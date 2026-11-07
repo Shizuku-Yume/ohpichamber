@@ -19,7 +19,7 @@ export interface SettingsSearchResult extends SettingsSearchItem {
   pageTitle: string;
 }
 
-interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
+export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
   isMobile: boolean;
   isDesktopLocalOrigin: boolean;
   // macOS desktop shell — for controls that only render on darwin (e.g. dock badge).
@@ -1650,3 +1650,15 @@ export function buildSettingsSearchResults({
     }];
   });
 }
+
+/** Static anchors used to seed the first-install baseline. */
+export const SETTINGS_ANCHOR_PAGES: ReadonlyMap<string, SettingsPageSlug> = new Map(
+  SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item.page] as const),
+);
+
+export const getAvailableSettingsAnchorPages = (ctx: SettingsSearchAvailabilityContext): ReadonlyMap<string, SettingsPageSlug> => new Map(
+  SETTINGS_SEARCH_ITEMS.filter((item) => {
+    const page = getSettingsPageMeta(item.page);
+    return page && (!page.isAvailable || page.isAvailable(ctx)) && (!item.isAvailable || item.isAvailable(ctx));
+  }).map((item) => [item.id, item.page] as const),
+);

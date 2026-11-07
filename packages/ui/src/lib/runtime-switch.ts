@@ -18,6 +18,7 @@ const RUNTIME_ENDPOINT_WILL_CHANGE_EVENT = 'openchamber:runtime-endpoint-will-ch
 
 let activeApiBaseUrl = '';
 let activeRuntimeKey = '';
+let instanceGeneration = 0;
 let runtimeSwitchRevision = 0;
 export const getRuntimeSwitchRevision = (): number => runtimeSwitchRevision;
 // Null reads the native boot injection; an explicit switch replaces it, even when local.
@@ -142,6 +143,13 @@ export const getRuntimeKey = (): string => {
   return cachedRuntimeKey;
 };
 
+/** A read's owner survives transport changes, but never an instance round trip. */
+export const captureRuntimeInstance = (): (() => boolean) => {
+  const generation = instanceGeneration;
+  const runtimeKey = getRuntimeKey();
+  return () => generation === instanceGeneration && runtimeKey === getRuntimeKey();
+};
+
 export const initializeRuntimeEndpoint = (options: { apiBaseUrl?: string | null; runtimeKey?: string | null } = {}): void => {
   if (activeApiBaseUrl || activeRuntimeKey) {
     return;
@@ -177,6 +185,7 @@ export const switchRuntimeEndpoint = (options: { apiBaseUrl: string; clientToken
   }
   activeApiBaseUrl = apiBaseUrl;
   activeRuntimeKey = runtimeKey;
+  if (runtimeKey !== previousRuntimeKey) instanceGeneration += 1;
   activeSshForwarded = sshForwarded;
   if (typeof window !== 'undefined') {
     const runtimeWindow = window as typeof window & {
@@ -199,7 +208,7 @@ export const switchRuntimeEndpoint = (options: { apiBaseUrl: string; clientToken
   } else {
     deactivateRelayTunnel();
   }
-  void refreshRuntimeUrlAuthToken(apiBaseUrl).catch(() => {});
+  void refreshRuntimeUrlAuthToken(apiBaseUrl).catch(() => { });
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent<RuntimeEndpointChangedDetail>(RUNTIME_ENDPOINT_CHANGED_EVENT, {
       detail,
@@ -208,7 +217,7 @@ export const switchRuntimeEndpoint = (options: { apiBaseUrl: string; clientToken
 };
 
 export const subscribeRuntimeEndpointWillChange = (callback: (detail: RuntimeEndpointChangedDetail) => void): (() => void) => {
-  if (typeof window === 'undefined') return () => {};
+  if (typeof window === 'undefined') return () => { };
   const listener = (event: Event) => {
     callback((event as CustomEvent<RuntimeEndpointChangedDetail>).detail);
   };
@@ -217,7 +226,7 @@ export const subscribeRuntimeEndpointWillChange = (callback: (detail: RuntimeEnd
 };
 
 export const subscribeRuntimeEndpointChanged = (callback: (detail: RuntimeEndpointChangedDetail) => void): (() => void) => {
-  if (typeof window === 'undefined') return () => {};
+  if (typeof window === 'undefined') return () => { };
   const listener = (event: Event) => {
     callback((event as CustomEvent<RuntimeEndpointChangedDetail>).detail);
   };

@@ -1,3 +1,4 @@
+import { extensionPowersI18n } from './extension-powers.i18n';
 import { settingsLayoutI18n } from './settings-layout.i18n';
 import { extensionsSettingsI18n } from './extensions.settings.i18n';
 import { guestIntegrationsI18n } from './guest-integrations.i18n';
@@ -5,6 +6,7 @@ import { firstPartyIntegrationsI18n } from './first-party-integrations.i18n';
 import { thirdPartyIntegrationI18n } from './third-party-integrations.i18n';
 import { extensionCatalogI18n } from './extension-catalog.i18n';
 export const settingsDict = {
+  ...extensionPowersI18n.ja,
   ...firstPartyIntegrationsI18n.ja,
   ...thirdPartyIntegrationI18n.ja,
   ...extensionCatalogI18n.ja,

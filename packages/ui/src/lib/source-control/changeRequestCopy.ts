@@ -59,6 +59,8 @@ const mergeRequestCopy = new Map<I18nKey, I18nKey>([
   ['chat.workStatus.action.openPr', 'chat.workStatus.action.openMr'],
   ['chat.workStatus.breakdown.prCountSingle', 'chat.workStatus.breakdown.mrCountSingle'],
   ['chat.workStatus.breakdown.prCountPlural', 'chat.workStatus.breakdown.mrCountPlural'],
+  ['chat.prWatch.title', 'chat.prWatch.mr.title'],
+  ['chat.sessionNotice.pullRequest.title', 'chat.sessionNotice.mergeRequest.title'],
 ]);
 
 /** The same messages for a review host's changes. */
@@ -115,6 +117,8 @@ const changeCopy = new Map<I18nKey, I18nKey>([
   ['chat.workStatus.action.openPr', 'chat.workStatus.change.openChange'],
   ['chat.workStatus.breakdown.prCountSingle', 'chat.workStatus.change.countSingle'],
   ['chat.workStatus.breakdown.prCountPlural', 'chat.workStatus.change.countPlural'],
+  ['chat.prWatch.title', 'chat.prWatch.change.title'],
+  ['chat.sessionNotice.pullRequest.title', 'chat.sessionNotice.change.title'],
 ]);
 
 /** Each term's wording of the pull-request messages; every term maps every message the others do. */
@@ -130,9 +134,5 @@ export const changeRequestCopyKeys = (term: Exclude<ChangeRequestTerm, 'pullRequ
  * The message to show for `key` where change requests go by `term`: its
  * wording for that term where one exists, else the key itself.
  */
-export const changeRequestCopy = (key: I18nKey, termOrProvider?: ChangeRequestTerm | string | null): I18nKey => {
-  const term: ChangeRequestTerm = termOrProvider === 'gitlab' || termOrProvider === 'mergeRequest' ? 'mergeRequest'
-    : termOrProvider === 'change' ? 'change'
-    : 'pullRequest';
-  return term === 'pullRequest' ? key : TERM_COPY[term].get(key) ?? key;
-};
+export const changeRequestCopy = (key: I18nKey, term: ChangeRequestTerm): I18nKey =>
+  term === 'pullRequest' ? key : TERM_COPY[term].get(key) ?? key;

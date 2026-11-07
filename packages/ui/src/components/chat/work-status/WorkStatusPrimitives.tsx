@@ -237,7 +237,7 @@ export const WorkStatusRowAction: React.FC<{
   ariaLabel?: string;
 }> = ({ children, onClick, tone = 'default', disabled, ariaLabel }) => {
   const color = tone === 'default' ? undefined : TONE_COLOR[tone];
-  return (
+  const button = (
     <button
       type="button"
       aria-label={ariaLabel}
@@ -259,6 +259,13 @@ export const WorkStatusRowAction: React.FC<{
     >
       {children}
     </button>
+  );
+  if (!ariaLabel) return button;
+  return (
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>{ariaLabel}</TooltipContent>
+    </Tooltip>
   );
 };
 

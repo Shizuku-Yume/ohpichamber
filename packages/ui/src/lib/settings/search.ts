@@ -19,7 +19,7 @@ export interface SettingsSearchResult extends SettingsSearchItem {
   pageTitle: string;
 }
 
-interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
+export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
   isMobile: boolean;
   isDesktopLocalOrigin: boolean;
   // macOS desktop shell — for controls that only render on darwin (e.g. dock badge).
@@ -260,6 +260,21 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.interfaceFontSize',
     keywords: ['font', 'text size', 'ui scale'],
+    isAvailable: (ctx) => !ctx.isMobile,
+  },
+  {
+    id: 'appearance.chat-font-size',
+    page: 'appearance',
+    titleKey: 'settings.openchamber.visual.field.chatFontSize',
+    keywords: ['chat', 'font', 'text size', 'messages'],
+    isAvailable: (ctx) => !ctx.isMobile,
+  },
+  {
+    id: 'appearance.interface-font-weight',
+    page: 'appearance',
+    titleKey: 'settings.openchamber.visual.field.interfaceFontWeight',
+    descriptionKey: 'settings.openchamber.visual.field.interfaceFontWeightInfo',
+    keywords: ['font weight', 'bold', 'regular', 'balanced', 'strong', 'typography'],
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {
@@ -1650,3 +1665,15 @@ export function buildSettingsSearchResults({
     }];
   });
 }
+
+/** Static anchors used to seed the first-install baseline. */
+export const SETTINGS_ANCHOR_PAGES: ReadonlyMap<string, SettingsPageSlug> = new Map(
+  SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item.page] as const),
+);
+
+export const getAvailableSettingsAnchorPages = (ctx: SettingsSearchAvailabilityContext): ReadonlyMap<string, SettingsPageSlug> => new Map(
+  SETTINGS_SEARCH_ITEMS.filter((item) => {
+    const page = getSettingsPageMeta(item.page);
+    return page && (!page.isAvailable || page.isAvailable(ctx)) && (!item.isAvailable || item.isAvailable(ctx));
+  }).map((item) => [item.id, item.page] as const),
+);

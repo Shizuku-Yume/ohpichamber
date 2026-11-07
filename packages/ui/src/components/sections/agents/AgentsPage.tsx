@@ -61,6 +61,21 @@ const fieldsEqual = (left: FormState, right: FormState): boolean =>
   left.thinkingLevel === right.thinkingLevel &&
   left.spawns === right.spawns;
 
+const thinkingLevelLabel = (level: AgentThinkingLevel | 'default', t: ReturnType<typeof useI18n>['t']): string => {
+  switch (level) {
+    case 'default': return t('sessions.scheduledTasks.editor.thinkingLevel.default');
+    case 'off': return t('settings.skills.page.use.off');
+    case 'minimal': return t('settings.omp.modelRoles.effort.minimal');
+    case 'low': return t('settings.omp.modelRoles.effort.low');
+    case 'medium': return t('settings.omp.modelRoles.effort.medium');
+    case 'high': return t('settings.omp.modelRoles.effort.high');
+    case 'xhigh': return t('settings.omp.modelRoles.effort.high');
+    case 'max': return t('settings.omp.modelRoles.effort.max');
+    case 'auto': return t('settings.remoteInstances.page.field.auto');
+    default: return level;
+  }
+};
+
 export const AgentsPage: React.FC = () => {
   const { t } = useI18n();
   const settingsDirectory = useSettingsDirectory();
@@ -286,7 +301,7 @@ export const AgentsPage: React.FC = () => {
             }}
           >
             <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('sessions.scheduledTasks.editor.thinkingLevel.label')}>
-              <SelectValue />
+              <SelectValue>{thinkingLevelLabel(form.thinkingLevel, t)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="default">{t('sessions.scheduledTasks.editor.thinkingLevel.default')}</SelectItem>

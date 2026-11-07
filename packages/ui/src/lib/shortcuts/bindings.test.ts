@@ -6,6 +6,7 @@ import {
   formatShortcutForDisplay,
   getEffectiveShortcutPrefix,
   getShortcutConflict,
+  isMenuAcceleratorCombo,
   isRiskyBrowserShortcut,
   isShortcutPrefixHeld,
   normalizeCombo,
@@ -180,5 +181,19 @@ describe('the Super / Windows key', () => {
     expect(eventMatchesShortcut(keydown('n', { ctrl: true }), 'super+n')).toBe(false);
     expect(eventMatchesShortcut(keydown('n', { ctrl: true, meta: true }), 'mod+n')).toBe(false);
     expect(eventMatchesShortcut(keydown('n', { ctrl: true, meta: true }), 'mod+super+n')).toBe(true);
+  });
+});
+
+describe('isMenuAcceleratorCombo', () => {
+  test('accepts single chord with non-shift modifier and accelerator key', () => {
+    expect(isMenuAcceleratorCombo('mod+k')).toBe(true);
+    expect(isMenuAcceleratorCombo('mod+shift+g')).toBe(true);
+    expect(isMenuAcceleratorCombo('ctrl+alt+arrowup')).toBe(true);
+  });
+
+  test('rejects shift-only, multi-chord, or unassigned combos', () => {
+    expect(isMenuAcceleratorCombo('shift+k')).toBe(false);
+    expect(isMenuAcceleratorCombo('mod+k b')).toBe(false);
+    expect(isMenuAcceleratorCombo('__unassigned__')).toBe(false);
   });
 });

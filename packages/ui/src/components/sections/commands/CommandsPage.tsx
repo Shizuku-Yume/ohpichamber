@@ -157,7 +157,9 @@ export const CommandsPage: React.FC = () => {
             if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope });
           }}>
             <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
-              <SelectValue placeholder={t('settings.agents.page.field.scopePlaceholder')} />
+              <SelectValue placeholder={t('settings.agents.page.field.scopePlaceholder')}>
+                {form.scope === 'workspace' ? t('settings.common.scope.project') : t('settings.common.scope.global')}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent align="end">
               <SelectItem value="agent">

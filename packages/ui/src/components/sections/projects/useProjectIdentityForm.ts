@@ -5,6 +5,16 @@ import { useI18n } from '@/lib/i18n';
 import type { ProjectEntry } from '@/lib/api/types';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 
+const resolveUploadMime = (file: File): 'image/png' | 'image/jpeg' | 'image/svg+xml' | null => {
+  const rawType = typeof file.type === 'string' ? file.type.trim().toLowerCase() : '';
+  if (rawType === 'image/png' || rawType === 'image/jpeg' || rawType === 'image/svg+xml') return rawType;
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith('.png')) return 'image/png';
+  if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) return 'image/jpeg';
+  if (lowerName.endsWith('.svg')) return 'image/svg+xml';
+  return null;
+};
+
 const HEX_COLOR_PATTERN = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/;
 
 const normalizeProjectIconBackground = (value: string | null | undefined): string | null => {
@@ -23,13 +33,14 @@ export type ProjectIdentitySaveData = {
   icon: string | null;
   color: string | null;
   iconBackground: string | null;
+  defaultAgent: string | null;
   defaultModel: string | null;
   defaultVariant: string | null;
 };
 
 type EditableProject = Pick<
   ProjectEntry,
-  'id' | 'label' | 'icon' | 'color' | 'iconBackground' | 'defaultModel' | 'defaultVariant' | 'iconImage' | 'path'
+  'id' | 'label' | 'icon' | 'color' | 'iconBackground' | 'defaultAgent' | 'defaultModel' | 'defaultVariant' | 'iconImage' | 'path'
 >;
 
 /** The editable identity fields, in the shape the form state holds them. */
@@ -38,17 +49,19 @@ type ProjectIdentity = {
   icon: string | null;
   color: string | null;
   iconBackground: string | null;
+  defaultAgent: string | undefined;
   defaultModel: string | undefined;
   defaultVariant: string | undefined;
 };
 
-const EMPTY_IDENTITY: ProjectIdentity = { label: '', icon: null, color: null, iconBackground: null, defaultModel: undefined, defaultVariant: undefined };
+const EMPTY_IDENTITY: ProjectIdentity = { label: '', icon: null, color: null, iconBackground: null, defaultAgent: undefined, defaultModel: undefined, defaultVariant: undefined };
 
 const identityOf = (project: EditableProject): ProjectIdentity => ({
   label: project.label ?? '',
   icon: project.icon ?? null,
   color: project.color ?? null,
   iconBackground: project.iconBackground ?? null,
+  defaultAgent: project.defaultAgent,
   defaultModel: project.defaultModel,
   defaultVariant: project.defaultVariant,
 });
@@ -58,6 +71,7 @@ const sameIdentity = (left: ProjectIdentity, right: ProjectIdentity): boolean =>
   && left.icon === right.icon
   && left.color === right.color
   && left.iconBackground === right.iconBackground
+  && left.defaultAgent === right.defaultAgent
   && left.defaultModel === right.defaultModel
   && left.defaultVariant === right.defaultVariant
 );
@@ -75,6 +89,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
   const [icon, setIcon] = React.useState<string | null>(null);
   const [color, setColor] = React.useState<string | null>(null);
   const [iconBackground, setIconBackground] = React.useState<string | null>(null);
+  const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>(undefined);
   const [defaultModel, setDefaultModel] = React.useState<string | undefined>(undefined);
   const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>(undefined);
   const [isUploadingIcon, setIsUploadingIcon] = React.useState(false);
@@ -105,7 +120,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
   // form's own auto-save, and re-seeding on each of those wiped the name
   // mid-typing (#3552).
   const formIdentityRef = React.useRef<ProjectIdentity>(EMPTY_IDENTITY);
-  formIdentityRef.current = { label: name, icon, color, iconBackground, defaultModel, defaultVariant };
+  formIdentityRef.current = { label: name, icon, color, iconBackground, defaultAgent, defaultModel, defaultVariant };
   const seededRef = React.useRef<{ projectId: string | null; identity: ProjectIdentity }>({ projectId: null, identity: EMPTY_IDENTITY });
 
   React.useEffect(() => {
@@ -115,6 +130,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
       setIcon(null);
       setColor(null);
       setIconBackground(null);
+      setDefaultAgent(undefined);
       setDefaultModel(undefined);
       setDefaultVariant(undefined);
       return;
@@ -138,6 +154,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
     setIcon(incoming.icon);
     setColor(incoming.color);
     setIconBackground(incoming.iconBackground);
+    setDefaultAgent(incoming.defaultAgent);
     setDefaultModel(incoming.defaultModel);
     setDefaultVariant(incoming.defaultVariant);
     if (switchedProject) {
@@ -171,6 +188,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
     || icon !== (project?.icon ?? null)
     || color !== (project?.color ?? null)
     || iconBackground !== (project?.iconBackground ?? null)
+    || (defaultAgent ?? undefined) !== (project?.defaultAgent ?? undefined)
     || (defaultModel ?? undefined) !== (project?.defaultModel ?? undefined)
     || (defaultVariant ?? undefined) !== (project?.defaultVariant ?? undefined)
     || pendingRemoveImageIcon
@@ -193,6 +211,20 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
       return;
     }
 
+    const mime = resolveUploadMime(file);
+    if (!mime) {
+      toast.error(t('settings.projects.page.toast.iconUnsupportedFormat'));
+      return;
+    }
+    if (!Number.isFinite(file.size) || file.size <= 0) {
+      toast.error(t('settings.projects.page.toast.iconEmpty'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t('settings.projects.page.toast.iconTooLarge'));
+      return;
+    }
+
     setPendingRemoveImageIcon(false);
     setPreviewImageFailed(false);
     setPendingUploadIconFile(file);
@@ -202,7 +234,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
       }
       return URL.createObjectURL(file);
     });
-  }, [isUploadingIcon, project]);
+  }, [isUploadingIcon, project, t]);
 
   const handleRemoveImageIcon = React.useCallback(() => {
     if (!project || !hasRemovableImageIcon || isRemovingCustomIcon) {
@@ -253,7 +285,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
     }
   }, [clearPendingUploadIcon, discoverProjectIcon, isDiscoveringIcon, project, t]);
 
-  const prepareSaveData = React.useCallback(async (options?: { silent?: boolean }): Promise<ProjectIdentitySaveData | null> => {
+  const prepareSaveData = React.useCallback(async (options?: { silent?: boolean; skipIconChanges?: boolean }): Promise<ProjectIdentitySaveData | null> => {
     const silent = options?.silent === true;
     if (!project) {
       return null;
@@ -264,7 +296,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
       return null;
     }
 
-    if (pendingUploadIconFile) {
+    if (pendingUploadIconFile && !options?.skipIconChanges) {
       setIsUploadingIcon(true);
       const uploadResult = await uploadProjectIcon(project.id, pendingUploadIconFile);
       setIsUploadingIcon(false);
@@ -281,7 +313,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
 
     const willRemoveImageIcon = pendingRemoveImageIcon && Boolean(project.iconImage);
 
-    if (willRemoveImageIcon) {
+    if (willRemoveImageIcon && !options?.skipIconChanges) {
       setIsRemovingCustomIcon(true);
       const removeResult = await removeProjectIcon(project.id);
       setIsRemovingCustomIcon(false);
@@ -301,12 +333,14 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
       icon,
       color,
       iconBackground: normalizeProjectIconBackground(willRemoveImageIcon ? null : iconBackground),
+      defaultAgent: defaultAgent ?? null,
       defaultModel: defaultModel ?? null,
       defaultVariant: defaultModel ? defaultVariant ?? null : null,
     };
   }, [
     clearPendingUploadIcon,
     color,
+    defaultAgent,
     defaultModel,
     defaultVariant,
     icon,
@@ -334,6 +368,8 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
     setColor,
     iconBackground,
     setIconBackground,
+    defaultAgent,
+    setDefaultAgent,
     defaultModel,
     defaultVariant,
     parsedDefaultModel,

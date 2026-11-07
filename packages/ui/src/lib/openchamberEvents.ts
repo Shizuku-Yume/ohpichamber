@@ -5,6 +5,7 @@ import { isRelayModeActive } from './relay/runtime-tunnel';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
+import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-watch';
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
 import type { SyncEvent } from './opencode/events';
@@ -238,6 +239,7 @@ type OpenChamberEvent =
  | RoutingPermissionHeldEvent
  | RoutingSafetySkippedEvent
  | MessageQueueUpdatedEvent
+ | PrWatchUpdatedEvent
  | PermissionPolicyEvent
  /** The host follows this space's queue again; what changed in a gap is read from the space. */
  | { type: 'space-queue-stream'; spaceId: string }
@@ -468,6 +470,13 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
 
  if (envelope.type === 'openchamber:message-queue.updated') {
   const parsed = messageQueueUpdatedEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener(parsed.data);
+  }
+  return;
+ }
+ if (envelope.type === 'openchamber:pr-watch.updated') {
+  const parsed = prWatchUpdatedEventSchema.safeParse(envelope);
   if (parsed.success) {
    for (const listener of listeners) listener(parsed.data);
   }

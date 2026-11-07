@@ -17,6 +17,7 @@ import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings'
 import { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { InternalUrlRouter } from '@oh-my-pi/pi-coding-agent/internal-urls';
 import { InteractionManager } from '../interaction/manager.ts';
 import { SessionJournal } from '../projection/journal.ts';
 import type { ProjectionInput } from '../projection/protocol.ts';
@@ -1561,48 +1562,137 @@ test('native mode changes reject while a worker run is active', async () => {
  }
 }, 30000);
 
-test('worker rejects a binary attachment (415) and an over-5 MB text attachment (413)', async () => {
+/** The last `fileMention` the worker appended for a prompt, i.e. what the model will see. */
+function lastFileMention(harness: { worker: WorkerSession }) {
+ const message = harness.worker.session.sessionManager.getEntries().flatMap(entry => {
+  const entryMessage = entry.type === 'message' ? entry.message : undefined;
+  return entryMessage && entryMessage.role === 'fileMention' ? [entryMessage] : [];
+ }).at(-1);
+ if (!message || message.role !== 'fileMention') throw new Error('Attachment did not reach the transcript');
+ return message;
+}
+
+test('a plain text attachment is inlined with its name as a delimiter', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const notePath = join(harness.root, 'note.txt');
+  await writeFile(notePath, 'INLINE_ATTACHMENT_BODY');
+  const note = { attachmentId: 'note-att', name: 'note.txt', mediaType: 'text/plain', size: Buffer.byteLength('INLINE_ATTACHMENT_BODY'), uri: 'attachment://note-att' };
+  await harness.worker.operation({
+   type: 'prompt', runId: 'text-attachment-run',
+   request: { ...prompt('Read the attached note.'), input: { text: 'Read the attached note.', attachments: [note], context: [] } },
+   attachments: [{ attachmentId: note.attachmentId, path: notePath }],
+  });
+  // OMP renders each file as `<file path="note.txt">…</file>`, so the name is
+  // the delimiter the model sees around the inlined body.
+  expect(lastFileMention(harness).files).toEqual([{ path: 'note.txt', content: 'INLINE_ATTACHMENT_BODY' }]);
+ } finally {
+  await harness.close();
+ }
+}, 30000);
+
+test('a binary attachment is handed off as a readable session path, not refused', async () => {
  const harness = await fixture({ respond: () => completion() });
  try {
   const binaryPath = join(harness.root, 'sample.bin');
   await writeFile(binaryPath, Buffer.from([0x00, 0x01, 0x02, 0xff]));
-  const binaryAttachment = {
-   attachmentId: 'bin-att',
-   name: 'sample.bin',
-   mediaType: 'application/octet-stream',
-   size: 4,
-   uri: 'attachment://bin-att',
-  };
-
-  await expect(harness.worker.operation({
-   type: 'prompt',
-   runId: 'bin-run',
-   request: {
-    ...prompt('Binary prompt'),
-    input: { text: 'Binary prompt', attachments: [binaryAttachment], context: [] },
+  const binary = { attachmentId: 'bin-att', name: 'sample.bin', mediaType: 'application/octet-stream', size: 4, uri: 'attachment://bin-att' };
+  await harness.worker.operation({
+   type: 'prompt', runId: 'bin-run',
+   request: { ...prompt('Inspect the attached binary.'), input: { text: 'Inspect the attached binary.', attachments: [binary], context: [] } },
+   attachments: [{ attachmentId: binary.attachmentId, path: binaryPath }],
+  });
+  const file = lastFileMention(harness).files[0]!;
+  expect(file.skippedReason).toBe('binary');
+  expect(file.byteSize).toBe(4);
+  // The published reference is session-relative, never a private Host path.
+  expect(file.path).toBe('local://attachments/bin-att-sample.bin');
+  expect(file.path).not.toContain(harness.root);
+  expect(file.path).not.toContain(tmpdir());
+  expect(file.content).toContain('Read this file to inspect it');
+  // The reference OMP was given actually resolves, at read tier, inside the
+  // session's own scratch root — the model can `read` it.
+  const located = await InternalUrlRouter.instance().locate(file.path, {
+   cwd: harness.root,
+   localProtocolOptions: {
+    getArtifactsDir: () => harness.worker.session.sessionManager.getArtifactsDir(),
+    getSessionId: () => harness.worker.session.sessionManager.getSessionId(),
    },
-   attachments: [{ attachmentId: 'bin-att', path: binaryPath }],
-  })).rejects.toMatchObject({ status: 415, code: 'UNSUPPORTED_MEDIA_TYPE' });
+  });
+  if (!located) throw new Error('Session path reference did not resolve');
+  expect(located).not.toContain(harness.root);
+  expect(located).toContain('local');
+  expect(await readFile(located)).toEqual(Buffer.from([0x00, 0x01, 0x02, 0xff]));
+ } finally {
+  await harness.close();
+ }
+}, 30000);
 
-  const oversizedPath = join(harness.root, 'large.txt');
-  await writeFile(oversizedPath, 'x');
-  const oversizedAttachment = {
-   attachmentId: 'large-att',
-   name: 'large.txt',
-   mediaType: 'text/plain',
-   size: 6 * 1024 * 1024,
-   uri: 'attachment://large-att',
-  };
-
+test('an attachment without a Host-resolved reference is refused before any prompt mutation', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const attachment = { attachmentId: 'unresolved-att', name: 'unresolved.txt', mediaType: 'text/plain', size: 2, uri: 'attachment://unresolved-att' };
+  // The Host must hand the worker an authorized absolute path; a submission
+  // that names an attachment but authorizes nothing is refused, not guessed.
   await expect(harness.worker.operation({
-   type: 'prompt',
-   runId: 'large-run',
-   request: {
-    ...prompt('Large prompt'),
-    input: { text: 'Large prompt', attachments: [oversizedAttachment], context: [] },
-   },
-   attachments: [{ attachmentId: 'large-att', path: oversizedPath }],
-  })).rejects.toMatchObject({ status: 413, code: 'PAYLOAD_TOO_LARGE' });
+   type: 'prompt', runId: 'unresolved-run',
+   request: { ...prompt('Read the attached file.'), input: { text: 'Read the attached file.', attachments: [attachment], context: [] } },
+   attachments: [{ attachmentId: 'other-att', path: join(harness.root, 'note.txt') }],
+  })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  expect(harness.worker.session.sessionManager.getEntries().some(entry => entry.type === 'message' && entry.message.role === 'fileMention')).toBe(false);
+ } finally {
+  await harness.close();
+ }
+}, 30000);
+
+test('a later attachment failure leaves no partial attachment context behind', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  // The first attachment is fully preparable; the second has no Host-resolved
+  // reference. Preparation must be all-or-nothing, so the first one never lands.
+  const notePath = join(harness.root, 'note.txt');
+  await writeFile(notePath, 'PARTIAL_ATTACHMENT_BODY');
+  const note = { attachmentId: 'partial-note', name: 'note.txt', mediaType: 'text/plain', size: Buffer.byteLength('PARTIAL_ATTACHMENT_BODY'), uri: 'attachment://partial-note' };
+  const missing = { attachmentId: 'missing-att', name: 'missing.txt', mediaType: 'text/plain', size: 3, uri: 'attachment://missing-att' };
+  await expect(harness.worker.operation({
+   type: 'prompt', runId: 'partial-run',
+   request: { ...prompt('Send both attachments.'), input: { text: 'Send both attachments.', attachments: [note, missing], context: [] } },
+   attachments: [{ attachmentId: note.attachmentId, path: notePath }],
+  })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  const mentions = harness.worker.session.sessionManager.getEntries().flatMap(entry => {
+   const entryMessage = entry.type === 'message' ? entry.message : undefined;
+   return entryMessage && entryMessage.role === 'fileMention' ? [entryMessage] : [];
+  });
+  expect(mentions).toEqual([]);
+  expect(JSON.stringify(harness.requests)).not.toContain('PARTIAL_ATTACHMENT_BODY');
+ } finally {
+  await harness.close();
+ }
+}, 30000);
+
+test('an oversized text attachment is handed off by path instead of rejected', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const largePath = join(harness.root, 'large.txt');
+  await writeFile(largePath, 'x'.repeat(300 * 1024));
+  const large = { attachmentId: 'large-att', name: 'large.txt', mediaType: 'text/plain', size: 300 * 1024, uri: 'attachment://large-att' };
+  await harness.worker.operation({
+   type: 'prompt', runId: 'large-run',
+   request: { ...prompt('Summarize the attached file.'), input: { text: 'Summarize the attached file.', attachments: [large], context: [] } },
+   attachments: [{ attachmentId: large.attachmentId, path: largePath }],
+  });
+
+  const message = harness.worker.session.sessionManager.getEntries().flatMap(entry => {
+   const entryMessage = entry.type === 'message' ? entry.message : undefined;
+   return entryMessage && entryMessage.role === 'fileMention' ? [entryMessage] : [];
+  }).at(-1);
+  if (!message || message.role !== 'fileMention') throw new Error('Oversized attachment did not reach the transcript');
+  const file = message.files[0]!;
+  expect(file.skippedReason).toBe('tooLarge');
+  expect(file.byteSize).toBe(300 * 1024);
+  expect(file.content).not.toContain('xxxxxxxx');
+  expect(file.path).toMatch(/^local:\/\/attachments\/large-att-large\.txt$/);
+  expect(file.path).not.toContain(harness.root);
  } finally {
   await harness.close();
  }

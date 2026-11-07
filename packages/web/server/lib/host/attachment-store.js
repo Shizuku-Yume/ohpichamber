@@ -14,15 +14,8 @@ const MediaTypeSchema = z.string().min(1).max(255).regex(/^[!#$%&'*+.^_`|~0-9A-Z
 const UploadMetadataSchema = z.strictObject({ name: AttachmentNameSchema, mediaType: MediaTypeSchema, size: z.number().int().nonnegative() });
 const isScope = (row, scope) => row.project_id === scope.projectId && row.workspace_id === scope.workspaceId && row.agent_directory_id === scope.agentDirectoryId;
 const requireBytes = (bytes) => { if (!(Buffer.isBuffer(bytes) || bytes instanceof Uint8Array)) throw new MetadataWriteError('Attachment bytes are required'); return Buffer.from(bytes); };
-const MAX_TEXT_ATTACHMENT_CHARS = 500_000;
-const MAX_PROMPT_TEXT_CHARS = 1_000_000;
-const isTextMediaType = (mediaType) => mediaType.startsWith('text/') || /(?:json|xml|yaml|javascript|typescript|ecmascript|x-sh|x-python|x-ruby|x-c|x-cpp|sql|graphql|toml|csv)$/.test(mediaType.split(';', 1)[0].toLowerCase());
-const textError = (code, message, status) => Object.assign(new Error(message), { code, statusCode: status });
-const decodeText = (bytes) => {
-  if (bytes.includes(0)) return null;
-  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-  return text;
-};
+/** Aggregate cap only: one prompt may not hand the worker unbounded text to inline. */
+const MAX_PROMPT_ATTACHMENT_CHARS = 1_000_000;
 export function createAttachmentStore({ database, storageDirectory, fsPromises = fs, now = () => Date.now() }) {
   if (!database || !storageDirectory) throw new TypeError('database and storageDirectory are required');
   const lifecycle = createMetadataLifecycle(database, false);
@@ -58,17 +51,23 @@ export function createAttachmentStore({ database, storageDirectory, fsPromises =
   const resolveAttachments = async (scope, attachments) => {
     if (attachments === undefined || attachments === null) return [];
     if (!Array.isArray(attachments)) throw new MetadataReadError('Attachment list is invalid');
+    // Media type is deliberately not judged here: a binary or oversized
+    // attachment is still a usable artifact, and the worker decides whether to
+    // inline it or hand the model a `read` target. Only the aggregate amount of
+    // text one prompt may inline is bounded.
     let textCharacters = 0;
     return Promise.all(attachments.map(async (attachment) => {
       const result = await read(scope, attachment?.attachmentId, attachment);
       if (result.attachment.mediaType.startsWith('image/')) return { attachmentId: result.attachment.attachmentId, path: result.path };
-      if (!isTextMediaType(result.attachment.mediaType)) throw textError('INVALID_REQUEST', `Attachment is not text or image: ${result.attachment.name}`, 400);
-      let content;
-      try { content = decodeText(await fsPromises.readFile(result.path)); } catch { throw textError('INVALID_REQUEST', `Attachment is not valid UTF-8 text: ${result.attachment.name}`, 400); }
-      if (content === null) throw textError('INVALID_REQUEST', `Attachment is not valid UTF-8 text: ${result.attachment.name}`, 400);
-      if (content.length > MAX_TEXT_ATTACHMENT_CHARS) throw textError('PAYLOAD_TOO_LARGE', `Attachment exceeds 500,000 characters: ${result.attachment.name}`, 413);
-      textCharacters += content.length;
-      if (textCharacters > MAX_PROMPT_TEXT_CHARS) throw textError('PAYLOAD_TOO_LARGE', 'Text attachments exceed 1,000,000 characters', 413);
+      if (result.size <= MAX_PROMPT_ATTACHMENT_CHARS) {
+        try {
+          const bytes = await fsPromises.readFile(result.path);
+          if (!bytes.includes(0)) textCharacters += new TextDecoder('utf-8', { fatal: true }).decode(bytes).length;
+        } catch {
+          // Undecodable bytes are handed off by path, not refused.
+        }
+        if (textCharacters > MAX_PROMPT_ATTACHMENT_CHARS) throw Object.assign(new Error('Text attachments exceed 1,000,000 characters'), { code: 'PAYLOAD_TOO_LARGE', statusCode: 413 });
+      }
       return { attachmentId: result.attachment.attachmentId, path: result.path };
     }));
   };

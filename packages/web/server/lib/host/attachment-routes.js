@@ -18,26 +18,6 @@ const problem = (res, status, code, detail) => {
   }));
 };
 const validBase64 = (data) => data.length % 4 === 0 && !/[^A-Za-z0-9+/=]/.test(data);
-const MAX_TEXT_ATTACHMENT_BYTES = 5 * 1024 * 1024;
-const isTextMediaType = (mediaType) => {
-  if (typeof mediaType !== 'string') return false;
-  const lower = mediaType.toLowerCase();
-  return lower.startsWith('text/')
-    || lower === 'application/json'
-    || lower.endsWith('+json')
-    || lower === 'application/xml'
-    || lower.endsWith('+xml')
-    || lower === 'application/javascript'
-    || lower === 'application/typescript'
-    || lower === 'application/x-sh'
-    || lower === 'application/x-shellscript'
-    || lower === 'application/x-yaml'
-    || lower === 'application/yaml'
-    || lower === 'application/toml'
-    || lower === 'application/sql'
-    || lower === 'application/graphql';
-};
-
 export function createAttachmentRoutes({ express, store, resolveWorkspaceScope, maxBytes = 20 * 1024 * 1024 }) {
   RouteDependenciesSchema.parse({ express: { Router: express?.Router, json: express?.json }, store, resolveWorkspaceScope, maxBytes });
   const router = express.Router();
@@ -60,13 +40,9 @@ export function createAttachmentRoutes({ express, store, resolveWorkspaceScope, 
     const bytes = Buffer.from(parsed.data.data, 'base64');
     if (bytes.length > maxBytes) return problem(res, 413, 'PAYLOAD_TOO_LARGE', 'Attachment exceeds the allowed size');
     if (bytes.length !== parsed.data.metadata.size) return problem(res, 400, 'INVALID_REQUEST', 'Attachment size does not match its content');
-    const isImage = parsed.data.metadata.mediaType.startsWith('image/');
-    if (!isImage && (!isTextMediaType(parsed.data.metadata.mediaType) || bytes.subarray(0, 8000).includes(0))) {
-      return problem(res, 415, 'UNSUPPORTED_MEDIA_TYPE', 'Binary attachments are not supported; only images and text files can be attached.');
-    }
-    if (!isImage && bytes.length > MAX_TEXT_ATTACHMENT_BYTES) {
-      return problem(res, 413, 'PAYLOAD_TOO_LARGE', 'Text attachments exceed the 5 MB limit');
-    }
+    // Any non-image media type is storable: the worker decides per prompt
+    // whether to inline the text or hand the model a `read` target, so neither
+    // binary content nor its size is a reason to refuse an upload here.
     const scope = await authorizedScope(parsed.data.workspaceId, res);
     if (!scope) return;
     try {

@@ -126,6 +126,27 @@ test('completed native compaction emits opaque canonical transition only', async
   }
 });
 
+test('a projected attachment part publishes its name and media type, never the private Host path', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-attachment-projection-'));
+  const manager = SessionManager.create(join(root, 'workspace'), join(root, 'storage'));
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const attachment = { attachmentId: 'att_projection', name: 'report.pdf', mediaType: 'application/pdf', size: 4096, uri: 'attachment://att_projection' };
+    const privatePath = join(manager.getArtifactsDir() ?? root, 'host-attachments', 'att_projection.bin');
+    // The Host-resolved absolute path reaches the worker (and so the projection);
+    // it must not survive into any canonical part a client can read.
+    const user: NativeMessage = { role: 'user', content: 'Summarize the report.', timestamp: 1, attribution: 'user' };
+    projection.beginRun('run', 2, [attachment], [], 'user');
+    const events = projection.consume({ type: 'message_start', message: user });
+    const parts = events.flatMap(({ event }) => event.type === 'part.started' ? [event.part] : []);
+    const attachmentPart = parts.find(part => part.type === 'attachment');
+    expect(attachmentPart).toEqual({ type: 'attachment', partId: expect.stringContaining(':attachment:0'), ...attachment });
+    expect(JSON.stringify(parts)).not.toContain(root);
+    expect(JSON.stringify(parts)).not.toContain(privatePath);
+  } finally { await manager.close(); await rm(root, { recursive: true, force: true }); }
+});
+
 test('a seeded live assistant start does not duplicate the first text delta', async () => {
   const root = await mkdtemp(join(tmpdir(), 'canonical-seed-projection-'));
   const manager = SessionManager.create(join(root, 'workspace'), join(root, 'storage'));

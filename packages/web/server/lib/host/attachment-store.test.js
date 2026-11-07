@@ -25,7 +25,7 @@ describe('attachment store', () => {
     await expect(store.resolveAttachments(scope, [{ ...submitted, name: 'forged.txt' }])).rejects.toMatchObject({ code: 'ATTACHMENT_METADATA_MISMATCH' });
     await expect(store.resolveAttachments({ ...scope, agentDirectoryId: 'other' }, [submitted])).rejects.toMatchObject({ code: 'ATTACHMENT_NOT_FOUND' });
   });
-  it('admits only bounded valid text and images for prompt delivery', async () => {
+  it('resolves every stored attachment to an authorized path, whatever its media type', async () => {
     const upload = async (name, mediaType, bytes) => store.upload(scope, { metadata: { name, mediaType, size: bytes.length }, bytes });
     const promptAttachment = (attachment) => { const { createdAt, ...value } = attachment; return value; };
     const [text, image, archive, large, binaryText] = await Promise.all([
@@ -37,9 +37,12 @@ describe('attachment store', () => {
     ]);
     const resolved = await store.resolveAttachments(scope, [promptAttachment(text), promptAttachment(image)]);
     expect(resolved).toHaveLength(2);
-    await expect(store.resolveAttachments(scope, [promptAttachment(archive)])).rejects.toMatchObject({ code: 'INVALID_REQUEST', statusCode: 400, message: expect.stringContaining('bundle.zip') });
-    await expect(store.resolveAttachments(scope, [promptAttachment(large)])).rejects.toMatchObject({ code: 'PAYLOAD_TOO_LARGE', statusCode: 413 });
-    await expect(store.resolveAttachments(scope, [promptAttachment(binaryText)])).rejects.toMatchObject({ code: 'INVALID_REQUEST', statusCode: 400 });
+    // Binary and oversized payloads are usable artifacts: the worker inlines
+    // text or hands the model a read target, so resolution must not refuse them.
+    for (const attachment of [archive, large, binaryText]) {
+      await expect(store.resolveAttachments(scope, [promptAttachment(attachment)]))
+        .resolves.toEqual([{ attachmentId: attachment.attachmentId, path: expect.stringContaining(`${attachment.attachmentId}.bin`) }]);
+    }
   });
   it('caps aggregate text attachment characters per prompt', async () => {
     const bytes = Buffer.alloc(500_000, 0x61);

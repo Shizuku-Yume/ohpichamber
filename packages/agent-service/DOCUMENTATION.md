@@ -153,6 +153,16 @@ Native Settings flush precedes the existing service catalog-revision file commit
 
 The worker captures the exact native tool input for Host authorization and keeps it service-private. The public approval record carries the actual tool name and a redacted, truncated one-line input summary (the bash command or file path); the card never renders a raw input object. `always-allow` resolves OMP's native `allow_always` handle in the worker's per-session ACP decision cache (bash cache key): OMP suppresses later bash cards for that key, while each cached call still reaches the custom Bash tool and receives its own exact execution grant before authorization. The cache resets with the native logical session, stops with the worker, and is never persisted to the Host policy store or OMP config. Provider-safety and Host-only prompts never receive it. The native approval handle is resolved with OMP's Approve or allow_always choice. Schema version 2 revokes legacy session allowances.
 
+## Permission modes for tool execution approvals
+
+Tool execution approvals are the requests that may be approved for the user: the native ACP permission gate (`WorkerInteraction.requestPermission`) and the native approval extension's tool requests, which share `InteractionManager`'s single `requestApproval` path (`approveBash`, `ui.approve`, and an observed `ui.select`). Those records carry `permissionRequest: true`, and the worker sets it on the shared `requestApproval` path so every native tool whose approval wrapper uses `ui.approve` or an observed `ui.select` is covered too, not only the ACP gate. Unobserved `ui.select`, `confirm`, `input`, `askDialog`, plan review, native-grant re-authorization and provider/Host authorization never pass through that method and always stay on screen.
+
+Each session resolves a mode from the Host: `ask` shows the card, `auto` answers it, `safety` asks the Host safety net first. The mode is never cached in the service; it is read over private IPC (`permission.mode.load`) when a request arrives, so the Host stays the single authority. A workspace or session deny policy always wins and is rejected at request time and again immediately before any programmatic approval.
+
+An approval the policy answers itself publishes no canonical events: there was never a card to show or to resolve. A card that stays is published once as `approval.requested`, and a resolution publishes `approval.resolved`. For `safety`, the accept is only consumed after a second read confirms the record is still pending, the epoch and worker generation still match, the mode did not change while the classifier ran, and no deny appeared.
+
+The Host pushes a mode change to `POST /internal/sessions/:id/permission-mode`, and `SessionRegistry.reconsiderPermissions` re-evaluates every pending execution approval of that session, so a switch to `auto` answers a card that was already waiting.
+
 ## Native goal mode
 
 Session control accepts `goal` operations `create`, `pause`, `resume`, and `drop`. Creation requires a nonempty objective and accepts a positive integer token budget (or `null` for no budget). The Host authorizes the session scope and forwards the operation; it stores no native goal state. Create and resume refuse an active run; pause and drop remain available during execution.

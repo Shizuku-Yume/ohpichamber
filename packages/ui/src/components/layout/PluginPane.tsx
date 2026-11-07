@@ -13,7 +13,6 @@ import {
  guestFileScope,
  type AttachIssueRequest,
  type GuestBlockCall,
- type GuestConnection,
  type GuestHostSurface,
  type GuestItem,
  type GuestPopoverClosedEvent,
@@ -23,6 +22,7 @@ import {
  type HostMessage,
  type HostReadyContext,
  type ResolveResultPayload,
+ type JsonValue,
  trackerProviderIdOf,
 } from '@openchamber/sdk';
 import { guestMessageSchema } from '@openchamber/sdk/schemas';
@@ -75,6 +75,7 @@ import {
 } from '@/lib/guests/oauth';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useTrackerAuthEntry, useTrackerAuthStore } from '@/stores/useTrackerAuthStore';
+import { trackerGuestConnection } from '@/lib/guests/tracker-connection';
 import { useGuestOauthStore } from '@/lib/guests/oauth-store';
 import { linkGuestSession, promptGuestSession, startGuestSession } from '@/lib/guests/start-session';
 import { useGuestsStore } from '@/lib/guests/store';
@@ -91,6 +92,7 @@ import { cn } from '@/lib/utils';
 import { closeGuestTabsEverywhere } from '@/lib/guests/tabs';
 import { pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
 import { useInputStore } from '@/sync/input-store';
+import { useSelectionStore } from '@/sync/selection-store';
 import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
 import { useSessionSelector, useSessionStatus } from '@/sync/sync-context';
 import type { Session } from '@openchamber/agent-contract';
@@ -166,24 +168,6 @@ const readCssVar = (name: string, fallback: string): string => {
  return value || fallback;
 };
 
-const trackerGuestConnection = (status: { connected?: boolean; account?: { name?: string; user?: { name?: string }; id?: string } } | null | undefined): GuestConnection => {
- if (!status?.connected) return EMPTY_GUEST_CONNECTION;
- const account = status.account;
- return { connected: true, account: account?.name ?? account?.user?.name ?? account?.id ?? '' };
-};
-
-type FrameSessionFields = { id?: string; title?: string; model?: string; agent?: string };
-
-const frameSessionFields = (session: Session | undefined): FrameSessionFields => ({
- id: session?.sessionId ?? session?.id,
- title: session?.title,
- model: session?.model ?? undefined,
- agent: session?.agent,
-});
-
-const sameFrameSessionFields = (left: FrameSessionFields, right: FrameSessionFields): boolean => (
- left.id === right.id && left.title === right.title && left.model === right.model && left.agent === right.agent
-);
 export const PluginPane: React.FC<PluginPaneProps> = ({
  mode,
  surface = 'panel',
@@ -215,8 +199,26 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  // Only the captured kinds that name a session carry one; a diff or file
  // item leaves the pane on the session the user has open.
  const actionItem = backgroundAction?.item ?? null;
+ const actionTitle = actionItem && 'sessionTitle' in actionItem ? actionItem.sessionTitle : undefined;
  const currentSessionId = actionItem && 'sessionId' in actionItem ? actionItem.sessionId : selectedSessionId;
- const session = useSessionSelector(currentSessionId, directory || undefined, frameSessionFields, sameFrameSessionFields);
+ const sessionTitle = useSessionSelector(
+  currentSessionId,
+  directory || undefined,
+  React.useCallback((s: Session | undefined) => s?.title, []),
+ );
+ const sessionModel = useSelectionStore(
+  React.useCallback((state) => {
+   if (!currentSessionId) return undefined;
+   const selection = state.sessionModelSelections.get(currentSessionId);
+   return selection ? `${selection.providerId}/${selection.modelId}` : undefined;
+  }, [currentSessionId]),
+ );
+ const sessionAgent = useSelectionStore(
+  React.useCallback((state) => {
+   if (!currentSessionId) return undefined;
+   return state.sessionAgentSelections.get(currentSessionId);
+  }, [currentSessionId]),
+ );
  const sessionStatus = useSessionStatus(currentSessionId ?? '', directory || undefined);
  const iframeRef = React.useRef<HTMLIFrameElement>(null);
  const [activePopover, setActivePopover] = React.useState<{ request: GuestPopoverRequest; position: GuestPopoverPosition; entry: string; directory: string; activation: GuestPopoverActivation } | null>(null);
@@ -265,13 +267,15 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   () => toGuestSessionSnapshot(
    currentSessionId
     ? {
-     id: session?.id ?? currentSessionId,
-     title: session?.title ?? (actionItem && 'sessionTitle' in actionItem ? actionItem.sessionTitle : undefined),
+     id: currentSessionId,
+     title: sessionTitle ?? actionTitle,
      busy: sessionBusy,
+     model: sessionModel,
+     agent: sessionAgent,
     }
     : null,
   ),
-  [actionItem, currentSessionId, session, sessionBusy],
+  [actionTitle, currentSessionId, sessionAgent, sessionBusy, sessionModel, sessionTitle],
  );
 
  const readableColors = React.useMemo(() => getReadableThemeColors(currentTheme), [currentTheme]);
@@ -361,9 +365,16 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
       : surface === 'file' ? fileEditorEntry
        : surface === 'dialog' && guest.attachEntry ? guest.attachEntry : guest.entry ?? null
   : null);
- const { src, srcDoc, status: frameStatus, retry: retryFrame, recoverExpiredNavigation, acknowledgeHandshake, rejectSdkVersion } = useGuestFrameUrl({
-  guestId, entry: guestEntry, instanceKey: frameKey, enabled: guestEnabled, origins: approvedOrigins, reuseDocument: surface === 'block' || headless,
+ const frameUrl = useGuestFrameUrl({
+  guestId,
+  entry: guestEntry,
+  instanceKey: frameKey,
+  enabled: guestEnabled,
+  origins: approvedOrigins,
  });
+ const { src, srcDoc, status: frameStatus, recoverExpiredNavigation, acknowledgeHandshake, rejectSdkVersion } = frameUrl;
+ // SAFETY: recoverExpiredNavigation re-evaluates and navigates iframe on error
+ const retryFrame = (frameUrl as { retry?: () => void }).retry ?? recoverExpiredNavigation;
 
  const readyRef = React.useRef(ready);
  readyRef.current = ready;
@@ -426,8 +437,15 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
  React.useEffect(() => {
   if (!guestEnabled) return undefined;
   return subscribeOpenchamberEvents((event) => {
-   if (event.type !== 'guest-service-event' || event.guestId !== guestId) return;
-   postToGuest({ channel: OPENCHAMBER_SDK_CHANNEL, v: OPENCHAMBER_SDK_API_VERSION, type: 'service-event', payload: { topic: event.topic, data: event.data } });
+   // SAFETY: checks discriminator for extended server service event
+   const candidate = event as { type: string; guestId?: string; topic?: string; data?: JsonValue };
+   if (candidate.type !== 'guest-service-event' || candidate.guestId !== guestId) return;
+   postToGuest({
+    channel: OPENCHAMBER_SDK_CHANNEL,
+    v: OPENCHAMBER_SDK_API_VERSION,
+    type: 'service-event',
+    payload: { topic: candidate.topic ?? '', data: candidate.data ?? null },
+   });
   });
  }, [guestEnabled, guestId, postToGuest]);
 
@@ -696,7 +714,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    const requestOwner = message.type === 'generate' && !headless ? generateOwner() : null;
    const requestDocument = frameDocumentRef.current;
 
-   void answerGuestMessage(message, {
+   const bridgeEffects: Parameters<typeof answerGuestMessage>[1] & { answerBlock?: (text: string) => Promise<void> } = {
     workspaceRead: (query) => { requireSessions(); return readGuestWorkspace(query, guestIdRef.current); },
     workspaceSubscribe: ({ subscriptionId, query }) => {
      requireSessions();
@@ -742,7 +760,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
     toast: (request) => {
      // Full pause: a disabled guest must not spam host toasts while the frame tears down.
      if (!guestEnabledRef.current) return;
-     showGuestToast(request);
+     showGuestToast(request, guestIdRef.current);
     },
     openUrl: openExternalUrl,
     openSurface: (surfaceMode) => openGuestSurface({
@@ -1013,7 +1031,8 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
       schedulePopoverClose(activePopoverRef.current.activation, 'anchor');
      }
     },
-   }).then((reply) => {
+   };
+   void answerGuestMessage(message, bridgeEffects).then((reply) => {
     if (message.type === 'shell-output' || message.type === 'shell-stop') {
      postGuestShellReply(reply, {
       port: guestPortRef.current, expectedPort: messagePort, runtimeKey,

@@ -541,3 +541,73 @@ test('compaction.modelThresholds preserves and renders valid native string thres
   expect(inputs.includes('80%')).toBe(true);
   expect(inputs.includes('f100000')).toBe(true);
 });
+
+test('numeric option with default sentinel (-1) renders Default label in trigger without NaN', async () => {
+  const sentinelState = {
+    workspaceId: 'workspace_1',
+    revision: '17',
+    settings: [
+      {
+        id: 'compaction.thresholdPercent' as const,
+        type: 'number' as const,
+        value: -1,
+        default: -1,
+        configured: true,
+        label: 'Compaction Threshold',
+        group: 'Compaction',
+        tab: 'context',
+        options: [
+          { value: 'default', label: 'Default' },
+          { value: '50', label: '50%' },
+        ],
+      },
+    ],
+  };
+
+  getSettings.mockResolvedValue(sentinelState as unknown as OmpSettingsState);
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+
+  const row = container.querySelector('[data-settings-item="omp.compaction.thresholdPercent"]');
+  expect(row).not.toBeNull();
+  // Verifies trigger text is Default, not blank or NaN
+  expect(row?.textContent).toContain('Default');
+});
+
+test('StringRecordField preserves scalar and structured values without lossy string coercion', async () => {
+  const recordState = {
+    workspaceId: 'workspace_1',
+    revision: '18',
+    settings: [
+      {
+        id: 'tools.approval' as const,
+        type: 'record' as const,
+        value: {
+          bash: true,
+          edit: 'always-ask',
+          retryCount: 3,
+        },
+        default: {},
+        configured: true,
+        label: 'Tool Approvals',
+        group: 'Approvals',
+        tab: 'interaction',
+      },
+    ],
+  };
+
+  getSettings.mockResolvedValue(recordState as unknown as OmpSettingsState);
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+
+  const recordRow = container.querySelector('[data-settings-item="omp.tools.approval"]');
+  expect(recordRow).not.toBeNull();
+  expect(recordRow?.textContent).toContain('bash:');
+  expect(recordRow?.textContent).toContain('edit:');
+  expect(recordRow?.textContent).toContain('retryCount:');
+
+  const inputs = Array.from(recordRow?.querySelectorAll('input') ?? []).map((i) => i.value);
+  expect(inputs.includes('true')).toBe(true);
+  expect(inputs.includes('always-ask')).toBe(true);
+  expect(inputs.includes('3')).toBe(true);
+});

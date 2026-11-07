@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/select';
 import {
   DEFAULT_RESPONSE_STYLE_PRESET,
-  getResponseStylePresetInstructions,
   isResponseStylePreset,
   RESPONSE_STYLE_PRESETS,
   resolveResponseStyleInstruction,
@@ -33,6 +32,7 @@ import {
   SettingsCheckboxRow,
   SettingsChipGroup,
   SettingsFieldRow,
+  SettingsStackedField,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
@@ -50,6 +50,9 @@ const readApiError = async (response: Response, fallback: string) => {
 const normalizeAgentsMdContent = (content: string) => (
   content.length > 0 && !content.endsWith('\n') ? `${content}\n` : content
 );
+
+/** The file both scopes edit; a path literal, so it stays untranslated. */
+const AGENTS_MD_FILE_NAME = 'AGENTS.md';
 
 type RulesScope = 'global' | 'project';
 
@@ -248,10 +251,6 @@ export const BehaviorPage: React.FC = () => {
   const setRulesValue = rulesScope === 'global' ? setGlobalRules : setProjectRules;
   const rulesDisabled = isLoading || (rulesScope === 'project' && !settingsDirectory);
 
-  const responseStylePreview = responseStylePreset === 'custom'
-    ? responseStyleCustomInstructions
-    : getResponseStylePresetInstructions(responseStylePreset);
-
   return (
     <SettingsPageLayout
       title={t('settings.behavior.page.title')}
@@ -261,6 +260,16 @@ export const BehaviorPage: React.FC = () => {
       <SettingsSection
         title={t('settings.behavior.page.section.systemPrompt')}
         divider={false}
+        info={(
+          <div className="space-y-1">
+            <p className="font-medium text-foreground">
+              {t('settings.behavior.page.warning.title')}
+            </p>
+            <p>
+              {t('settings.behavior.page.warning.description', { path: AGENTS_MD_FILE_NAME })}
+            </p>
+          </div>
+        )}
         settingsItem="behavior.system-prompt"
         contentClassName="space-y-3"
       >
@@ -273,15 +282,20 @@ export const BehaviorPage: React.FC = () => {
           ]}
           aria-label={t('settings.behavior.page.section.systemPrompt')}
         />
-        <Textarea
-          value={rulesValue}
-          onChange={(event) => setRulesValue(event.target.value)}
-          placeholder={t('settings.behavior.page.field.systemPromptPlaceholder')}
-          rows={12}
-          disabled={rulesDisabled}
-          outerClassName="min-h-[160px] max-h-[70vh]"
-          className="w-full font-mono typography-meta bg-transparent"
-        />
+        <SettingsStackedField
+          label={AGENTS_MD_FILE_NAME}
+          controlClassName="w-full max-w-[40rem] flex-col items-stretch"
+        >
+          <Textarea
+            value={rulesValue}
+            onChange={(event) => setRulesValue(event.target.value)}
+            placeholder={t('settings.behavior.page.field.systemPromptPlaceholder')}
+            rows={12}
+            disabled={rulesDisabled}
+            outerClassName="min-h-[160px]"
+            className="w-full font-mono typography-meta bg-transparent"
+          />
+        </SettingsStackedField>
       </SettingsSection>
 
       <SettingsSection
@@ -303,7 +317,6 @@ export const BehaviorPage: React.FC = () => {
 
         <SettingsFieldRow
           label={t('settings.behavior.page.responseStyle.preset')}
-          alignEnd={false}
         >
           <Select<ResponseStylePreset>
             value={responseStylePreset}
@@ -328,15 +341,23 @@ export const BehaviorPage: React.FC = () => {
           </Select>
         </SettingsFieldRow>
 
-        <Textarea
-          value={responseStylePreview}
-          onChange={(event) => setResponseStyleCustomInstructions(event.target.value)}
-          placeholder={t('settings.behavior.page.responseStyle.customPlaceholder')}
-          rows={5}
-          disabled={isLoading || !responseStyleEnabled || responseStylePreset !== 'custom'}
-          outerClassName="min-h-[120px]"
-          className="w-full font-mono typography-meta bg-transparent"
-        />
+        {responseStylePreset === 'custom' ? (
+          <SettingsStackedField
+            label={t('settings.behavior.page.responseStyle.option.custom')}
+            controlClassName="w-full max-w-[40rem] flex-col items-stretch"
+          >
+            <Textarea
+              aria-label={t('settings.behavior.page.responseStyle.option.custom')}
+              value={responseStyleCustomInstructions}
+              onChange={(event) => setResponseStyleCustomInstructions(event.target.value)}
+              placeholder={t('settings.behavior.page.responseStyle.customPlaceholder')}
+              rows={5}
+              disabled={isLoading || !responseStyleEnabled}
+              outerClassName="min-h-[120px]"
+              className="w-full font-mono typography-meta bg-transparent"
+            />
+          </SettingsStackedField>
+        ) : null}
       </SettingsSection>
     </SettingsPageLayout>
   );

@@ -25,30 +25,42 @@ const result = (overrides: Partial<ProviderResult> = {}): ProviderResult => ({
 const staleError = (error: string) => `stale: ${error}`;
 
 describe('UsagePage panel state', () => {
-  test('an unconfigured provider is an empty state with no error', () => {
+  test('an unconfigured provider offers the actionable callout, not an empty state', () => {
     const state = resolveUsagePanelState(
       result({ ok: false, configured: false, usage: null }),
       undefined,
       staleError,
     );
 
-    expect(state).toEqual({ usage: null, error: null, empty: true });
+    expect(state).toEqual({ usage: null, error: null, empty: false, unconfigured: true });
   });
 
-  test('a configured provider failure keeps its error', () => {
+  test('no result at all is the plain empty state', () => {
+    const state = resolveUsagePanelState(null, undefined, staleError);
+
+    expect(state).toEqual({ usage: null, error: null, empty: true, unconfigured: false });
+  });
+
+  test('a configured provider failure keeps its error and is not unconfigured', () => {
     const state = resolveUsagePanelState(
       result({ ok: false, error: 'Selected credential unavailable', usage: null }),
       undefined,
       staleError,
     );
 
-    expect(state).toEqual({ usage: null, error: 'Selected credential unavailable', empty: false });
+    expect(state).toEqual({
+      usage: null,
+      error: 'Selected credential unavailable',
+      empty: false,
+      unconfigured: false,
+    });
   });
 
   test('a configured provider with retained usage reports the refresh failure as stale', () => {
     const state = resolveUsagePanelState(result(), 'Provider API unavailable', staleError);
 
     expect(state.empty).toBe(false);
+    expect(state.unconfigured).toBe(false);
     expect(state.usage?.windows.session).toEqual(window);
     expect(state.error).toBe('stale: Provider API unavailable');
   });
@@ -57,6 +69,7 @@ describe('UsagePage panel state', () => {
     const state = resolveUsagePanelState(result(), undefined, staleError);
 
     expect(state.empty).toBe(false);
+    expect(state.unconfigured).toBe(false);
     expect(state.error).toBeNull();
   });
 });

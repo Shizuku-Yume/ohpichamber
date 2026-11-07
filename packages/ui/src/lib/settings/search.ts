@@ -948,6 +948,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['identity', 'profile', 'author', 'email', 'credentials', 'account', 'transport', 'ssh', 'ssh key', 'signing', 'commit signing', 'ssh signing', 'gpg'],
   },
   {
+    id: 'git.commit-model',
+    page: 'git',
+    titleKey: 'settings.omp.modelRoles.role.commit.label',
+    descriptionKey: 'settings.omp.modelRoles.role.commit.desc',
+    keywords: ['commit', 'message', 'model', 'role', 'commit message model', 'generation', 'pr description'],
+  },
+  {
     id: 'git.changes-view',
     page: 'git',
     titleKey: 'settings.openchamber.git.changesViewTitle',

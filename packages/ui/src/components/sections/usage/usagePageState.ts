@@ -5,16 +5,20 @@ interface UsagePanelState {
   usage: ProviderResult['usage'];
   /** A real failure message; null for an unconfigured provider. */
   error: string | null;
-  /** No credential means the page shows its normal empty state. */
+  /** No result arrived at all, so the page can only say no data is available. */
   empty: boolean;
+  /** The provider answered but holds no credential, so the page offers the fix. */
+  unconfigured: boolean;
 }
 
 /**
  * Which outcome the selected provider's panel shows.
  *
- * An unconfigured provider is an empty state, not a refresh failure. A failure
- * from a configured provider keeps its error, and when a usage sample survived
- * the failure the message says the data is stale.
+ * A provider without a stored credential is actionable, not a refresh failure:
+ * the page shows the callout that leads to the sign-in or the Providers tab.
+ * A failure from a configured provider keeps its error, and when a usage sample
+ * survived the failure the message says the data is stale. Only the absence of
+ * any result is the plain empty state.
  */
 export const resolveUsagePanelState = (
   result: ProviderResult | null,
@@ -29,7 +33,12 @@ export const resolveUsagePanelState = (
     : result?.configured && !result.ok
       ? result.error ?? null
       : null;
-  return { usage, error, empty: !result || !result.configured };
+  return {
+    usage,
+    error,
+    empty: result === null,
+    unconfigured: result !== null && !result.configured,
+  };
 };
 
 /** Quota reads require both an initialized catalog and its resolved workspace. */

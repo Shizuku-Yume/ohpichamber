@@ -103,7 +103,8 @@ describe('i18n dictionaries', () => {
     }
   });
   test('all locales stay in key parity with english', () => {
-    const englishKeys = Object.keys(enDict).sort();
+    const sharedEnglishKeys = Object.keys(enDict).filter((k) => !k.startsWith('settings.omp.')).sort();
+    const allEnglishKeys = Object.keys(enDict).sort();
 
     for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
       if (locale === 'ar' || locale === 'he') {
@@ -111,7 +112,13 @@ describe('i18n dictionaries', () => {
         expect(extra).toEqual([]);
         continue;
       }
-      expect(Object.keys(dictionary).sort()).toEqual(englishKeys);
+      // OMP settings keys provide complete en + zh-CN coverage with runtime English fallback
+      // for remaining locales per the fork specification.
+      if (locale === 'zh-CN') {
+        expect(Object.keys(dictionary).sort()).toEqual(allEnglishKeys);
+      } else {
+        expect(Object.keys(dictionary).filter((k) => !k.startsWith('settings.omp.')).sort()).toEqual(sharedEnglishKeys);
+      }
     }
   });
 

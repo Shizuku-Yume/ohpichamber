@@ -3,8 +3,8 @@ import React from 'react';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
-/** Where an autocomplete item comes from; `opencode` and `openchamber` are the apps' own items. */
-export type AutocompleteScope = 'user' | 'project' | 'opencode' | 'openchamber';
+/** Where an autocomplete item comes from; `omp` and `openchamber` are the apps' own items. */
+export type AutocompleteScope = 'user' | 'project' | 'omp' | 'openchamber';
 
 const SCOPE_TONE = {
   project: 'bg-[color-mix(in_srgb,var(--status-info)_12%,transparent)] text-[color-mix(in_srgb,var(--status-info)_70%,transparent)] border-[color-mix(in_srgb,var(--status-info)_24%,transparent)]',
@@ -15,7 +15,7 @@ const SCOPE_TONE = {
 const SCOPE_LABEL = {
   user: 'chat.autocomplete.scope.user',
   project: 'chat.autocomplete.scope.project',
-  opencode: 'chat.autocomplete.scope.opencode',
+  omp: 'chat.autocomplete.scope.omp',
   openchamber: 'chat.autocomplete.scope.openchamber',
 } as const;
 

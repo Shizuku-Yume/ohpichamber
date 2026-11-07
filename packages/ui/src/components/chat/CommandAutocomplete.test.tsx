@@ -106,3 +106,30 @@ test('CommandAutocomplete filters commands matching query', async () => {
 
   expect(container.textContent).toContain('/dirs');
 });
+
+const rowBadge = (name: string): string | null => {
+  const label = Array.from(container.querySelectorAll('span')).find((node) => node.textContent === `/${name}`);
+  return label?.parentElement?.querySelector('span.uppercase')?.textContent ?? null;
+};
+
+test('badges built-in commands and /btw as OMP', async () => {
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <CommandAutocomplete
+          searchQuery=""
+          onCommandSelect={() => {}}
+          onClose={() => {}}
+        />
+      </I18nProvider>
+    );
+  });
+  await settle();
+
+  for (const builtin of ['compact', 'clear', 'dirs']) {
+    expect(rowBadge(builtin)).toBe('omp');
+  }
+  expect(container.textContent).toContain('/btw');
+  expect(rowBadge('btw')).toBe('omp');
+  expect(container.textContent?.toLowerCase()).not.toContain('opencode');
+});

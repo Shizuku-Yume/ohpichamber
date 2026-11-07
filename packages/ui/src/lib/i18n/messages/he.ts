@@ -8642,7 +8642,7 @@ export const dict = {
   "chat.markdown.suggestion.title": "שינוי מוצע",
   "chat.autocomplete.scope.user": "משתמש",
   "chat.autocomplete.scope.project": "פרויקט",
-  "chat.autocomplete.scope.opencode": "opencode",
+  "chat.autocomplete.scope.omp": "omp",
   "chat.autocomplete.scope.openchamber": "openchamber",
   "chat.autocomplete.skillsEmpty": "לא נמצאו מיומנויות",
   "chat.workflow.state.awaitingApproval": "ממתין לך",

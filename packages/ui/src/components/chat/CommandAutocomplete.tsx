@@ -177,8 +177,11 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
           ]
         : []
       ),
-      ...(hasSession
-        ? [{ id: 'openchamber:btw', name: 'btw', source: 'openchamber' as const, description: t('chat.commandAutocomplete.command.btwDescription'), isOpenChamber: true }]
+      ...(hasSession && !builtinCommandNames.includes('btw')
+        // `/btw` is an OMP built-in that the composer runs itself (BtwPanel),
+        // so it carries the OMP badge like the other native commands. The
+        // catalog list wins when the service publishes it.
+        ? [{ id: 'native:btw', name: 'btw', source: 'native' as const, description: t('chat.commandAutocomplete.command.btwDescription'), isBuiltIn: true }]
         : []
       ),
       ...(hasSession
@@ -357,7 +360,7 @@ export const CommandAutocomplete = React.forwardRef<CommandAutocompleteHandle, C
                 >
                   <span className="max-w-[60%] shrink-0 truncate font-medium">/{command.name}</span>
                   <AutocompleteRowDetail
-                    scope={command.isOpenChamber ? 'openchamber' : command.isBuiltIn ? 'opencode' : (command.scope === 'project' || command.scope === 'workspace') ? 'project' : command.scope ? 'user' : null}
+                    scope={command.isOpenChamber ? 'openchamber' : command.isBuiltIn ? 'omp' : (command.scope === 'project' || command.scope === 'workspace') ? 'project' : command.scope ? 'user' : null}
                     extension={command.extensionName}
                     description={command.description}
                   />

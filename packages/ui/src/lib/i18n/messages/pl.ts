@@ -4996,7 +4996,7 @@ export const dict = {
   "chat.markdown.suggestion.title": "Sugerowana zmiana",
   "chat.autocomplete.scope.user": "użytkownik",
   "chat.autocomplete.scope.project": "projekt",
-  "chat.autocomplete.scope.opencode": "opencode",
+  "chat.autocomplete.scope.omp": "omp",
   "chat.autocomplete.scope.openchamber": "openchamber",
   "chat.autocomplete.skillsEmpty": "Nie znaleziono skilli",
   "chat.workflow.state.awaitingApproval": "Czeka na ciebie",

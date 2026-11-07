@@ -909,7 +909,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   const [textViewMode, setTextViewMode] = React.useState<TextViewMode>('edit');
   const [mdViewMode, setMdViewMode] = React.useState<PreviewViewMode>('edit');
   const [jsonViewMode, setJsonViewMode] = React.useState<'tree' | 'text'>('tree');
-  const [htmlViewMode, setHtmlViewMode] = React.useState<PreviewViewMode>('edit');
+  const [htmlViewMode, setHtmlViewMode] = React.useState<PreviewViewMode>('preview');
   const [drawioViewMode, setDrawioViewMode] = React.useState<PreviewViewMode>('preview');
   const [canvasViewMode, setCanvasViewMode] = React.useState<PreviewViewMode>('preview');
   const [svgViewMode, setSvgViewMode] = React.useState<PreviewViewMode>('preview');
@@ -2879,7 +2879,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   }, [canEdit, textViewMode]);
 
   const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
-  const HTML_VIEWER_MODE_KEY = 'openchamber:files:html-viewer-mode';
   const JSON_VIEWER_MODE_KEY = 'openchamber:files:json-viewer-mode';
 
   React.useEffect(() => {
@@ -2903,16 +2902,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     }
     setMdViewMode(mdViewModeByPathRef.current[selectedPath] ?? mdDefault);
 
-    let htmlDefault: PreviewViewMode = settingsDefaultFileViewerPreview ? 'preview' : 'edit';
-    try {
-      const stored = localStorage.getItem(HTML_VIEWER_MODE_KEY);
-      if (stored === 'preview' || stored === 'edit') {
-        htmlDefault = stored;
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-    setHtmlViewMode(htmlViewModeByPathRef.current[selectedPath] ?? htmlDefault);
+    // HTML pages are live documents: show the rendered page first and let the
+    // toolbar toggle swap it for the source. Only the open tab's own choice is
+    // remembered, so a page reopened from chat is always a live preview again.
+    setHtmlViewMode(htmlViewModeByPathRef.current[selectedPath] ?? 'preview');
     setDrawioViewMode(drawioViewModeByPathRef.current[selectedPath] ?? (settingsDefaultFileViewerPreview ? 'preview' : 'edit'));
     // Artifacts an agent produces are opened to be looked at: the picture,
     // the diagram, the table come first regardless of the text-first setting.
@@ -3016,11 +3009,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       htmlViewModeByPathRef.current[selectedPath] = mode;
     }
     setHtmlViewMode(mode);
-    try {
-      localStorage.setItem(HTML_VIEWER_MODE_KEY, mode);
-    } catch {
-      // Ignore localStorage errors
-    }
   }, [selectedFile?.path]);
 
   const saveDrawioViewMode = React.useCallback((mode: PreviewViewMode) => {
@@ -3202,9 +3190,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
         if (isMarkdownFile(path)) {
           mdViewModeByPathRef.current[path] = previewMode;
         }
-        if (isHtmlFile(path)) {
-          htmlViewModeByPathRef.current[path] = previewMode;
-        }
         if (isDrawioFile(path)) {
           drawioViewModeByPathRef.current[path] = previewMode;
         }
@@ -3215,14 +3200,15 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
 
       setTextViewMode('edit');
       setMdViewMode(previewMode);
-      setHtmlViewMode(previewMode);
+      // HTML stays on its live preview: the setting governs source-first text
+      // files, not pages that are meant to be looked at.
+      setHtmlViewMode('preview');
       setDrawioViewMode(previewMode);
       setCanvasViewMode(previewMode);
       setJsonViewMode(nextJsonMode);
 
       try {
         localStorage.setItem(MD_VIEWER_MODE_KEY, previewMode);
-        localStorage.setItem(HTML_VIEWER_MODE_KEY, previewMode);
         localStorage.setItem(JSON_VIEWER_MODE_KEY, nextJsonMode);
       } catch {
         // Ignore localStorage errors

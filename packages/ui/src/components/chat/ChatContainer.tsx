@@ -1,3 +1,6 @@
+import { useMessageTTS } from "@/hooks/useMessageTTS";
+import { useAutoReadAloud } from "@/hooks/useAutoReadAloud";
+import { findLatestCompletedReply } from "@/lib/messages/latestReply";
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { Message as CanonicalMessage, Part } from '@openchamber/agent-contract';
@@ -108,6 +111,7 @@ import { createFirstVisibleSessionPerformanceTracker } from '@/sync/session-load
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 
 const EMPTY_MESSAGES: CanonicalMessage[] = [];
+const EMPTY_COMPLETED_REPLY_IDS: ReadonlySet<string> = new Set();
 const IDLE_SESSION_STATUS = 'idle' as const;
 const CHAT_FORCE_SCROLL_BOTTOM_EVENT = 'openchamber:chat-force-scroll-bottom';
 const DRAFT_EXIT_DURATION_MS = 120;
@@ -1097,6 +1101,31 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   // persisted last-session pointer the cold-launch restore reads.
   openNewSessionDraft({ automatic: true });
  }, [autoOpenDraft, liveSessionId, draftOpen, openNewSessionDraft]);
+
+ const autoReadAloudEnabled = useConfigStore((state) => state.autoReadAloudEnabled);
+ const latestCompletedReply = React.useMemo(
+  () => findLatestCompletedReply(sessionMessages),
+  [sessionMessages],
+ );
+ // Use the reply's own messageId as the reading key so the message
+ // button shows the auto-started reading as playing and can stop it.
+ const { play: playAutoReadAloud } = useMessageTTS(latestCompletedReply?.messageId);
+ // Permission prompts pause sessionIsWorking while the turn is still
+ // running, so status also marks the session as active for the auto-read
+ // baseline.
+ const sessionIsActive = sessionIsWorking
+  || sessionStatusForCurrent.type === "busy"
+  || sessionStatusForCurrent.type === "retry";
+ useAutoReadAloud({
+  sessionKey: currentSessionKey ?? "",
+  ready: hasRenderableSessionSnapshot && sessionMessageLoadState.status === "ready",
+  sessionIsActive,
+  reply: latestCompletedReply,
+  history: sessionMessages,
+  olderCompletedReplyIds: EMPTY_COMPLETED_REPLY_IDS,
+  enabled: autoReadAloudEnabled && !pinned && !readOnly,
+  play: playAutoReadAloud,
+ });
 
  const activeTurnChangeRef = React.useRef<(turnId: string | null) => void>(() => { });
  const handleActiveTurnChange = React.useCallback((turnId: string | null) => {

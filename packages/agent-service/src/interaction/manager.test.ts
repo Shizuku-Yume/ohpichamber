@@ -477,6 +477,31 @@ describe('service-owned interaction CAS', () => {
   };
   const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
+  const runWithSafety = (
+    gate: Promise<'accept' | 'hold'>,
+    verdict: 'accept' | 'hold' = 'accept',
+    afterVerdictMode: 'safety' | 'ask' = 'safety',
+  ) => {
+    const decisions: { value: 'safety' | 'ask' } = { value: 'safety' };
+    const resolveMode = vi.fn(async () => decisions.value);
+    const evaluate = vi.fn(async () => {
+      decisions.value = afterVerdictMode;
+      return verdict === 'accept' ? gate : Promise.resolve('hold');
+    });
+    const { manager, operations, events } = withAuthority({ resolveMode, evaluate });
+    manager.onRequest('session-1', 'worker-1', permissionApproval);
+    return { manager, operations, events };
+  };
+
+  const settleSafety = async (run: ReturnType<typeof withAuthority>) => {
+    await settle();
+    return {
+      approvals: run.manager.approvals('session-1'),
+      requested: run.events.filter(input => input.event.type === 'approval.requested'),
+      operations: run.operations,
+    };
+  };
+
   test('auto answers the execution gate through CAS and leaves every other card', async () => {
     const { manager, operations, events } = withAuthority(authority({ 'session-1': 'auto' }));
     try {
@@ -516,33 +541,35 @@ describe('service-owned interaction CAS', () => {
     }
   });
 
-  test('safety accepts only on the Host verdict and re-reads the mode after it', async () => {
+  test('safety publishes only after a hold, and never accepts a downgraded mode', async () => {
+    // A pending verdict hides the request: nothing is advertised as a card yet.
     const gate = Promise.withResolvers<'accept' | 'hold'>();
-    const resolveMode = vi.fn(async () => 'safety' as const);
-    const evaluate = vi.fn(async () => gate.promise);
-    const { manager, operations } = withAuthority({ resolveMode, evaluate });
-    try {
-      manager.onRequest('session-1', 'worker-1', permissionApproval);
-      expect(manager.approvals('session-1')).toHaveLength(1);
-      // The user drops to ask while the safety net runs: no approval may follow.
-      resolveMode.mockImplementation(async () => 'ask');
-      gate.resolve('accept');
-      await settle();
-      expect(manager.approvals('session-1')).toHaveLength(1);
-      expect(operations).toHaveLength(0);
+    const held = runWithSafety(gate);
+    expect(held.manager.approvals('session-1')).toHaveLength(0);
+    gate.resolve('hold');
+    // A hold publishes the card the user must answer, exactly once.
+    const afterHold = await settleSafety(held);
+    expect(afterHold.approvals).toHaveLength(1);
+    expect(afterHold.requested).toHaveLength(1);
+    expect(afterHold.operations).toHaveLength(0);
 
-      // A worker replacement during the evaluation cannot approve the stale record.
-      const held = Promise.withResolvers<'accept'>();
-      const replacementOps: WorkerOperation[] = [];
-      const replacement = new InteractionManager(60_000, undefined, { resolveMode: async () => 'safety', evaluate: async () => held.promise });
-      replacement.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { replacementOps.push(operation); }, () => {});
-      replacement.onRequest('session-1', 'worker-1', permissionApproval);
-      replacement.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async operation => { replacementOps.push(operation); }, () => {});
-      held.resolve('accept');
-      await settle();
-      expect(replacementOps).toEqual([]);
-      replacement.closeSession('session-1');
-    } finally { manager.closeSession('session-1'); }
+    // Switching to ask while the safety net runs leaves the request unpublished.
+    const downgraded = runWithSafety(Promise.withResolvers<'accept'>(), 'accept', 'ask');
+    const afterDowngrade = await settleSafety(downgraded);
+    expect(afterDowngrade.operations).toHaveLength(0);
+    expect(afterDowngrade.approvals).toHaveLength(1);
+
+    // A worker replacement during the evaluation cannot approve the stale record.
+    const stale = Promise.withResolvers<'accept'>();
+    const replacementOps: WorkerOperation[] = [];
+    const replacement = new InteractionManager(60_000, undefined, { resolveMode: async () => 'safety', evaluate: async () => stale.promise });
+    replacement.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { replacementOps.push(operation); }, () => {});
+    replacement.onRequest('session-1', 'worker-1', permissionApproval);
+    replacement.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async operation => { replacementOps.push(operation); }, () => {});
+    stale.resolve('accept');
+    await settle();
+    expect(replacementOps).toEqual([]);
+    replacement.closeSession('session-1');
   });
 
   test('reconsidering pending approvals answers one already waiting on a mode switch', async () => {
@@ -557,6 +584,30 @@ describe('service-owned interaction CAS', () => {
       await settle();
       expect(operations).toEqual([{ type: 'approval.resolve', approvalId: 'permission-1', decision: 'approve' }]);
       expect(manager.approvals('session-1')).toHaveLength(0);
+    } finally { manager.closeSession('session-1'); }
+  });
+
+  test('a mode switch and a user reply racing the safety net do not raise an unhandled rejection', async () => {
+    const gate = Promise.withResolvers<'accept'>();
+    const { manager, events, operations } = withAuthority({ resolveMode: async () => 'safety', evaluate: async () => gate.promise });
+    try {
+      manager.onRequest('session-1', 'worker-1', permissionApproval);
+      // The user answers first; the pending verdict must not resolve twice.
+      const userReply = manager.resolveApproval('session-1', 'permission-1', {
+        decision: 'reject', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1',
+      });
+      manager.reconsiderPending('session-1');
+      manager.reconsiderPending('session-1');
+      gate.resolve('accept');
+      await expect(userReply).resolves.toMatchObject({ status: 'rejected' });
+      await settle();
+      // Exactly one resolution reaches the worker, and the competing safety
+      // verdict neither duplicates it nor rejects unhandled.
+      expect(operations.filter(operation => operation.type === 'approval.resolve')).toHaveLength(1);
+      // The reply landed before the card was announced, so nothing was published
+      // and nothing is resolved on the wire; no duplicate CAS attempt either.
+      expect(events.filter(input => input.event.type === 'approval.requested')).toHaveLength(0);
+      expect(events.filter(input => input.event.type === 'approval.resolved')).toHaveLength(0);
     } finally { manager.closeSession('session-1'); }
   });
 

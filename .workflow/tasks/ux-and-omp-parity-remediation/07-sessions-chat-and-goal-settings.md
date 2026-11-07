@@ -11,5 +11,7 @@
 - [ ] In `packages/ui/src/components/sections/openchamber/DefaultsSettings.tsx`, restore the full upstream `0056bf6a9` Sessions page controls and layout:
   - **Default Behavior**: Default Model selector (`default` role), Default Thinking Variant selector, Default Agent selector, Auto-apply Agent Default Model checkbox, Small Model (`smol`/`tiny` role with "Use default" toggle + model selector), Walkthrough Model (`slow` role with "Use default" toggle + model selector), and Fallback Model selector.
   - **Tool Permissions**: New Session Default Mode (`ask` / `safety` / `auto`, bound to Host permission policy) and Plan Mode Agents permission toggle.
+- **Base commit:** 3f87cc64f47ef5ef3982e36e7583fb1e2583ec4b
+- **Status:** active
 - [ ] Restore `packages/ui/src/components/sections/openchamber/SessionGoalCheckerField.tsx` (`SessionGoalCheckerField` for `Jev` vs `Small Model` and `SessionGoalMaxTurnsField` for max auto-turns 1–200) and wire both into `ChatSettings.tsx` (`AssistanceTab`), plus restore `pillSize="form"` on `SortableTabsStrip`.
 - [ ] Wire Goal completion checking and `sessionGoalMaxAutoTurns` into `packages/agent-service/src/worker/mode.ts` (`WorkerModeController`) using OMP's native `resolveJudge` (`judge` role / TypeSafe Jev / small model) and turn counter cap.

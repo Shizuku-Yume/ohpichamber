@@ -143,11 +143,140 @@ export const PluginRuntimeStateSchema = z.strictObject({
 }).refine(state => state.status !== 'ready' || state.appliedRevision !== null && state.error === null,
  'Ready plugin workers have a successful applied publication');
 export type PluginRuntimeState = z.infer<typeof PluginRuntimeStateSchema>;
+/**
+ * Discovery provider inventory from OMP's capability registry. Every registered
+ * provider is reported with its exact switch state, including providers that
+ * currently discover no items, so a disabled provider never disappears from the
+ * control surface.
+ */
+export const ExtensionProviderEntrySchema = z.strictObject({
+ id: z.string().min(1),
+ displayName: z.string().min(1),
+ description: z.string(),
+ priority: z.number().int(),
+ capabilities: z.array(z.string().min(1)),
+ enabled: z.boolean(),
+ userSourceEnabled: z.boolean(),
+ foreignUserSource: z.boolean(),
+ itemCount: z.number().int().nonnegative(),
+});
+export type ExtensionProviderEntry = z.infer<typeof ExtensionProviderEntrySchema>;
+
+export const ExtensionKindSchema = z.enum([
+ 'extension-module', 'skill', 'rule', 'tool', 'mcp', 'prompt', 'instruction', 'context-file', 'hook', 'slash-command', 'ssh',
+]);
+export type ExtensionKind = z.infer<typeof ExtensionKindSchema>;
+
+/** Native user/project/native levels, with native reported as the `builtin` scope. */
+export const ExtensionScopeSchema = z.enum(['user', 'project', 'builtin']);
+export type ExtensionScope = z.infer<typeof ExtensionScopeSchema>;
+/**
+ * Why a row is inactive. Two independent authorities remain distinct: the native
+ * switch itself (`enabled`, `shadowed`) and the reason it is off.
+ */
+export const ExtensionDisabledReasonSchema = z.enum(['provider-disabled', 'user-opt-in', 'item-disabled']);
+export type ExtensionDisabledReason = z.infer<typeof ExtensionDisabledReasonSchema>;
+
+/** Sanitized, non-secret facts about an item; never carries credentials or private material. */
+export const ExtensionItemMetadataSchema = z.strictObject({
+ transport: z.enum(['stdio', 'sse', 'http']).optional(),
+ host: z.string().min(1).optional(),
+ username: z.string().min(1).optional(),
+ port: z.number().int().positive().optional(),
+ requiresOptIn: z.boolean().optional(),
+});
+export type ExtensionItemMetadata = z.infer<typeof ExtensionItemMetadataSchema>;
+
+export const ExtensionItemSchema = z.strictObject({
+ /** Opaque stable row identity; shadowed duplicates never share it. */
+ id: EntityIdSchema,
+ kind: ExtensionKindSchema,
+ name: z.string().min(1),
+ providerId: z.string().min(1).describe('id of the discovery provider that reported this row'),
+ providerName: z.string().min(1),
+ scope: ExtensionScopeSchema,
+ /** Display-safe path: home-relative, workspace-relative or an abbreviated tail. */
+ path: z.string().min(1),
+ /** Independent native switch: false when the provider, user opt-in gate or item switch turns this row off. */
+ enabled: z.boolean(),
+ /** A lower-precedence copy of another same-name row; never independently toggleable. */
+ shadowed: z.boolean(),
+ shadowedBy: z.string().min(1).optional(),
+ /** Which switch turned this row off; absent while enabled. */
+ disabledReason: ExtensionDisabledReasonSchema.optional(),
+ /**
+ * Native `disabledExtensions` identity this row toggles. Private to the service:
+ * callers toggle rows by {@link ExtensionItem.id}, never by this value.
+ */
+ toggleable: z.boolean(),
+ description: z.string().optional(),
+ triggers: z.array(z.string()),
+ /** Knowledge-body content for inspector; absent for profiles and connection items. */
+ content: z.string().optional(),
+ metadata: ExtensionItemMetadataSchema.optional(),
+}).superRefine((item, context) => {
+ if (item.shadowed && item.enabled) {
+  context.addIssue({ code: 'custom', path: ['enabled'], message: 'Shadowed rows are never enabled' });
+ }
+ if (!item.shadowed && item.disabledReason === undefined && !item.enabled) {
+  context.addIssue({ code: 'custom', path: ['disabledReason'], message: 'Disabled rows name the switch that turned them off' });
+ }
+ if (item.shadowed && item.disabledReason !== undefined) {
+  context.addIssue({ code: 'custom', path: ['disabledReason'], message: 'Shadowed rows report shadowing, not a disabled reason' });
+ }
+ if (item.shadowed && !item.shadowedBy) {
+  context.addIssue({ code: 'custom', path: ['shadowedBy'], message: 'Shadowed rows name the row that shadows them' });
+ }
+});
+export type ExtensionItem = z.infer<typeof ExtensionItemSchema>;
+
+export const ExtensionInventorySchema = z.strictObject({
+ providers: z.array(ExtensionProviderEntrySchema),
+ items: z.array(ExtensionItemSchema),
+ warnings: z.array(z.string()),
+ /** Native capability display names per kind, so no label is invented in the UI. */
+ kinds: z.array(z.strictObject({ kind: ExtensionKindSchema, label: z.string().min(1) })),
+}).refine(inventory => new Set(inventory.providers.map(provider => provider.id)).size === inventory.providers.length,
+ 'Discovery providers have unique identities',
+).refine(inventory => new Set(inventory.kinds.map(entry => entry.kind)).size === inventory.kinds.length,
+ 'Extension kinds have unique labels',
+).refine(inventory => new Set(inventory.items.map(item => item.id)).size === inventory.items.length,
+ 'Extension rows have unique identities',
+).refine(inventory => inventory.items.every(item => inventory.providers.some(provider => provider.id === item.providerId)),
+ 'Extension rows name a reported discovery provider',
+);
+export type ExtensionInventory = z.infer<typeof ExtensionInventorySchema>;
+
+export const ExtensionInventoryStateSchema = z.strictObject({
+ workspaceId: EntityIdSchema, revision: CounterSchema, extensions: ExtensionInventorySchema,
+});
+export type ExtensionInventoryState = z.infer<typeof ExtensionInventoryStateSchema>;
+
+/**
+ * Toggles persist native `disabledProviders` / `enabledProviders` /
+ * `disabledExtensions` settings. The request owns the expected workspace
+ * catalog revision so a stale editor cannot overwrite a newer save.
+ */
+export const ExtensionToggleRequestSchema = z.strictObject({
+ expectedRevision: CounterSchema,
+ providerId: z.string().min(1),
+ enabled: z.boolean(),
+ userSource: z.boolean().optional(),
+ /** Row `id` to toggle; a provider-level request omits it. */
+ extensionId: EntityIdSchema.optional(),
+}).superRefine((request, context) => {
+ if (request.extensionId !== undefined && request.userSource === true) {
+  context.addIssue({ code: 'custom', path: ['userSource'], message: 'Item toggles do not change user-source opt-in' });
+ }
+});
+export type ExtensionToggleRequest = z.infer<typeof ExtensionToggleRequestSchema>;
+
 export const PluginCatalogStateSchema = z.strictObject({
  workspaceId: EntityIdSchema, revision: CounterSchema, plugins: z.array(InstalledPluginEntrySchema),
  marketplace: z.array(MarketplaceEntrySchema), localExtensions: z.array(LocalExtensionEntrySchema), workers: z.array(PluginRuntimeStateSchema),
  marketplaceSources: z.array(MarketplaceSourceSchema).default([]),
  availableUpdates: z.array(PluginUpdateCheckEntrySchema).default([]),
+ extensions: ExtensionInventorySchema,
 }).refine(catalog => new Set(catalog.plugins.map(plugin => plugin.id)).size === catalog.plugins.length
  && new Set(catalog.localExtensions.map(extension => extension.extensionId)).size === catalog.localExtensions.length,
  'Plugin and local extension identities are unique').refine(

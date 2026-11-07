@@ -51,6 +51,7 @@ const plugin: InstalledPluginEntry = {
     overridden: false,
   }],
 };
+const emptyInventory: PluginCatalogState['extensions'] = { providers: [], items: [], warnings: [], kinds: [] };
 const emptyCatalog: PluginCatalogState = {
   workspaceId,
   revision: '3',
@@ -60,6 +61,7 @@ const emptyCatalog: PluginCatalogState = {
   workers: [],
   marketplaceSources: [],
   availableUpdates: [],
+  extensions: emptyInventory,
 };
 
 installTestDomGlobals();

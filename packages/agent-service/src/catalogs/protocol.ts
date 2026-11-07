@@ -15,14 +15,19 @@ import {
   CacheWarmingModeSchema, CacheWarmingStateSchema, CacheWarmingUpdateRequestSchema,
   OmpSettingsStateSchema, OmpSettingsUpdateRequestSchema,
 } from '@openchamber/agent-contract';
-import { PrivateCredentialResolveRequestSchema, PrivateCredentialResolveResultSchema,
-  PrivateCredentialHandoffRequestSchema, PrivateCredentialHandoffResultSchema } from './private-credentials.ts';
+import {
+  PrivateCredentialResolveRequestSchema, PrivateCredentialResolveResultSchema,
+  PrivateCredentialHandoffRequestSchema, PrivateCredentialHandoffResultSchema
+} from './private-credentials.ts';
 export * from './private-credentials.ts';
-import { NativePluginOperationSchemas, NativePluginResultSchemas } from './plugins.ts';
+import {
+  NativePluginOperationSchemas, NativePluginResultSchemas, NativeExtensionOperationSchemas, NativeExtensionResultSchemas,
+} from './plugins.ts';
 
 // Private worker envelopes carry canonical requests and owner-captured revisions.
 // The service owns authorization, CAS, serialization and cross-worker fan-out.
 export const CatalogOperationSchema = z.discriminatedUnion('type', [
+  ...NativeExtensionOperationSchemas,
   ...NativePluginOperationSchemas,
   z.strictObject({ type: z.literal('fileResources'), operation: FileResourceOperationSchema }),
   z.strictObject({ type: z.literal('catalog.models.read') }),
@@ -61,6 +66,7 @@ export const CatalogOperationSchema = z.discriminatedUnion('type', [
 export type CatalogOperation = z.infer<typeof CatalogOperationSchema>;
 
 export const CatalogResultSchema = z.discriminatedUnion('type', [
+  ...NativeExtensionResultSchemas,
   ...NativePluginResultSchemas,
   z.strictObject({ type: z.literal('fileResources'), result: FileResourceResultSchema }),
   z.strictObject({ type: z.literal('catalog.models'), catalog: ModelCatalogSchema }),

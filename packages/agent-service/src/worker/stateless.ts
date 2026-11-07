@@ -16,7 +16,9 @@ import type { WorkerAuthorize } from './policy.ts';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot } from '../native-policy-protocol.ts';
 import { NativePlugins } from './catalog-plugins.ts';
+import { NativeExtensions } from './catalog-extensions.ts';
 import { NativePluginOperationSchema } from '../catalogs/plugins.ts';
+import { NativeExtensionOperationSchema } from '../catalogs/plugins.ts';
 import { NativeFileResources } from './catalog-resources.ts';
 import { nativeSkillOptions } from './native-runtime.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
@@ -52,9 +54,11 @@ export class StatelessWorker {
     this.webSearch = new NativeWebSearch(runtime, input.workspaceId, authorize);
     this.settingsStore = new NativeSettings(runtime.settings);
     this.mcpCredentials = new NativeMcpCredentials(runtime.authStorage, input.workspaceId);
-    this.fileResources = new NativeFileResources({ cwd: input.cwd, agentDirectory: input.agentDirectory,
+    this.fileResources = new NativeFileResources({
+      cwd: input.cwd, agentDirectory: input.agentDirectory,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
-      get skillOptions() { return nativeSkillOptions(runtime.settings); } });
+      get skillOptions() { return nativeSkillOptions(runtime.settings); }
+    });
     this.mcp = input.mcpConfigPath ? new WorkerMcp({
       cwd: input.cwd, configPath: input.mcpConfigPath, authStorage: runtime.authStorage,
       worker: { rootSessionId: input.authorizationRootId, workspaceId: input.workspaceId, workerGeneration: input.workerGeneration },
@@ -63,7 +67,7 @@ export class StatelessWorker {
       authorizeServer: server => authorize({ type: 'mcp-server', server }),
       authorizeOAuth: (server, configuration) => authorize({ type: 'mcp-oauth', server, configuration: JsonObjectSchema.parse(Object.fromEntries(Object.entries(MCPOAuthPublicConfigurationSchema.parse(configuration)).filter(([, value]) => value !== undefined))) }),
       sanitizeTool: tool => tool,
-      onCatalog: () => {},
+      onCatalog: () => { },
       onRuntimeFailure: error => { process.stderr.write(`${JSON.stringify({ type: 'mcp.runtime.failure', error })}\n`); },
       isCurrent: () => !this.closed,
     }) : undefined;
@@ -168,9 +172,18 @@ export class StatelessWorker {
       PositiveCounterSchema.parse(revision);
       if (BigInt(revision) !== BigInt(operation.request.expectedRevision) + 1n) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Mutation revision does not follow its expected owning revision');
     }
-    const pluginOperation = NativePluginOperationSchema.safeParse(operation);
-    if (pluginOperation.success) return CatalogResultSchema.parse(await new NativePlugins({ cwd: this.input.cwd,
+    const extensionOperation = NativeExtensionOperationSchema.safeParse(operation);
+    if (extensionOperation.success) return CatalogResultSchema.parse(await new NativeExtensions({
+      cwd: this.input.cwd, agentDirectory: this.input.agentDirectory,
       worker: { rootSessionId: this.input.authorizationRootId, workspaceId: this.input.workspaceId, workerGeneration: this.input.workerGeneration },
+      settings: this.runtime.settings, extensionRoots: nativeExtensionRoots(this.runtime.settings),
+    }).operation(extensionOperation.data, revision));
+    const pluginOperation = NativePluginOperationSchema.safeParse(operation);
+    if (pluginOperation.success) return CatalogResultSchema.parse(await new NativePlugins({
+      cwd: this.input.cwd,
+      agentDirectory: this.input.agentDirectory,
+      worker: { rootSessionId: this.input.authorizationRootId, workspaceId: this.input.workspaceId, workerGeneration: this.input.workerGeneration },
+      settings: this.runtime.settings, extensionRoots: nativeExtensionRoots(this.runtime.settings),
     }).operation(pluginOperation.data, revision));
     const providerEntry = () => this.authorize({ type: 'provider-entry' });
     const workspaceId = this.input.workspaceId;

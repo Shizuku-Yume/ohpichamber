@@ -11,6 +11,9 @@ import {
   getMarketplacesCacheDir, getPluginsCacheDir
 } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
+import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
+import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capability/types';
+import { NativeExtensions } from './catalog-extensions.ts';
 import {
   MarketplacePluginDetailsSchema, JsonObjectSchema, type JsonObject, type InstalledPluginEntry, type PluginTarget, type PluginSettingDefinition,
   type CatalogWorkerIdentity, type PluginCatalogState, type MarketplaceEntry, type MarketplaceSource,
@@ -23,7 +26,12 @@ import { removeTemporaryFile } from './temporary-file.ts';
 
 export interface NativePluginsContext {
   cwd: string;
+  agentDirectory: string;
   worker: CatalogWorkerIdentity;
+  /** The worker's existing native settings instance; never a second authority. */
+  settings: Settings;
+  /** Current native extension roots, read when the inventory is projected. */
+  extensionRoots: EffectiveExtensionRoots;
 }
 const NativePluginConfigSchema = z.object({
   plugins: z.record(z.string(), z.object({ version: z.string(), enabledFeatures: z.array(z.string()).nullable(), enabled: z.boolean() })).optional(),
@@ -155,7 +163,8 @@ export class NativePlugins {
     return {
       workspaceId: this.context.worker.workspaceId, revision, plugins, marketplace: await this.marketplaceEntries(marketplace),
       marketplaceSources: sources, availableUpdates: await this.availableUpdates(marketplace),
-      localExtensions: (await this.local.list()).map(extensionId => ({ extensionId, relativePath: `.omp/extensions/${extensionId}` })), workers: []
+      localExtensions: (await this.local.list()).map(extensionId => ({ extensionId, relativePath: `.omp/extensions/${extensionId}` })),
+      workers: [], extensions: await new NativeExtensions(this.context).readInventory(),
     };
   }
 

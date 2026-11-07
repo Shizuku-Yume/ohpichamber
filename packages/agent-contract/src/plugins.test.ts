@@ -15,8 +15,10 @@ const plugin: InstalledPluginEntry = {
     { key: 'token', description: '', type: 'string', secret: true, configured: true, globalConfigured: true, overridden: false },
   ],
 };
-const catalog = { workspaceId: 'workspace', revision: '1', plugins: [plugin], marketplace: [], localExtensions: [], workers: [],
-  marketplaceSources: [], availableUpdates: [] };
+const catalog = {
+  workspaceId: 'workspace', revision: '1', plugins: [plugin], marketplace: [], localExtensions: [], workers: [],
+  marketplaceSources: [], availableUpdates: [], extensions: { providers: [], items: [], warnings: [], kinds: [] }
+};
 
 describe('native plugin contracts', () => {
   test('package installation has no fictitious workspace scope; marketplace scope is native', () => {
@@ -94,26 +96,39 @@ describe('native plugin contracts', () => {
   });
 
   test('catalog update entries describe native marketplace targets and generated defaults stay empty', () => {
-    const update = { pluginId: 'proof@native', scope: 'global',
-      target: { kind: 'marketplace', name: 'proof', marketplace: 'native', scope: 'user' }, from: '1.0.0', to: '2.0.0' };
+    const update = {
+      pluginId: 'proof@native', scope: 'global',
+      target: { kind: 'marketplace', name: 'proof', marketplace: 'native', scope: 'user' }, from: '1.0.0', to: '2.0.0'
+    };
     expect(PluginUpdateCheckEntrySchema.safeParse(update).success).toBe(true);
     expect(PluginUpdateCheckEntrySchema.safeParse({ ...update, scope: 'workspace' }).success).toBe(false);
-    expect(PluginUpdateCheckEntrySchema.safeParse({ ...update,
-      target: { kind: 'marketplace', name: 'proof', marketplace: 'native', scope: 'project' } }).success).toBe(false);
-    const parsed = PluginCatalogStateSchema.parse({ workspaceId: 'workspace', revision: '1', plugins: [], marketplace: [],
-      localExtensions: [], workers: [] });
+    expect(PluginUpdateCheckEntrySchema.safeParse({
+      ...update,
+      target: { kind: 'marketplace', name: 'proof', marketplace: 'native', scope: 'project' }
+    }).success).toBe(false);
+    const parsed = PluginCatalogStateSchema.parse({
+      workspaceId: 'workspace', revision: '1', plugins: [], marketplace: [],
+      localExtensions: [], workers: [], extensions: { providers: [], items: [], warnings: [], kinds: [] }
+    });
     expect(parsed.marketplaceSources).toEqual([]);
     expect(parsed.availableUpdates).toEqual([]);
+    expect(parsed.extensions).toEqual({ providers: [], items: [], warnings: [], kinds: [] });
   });
 
   test('marketplace entries carry rich manifest details without fabricated fields', () => {
-    const entry = MarketplaceEntrySchema.parse({ marketplace: 'native', name: 'proof', description: 'Native proof',
-      version: '1.0.0', details: { author: { name: 'Author' }, license: 'MIT', keywords: ['native'],
-        category: 'tools', commands: ['proof'], mcpServers: { proof: { command: 'proof' } }, lspServers: './lsp.json' } });
+    const entry = MarketplaceEntrySchema.parse({
+      marketplace: 'native', name: 'proof', description: 'Native proof',
+      version: '1.0.0', details: {
+        author: { name: 'Author' }, license: 'MIT', keywords: ['native'],
+        category: 'tools', commands: ['proof'], mcpServers: { proof: { command: 'proof' } }, lspServers: './lsp.json'
+      }
+    });
     expect(entry.details).toMatchObject({ author: { name: 'Author' }, category: 'tools', keywords: ['native'] });
     expect(MarketplaceEntrySchema.parse({ marketplace: 'native', name: 'plain', description: '', version: null }).details).toBeUndefined();
-    expect(MarketplaceEntrySchema.safeParse({ marketplace: 'native', name: 'plain', description: '', version: null,
-      details: { source: './plugins/plain' } }).success).toBe(false);
+    expect(MarketplaceEntrySchema.safeParse({
+      marketplace: 'native', name: 'plain', description: '', version: null,
+      details: { source: './plugins/plain' }
+    }).success).toBe(false);
   });
 
   test('catalogs reject duplicate native plugin identities', () => {

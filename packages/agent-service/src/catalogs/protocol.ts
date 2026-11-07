@@ -3,6 +3,7 @@ import { FileResourceOperationSchema, FileResourceResultSchema } from './file-re
 import {
   AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema,
   AgentMutationResultSchema, PositiveCounterSchema, ModelCatalogSchema, ModelConfigureRequestSchema,
+  ImageGenerateRequestSchema, ImageGenerateResultSchema,
   ModelDeleteRequestSchema, ModelMutationResultSchema, ProviderCatalogSchema,
   ProviderConfigureRequestSchema, ProviderDeleteRequestSchema, ProviderMutationResultSchema,
   ProviderCredentialWriteRequestSchema, ProviderCredentialDeleteRequestSchema,
@@ -31,6 +32,7 @@ export const CatalogOperationSchema = z.discriminatedUnion('type', [
   ...NativePluginOperationSchemas,
   z.strictObject({ type: z.literal('fileResources'), operation: FileResourceOperationSchema }),
   z.strictObject({ type: z.literal('catalog.models.read') }),
+  z.strictObject({ type: z.literal('catalog.image.generate'), request: ImageGenerateRequestSchema }),
   z.strictObject({ type: z.literal('catalog.providers.read') }),
   z.strictObject({ type: z.literal('catalog.agents.read') }),
   z.strictObject({ type: z.literal('catalog.warming.read') }),
@@ -70,6 +72,7 @@ export const CatalogResultSchema = z.discriminatedUnion('type', [
   ...NativePluginResultSchemas,
   z.strictObject({ type: z.literal('fileResources'), result: FileResourceResultSchema }),
   z.strictObject({ type: z.literal('catalog.models'), catalog: ModelCatalogSchema }),
+  z.strictObject({ type: z.literal('catalog.image.generated'), result: ImageGenerateResultSchema }),
   z.strictObject({ type: z.literal('skills.catalog'), catalog: SkillsCatalogStateSchema }),
   z.strictObject({ type: z.literal('catalog.providers'), catalog: ProviderCatalogSchema }),
   z.strictObject({ type: z.literal('catalog.agents'), catalog: AgentCatalogSchema }),

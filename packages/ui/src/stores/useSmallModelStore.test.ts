@@ -19,7 +19,7 @@ beforeEach(() => {
   const scope = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async directory => ({ workspaceId: directory, projectId: 'p', name: directory }));
   const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async (workspaceId): Promise<ModelCatalog> => {
     if (fail) throw new Error('offline');
-    return { workspaceId, revision: '0', models, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false };
+    return { workspaceId, revision: '0', models, imageModels: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false };
   });
   const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
   restorers = [() => scope.mockRestore(), () => catalog.mockRestore(), () => fetcher.mockRestore()];
@@ -59,7 +59,7 @@ describe('canonical small model availability', () => {
     useSmallModelStore.getState().invalidate();
     models = [];
     await useSmallModelStore.getState().ensureFresh('/a');
-    delayed.resolve({ workspaceId: '/a', revision: '0', models: [model], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
+    delayed.resolve({ workspaceId: '/a', revision: '0', models: [model], defaults: { model: null, thinkingLevel: null }, imageModels: [], planRoleAvailable: false });
     await first;
     expect(selectSmallModelAvailability(useSmallModelStore.getState(), '/a')).toBe('unavailable');
   });

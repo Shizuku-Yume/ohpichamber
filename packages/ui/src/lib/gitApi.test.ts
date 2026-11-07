@@ -198,7 +198,7 @@ describe("generateCommitMessage diff collection", () => {
     if (url.includes('/api/git/commit-files')) return jsonResponse(JSON.stringify({ files: [{ path: 'src/file.ts', changeType: 'M', insertions: 1, deletions: 0, isBinary: false }] }))
     if (url.includes('/api/magic-prompts')) return jsonResponse(JSON.stringify({ version: 1, overrides: {} }))
     if (url.includes('/api/agent/v1/workspaces/resolve')) return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', projectId: 'project-git', name: 'Git' }))
-    if (url.includes('/api/agent/v1/workspaces/workspace-git/models')) return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', revision: '0', models: [{ provider: 'git-provider', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }], defaults: { model: { providerId: 'git-provider', modelId: 'haiku' }, thinkingLevel: 'auto' }, planRoleAvailable: true }))
+    if (url.includes('/api/agent/v1/workspaces/workspace-git/models')) return jsonResponse(JSON.stringify({ workspaceId: 'workspace-git', revision: '0', models: [{ provider: 'git-provider', modelId: 'haiku', name: 'Haiku', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null }], defaults: { model: { providerId: 'git-provider', modelId: 'haiku' }, thinkingLevel: 'auto' }, imageModels: [], planRoleAvailable: true }))
     if (url.includes('/api/agent/v1/workspaces/workspace-git/completions')) {
       const body = JSON.parse(String(init?.body)); expect(body.format.kind).toBe('json')
       return jsonResponse(JSON.stringify({ completionId: body.completionId, selection: body.selection, status: 'completed', output: { kind: 'json', value: { subject: 'chore: bound diff collection', highlights: [] } }, finishReason: 'complete', usage: null }))
@@ -317,7 +317,7 @@ describe('generateCommitMessage reasoning request', () => {
     if (url.includes('/api/magic-prompts')) return Response.json({ version: 1, overrides: {} })
     if (url.includes('/api/agent/v1/workspaces/resolve')) return Response.json({ workspaceId: 'workspace-git', projectId: 'project-git', name: 'Git' })
     if (url.includes('/models')) return Response.json({
-      workspaceId: 'workspace-git', revision: '0', defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false,
+      workspaceId: 'workspace-git', revision: '0', defaults: { model: null, thinkingLevel: null }, imageModels: [], planRoleAvailable: false,
       models: [{
         provider: 'git-provider', modelId: 'thinker', name: 'Thinker', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000,
         reasoningEffortSupported: true, reasoningOptions: [{ reasoningEffort: 'low', label: 'Low', budgetTokens: null }, { reasoningEffort: 'medium', label: 'Medium', budgetTokens: null }],

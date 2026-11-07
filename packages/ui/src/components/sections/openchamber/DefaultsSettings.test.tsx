@@ -36,7 +36,7 @@ let updateSpy: ReturnType<typeof spyOn>;
 const mockModelCatalog = {
   workspaceId: 'workspace_1',
   revision: '1',
-  planRoleAvailable: true,
+  imageModels: [], planRoleAvailable: true,
   defaults: { model: null, thinkingLevel: null },
   models: [
     {

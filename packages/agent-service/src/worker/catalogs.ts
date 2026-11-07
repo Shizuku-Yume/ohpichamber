@@ -67,6 +67,8 @@ export class WorkerCatalogs {
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'File resources use the workspace worker');
       case 'catalog.models.read':
         return { type: 'catalog.models', catalog: await this.models.readModels(workspaceId, revision) };
+      case 'catalog.image.generate':
+        return { type: 'catalog.image.generated', result: await this.models.generate(operation.request) };
       case 'catalog.providers.read':
         return { type: 'catalog.providers', catalog: await this.models.readProviders(workspaceId, revision) };
       case 'catalog.agents.read':

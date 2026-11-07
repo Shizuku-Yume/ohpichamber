@@ -49,7 +49,7 @@ const state = {
 const mockModelCatalog = {
   workspaceId: 'workspace_1',
   revision: '1',
-  planRoleAvailable: true,
+  imageModels: [], planRoleAvailable: true,
   defaults: { model: { providerId: 'anthropic', modelId: 'claude-3-7-sonnet' }, thinkingLevel: 'auto' },
   models: [
     {

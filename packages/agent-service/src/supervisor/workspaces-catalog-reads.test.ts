@@ -12,7 +12,7 @@ afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await 
 const catalogResult = (type: 'models' | 'providers'): WorkerOperationResult => ({
   type: 'catalog',
   result: type === 'models'
-    ? { type: 'catalog.models', catalog: { workspaceId: 'workspace', revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false } }
+    ? { type: 'catalog.models', catalog: { workspaceId: 'workspace', revision: '0', models: [], imageModels: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false } }
     : { type: 'catalog.providers', catalog: { workspaceId: 'workspace', revision: '0', providers: [] } },
 });
 

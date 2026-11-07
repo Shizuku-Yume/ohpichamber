@@ -7,6 +7,8 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { isRestorableOnItsOwn } from '@/sync/session-restore-rule';
 import type { SessionTabMenuComponents } from './SessionTabsStrip';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
+import { useUIStore } from '@/stores/useUIStore';
 
 export function HeaderSessionArchiveMenuItem({ sessionId, onArchive, Item }: {
   sessionId: string;
@@ -15,6 +17,9 @@ export function HeaderSessionArchiveMenuItem({ sessionId, onArchive, Item }: {
 }) {
   const { t } = useI18n();
   const archived = useGlobalSessionsStore((state) => state.entityById.get(sessionId)?.archivedAt !== undefined);
+  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+  const isCurrentSession = useSessionUIStore((state) => state.currentSessionId === sessionId);
+  const archiveShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('archive_current_session', shortcutOverrides), '');
   const restorable = useGlobalSessionsStore((state) => {
     const session = state.entityById.get(sessionId);
     return !session || isRestorableOnItsOwn(session, state.entityById);
@@ -36,8 +41,9 @@ export function HeaderSessionArchiveMenuItem({ sessionId, onArchive, Item }: {
   return (
     <SessionMenuItemHint hint={t(archived ? 'sessions.sidebar.session.menuHint.restore' : 'sessions.sidebar.session.menuHint.archive')}>
       <Item onClick={archived ? () => void restore() : onArchive}>
-        <Icon name={archived ? 'inbox-unarchive' : 'inbox-archive'} className="mr-1 size-4" />
+        <Icon name={archived ? 'inbox-unarchive' : 'inbox-archive'} className="me-1 size-4" />
         {t(archived ? 'sessions.sidebar.bulkActions.restore' : 'sessions.sidebar.bulkActions.archive')}
+        {!archived && isCurrentSession && archiveShortcut ? <span className="ms-auto ps-3 typography-meta text-muted-foreground">{archiveShortcut}</span> : null}
       </Item>
     </SessionMenuItemHint>
   );

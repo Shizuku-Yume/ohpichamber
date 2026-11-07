@@ -104,7 +104,10 @@ mock.module('@/contexts/useThemeSystem', () => ({
   }),
 }));
 mock.module('@/hooks/useFontPreferences', () => ({ useFontPreferences: () => ({ monoFont: 'geist-mono' }) }));
-mock.module('@/lib/device', () => ({ useDeviceInfo: () => deviceInfo }));
+mock.module('@/lib/device', () => ({
+  useDeviceInfo: () => deviceInfo,
+  useTabletLayout: () => ({ enabled: false, roomyForPanels: false }),
+}));
 mock.module('@/stores/useUIStore', () => ({ useUIStore: useUiStoreMock }));
 mock.module('@/stores/useInlineCommentDraftStore', () => ({ useInlineCommentDraftStore: () => ({ addDraft: () => undefined }) }));
 mock.module('@/components/terminal/TerminalViewport', () => ({
@@ -148,7 +151,7 @@ mock.module('@/components/ui/sortable-tabs-strip', () => ({
     )),
   ),
 }));
-mock.module('@/lib/i18n', () => ({ useI18n: () => i18n }));
+mock.module('@/lib/i18n', () => ({ useI18n: () => i18n, isRightToLeft: () => false }));
 
 const { TerminalView } = await import('./TerminalView');
 
@@ -213,8 +216,8 @@ describe('TerminalView project action tab indicator', () => {
       KeyboardEvent: windowInstance.KeyboardEvent,
       MouseEvent: windowInstance.MouseEvent,
       ResizeObserver: class {
-        observe() {}
-        disconnect() {}
+        observe() { }
+        disconnect() { }
       },
       IS_REACT_ACT_ENVIRONMENT: true,
     });

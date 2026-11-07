@@ -51,6 +51,7 @@ import { buildSessionContextUsage, isSameContextUsage } from '@/stores/utils/tok
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
+import { HeaderTerminalAction } from '@/components/layout/HeaderTerminalAction';
 import { SpaceAccessButton } from '@/components/session/spaces/SpaceAccessButton';
 import { SpaceApplyButton } from '@/components/session/spaces/SpaceApplyButton';
 import { useProjectActionsContext } from '@/hooks/useProjectActionsContext';
@@ -241,7 +242,7 @@ const DesktopServicesMenu = React.memo(function DesktopServicesMenu({
             <DesktopHostSwitcherDialog
               embedded
               open={isDesktopServicesOpen}
-              onOpenChange={() => {}}
+              onOpenChange={() => { }}
               onHostSwitched={() => setIsDesktopServicesOpen(false)}
             />
           </div>
@@ -1346,6 +1347,7 @@ export const Header: React.FC = () => {
 
   const desktopSidebarActions = (
     <>
+      <HeaderTerminalAction directory={openDirectory} className="mr-1" />
       {projectActionsContext ? (
         <ProjectActionsButton
           projectRef={projectActionsContext.projectRef}
@@ -1360,19 +1362,19 @@ export const Header: React.FC = () => {
           holding a single dev-only shutdown action, which is not a reason to
           keep a dropdown in the header. */}
       {isDesktopApp ? (
-      <DesktopServicesMenu
-        isDesktopApp={isDesktopApp}
-        currentInstanceLabel={currentInstanceLabel}
-        currentInstanceIsLocal={currentInstanceIsLocal}
-        isDesktopServicesOpen={isDesktopServicesOpen}
-        setIsDesktopServicesOpen={setIsDesktopServicesOpen}
-        refreshCurrentInstanceLabel={refreshCurrentInstanceLabel}
-        shortcutLabel={shortcutLabel}
-        remoteUpdateInfo={remoteUpdateInfo}
-        remoteUpdateChecking={remoteUpdateChecking}
-        remoteUpdateError={remoteUpdateError}
-        onOpenRemoteUpdate={openRemoteInstanceUpdate}
-      />
+        <DesktopServicesMenu
+          isDesktopApp={isDesktopApp}
+          currentInstanceLabel={currentInstanceLabel}
+          currentInstanceIsLocal={currentInstanceIsLocal}
+          isDesktopServicesOpen={isDesktopServicesOpen}
+          setIsDesktopServicesOpen={setIsDesktopServicesOpen}
+          refreshCurrentInstanceLabel={refreshCurrentInstanceLabel}
+          shortcutLabel={shortcutLabel}
+          remoteUpdateInfo={remoteUpdateInfo}
+          remoteUpdateChecking={remoteUpdateChecking}
+          remoteUpdateError={remoteUpdateError}
+          onOpenRemoteUpdate={openRemoteInstanceUpdate}
+        />
       ) : null}
     </>
   );
@@ -1494,30 +1496,30 @@ export const Header: React.FC = () => {
       <div className="flex min-w-0 flex-1 items-center">
         {activeSurfaceHeader ? (
           <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="app-region-no-drag mr-1 text-muted-foreground hover:bg-transparent hover:text-foreground"
-                aria-label={t('header.mainSurface.backToChat')}
-                onClick={() => useUIStore.getState().closeMainSurfaces()}
-              >
-                <Icon name="arrow-left" className="size-[18px]" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('header.mainSurface.backToChat')}</TooltipContent>
-          </Tooltip>
-          <div className="mr-3 flex min-w-0 flex-col items-start px-1 py-0.5 -my-0.5 text-left">
-            <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
-              {activeSurfaceHeader.title}
-            </span>
-            {activeSurfaceHeader.subtitle ? (
-              <span className="truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75 max-w-full">
-                {activeSurfaceHeader.subtitle}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="app-region-no-drag mr-1 text-muted-foreground hover:bg-transparent hover:text-foreground"
+                  aria-label={t('header.mainSurface.backToChat')}
+                  onClick={() => useUIStore.getState().closeMainSurfaces()}
+                >
+                  <Icon name="arrow-left" className="size-[18px]" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('header.mainSurface.backToChat')}</TooltipContent>
+            </Tooltip>
+            <div className="mr-3 flex min-w-0 flex-col items-start px-1 py-0.5 -my-0.5 text-left">
+              <span className="truncate typography-ui-label text-[14px] font-normal leading-tight text-foreground max-w-full">
+                {activeSurfaceHeader.title}
               </span>
-            ) : null}
-          </div>
+              {activeSurfaceHeader.subtitle ? (
+                <span className="truncate typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75 max-w-full">
+                  {activeSurfaceHeader.subtitle}
+                </span>
+              ) : null}
+            </div>
           </>
         ) : !sessionTabsEnabled ? (
           <div className="app-region-no-drag mr-3 flex min-w-0 max-w-full items-center gap-0.5 py-0.5 -my-0.5 text-left">
@@ -1685,49 +1687,49 @@ export const Header: React.FC = () => {
                 }
               }}
             >
-            <div className="flex min-w-0 flex-col justify-center">
-              {isRenamingHeaderSession ? (
-                <form
-                  ref={headerRenameFormRef}
-                  className="flex w-full min-w-0 items-center gap-2 leading-tight"
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void saveHeaderSessionRename();
-                  }}
-                >
-                  <input
-                    ref={focusHeaderRenameInput}
-                    value={headerSessionTitleDraft}
-                    onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
-                    onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
-                    placeholder={t('sessions.sidebar.session.menu.rename')}
-                    className="min-w-0 flex-1 bg-transparent text-[13px] font-medium leading-4 outline-none placeholder:text-muted-foreground"
-                  />
-                  <button
-                    type="submit"
-                    aria-label={t('sessions.sidebar.session.rename.save')}
-                    title={t('sessions.sidebar.session.rename.save')}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
+              <div className="flex min-w-0 flex-col justify-center">
+                {isRenamingHeaderSession ? (
+                  <form
+                    ref={headerRenameFormRef}
+                    className="flex w-full min-w-0 items-center gap-2 leading-tight"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveHeaderSessionRename();
+                    }}
                   >
-                    <Icon name="check" className="size-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsRenamingHeaderSession(false)}
-                    aria-label={t('sessions.sidebar.session.rename.cancel')}
-                    title={t('sessions.sidebar.session.rename.cancel')}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                  >
-                    <Icon name="close" className="size-4" />
-                  </button>
-                </form>
-              ) : (
-                <span dir="auto" className="block overflow-hidden whitespace-nowrap text-left text-[13px] font-medium leading-4 text-foreground max-w-full">
-                  {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
-                </span>
-              )}
-            </div>
+                    <input
+                      ref={focusHeaderRenameInput}
+                      value={headerSessionTitleDraft}
+                      onChange={(event) => setHeaderSessionTitleDraft(event.target.value)}
+                      onKeyDown={(event) => handleSessionRenameKeyDown(event, () => setIsRenamingHeaderSession(false))}
+                      placeholder={t('sessions.sidebar.session.menu.rename')}
+                      className="min-w-0 flex-1 bg-transparent text-[13px] font-medium leading-4 outline-none placeholder:text-muted-foreground"
+                    />
+                    <button
+                      type="submit"
+                      aria-label={t('sessions.sidebar.session.rename.save')}
+                      title={t('sessions.sidebar.session.rename.save')}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Icon name="check" className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsRenamingHeaderSession(false)}
+                      aria-label={t('sessions.sidebar.session.rename.cancel')}
+                      title={t('sessions.sidebar.session.rename.cancel')}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Icon name="close" className="size-4" />
+                    </button>
+                  </form>
+                ) : (
+                  <span dir="auto" className="block overflow-hidden whitespace-nowrap text-left text-[13px] font-medium leading-4 text-foreground max-w-full">
+                    {isNewSessionDraftOpen ? t('sessions.switcher.draftTitle') : currentSessionTitle}
+                  </span>
+                )}
+              </div>
             </SessionTabsStrip>
           </div>
         )}
@@ -1761,37 +1763,37 @@ export const Header: React.FC = () => {
             className={cn(desktopHeaderIconButtonClass, 'mr-1')}
             Icon={'picture-in-picture-2'}
           />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  data-work-status-toggle="true"
-                  aria-pressed={workStatusToggleActive}
-                  aria-label={t('header.workStatusPanel.toggleAria')}
-                  onClick={handleWorkStatusToggle}
-                  className={cn(
-                    DESKTOP_HEADER_ICON_BUTTON_CLASS,
-                    // Trailing gap before the sidebar actions; it moved here
-                    // with the button when this took the last position.
-                    'mr-1',
-                    // On is the resting state and carries no chrome; off is the
-                    // one worth signalling, so it dims instead of filling.
-                    workStatusToggleActive ? 'text-foreground' : 'text-muted-foreground/50',
-                  )}
-                >
-                  <Icon name="list-indefinite" className="h-[18px] w-[18px]" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {workStatusPanelEnabled && !workStatusPanelFits
-                  ? (workStatusOverlayOpen
-                    ? t('header.workStatusPanel.hide')
-                    : t('header.workStatusPanel.showOverlay'))
-                  : workStatusPanelEnabled
-                    ? t('header.workStatusPanel.hide')
-                    : t('header.workStatusPanel.show')}
-              </TooltipContent>
-            </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                data-work-status-toggle="true"
+                aria-pressed={workStatusToggleActive}
+                aria-label={t('header.workStatusPanel.toggleAria')}
+                onClick={handleWorkStatusToggle}
+                className={cn(
+                  DESKTOP_HEADER_ICON_BUTTON_CLASS,
+                  // Trailing gap before the sidebar actions; it moved here
+                  // with the button when this took the last position.
+                  'mr-1',
+                  // On is the resting state and carries no chrome; off is the
+                  // one worth signalling, so it dims instead of filling.
+                  workStatusToggleActive ? 'text-foreground' : 'text-muted-foreground/50',
+                )}
+              >
+                <Icon name="list-indefinite" className="h-[18px] w-[18px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {workStatusPanelEnabled && !workStatusPanelFits
+                ? (workStatusOverlayOpen
+                  ? t('header.workStatusPanel.hide')
+                  : t('header.workStatusPanel.showOverlay'))
+                : workStatusPanelEnabled
+                  ? t('header.workStatusPanel.hide')
+                  : t('header.workStatusPanel.show')}
+            </TooltipContent>
+          </Tooltip>
 
           {desktopSidebarActions}
           <WindowsWindowControls visible={usesFramelessChrome && windowControlsSide === 'right'} position="right" />
@@ -1849,8 +1851,8 @@ export const Header: React.FC = () => {
         downloaded={false}
         progress={null}
         error={remoteUpdateError}
-        onDownload={() => {}}
-        onRestart={() => {}}
+        onDownload={() => { }}
+        onRestart={() => { }}
         runtimeType="web"
       />
     </>

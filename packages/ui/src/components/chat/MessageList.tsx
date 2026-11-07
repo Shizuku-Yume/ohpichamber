@@ -14,7 +14,7 @@ import { buildLiveStreamingEntry } from './lib/turns/streamingTailEntry';
 import { FULL_MESSAGE_WINDOW, TurnMessageWindowContext, createTurnMessageWindowStore } from './lib/turns/turnMessageWindow';
 import { attachToolResultsForDisplay, getNormalizedMessageForDisplay } from './lib/messageDisplayNormalization';
 import { useUIStore } from '@/stores/useUIStore';
-import { isHiddenUserMessage } from './message/hiddenUserMessage';
+import { turnHeaderCanStick as canStickPrompt } from './lib/turns/stickyPrompt';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
 import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
 import { streamPerfCount, streamPerfMark, streamPerfMeasure } from '@/stores/utils/streamDebug';
@@ -251,7 +251,7 @@ export const TurnBlock = React.memo(({
     const showReasoningTraces = useUIStore((state) => state.showReasoningTraces);
     // A hidden prompt has nothing to pin.
     const turnHeaderCanStick = React.useMemo(
-        () => !isHiddenUserMessage(turn.userMessage),
+        () => canStickPrompt(turn.userMessage),
         [turn.userMessage]
     );
     const turnUiState = turnUiStates.get(turn.turnId) ?? { isExpanded: defaultActivityExpanded };

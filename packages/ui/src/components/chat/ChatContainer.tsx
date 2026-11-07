@@ -113,6 +113,7 @@ const CHAT_FORCE_SCROLL_BOTTOM_EVENT = 'openchamber:chat-force-scroll-bottom';
 const DRAFT_EXIT_DURATION_MS = 120;
 const COMPOSER_MOVE_DURATION_MS = 180;
 const CHAT_SCROLL_STYLE = {
+ minWidth: 1,
  overflowAnchor: 'none',
  overscrollBehavior: 'contain',
  overscrollBehaviorY: 'contain',

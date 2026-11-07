@@ -59,7 +59,6 @@ import {
     SETTINGS_SELECT_TRIGGER_CLASS,
     SETTINGS_ICON_BUTTON_CLASS,
     SETTINGS_CONTROL_CLUSTER_CLASS,
-    SETTINGS_CLUSTER_CONTROL_CLASS,
     SETTINGS_NUMBER_STEPPER_ROW_CLASS,
     SETTINGS_NUMBER_UNIT_CLASS,
     SETTINGS_NUMBER_INPUT_CLASS,
@@ -316,6 +315,15 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
 
 type VisibleSetting = 'sessionAssist' | 'sessionGoal' | 'theme' | 'windowControlsPosition' | 'pwaInstallName' | 'pwaOrientation' | 'mobileKeyboardMode' | 'timeFormat' | 'weekStart' | 'fontSize' | 'terminalFontSize' | 'terminalShell' | 'terminalLoginShell' | 'editorFontSize' | 'spacing' | 'scrollbars' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'messageTransport' | 'activityRenderMode' | 'collapsibleUserMessages' | 'stickyUserHeader' | 'promptNavigatorEnabled' | 'wideChatLayout' | 'codeBlockLineWrap' | 'tableCellWrap' | 'copyMessagesAsPlainText' | 'splitAssistantMessageActions' | 'subagentReadOnlyBanner' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'fileViewerPreview' | 'reasoning' | 'showToolFileIcons' | 'showTurnChangedFiles' | 'expandedTools' | 'followUpBehavior' | 'inputHistoryScope' | 'inputHistoryLimit' | 'messageSearch' | 'terminalQuickKeys' | 'fileEditorKeymap' | 'persistDraft' | 'inputSpellcheck' | 'largeTextPaste' | 'enterToSend' | 'reportUsage' | 'autoSaveEnabled' | 'confirmFileTreeMove' | 'sessionTabs' | 'liveBrowserTabs' | 'animatedActivityIndicators';
 
+const UI_FONT_WEIGHT_OPTIONS = ['regular', 'balanced', 'strong'] as const;
+type UiFontWeight = typeof UI_FONT_WEIGHT_OPTIONS[number];
+
+const UI_FONT_WEIGHT_LABEL_KEYS = {
+    regular: 'settings.openchamber.visual.option.uiFontWeight.regular',
+    balanced: 'settings.openchamber.visual.option.uiFontWeight.balanced',
+    strong: 'settings.openchamber.visual.option.uiFontWeight.strong',
+} as const satisfies Record<UiFontWeight, string>;
+
 const WINDOW_CONTROLS_POSITION_OPTIONS: Array<{ id: DesktopWindowControlsPosition; labelKey: string }> = [
     { id: 'left', labelKey: 'settings.openchamber.desktopNetwork.option.windowControlsLeft' },
     { id: 'right', labelKey: 'settings.openchamber.desktopNetwork.option.windowControlsRight' },
@@ -390,6 +398,20 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setActivityRenderMode = useUIStore(state => state.setActivityRenderMode);
     const fontSize = useUIStore(state => state.fontSize);
     const setFontSize = useUIStore(state => state.setFontSize);
+    const chatFontSize = useUIStore(state => (state as unknown as { chatFontSize?: number }).chatFontSize ?? 100);
+    const setChatFontSize = React.useCallback((val: number) => {
+        const store = useUIStore.getState() as unknown as { setChatFontSize?: (v: number) => void };
+        if (typeof store.setChatFontSize === 'function') store.setChatFontSize(val);
+        else useUIStore.setState({ chatFontSize: val } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
+        void updateDesktopSettings({ chatFontSize: val });
+    }, []);
+    const uiFontWeight = useUIStore(state => (state as unknown as { uiFontWeight?: UiFontWeight }).uiFontWeight ?? 'regular');
+    const setUiFontWeight = React.useCallback((val: UiFontWeight) => {
+        const store = useUIStore.getState() as unknown as { setUiFontWeight?: (v: UiFontWeight) => void };
+        if (typeof store.setUiFontWeight === 'function') store.setUiFontWeight(val);
+        else useUIStore.setState({ uiFontWeight: val } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
+        void updateDesktopSettings({ uiFontWeight: val });
+    }, []);
     const terminalFontSize = useUIStore(state => state.terminalFontSize);
     const setTerminalFontSize = useUIStore(state => state.setTerminalFontSize);
     const terminalShell = useUIStore(state => state.terminalShell);
@@ -1228,7 +1250,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             void applyPwaOrientation(orientation);
                                         }}
                                     >
-                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.pwaInstallOrientationAria')} className={SETTINGS_CLUSTER_CONTROL_CLASS}>
+                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.pwaInstallOrientationAria')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
                                             <SelectValue placeholder={t('settings.openchamber.visual.field.selectOrientationPlaceholder')}>
                                                 {selectedPwaOrientationLabel}
                                             </SelectValue>
@@ -1274,7 +1296,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             void updateDesktopSettings({ mobileKeyboardMode: mode });
                                         }}
                                     >
-                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.mobileKeyboardModeAria')} className={SETTINGS_CLUSTER_CONTROL_CLASS}>
+                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.mobileKeyboardModeAria')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
                                             <SelectValue placeholder={t('settings.openchamber.visual.field.selectMobileKeyboardModePlaceholder')}>
                                                 {selectedMobileKeyboardModeLabel}
                                             </SelectValue>
@@ -1434,6 +1456,55 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 <Icon name="restart" className="h-3.5 w-3.5" />
                                             </Button>
                                         </div>
+                                    </SettingsStackedField>
+                                )}
+                                {shouldShow('fontSize') && !isMobile && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.chatFontSize')}
+                                        settingsItem="appearance.chat-font-size"
+                                        controlClassName="w-full"
+                                    >
+                                        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                            <NumberInput
+                                                value={chatFontSize}
+                                                onValueChange={setChatFontSize}
+                                                min={50}
+                                                max={200}
+                                                step={5}
+                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                aria-label={t('settings.openchamber.visual.field.chatFontSizePercentageAria')}
+                                            />
+                                            <span className={SETTINGS_NUMBER_UNIT_CLASS}>%</span>
+                                            <Button size="sm"
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => setChatFontSize(100)}
+                                                disabled={chatFontSize === 100}
+                                                className={SETTINGS_ICON_BUTTON_CLASS}
+                                                aria-label={t('settings.openchamber.visual.actions.resetChatFontSizeAria')}
+                                                title={t('settings.common.actions.reset')}
+                                            >
+                                                <Icon name="restart" className="h-3.5 w-3.5" />
+                                            </Button>
+                                        </div>
+                                    </SettingsStackedField>
+                                )}
+                                {shouldShow('fontSize') && !isMobile && (
+                                    <SettingsStackedField
+                                        label={t('settings.openchamber.visual.field.interfaceFontWeight')}
+                                        info={t('settings.openchamber.visual.field.interfaceFontWeightInfo')}
+                                        settingsItem="appearance.interface-font-weight"
+                                        controlClassName="w-full"
+                                    >
+                                        <SettingsChipGroup
+                                            value={uiFontWeight}
+                                            onChange={setUiFontWeight}
+                                            aria-label={t('settings.openchamber.visual.field.interfaceFontWeight')}
+                                            options={UI_FONT_WEIGHT_OPTIONS.map((weight) => ({
+                                                value: weight,
+                                                label: t(UI_FONT_WEIGHT_LABEL_KEYS[weight]),
+                                            }))}
+                                        />
                                     </SettingsStackedField>
                                 )}
                                 {shouldShow('terminalFontSize') && (

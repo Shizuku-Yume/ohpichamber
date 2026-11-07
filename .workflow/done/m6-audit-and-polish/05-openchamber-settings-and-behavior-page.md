@@ -18,9 +18,18 @@
 
 ## Blockers and Incomplete Scope
 
-- **Item 5 Blocked by W6 Ownership Boundary:** `useAssistantStatus.ts` maps OMP native tool status and Compact action delegates to `canonicalClient.compactSession(sessionId)`. However, full attachment parity requires modifying `packages/agent-service/src/worker/session.ts` (currently inlining text as `fileMention` while throwing HTTP 413 for >5MB and HTTP 415 for binary, lacking delimiter framing and fallback paths for `read`). Per `common.md`, `packages/agent-service/src/worker/session.ts` is owned exclusively by W6 (`06-native-subagents-and-tree-cost`), so editing it in W5 is disallowed by project change discipline. Item 5 remains open pending W6 cutover.
+- **None open.** The previous W6 ownership blocker is resolved: a maintainer directive cleared that fence, the worker-side attachment behavior landed in `packages/agent-service/src/worker/session.ts` (`f1920bcffc`) and the composer intake in `m6-audit-and-polish/09-chat-workbench-tokens-primitives-i18n-rtl` (`e2d5f7a1a0`), both merged into integration.
+- **Intentional limit — 20 MB transport cap.** `createAttachmentRoutes` still refuses an upload past its `maxBytes` (20 MB, wired in `packages/web/server/index.js`). This is the request-body transport bound, deliberately kept, and is separate from the removed per-file content-type and 5 MB text refusals: a legitimate file above 20 MB cannot be transferred at all, so there is nothing for the worker to hand off. It surfaces as 413 `PAYLOAD_TOO_LARGE` with the transport-cap copy.
+- **Unrelated pre-existing test failures.** `bun test packages/ui/src/sync/` reports 4 failures (`cleanupPersistedSessionState > clears persisted session state only for the deleted composite session`, and three `issue 2039 draft auto-accept` cases). They fail identically on the untouched baseline with this lane's changes stashed (723 pass / 4 fail both before and after), and none touches attachments. Left out of scope rather than silently absorbed.
 
 ## Progress
+
+**Check after:** `bun test packages/ui/src/sync/attachment-files.test.ts packages/ui/src/sync/input-store.test.ts packages/ui/src/sync/session-ui-store.test.js packages/ui/src/lib/i18n/messages.test.ts` → 131 pass / 0 fail (4526 assertions) on integration.
+`bunx vitest run packages/web/server/lib/host/attachment-store.test.js packages/web/server/lib/host/attachment-routes.test.js` → 2 files, 8 tests passed.
+`bun test packages/agent-service/src/worker/session-native.test.ts` → 67 pass / 0 fail; `projection.test.ts` → 20 pass / 0 fail (worker-side half, commit `f1920bcffc`).
+`bun run --cwd packages/ui type-check` → No type errors in 2,975 files across 2 projects.
+`bunx oxlint` on all touched sources → exit 0, with the one pre-existing `react-hooks/exhaustive-deps` warning in `ChatInput.tsx:1587` that predates this lane (reproduced with the change stashed).
+`.workflow/bin/workflow validate` → Workflow is valid.
 
 ### Check before
 - Inspected baseline attachment handling in `packages/agent-service/src/worker/session.ts`: inlines text attachments as native `fileMention` parts without delimiter framing, rejects text >5MB with HTTP 413, and rejects binary attachments with HTTP 415 instead of falling back to paths for `read`. While `useAssistantStatus.ts` maps native tool statuses and Compact delegates to `canonicalClient.compactSession(sessionId)`, full attachment parity requires updating `worker/session.ts`. However, `common.md` assigns `packages/agent-service/src/worker/session.ts` exclusively to W6 (`06-native-subagents-and-tree-cost`), so editing it in W5 is blocked by ownership boundary.

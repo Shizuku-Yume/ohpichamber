@@ -17,7 +17,7 @@ import type {
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, ShellStreamResponse, ShellStdinResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
   ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
   CacheWarmingState, CacheWarmingApplyResult, OmpSettingsState,
-  UsageStats, UsageToolsResponse,
+  UsageStats, UsageToolsResponse, ImageGenerateResult, ImageModelMutationResult,
   WebSearchConfigState, WebSearchMutationResult,
   PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
   PluginUpdateCheckResult, PluginUpgradePreviewResult, PluginMarketplaceSources,
@@ -97,7 +97,7 @@ type ServiceResponse =
   | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
   | CacheWarmingState | CacheWarmingApplyResult | OmpSettingsState
   | WebSearchConfigState | WebSearchMutationResult
-  | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse
+  | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse | ImageGenerateResult | ImageModelMutationResult
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
   | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
   | { sources: SkillSourceRevisions }

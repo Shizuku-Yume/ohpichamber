@@ -183,7 +183,10 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   const directory = popoverHost?.directory ?? pinnedDirectory ?? (backgroundAction ? backgroundAction.item.directory ?? ''
     : surface === 'status' && statusDirectory !== undefined ? statusDirectory ?? '' : effectiveDirectory);
   const statusContextKey = surface === 'status' ? directory : null;
-  const currentSessionId = backgroundAction ? backgroundAction.item.sessionId : selectedSessionId;
+  // Only the captured kinds that name a session carry one; a diff or file
+  // item leaves the pane on the session the user has open.
+  const actionItem = backgroundAction?.item ?? null;
+  const currentSessionId = actionItem && 'sessionId' in actionItem ? actionItem.sessionId : selectedSessionId;
   const session = useSession(currentSessionId, directory || undefined);
   const sessionStatus = useSessionStatus(currentSessionId ?? '', directory || undefined);
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
@@ -225,12 +228,12 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
       currentSessionId
         ? {
           id: session?.sessionId ?? currentSessionId,
-          title: session?.title ?? backgroundAction?.item.sessionTitle,
+          title: session?.title ?? (actionItem && 'sessionTitle' in actionItem ? actionItem.sessionTitle : undefined),
           busy: sessionBusy,
         }
         : null,
     ),
-    [backgroundAction, currentSessionId, session, sessionBusy],
+    [actionItem, currentSessionId, session, sessionBusy],
   );
 
   const readableColors = React.useMemo(() => getReadableThemeColors(currentTheme), [currentTheme]);

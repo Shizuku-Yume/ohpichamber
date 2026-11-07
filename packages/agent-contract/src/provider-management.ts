@@ -52,5 +52,6 @@ export const ProviderModelDiscoveryResultSchema = z.strictObject({ models: z.arr
   modelId: EntityIdSchema, name: z.string().min(1), contextWindow: z.number().int().positive().optional(), maxOutputTokens: z.number().int().positive().optional(),
 })) });
 export type ProviderModelDiscoveryResult = z.infer<typeof ProviderModelDiscoveryResultSchema>;
-export const ProviderConfigurationReadSchema = z.strictObject({ revision: CounterSchema, configuration: ProviderConfigurationSchema, headerNames: z.array(z.string()), models: z.array(ModelSchema) });
+import { ImageModelSchema } from './catalogs.ts';
+export const ProviderConfigurationReadSchema = z.strictObject({ revision: CounterSchema, configuration: ProviderConfigurationSchema, headerNames: z.array(z.string()), models: z.array(ModelSchema), imageModels: z.array(ImageModelSchema).default([]) });
 export type ProviderConfigurationRead = z.infer<typeof ProviderConfigurationReadSchema>;

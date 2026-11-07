@@ -16,6 +16,7 @@ import { formatMoney } from '@/lib/money';
 import type { TimeFormatPreference } from '@/stores/useUIStore';
 import { formatDateTimeForPreference } from '@/lib/timeFormat';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { completePair, EMPTY_TOKEN_BREAKDOWN, readTokenBreakdown, resolveContextModel, type SidebarTokenBreakdown } from './contextSidebarModel';
 import {
   derivePartsLabel,
@@ -285,7 +286,7 @@ export const ContextPanelContent: React.FC = () => {
 
   if (!currentSessionId) {
     return (
-        <div className="flex h-full items-center justify-center p-6 text-center typography-ui-label text-muted-foreground">
+      <div className="flex h-full items-center justify-center p-6 text-center typography-ui-label text-muted-foreground">
         {t('contextSidebar.empty.openSession')}
       </div>
     );
@@ -496,20 +497,24 @@ export const ContextPanelContent: React.FC = () => {
 
                   {isExpanded && (
                     <div className="border-t border-[var(--surface-subtle)] p-0">
-                      <div className="group relative max-h-[26rem] w-full overflow-auto bg-[var(--surface-background)]">
+                      <ScrollableOverlay outerClassName="max-h-[26rem] bg-[var(--surface-background)]" className="group relative" disableHorizontal>
                         <div className="absolute top-1 right-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
-                          <button
-                            type="button"
-                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-interactive-hover/60 hover:text-foreground"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleCopyRawMessage(message.info.messageId, jsonValue);
-                            }}
-                            aria-label={isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}
-                            title={isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copy')}
-                          >
-                            {isCopied ? <Icon name="check" className="size-3.5" /> : <Icon name="file-copy" className="size-3.5" />}
-                          </button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                className="rounded p-1 text-muted-foreground transition-colors hover:bg-interactive-hover/60 hover:text-foreground"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleCopyRawMessage(message.info.messageId, jsonValue);
+                                }}
+                                aria-label={isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}
+                              >
+                                {isCopied ? <Icon name="check" className="size-3.5" /> : <Icon name="file-copy" className="size-3.5" />}
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent sideOffset={6}>{isCopied ? t('contextSidebar.actions.copied') : t('contextSidebar.actions.copyJson')}</TooltipContent>
+                          </Tooltip>
                         </div>
                         <WorkerHighlightedCode
                           language="json"
@@ -523,7 +528,7 @@ export const ContextPanelContent: React.FC = () => {
                           }}
                           wrap
                         />
-                      </div>
+                      </ScrollableOverlay>
                     </div>
                   )}
                 </div>

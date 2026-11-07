@@ -641,6 +641,9 @@
     "showDeletionDialog": {
       "scope": "profile"
     },
+    "defaultSessionMode": {
+      "scope": "profile"
+    },
     "nativeNotificationsEnabled": {
       "scope": "profile"
     },

@@ -3025,7 +3025,7 @@ A	scripts/model-bench/judge-review.md	adopted	taken whole from upstream/main and
 A	scripts/model-bench/judge.md	adopted	taken whole from upstream/main and verified identical	
 A	scripts/model-bench/report.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/model-bench/tasks.json	adopted	taken whole from upstream/main and verified identical	
-M	scripts/oc-dev.mjs	adapt-pending	upstream changed it; fork content still needs the delta ported	
+M	scripts/oc-dev.mjs	adapted	upstream dev-loop delta taken (dev:web:hmr -> dev, prod-like and mobile-dev modes dropped) and the remaining OpenCode config/CLI wiring renamed to PI_CONFIG_DIR and omp	
 M	scripts/perf/DOCUMENTATION.md	adapted-partial	19 line(s) still name the removed OpenCode runtime: rate the model name asks for. OpenCode still produces its real event stream.	
 M	scripts/perf/cdp.mjs	adopted	taken whole from upstream/main and verified identical	
 M	scripts/perf/chat-quote-popover.browser.test.mjs	adapt-pending	upstream added or renamed it; not yet present on the task branch	

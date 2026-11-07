@@ -9108,8 +9108,6 @@ export const dict = {
   "session.newWorktree.actions.startFromGitLabIssueMr": "GitLab 議題或合併請求",
   "session.newWorktree.prNumber": "PR #{number}",
   "chat.emptyState.agentUnreachable": "無法連線到 Agent Service",
-  "chat.composer.error.binaryAttachmentNotSupported": "此檔案是二進位檔案，無法作為文字傳送。請附加影像或文字檔案。",
-  "chat.composer.error.textAttachmentTooLarge": "此文字附件超過 5 MB 限制。請選擇較小的檔案。",
   "chat.messageBody.actions.openPreviewAria": "開啟預覽",
   "chat.messageBody.actions.openPreview": "開啟預覽",
   "chat.chatInput.focusMode.toggleAria": "切換專注模式",

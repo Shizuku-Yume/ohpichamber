@@ -1158,6 +1158,46 @@ describe('native prompt routing', () => {
     await expect(route({ content: '$review', skills: { names: ['review'] } })).rejects.toBe(failure);
     expect(runCalls).toEqual([]);
   });
+  test('a binary file and an over-5 MB text file both reach the canonical attachment payload', async () => {
+    seedCanonicalSession();
+    // Both are now attachable; the old content-type and per-file size refusals
+    // are gone and the worker decides inline vs `read` handoff instead.
+    const binaryBytes = new Uint8Array([0, 1, 2, 255]);
+    const oversizedText = new Uint8Array(6 * 1024 * 1024).fill(0x61);
+    const attachments = [
+      {
+        id: 'binary', file: new File([binaryBytes], 'archive.bin', { type: 'application/octet-stream' }),
+        dataUrl: 'data:application/octet-stream;base64,AAEC/w==', mimeType: 'application/octet-stream',
+        filename: 'archive.bin', size: binaryBytes.length, source: 'local',
+      },
+      {
+        id: 'oversized', file: new File([oversizedText], 'huge.txt', { type: 'text/plain' }),
+        dataUrl: 'data:text/plain;base64,', mimeType: 'text/plain',
+        filename: 'huge.txt', size: oversizedText.length, source: 'local',
+      },
+    ];
+    const uploaded = [];
+    stub(canonicalClient, 'uploadAttachment', async (workspaceId, metadata) => {
+      uploaded.push({ workspaceId, metadata });
+      return { ...metadata, attachmentId: `att-${metadata.name}`, uri: `attachment://att-${metadata.name}`, createdAt: 1 };
+    });
+    await useSessionUIStore.getState().sendMessage(
+      'Inspect these files', 'provider-a', 'model-a', 'build', attachments,
+    );
+    expect(uploaded.map(entry => entry.metadata)).toEqual([
+      { name: 'archive.bin', mediaType: 'application/octet-stream', size: binaryBytes.length },
+      { name: 'huge.txt', mediaType: 'text/plain', size: oversizedText.length },
+    ]);
+    // The canonical prompt carries opaque attachment identities only: no local
+    // or Host absolute path may appear in any field.
+    expect(runCalls[0].request.input.attachments).toEqual([
+      { attachmentId: 'att-archive.bin', name: 'archive.bin', mediaType: 'application/octet-stream', size: binaryBytes.length, uri: 'attachment://att-archive.bin' },
+      { attachmentId: 'att-huge.txt', name: 'huge.txt', mediaType: 'text/plain', size: oversizedText.length, uri: 'attachment://att-huge.txt' },
+    ]);
+    expect(JSON.stringify(runCalls[0].request)).not.toContain('data:');
+    expect(JSON.stringify(runCalls[0].request)).not.toContain('/repo');
+  });
+
   test('keeps attachments, quoted context and synthetic instructions on command prompts', async () => {
     seedCanonicalSession();
     fakeFileResources({ expand: () => Response.json({ kind: 'command', content: 'Inspect auth' }) });

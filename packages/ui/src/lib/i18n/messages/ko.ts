@@ -9110,8 +9110,6 @@ export const dict = {
   "session.newWorktree.actions.startFromGitLabIssueMr": "GitLab 이슈 또는 머지 리퀘스트",
   "session.newWorktree.prNumber": "PR #{number}",
   "chat.emptyState.agentUnreachable": "Agent Service에 연결할 수 없습니다",
-  "chat.composer.error.binaryAttachmentNotSupported": "이 파일은 바이너리 파일이므로 텍스트로 보낼 수 없습니다. 이미지 또는 텍스트 파일을 첨부해 주세요.",
-  "chat.composer.error.textAttachmentTooLarge": "이 텍스트 첨부 파일은 5MB 제한을 초과합니다. 더 작은 파일을 선택해 주세요.",
   "chat.chatInput.focusMode.toggleAria": "집중 모드 전환",
   "chat.chatInput.focusMode.label": "집중 모드",
   "chat.chatInput.linked.pr.number": "PR #{number}",

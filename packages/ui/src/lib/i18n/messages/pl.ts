@@ -9088,8 +9088,6 @@ export const dict = {
   "sessions.mergedCleanup.toast.archivedDescription": "Worktree zostaje: ma zmiany lub commity, których nie ma w scalonym PR.",
   "sessions.mergedCleanup.toast.mr.archivedDescription": "Worktree zostaje: ma zmiany lub commity, których nie ma w scalonym MR.",
   "chat.emptyState.agentUnreachable": "Agent Service jest nieosiągalny",
-  "chat.composer.error.binaryAttachmentNotSupported": "Ten plik jest binarny i nie może być wysłany jako tekst. Załącz obraz lub plik tekstowy.",
-  "chat.composer.error.textAttachmentTooLarge": "Ten załącznik tekstowy przekracza limit 5 MB. Wybierz mniejszy plik.",
   "chat.messageBody.actions.openPreviewAria": "Otwórz podgląd",
   "chat.messageBody.actions.openPreview": "Otwórz podgląd",
   "startup.initRecovery.agentServiceUnavailable": "OpenChamber jest dostępny, ale Agent Service nie jest gotowy. Sprawdź Agent Service na serwerze i spróbuj ponownie.",

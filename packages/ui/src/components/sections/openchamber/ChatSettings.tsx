@@ -2,6 +2,7 @@ import React from 'react';
 
 import { NumberInput } from '@/components/ui/number-input';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
+import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
 import {
   SettingsSection,
   SettingsFieldRow,
@@ -624,6 +625,8 @@ const AssistanceTab: React.FC = () => {
               />
             </SettingsFieldRow>
           </div>
+          <SessionGoalCheckerField disabled={!sessionGoalEnabled} />
+          <SessionGoalMaxTurnsField disabled={!sessionGoalEnabled} />
       </SettingsSection>
     </>
   );
@@ -657,6 +660,7 @@ export const ChatSettings: React.FC = () => {
           }}
           layoutMode="fit"
           variant="active-pill"
+          pillSize="form"
           className="h-8 max-w-[28rem]"
         />
       </div>

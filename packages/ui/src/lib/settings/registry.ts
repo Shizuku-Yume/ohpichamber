@@ -272,9 +272,13 @@ export const SETTINGS_REGISTRY = {
   // The server keeps the message search index only while this is on.
   // New top-level sessions start in this permission mode; the Host policy
   // runtime writes the per-session modes and must not be set from a client.
-  permissionDefaultMode: field({ scope: 'profile', parse: parseOneOf(['ask', 'safety', 'auto']) }),
-  sessionGoalChecker: field({ scope: 'profile', parse: parseOneOf(['classifier', 'small-model']) }),
-  sessionGoalMaxAutoTurns: field({ scope: 'profile', parse: parseIntegerInRange(1, 200) }),
+  permissionDefaultMode: field({ scope: 'profile', parse: parseOneOf(['ask', 'safety', 'auto']), ui: uiStore('permissionDefaultMode', (v) => useUIStore.getState().setPermissionDefaultMode(v)) }),
+  sessionGoalChecker: field({ scope: 'profile', parse: parseOneOf(['classifier', 'small-model']), ui: uiStore('sessionGoalChecker', (v) => useUIStore.getState().setSessionGoalChecker(v)) }),
+  sessionGoalMaxAutoTurns: field({ scope: 'profile', parse: parseIntegerInRange(1, 200), ui: uiStore('sessionGoalMaxAutoTurns', (v) => useUIStore.getState().setSessionGoalMaxAutoTurns(v)) }),
+  /** Start a new session on the model the picked agent pins. */
+  autoApplyAgentModel: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('autoApplyAgentModel', (v) => useUIStore.getState().setAutoApplyAgentModel(v)) }),
+  /** Keep the subagent task tool available while Plan mode is active. */
+  planModeAllowAgents: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('planModeAllowAgents', (v) => useUIStore.getState().setPlanModeAllowAgents(v)) }),
   messageSearchEnabled: field({
     scope: 'instance',
     surfaces: ['web', 'desktop', 'mobile'],

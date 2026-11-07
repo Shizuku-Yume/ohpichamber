@@ -124,23 +124,17 @@ export class InteractionManager {
   }
 
   /**
-   * One in-flight reconsideration per approval. A second mode switch or a user
-   * reply racing it must not queue a duplicate CAS attempt.
+   * Start one attempt per mode change. Attempts may overlap, and that is the
+   * point: a slow `safety` verdict for an old mode must not delay the `auto`
+   * switch that supersedes it. CAS makes exactly one attempt win and the rest
+   * report `409/410/404`, which is expected coordination rather than failure.
    */
-  private readonly reconsidering = new Set<string>();
-
   private scheduleReconsider(request: ApprovalRequest, publish?: () => void): void {
-    if (this.reconsidering.has(request.approvalId)) return;
-    this.reconsidering.add(request.approvalId);
     void this.reconsider(request.sessionId, request.approvalId, request.epoch, request.workerGeneration, publish)
       .catch(error => {
-        // A user reply or a competing mode switch can win the CAS first; that is
-        // expected coordination, not a failure. Anything else is a real error and
-        // must not become an unhandled rejection.
         if (error instanceof ProjectionError && (error.status === 409 || error.status === 410 || error.status === 404)) return;
         console.warn('[interaction] permission reconsideration failed:', error?.message ?? error);
-      })
-      .finally(() => this.reconsidering.delete(request.approvalId));
+      });
   }
 
   /**
@@ -155,7 +149,14 @@ export class InteractionManager {
     // answer the policy gives itself never publishes, so no card is advertised
     // for a request the user never has to see.
     let publish = publishPending;
-    const ensurePublished = (): void => { publish?.(); publish = undefined; };
+    // Publishing is only meaningful while this exact record is still pending: a
+    // concurrent approval or revocation must not leave a card behind.
+    const ensurePublished = (): void => {
+      const live = this.pendingExecutionApproval(sessionId, approvalId, epoch, generation);
+      if (!live) return;
+      (publish ?? live.publish)?.();
+      publish = undefined;
+    };
     const current = this.pendingExecutionApproval(sessionId, approvalId, epoch, generation);
     publish ??= current?.publish;
     // A request that was revoked while its answer was computed has no card to show.

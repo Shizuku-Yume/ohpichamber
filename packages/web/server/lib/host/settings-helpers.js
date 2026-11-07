@@ -545,6 +545,12 @@ export const createSettingsHelpers = (dependencies) => {
       && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
       result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
     }
+    if (typeof candidate.autoApplyAgentModel === 'boolean') {
+      result.autoApplyAgentModel = candidate.autoApplyAgentModel;
+    }
+    if (typeof candidate.planModeAllowAgents === 'boolean') {
+      result.planModeAllowAgents = candidate.planModeAllowAgents;
+    }
     if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
       result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks;
     }

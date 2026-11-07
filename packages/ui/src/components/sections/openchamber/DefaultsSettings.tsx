@@ -11,11 +11,15 @@ import {
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
+import { PermissionDefaultModeField } from './PermissionDefaultModeField';
+import { AgentSelector } from '@/components/sections/agents/AgentSelector';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+
 
 type SessionModeValue = 'main' | 'plan' | 'vibe' | 'goal';
 
@@ -151,6 +155,9 @@ export const DefaultsSettings: React.FC = () => {
     async (nextRoles: Record<string, string>) => {
       const currentState = ompStateRef.current;
       if (!currentState) return;
+      // The snapshot this write was computed against, so a 409 re-applies only
+      // the roles it actually changed.
+      const previousRoles = parseSafeRolesRecord(currentState.settings.find((s) => s.id === 'modelRoles')?.value);
       setIsSavingOmp(true);
       try {
         let next: OmpSettingsState;
@@ -163,7 +170,14 @@ export const DefaultsSettings: React.FC = () => {
           if (error instanceof CanonicalApiError && error.problem.status === 409) {
             const latest = await canonicalClient.getOmpSettings(currentState.workspaceId);
             const latestRoles = parseSafeRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
-            const merged = { ...latestRoles, default: nextRoles.default };
+            // Only the roles this write changed are re-applied; every other role
+            // in the newer snapshot (including fallback chains) stays as it is.
+            const merged = { ...latestRoles };
+            for (const role of Object.keys(nextRoles)) merged[role] = nextRoles[role];
+            for (const role of Object.keys(previousRoles)) {
+              if (Object.hasOwn(nextRoles, role)) continue;
+              delete merged[role];
+            }
             next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
               expectedRevision: latest.revision,
               changes: [{ id: 'modelRoles', value: merged }],
@@ -210,6 +224,60 @@ export const DefaultsSettings: React.FC = () => {
     },
     [rolesMap, selectedModelId, updateRolesOnServer],
   );
+
+  /**
+   * Any OMP model role: `smol` is the small model, `slow` the changes
+   * walkthrough, `judge` the goal checker, `tiny` the fallback chain head.
+   * Writing the role is what makes the setting take effect; nothing here keeps
+   * a second copy of it.
+   */
+  const setRole = React.useCallback(
+    (role: string, value: string) => {
+      const nextRoles = { ...rolesMap };
+      if (!value || value === '__inherit__') delete nextRoles[role];
+      else nextRoles[role] = value;
+      void updateRolesOnServer(nextRoles);
+    },
+    [rolesMap, updateRolesOnServer],
+  );
+
+  const roleModel = (role: string): string => {
+    const { model } = parseRoleSelector(rolesMap[role]);
+    return models.some((m) => `${m.provider}/${m.modelId}` === model) || !model ? model : '';
+  };
+
+  const roleSelect = (role: string, ariaLabel: string, placeholder: string): React.ReactNode => (
+    <Select
+      value={roleModel(role) || '__inherit__'}
+      onValueChange={(val) => setRole(role, val)}
+      disabled={isSavingOmp || !ompState}
+    >
+      <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={ariaLabel}>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__inherit__">{placeholder}</SelectItem>
+        {models.map((m) => {
+          const id = `${m.provider}/${m.modelId}`;
+          return (
+            <SelectItem key={id} value={id}>
+              {m.name || m.modelId} ({m.provider})
+            </SelectItem>
+          );
+        })}
+        {roleModel(role) && (
+          <SelectItem value={roleModel(role)}>
+            {roleModel(role)} ({t('settings.omp.modelRoles.customModel')})
+          </SelectItem>
+        )}
+      </SelectContent>
+    </Select>
+  );
+
+  const defaultAgent = useConfigStore((state) => state.settingsDefaultAgent);
+  const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
+  const setAgent = useConfigStore((state) => state.setAgent);
+  const autoApplyAgentModel = useUIStore((state) => state.autoApplyAgentModel);
 
   return (
     <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
@@ -307,6 +375,58 @@ export const DefaultsSettings: React.FC = () => {
           </Select>
         </SettingsFieldRow>
 
+        <SettingsFieldRow
+          settingsItem="sessions.default-agent"
+          label={t('settings.openchamber.defaults.field.defaultAgent')}
+        >
+          <AgentSelector
+            agentId={defaultAgent ?? ''}
+            onChange={(agentId) => {
+              const next = agentId || undefined;
+              setSettingsDefaultAgent(next);
+              // Auto-apply means the agent's pinned model wins, so `keepModel`
+              // is the opposite. Without it the chat keeps the model it had.
+              if (next) setAgent(next, { keepModel: !autoApplyAgentModel });
+              void updateDesktopSettings({ defaultAgent: next ?? '' });
+            }}
+            directory={directory ?? undefined}
+            className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+          />
+        </SettingsFieldRow>
+
+        <SettingsFieldRow
+          settingsItem="sessions.small-model"
+          label={t('settings.openchamber.defaults.smallModel.title')}
+          info={t('settings.openchamber.defaults.smallModel.description')}
+        >
+          {roleSelect('smol', t('settings.openchamber.defaults.smallModel.title'), t('settings.openchamber.defaults.smallModel.useDefault'))}
+        </SettingsFieldRow>
+
+        <SettingsFieldRow
+          settingsItem="sessions.walkthrough-model"
+          label={t('settings.openchamber.defaults.walkthroughModel.title')}
+          info={t('settings.openchamber.defaults.walkthroughModel.description')}
+        >
+          {roleSelect('slow', t('settings.openchamber.defaults.walkthroughModel.title'), t('settings.openchamber.defaults.walkthroughModel.usesSmallModel'))}
+        </SettingsFieldRow>
+
+        <SettingsFieldRow
+          settingsItem="sessions.fallback-model"
+          label={t('settings.openchamber.defaults.field.fallbackModel')}
+          info={t('settings.openchamber.defaults.field.fallbackModelInfo')}
+        >
+          {roleSelect('tiny', t('settings.openchamber.defaults.field.fallbackModel'), t('settings.openchamber.defaults.field.fallbackModelNone'))}
+        </SettingsFieldRow>
+
+        <PermissionDefaultModeField agentName={defaultAgent} />
+
+        {/* The plan-mode agent toggle and the auto-apply-agent-model toggle are
+            wired end to end (store, registry snapshot, Host capture, worker
+            enforcement) but their labels are not in the shared dictionaries.
+            ux-06 owns `packages/ui/src/lib/i18n/messages/*.ts`; the required keys
+            are listed in ux-03-localization-request.json, and the two rows land
+            here once they exist. Rendering a raw key or a made-up translation
+            for them is not an option. */}
         <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
           <SettingsCheckboxRow
             settingsItem="sessions.deletion-dialog"

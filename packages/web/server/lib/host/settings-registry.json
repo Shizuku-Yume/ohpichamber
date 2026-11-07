@@ -180,6 +180,12 @@
     "sessionGoalMaxAutoTurns": {
       "scope": "profile"
     },
+    "autoApplyAgentModel": {
+      "scope": "profile"
+    },
+    "planModeAllowAgents": {
+      "scope": "profile"
+    },
     "messageSearchEnabled": {
       "scope": "instance",
       "surfaces": [

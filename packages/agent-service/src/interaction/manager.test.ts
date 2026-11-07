@@ -611,6 +611,34 @@ describe('service-owned interaction CAS', () => {
     } finally { manager.closeSession('session-1'); }
   });
 
+  test('a switch to auto supersedes an in-flight safety verdict for the same request', async () => {
+    const verdict = Promise.withResolvers<'accept' | 'hold'>();
+    const decisions: { value: 'ask' | 'safety' | 'auto' } = { value: 'safety' };
+    const resolveMode = vi.fn(async () => decisions.value);
+    const evaluate = vi.fn(async () => verdict.promise);
+    const operations: WorkerOperation[] = [];
+    const events: ProjectionInput[] = [];
+    const manager = new InteractionManager(60_000, undefined, { resolveMode, evaluate });
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { operations.push(operation); }, input => { events.push(input); });
+    try {
+      manager.onRequest('session-1', 'worker-1', permissionApproval);
+      await settle();
+      // The safety net is still running when the Host switches the session to auto.
+      decisions.value = 'auto';
+      manager.reconsiderPending('session-1');
+      await settle();
+      // Auto wins immediately: the old verdict is not allowed to block it.
+      expect(operations).toEqual([{ type: 'approval.resolve', approvalId: 'permission-1', decision: 'approve' }]);
+      expect(manager.approvals('session-1')).toHaveLength(0);
+      // The late verdict must be discarded, not publish or duplicate anything.
+      verdict.resolve('hold');
+      await settle();
+      expect(operations).toHaveLength(1);
+      expect(events.filter(input => input.event.type === 'approval.requested' && input.event.approval.approvalId === 'permission-1')).toHaveLength(0);
+      expect(events.filter(input => input.event.type === 'approval.resolved' && input.event.approval.approvalId === 'permission-1')).toHaveLength(0);
+    } finally { manager.closeSession('session-1'); }
+  });
+
   test('an explicit workspace deny wins over every mode', async () => {
     const { manager, operations } = withAuthority(authority({ 'session-1': 'auto' }));
     manager.loadPolicies('session-1', 'workspace-1', [{

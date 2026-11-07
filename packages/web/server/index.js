@@ -569,7 +569,20 @@ const hostAgentRuntime = createHostAgentRuntime({
  bunPath: process.env.OHPICHAMBER_BUN,
  entrypoint: process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT,
  validateDirectoryPath,
- getEnvironmentForDirectory: async (directory) => await environmentRuntime.forDirectory(directory) ?? {},
+ // Project environment plus the non-secret goal preferences the worker reads.
+ // Captured at worker admission: a saved change applies to workers started after it.
+ getEnvironmentForDirectory: async (directory) => {
+  const environment = await environmentRuntime.forDirectory(directory) ?? {};
+  const settings = await readSettingsFromDiskMigrated().catch(() => ({}));
+  const checker = settings?.sessionGoalChecker === 'small-model' ? 'small-model' : 'classifier';
+  const maxTurns = Number.isSafeInteger(settings?.sessionGoalMaxAutoTurns) ? settings.sessionGoalMaxAutoTurns : 20;
+  return {
+   ...environment,
+   OPENCHAMBER_SESSION_GOAL_CHECKER: checker,
+   OPENCHAMBER_SESSION_GOAL_MAX_AUTO_TURNS: String(maxTurns),
+   OPENCHAMBER_PLAN_ALLOW_AGENTS: settings?.planModeAllowAgents === true ? 'true' : 'false',
+  };
+ },
  invokeHostAction: (scope, request, signal) => openChamberControlService.invokeHostAction(scope, request, signal),
 });
 // The Host generates the lease id before the Agent Service sees it and releases

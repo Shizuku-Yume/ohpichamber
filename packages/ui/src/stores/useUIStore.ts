@@ -6,6 +6,10 @@ import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey } from '@/lib/typography';
 import type { ShortcutCombo } from '@/lib/shortcuts';
 import type { DraftStarterRef } from '@/lib/draftStarters';
+import {
+  DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, type SessionGoalChecker,
+} from '@/lib/sessionGoalTurnLimit';
+import type { PermissionMode } from '@/stores/utils/permissionAutoAccept';
 import type { CustomProviderIcon } from '@/lib/customProviderIcons';
 import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
 import { getStoredMobileKeyboardMode, type MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
@@ -1027,6 +1031,16 @@ interface UIStore {
   sessionGoalEnabled: boolean;
   sessionGoalDefaultBudgetEnabled: boolean;
   sessionGoalDefaultBudget: number;
+  /** Who checks goal progress: the Jev classifier or the small model. */
+  sessionGoalChecker: SessionGoalChecker;
+  /** Automatic goal turns before the goal stops and hands back to the user. */
+  sessionGoalMaxAutoTurns: number;
+  /** How new top-level sessions answer tool permissions. */
+  permissionDefaultMode: PermissionMode;
+  /** Start a new session on the model the picked agent pins. */
+  autoApplyAgentModel: boolean;
+  /** Keep the subagent task tool available while Plan mode is active. */
+  planModeAllowAgents: boolean;
   collapsibleThinkingBlocks: boolean;
   /** A collapsible reasoning block opens while its model thinks. Off: it stays folded to its header. */
   expandReasoningWhileStreaming: boolean;
@@ -1342,6 +1356,11 @@ interface UIStore {
   setSessionGoalEnabled: (value: boolean) => void;
   setSessionGoalDefaultBudgetEnabled: (value: boolean) => void;
   setSessionGoalDefaultBudget: (value: number) => void;
+  setSessionGoalChecker: (value: SessionGoalChecker) => void;
+  setSessionGoalMaxAutoTurns: (value: number) => void;
+  setPermissionDefaultMode: (value: PermissionMode) => void;
+  setAutoApplyAgentModel: (value: boolean) => void;
+  setPlanModeAllowAgents: (value: boolean) => void;
   setCollapsibleThinkingBlocks: (value: boolean) => void;
   setExpandReasoningWhileStreaming: (value: boolean) => void;
   setActivityRenderMode: (value: ActivityRenderMode) => void;
@@ -1600,6 +1619,11 @@ export const useUIStore = create<UIStore>()(
         sessionGoalEnabled: true,
         sessionGoalDefaultBudgetEnabled: false,
         sessionGoalDefaultBudget: 200_000,
+        sessionGoalChecker: 'classifier',
+        sessionGoalMaxAutoTurns: DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS,
+        permissionDefaultMode: 'ask',
+        autoApplyAgentModel: false,
+        planModeAllowAgents: false,
         collapsibleThinkingBlocks: true,
         expandReasoningWhileStreaming: false,
         activityRenderMode: 'summary',
@@ -2723,6 +2747,26 @@ export const useUIStore = create<UIStore>()(
           set({ sessionGoalDefaultBudget: value });
         },
 
+        setSessionGoalChecker: (value) => {
+          set({ sessionGoalChecker: value });
+        },
+
+        setSessionGoalMaxAutoTurns: (value) => {
+          set({ sessionGoalMaxAutoTurns: Math.min(SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, Math.max(1, Math.floor(value))) });
+        },
+
+        setPermissionDefaultMode: (value) => {
+          set({ permissionDefaultMode: value });
+        },
+
+        setAutoApplyAgentModel: (value) => {
+          set({ autoApplyAgentModel: value });
+        },
+
+        setPlanModeAllowAgents: (value) => {
+          set({ planModeAllowAgents: value });
+        },
+
         setCollapsibleThinkingBlocks: (value) => {
           set({ collapsibleThinkingBlocks: value });
         },
@@ -3829,6 +3873,11 @@ export const useUIStore = create<UIStore>()(
           sessionGoalEnabled: state.sessionGoalEnabled,
           sessionGoalDefaultBudgetEnabled: state.sessionGoalDefaultBudgetEnabled,
           sessionGoalDefaultBudget: state.sessionGoalDefaultBudget,
+          sessionGoalChecker: state.sessionGoalChecker,
+          sessionGoalMaxAutoTurns: state.sessionGoalMaxAutoTurns,
+          permissionDefaultMode: state.permissionDefaultMode,
+          autoApplyAgentModel: state.autoApplyAgentModel,
+          planModeAllowAgents: state.planModeAllowAgents,
           collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,
           expandReasoningWhileStreaming: state.expandReasoningWhileStreaming,
           activityRenderMode: state.activityRenderMode,

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { AsyncJobManager, type AsyncJob } from '@oh-my-pi/pi-coding-agent/async/job-manager';
-import type { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
+import type { AgentRegistryApi } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import type { PipeStreams } from '@oh-my-pi/pi-natives';
 import type { DaemonSnapshot } from '@oh-my-pi/pi-tui/tools/daemon';
 import type { RunningShell } from '@openchamber/agent-contract';
@@ -47,7 +47,7 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
       sessionId: 'session-1',
       workerGeneration: 'gen-1',
       epoch: 'epoch-1',
-      nativeOwner: { agentId: 'session-1', registry: { get: () => undefined } as unknown as AgentRegistry },
+      nativeOwner: { agentId: 'session-1', registry: { get: () => undefined } as unknown as AgentRegistryApi },
       privateRoots: [{ root: '/home/private/repo', label: 'workspace' }],
     });
 
@@ -371,7 +371,7 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
       workerGeneration: 'gen-1',
       epoch: 'epoch-1',
       cwd: '/workspace',
-      nativeOwner: { agentId: 'session-1', registry: { get: () => undefined } as unknown as AgentRegistry },
+      nativeOwner: { agentId: 'session-1', registry: { get: () => undefined } as unknown as AgentRegistryApi },
     });
 
     const { promise: jobPromise } = Promise.withResolvers<void>();
@@ -445,7 +445,7 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
       workerGeneration: 'gen-1',
       epoch: 'epoch-1',
       cwd: '/workspace',
-      nativeOwner: { agentId: 'session-1', registry: { get: () => undefined } as unknown as AgentRegistry },
+      nativeOwner: { agentId: 'session-1', registry: { get: () => undefined } as unknown as AgentRegistryApi },
     });
 
     const { promise: jobPromise } = Promise.withResolvers<void>();
@@ -514,7 +514,7 @@ describe('WorkerShell streams, stdin, and job widgets', () => {
       workerGeneration: 'gen-1',
       epoch: 'epoch-1',
       cwd: '/workspace',
-      nativeOwner: { agentId: 'session-1', registry: { get: () => undefined } as unknown as AgentRegistry },
+      nativeOwner: { agentId: 'session-1', registry: { get: () => undefined } as unknown as AgentRegistryApi },
     });
 
     const { promise: jobPromise } = Promise.withResolvers<void>();

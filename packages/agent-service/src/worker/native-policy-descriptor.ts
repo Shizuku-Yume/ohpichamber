@@ -5,7 +5,7 @@ import { parseArchivePathCandidates } from '@oh-my-pi/pi-utils/ar';
 import { toPathList } from '@oh-my-pi/pi-tui/render/render-utils';
 import { splitPathAndSel } from '@oh-my-pi/pi-tui/tools/read';
 import { expandDelimitedPathEntries, normalizePathLikeInput, parseFindPattern, parseSearchPathPreferringLiteral, resolveReadPathAsync, resolveToCwd, splitDelimitedPathEntry, splitMixedUrlPathList, splitPathAndSelPreferringLiteral } from '@oh-my-pi/pi-coding-agent/tools/path-utils';
-import { unwrapHashlineHeaderPath } from '@oh-my-pi/pi-coding-agent/tools/plan-mode-guard';
+import { unwrapHashlineHeaderPath } from '@oh-my-pi/pi-coding-agent/tools/hashline-header-path';
 import { splitJsonQueryTarget } from '@oh-my-pi/pi-coding-agent/tools/read-json';
 import { parseSqlitePathCandidates } from '@oh-my-pi/pi-coding-agent/tools/sqlite-reader';
 import { splitVideoReadTarget } from '@oh-my-pi/pi-coding-agent/utils/video';

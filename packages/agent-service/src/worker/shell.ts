@@ -5,10 +5,10 @@ import type {
 } from '@openchamber/agent-contract';
 import type { DaemonSnapshot } from '@oh-my-pi/pi-tui/tools/daemon';
 import type { JobWidgets } from '@oh-my-pi/pi-coding-agent/job-widgets/registry';
-import { AsyncJobManager, type AsyncJob, type BashJobEvent } from '@oh-my-pi/pi-coding-agent/async/job-manager';
+import { type AsyncJob, type AsyncJobManagerApi, type BashJobEvent } from '@oh-my-pi/pi-coding-agent/async/job-manager';
 import { executeBash, releaseShellSessions, type BashResult } from '@oh-my-pi/pi-coding-agent/exec/bash-executor';
 import type { PipeStreams } from '@oh-my-pi/pi-natives';
-import type { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
+import type { AgentRegistryApi } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { ProjectionError } from '../projection/journal.ts';
 import { ShellOperationSchema, type ShellOperation, type ShellResult } from '../shell/protocol.ts';
 
@@ -36,14 +36,14 @@ type ServiceRecord = {
 };
 
 export interface WorkerShellContext {
-  manager: AsyncJobManager;
+  manager: AsyncJobManagerApi;
   workspaceId: string;
   projectId: string;
   sessionId: string;
   workerGeneration: string;
   epoch: string;
   cwd: string;
-  nativeOwner?: { agentId: string; registry: AgentRegistry };
+  nativeOwner?: { agentId: string; registry: AgentRegistryApi };
   widgets?: JobWidgets;
   listServices?: () => Promise<DaemonSnapshot[]>;
   serviceLogs?: (name: string) => Promise<string>;
@@ -77,13 +77,13 @@ export class WorkerShell {
   private readonly authorizedServices = new Map<string, ServiceRecord>();
   private readonly endedServices = new Map<string, Ended>();
   private revision = 0n;
-  private readonly unsubscribe: () => void;
+  private readonly unsubscribe?: () => void;
   private readonly unsubscribeWidgets?: () => void;
   private observationFailure: unknown;
   private closed = false;
 
   constructor(private readonly context: WorkerShellContext) {
-    this.unsubscribe = context.manager.observeBashJobs(event => {
+    this.unsubscribe = context.manager.observeBashJobs?.(event => {
       try { this.observeNative(event); }
       catch (error) {
         const jobId = this.nativeJobs.get(event.jobId);
@@ -139,7 +139,7 @@ export class WorkerShell {
     if (!owner || native.ownerId === undefined) return false;
     if (native.ownerId === owner.agentId) return true;
     let ref = owner.registry.get(native.ownerId);
-    if (ref?.session?.asyncJobManager !== this.context.manager) return false;
+    // Live sessions in this worker's registry share this root's job manager.
     const visited = new Set<string>();
     while (ref && !visited.has(ref.id)) {
       if (ref.id === owner.agentId) return true;
@@ -624,7 +624,7 @@ export class WorkerShell {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    this.unsubscribe();
+    this.unsubscribe?.();
     this.unsubscribeWidgets?.();
     this.context.widgets?.dispose();
     const jobs = [...this.jobs.values()];

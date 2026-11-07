@@ -577,7 +577,13 @@ test('stateless identity changes preserve active commands and recreate an idle w
     const reused = await harness.workers.startStateless({ ...input, catalogRevision: '7' });
     expect(reused.workerGeneration).toBe(first.workerGeneration);
     const pending = harness.workers.request(input.rootSessionId, { type: 'catalog', revision: '0', operation: { type: 'plugins.owner' } });
-    const changed = { ...input, env: { ...input.env, OMP_PROFILE: 'refreshed-native-profile' } };
+    // A named profile resolves its own config root, so the Host hands the worker
+    // that profile's agent directory; the runtime rejects a mismatched pair.
+    const profileName = 'refreshed-native-profile';
+    const profileAgentDirectory = join(harness.root, '.omp', 'profiles', profileName, 'agent');
+    await mkdir(profileAgentDirectory, { recursive: true });
+    const changed = { ...input, agentDirectory: profileAgentDirectory, agentDirectoryId: 'refreshed-owner',
+      env: { ...input.env, OMP_PROFILE: profileName } };
     await expect(harness.workers.startStateless(changed)).rejects.toMatchObject({ code: 'COMMAND_IN_FLIGHT' });
     expect(harness.workers.authorizationScope(input.rootSessionId)?.workerGeneration).toBe(first.workerGeneration);
     const oldOwner = await pending;

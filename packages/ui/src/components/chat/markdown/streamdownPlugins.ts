@@ -118,10 +118,35 @@ function createOptions(allowRawHtml: boolean, isVSCode: boolean, singleTilde: bo
     ],
   };
 }
+
 const policies = [false, true].flatMap(singleTilde => [
   createOptions(false, false, singleTilde), createOptions(false, true, singleTilde),
   createOptions(true, false, singleTilde), createOptions(true, true, singleTilde),
 ]);
-export function getMarkdownProcessingOptions(allowRawHtml: boolean, isVSCode: boolean, singleTilde = false): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
-  return policies[(singleTilde ? 4 : 0) + (allowRawHtml ? 2 : 0) + (isVSCode ? 1 : 0)];
+
+export function getMarkdownProcessingOptions(
+  allowRawHtml: boolean,
+  singleTildeStrikethrough?: boolean,
+): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'>;
+export function getMarkdownProcessingOptions(
+  allowRawHtml: boolean,
+  isVSCode: boolean,
+  singleTilde?: boolean,
+): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'>;
+export function getMarkdownProcessingOptions(
+  allowRawHtml: boolean,
+  isVSCodeOrSingleTilde?: boolean,
+  singleTilde?: boolean,
+): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
+  let isVSCode = false;
+  let singleTildeStrikethrough = true;
+
+  if (typeof singleTilde === 'boolean') {
+    isVSCode = Boolean(isVSCodeOrSingleTilde);
+    singleTildeStrikethrough = singleTilde;
+  } else if (typeof isVSCodeOrSingleTilde === 'boolean') {
+    singleTildeStrikethrough = isVSCodeOrSingleTilde;
+  }
+
+  return policies[(singleTildeStrikethrough ? 4 : 0) + (allowRawHtml ? 2 : 0) + (isVSCode ? 1 : 0)];
 }

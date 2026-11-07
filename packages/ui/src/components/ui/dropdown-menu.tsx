@@ -8,6 +8,7 @@ import { handleDropdownNavigationKey } from "./dropdown-navigation";
 import { useMenuWindowDismiss } from "./menu-window-dismiss";
 import { dropdownMenuItemClass, dropdownMenuPopupClass, dropdownMenuSeparatorClass, dropdownMenuSubTriggerClass } from "./dropdown-menu.styles";
 import { GlassRedrawGuard } from "./glass-redraw-guard"
+import { PopupOverlayScrollbar } from "./AttachedOverlayScrollbar";
 
 type AsChildProps = { asChild?: boolean };
 type AsChildRenderProps = {
@@ -28,11 +29,13 @@ const resolveDialogContainer = (element: HTMLElement | null): HTMLElement | null
   if (!element) {
     return null;
   }
+  // SAFETY: closest query matches dialog HTMLElement
   return element.closest('[data-slot="dialog-content"], [role="dialog"]') as HTMLElement | null;
 };
 
 function renderFromAsChild(asChild: boolean | undefined, children: React.ReactNode) {
   if (asChild && React.isValidElement(children)) {
+    // SAFETY: React.isValidElement verifies children is a ReactElement
     return { render: children as React.ReactElement } satisfies AsChildRenderProps;
   }
   return { children };
@@ -166,6 +169,7 @@ function DropdownMenuContent({
 }: ContentProps) {
   const portalContext = React.useContext(DropdownPortalContext);
   void onCloseAutoFocus
+  const [popup, setPopup] = React.useState<HTMLDivElement | null>(null);
 
   const handleKeyDown: NonNullable<React.ComponentProps<typeof BaseMenu.Popup>['onKeyDown']> = (event) => {
     onKeyDown?.(event);
@@ -190,6 +194,7 @@ function DropdownMenuContent({
         className={cn("app-region-no-drag z-50", positionerClassName)}
       >
         <BaseMenu.Popup
+          ref={setPopup}
           data-slot="dropdown-menu-content"
           style={{
             color: 'var(--surface-elevated-foreground)',
@@ -197,6 +202,7 @@ function DropdownMenuContent({
           }}
           className={cn(
             dropdownMenuPopupClass,
+            "overlay-scrollbar-target",
             className
           )}
           {...props}
@@ -205,6 +211,7 @@ function DropdownMenuContent({
           {children}
           <GlassRedrawGuard />
         </BaseMenu.Popup>
+        <PopupOverlayScrollbar scroller={popup} />
       </BaseMenu.Positioner>
     </BaseMenu.Portal>
   )
@@ -345,6 +352,7 @@ function DropdownMenuSubContent({
   ...props
 }: React.ComponentProps<typeof BaseMenu.Popup>) {
   const portalContext = React.useContext(DropdownPortalContext);
+  const [popup, setPopup] = React.useState<HTMLDivElement | null>(null);
   const handleKeyDown: NonNullable<React.ComponentProps<typeof BaseMenu.Popup>['onKeyDown']> = (event) => {
     onKeyDown?.(event);
     handleDropdownNavigationKey(event, (navigationKey) => {
@@ -360,12 +368,14 @@ function DropdownMenuSubContent({
     <BaseMenu.Portal className="contents" container={portalContext?.portalContainer || undefined}>
       <BaseMenu.Positioner className="z-50">
         <BaseMenu.Popup
+          ref={setPopup}
           data-slot="dropdown-menu-sub-content"
           style={{
             color: 'var(--surface-elevated-foreground)',
           }}
           className={cn(
             dropdownMenuPopupClass,
+            "overlay-scrollbar-target",
             className
           )}
           {...props}
@@ -374,6 +384,7 @@ function DropdownMenuSubContent({
           {children}
           <GlassRedrawGuard />
         </BaseMenu.Popup>
+        <PopupOverlayScrollbar scroller={popup} />
       </BaseMenu.Positioner>
     </BaseMenu.Portal>
   )

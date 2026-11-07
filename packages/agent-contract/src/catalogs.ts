@@ -95,6 +95,36 @@ export const ProviderSchema = z.strictObject({
 );
 export type Provider = z.infer<typeof ProviderSchema>;
 
+/**
+ * An image generation request. The prompt is what the agent wrote; references
+ * are files the caller already resolved, so the service never guesses a path.
+ */
+export const ImageGenerateRequestSchema = z.strictObject({
+  workspaceId: EntityIdSchema,
+  selection: ModelSelectionSchema,
+  prompt: z.string().min(1).max(8_000),
+  inputImages: z.array(z.strictObject({
+    data: z.string().min(1),
+    mimeType: z.string().regex(/^image\/(png|jpeg|gif|webp)$/),
+  })).max(8).optional(),
+  aspectRatio: z.string().regex(/^\d+(?:\.\d+)?:\d+(?:\.\d+)?$/).optional(),
+  imageSize: z.string().regex(/^[0-9A-Za-z]{1,8}$/).optional(),
+  count: z.number().int().min(1).max(4).optional(),
+});
+export type ImageGenerateRequest = z.infer<typeof ImageGenerateRequestSchema>;
+
+export const ImageGenerateResultSchema = z.strictObject({
+  model: ModelSelectionSchema,
+  images: z.array(z.strictObject({
+    data: z.string().min(1),
+    mimeType: z.string().regex(/^image\/(png|jpeg|gif|webp)$/),
+    size: z.string().optional(),
+    quality: z.string().optional(),
+  })).min(1),
+  text: z.string().optional(),
+});
+export type ImageGenerateResult = z.infer<typeof ImageGenerateResultSchema>;
+
 export const ModelCatalogDefaultsSchema = z.strictObject({
   /** The model OMP resolves for a new session with no explicit selection. */
   model: ModelSelectionSchema.nullable(),

@@ -410,6 +410,9 @@ export const DefaultsSettings: React.FC = () => {
   const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
   const setAgent = useConfigStore((state) => state.setAgent);
   const autoApplyAgentModel = useUIStore((state) => state.autoApplyAgentModel);
+  const setAutoApplyAgentModel = useUIStore((state) => state.setAutoApplyAgentModel);
+  const planModeAllowAgents = useUIStore((state) => state.planModeAllowAgents);
+  const setPlanModeAllowAgents = useUIStore((state) => state.setPlanModeAllowAgents);
 
   return (
     <>
@@ -583,11 +586,28 @@ export const DefaultsSettings: React.FC = () => {
 
       <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')} contentClassName="space-y-1">
         <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
-          {/* Both rows wait on ux-06-owned dictionaries. Their state, storage,
-              Host capture and worker enforcement are complete; the labels are
-              requested in ux-03-localization-request.json. Rows land here as
-              direct `t()` calls once the owner lands the keys — never as a raw
-              key or a hardcoded English string. */}
+          <SettingsCheckboxRow
+            settingsItem="sessions.auto-apply-agent-model"
+            checked={autoApplyAgentModel}
+            onChange={(checked) => {
+              setAutoApplyAgentModel(checked);
+              void updateDesktopSettings({ autoApplyAgentModel: checked });
+            }}
+            label={t('settings.openchamber.defaults.field.autoApplyAgentModel')}
+            ariaLabel={t('settings.openchamber.defaults.field.autoApplyAgentModelAria')}
+            description={t('settings.openchamber.defaults.field.autoApplyAgentModelInfo')}
+          />
+          <SettingsCheckboxRow
+            settingsItem="sessions.plan-mode-allow-agents"
+            checked={planModeAllowAgents}
+            onChange={(checked) => {
+              setPlanModeAllowAgents(checked);
+              void updateDesktopSettings({ planModeAllowAgents: checked });
+            }}
+            label={t('settings.openchamber.defaults.field.planModeAllowAgents')}
+            ariaLabel={t('settings.openchamber.defaults.field.planModeAllowAgentsAria')}
+            description={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
+          />
           <SettingsCheckboxRow
             settingsItem="sessions.deletion-dialog"
             checked={showDeletionDialog}

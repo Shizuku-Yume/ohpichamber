@@ -13,6 +13,7 @@ export type CommandConfig = Pick<CommandEntry, 'name' | 'description' | 'content
 type CommandDraft = Omit<CommandConfig, 'content' | 'description'> & { content?: string; description?: string; scope: CommandScope };
 
 interface CommandsStore {
+  selectedCommandId: string | null;
   selectedCommandName: string | null;
   commands: Command[];
   commandsByDirectory: { [directory: string]: Command[] };
@@ -20,12 +21,13 @@ interface CommandsStore {
   isLoading: boolean;
   commandDraft: CommandDraft | null;
   setSelectedCommand: (name: string | null) => void;
+  setSelectedCommandId: (id: string | null) => void;
   setCommandDraft: (draft: CommandDraft | null) => void;
   loadCommands: (directory?: string | null) => Promise<boolean>;
   resetForRuntimeSwitch: () => void;
   createCommand: (config: CommandConfig, directory?: string | null) => Promise<boolean>;
-  updateCommand: (name: string, config: Partial<Omit<CommandConfig, 'agentId'>> & { agentId?: string | null }, directory?: string | null) => Promise<boolean>;
-  deleteCommand: (name: string, directory?: string | null) => Promise<boolean>;
+  updateCommand: (name: string, config: Partial<Omit<CommandConfig, 'agentId'>> & { agentId?: string | null }, directory?: string | null, commandId?: string | null) => Promise<boolean>;
+  deleteCommand: (name: string, directory?: string | null, commandId?: string | null) => Promise<boolean>;
   getCommandByName: (name: string, directory?: string | null) => Command | undefined;
 }
 
@@ -86,12 +88,31 @@ export const useCommandsStore = create<CommandsStore>()(devtools((set, get) => {
     return catalog;
   };
   return {
-    selectedCommandName: null, commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null,
-    setSelectedCommand: (name) => set({ selectedCommandName: name }),
-    setCommandDraft: (draft) => set({ commandDraft: draft }),
+    selectedCommandId: null, selectedCommandName: null, commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null,
+    setSelectedCommand: (name) => {
+      let match = get().commands.find(c => c.name === name);
+      if (!match) {
+        for (const list of Object.values(get().commandsByDirectory)) {
+          match = list.find(c => c.name === name);
+          if (match) break;
+        }
+      }
+      set({ selectedCommandName: name, selectedCommandId: match?.commandId ?? null });
+    },
+    setSelectedCommandId: (id) => {
+      let match = get().commands.find(c => c.commandId === id);
+      if (!match) {
+        for (const list of Object.values(get().commandsByDirectory)) {
+          match = list.find(c => c.commandId === id);
+          if (match) break;
+        }
+      }
+      set({ selectedCommandId: id, selectedCommandName: match?.name ?? id });
+    },
+    setCommandDraft: (draft) => set({ commandDraft: draft, selectedCommandId: null }),
     resetForRuntimeSwitch: () => {
       generation += 1; loads.clear(); loadedAt.clear();
-      set({ commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null, selectedCommandName: null });
+      set({ commands: [], commandsByDirectory: {}, catalogsByDirectory: {}, isLoading: false, commandDraft: null, selectedCommandName: null, selectedCommandId: null });
     },
     loadCommands: async (requestedDirectory) => {
       const directory = resolveDirectory(requestedDirectory);
@@ -131,11 +152,14 @@ export const useCommandsStore = create<CommandsStore>()(devtools((set, get) => {
         return true;
       } catch (error) { console.error('[CommandsStore] Failed to create command:', error); return false; }
     },
-    updateCommand: async (name, config, directory) => {
+    updateCommand: async (name, config, directory, commandId) => {
       try {
         const owner = await context(directory);
         const catalog = await catalogFor(owner);
-        const entry = catalog.commands.find((command) => command.name === name);
+        const entry = commandId
+          ? catalog.commands.find((command) => command.commandId === commandId)
+          : (catalog.commands.find((command) => command.name === name && command.editable && command.scope !== 'inherited')
+            ?? catalog.commands.find((command) => command.name === name));
         if (!entry?.editable || entry.scope === 'inherited') return false;
         const next = await canonicalClient.fileResources.updateCommand(owner.workspaceId, {
           name: config.name ?? entry.name, description: config.description ?? entry.description,
@@ -151,16 +175,25 @@ export const useCommandsStore = create<CommandsStore>()(devtools((set, get) => {
         return true;
       } catch (error) { console.error('[CommandsStore] Failed to update command:', error); return false; }
     },
-    deleteCommand: async (name, directory) => {
+    deleteCommand: async (name, directory, commandId) => {
       try {
         const owner = await context(directory);
         const catalog = await catalogFor(owner);
-        const entry = catalog.commands.find((command) => command.name === name);
+        const entry = commandId
+          ? catalog.commands.find((command) => command.commandId === commandId)
+          : (catalog.commands.find((command) => command.name === name && command.editable && command.scope !== 'inherited')
+            ?? catalog.commands.find((command) => command.name === name));
         if (!entry?.editable) return false;
         const next = await canonicalClient.fileResources.deleteCommand(owner.workspaceId, { expectedRevision: catalog.revision, commandId: entry.commandId });
         if (!current(owner)) return false;
         publish(owner.directory, next);
-        if (get().selectedCommandName === name) set({ selectedCommandName: null });
+        const state = get();
+        const shouldClear = state.selectedCommandId !== null
+          ? state.selectedCommandId === entry.commandId
+          : state.selectedCommandName === name;
+        if (shouldClear) {
+          set({ selectedCommandName: null, selectedCommandId: null });
+        }
         emitConfigChange('commands', { source: SOURCE });
         return true;
       } catch (error) { console.error('[CommandsStore] Failed to delete command:', error); return false; }

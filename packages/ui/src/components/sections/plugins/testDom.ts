@@ -24,6 +24,8 @@ export const installTestDomGlobals = (): void => {
     Event: browser.Event,
     FocusEvent: browser.FocusEvent,
     CustomEvent: browser.CustomEvent,
+    MouseEvent: browser.MouseEvent,
+    PointerEvent: browser.PointerEvent,
     MutationObserver: browser.MutationObserver,
     ResizeObserver: browser.ResizeObserver,
     getComputedStyle: browser.getComputedStyle.bind(browser),

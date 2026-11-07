@@ -28,7 +28,7 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true,
 });
 
-const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+const _fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
   const request = new Request(input instanceof Request ? input : new URL(input, window.location.href), init);
   const path = new URL(request.url).pathname;
   if (path === '/api/fs/home') return Response.json({ home: '/test' });
@@ -39,7 +39,7 @@ const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, ini
 // React's input-event support is detected when react-dom loads.
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { I18nProvider } = await import('@/lib/i18n');
+const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
 // Match Vite's eager asset glob when the real model selector loads in Bun.
 plugin({
   name: 'command-settings-provider-logos',
@@ -60,14 +60,14 @@ const { SyncProvider } = await import('@/sync/sync-context');
 const initialStore = useCommandsStore.getState();
 const container = document.createElement('div');
 document.body.appendChild(container);
-const root = createRoot(container);
+let root = createRoot(container);
 
 afterEach(async () => {
   await act(async () => root.unmount());
+  container.innerHTML = '';
+  root = createRoot(container);
   useCommandsStore.setState(initialStore, true);
   await new Promise((resolve) => setTimeout(resolve, 350));
-  fetchSpy.mockRestore();
-  browser.close();
 });
 
 test('a command refresh during save preserves the newer draft for the queued save', async () => {
@@ -79,11 +79,13 @@ test('a command refresh during save preserves the newer draft for the queued sav
     commands: [command],
     commandsByDirectory: { '/project': [command] },
     updateCommand: async (_name, config) => new Promise<boolean>((resolve) => {
-      writes.push({ template: config.content || '', agentId: config.agentId, publish: () => {
-        const { agentId, ...rest } = { ...command, ...config };
-        const updated: CommandEntry = { ...rest, ...(agentId ? { agentId } : {}) };
-        useCommandsStore.setState({ commands: [updated], commandsByDirectory: { '/project': [updated] } });
-      }, finish: (success = true) => resolve(success) });
+      writes.push({
+        template: config.content || '', agentId: config.agentId, publish: () => {
+          const { agentId, ...rest } = { ...command, ...config };
+          const updated: CommandEntry = { ...rest, ...(agentId ? { agentId } : {}) };
+          useCommandsStore.setState({ commands: [updated], commandsByDirectory: { '/project': [updated] } });
+        }, finish: (success = true) => resolve(success)
+      });
     }),
   });
   await act(async () => { root.render(<SyncProvider directory="/project"><I18nProvider><CommandsPage /></I18nProvider></SyncProvider>); });
@@ -137,4 +139,131 @@ test('a command refresh during save preserves the newer draft for the queued sav
   await act(async () => { writes[6].finish(); });
   await act(async () => { prompt.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
   expect(writes).toHaveLength(7);
+});
+
+test('shows clean read-only built-in command detail without form chrome', async () => {
+  const builtin: CommandEntry = {
+    commandId: 'command_compact',
+    name: 'compact',
+    content: '',
+    description: 'Manually compact the session context',
+    argumentHint: '[soft|remote|snapcompact] [focus]',
+    scope: 'inherited',
+    source: 'builtin',
+    editable: false,
+  };
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useCommandsStore.setState({
+    selectedCommandName: builtin.name,
+    selectedCommandId: builtin.commandId,
+    commands: [builtin],
+    commandsByDirectory: { '/project': [builtin] },
+  });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <SyncProvider directory="/project">
+          <CommandsPage />
+        </SyncProvider>
+      </I18nProvider>
+    );
+  });
+
+  expect(container.textContent).toContain('/compact');
+  expect(container.textContent).toContain('Built-in commands');
+  expect(container.textContent).toContain('Compress session history using AI to reduce context size');
+  expect(container.textContent).toContain('[soft|remote|snapcompact] [focus]');
+  expect(container.querySelector('textarea')).toBeNull();
+  expect(container.querySelector('input')).toBeNull();
+  expect(container.querySelector('fieldset')).toBeNull();
+});
+
+test('locale switch preserves unsaved custom command draft without rehydrating', async () => {
+  const custom: CommandEntry = {
+    commandId: 'command_custom_one',
+    name: 'my-custom-cmd',
+    content: 'Custom template content',
+    description: 'Initial description',
+    scope: 'workspace',
+    source: 'workspace',
+    editable: true,
+  };
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useCommandsStore.setState({
+    selectedCommandName: custom.name,
+    selectedCommandId: custom.commandId,
+    commands: [custom],
+    commandsByDirectory: { '/project': [custom] },
+  });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <SyncProvider directory="/project">
+          <CommandsPage />
+        </SyncProvider>
+      </I18nProvider>
+    );
+  });
+
+  const descTextarea = container.querySelector<HTMLTextAreaElement>('textarea');
+  expect(descTextarea).not.toBeNull();
+  const setTextValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+  await act(async () => {
+    setTextValue?.call(descTextarea, 'Dirty unsaved description');
+    descTextarea!.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+
+  await act(async () => {
+    await useI18nStore.getState().setLocale('zh-CN');
+  });
+
+  expect(descTextarea?.value).toBe('Dirty unsaved description');
+
+  await act(async () => {
+    await useI18nStore.getState().setLocale('en');
+  });
+});
+
+test('creating a custom command with same name as built-in is permitted', async () => {
+  const builtinCompact: CommandEntry = {
+    commandId: 'command_compact',
+    name: 'compact',
+    content: '',
+    description: 'Built-in compact',
+    scope: 'inherited',
+    source: 'builtin',
+    editable: false,
+  };
+  let created = false;
+  useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useCommandsStore.setState({
+    selectedCommandName: 'compact',
+    selectedCommandId: null,
+    commandDraft: { name: 'compact', scope: 'workspace', description: 'Override', content: 'Custom content' },
+    commands: [builtinCompact],
+    commandsByDirectory: { '/project': [builtinCompact] },
+    createCommand: async () => {
+      created = true;
+      return true;
+    },
+  });
+
+  await act(async () => {
+    root.render(
+      <I18nProvider>
+        <SyncProvider directory="/project">
+          <CommandsPage />
+        </SyncProvider>
+      </I18nProvider>
+    );
+  });
+
+  const createBtn = Array.from(container.querySelectorAll('button'))
+    .find(button => button.textContent?.includes('Create'));
+  expect(createBtn).toBeDefined();
+  await act(async () => { createBtn?.click(); });
+
+  expect(created).toBe(true);
 });

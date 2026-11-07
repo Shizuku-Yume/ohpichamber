@@ -6,7 +6,26 @@ import {
   PluginWorkerApplyOutcomeSchema, PluginMutationResultSchema, PluginMarketplaceManageRequestSchema,
   PluginPreviewUpgradeRequestSchema, PluginUpgradeAllRequestSchema, PluginUpgradeRequestSchema,
   PluginUpdateCheckResultSchema, PluginUpgradePreviewResultSchema, PluginMarketplaceSourcesSchema,
+  ExtensionInventoryStateSchema, ExtensionToggleRequestSchema,
 } from '@openchamber/agent-contract';
+
+/**
+  * Native capability-control operations. They are separate from plugin-registry
+  * operations because their authoritative state is native settings
+  * (`disabledProviders` / `enabledProviders` / `disabledExtensions`), not the
+  * plugin lockfile; the workspace catalog owner revision still guards writes.
+  */
+export const NativeExtensionOperationSchemas = [
+  z.strictObject({ type: z.literal('extensions.read') }),
+  z.strictObject({ type: z.literal('extensions.toggle'), request: ExtensionToggleRequestSchema }),
+] as const;
+export const NativeExtensionOperationSchema = z.discriminatedUnion('type', NativeExtensionOperationSchemas);
+export type NativeExtensionOperation = z.infer<typeof NativeExtensionOperationSchema>;
+export const NativeExtensionResultSchemas = [
+  z.strictObject({ type: z.literal('extensions.inventory'), state: ExtensionInventoryStateSchema }),
+] as const;
+const NativeExtensionResultSchema = z.discriminatedUnion('type', NativeExtensionResultSchemas);
+export type NativeExtensionResult = z.infer<typeof NativeExtensionResultSchema>;
 
 export const NativePluginOperationSchemas = [
   z.strictObject({ type: z.literal('plugins.read') }),

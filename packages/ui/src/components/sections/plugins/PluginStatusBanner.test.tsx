@@ -1,3 +1,4 @@
+import './testDom';
 import React from 'react';
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -13,8 +14,10 @@ const failed: PluginWorkerApplyOutcome = {
 
 const result = (workers: PluginWorkerApplyOutcome[], status: PluginMutationResult['status']): PluginMutationResult => PluginMutationResultSchema.parse({
   workspaceId: worker.workspaceId, revision: '3', persistence: 'committed', status, workers,
-  catalog: { workspaceId: worker.workspaceId, revision: '3', plugins: [], marketplace: [], localExtensions: [], workers: [],
-    marketplaceSources: [], availableUpdates: [] },
+  catalog: {
+    workspaceId: worker.workspaceId, revision: '3', plugins: [], marketplace: [], localExtensions: [], workers: [],
+    marketplaceSources: [], availableUpdates: [], extensions: { providers: [], items: [], warnings: [], kinds: [] }
+  },
 });
 
 test('a saved configuration with a failed runtime apply stays visibly committed and explains the retained runtime', async () => {

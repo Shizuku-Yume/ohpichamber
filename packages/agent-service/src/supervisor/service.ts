@@ -21,6 +21,7 @@ import type {
   WebSearchConfigState, WebSearchMutationResult,
   PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
   PluginUpdateCheckResult, PluginUpgradePreviewResult, PluginMarketplaceSources,
+  ExtensionInventoryState,
   SessionRecapListResponse, SubagentListResponse, SubagentTranscriptResponse, SubagentTreeCostResponse,
 } from '@openchamber/agent-contract';
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
@@ -90,6 +91,7 @@ type ServiceResponse =
   | SkillsCatalogState | SkillsApplyResult | SkillExpandResult | SkillInstallResult
   | PluginCatalogState | PluginMutationResult | PluginDoctorResult | PluginMarketplaceState
   | PluginUpdateCheckResult | PluginUpgradePreviewResult | PluginMarketplaceSources
+  | ExtensionInventoryState
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
   | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
@@ -152,7 +154,8 @@ export class AgentService {
   private stopping: Promise<void> | undefined;
   constructor(private readonly options: ServiceOptions) {
     this.secret = Buffer.from(InternalSecretSchema.parse(options.internalSecret), 'hex');
-    this.workers = new WorkerRegistry({ workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, onDiagnostic: options.onDiagnostic, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
+    this.workers = new WorkerRegistry({
+      workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, onDiagnostic: options.onDiagnostic, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
       capacityPolicy: options.workerCapacityPolicy,
       isSessionIdle: rootSessionId => this.sessions?.isIdleForEviction(rootSessionId) ?? false,
       consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
@@ -172,7 +175,7 @@ export class AgentService {
         // rejected child identity or persistence write stops that root instead of
         // becoming an unhandled rejection that exits the whole service.
         onSubagent: (...args) => {
-          void this.sessions.onSubagent(...args).catch(() => { void this.workers.stop(args[0]).catch(() => {}); });
+          void this.sessions.onSubagent(...args).catch(() => { void this.workers.stop(args[0]).catch(() => { }); });
         },
       },
     });
@@ -199,8 +202,10 @@ export class AgentService {
         return outcomes.map((outcome, index) => {
           const target = targets[index];
           if (!target || target.rootSessionId !== outcome.rootSessionId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
-          if (outcome.outcome === 'failed') return { worker: target, outcome: 'failed' as const, appliedRevision: null,
-            error: { code: outcome.error.code, detail: 'The native session could not restart with the persisted plugin configuration.', retryable: outcome.error.status >= 500 } };
+          if (outcome.outcome === 'failed') return {
+            worker: target, outcome: 'failed' as const, appliedRevision: null,
+            error: { code: outcome.error.code, detail: 'The native session could not restart with the persisted plugin configuration.', retryable: outcome.error.status >= 500 }
+          };
           const worker = { ...target, workerGeneration: outcome.workerGeneration };
           const appliedRevision = this.workers.bootstrap(outcome.rootSessionId)?.pluginRevision;
           if (appliedRevision === undefined || appliedRevision !== revision) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
@@ -233,8 +238,10 @@ export class AgentService {
     if (!capturedAdmission) await this.catalog.registerWorkspace(input.workspaceId, agentDirectoryId);
     const load = async (authority: CatalogBootstrap): Promise<T> => this.webSearch.admit(agentDirectoryId, async () => {
       const pluginRevision = await this.workspaceCatalogs.pluginRevision(input.workspaceId);
-      const bootstrap = WorkerBootstrapSchema.parse({ ...input, ...authority, agentDirectoryId, pluginRevision,
-        observationEpoch: this.observationEpoch, mcpConfigPath: join(input.cwd, '.omp', 'mcp.json') });
+      const bootstrap = WorkerBootstrapSchema.parse({
+        ...input, ...authority, agentDirectoryId, pluginRevision,
+        observationEpoch: this.observationEpoch, mcpConfigPath: join(input.cwd, '.omp', 'mcp.json')
+      });
       const result = await launch(bootstrap);
       try {
         const scope = this.workers.authorizationScope(bootstrap.rootSessionId);
@@ -316,8 +323,10 @@ export class AgentService {
         },
       },
     });
-    if (input.pluginRevision !== undefined) this.catalog.publishPluginRuntime({ rootSessionId: root,
-      workspaceId: input.workspaceId, workerGeneration: generation }, input.pluginRevision);
+    if (input.pluginRevision !== undefined) this.catalog.publishPluginRuntime({
+      rootSessionId: root,
+      workspaceId: input.workspaceId, workerGeneration: generation
+    }, input.pluginRevision);
   }
   async start(): Promise<void> {
     await this.catalog.initialize();
@@ -339,7 +348,8 @@ export class AgentService {
       const sessionsDirectory = join(profile, 'sessions');
       await Promise.all([cwd, agentDirectory, sessionsDirectory].map(path => mkdir(path, { mode: 0o700 })));
       const rootSessionId = randomUUID();
-      await this.workers.start({ rootSessionId, projectId: randomUUID(), workspaceId: randomUUID(), cwd, agentDirectory, sessionsDirectory,
+      await this.workers.start({
+        rootSessionId, projectId: randomUUID(), workspaceId: randomUUID(), cwd, agentDirectory, sessionsDirectory,
         env: { HOME: profile, XDG_CONFIG_HOME: join(profile, 'config'), XDG_DATA_HOME: join(profile, 'data') },
       });
       if (!await this.workers.stop(rootSessionId)) throw new Error('SDK readiness disposal failed');
@@ -561,14 +571,18 @@ export class AgentService {
       }
       const privateWorktreeDelete = /^\/internal\/sessions\/([^/]+)\/worktree-archive-delete$/.exec(url.pathname);
       if (privateWorktreeDelete && request.method === 'POST') {
-        const input = await readBody(request, z.strictObject({ operationId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
-          agentDirectoryId: EntityIdSchema, sessionIds: z.array(EntityIdSchema).min(1) }));
+        const input = await readBody(request, z.strictObject({
+          operationId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
+          agentDirectoryId: EntityIdSchema, sessionIds: z.array(EntityIdSchema).min(1)
+        }));
         respondJson(response, 200, await this.sessions.deleteWorktreeArchiveFamily(identity(privateWorktreeDelete[1]), input)); return;
       }
       const privateWorktreeDeleteRetire = /^\/internal\/sessions\/([^/]+)\/worktree-archive-delete\/retire$/.exec(url.pathname);
       if (privateWorktreeDeleteRetire && request.method === 'POST') {
-        const input = await readBody(request, z.strictObject({ operationId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
-          agentDirectoryId: EntityIdSchema, sessionIds: z.array(EntityIdSchema).min(1) }));
+        const input = await readBody(request, z.strictObject({
+          operationId: EntityIdSchema, projectId: EntityIdSchema, workspaceId: EntityIdSchema,
+          agentDirectoryId: EntityIdSchema, sessionIds: z.array(EntityIdSchema).min(1)
+        }));
         await this.sessions.retireWorktreeArchiveDelete(identity(privateWorktreeDeleteRetire[1]), input);
         response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return;
       }
@@ -642,7 +656,8 @@ export class AgentService {
         if (action === undefined && request.method === 'DELETE') { respondJson(response, 200, await this.sessions.delete(sessionId)); return; }
         if (action === 'snapshot' && request.method === 'GET') { respondJson(response, 200, await this.sessions.snapshot(sessionId)); return; }
         if (action === 'history' && request.method === 'GET') {
-          const parsed = HistoryPageRequestSchema.safeParse({ sessionId,
+          const parsed = HistoryPageRequestSchema.safeParse({
+            sessionId,
             cursor: url.searchParams.get('cursor') ?? undefined,
             leafTurnId: url.searchParams.get('leafTurnId') ?? undefined,
             limit: url.searchParams.has('limit') ? Number(url.searchParams.get('limit')) : undefined,

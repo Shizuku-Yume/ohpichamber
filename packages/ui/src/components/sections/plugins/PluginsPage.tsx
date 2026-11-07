@@ -35,6 +35,7 @@ import { usePluginsStore } from '@/stores/usePluginsStore';
 import { AddPluginDialog } from './AddPluginDialog';
 import { PluginsGrid, pluginUpdateFor, type PluginDeleteTarget, type PluginSelection } from './PluginsGrid';
 import { MarketplaceSourcesDialog } from './MarketplaceSourcesDialog';
+import { ExtensionControlCenter } from './ExtensionControlCenter';
 import { PluginStatusBanner } from './PluginStatusBanner';
 
 const parseSettings = (text: string) => {
@@ -422,6 +423,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   const isMutating = usePluginsStore(state => state.isMutating);
   const lastMutation = usePluginsStore(state => state.lastMutation);
   const doctor = usePluginsStore(state => state.doctor);
+  const extensions = usePluginsStore(state => state.extensions);
   const [selection, setSelection] = React.useState<PluginSelection | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState<PluginDeleteTarget | null>(null);
@@ -480,13 +482,27 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
       : (catalog?.marketplace ?? []).filter(entry => entry.details?.category === marketplaceFacet
         || (entry.details?.keywords ?? []).includes(marketplaceFacet));
     return rankByQuery(scoped, marketplaceQuery, entry => [entry.name, entry.description, entry.marketplace,
-      entry.details?.category ?? '', ...(entry.details?.keywords ?? []), entry.details?.author?.name ?? '']);
+    entry.details?.category ?? '', ...(entry.details?.keywords ?? []), entry.details?.author?.name ?? '']);
   }, [catalog, marketplaceFacet, marketplaceQuery]);
 
   const requestDelete = (target: PluginDeleteTarget) => {
     setOperationError(null);
     setDeleteTarget(target);
   };
+
+  /**
+    * Extension switches live in native settings, so a refused revision has to
+    * surface as an operation error instead of quietly re-reading a new one.
+    */
+  const toggleExtensionProvider = (providerId: string, enabled: boolean) => run(async () => {
+    await usePluginsStore.getState().toggleExtensionProvider(providerId, enabled);
+  });
+  const toggleExtensionUserSource = (providerId: string, enabled: boolean) => run(async () => {
+    await usePluginsStore.getState().toggleExtensionUserSource(providerId, enabled);
+  });
+  const toggleExtensionItem = (providerId: string, extensionId: string, enabled: boolean) => run(async () => {
+    await usePluginsStore.getState().toggleExtensionItem(providerId, extensionId, enabled);
+  });
   const requestApply = () => {
     setOperationError(null);
     setApplyOpen(true);
@@ -772,6 +788,20 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             ) : null}
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
             {lastMutation ? <PluginStatusBanner result={lastMutation} /> : null}
+            {extensions === null ? (
+              <p role="status" className="flex items-center gap-2 typography-meta text-muted-foreground">
+                <Icon name="loader-4" className="size-4 animate-spin" />
+                {t('settings.plugins.status.loading')}
+              </p>
+            ) : (
+              <ExtensionControlCenter
+                inventory={extensions}
+                disabled={disabled}
+                onToggleProvider={(providerId, enabled) => void toggleExtensionProvider(providerId, enabled)}
+                onToggleUserSource={(providerId, enabled) => void toggleExtensionUserSource(providerId, enabled)}
+                onToggleItem={(providerId, extensionId, enabled) => void toggleExtensionItem(providerId, extensionId, enabled)}
+              />
+            )}
           </div>
         )}
       >
@@ -871,7 +901,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                       ))}
                     </div>
                   ) : null}
-          </div>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"

@@ -57,6 +57,8 @@ const AGENT_ROUTES = [
  { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/models\/[^/]+$/, request: C.ModelDeleteRequestSchema, response: C.ModelMutationResultSchema },
  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/credential$/, request: C.ProviderCredentialWriteRequestSchema, response: C.ProviderCredentialMutationResultSchema, providerEntry: true },
  { method: 'DELETE', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/credential\/[^/]+$/, request: C.ProviderCredentialDeleteRequestSchema, response: C.ProviderCredentialMutationResultSchema },
+ { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/extensions$/, response: C.ExtensionInventoryStateSchema },
+ { method: 'PATCH', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/extensions$/, request: C.ExtensionToggleRequestSchema, response: C.ExtensionInventoryStateSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins$/, response: C.PluginCatalogStateSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/install$/, request: C.PluginInstallRequestSchema, response: C.PluginMutationResultSchema, pluginEgress: true },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/plugins\/uninstall$/, request: C.PluginUninstallRequestSchema, response: C.PluginMutationResultSchema, pluginEgress: true },

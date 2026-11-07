@@ -113,6 +113,13 @@ export class CanonicalClient {
     writeLocal: (workspaceId: string, input: C.LocalExtensionWriteRequest): Promise<C.PluginMutationResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/local/${id(input.extensionId)}`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.LocalExtensionWriteRequestSchema, input) }),
     deleteLocal: (workspaceId: string, input: C.LocalExtensionDeleteRequest): Promise<C.PluginMutationResult> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/plugins/local/${id(input.extensionId)}`, scoped(C.PluginMutationResultSchema, result => result.workspaceId === workspaceId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.LocalExtensionDeleteRequestSchema, input) }),
   };
+  /** Native capability control: discovery providers and their toggled items. */
+  readonly extensions = {
+    inventory: (workspaceId: string): Promise<C.ExtensionInventoryState> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/extensions`, scoped(C.ExtensionInventoryStateSchema, result => result.workspaceId === workspaceId)),
+    toggle: (workspaceId: string, input: C.ExtensionToggleRequest): Promise<C.ExtensionInventoryState> =>
+      request(`/api/agent/v1/workspaces/${id(workspaceId)}/extensions`, scoped(C.ExtensionInventoryStateSchema, result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(input.expectedRevision) + 1n), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ExtensionToggleRequestSchema, input) }),
+  };
   readonly fileResources = {
     getCommands: (workspaceId: string): Promise<C.CommandCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/commands`, scoped(C.CommandCatalogStateSchema, result => result.workspaceId === workspaceId)),
     createCommand: (workspaceId: string, input: C.CommandCreateRequest): Promise<C.CommandCatalogState> => request(`/api/agent/v1/workspaces/${id(workspaceId)}/commands`, scoped(C.CommandCatalogStateSchema, result => result.workspaceId === workspaceId && BigInt(result.revision) === BigInt(input.expectedRevision) + 1n), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.CommandCreateRequestSchema, input) }),

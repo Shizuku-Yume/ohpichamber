@@ -13,7 +13,8 @@ import { NativeCredentials } from './catalog-credentials.ts';
 import type { NativeModels, NativeModelsContext, ResolvedModelSelection } from './catalog-models.ts';
 import { WorkerSkills, type WorkerSkillsContext } from './catalog-skills.ts';
 import { NativePlugins } from './catalog-plugins.ts';
-import { NativePluginOperationSchema } from '../catalogs/plugins.ts';
+import { NativeExtensions } from './catalog-extensions.ts';
+import { NativePluginOperationSchema, NativeExtensionOperationSchema } from '../catalogs/plugins.ts';
 import type { NativeCacheWarming } from './catalog-warming.ts';
 import { NativeSettings } from './catalog-settings.ts';
 export type CatalogNativeContext = NativeModelsContext & NativeAgentsContext & WorkerSkillsContext & {
@@ -56,6 +57,8 @@ export class WorkerCatalogs {
   }
 
   private async execute(operation: CatalogOperation, revision: string): Promise<CatalogResult> {
+    const extensionOperation = NativeExtensionOperationSchema.safeParse(operation);
+    if (extensionOperation.success) return new NativeExtensions(this.context).operation(extensionOperation.data, revision);
     const pluginOperation = NativePluginOperationSchema.safeParse(operation);
     if (pluginOperation.success) return new NativePlugins(this.context).operation(pluginOperation.data, revision);
     const workspaceId = this.context.worker.workspaceId;

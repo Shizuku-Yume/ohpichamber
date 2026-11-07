@@ -28,7 +28,9 @@ import { SettingsSidebarNoMatches, SettingsSidebarSearch } from '@/components/se
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
+import { getLocalizedCommandDescription } from './commandDescriptions';
 import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
+
 
 interface CommandsSidebarProps {
   onItemSelect?: () => void;
@@ -44,15 +46,19 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const [openMenuCommand, setOpenMenuCommand] = React.useState<string | null>(null);
 
   const {
+    selectedCommandId,
     selectedCommandName,
     setSelectedCommand,
+    setSelectedCommandId,
     setCommandDraft,
     updateCommand,
     deleteCommand,
     loadCommands,
   } = useCommandsStore(useShallow((s) => ({
+    selectedCommandId: s.selectedCommandId,
     selectedCommandName: s.selectedCommandName,
     setSelectedCommand: s.setSelectedCommand,
+    setSelectedCommandId: s.setSelectedCommandId,
     setCommandDraft: s.setCommandDraft,
     updateCommand: s.updateCommand,
     deleteCommand: s.deleteCommand,
@@ -103,7 +109,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     }
 
     setIsConfirmActionPending(true);
-    const success = await deleteCommand(confirmActionCommand.name, settingsDirectory);
+    const success = await deleteCommand(confirmActionCommand.name, settingsDirectory, confirmActionCommand.commandId);
 
     if (success) {
       toast.success(t('settings.commands.sidebar.toast.commandDeleted', { name: confirmActionCommand.name }));
@@ -160,12 +166,12 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
-    if (commands.some((cmd) => cmd.name === sanitizedName)) {
+    if (commands.some((cmd) => !isCommandBuiltIn(cmd) && cmd.name === sanitizedName)) {
       toast.error(t('settings.commands.sidebar.toast.commandExists'));
       return;
     }
 
-    const success = await updateCommand(renameDialogCommand.name, { name: sanitizedName }, settingsDirectory);
+    const success = await updateCommand(renameDialogCommand.name, { name: sanitizedName }, settingsDirectory, renameDialogCommand.commandId);
 
     if (success) {
       toast.success(t('settings.common.status.saved'));
@@ -219,17 +225,16 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                 </div>
                 {[...builtInCommands].sort((a, b) => a.name.localeCompare(b.name)).map((command) => (
                   <CommandListItem
-                    key={command.name}
+                    key={command.commandId}
                     command={command}
-                    isSelected={selectedCommandName === command.name}
+                    isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
                     onSelect={() => {
-                      setSelectedCommand(command.name);
+                      setSelectedCommandId(command.commandId);
                       onItemSelect?.();
-
                     }}
                     onDuplicate={() => handleDuplicateCommand(command)}
-                    isMenuOpen={openMenuCommand === command.name}
-                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.name : null)}
+                    isMenuOpen={openMenuCommand === command.commandId}
+                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.commandId : null)}
                   />
                 ))}
               </>
@@ -242,19 +247,18 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                 </div>
                 {[...customCommands].sort((a, b) => a.name.localeCompare(b.name)).map((command) => (
                   <CommandListItem
-                    key={command.name}
+                    key={command.commandId}
                     command={command}
-                    isSelected={selectedCommandName === command.name}
+                    isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
                     onSelect={() => {
-                      setSelectedCommand(command.name);
+                      setSelectedCommandId(command.commandId);
                       onItemSelect?.();
-
                     }}
                     onRename={() => handleOpenRenameDialog(command)}
                     onDelete={() => handleDeleteCommand(command)}
                     onDuplicate={() => handleDuplicateCommand(command)}
-                    isMenuOpen={openMenuCommand === command.name}
-                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.name : null)}
+                    isMenuOpen={openMenuCommand === command.commandId}
+                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.commandId : null)}
                   />
                 ))}
               </>
@@ -381,46 +385,46 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
   return (
     <ContextMenu open={isContextMenuOpen} onOpenChange={setIsContextMenuOpen}>
       <ContextMenuTrigger render={<div className={cn('group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none', isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover')} onContextMenu={!isMobile ? (e) => { e.preventDefault(); setIsContextMenuOpen(true); } : undefined} />}>
-      <div className="flex min-w-0 flex-1 items-center">
-        <button
-          onClick={onSelect}
-          className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          tabIndex={0}
-        >
-          <div className="flex items-center gap-2">
-            <span className="typography-ui-label font-normal truncate text-foreground">
-              /{command.name}
-            </span>
-            <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
-              {isCommandBuiltIn(command)
-                ? t('settings.agents.sidebar.badge.system')
-                : t(command.scope === 'workspace' ? 'settings.common.scope.project' : 'settings.common.scope.global')}
-              {command.group ? ` / ${command.group}` : ''}
-            </span>
-          </div>
-
-          {command.description && (
-            <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
-              {command.description}
+        <div className="flex min-w-0 flex-1 items-center">
+          <button
+            onClick={onSelect}
+            className="flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            tabIndex={0}
+          >
+            <div className="flex items-center gap-2">
+              <span className="typography-ui-label font-normal truncate text-foreground">
+                /{command.name}
+              </span>
+              <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
+                {isCommandBuiltIn(command)
+                  ? t('settings.agents.sidebar.badge.system')
+                  : t(command.scope === 'workspace' ? 'settings.common.scope.project' : 'settings.common.scope.global')}
+                {command.group ? ` / ${command.group}` : ''}
+              </span>
             </div>
-          )}
-        </button>
 
-        <DropdownMenu open={isMenuOpen} onOpenChange={(open) => { if (open) setIsContextMenuOpen(false); onMenuOpenChange(open); }}>
-          <DropdownMenuTrigger asChild>
-            <Button size="sm"
-              variant="ghost"
-              className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
-              aria-label={command.name}
-            >
-              <Icon name="more-2" className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-fit min-w-20">
-            {renderMenuItems(DropdownMenuItem)}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+            {getLocalizedCommandDescription(command, t) && (
+              <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
+                {getLocalizedCommandDescription(command, t)}
+              </div>
+            )}
+          </button>
+
+          <DropdownMenu open={isMenuOpen} onOpenChange={(open) => { if (open) setIsContextMenuOpen(false); onMenuOpenChange(open); }}>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm"
+                variant="ghost"
+                className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+                aria-label={command.name}
+              >
+                <Icon name="more-2" className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-fit min-w-20">
+              {renderMenuItems(DropdownMenuItem)}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-fit min-w-20">
         {renderMenuItems(ContextMenuItem)}

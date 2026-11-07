@@ -26,9 +26,10 @@ import {
   LocalExtensionWriteRequestSchema, LocalExtensionDeleteRequestSchema, PluginApplyRequestSchema,
   PluginMarketplaceManageRequestSchema, PluginPreviewUpgradeRequestSchema, PluginUpgradeAllRequestSchema,
   PluginUpgradeRequestSchema,
+  ExtensionToggleRequestSchema,
   type PluginApplyRequest, type PluginMutationResult
 } from '@openchamber/agent-contract';
-import type { NativePluginOperation } from '../catalogs/plugins.ts';
+import type { NativePluginOperation, NativeExtensionOperation } from '../catalogs/plugins.ts';
 import { fileResourceRoute } from './file-resource-routes.ts';
 import { UsageAuthorizationSchema } from '../protocol.ts';
 import type { SessionRegistry } from '../sessions/registry.ts';
@@ -60,6 +61,17 @@ export class WorkspaceRoutes {
     private readonly sessions: SessionRegistry, private readonly stateDirectory: string, private readonly webSearch: WebSearchCoordinator,
     private readonly applyPlugins?: (workspaceId: string, request: PluginApplyRequest) => Promise<PluginMutationResult>) { }
   async handle(request: IncomingMessage, url: URL, readBody: <T>(request: IncomingMessage, schema: z.ZodType<T>) => Promise<T>) {
+    const extensions = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/extensions$/.exec(url.pathname);
+    if (extensions) {
+      const workspaceId = id(extensions[1]);
+      let operation: NativeExtensionOperation;
+      if (request.method === 'GET') operation = { type: 'extensions.read' };
+      else if (request.method === 'PATCH') operation = { type: 'extensions.toggle', request: await readBody(request, ExtensionToggleRequestSchema) };
+      else return null;
+      const result = await this.catalogs.operation(workspaceId, operation);
+      if (result.type !== 'extensions.inventory') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      return { status: 200, body: result.state };
+    }
     const plugins = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/plugins(?:\/(.*))?$/.exec(url.pathname);
     if (plugins) {
       const workspaceId = id(plugins[1]);
@@ -111,8 +123,12 @@ export class WorkspaceRoutes {
       const result = await this.catalogs.operation(workspaceId, operation);
       if (result.type === 'plugins.catalog') return { status: 200, body: result.catalog };
       if (result.type === 'plugins.marketplaceSources') {
-        return { status: 200, body: { workspaceId: result.result.workspaceId, revision: result.result.revision,
-          sources: result.result.sources } };
+        return {
+          status: 200, body: {
+            workspaceId: result.result.workspaceId, revision: result.result.revision,
+            sources: result.result.sources
+          }
+        };
       }
       if (result.type === 'plugins.mutated' || result.type === 'plugins.local' || result.type === 'plugins.doctor'
         || result.type === 'plugins.marketplace' || result.type === 'plugins.updateCheck' || result.type === 'plugins.upgradePreview') {

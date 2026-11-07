@@ -21,10 +21,32 @@
 
 ## Progress
 
-- Check before: `OmpSettingsPage.tsx` rendered fallback `<Textarea>` for unknown arrays/records, only 57 legacy i18n keys existed for OMP, and settings were grouped in a flat list without tabs.
-- Check after: `bun test packages/ui/src/components/sections/openchamber/OmpSettingsPage.test.tsx packages/ui/src/lib/i18n/messages.test.ts packages/ui/src/components/chat/CommandAutocomplete.test.tsx && bun run --cwd packages/ui type-check` exits 0 (21 pass, 0 fail; 0 type errors across 2,974 files; 0 oxlint findings).
+- Check before: `OmpSettingsPage.tsx` rendered fallback `<Textarea>` for unknown arrays/records, only 57 legacy i18n keys existed for OMP, settings were grouped in a flat list without tabs, and literal English strings existed in error and placeholder states.
+- Check after:
+  - Full UI suite: `bun run --cwd packages/ui test` (`node ../../scripts/run-isolated-tests.mjs src`) → 1028/1028 test files passed.
+  - Focused test suite: `bun test packages/ui/src/components/sections/openchamber/OmpSettingsPage.test.tsx packages/ui/src/components/sections/openchamber/OmpSettingsPage.smoke.test.tsx packages/ui/src/lib/i18n/messages.test.ts packages/ui/src/components/chat/CommandAutocomplete.test.tsx` → 24 pass, 0 fail (4228 expect() calls).
+  - Type check: `bun run --cwd packages/ui type-check` (`bun check -b`) → 0 type errors across 2,975 files.
+  - Lint: `bunx oxlint packages/ui/src/components/sections/openchamber/OmpSettingsPage.tsx packages/ui/src/components/sections/openchamber/OmpSettingsPage.test.tsx packages/ui/src/components/sections/openchamber/OmpSettingsPage.smoke.test.tsx packages/ui/src/lib/i18n/messages/omp-settings.i18n.ts packages/ui/src/lib/i18n/messages.test.ts` → 0 findings.
+  - Workflow check: `.workflow/bin/workflow validate` → exits 0 (238 task files valid).
+  - Runtime / Browser Smoke Evidence: saved to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-dispatch-2026-11-07/smoke-ux-06.json`, verifying PreviewToggleButton, 0 textareas, all 9 rendered tabs in SortableTabsStrip (`Appearance`, `Model & Roles`, `Interaction & Composer`, `Context & Compaction`, `Memory`, `Files & Search`, `Shell & Tools`, `Tasks & Subagents`, `Providers & Retry`), all 6 structured editors, and reactive Chinese localization.
+- Exact line ranges for the 5 requested agent fields across all 15 locale dictionary files:
+  - `packages/ui/src/lib/i18n/messages/en.settings.ts`: lines 724-728
+  - `packages/ui/src/lib/i18n/messages/zh-CN.settings.ts`: lines 683-687
+  - `packages/ui/src/lib/i18n/messages/zh-TW.settings.ts`: lines 680-684
+  - `packages/ui/src/lib/i18n/messages/de.settings.ts`: lines 674-678
+  - `packages/ui/src/lib/i18n/messages/fr.settings.ts`: lines 585-589
+  - `packages/ui/src/lib/i18n/messages/es.settings.ts`: lines 683-687
+  - `packages/ui/src/lib/i18n/messages/ja.settings.ts`: lines 724-728
+  - `packages/ui/src/lib/i18n/messages/ko.settings.ts`: lines 683-687
+  - `packages/ui/src/lib/i18n/messages/nl.settings.ts`: lines 725-729
+  - `packages/ui/src/lib/i18n/messages/pl.settings.ts`: lines 119-123
+  - `packages/ui/src/lib/i18n/messages/pt-BR.settings.ts`: lines 683-687
+  - `packages/ui/src/lib/i18n/messages/tr.settings.ts`: lines 700-704
+  - `packages/ui/src/lib/i18n/messages/uk.settings.ts`: lines 683-687
+  - `packages/ui/src/lib/i18n/messages/ar.settings.ts`: lines 724-728
+  - `packages/ui/src/lib/i18n/messages/he.settings.ts`: lines 724-728
 - Schema & tab decisions:
   - `retry.fallbackOn`: In OMP registry (`session/settings.ts`), `retry.fallbackOn` is an enum (`'any' | 'usage-limit' | 'except-usage-limit'`), not an array. We implemented single-select `SettingsChipGroup` preserving the enum payload so writes are accepted by the backend.
   - Category tabs: Reorganized into all 9 canonical tabs using `SortableTabsStrip` with `pillSize="form"`. `Retry & Fallback` group moved to `Providers & Retry` tab; `Memory` tab provides an empty-state card since memory settings are unexposed host-side; other 7 tabs populate all 139 settings.
-  - Structured controls: Implemented dedicated editors for `enabledModels`, `modelPresets` (preserving non-default roles), `retry.fallbackChains`, `retry.fallbackOn`, `compaction.methodOrder` (reorderable chips), `compaction.modelThresholds` (positive integer validation + model selector pattern checks), plus generic string-array and record editors. Completely eliminated `<Textarea>` from `OmpSettingsPage.tsx`.
-  - Cross-window coordination: Added the 5 requested `settings.agents.page.field.*` keys with authentic translations across all 15 `*.settings.ts` files.
+  - Structured controls: Implemented dedicated editors for `enabledModels`, `modelPresets` (supporting multiple role overrides with `AddRoleOverrideRow`, rejecting duplicate names with localized error without data loss), `retry.fallbackChains`, `retry.fallbackOn`, `compaction.methodOrder` (reorderable chips), `compaction.modelThresholds` (in-place editable numeric thresholds and preservation/editing of valid native string thresholds like percentage or fixed triggers, with localized key error checks and tokens label), plus generic string-array and record editors. Completely eliminated `<Textarea>` from `OmpSettingsPage.tsx`.
+  - All user-visible literals (placeholders, units, SelectItem options, error strings) localized via `@/lib/i18n`.

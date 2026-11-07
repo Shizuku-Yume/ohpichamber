@@ -246,11 +246,11 @@ function getOptionSlug(value: unknown, label?: string): string {
   return out.join('').replace(/^_+|_+$/g, '') || 'opt';
 }
 
-function checkModelThresholdKey(key: string): string | undefined {
+function getModelThresholdKeyError(key: string, t: (k: I18nKey) => string): string | undefined {
   const star = key.indexOf('*');
-  if (star !== -1 && star !== key.length - 1) return '`*` is only allowed as the last character';
+  if (star !== -1 && star !== key.length - 1) return t('settings.omp.modelThresholds.invalidKeyStar');
   const slash = key.indexOf('/');
-  if (slash <= 0 || slash === key.length - 1) return 'expected `provider/model-id` or a `provider/…*` prefix';
+  if (slash <= 0 || slash === key.length - 1) return t('settings.omp.modelThresholds.invalidKeySlash');
   return undefined;
 }
 
@@ -393,6 +393,76 @@ type ModelPresetEntry = {
   defaultThinkingLevel?: string;
 };
 
+const AddRoleOverrideRow: React.FC<{
+  preset: ModelPresetEntry;
+  models: Model[];
+  disabled?: boolean;
+  onAdd: (role: string, model: string) => void;
+}> = ({ preset, models, disabled, onAdd }) => {
+  const { t } = useI18n();
+  const [selectedRole, setSelectedRole] = React.useState('');
+  const [selectedModel, setSelectedModel] = React.useState('');
+
+  const availableRoles = React.useMemo(() => {
+    return OMP_MODEL_ROLES.filter((r) => !preset.modelRoles[r.id]);
+  }, [preset.modelRoles]);
+
+  if (availableRoles.length === 0 || disabled) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-dashed">
+      <Select value={selectedRole} onValueChange={setSelectedRole} disabled={disabled}>
+        <SelectTrigger className="h-7 text-xs w-36">
+          <SelectValue placeholder={t('settings.omp.modelPresets.selectRole')} />
+        </SelectTrigger>
+        <SelectContent>
+          {availableRoles.map((r) => {
+            const i18n = ROLE_I18N[r.id];
+            const roleLabel = i18n ? t(i18n.label) : r.id;
+            return (
+              <SelectItem key={r.id} value={r.id} className="text-xs">
+                {roleLabel} ({r.tag})
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+
+      <Select value={selectedModel} onValueChange={setSelectedModel} disabled={disabled}>
+        <SelectTrigger className="h-7 text-xs flex-1 min-w-[160px]">
+          <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')} />
+        </SelectTrigger>
+        <SelectContent>
+          {models.map((m) => {
+            const selector = `${m.provider}/${m.modelId}`;
+            return (
+              <SelectItem key={selector} value={selector} className="text-xs">
+                {m.name || m.modelId} ({selector})
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 text-xs"
+        disabled={!selectedRole || !selectedModel || disabled}
+        onClick={() => {
+          onAdd(selectedRole, selectedModel);
+          setSelectedRole('');
+          setSelectedModel('');
+        }}
+      >
+        <Icon name="add" className="size-3 mr-1" />
+        {t('settings.omp.modelPresets.addRole')}
+      </Button>
+    </div>
+  );
+};
+
 const ModelPresetsEditor: React.FC<{
   setting: OmpSetting;
   value: unknown;
@@ -434,6 +504,10 @@ const ModelPresetsEditor: React.FC<{
       setNameError(t('settings.omp.modelPresets.invalidName'));
       return;
     }
+    if (Object.hasOwn(presets, trimmed)) {
+      setNameError(t('settings.omp.modelPresets.duplicateName'));
+      return;
+    }
     setNameError(null);
     const effort = newPresetEffort === 'default' ? undefined : newPresetEffort;
     const next: Record<string, ModelPresetEntry> = {
@@ -468,19 +542,18 @@ const ModelPresetsEditor: React.FC<{
       ) : (
         <div className="space-y-3">
           {Object.entries(presets).map(([name, preset]) => {
-            const defaultModel = preset.modelRoles.default || '';
             const effort = preset.defaultThinkingLevel || 'default';
 
             return (
-              <div key={name} className="p-3 rounded-lg border bg-card space-y-2.5">
+              <div key={name} className="p-3.5 rounded-lg border bg-card space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="font-medium text-xs font-mono">{name}</span>
+                  <span className="font-semibold text-xs font-mono">{name}</span>
                   {!disabled && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-6 px-2 text-destructive hover:bg-destructive/10"
+                      className="h-6 px-2 text-destructive hover:bg-destructive/10 text-xs"
                       onClick={() => removePreset(name)}
                       aria-label={t('settings.omp.actions.remove')}
                     >
@@ -490,67 +563,108 @@ const ModelPresetsEditor: React.FC<{
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">
-                      {t('settings.omp.modelPresets.model')} (default)
-                    </label>
-                    <Select
-                      value={defaultModel}
-                      onValueChange={(val) => {
-                        updatePreset(name, {
-                          ...preset,
-                          modelRoles: { ...preset.modelRoles, default: val },
-                        });
-                      }}
-                      disabled={disabled}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="Select model..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {models.map((m) => {
-                          const selector = `${m.provider}/${m.modelId}`;
-                          return (
-                            <SelectItem key={selector} value={selector} className="text-xs">
-                              {m.name || m.modelId} ({selector})
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">
-                      {t('settings.omp.modelPresets.thinking')}
-                    </label>
-                    <Select
-                      value={effort}
-                      onValueChange={(val) => {
-                        updatePreset(name, {
-                          ...preset,
-                          defaultThinkingLevel: val === 'default' ? undefined : val,
-                        });
-                      }}
-                      disabled={disabled}
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default" className="text-xs">
-                          {t('settings.omp.modelRoles.thinkingDefault')}
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1">
+                    {t('settings.omp.modelPresets.thinking')}
+                  </label>
+                  <Select
+                    value={effort}
+                    onValueChange={(val) => {
+                      updatePreset(name, {
+                        ...preset,
+                        defaultThinkingLevel: val === 'default' ? undefined : val,
+                      });
+                    }}
+                    disabled={disabled}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default" className="text-xs">
+                        {t('settings.omp.modelRoles.thinkingDefault')}
+                      </SelectItem>
+                      <SelectItem value="auto" className="text-xs">
+                        {t('settings.omp.modelRoles.thinkingAuto')}
+                      </SelectItem>
+                      {DEFAULT_EFFORT_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                          {t(opt.labelKey)}
                         </SelectItem>
-                        <SelectItem value="auto" className="text-xs">Auto</SelectItem>
-                        {DEFAULT_EFFORT_OPTIONS.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                            {t(opt.labelKey)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] text-muted-foreground block">
+                    {t('settings.omp.modelPresets.roleOverrides')}
+                  </label>
+                  {Object.entries(preset.modelRoles).map(([roleKey, modelVal]) => {
+                    const i18n = ROLE_I18N[roleKey];
+                    const roleLabel = i18n ? t(i18n.label) : roleKey;
+                    const isDefaultRole = roleKey === 'default';
+
+                    return (
+                      <div key={roleKey} className="flex items-center gap-2 text-xs">
+                        <span className="w-28 font-mono font-medium truncate text-muted-foreground" title={roleLabel}>
+                          {isDefaultRole ? `${roleLabel} (${t('settings.omp.modelPresets.defaultRole')})` : `${roleLabel}:`}
+                        </span>
+                        <Select
+                          value={modelVal}
+                          onValueChange={(val) => {
+                            updatePreset(name, {
+                              ...preset,
+                              modelRoles: { ...preset.modelRoles, [roleKey]: val },
+                            });
+                          }}
+                          disabled={disabled}
+                        >
+                          <SelectTrigger className="h-8 text-xs flex-1">
+                            <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {models.map((m) => {
+                              const selector = `${m.provider}/${m.modelId}`;
+                              return (
+                                <SelectItem key={selector} value={selector} className="text-xs">
+                                  {m.name || m.modelId} ({selector})
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        {!disabled && !isDefaultRole && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="size-7 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                            onClick={() => {
+                              const nextRoles = { ...preset.modelRoles };
+                              delete nextRoles[roleKey];
+                              updatePreset(name, { ...preset, modelRoles: nextRoles });
+                            }}
+                            aria-label={t('settings.omp.actions.remove')}
+                          >
+                            <Icon name="close" className="size-3" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  <AddRoleOverrideRow
+                    preset={preset}
+                    models={models}
+                    disabled={disabled}
+                    onAdd={(roleKey, modelVal) => {
+                      updatePreset(name, {
+                        ...preset,
+                        modelRoles: { ...preset.modelRoles, [roleKey]: modelVal },
+                      });
+                    }}
+                  />
                 </div>
               </div>
             );
@@ -573,7 +687,7 @@ const ModelPresetsEditor: React.FC<{
             />
             <Select value={newPresetModel} onValueChange={setNewPresetModel}>
               <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder={t('settings.omp.modelPresets.model')} />
+                <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')} />
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => {
@@ -595,7 +709,9 @@ const ModelPresetsEditor: React.FC<{
                   <SelectItem value="default" className="text-xs">
                     {t('settings.omp.modelRoles.thinkingDefault')}
                   </SelectItem>
-                  <SelectItem value="auto" className="text-xs">Auto</SelectItem>
+                  <SelectItem value="auto" className="text-xs">
+                    {t('settings.omp.modelRoles.thinkingAuto')}
+                  </SelectItem>
                   {DEFAULT_EFFORT_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value} className="text-xs">
                       {t(opt.labelKey)}
@@ -607,7 +723,7 @@ const ModelPresetsEditor: React.FC<{
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs"
+                className="h-8 text-xs shrink-0"
                 onClick={addPreset}
                 disabled={!newPresetName.trim()}
               >
@@ -950,14 +1066,14 @@ const CompactionModelThresholdsEditor: React.FC<{
   value: unknown;
   models: Model[];
   disabled?: boolean;
-  onChange: (setting: OmpSetting, value: Record<string, number>) => void;
+  onChange: (setting: OmpSetting, value: Record<string, number | string>) => void;
 }> = ({ setting, value, models, disabled, onChange }) => {
   const { t } = useI18n();
-  const thresholds: Record<string, number> = React.useMemo(() => {
+  const thresholds: Record<string, number | string> = React.useMemo(() => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-    const res: Record<string, number> = {};
+    const res: Record<string, number | string> = {};
     for (const [k, v] of Object.entries(value)) {
-      if (typeof v === 'number' && Number.isSafeInteger(v) && v > 0) {
+      if (typeof v === 'number' || typeof v === 'string') {
         res[k] = v;
       }
     }
@@ -970,9 +1086,9 @@ const CompactionModelThresholdsEditor: React.FC<{
 
   const addThreshold = () => {
     const trimmed = newPattern.trim();
-    const keyErr = checkModelThresholdKey(trimmed);
+    const keyErr = getModelThresholdKeyError(trimmed, t);
     if (keyErr) {
-      setErrorMsg(t('settings.omp.modelThresholds.invalidKey'));
+      setErrorMsg(keyErr);
       return;
     }
     if (!newTokens || !Number.isSafeInteger(newTokens) || newTokens <= 0) {
@@ -991,6 +1107,10 @@ const CompactionModelThresholdsEditor: React.FC<{
     onChange(setting, next);
   };
 
+  const updateThreshold = (key: string, nextVal: number | string) => {
+    onChange(setting, { ...thresholds, [key]: nextVal });
+  };
+
   return (
     <div className="space-y-4" data-settings-item={`omp.${setting.id}`}>
       {Object.keys(thresholds).length === 0 ? (
@@ -999,28 +1119,61 @@ const CompactionModelThresholdsEditor: React.FC<{
         </div>
       ) : (
         <div className="space-y-2">
-          {Object.entries(thresholds).map(([pat, tokens]) => (
+          {Object.entries(thresholds).map(([pat, thVal]) => (
             <div
               key={pat}
-              className="flex items-center justify-between p-2.5 rounded border bg-card text-xs font-mono"
+              className="flex items-center justify-between p-2.5 rounded border bg-card text-xs font-mono gap-3"
             >
-              <div className="flex items-center gap-3">
-                <span className="font-medium">{pat}</span>
+              <div className="flex items-center gap-2 flex-1 min-w-[140px] truncate">
+                <span className="font-semibold">{pat}</span>
                 <span className="text-muted-foreground">→</span>
-                <span>{tokens.toLocaleString()} tokens</span>
               </div>
-              {!disabled && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="size-7 p-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => removeThreshold(pat)}
-                  aria-label={t('settings.omp.actions.remove')}
-                >
-                  <Icon name="close" className="size-3.5" />
-                </Button>
-              )}
+              <div className="flex items-center gap-2">
+                {typeof thVal === 'number' ? (
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-28">
+                      <NumberInput
+                        value={thVal}
+                        onValueChange={(val: number) => {
+                          if (Number.isSafeInteger(val) && val > 0) {
+                            updateThreshold(pat, val);
+                          }
+                        }}
+                        disabled={disabled}
+                        min={1}
+                        step={1000}
+                        className={SETTINGS_NUMBER_INPUT_CLASS}
+                        aria-label={`${pat} ${t('settings.omp.modelThresholds.tokensUnit')}`}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {t('settings.omp.modelThresholds.tokensUnit')}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="w-28">
+                    <Input
+                      value={thVal}
+                      onChange={(e) => updateThreshold(pat, e.target.value)}
+                      disabled={disabled}
+                      className="h-8 text-xs font-mono"
+                      aria-label={pat}
+                    />
+                  </div>
+                )}
+                {!disabled && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="size-7 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                    onClick={() => removeThreshold(pat)}
+                    aria-label={t('settings.omp.actions.remove')}
+                  >
+                    <Icon name="close" className="size-3.5" />
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -1038,7 +1191,7 @@ const CompactionModelThresholdsEditor: React.FC<{
                 }}
               >
                 <SelectTrigger className="h-8 text-xs w-[160px]">
-                  <SelectValue placeholder="Pick model..." />
+                  <SelectValue placeholder={t('settings.omp.modelThresholds.pickModel')} />
                 </SelectTrigger>
                 <SelectContent>
                   {models.map((m) => {
@@ -1184,26 +1337,43 @@ const StringRecordField: React.FC<{
   setting: OmpSetting;
   value: unknown;
   disabled?: boolean;
-  onChange: (setting: OmpSetting, value: Record<string, string>) => void;
+  onChange: (setting: OmpSetting, value: Record<string, OmpSettingValue>) => void;
 }> = ({ setting, value, disabled, onChange }) => {
   const { t } = useI18n();
-  const record: Record<string, string> = React.useMemo(() => {
+  const record: Record<string, OmpSettingValue> = React.useMemo(() => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-    const res: Record<string, string> = {};
-    for (const [k, v] of Object.entries(value)) {
-      if (typeof v === 'string') res[k] = v;
-      else if (v !== null && v !== undefined) res[k] = String(v);
-    }
-    return res;
+    return { ...(value as Record<string, OmpSettingValue>) };
   }, [value]);
 
   const [newKey, setNewKey] = React.useState('');
   const [newVal, setNewVal] = React.useState('');
 
+  const parseVal = (raw: string, currentVal?: unknown): OmpSettingValue => {
+    const trimmed = raw.trim();
+    if (typeof currentVal === 'boolean') {
+      return trimmed === 'true';
+    }
+    if (typeof currentVal === 'number') {
+      const num = Number(trimmed);
+      return Number.isFinite(num) ? num : currentVal;
+    }
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+    if (!Number.isNaN(Number(trimmed)) && trimmed !== '') return Number(trimmed);
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        return JSON.parse(trimmed) as OmpSettingValue;
+      } catch {
+        /* keep as string */
+      }
+    }
+    return trimmed;
+  };
+
   const addEntry = () => {
     const k = newKey.trim();
     if (!k) return;
-    onChange(setting, { ...record, [k]: newVal.trim() });
+    onChange(setting, { ...record, [k]: parseVal(newVal) });
     setNewKey('');
     setNewVal('');
   };
@@ -1212,6 +1382,10 @@ const StringRecordField: React.FC<{
     const next = { ...record };
     delete next[key];
     onChange(setting, next);
+  };
+
+  const updateEntryVal = (key: string, raw: string) => {
+    onChange(setting, { ...record, [key]: parseVal(raw, record[key]) });
   };
 
   return (
@@ -1225,18 +1399,21 @@ const StringRecordField: React.FC<{
           {Object.entries(record).map(([k, v]) => (
             <div
               key={k}
-              className="flex items-center justify-between p-2 rounded border bg-card text-xs font-mono"
+              className="flex items-center justify-between p-2 rounded border bg-card text-xs font-mono gap-2"
             >
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">{k}:</span>
-                <span>{v}</span>
-              </div>
+              <span className="font-semibold truncate max-w-[120px]">{k}:</span>
+              <Input
+                value={typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v ?? '')}
+                onChange={(e) => updateEntryVal(k, e.target.value)}
+                disabled={disabled}
+                className="h-7 text-xs font-mono flex-1 max-w-xs"
+              />
               {!disabled && (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="size-6 p-0 text-muted-foreground hover:text-foreground"
+                  className="size-6 p-0 text-muted-foreground hover:text-foreground shrink-0"
                   onClick={() => removeEntry(k)}
                   aria-label={t('settings.omp.actions.remove')}
                 >

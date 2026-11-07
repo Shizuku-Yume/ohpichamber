@@ -165,3 +165,26 @@ export function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, 
         </LiveTurnHoistedPagesContext.Provider>
     );
 }
+
+
+export interface TurnFoldProps {
+    turn: TurnRecord;
+    hasLaterAssistant: boolean;
+    expanded: boolean;
+    finalMessageId: string | undefined;
+    onToggle: () => void;
+    renderMessage: (message: ChatMessageEntry) => React.ReactNode;
+}
+
+export function TurnFold({ turn, hasLaterAssistant, expanded, onToggle, renderMessage }: TurnFoldProps) {
+    return <LiveTurnActivity turn={turn} hasLaterAssistant={hasLaterAssistant} expanded={expanded} onToggle={onToggle} renderMessage={renderMessage} />;
+}
+
+export function TurnPagesRow({ turn }: { turn: TurnRecord }) {
+    const pages = React.useMemo(() => getShownPages(turn.assistantMessages), [turn.assistantMessages]);
+    return pages.length > 0 ? (
+        <div className="chat-message-column">
+            {pages.map((part) => <div key={part.partId ?? part.id}>{part.type}</div>)}
+        </div>
+    ) : null;
+}

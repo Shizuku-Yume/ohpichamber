@@ -1,3 +1,5 @@
+import { MobileEffortButton } from './MobileEffortButton';
+import { PullRequestWatchStrip } from './PullRequestWatchStrip';
 import React from 'react';
 import { useDirectorySync, useSessionActiveRun } from '@/sync/sync-context';
 import { ComposerStatusStrip } from './ComposerStatusStrip';
@@ -343,6 +345,7 @@ const MemoModelControls = React.memo(ModelControls);
 const MemoComposerDictation = React.memo(ComposerDictation);
 
 const MemoMobileModelButton = React.memo(MobileModelButton);
+const MemoMobileEffortButton = React.memo(MobileEffortButton);
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
@@ -3808,6 +3811,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         />
     ) : null;
     const autoReviewRow = !isBtwActive && !newSessionDraftOpen ? <AutoReviewStrip /> : null;
+    const prWatchRow = !isBtwActive && !newSessionDraftOpen ? <PullRequestWatchStrip sessionId={currentSessionId} /> : null;
     const sessionMode = useDirectorySync(React.useCallback((state) => currentSessionId ? state.snapshot[currentSessionId]?.session.mode : undefined, [currentSessionId]), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
     // The workspace model catalog is the authoritative source for whether OMP
     // can resolve the project/global `plan` role.
@@ -3842,7 +3846,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     ) : null;
     // Null exactly when the suggestion row alone would have been: the mobile
     // pill picks its shape from whether a top row exists.
-    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || workerRunRow || autoReviewRow || loopRow || subagentHudRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
+    const composerTopRows = worktreeSetupRow || spaceWaitRow || todoRow || goalRow || workerRunRow || autoReviewRow || prWatchRow || loopRow || subagentHudRow || backgroundShellsRow || revertRow || queueRow || doneHintRow || reviewHintRow || suggestionRow ? (
         <>
             {worktreeSetupRow}
             {spaceWaitRow}
@@ -3850,6 +3854,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             {goalRow}
             {workerRunRow}
             {autoReviewRow}
+            {prWatchRow}
             {loopRow}
             {subagentHudRow}
             {backgroundShellsRow}
@@ -3863,7 +3868,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const mobileModelRow = isMobile && !isBtwActive ? (
         // Keep the mobile model control aligned with the attachment and dictation rows.
         <div className="flex items-center justify-between gap-x-2 px-3.5 pb-2 pt-0.5">
-            <MemoMobileModelButton onOpenModel={() => handleOpenMobilePanel('model')} className="min-w-0 px-0" />
+            <div className="flex min-w-0 items-center gap-0.5">
+                <MemoMobileModelButton onOpenModel={() => handleOpenMobilePanel('model')} className="min-w-0 px-0" />
+                <MemoMobileEffortButton onCycleThinking={handleCycleThinking} onOpenThinking={handleOpenThinkingPanel} />
+            </div>
             <ComposerModeSelector
                 sessionId={currentSessionId}
                 draftOpen={newSessionDraftOpen}

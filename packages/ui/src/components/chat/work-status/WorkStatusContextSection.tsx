@@ -372,18 +372,25 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
           key={note.id}
           muted
           leading={(
-            <button
-              type="button"
-              disabled={!isDraft && (!sessionId || !directory)}
-              aria-label={t('chat.workStatus.breakdown.unpin')}
-              onClick={(event) => {
-                event.stopPropagation();
-                unpinNote(note.id);
-              }}
-              className="shrink-0 rounded p-0.5 transition-opacity hover:opacity-70 disabled:opacity-40"
-            >
-              <Icon name="pushpin-2-fill" className="size-3.5" style={{ color: 'var(--primary)' }} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="pointer-events-auto inline-flex shrink-0">
+                  <button
+                    type="button"
+                    disabled={!isDraft && (!sessionId || !directory)}
+                    aria-label={t('chat.workStatus.breakdown.unpin')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      unpinNote(note.id);
+                    }}
+                    className="shrink-0 rounded p-0.5 transition-opacity hover:opacity-70 disabled:opacity-40"
+                  >
+                    <Icon name="pushpin-2-fill" className="size-3.5" style={{ color: 'var(--primary)' }} />
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>{t('chat.workStatus.breakdown.unpin')}</TooltipContent>
+            </Tooltip>
           )}
           label={note.body.trim().split('\n')[0] || note.body.trim()}
           value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedNote')}</WorkStatusValue>}
@@ -394,18 +401,25 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
           key={plan.id}
           muted
           leading={(
-            <button
-              type="button"
-              disabled={!isDraft && (!sessionId || !directory)}
-              aria-label={t('chat.workStatus.breakdown.unpin')}
-              onClick={(event) => {
-                event.stopPropagation();
-                unpinPlan(plan.id);
-              }}
-              className="shrink-0 rounded p-0.5 transition-opacity hover:opacity-70 disabled:opacity-40"
-            >
-              <Icon name="pushpin-2-fill" className="size-3.5" style={{ color: 'var(--primary)' }} />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="pointer-events-auto inline-flex shrink-0">
+                  <button
+                    type="button"
+                    disabled={!isDraft && (!sessionId || !directory)}
+                    aria-label={t('chat.workStatus.breakdown.unpin')}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      unpinPlan(plan.id);
+                    }}
+                    className="shrink-0 rounded p-0.5 transition-opacity hover:opacity-70 disabled:opacity-40"
+                  >
+                    <Icon name="pushpin-2-fill" className="size-3.5" style={{ color: 'var(--primary)' }} />
+                  </button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>{t('chat.workStatus.breakdown.unpin')}</TooltipContent>
+            </Tooltip>
           )}
           label={plan.title}
           value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedPlan')}</WorkStatusValue>}

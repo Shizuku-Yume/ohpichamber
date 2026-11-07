@@ -6,7 +6,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useUIStore } from '@/stores/useUIStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useMobileAutocompleteMaxHeight } from './useMobileAutocompleteMaxHeight';
-import { AutocompleteRowDetail } from './composer/ui/AutocompleteRowParts';
+import { AutocompleteLoadingRow, AutocompleteRowDetail, type AutocompleteScope } from "./composer/ui/AutocompleteRowParts";
 import { useAutocompleteSelectionScroll } from './composer/ui/useAutocompleteSelectionScroll';
 import { rankSkillAutocompleteItems } from './skillAutocompleteItems';
 
@@ -28,6 +28,11 @@ interface SkillAutocompleteProps {
   style?: React.CSSProperties;
 }
 
+const skillRowScope = (skill: SkillInfo): AutocompleteScope => {
+  if (skill.name === "openchamber-extensions") return "openchamber";
+  return skill.scope === "project" ? "project" : "user";
+};
+
 export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, SkillAutocompleteProps>(({
   searchQuery,
   onSkillSelect,
@@ -37,16 +42,16 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
   const { t } = useI18n();
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const isMobile = useUIStore((state) => state.isMobile);
-  const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, true, 240);
+  const mobileMaxHeight = useMobileAutocompleteMaxHeight(containerRef, style?.maxHeight === undefined, 240);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const selectedIndexRef = React.useRef(0);
-  const [filteredSkills, setFilteredSkills] = React.useState<SkillInfo[]>([]);
   const itemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
   const { listRef, onKeyboardNavigate } = useAutocompleteSelectionScroll(selectedIndex, itemRefs);
   // Skills of the directory the composer sends to (session directory, or the
   // Chats root for a chat draft), not of the project the app was on last.
   const effectiveDirectory = useEffectiveDirectory();
   const skills = useSkillsStore((s) => selectAvailableSkillsForDirectory(s, effectiveDirectory));
+  const skillsLoading = useSkillsStore((s) => s.isLoading);
   const loadSkills = useSkillsStore((s) => s.loadSkills);
 
   React.useEffect(() => {
@@ -54,10 +59,10 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
     void loadSkills(effectiveDirectory);
   }, [effectiveDirectory, loadSkills]);
 
+  const filteredSkills = React.useMemo(() => rankSkillAutocompleteItems(skills, searchQuery), [skills, searchQuery]);
   React.useEffect(() => {
-    setFilteredSkills(rankSkillAutocompleteItems(skills, searchQuery));
     setSelectedIndex(0);
-  }, [skills, searchQuery]);
+  }, [filteredSkills]);
 
   React.useEffect(() => {
     selectedIndexRef.current = selectedIndex;
@@ -130,7 +135,7 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
         }}
       >
         <span className="max-w-[60%] shrink-0 truncate font-semibold">{skill.name}</span>
-        <AutocompleteRowDetail scope={skill.scope === 'project' || skill.scope === 'workspace' ? 'project' : 'user'} description={skill.description} />
+        <AutocompleteRowDetail scope={skillRowScope(skill)} description={skill.description} />
       </div>
     );
   };
@@ -146,6 +151,8 @@ export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, Skill
           <div>
             {filteredSkills.map((skill, index) => renderSkill(skill, index))}
           </div>
+        ) : skillsLoading ? (
+          <AutocompleteLoadingRow />
         ) : (
           <div className="px-2 py-1.5 typography-ui-label text-muted-foreground">
             {t('chat.autocomplete.skillsEmpty')}

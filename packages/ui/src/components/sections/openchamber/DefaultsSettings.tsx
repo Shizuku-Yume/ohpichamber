@@ -1,6 +1,6 @@
 import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
-import type { Model, OmpSettingsState } from '@openchamber/agent-contract';
+import type { JsonValue, Model, OmpSettingsState } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsSection,
@@ -75,6 +75,20 @@ function parseSafeRolesRecord(val: unknown): Record<string, string> {
   }
   return {};
 }
+
+/**
+ * The entries `next` really changed relative to `previous`: written values plus
+ * the keys it removed. A conflict retry re-applies exactly these, so a role or
+ * fallback chain a concurrent edit added is never overwritten or deleted.
+ */
+const changedRoles = (previous: Record<string, string>, next: Record<string, JsonValue>) => {
+  const removed = Object.keys(previous).filter(role => !Object.hasOwn(next, role));
+  const written: Record<string, JsonValue> = {};
+  for (const [role, value] of Object.entries(next)) {
+    if (previous[role] !== value) written[role] = value;
+  }
+  return Object.assign(written, { removed });
+};
 
 export const DefaultsSettings: React.FC = () => {
   const { t } = useI18n();
@@ -152,11 +166,11 @@ export const DefaultsSettings: React.FC = () => {
   );
 
   const updateRolesOnServer = React.useCallback(
-    async (nextRoles: Record<string, string>) => {
+    async (nextRoles: Record<string, JsonValue>) => {
       const currentState = ompStateRef.current;
       if (!currentState) return;
       // The snapshot this write was computed against, so a 409 re-applies only
-      // the roles it actually changed.
+      // the entries it actually changed.
       const previousRoles = parseSafeRolesRecord(currentState.settings.find((s) => s.id === 'modelRoles')?.value);
       setIsSavingOmp(true);
       try {
@@ -170,14 +184,12 @@ export const DefaultsSettings: React.FC = () => {
           if (error instanceof CanonicalApiError && error.problem.status === 409) {
             const latest = await canonicalClient.getOmpSettings(currentState.workspaceId);
             const latestRoles = parseSafeRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
-            // Only the roles this write changed are re-applied; every other role
-            // in the newer snapshot (including fallback chains) stays as it is.
-            const merged = { ...latestRoles };
-            for (const role of Object.keys(nextRoles)) merged[role] = nextRoles[role];
-            for (const role of Object.keys(previousRoles)) {
-              if (Object.hasOwn(nextRoles, role)) continue;
-              delete merged[role];
-            }
+            // Re-apply only the entries this write changed. Any role or fallback
+            // chain someone else wrote in the newer snapshot stays untouched.
+            const merged: Record<string, JsonValue> = { ...latestRoles };
+            const changed = changedRoles(previousRoles, nextRoles);
+            for (const role of Object.keys(changed)) merged[role] = changed[role];
+            for (const role of changed.removed) delete merged[role];
             next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
               expectedRevision: latest.revision,
               changes: [{ id: 'modelRoles', value: merged }],
@@ -226,14 +238,13 @@ export const DefaultsSettings: React.FC = () => {
   );
 
   /**
-   * Any OMP model role: `smol` is the small model, `slow` the changes
-   * walkthrough, `judge` the goal checker, `tiny` the fallback chain head.
-   * Writing the role is what makes the setting take effect; nothing here keeps
-   * a second copy of it.
+   * Write one native model role and nothing else. `smol` is the small model,
+   * `slow` the changes walkthrough. The fallback chain is not a role and is
+   * written separately through `retry.fallbackChains`.
    */
   const setRole = React.useCallback(
     (role: string, value: string) => {
-      const nextRoles = { ...rolesMap };
+      const nextRoles: Record<string, JsonValue> = { ...rolesMap };
       if (!value || value === '__inherit__') delete nextRoles[role];
       else nextRoles[role] = value;
       void updateRolesOnServer(nextRoles);
@@ -241,22 +252,101 @@ export const DefaultsSettings: React.FC = () => {
     [rolesMap, updateRolesOnServer],
   );
 
-  const roleModel = (role: string): string => {
-    const { model } = parseRoleSelector(rolesMap[role]);
-    return models.some((m) => `${m.provider}/${m.modelId}` === model) || !model ? model : '';
+  /** The stored selector for a role, custom values included; '' means unset. */
+  const roleModel = (role: string): string => rolesMap[role] ?? '';
+
+  /** A role is set only when a "use default" toggle is off. */
+  const roleSelect = (
+    role: string,
+    ariaLabel: string,
+    placeholder: string,
+    disabled: boolean,
+  ): React.ReactNode => {
+    const value = roleModel(role);
+    const known = models.some((m) => `${m.provider}/${m.modelId}` === value);
+    return (
+      <Select
+        value={value || '__inherit__'}
+        onValueChange={(val) => setRole(role, val)}
+        disabled={disabled || isSavingOmp || !ompState}
+      >
+        <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={ariaLabel}>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__inherit__">{placeholder}</SelectItem>
+          {models.map((m) => {
+            const id = `${m.provider}/${m.modelId}`;
+            return (
+              <SelectItem key={id} value={id}>
+                {m.name || m.modelId} ({m.provider})
+              </SelectItem>
+            );
+          })}
+          {/* A configured value the catalog does not list stays visible, once. */}
+          {value && !known && (
+            <SelectItem value={value}>
+              {value} ({t('settings.omp.modelRoles.customModel')})
+            </SelectItem>
+          )}
+        </SelectContent>
+      </Select>
+    );
   };
 
-  const roleSelect = (role: string, ariaLabel: string, placeholder: string): React.ReactNode => (
+  /**
+   * The native retry fallback chain for the `default` selector, which is what
+   * actually continues a session when a usage limit stops it. Writing
+   * `retry.fallbackChains` keeps every other chain and wildcard entry intact.
+   */
+  const fallbackRoles = React.useMemo(() => {
+    const value = ompState?.settings.find((s) => s.id === 'retry.fallbackChains')?.value;
+    const parsed = typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, JsonValue> : {};
+    const chain = parsed.default;
+    return { chains: parsed, current: Array.isArray(chain) && typeof chain[0] === 'string' ? chain[0] : '' };
+  }, [ompState]);
+
+  const updateFallbackChain = React.useCallback(
+    async (selector: string) => {
+      const currentState = ompStateRef.current;
+      if (!currentState) return;
+      const revision = currentState.revision;
+      const nextChains: Record<string, JsonValue> = { ...fallbackRoles.chains };
+      const chain = Array.isArray(nextChains.default) ? [...nextChains.default as string[]] : [];
+      if (selector) chain[0] = selector;
+      else chain.shift();
+      if (chain.length) nextChains.default = chain;
+      else delete nextChains.default;
+      setIsSavingOmp(true);
+      try {
+        const next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
+          expectedRevision: revision,
+          changes: [{ id: 'retry.fallbackChains', value: nextChains }],
+        });
+        setOmpState(next);
+      } catch (err) {
+        console.warn('Failed to update the fallback model:', err);
+      } finally {
+        setIsSavingOmp(false);
+      }
+    },
+    [fallbackRoles.chains],
+  );
+
+  const fallbackSelect = (): React.ReactNode => (
     <Select
-      value={roleModel(role) || '__inherit__'}
-      onValueChange={(val) => setRole(role, val)}
+      value={fallbackRoles.current || '__none__'}
+      onValueChange={(val) => void updateFallbackChain(val === '__none__' ? '' : val)}
       disabled={isSavingOmp || !ompState}
     >
-      <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={ariaLabel}>
-        <SelectValue placeholder={placeholder} />
+      <SelectTrigger
+        className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+        aria-label={t('settings.openchamber.defaults.field.fallbackModel')}
+      >
+        <SelectValue placeholder={t('settings.openchamber.defaults.field.fallbackModelNone')} />
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="__inherit__">{placeholder}</SelectItem>
+        <SelectItem value="__none__">{t('settings.openchamber.defaults.field.fallbackModelNone')}</SelectItem>
         {models.map((m) => {
           const id = `${m.provider}/${m.modelId}`;
           return (
@@ -265,9 +355,9 @@ export const DefaultsSettings: React.FC = () => {
             </SelectItem>
           );
         })}
-        {roleModel(role) && (
-          <SelectItem value={roleModel(role)}>
-            {roleModel(role)} ({t('settings.omp.modelRoles.customModel')})
+        {fallbackRoles.current && !models.some((m) => `${m.provider}/${m.modelId}` === fallbackRoles.current) && (
+          <SelectItem value={fallbackRoles.current}>
+            {fallbackRoles.current} ({t('settings.omp.modelRoles.customModel')})
           </SelectItem>
         )}
       </SelectContent>
@@ -280,6 +370,7 @@ export const DefaultsSettings: React.FC = () => {
   const autoApplyAgentModel = useUIStore((state) => state.autoApplyAgentModel);
 
   return (
+    <>
     <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
       <div className="space-y-4">
         <SettingsFieldRow
@@ -395,39 +486,53 @@ export const DefaultsSettings: React.FC = () => {
         </SettingsFieldRow>
 
         <SettingsFieldRow
-          settingsItem="sessions.small-model"
-          label={t('settings.openchamber.defaults.smallModel.title')}
-          info={t('settings.openchamber.defaults.smallModel.description')}
+          settingsItem="sessions.fallback-model"
+          label={t('settings.openchamber.defaults.field.fallbackModel')}
+          info={t('settings.openchamber.defaults.field.fallbackModelInfo')}
         >
-          {roleSelect('smol', t('settings.openchamber.defaults.smallModel.title'), t('settings.openchamber.defaults.smallModel.useDefault'))}
+          {fallbackSelect()}
         </SettingsFieldRow>
+      </div>
+    </SettingsSection>
 
+      {/* Models the app runs on its own: summaries, titles, the walkthrough. */}
+      <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName="space-y-2">
+        <SettingsCheckboxRow
+          settingsItem="sessions.small-model"
+          checked={!rolesMap.smol}
+          onChange={(useDefault) => {
+            if (useDefault) { setRole('smol', ''); return; }
+            // Turning the toggle off writes the `smol` role. The session default
+            // is the starting point; picking a cheaper model is the next step.
+            setRole('smol', rolesMap.default ?? '');
+          }}
+          label={t('settings.openchamber.defaults.smallModel.useDefault')}
+          ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
+          info={t('settings.openchamber.defaults.smallModel.description')}
+        />
+        <SettingsFieldRow label={t('settings.openchamber.defaults.smallModel.title')}>
+          {roleSelect('smol', t('settings.openchamber.defaults.smallModel.title'), t('settings.openchamber.defaults.smallModel.useDefault'), !rolesMap.smol)}
+        </SettingsFieldRow>
         <SettingsFieldRow
           settingsItem="sessions.walkthrough-model"
           label={t('settings.openchamber.defaults.walkthroughModel.title')}
           info={t('settings.openchamber.defaults.walkthroughModel.description')}
         >
-          {roleSelect('slow', t('settings.openchamber.defaults.walkthroughModel.title'), t('settings.openchamber.defaults.walkthroughModel.usesSmallModel'))}
+          {roleSelect('slow', t('settings.openchamber.defaults.walkthroughModel.title'), t('settings.openchamber.defaults.walkthroughModel.usesSmallModel'), !rolesMap.slow)}
         </SettingsFieldRow>
+      </SettingsSection>
 
-        <SettingsFieldRow
-          settingsItem="sessions.fallback-model"
-          label={t('settings.openchamber.defaults.field.fallbackModel')}
-          info={t('settings.openchamber.defaults.field.fallbackModelInfo')}
-        >
-          {roleSelect('tiny', t('settings.openchamber.defaults.field.fallbackModel'), t('settings.openchamber.defaults.field.fallbackModelNone'))}
-        </SettingsFieldRow>
-
+      <SettingsSection title={t('settings.sessions.permissions.defaultMode')} contentClassName="space-y-1">
         <PermissionDefaultModeField agentName={defaultAgent} />
+      </SettingsSection>
 
-        {/* The plan-mode agent toggle and the auto-apply-agent-model toggle are
-            wired end to end (store, registry snapshot, Host capture, worker
-            enforcement) but their labels are not in the shared dictionaries.
-            ux-06 owns `packages/ui/src/lib/i18n/messages/*.ts`; the required keys
-            are listed in ux-03-localization-request.json, and the two rows land
-            here once they exist. Rendering a raw key or a made-up translation
-            for them is not an option. */}
+      <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')} contentClassName="space-y-1">
         <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
+          {/* Both rows wait on ux-06-owned dictionaries. Their state, storage,
+              Host capture and worker enforcement are complete; the labels are
+              requested in ux-03-localization-request.json. Rows land here as
+              direct `t()` calls once the owner lands the keys — never as a raw
+              key or a hardcoded English string. */}
           <SettingsCheckboxRow
             settingsItem="sessions.deletion-dialog"
             checked={showDeletionDialog}
@@ -450,7 +555,7 @@ export const DefaultsSettings: React.FC = () => {
             ariaLabel={t('settings.openchamber.defaults.field.showChats')}
           />
         </SettingsInset>
-      </div>
-    </SettingsSection>
+      </SettingsSection>
+    </>
   );
 };

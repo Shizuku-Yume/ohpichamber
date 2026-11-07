@@ -61,7 +61,10 @@ class GoalVerifyingController extends RpcGoalController {
     private readonly context: (objective: string) => Record<string, string | number> & { objectiveId: string },
   ) {
     super(session, onContinuationDropped);
+    this.onContinuationDropped = onContinuationDropped;
   }
+
+  private readonly onContinuationDropped: (() => void) | undefined;
 
   /** A pending verdict is work: the session must not look settled while it runs. */
   override get continuationPending(): boolean { return this.check !== null || super.continuationPending; }
@@ -74,14 +77,24 @@ class GoalVerifyingController extends RpcGoalController {
     const goalId = this.goalId();
     const objective = this.objective();
     if (!goalId || !objective) { super.observe(event); return; }
-    if (this.verifiedGoalId !== goalId) { this.verifiedGoalId = goalId; this.turns = 0; }
+    if (this.verifiedGoalId !== goalId) {
+      this.verifiedGoalId = goalId;
+      this.turns = 0;
+      // A new goal re-arms the check; an abort belonged to the previous one.
+      this.abort = new AbortController();
+    }
     this.turns += 1;
-    this.check = this.verify(objective, goalId)
+    const abort = this.abort;
+    this.check = this.verify(objective, goalId, abort.signal)
       .catch(() => {})
       .finally(() => {
         this.check = null;
-        // The verdict has already paused or completed the goal; OMP decides the rest.
+        // The verdict already paused or completed the goal; OMP decides the rest
+        // from this same terminal event, so the completion is journaled now.
         super.observe(event);
+        // If the verdict ended the goal, no continuation follows: tell the host
+        // so its pending-continuation marker clears instead of waiting forever.
+        if (!this.goalSession.getGoalModeState()?.enabled) this.onContinuationDropped?.();
       });
     void this.check;
   }
@@ -96,22 +109,22 @@ class GoalVerifyingController extends RpcGoalController {
     return goal && goal.status === 'active' ? goal.objective : null;
   }
 
-  /** A host abort or a session change voids the verdict this check would produce. */
-  private readonly checkAbort = new AbortController();
+  /** A host abort voids the verdict this check would produce; the next goal re-arms it. */
+  private abort = new AbortController();
 
   override stopForHostAbort(): void {
     super.stopForHostAbort();
-    this.checkAbort.abort();
+    this.abort.abort();
   }
 
-  private async verify(objective: string, goalId: string): Promise<void> {
+  private async verify(objective: string, goalId: string, signal: AbortSignal): Promise<void> {
     // The cap counts automatic goal turns for this goal, starting at the first check.
     if (this.turns >= this.maxAutoTurns) {
       await this.pause();
       return;
     }
     const context = this.context(objective);
-    if (context.objectiveId !== goalId || this.checkAbort.signal.aborted) return;
+    if (context.objectiveId !== goalId || signal.aborted) return;
     const roles = this.judgeDeps.settings.getModelRoles();
     // The small model is `smol`, then `tiny`, then the default role: whatever a
     // cheap utility check would resolve on this session.
@@ -126,7 +139,7 @@ class GoalVerifyingController extends RpcGoalController {
         ? this.judgeDeps.settings.overlay({ modelRoles: { ...roles, judge: smallModel } })
         : this.judgeDeps.settings;
       const judge = resolveJudge({ ...this.judgeDeps, settings, purpose: 'goal-verification' });
-      const result = await judge.judge({ state: context, questions: GOAL_QUESTIONS }, { signal: this.checkAbort.signal });
+      const result = await judge.judge({ state: context, questions: GOAL_QUESTIONS }, { signal });
       verdict = decideGoalVerdict({
         all_done: result.answers.all_done.noul,
         remaining: result.answers.remaining.noul,
@@ -137,7 +150,7 @@ class GoalVerifyingController extends RpcGoalController {
       verdict = null;
     }
     // An abort is not a verdict: leave the goal alone and let OMP decide.
-    if (this.checkAbort.signal.aborted) return;
+    if (signal.aborted) return;
     const live = this.goalSession.getGoalModeState();
     if (!live?.enabled || live.goal.status !== 'active' || live.goal.id !== goalId) return;
     if (verdict === 'complete') await this.complete();

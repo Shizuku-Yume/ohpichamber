@@ -61,6 +61,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
     if (activeProjectId && projects.some(project => project.id === activeProjectId)) return activeProjectId;
     return projects[0]?.id ?? null;
   }, [activeProjectId, projects, targetProjectId]);
+  const selectedTargetProject = projects.find((p) => p.id === resolvedTargetProjectId);
 
   const selectedProject = projects.find(project => project.id === resolvedTargetProjectId) ?? null;
   // The native install call always resolves one workspace; `workspace` scope
@@ -166,7 +167,9 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
                     disabled={projects.length === 1}
                   >
                     <SelectTrigger className="w-fit">
-                      <SelectValue placeholder={t('settings.skills.catalog.installSkill.field.chooseProjectPlaceholder')} />
+                      <SelectValue placeholder={t('settings.skills.catalog.installSkill.field.chooseProjectPlaceholder')}>
+                        {selectedTargetProject ? (selectedTargetProject.label || selectedTargetProject.path) : undefined}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent align="start" portalToBody>
                       {projects.map(project => (

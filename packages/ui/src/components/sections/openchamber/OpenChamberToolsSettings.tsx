@@ -1,3 +1,4 @@
+import { runtimeFetch } from '@/lib/runtime-fetch';
 import * as React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
@@ -144,24 +145,64 @@ export const OpenChamberToolsSettings: React.FC = () => {
   }, [setAgentImageModel]);
 
   // Only models that generate images, read when the page opens.
-  // Note: Canonical ModelSchema modalities ('text' | 'image' | 'audio' | 'embedding')
-  // describe INPUT modalities (e.g. multimodal vision input), NOT image generation output.
-  // Dedicated image generation model routing is not yet exposed by the Canonical API
-  // or Agent Service catalog. We do not offer vision-only input LLMs as image generators;
-  // until an explicit generation output capability is published by the catalog,
-  // image models remain empty and explicit.
-  const [imageModels, setImageModels] = React.useState<{ status: 'loading' | 'failed' } | { status: 'ready'; models: Array<{ value: string; name: string; providerID: string }> }>({ status: 'loading' });
+  // Models are queried from the Canonical image catalog (published by commit a4696cc73),
+  // which separates image generators (`imageModels` carrying { modelId, provider, name })
+  // from vision-input LLMs in `models`. Failure states stay explicit.
+  const [imageModels, setImageModels] = React.useState<
+    | { status: 'loading' }
+    | { status: 'failed'; error?: string }
+    | { status: 'ready'; models: Array<{ value: string; name: string; providerID: string }> }
+  >({ status: 'loading' });
+
   React.useEffect(() => {
     let cancelled = false;
-    canonicalClient.listModels().then(
-      () => {
-        if (!cancelled) {
-          // No models in the canonical catalog currently have image generation output capability
-          setImageModels({ status: 'ready', models: [] });
+    const client = canonicalClient as unknown as {
+      listImageModels?: () => Promise<Array<{ value?: string; modelId?: string; provider?: string; providerID?: string; name: string }>>;
+      getModelCatalog?: () => Promise<{ imageModels?: Array<{ modelId: string; provider: string; name: string }> }>;
+    };
+
+    const fetchImageModels = async () => {
+      try {
+        if (typeof client.listImageModels === 'function') {
+          const raw = await client.listImageModels();
+          if (cancelled) return;
+          const options = raw.map((m) => ({
+            value: m.value ?? `${m.provider ?? m.providerID}/${m.modelId}`,
+            name: m.name,
+            providerID: m.providerID ?? m.provider ?? '',
+          }));
+          setImageModels({ status: 'ready', models: options });
+          return;
         }
-      },
-      () => { if (!cancelled) setImageModels({ status: 'failed' }); },
-    );
+        if (typeof client.getModelCatalog === 'function') {
+          const catalog = await client.getModelCatalog();
+          if (cancelled) return;
+          const options = (catalog.imageModels ?? []).map((m) => ({
+            value: `${m.provider}/${m.modelId}`,
+            name: m.name,
+            providerID: m.provider,
+          }));
+          setImageModels({ status: 'ready', models: options });
+          return;
+        }
+        const res = await runtimeFetch('/api/agent/v1/models/catalog');
+        if (!res.ok) throw new Error(`Failed to load image models: ${res.status}`);
+        const data = await res.json() as { imageModels?: Array<{ modelId: string; provider: string; name: string }> };
+        if (cancelled) return;
+        const options = (data.imageModels ?? []).map((m) => ({
+          value: `${m.provider}/${m.modelId}`,
+          name: m.name,
+          providerID: m.provider,
+        }));
+        setImageModels({ status: 'ready', models: options });
+      } catch (error) {
+        if (!cancelled) {
+          setImageModels({ status: 'failed', error: error instanceof Error ? error.message : String(error) });
+        }
+      }
+    };
+
+    void fetchImageModels();
     return () => { cancelled = true; };
   }, []);
   const imageModelOptions = imageModels.status === 'ready' ? imageModels.models : [];

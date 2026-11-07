@@ -298,6 +298,7 @@ export function MarkdownContent({
   mediaMode = 'local',
   isStreaming = false,
   allowRawHtml = false,
+  singleTilde = true,
   directory = '',
   settled = !isStreaming,
   sessionId,
@@ -414,14 +415,14 @@ export function MarkdownContent({
       : undefined;
     return createMarkdownCodePlugin({ purpose, prepared: preparedHighlights, resolvePaths });
   }, [purpose, preparedHighlights, fileReferences, directory, confirmFile]);
-  const plugins = React.useMemo(() => ({ code, math: markdownMath, cjk: getMarkdownCjk(singleTilde), renderers }), [code]);
+  const plugins = React.useMemo(() => ({ code, math: markdownMath, cjk: getMarkdownCjk(singleTilde), renderers }), [code, singleTilde]);
   const processing = React.useMemo(() => {
-    const base = getMarkdownProcessingOptions(allowRawHtml);
+    const base = getMarkdownProcessingOptions(allowRawHtml, singleTilde);
     const extra: Pluggable[] = [];
     if (activeEmojiShortcodes) extra.push([remarkEmojiShortcodes, activeEmojiShortcodes]);
     if (extra.length === 0) return base;
     return { ...base, remarkPlugins: [...(base.remarkPlugins ?? []), ...extra] };
-  }, [allowRawHtml, activeEmojiShortcodes]);
+  }, [allowRawHtml, singleTilde, activeEmojiShortcodes]);
   const presentation = React.useMemo(() => ({
     directory,
     fileReferences,

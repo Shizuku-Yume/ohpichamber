@@ -106,12 +106,18 @@ function remarkVisibleBlocks() {
   };
 }
 
-function createOptions(allowRawHtml: boolean, isVSCode: boolean, singleTilde: boolean): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
+function createOptions(allowRawHtml: boolean, singleTilde: boolean): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
   return {
-    remarkPlugins: [...(singleTilde ? Object.values(defaultRemarkPlugins) : defaultRemarkPluginList), remarkDisclosures, remarkAlerts, remarkVisibleBlocks, remarkSessionLinks],
+    remarkPlugins: [
+      ...(singleTilde ? Object.values(defaultRemarkPlugins) : defaultRemarkPluginList),
+      remarkDisclosures,
+      remarkAlerts,
+      remarkVisibleBlocks,
+      remarkSessionLinks,
+    ],
     rehypePlugins: [
       ...(allowRawHtml ? [defaultRehypePlugins.raw] : []),
-      [rehypeMarkdownPolicy, { isVSCode }],
+      rehypeMarkdownPolicy,
       [rehypeSanitize, schema],
       defaultRehypePlugins.harden,
       rehypeRestoreMarkdownLinks,
@@ -119,34 +125,19 @@ function createOptions(allowRawHtml: boolean, isVSCode: boolean, singleTilde: bo
   };
 }
 
-const policies = [false, true].flatMap(singleTilde => [
-  createOptions(false, false, singleTilde), createOptions(false, true, singleTilde),
-  createOptions(true, false, singleTilde), createOptions(true, true, singleTilde),
-]);
+const policies = {
+  strictText: createOptions(false, false),
+  strictRaw: createOptions(true, false),
+  gfmText: createOptions(false, true),
+  gfmRaw: createOptions(true, true),
+};
 
 export function getMarkdownProcessingOptions(
   allowRawHtml: boolean,
-  singleTildeStrikethrough?: boolean,
-): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'>;
-export function getMarkdownProcessingOptions(
-  allowRawHtml: boolean,
-  isVSCode: boolean,
-  singleTilde?: boolean,
-): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'>;
-export function getMarkdownProcessingOptions(
-  allowRawHtml: boolean,
-  isVSCodeOrSingleTilde?: boolean,
-  singleTilde?: boolean,
+  singleTildeStrikethrough = true,
 ): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
-  let isVSCode = false;
-  let singleTildeStrikethrough = true;
-
-  if (typeof singleTilde === 'boolean') {
-    isVSCode = Boolean(isVSCodeOrSingleTilde);
-    singleTildeStrikethrough = singleTilde;
-  } else if (typeof isVSCodeOrSingleTilde === 'boolean') {
-    singleTildeStrikethrough = isVSCodeOrSingleTilde;
+  if (singleTildeStrikethrough) {
+    return allowRawHtml ? policies.gfmRaw : policies.gfmText;
   }
-
-  return policies[(singleTildeStrikethrough ? 4 : 0) + (allowRawHtml ? 2 : 0) + (isVSCode ? 1 : 0)];
+  return allowRawHtml ? policies.strictRaw : policies.strictText;
 }

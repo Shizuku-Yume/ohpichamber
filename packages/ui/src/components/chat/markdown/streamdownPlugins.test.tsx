@@ -6,11 +6,11 @@ import { Streamdown } from 'streamdown';
 import { getMarkdownCjk, getMarkdownProcessingOptions, markdownMath } from './streamdownPlugins';
 
 const dom = new Window();
-function render(source: string, raw = false, vscode = false, singleTilde = false) {
+function render(source: string, raw = false, singleTilde = false) {
   const html = renderToStaticMarkup(<Streamdown
     mode="static" parseIncompleteMarkdown={false} controls={false}
     plugins={{ math: markdownMath, cjk: getMarkdownCjk(singleTilde) }}
-    {...getMarkdownProcessingOptions(raw, vscode, singleTilde)}
+    {...getMarkdownProcessingOptions(raw, singleTilde)}
     urlTransform={(value) => value}
     components={{
       a: ({ node: _node, ...props }) => <a {...props} />,
@@ -80,10 +80,8 @@ describe('Streamdown processing policy', () => {
   });
 
   test('preserves GFM tildes in host-authored bodies, comments and disclosures', () => {
-    for (const vscode of [false, true]) {
-      const result = render('a ~removed~ b and 前~~删除。~~后\n\n<details><summary>More</summary>\n\na ~hidden~ b\n\n</details>', true, vscode, true);
-      expect(Array.from(result.querySelectorAll('del')).map(node => node.textContent)).toEqual(['removed', '删除。', 'hidden']);
-    }
+    const result = render('a ~removed~ b and 前~~删除。~~后\n\n<details><summary>More</summary>\n\na ~hidden~ b\n\n</details>', true, true);
+    expect(Array.from(result.querySelectorAll('del')).map(node => node.textContent)).toEqual(['removed', '删除。', 'hidden']);
   });
 
   test('keeps processing arrays stable and policy-specific', () => {
@@ -125,7 +123,6 @@ describe('Streamdown processing policy', () => {
     const source = sources.map((url, i) => `[link${i}](${url})`).join('\n\n');
     const links = render(source).querySelectorAll('a');
     for (let i = 0; i < sources.length; i++) expect(links[i]?.getAttribute('href')).toBe(i < 3 ? sources[i] : null);
-    expect(render('[session](openchamber://session/ses_abc)', false, true).querySelector('a')?.getAttribute('href')).toBeNull();
     expect(render('Pasted openchamber://session/ses_abc?message=msg_1.').querySelector('a')?.getAttribute('href')).toBe('openchamber://session/ses_abc?message=msg_1');
     const image = render('![local](file:///workspace/a.png)').querySelector('img');
     expect(image?.getAttribute('data-oc-media-source')).toBe('file:///workspace/a.png');

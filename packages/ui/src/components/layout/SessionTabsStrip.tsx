@@ -1,4 +1,8 @@
 import React from 'react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
+import { formatShortcutForDisplay, getEffectiveShortcutPrefix, UNASSIGNED_SHORTCUT } from '@/lib/shortcuts';
+import { useUIStore } from '@/stores/useUIStore';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import {
@@ -104,6 +108,7 @@ const contextComponents: SessionTabMenuComponents = {
  */
 const SessionTabItem: React.FC<{
  tab: SessionTab;
+ tabNumber: number;
  isActive: boolean;
  suppressControls: boolean;
  onSelect: (tab: SessionTab) => void;
@@ -112,8 +117,13 @@ const SessionTabItem: React.FC<{
  closeOtherTabs: (id: string) => void;
  onMenuOpenChangeComplete?: (open: boolean) => void;
  children?: React.ReactNode;
-}> = ({ tab, isActive, suppressControls, onSelect, onClose, renderMenu, closeOtherTabs, onMenuOpenChangeComplete, children }) => {
+}> = ({ tab, tabNumber, isActive, suppressControls, onSelect, onClose, renderMenu, closeOtherTabs, onMenuOpenChangeComplete, children }) => {
  const { t } = useI18n();
+ const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+ const tabPrefix = getEffectiveShortcutPrefix('switch_session_tab', shortcutOverrides);
+ const tabShortcut = tabPrefix && tabPrefix !== UNASSIGNED_SHORTCUT && tabNumber <= 9
+  ? formatShortcutForDisplay(`${tabPrefix}+${tabNumber}`)
+  : undefined;
  const [menuOpen, setMenuOpen] = React.useState(false);
  // Keeps the overlay (the dropdown's anchor) mounted through the close animation.
  const [menuVisible, setMenuVisible] = React.useState(false);
@@ -207,9 +217,16 @@ const SessionTabItem: React.FC<{
                           activation and does not jump when the tab swaps
                           its content. */}
          {isActive ? children : (
-          <div className="flex min-w-0 flex-col justify-center">
-           <span dir="auto" className="block max-w-full overflow-hidden whitespace-nowrap text-left text-[13px] font-medium leading-4">{title}</span>
-          </div>
+          <Tooltip delayDuration={350}>
+           <TooltipTrigger asChild>
+            <div className="flex min-w-0 flex-col justify-center">
+             <span dir="auto" className="block max-w-full overflow-hidden whitespace-nowrap text-left text-[13px] font-medium leading-4">{title}</span>
+            </div>
+           </TooltipTrigger>
+           <TooltipContent side="bottom" sideOffset={8}>
+            <TooltipLabelWithShortcut label={title} shortcut={tabShortcut} />
+           </TooltipContent>
+          </Tooltip>
          )}
         </div>
         {isAiRenaming ? (
@@ -425,6 +442,7 @@ export const SessionTabsStrip: React.FC<{
        <SessionTabItem
         key={tab.id}
         tab={tab}
+        tabNumber={index + 1}
         isActive={tab.id === currentSessionId}
         suppressControls={tab.id === currentSessionId && suppressActiveTabControls}
         onSelect={handleSelect}

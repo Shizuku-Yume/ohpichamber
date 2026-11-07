@@ -103,6 +103,7 @@ export const createSettingsHelpers = (dependencies) => {
   const PWA_ORIENTATION_VALUES = new Set(['system', 'portrait', 'landscape']);
   const MOBILE_KEYBOARD_MODE_VALUES = new Set(['native', 'resize-content']);
   const TERMINAL_SHELL_VALUES = new Set(['auto', 'bash', 'zsh', 'sh', 'fish', 'pwsh', 'powershell', 'cmd', 'dash', 'ksh', 'nu']);
+  const SESSION_MODE_VALUES = new Set(['main', 'plan', 'vibe', 'goal']);
   const SIDEBAR_PROJECT_DISPLAY_MODE_VALUES = new Set(['all', 'single']);
   const SIDEBAR_LIST_SESSION_GROUPING_VALUES = new Set(['project', 'time']);
   // The interface languages (`LOCALES` in packages/ui/src/lib/i18n/runtime.ts);
@@ -635,6 +636,12 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.defaultAgent === 'string') {
       const trimmed = candidate.defaultAgent.trim();
       result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
+    }
+    if (typeof candidate.defaultSessionMode === 'string') {
+      const mode = candidate.defaultSessionMode.trim();
+      if (SESSION_MODE_VALUES.has(mode)) {
+        result.defaultSessionMode = mode;
+      }
     }
     if (typeof candidate.defaultGitIdentityId === 'string') {
       const trimmed = candidate.defaultGitIdentityId.trim();

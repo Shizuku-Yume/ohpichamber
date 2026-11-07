@@ -2,7 +2,9 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { isInvisibleText } from '@/lib/invisibleText';
 import { Icon } from '@/components/icon/Icon';
-import type { FilePart, Part } from '@/lib/opencode/model';
+import type { Part } from '@openchamber/agent-contract';
+
+type AttachmentFile = { mime?: string; url?: string; filename?: string; mimeType?: string };
 import {
     collectOpenableAttachmentNames,
     findAttachmentPart,
@@ -15,7 +17,6 @@ import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { getDirectoryForFilePath } from '@/lib/path-utils';
 import { hasTextSelectionInside } from '@/lib/textSelection';
 import { useI18n } from '@/lib/i18n';
 import {
@@ -57,7 +58,7 @@ type UserTextPartProps = {
     /** Names of the files attached to this message; `[name]` in the text renders as a file chip. */
     attachmentFilenames: readonly string[];
     /** The message's file parts; a citation of one the app can show opens it on click. */
-    attachmentFiles?: readonly FilePart[];
+    attachmentFiles?: readonly AttachmentFile[];
     /** The message's popup opener, for images and inline text. */
     onShowPopup?: (content: ToolPopupContent) => void;
     /** Sessions and messages the message mentioned; their links in the text draw as chips. */
@@ -67,7 +68,7 @@ type UserTextPartProps = {
 const NO_SESSION_MENTIONS: SessionMentionChips = new Map();
 
 const EMPTY_ATTACHMENT_LINKS: AttachmentCitationLink[] = [];
-const EMPTY_ATTACHMENT_FILES: readonly FilePart[] = [];
+const EMPTY_ATTACHMENT_FILES: readonly AttachmentFile[] = [];
 
 
 const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' => {
@@ -137,8 +138,8 @@ const UserTextPart: React.FC<UserTextPartProps> = ({
 
     const openSkill = React.useCallback((name: string) => {
         const skill = skillByName.get(name);
-        if (!skill?.path) return;
-        openContextFile(effectiveDirectory || getDirectoryForFilePath('', skill.path) || '/', skill.path);
+        if (!skill) return;
+        openContextFile(effectiveDirectory || '/', `skill://${skill.name}`);
     }, [effectiveDirectory, openContextFile, skillByName]);
 
     // Measured before paint, and reported to the message (which renders the

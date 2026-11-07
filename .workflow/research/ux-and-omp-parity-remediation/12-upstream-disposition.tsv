@@ -3018,15 +3018,15 @@ D	scripts/dev-web-full.mjs	applied-upstream-deletion	upstream deleted it and the
 M	scripts/dev-web-hmr.mjs	adopted	taken whole from upstream/main and verified identical	
 M	scripts/generate-icon-sprite.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/icons/open-in-apps.mjs	adopted	taken whole from upstream/main and verified identical	
-A	scripts/model-bench/README.md	adopted	taken whole from upstream/main and verified identical	
-A	scripts/model-bench/bench.mjs	adopted	taken whole from upstream/main and verified identical	
+A	scripts/model-bench/README.md	adapted	upstream content applied and adapted to the OMP agent runtime	
+A	scripts/model-bench/bench.mjs	adapted-partial	11 line(s) still name the removed OpenCode runtime: // no git history (so the model cannot read the real fix), lets `opencode run`	
 A	scripts/model-bench/cross-judge.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/model-bench/judge-review.md	adopted	taken whole from upstream/main and verified identical	
 A	scripts/model-bench/judge.md	adopted	taken whole from upstream/main and verified identical	
 A	scripts/model-bench/report.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/model-bench/tasks.json	adopted	taken whole from upstream/main and verified identical	
 M	scripts/oc-dev.mjs	adapt-pending	upstream changed it; fork content still needs the delta ported	
-M	scripts/perf/DOCUMENTATION.md	adopted	taken whole from upstream/main and verified identical	
+M	scripts/perf/DOCUMENTATION.md	adapted-partial	19 line(s) still name the removed OpenCode runtime: rate the model name asks for. OpenCode still produces its real event stream.	
 M	scripts/perf/cdp.mjs	adopted	taken whole from upstream/main and verified identical	
 M	scripts/perf/chat-quote-popover.browser.test.mjs	adapt-pending	upstream added or renamed it; not yet present on the task branch	
 M	scripts/perf/compare-runs.mjs	adopted	taken whole from upstream/main and verified identical	
@@ -3034,17 +3034,17 @@ M	scripts/perf/compare-runs.test.mjs	adopted	taken whole from upstream/main and 
 A	scripts/perf/page-signals.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/perf/paired-stats.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/perf/paired-stats.test.mjs	adopted	taken whole from upstream/main and verified identical	
-M	scripts/perf/process-cpu.mjs	adopted	taken whole from upstream/main and verified identical	
+M	scripts/perf/process-cpu.mjs	adapted	upstream content applied and adapted to the OMP agent runtime	
 M	scripts/perf/scenario.mjs	adopted	taken whole from upstream/main and verified identical	
-A	scripts/perf/soak-analyze.mjs	adopted	taken whole from upstream/main and verified identical	
+A	scripts/perf/soak-analyze.mjs	adapted-partial	1 line(s) still name the removed OpenCode runtime: const connections = parseExternal(externalText).filter((entry) => inWindow(entry.t) && (tr	
 A	scripts/perf/soak-capture.sh	adopted	taken whole from upstream/main and verified identical	
 A	scripts/perf/soak-cdp.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/perf/soak-system.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/pr-evidence.mjs	adopted	taken whole from upstream/main and verified identical	
-M	scripts/profile-compare.mjs	adopted	taken whole from upstream/main and verified identical	
+M	scripts/profile-compare.mjs	adapted-partial	5 line(s) still name the removed OpenCode runtime: --opencode-binary <path> OpenCode CLI for the servers (see profile:serve)	
 M	scripts/profile-idle.mjs	adopted	taken whole from upstream/main and verified identical	
 A	scripts/profile-ios.mjs	adopted	taken whole from upstream/main and verified identical	
-M	scripts/profile-session.mjs	adopted	taken whole from upstream/main and verified identical	
+M	scripts/profile-session.mjs	adapted-partial	5 line(s) still name the removed OpenCode runtime: const count = await evaluateValue(client, `globalThis.__opencodeDebug?.getCachedMessageCou	
 A	scripts/profile-soak.mjs	adopted	taken whole from upstream/main and verified identical	
 M	scripts/profile-switch.mjs	adopted	taken whole from upstream/main and verified identical	
 D	vite-theme-plugin.ts	kept-fork-change	upstream deleted it; the fork still has and changed it, kept after review	

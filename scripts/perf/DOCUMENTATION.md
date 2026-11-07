@@ -62,7 +62,7 @@ bun run profile:serve        # isolated server on :4799 with the fixture provide
 type-check and adds nothing to the bundle. `profile:serve` keeps its state,
 project directory and seed under `tmp/perf-serve` (`--root`), refuses a busy
 port, checks that it serves the build's main chunk, and stops the server, its
-OpenCode and the fixture provider on Ctrl-C. Pass `--dir tmp/perf-serve/project`
+agent worker and the fixture provider on Ctrl-C. Pass `--dir tmp/perf-serve/project`
 to the session commands. Every command except `profile:animation` and
 `profile:startup` without `--url` needs a running server.
 
@@ -77,10 +77,10 @@ maintainer's own app and dev shell, on the same machine.
   the desktop app flips themes. Copy `settings.json` in, minus
   `desktopUiPassword`, when the run needs the saved projects or hosts. A shell
   inside the desktop app inherits its `OPENCHAMBER_*` variables (UI password,
-  dist dir, agent-tool URL and token) and `OPENCODE_PASSWORD`: start copies
-  with `env -i HOME USER PATH SHELL TMPDIR` or unset them first, and use
-  `OPENCODE_BINARY=/Applications/OpenChamber.app/Contents/Resources/opencode-cli/opencode`
-  when `~/.opencode/bin/opencode` lags the version the repo needs.
+  dist dir, agent-tool URL and token) and the agent credentials it exports: start copies
+  with `env -i HOME USER PATH SHELL TMPDIR` or unset them first, and point
+  `PI_CONFIG_DIR` at a scratch config directory so the run never reads the
+  maintainer's own agent settings.
 - **Dev server:** from the repo root, after the env is clean,
   `OPENCHAMBER_DATA_DIR=<scratch>/oc-data OPENCHAMBER_HMR_UI_PORT=5391 OPENCHAMBER_HMR_API_PORT=3991 bun run dev`
   in the background; the UI is at `http://127.0.0.1:5391/`. It runs React
@@ -108,8 +108,8 @@ maintainer's own app and dev shell, on the same machine.
 - **Stop exactly what you started.** Record each PID at launch and stop that
   process tree; a pattern kill (`pkill -f vite`, `pkill -f "cli.js serve"`)
   also hits the maintainer's dev shell, which runs the same scripts. Before a
-  heavy run, check for orphaned headless Chromes and `opencode serve`
-  processes from earlier probes and report them.
+  heavy run, check for orphaned headless Chromes and stray `omp` processes
+  from earlier probes and report them.
 
 ## When An Accessibility Client Is On
 
@@ -218,7 +218,7 @@ bun run profile:soak -- --minutes 15 --delay 0 --cdp-port 9339 --output tmp/soak
 What each source gives:
 
 - `ps` every 250 ms: CPU per process of the app's tree by role (main with the
-  server, renderer, GPU, network, OpenCode, git, other children), and every
+  server, renderer, GPU, network, agent worker, git, other children), and every
   process that appears. The recorder leaves out its own shell's subtree when
   started from an agent inside the app; `--exclude-pid` leaves out another.
 - `footprint` every 30 s: physical footprint per long-lived process with its
@@ -236,7 +236,7 @@ What each source gives:
   process, which hosts the server, through the Node inspector of an app
   started with `--inspect=<port>`, and reports time per source file.
 - `soak-capture.sh` under sudo: request lines on loopback to the server and to
-  OpenCode (where the server's own calls to OpenCode show), connection
+  the agent worker (where the server's own calls to it show), connection
   openings and DNS lookups with the process behind them, and `eslogger exec`
   for every spawned process when the terminal has Full Disk Access.
 
@@ -249,7 +249,7 @@ arrive together share it, so confirm a suspect with an ablation.
 
 Per-process CPU does not depend on what else runs on the machine, so the user
 may keep working in other apps. Agent sessions inside the app do count: their
-OpenCode work, tool processes and streaming land in the measured processes.
+agent worker work, tool processes and streaming land in the measured processes.
 
 ## profile:session
 
@@ -278,7 +278,7 @@ numbers. Streaming at 300 characters per second, the main thread is 17% busy
 while the renderer process uses 34% of a core, because the compositor thread,
 raster and garbage-collection workers, and the GPU process never appear in a
 main-thread profile. Every run reports CPU per process, of one core, for each
-Chrome process, the OpenChamber server, and the OpenCode instance it manages.
+Chrome process, the OpenChamber server, and the agent worker it supervises.
 
 The sampler and the trace run inside the renderer and inflate that figure
 (15% uninstrumented became 21-24% instrumented on the same scenario). Quote

@@ -1,7 +1,7 @@
 import { cjk } from '@streamdown/cjk';
 import { createMathPlugin } from '@streamdown/math';
 import { defaultRehypePlugins, defaultRemarkPlugins, type MathPlugin, type StreamdownProps } from 'streamdown';
-import type { Processor } from 'unified';
+import type { Plugin, Pluggable, Processor } from 'unified';
 import type { Root, RootContent } from 'mdast';
 import rehypeSanitize from 'rehype-sanitize';
 import { remarkAlerts, MARKDOWN_ALERT_KINDS } from './remarkAlerts';
@@ -10,6 +10,13 @@ import { remarkMathCompatibility } from './remarkMathCompatibility';
 import { rehypeMarkdownPolicy, rehypeRestoreMarkdownLinks } from './rehypeMarkdownPolicy';
 import { isInvisibleText } from '@/lib/invisibleText';
 
+// Micromark merges GFM and CJK registrations, so both must disable single tildes.
+const strictTildes = { singleTilde: false } as const;
+const gfmEntry = defaultRemarkPlugins.gfm as [Plugin, Record<string, unknown>];
+const defaultRemarkPluginList: Pluggable[] = [
+  [gfmEntry[0], strictTildes],
+  ...Object.values(defaultRemarkPlugins).filter((plugin) => plugin !== defaultRemarkPlugins.gfm),
+];
 export const markdownCjk = cjk;
 const officialMath = createMathPlugin({ singleDollarTextMath: false });
 // Streamdown appends math's remark plugin after the configured remark plugins.
@@ -88,9 +95,9 @@ function remarkVisibleBlocks() {
   };
 }
 
-function createOptions(allowRawHtml: boolean): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
+function createOptions(allowRawHtml: boolean, singleTilde: boolean): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
   return {
-    remarkPlugins: [...Object.values(defaultRemarkPlugins), remarkDisclosures, remarkAlerts, remarkVisibleBlocks, remarkSessionLinks],
+    remarkPlugins: [...(singleTilde ? Object.values(defaultRemarkPlugins) : defaultRemarkPluginList), remarkDisclosures, remarkAlerts, remarkVisibleBlocks, remarkSessionLinks],
     rehypePlugins: [
       ...(allowRawHtml ? [defaultRehypePlugins.raw] : []),
       [rehypeMarkdownPolicy],
@@ -100,7 +107,17 @@ function createOptions(allowRawHtml: boolean): Pick<StreamdownProps, 'remarkPlug
     ],
   };
 }
-const policies = [createOptions(false), createOptions(true)];
-export function getMarkdownProcessingOptions(allowRawHtml: boolean): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
-  return policies[allowRawHtml ? 1 : 0];
+
+const policies = [
+  createOptions(false, false),
+  createOptions(false, true),
+  createOptions(true, false),
+  createOptions(true, true),
+];
+
+export function getMarkdownProcessingOptions(
+  allowRawHtml: boolean,
+  singleTildeStrikethrough: boolean = true,
+): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
+  return policies[(allowRawHtml ? 2 : 0) + (singleTildeStrikethrough ? 1 : 0)];
 }

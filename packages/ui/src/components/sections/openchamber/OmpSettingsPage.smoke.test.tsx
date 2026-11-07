@@ -104,7 +104,9 @@ test('runtime smoke: exercises PreviewToggleButton and OmpSettingsPage, writing 
       { id: 'compaction.methodOrder' as const, type: 'array' as const, value: ['remote', 'snapcompact', 'handoff', 'shake', 'soft'], default: [], configured: true, label: 'Compaction Method Order', group: 'Compaction' },
       { id: 'compaction.modelThresholds' as const, type: 'record' as const, value: { 'openai/gpt-4o': 90000, 'deepseek/*': '80%', 'anthropic/*': 'f100000' }, default: {}, configured: true, label: 'Model Thresholds', group: 'Compaction' },
       { id: 'tui.renderSvg' as const, type: 'boolean' as const, value: true, default: false, configured: true, label: 'Render SVG', group: 'Display' },
-      { id: 'ask.timeout' as const, type: 'number' as const, value: 30, default: 0, configured: true, label: 'Ask Timeout', group: 'Input' },
+      { id: 'compaction.thresholdPercent' as const, type: 'number' as const, value: -1, default: -1, configured: true, label: 'Compaction Threshold', group: 'Compaction', tab: 'context', options: [{ value: 'default', label: 'Default' }, { value: '50', label: '50%' }] },
+      { id: 'steeringMode' as const, type: 'enum' as const, value: 'one-at-a-time', default: 'one-at-a-time', configured: true, label: 'Steering Mode', group: 'Input', tab: 'interaction', enumValues: ['all', 'one-at-a-time'] },
+      { id: 'ask.timeout' as const, type: 'number' as const, value: 30, default: 0, configured: true, label: 'Ask Timeout', group: 'Input', tab: 'interaction', options: [{ value: '0', label: 'Disabled' }, { value: '30', label: '30 seconds' }] },
     ],
   };
 
@@ -146,11 +148,18 @@ test('runtime smoke: exercises PreviewToggleButton and OmpSettingsPage, writing 
   const fallbackOnRow = container.querySelector('[data-settings-item="omp.retry.fallbackOn"]');
   const methodOrderRow = container.querySelector('[data-settings-item="omp.compaction.methodOrder"]');
   const thresholdsRow = container.querySelector('[data-settings-item="omp.compaction.modelThresholds"]');
+  const thresholdPercentRow = container.querySelector('[data-settings-item="omp.compaction.thresholdPercent"]');
+  expect(thresholdPercentRow?.textContent).toContain('Default');
+
+  const steeringRow = container.querySelector('[data-settings-item="omp.steeringMode"]');
+  expect(steeringRow).not.toBeNull();
 
   // Exercise Reactive Chinese Localization
   await act(async () => {
     useI18nStore.getState().setLocale('zh-CN');
-    await new Promise((r) => setTimeout(r, 60));
+    while (useI18nStore.getState().loadingLocale !== null) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
   });
   await act(async () => {
     root.render(
@@ -161,6 +170,13 @@ test('runtime smoke: exercises PreviewToggleButton and OmpSettingsPage, writing 
   });
   await settle();
 
+  const zhThresholdPercentRow = container.querySelector('[data-settings-item="omp.compaction.thresholdPercent"]');
+  const zhAskTimeoutRow = container.querySelector('[data-settings-item="omp.ask.timeout"]');
+  const zhSteeringRow = container.querySelector('[data-settings-item="omp.steeringMode"]');
+
+  const zhThresholdPercentText = zhThresholdPercentRow?.textContent;
+  const zhAskTimeoutText = zhAskTimeoutRow?.textContent;
+  const zhSteeringText = zhSteeringRow?.textContent;
   const zhTabButtons = Array.from(container.querySelectorAll('.h-8.mb-6 button')).map((b) => b.textContent?.trim());
   const containsZhSettings = container.textContent?.includes('启用的模型') && container.textContent?.includes('模型预设');
 
@@ -199,6 +215,11 @@ test('runtime smoke: exercises PreviewToggleButton and OmpSettingsPage, writing 
         patterns: Array.from(thresholdsRow?.querySelectorAll('.font-semibold') ?? []).map((s) => s.textContent),
         values: Array.from(thresholdsRow?.querySelectorAll('input') ?? []).map((i) => i.value),
       },
+    },
+    zhEnumOptions: {
+      thresholdPercentValue: zhThresholdPercentText,
+      askTimeoutValue: zhAskTimeoutText,
+      steeringModeValue: zhSteeringText,
     },
     zhLocalization: {
       zhTabs: zhTabButtons,

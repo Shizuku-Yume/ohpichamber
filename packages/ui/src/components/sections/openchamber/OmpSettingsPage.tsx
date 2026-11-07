@@ -171,7 +171,13 @@ function getGroupSlug(name?: string): string {
   return out.join('').replace(/^_+|_+$/g, '') || 'general';
 }
 
-function getSettingTab(id: string): string {
+function getSettingTab(setting: OmpSetting): string {
+  if (setting.id.startsWith('retry.')) return 'providers';
+  if (setting.tab) {
+    if (setting.tab === 'tools' || setting.tab === 'shell') return 'shellTools';
+    return setting.tab;
+  }
+  const id = setting.id;
   if (
     id === 'modelRoles' ||
     id === 'modelPresets' ||
@@ -183,23 +189,20 @@ function getSettingTab(id: string): string {
   ) {
     return 'model';
   }
-  if (id.startsWith('retry.')) return 'providers';
   if (id.startsWith('compaction.')) return 'context';
   if (id.startsWith('recap.')) return 'interaction';
   if (
-    id.startsWith('tools.') ||
     id === 'out.enabled' ||
     id === 'glob.enabled' ||
     id === 'grep.enabled' ||
     id === 'astGrep.enabled' ||
     id === 'astEdit.enabled' ||
     id === 'checkpoint.enabled' ||
-    id.startsWith('async.')
+    id.startsWith('async.') ||
+    id.startsWith('mcp.')
   ) {
     return 'shellTools';
   }
-  if (id.startsWith('lsp.')) return 'files';
-  if (id.startsWith('tui.')) return 'appearance';
   if (
     id.startsWith('task.') ||
     id.startsWith('plan.') ||
@@ -231,19 +234,19 @@ function getSettingGroup(id: string, defaultGroup?: string): string {
   return 'General';
 }
 
-function getOptionSlug(value: unknown, label?: string): string {
-  const str = String(label || value || '');
+function getOptionSlug(value: unknown): string {
+  const s = String(value ?? '');
   const out: string[] = [];
-  for (const ch of str.toLowerCase()) {
-    if (ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9') {
+  for (const ch of s.toLowerCase()) {
+    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) {
       out.push(ch);
     } else {
-      if (out.length > 0 && out[out.length - 1] !== '_') {
-        out.push('_');
+      if (out.length > 0 && out[out.length - 1] !== '-') {
+        out.push('-');
       }
     }
   }
-  return out.join('').replace(/^_+|_+$/g, '') || 'opt';
+  return out.join('').replace(/^-+|-+$/g, '') || 'opt';
 }
 
 function getModelThresholdKeyError(key: string, t: (k: I18nKey) => string): string | undefined {
@@ -1778,27 +1781,51 @@ const SettingItemRenderer: React.FC<{
   // 8. Number
   if (setting.type === 'number') {
     if (setting.options && setting.options.length > 0) {
-      const selectedValue = value === null || value === undefined ? '__default__' : String(value);
+      let selectedValue = '__default__';
+      if (value === -1 && setting.options.some((o) => o.value === 'default')) {
+        selectedValue = 'default';
+      } else if (value !== null && value !== undefined) {
+        selectedValue = String(value);
+      }
+
       return (
         <SettingsFieldRow key={setting.id} label={label} info={info} settingsItem={`omp.${setting.id}`}>
           <Select
             value={selectedValue}
             onValueChange={(val) => {
-              if (val === '__default__') onImmediate(setting, null);
-              else onImmediate(setting, Number(val));
+              if (val === '__default__') {
+                onImmediate(setting, null);
+              } else if (val === 'default') {
+                onImmediate(setting, -1);
+              } else {
+                const num = Number(val);
+                onImmediate(setting, Number.isFinite(num) ? num : val);
+              }
             }}
             disabled={disabled}
           >
             <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={label}>
-              <SelectValue />
+              <SelectValue>
+                {(val) => {
+                  if (!val || val === '__default__') return null;
+                  const opt = setting.options?.find((o) => String(o.value) === val);
+                  if (!opt) return val;
+                  const optSlug = getOptionSlug(opt.value);
+                  const optKey = `settings.omp.items.${setting.id}.options.${optSlug}` as I18nKey;
+                  const trOpt = t(optKey);
+                  return trOpt !== optKey ? trOpt : (opt.label ?? val);
+                }}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {setting.options.map((opt) => {
-                const optKey = `settings.omp.items.${setting.id}.options.${getOptionSlug(opt.value, opt.label)}` as I18nKey;
+                const optValStr = String(opt.value);
+                const optSlug = getOptionSlug(opt.value);
+                const optKey = `settings.omp.items.${setting.id}.options.${optSlug}` as I18nKey;
                 const trOpt = t(optKey);
-                const optLabel = trOpt !== optKey ? trOpt : (opt.label ?? String(opt.value));
+                const optLabel = trOpt !== optKey ? trOpt : (opt.label ?? optValStr);
                 return (
-                  <SelectItem key={String(opt.value)} value={String(opt.value)} className="text-xs">
+                  <SelectItem key={optValStr} value={optValStr} className="text-xs">
                     {optLabel}
                   </SelectItem>
                 );
@@ -1841,15 +1868,27 @@ const SettingItemRenderer: React.FC<{
           disabled={disabled}
         >
           <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={label}>
-            <SelectValue />
+            <SelectValue>
+              {(val) => {
+                if (!val || val === '__default__') return null;
+                const opt = rawChoices.find((o) => String(o.value) === val);
+                if (!opt) return val;
+                const optSlug = getOptionSlug(opt.value);
+                const optKey = `settings.omp.items.${setting.id}.options.${optSlug}` as I18nKey;
+                const trOpt = t(optKey);
+                return trOpt !== optKey ? trOpt : (opt.label ?? val);
+              }}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {rawChoices.map((opt) => {
-              const optKey = `settings.omp.items.${setting.id}.options.${getOptionSlug(opt.value, opt.label)}` as I18nKey;
+              const optValStr = String(opt.value);
+              const optSlug = getOptionSlug(opt.value);
+              const optKey = `settings.omp.items.${setting.id}.options.${optSlug}` as I18nKey;
               const trOpt = t(optKey);
-              const optLabel = trOpt !== optKey ? trOpt : (opt.label ?? String(opt.value));
+              const optLabel = trOpt !== optKey ? trOpt : (opt.label ?? optValStr);
               return (
-                <SelectItem key={String(opt.value)} value={String(opt.value)} className="text-xs">
+                <SelectItem key={optValStr} value={optValStr} className="text-xs">
                   {optLabel}
                 </SelectItem>
               );
@@ -2093,7 +2132,7 @@ export const OmpSettingsPage: React.FC = () => {
     };
 
     for (const setting of state.settings) {
-      const tabId = getSettingTab(setting.id);
+      const tabId = getSettingTab(setting);
       const groupName = getSettingGroup(setting.id, setting.group);
       if (!byTab[tabId]) byTab[tabId] = {};
       if (!byTab[tabId][groupName]) byTab[tabId][groupName] = [];

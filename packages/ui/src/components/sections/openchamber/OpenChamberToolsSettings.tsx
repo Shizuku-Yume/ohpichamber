@@ -59,13 +59,13 @@ const ToolRow: React.FC<ToolRowProps> = ({ icon, title, summary, info, ariaLabel
 /**
  * Which OpenChamber capabilities agents are given.
  *
- * Each entry is one tool the managed OpenCode child is handed, so the choices
- * belong together and not under the CLI's own configuration — the binary path
- * is about which OpenCode runs, these are about what it can do.
+ * Each entry controls a tool or capability exposed to OMP agent sessions via the
+ * Host Gateway and Bun Agent Service. Choices belong to the workbench settings
+ * rather than raw agent engine flags.
  *
- * A toggle only writes the setting: the server keeps OpenChamber's plugin
- * injection in a watched file, so OpenCode picks the change up on its own and
- * the tool list is live without a restart.
+ * Toggles write authoritative configuration via updateDesktopSettings
+ * (/api/openchamber/settings), which the Host Gateway synchronizes to Agent Service
+ * workers so capability changes take effect live without restarting the runtime.
  *
  * Each tool is a list row with a switch because each one adds or removes a
  * whole capability, and the one-line summary says what without opening the
@@ -85,7 +85,7 @@ export const OpenChamberToolsSettings: React.FC = () => {
   const setBrowserProvider = useUIStore((state) => state.setBrowserProvider);
   const guests = useGuestsStore((state) => state.guests);
   const agentMemoryToolEnabled = useUIStore((state) => state.agentMemoryToolEnabled);
-  // Absent where no OpenChamber server answers settings (VS Code).
+  // Absent where the host agent-memory capability is unavailable.
   const agentMemoryAvailable = useUIStore((state) => state.agentMemoryFeatureAvailable);
   const setAgentMemoryToolEnabled = useUIStore((state) => state.setAgentMemoryToolEnabled);
   const agentKnowledgeToolEnabled = useUIStore((state) => state.agentKnowledgeToolEnabled);
@@ -143,18 +143,21 @@ export const OpenChamberToolsSettings: React.FC = () => {
     void updateDesktopSettings({ agentImageModel: value });
   }, [setAgentImageModel]);
 
-  // Only models that generate images, read when the page opens: a provider
-  // connected meanwhile shows up on the next visit.
+  // Only models that generate images, read when the page opens.
+  // Note: Canonical ModelSchema modalities ('text' | 'image' | 'audio' | 'embedding')
+  // describe INPUT modalities (e.g. multimodal vision input), NOT image generation output.
+  // Dedicated image generation model routing is not yet exposed by the Canonical API
+  // or Agent Service catalog. We do not offer vision-only input LLMs as image generators;
+  // until an explicit generation output capability is published by the catalog,
+  // image models remain empty and explicit.
   const [imageModels, setImageModels] = React.useState<{ status: 'loading' | 'failed' } | { status: 'ready'; models: Array<{ value: string; name: string; providerID: string }> }>({ status: 'loading' });
   React.useEffect(() => {
     let cancelled = false;
     canonicalClient.listModels().then(
-      (models) => {
+      () => {
         if (!cancelled) {
-          const imgList = models
-            .filter((m) => m.modalities?.includes('image'))
-            .map((m) => ({ value: `${m.providerId}/${m.modelId}`, name: m.name || m.modelId, providerID: m.providerId }));
-          setImageModels({ status: 'ready', models: imgList });
+          // No models in the canonical catalog currently have image generation output capability
+          setImageModels({ status: 'ready', models: [] });
         }
       },
       () => { if (!cancelled) setImageModels({ status: 'failed' }); },

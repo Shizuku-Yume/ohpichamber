@@ -5,13 +5,16 @@ import { Window } from 'happy-dom';
 
 import { I18nProvider } from '@/lib/i18n';
 import { useTerminalStore } from '@/stores/useTerminalStore';
-import { useUIStore, normalizeContextPanelDirectoryKey } from '@/stores/useUIStore';
+import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
+import { shownContextModes } from '@/lib/workspace/zones';
 import { HeaderTerminalAction } from './HeaderTerminalAction';
 
-describe('HeaderTerminalAction', () => {
+describe('HeaderTerminalAction behavior with real stores', () => {
   let windowInstance: Window;
   let root: Root;
   let host: HTMLDivElement;
+  const dir = '/workspace/project-alpha';
+  const dirKey = normalizeContextPanelDirectoryKey(dir);
 
   beforeEach(() => {
     windowInstance = new Window({ url: 'http://localhost/' });
@@ -24,87 +27,88 @@ describe('HeaderTerminalAction', () => {
       HTMLElement: windowInstance.HTMLElement,
       Event: windowInstance.Event,
       MouseEvent: windowInstance.MouseEvent,
+      PointerEvent: windowInstance.MouseEvent,
       IS_REACT_ACT_ENVIRONMENT: true,
     });
     host = document.createElement('div');
     document.body.appendChild(host);
     root = createRoot(host);
+
     useTerminalStore.setState({ sessions: new Map() });
+    useUIStore.setState({
+      contextPanelByDirectory: {},
+      contextSurfaceZones: {},
+    });
   });
 
-  afterEach(() => {
-    act(() => {
+  afterEach(async () => {
+    await act(async () => {
       root.unmount();
     });
     host.remove();
     useTerminalStore.setState({ sessions: new Map() });
+    useUIStore.setState({ contextPanelByDirectory: {} });
   });
 
-  test('renders terminal toggle button with terminal-box icon', () => {
-    act(() => {
-      root.render(
-        <I18nProvider>
-          <HeaderTerminalAction directory="/test/repo" />
-        </I18nProvider>
-      );
-    });
-
-    const buttons = host.querySelectorAll('button');
-    expect(buttons.length).toBeGreaterThanOrEqual(1);
-    const toggleBtn = buttons[0];
-    expect(toggleBtn?.getAttribute('aria-label')).toBe('Toggle terminal panel');
-    expect(toggleBtn?.innerHTML).toContain('terminal-box');
-  });
-
-  test('clicking toggle button invokes openContextSurface', () => {
-    const dir = '/test/repo';
-    let openedDir = '';
-    let openedMode = '';
-    const originalOpen = useUIStore.getState().openContextSurface;
-    useUIStore.setState({
-      openContextSurface: (d, m) => {
-        openedDir = d;
-        openedMode = m;
-      },
-    });
-
-    try {
-      act(() => {
-        root.render(
-          <I18nProvider>
-            <HeaderTerminalAction directory={dir} />
-          </I18nProvider>
-        );
-      });
-
-      const toggleBtn = host.querySelector('button[aria-label="Toggle terminal panel"]');
-      expect(toggleBtn).not.toBeNull();
-      act(() => {
-        toggleBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      });
-
-      expect(openedDir).toBe(normalizeContextPanelDirectoryKey(dir));
-      expect(openedMode).toBe('terminal');
-    } finally {
-      useUIStore.setState({ openContextSurface: originalOpen });
-    }
-  });
-
-  test('lists existing terminal tabs and handles tab actions', () => {
-    const dir = '/test/repo';
-    const tab1 = useTerminalStore.getState().createTab(dir);
-    useTerminalStore.getState().setTabLabel(dir, tab1, 'Terminal 1');
-
-    act(() => {
+  test('toggle button opens then closes terminal surface in real UI store', async () => {
+    await act(async () => {
       root.render(
         <I18nProvider>
           <HeaderTerminalAction directory={dir} />
-        </I18nProvider>
+        </I18nProvider>,
       );
     });
 
-    const state = useTerminalStore.getState().getDirectoryState(dir);
-    expect(state?.tabs.length).toBe(1);
-    expect(state?.tabs[0]?.label).toBe('Terminal 1');
+    const toggleBtn = host.querySelectorAll('button')[0];
+    expect(toggleBtn).toBeDefined();
+
+    // Initially closed
+    let panelState = useUIStore.getState().contextPanelByDirectory[dirKey];
+    let isShown = shownContextModes(panelState, useUIStore.getState().contextSurfaceZones).has('terminal');
+    expect(isShown).toBe(false);
+
+    // Click 1: toggle OPEN
+    await act(async () => {
+      toggleBtn?.click();
+    });
+    panelState = useUIStore.getState().contextPanelByDirectory[dirKey];
+    isShown = shownContextModes(panelState, useUIStore.getState().contextSurfaceZones).has('terminal');
+    expect(panelState?.isOpen).toBe(true);
+    expect(isShown).toBe(true);
+
+    // Click 2: toggle CLOSED
+    await act(async () => {
+      toggleBtn?.click();
+    });
+    panelState = useUIStore.getState().contextPanelByDirectory[dirKey];
+    const isShownAfter = shownContextModes(panelState, useUIStore.getState().contextSurfaceZones).has('terminal');
+    expect(isShownAfter).toBe(false);
+  });
+
+  test('reflects active terminal surface state via button aria-pressed and styling', async () => {
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <HeaderTerminalAction directory={dir} />
+        </I18nProvider>,
+      );
+    });
+
+    const toggleBtn = host.querySelectorAll('button')[0];
+    expect(toggleBtn?.getAttribute('aria-pressed')).toBe('false');
+
+    // Open terminal via store
+    await act(async () => {
+      useUIStore.getState().openContextSurface(dirKey, 'terminal');
+    });
+
+    expect(toggleBtn?.getAttribute('aria-pressed')).toBe('true');
+
+    // Close terminal via store
+    await act(async () => {
+      useUIStore.getState().closeContextZone(dirKey, 'right');
+    });
+
+    expect(toggleBtn?.getAttribute('aria-pressed')).toBe('false');
   });
 });

@@ -12,6 +12,10 @@ import type { CatalogCoordinator, CatalogAdmission } from './catalog.ts';
 import { NativePluginOperationSchema, type NativePluginOperation } from '../catalogs/plugins.ts';
 
 export type PrivateWorkspaceRegistration = z.infer<typeof HostWorkspaceBootstrapSchema>;
+/** Read-only catalog operations that may run concurrently with each other. */
+const isStatelessCatalogRead = (operation: CatalogOperation): boolean => (
+  operation.type === 'catalog.models.read' || operation.type === 'catalog.providers.read'
+);
 const WorkspaceSchema = HostWorkspaceBootstrapSchema.omit({ env: true }).extend({
   workspaceId: EntityIdSchema, authorizationRootId: EntityIdSchema,
   agentDirectoryIds: z.array(EntityIdSchema).min(1),
@@ -36,6 +40,7 @@ export class WorkspaceCatalogs {
   private readonly pluginBindings = new Map<string, z.infer<typeof PluginBindingSchema>>();
   private readonly environments = new Map<string, Record<string, string>>();
   private readonly tails = new Map<string, Promise<void>>();
+  private readonly prewarming = new Map<string, Promise<void>>();
   private stateTail: Promise<void> = Promise.resolve();
   private readonly file: string;
   constructor(private readonly stateDirectory: string, private readonly workers: WorkerRegistry, private readonly pluginCoordinator?: () => CatalogCoordinator) {
@@ -80,6 +85,10 @@ export class WorkspaceCatalogs {
         catch (error) { this.workspaces.delete(workspaceId); if (!owner) this.owners.delete(input.agentDirectoryId); throw error; }
       }
       this.environments.set(workspaceId, input.env ?? {});
+      // Warm the stateless catalog worker off the request path so the first
+      // models/providers read does not pay worker startup. A failure is
+      // reported to the next real read, never to workspace registration.
+      this.prewarmStateless(workspaceId);
       return { workspaceId, projectId: workspace.projectId, agentDirectoryId: workspace.agentDirectoryId, authorizationRootId: workspace.authorizationRootId, catalogRevision: this.revision(workspaceId) };
     });
   }
@@ -131,7 +140,19 @@ export class WorkspaceCatalogs {
     const pluginOperation = NativePluginOperationSchema.safeParse(operation);
     if (pluginOperation.success) return this.pluginOperation(workspaceId, pluginOperation.data);
     const workspace = this.get(workspaceId);
+    // A pure read advances no revision and touches no owner mutation, so it runs
+    // beside other reads instead of behind the mutation queue.
+    if (isStatelessCatalogRead(operation)) return this.operationNow(workspaceId, operation);
     return this.serial(workspace.agentDirectoryId, () => this.operationNow(workspaceId, operation));
+  }
+
+  /** Starts the workspace's stateless worker once, without surfacing its failure. */
+  private prewarmStateless(workspaceId: string): void {
+    if (this.prewarming.has(workspaceId)) return;
+    const prewarm = this.stateless(workspaceId).then(() => undefined, () => undefined).finally(() => {
+      if (this.prewarming.get(workspaceId) === prewarm) this.prewarming.delete(workspaceId);
+    });
+    this.prewarming.set(workspaceId, prewarm);
   }
 
   async readCacheWarming(workspaceId: string): Promise<CacheWarmingState> {

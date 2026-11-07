@@ -666,6 +666,93 @@ describe('useConfigStore provider persistence', () => {
     expect(rewritten.state.directoryScoped[DIRECTORY].currentModelId).toBe('fresh-model');
   });
 
+  test('a synchronous localStorage catalog paints the picker before the live read resolves', async () => {
+    const { writeLocalCatalogSnapshot } = await import('./configCatalogCache');
+    writeLocalCatalogSnapshot(getRuntimeKey(), DIRECTORY, {
+      providers: [{
+        ...providerInfo('cached-fast'),
+        models: [model('cached-fast', 'cached-fast-model')],
+      }],
+    });
+    // The live answer stays pending until this test releases it.
+    canonicalResponsePromises = new Map();
+    const live = deferred<void>();
+    getProvidersForConfigImpl = async (directory) => {
+      await live.promise;
+      return providerResponse(liveProviderIdsByDirectory.get(directory ?? '') ?? 'fresh');
+    };
+    // Activate from a different directory so the target has no in-memory catalog.
+    useConfigStore.setState({ activeDirectoryKey: OTHER_DIRECTORY });
+    const activating = useConfigStore.getState().activateDirectory(DIRECTORY);
+    // Before the live request answers, the cached catalog is already on screen.
+    expect(useConfigStore.getState().providers.map((entry) => entry.providerId)).toEqual(['cached-fast']);
+    expect(useConfigStore.getState().providersLoaded).toBe(true);
+    live.resolve(undefined);
+    await activating;
+    // The authoritative answer replaces the cache.
+    expect(useConfigStore.getState().providers.map((entry) => entry.providerId)).toEqual(['fresh']);
+  });
+
+  test('a persisted selection whose directory differs from the boot directory paints from the synchronous mirror on merge', async () => {
+    const { writeLocalCatalogSnapshot } = await import('./configCatalogCache');
+    // The boot directory key here is DIRECTORY (host filesystem); the user left
+    // in OTHER_DIRECTORY, which the slim persisted blob still names.
+    writeLocalCatalogSnapshot(getRuntimeKey(), OTHER_DIRECTORY, {
+      providers: [{
+        ...providerInfo('cached-merged'),
+        models: [model('cached-merged', 'cached-merged-model')],
+      }],
+    });
+    storage.set(STORAGE_KEY, JSON.stringify({
+      state: {
+        configRuntimeKey: getRuntimeKey(),
+        activeDirectoryKey: OTHER_DIRECTORY,
+        directoryScoped: {
+          [OTHER_DIRECTORY]: {
+            currentProviderId: 'cached-merged',
+            currentModelId: 'cached-merged-model',
+            currentAgentName: undefined,
+            selectedProviderId: 'cached-merged',
+            agentModelSelections: {},
+            defaultProviders: {},
+          },
+        },
+        currentProviderId: 'cached-merged',
+        currentModelId: 'cached-merged-model',
+        selectedProviderId: 'cached-merged',
+        defaultProviders: {},
+      },
+      version: 1,
+    }));
+    // Publishes the merged state without awaiting any live read.
+    await useConfigStore.persist.rehydrate();
+    const merged = useConfigStore.getState();
+    expect(merged.activeDirectoryKey).toBe(OTHER_DIRECTORY);
+    expect(merged.providers.map((entry) => entry.providerId)).toEqual(['cached-merged']);
+    expect(merged.providersLoaded).toBe(true);
+    expect(merged.directoryScoped[OTHER_DIRECTORY]?.providers.map((entry) => entry.providerId)).toEqual(['cached-merged']);
+    expect(merged.directoryScoped[OTHER_DIRECTORY]?.providersLoaded).toBe(true);
+    expect(getProvidersCalls).toBe(0);
+    // A live answer still replaces the mirror.
+    liveProviderId = 'fresh-merged';
+    await merged.initializeApp();
+    expect(useConfigStore.getState().providers.map((entry) => entry.providerId)).toEqual(['fresh-merged']);
+  });
+
+  test('a malformed or foreign synchronous snapshot paints nothing', async () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        ...makeStorage(),
+        getItem: (key: string) => (key.startsWith('openchamber-config-catalog:') ? '{"providers": [{"providerId": 7}]}' : (storage.get(key) ?? null)),
+      },
+    });
+    const initializing = useConfigStore.getState().initializeApp();
+    expect(useConfigStore.getState().providers).toEqual([]);
+    await initializing;
+    expect(useConfigStore.getState().providers.map((entry) => entry.providerId)).toEqual(['live']);
+  });
+
   test('an upgraded cache with keyed variants cannot break model selection', async () => {
     const inactiveLegacyDirectory = '/workspace/inactive-legacy';
     const legacyProvider = {

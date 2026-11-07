@@ -200,6 +200,92 @@ export const writeCachedCatalogWhenSettled = (
   }, CATALOG_PERSIST_SETTLE_MS);
 };
 
+/**
+ * Synchronous `localStorage` mirror of the same record. Startup paints the
+ * model picker before any IndexedDB read resolves; the async store stays the
+ * durable owner and the live load still replaces it.
+ */
+const LOCAL_PREFIX = 'openchamber-config-catalog:';
+const LOCAL_MAX_BYTES = 1_000_000;
+const localRecordKey = (runtimeKey: string, directoryKey: string): string =>
+  `${LOCAL_PREFIX}${CATALOG_CACHE_SCHEMA}:${runtimeKey}\n${directoryKey}`;
+
+/** Reads one synchronous snapshot, parsed here; malformed or foreign records are never shown. */
+export const readLocalCatalogSnapshot = (runtimeKey: string, directoryKey: string): CachedCatalog | null => {
+  try {
+    const storage = globalThis.localStorage;
+    if (!storage) return null;
+    const key = localRecordKey(runtimeKey, directoryKey);
+    const raw = storage.getItem(key);
+    if (raw === null) return null;
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { storage.removeItem(key); return null; }
+    const record = storedRecordSchema.safeParse(parsed);
+    if (!record.success || !isRecordFor(record.data, runtimeKey, directoryKey)) {
+      storage.removeItem(key);
+      return null;
+    }
+    return toCachedCatalog(record.data);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Mirrors one live catalog synchronously, keeping the other part of the
+ * record. A full or unavailable storage drops the write; startup continuity
+ * then falls back to the async cache and the live load.
+ */
+export const writeLocalCatalogSnapshot = (runtimeKey: string, directoryKey: string, update: CachedCatalog): void => {
+  try {
+    const storage = globalThis.localStorage;
+    if (!storage) return;
+    const key = localRecordKey(runtimeKey, directoryKey);
+    const previous = readLocalCatalogSnapshot(runtimeKey, directoryKey) ?? {};
+    const record: StoredRecord = {
+      ...previous,
+      ...toStoredCatalog(update),
+      key,
+      schema: CATALOG_CACHE_SCHEMA,
+      runtimeKey,
+      directoryKey,
+      savedAt: Date.now(),
+    };
+    const serialized = JSON.stringify(record);
+    if (serialized.length > LOCAL_MAX_BYTES) {
+      storage.removeItem(key);
+      return;
+    }
+    storage.setItem(key, serialized);
+    pruneLocalCatalogSnapshots(storage, key);
+  } catch {
+    // Quota, private mode or a disabled store; the async cache still owns continuity.
+  }
+};
+
+/** Keeps at most {@link CATALOG_CACHE_MAX_RECORDS} synchronous snapshots, oldest first. */
+const pruneLocalCatalogSnapshots = (storage: Storage, keep: string): void => {
+  try {
+    const keys: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(LOCAL_PREFIX)) keys.push(key);
+    }
+    if (keys.length <= CATALOG_CACHE_MAX_RECORDS) return;
+    const savedAt = (key: string): number => {
+      try {
+        const record = storedRecordSchema.safeParse(JSON.parse(storage.getItem(key) ?? 'null'));
+        return record.success ? record.data.savedAt : 0;
+      } catch { return 0; }
+    };
+    const sorted = keys.filter(key => key !== keep).sort((left, right) => savedAt(left) - savedAt(right));
+    const excess = keys.length - CATALOG_CACHE_MAX_RECORDS;
+    for (const key of sorted.slice(0, Math.max(0, excess))) storage.removeItem(key);
+  } catch {
+    // Pruning is maintenance; a failure leaves the cache correct but larger.
+  }
+};
+
 /** Deletes the least recently saved records beyond the limit, reading keys only. */
 const pruneCachedCatalogs = (database: IDBDatabase): Promise<void> => new Promise((resolve, reject) => {
   const transaction = database.transaction(STORE, 'readwrite');

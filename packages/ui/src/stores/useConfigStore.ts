@@ -28,7 +28,7 @@ import { EMPTY_VOICE_API_KEYS, fetchVoiceApiKeys, migrateLegacyVoiceApiKeys, upd
 import { markStartupTrace, measureStartupTrace } from "@/lib/startupTrace";
 import { normalizePath } from "@/lib/pathNormalization";
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from "@/lib/runtime-switch";
-import { readCachedCatalog, writeCachedCatalogWhenSettled, type CachedCatalog } from "./configCatalogCache";
+import { readCachedCatalog, writeCachedCatalogWhenSettled, readLocalCatalogSnapshot, writeLocalCatalogSnapshot, type CachedCatalog } from "./configCatalogCache";
 
 
 const MODELS_DEV_API_URL = "https://models.dev/api.json";
@@ -744,6 +744,19 @@ const toDirectoryKey = (directory: string | null | undefined): string => {
 
 const fromDirectoryKey = (key: string): string | null => (key === DIRECTORY_KEY_GLOBAL ? null : key);
 
+/**
+ * The synchronous catalog the first render may paint. It is derived from the
+ * same runtime identity and active directory key the store starts with, so a
+ * smoke test that prepopulates storage sees the picker filled on the first
+ * render instead of one loading frame.
+ */
+const readInitialCatalogSnapshot = (directoryKey: string): Pick<ConfigStore, 'providers' | 'providersLoaded'> => {
+    const snapshot = readLocalCatalogSnapshot(getRuntimeKey(), directoryKey);
+    const providers = snapshot?.providers as ProviderWithModelList[] | undefined;
+    if (!providers?.length) return { providers: [], providersLoaded: false };
+    return { providers, providersLoaded: true };
+};
+
 const resolveInitialDirectoryKey = (): string => {
     if (typeof window === 'undefined') {
         return DIRECTORY_KEY_GLOBAL;
@@ -948,26 +961,45 @@ const persistLoadedCatalog = (
     if (directoryKey === DIRECTORY_KEY_GLOBAL) return;
     if (isEmpty && source !== CATALOG_CACHE_RECHECK_SOURCE) return;
     writeCachedCatalogWhenSettled(context.runtimeKey, directoryKey, update, () => !isConfigRuntimeContextCurrent(context));
+    // Mirror the same snapshot synchronously so the next startup paints before
+    // any async storage read. It is not a second authority: the live load
+    // replaces it and the IndexedDB record stays the durable owner.
+    if (!isEmpty) writeLocalCatalogSnapshot(context.runtimeKey, directoryKey, update);
+};
+
+/**
+ * Paints a cached catalog only where the live load has not published one. A
+ * present catalog is authoritative even when empty, so the cache never
+ * replaces it; a failed live load keeps the previous data untouched.
+ */
+const applyCachedCatalog = (
+    context: ConfigRuntimeContext,
+    directoryKey: string,
+    cached: CachedCatalog | null,
+): void => {
+    if (!cached?.providers?.length || !isConfigRuntimeContextCurrent(context)) return;
+    useConfigStore.setState((state) => {
+        const snapshot = state.directoryScoped[directoryKey] ?? createEmptyDirectoryScopedConfig();
+        const isActive = state.activeDirectoryKey === directoryKey;
+        const providersLive = snapshot.providersLoaded === true || snapshot.providers.length > 0 || (isActive && (state.providersLoaded || state.providers.length > 0));
+        if (providersLive) return state;
+        const providers = cached.providers as ProviderWithModelList[];
+        return {
+            directoryScoped: { ...state.directoryScoped, [directoryKey]: { ...snapshot, providers, providersLoaded: true } },
+            ...(isActive ? { providers, providersLoaded: true } : {}),
+        };
+    });
 };
 
 /** Shows cached canonical models while the live workspace request starts. */
 const hydrateConfigCatalogFromCache = async (directoryKey: string): Promise<void> => {
     if (directoryKey === DIRECTORY_KEY_GLOBAL) return;
     const context = captureConfigRuntimeContext();
+    // The synchronous mirror paints this tick; the IndexedDB record re-validates
+    // the same runtime+directory identity and never overrides a live catalog.
+    applyCachedCatalog(context, directoryKey, readLocalCatalogSnapshot(context.runtimeKey, directoryKey));
     const cached = await readCachedCatalog(context.runtimeKey, directoryKey);
-    if (!cached || !isConfigRuntimeContextCurrent(context)) return;
-    useConfigStore.setState((state) => {
-        const snapshot = state.directoryScoped[directoryKey] ?? createEmptyDirectoryScopedConfig();
-        const isActive = state.activeDirectoryKey === directoryKey;
-        const providersLive = snapshot.providersLoaded === true || snapshot.providers.length > 0 || (isActive && (state.providersLoaded || state.providers.length > 0));
-        const providers = !providersLive && cached.providers?.length ? cached.providers : null;
-        if (!providers) return state;
-        const nextSnapshot = { ...snapshot, providers };
-        return {
-            directoryScoped: { ...state.directoryScoped, [directoryKey]: nextSnapshot },
-            ...(isActive ? { providers } : {}),
-        };
-    });
+    applyCachedCatalog(context, directoryKey, cached);
 };
 
 
@@ -1082,7 +1114,7 @@ const variantAfterResolve = (selection: CurrentVariantSelection | undefined, res
  * has catalogs, and those paint instantly. Falls back to whatever top-level
  * data was persisted; handles legacy blobs that only stored directoryScoped.
  */
-const hydrateActiveDirectorySnapshot = <T extends Partial<ConfigStore>>(merged: T): T => {
+const hydrateActiveDirectorySnapshot = <T extends Partial<ConfigStore>>(merged: T, bootState: Partial<ConfigStore>): T => {
     const directoryScoped = merged.directoryScoped;
     const activeKey = merged.activeDirectoryKey;
     if (!directoryScoped || !activeKey) return merged;
@@ -1090,8 +1122,41 @@ const hydrateActiveDirectorySnapshot = <T extends Partial<ConfigStore>>(merged: 
     if (!snapshot) return merged;
 
     const next: Partial<ConfigStore> = { ...merged };
-    if ((!merged.providers || merged.providers.length === 0) && snapshot.providers?.length) {
+    // Top-level providers in the boot state belong to the boot directory key,
+    // which resolves before the directory store hydrates. When the persisted
+    // selection names another directory, those providers describe the wrong
+    // scope and must not paint it.
+    const bootScopeMatches = bootState.activeDirectoryKey === activeKey;
+    if (!bootScopeMatches) next.providers = [];
+    if (!next.providers?.length && snapshot.providers?.length) {
         next.providers = snapshot.providers;
+    }
+    // A persisted selection names the directory the user actually left, which
+    // can differ from the boot-time key. When neither a live catalog nor a
+    // persisted one exists, the synchronous mirror for the *merged* runtime and
+    // active key fills the first published state, so the first render is not a
+    // loading frame. A present catalog — even an empty one — always wins.
+    const liveCatalogPresent = Boolean(next.providers?.length) || snapshot.providersLoaded === true;
+    if (!liveCatalogPresent) {
+        const cached = readLocalCatalogSnapshot(merged.configRuntimeKey || getRuntimeKey(), activeKey);
+        const cachedProviders = cached?.providers as ProviderWithModelList[] | undefined;
+        if (cached && cachedProviders?.length) {
+            const scoped = { ...snapshot, providers: cachedProviders, providersLoaded: true };
+            next.providers = cachedProviders;
+            next.providersLoaded = true;
+            next.directoryScoped = { ...directoryScoped, [activeKey]: scoped };
+            if (!merged.defaultProviders || Object.keys(merged.defaultProviders).length === 0) {
+                const cachedDefaults = cached.defaultProviders;
+                if (cachedDefaults && Object.keys(cachedDefaults).length > 0) {
+                    next.defaultProviders = cachedDefaults;
+                }
+            }
+        } else if (!bootScopeMatches) {
+            // Nothing cached for the persisted scope: stay not-loaded rather
+            // than paint another directory's providers.
+            next.providersLoaded = false;
+            next.directoryScoped = { ...directoryScoped, [activeKey]: { ...snapshot, providers: [], providersLoaded: false } };
+        }
     }
     if (!merged.defaultProviders || Object.keys(merged.defaultProviders).length === 0) {
         if (snapshot.defaultProviders && Object.keys(snapshot.defaultProviders).length > 0) {
@@ -1428,17 +1493,20 @@ const isSameDefaults = (previous: { [key: string]: string }, next: { [key: strin
 /** The last read of which voice keys the server holds, per runtime (see refreshVoiceApiKeys). */
 let voiceApiKeysLoad: { runtimeKey: string; promise: Promise<void> } | null = null;
 
+// The first render must not show a loading picker when the synchronous catalog
+// snapshot for this runtime and directory already exists.
+const initialDirectoryKey = resolveInitialDirectoryKey();
+
 export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
     devtools(
         persist(
             (set, get) => ({
 
-                activeDirectoryKey: resolveInitialDirectoryKey(),
+                activeDirectoryKey: initialDirectoryKey,
                 directoryScoped: {},
                 configRuntimeKey: getRuntimeKey(),
 
-                providers: [],
-                providersLoaded: false,
+                ...readInitialCatalogSnapshot(initialDirectoryKey),
                 workspaceId: "",
                 currentProviderId: "",
                 currentModelId: "",
@@ -1702,6 +1770,12 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         return;
                     }
                     const directoryKey = toDirectoryKey(configDirectory);
+                    // First entry into a directory with nothing in memory paints the
+                    // synchronous mirror in this tick; the live load still owns the
+                    // final catalog and replaces it.
+                    if (!get().directoryScoped[directoryKey]?.providers?.length) {
+                        applyCachedCatalog(runtimeContext, directoryKey, readLocalCatalogSnapshot(runtimeContext.runtimeKey, directoryKey));
+                    }
                     let snapshotHadProviders = false;
                     const previousDirectoryKey = get().activeDirectoryKey;
                     if (previousDirectoryKey !== directoryKey) _providersLoadedAt.delete(previousDirectoryKey);
@@ -3398,7 +3472,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         merged.providersLoaded = currentState.providersLoaded;
                         merged.defaultProviders = currentState.defaultProviders;
                     }
-                    return hydrateActiveDirectorySnapshot(merged);
+                    return hydrateActiveDirectorySnapshot(merged, currentState);
                 },
                 // Selections only. The provider and agent catalogs are not
                 // persisted: large catalog payloads would make every selection

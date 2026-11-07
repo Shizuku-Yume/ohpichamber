@@ -303,3 +303,56 @@ describe("generateCommitMessage diff collection", () => {
     } finally { complete.mockRestore() }
   })
 })
+
+// The reasoning toggle is the whole difference between the two commit
+// completions. These assert the canonical request body, not a mock echo.
+describe('generateCommitMessage reasoning request', () => {
+  const files = ['src/a.ts']
+  let request: Spy<typeof fetch>
+
+  const respond = (captured: { body?: string }[]) => async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/git/diff')) return Response.json({ path: 'src/a.ts', diff: '--- a\n+++ b\n', submodule: null })
+    if (url.includes('/api/git/log')) return Response.json({ all: [{ hash: 'abc', date: '2026-11-07', message: 'chore: prior', refs: '', body: '', author_name: 'T', author_email: 't@e.test', filesChanged: 1, insertions: 1, deletions: 0, parents: [] }], latest: null, total: 1 })
+    if (url.includes('/api/magic-prompts')) return Response.json({ version: 1, overrides: {} })
+    if (url.includes('/api/agent/v1/workspaces/resolve')) return Response.json({ workspaceId: 'workspace-git', projectId: 'project-git', name: 'Git' })
+    if (url.includes('/models')) return Response.json({
+      workspaceId: 'workspace-git', revision: '0', defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false,
+      models: [{
+        provider: 'git-provider', modelId: 'thinker', name: 'Thinker', modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000,
+        reasoningEffortSupported: true, reasoningOptions: [{ reasoningEffort: 'low', label: 'Low', budgetTokens: null }, { reasoningEffort: 'medium', label: 'Medium', budgetTokens: null }],
+        variants: [], pricing: null,
+      }],
+    })
+    if (url.includes('/completions')) {
+      captured.push({ body: String(init?.body) })
+      const body = JSON.parse(String(init?.body))
+      return Response.json({ completionId: body.completionId, selection: body.selection, status: 'completed', output: { kind: 'json', value: { subject: 'feat: reasoned', highlights: [] } }, finishReason: 'complete', usage: null })
+    }
+    return Response.json({})
+  }
+
+  beforeEach(() => {
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://reasoning.test', runtimeKey: `reasoning-${crypto.randomUUID()}` })
+    invalidateSettingsCache()
+    useConfigStore.setState({ currentProviderId: 'git-provider', currentModelId: 'thinker' })
+  })
+  afterEach(() => {
+    request?.mockRestore()
+    // Leave the default endpoint behind: this suite switches to a stand-in
+    // origin, and a later file that shares this process must not inherit it.
+    switchRuntimeEndpoint({ apiBaseUrl: '', clientToken: null, runtimeKey: 'test-default' })
+    invalidateSettingsCache()
+  })
+
+  test('the toggle is what puts a reasoning effort on the canonical completion', async () => {
+    const captured: { body?: string }[] = []
+    request = spyOn(globalThis, 'fetch').mockImplementation(respond(captured) as typeof fetch)
+
+    await generateCommitMessage('/repo', files)
+    expect(JSON.parse(captured[0].body ?? '{}').reasoningEffort).toBeNull()
+
+    await generateCommitMessage('/repo', files, { reasoning: true })
+    expect(JSON.parse(captured[1].body ?? '{}').reasoningEffort).toBe('medium')
+  })
+})

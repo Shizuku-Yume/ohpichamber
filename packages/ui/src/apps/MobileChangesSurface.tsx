@@ -61,6 +61,7 @@ import { SubmoduleDiffSummary } from '@/components/views/SubmoduleDiffSummary';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
 import { useI18n } from '@/lib/i18n';
 import { generateCommitMessage, stageGitFile, stageGitFiles, unstageGitFile, unstageGitFiles } from '@/lib/gitApi';
+import { commitExtrasFailureKey, readCommitExtrasFailure, useCommitSettings } from '@/lib/gitCommitSettings';
 import type { GitRemote } from '@/lib/gitApi';
 import { getLanguageFromExtension, isImageFile } from '@/lib/toolHelpers';
 import {
@@ -157,6 +158,7 @@ interface MobileChangesPaneProps extends MobileChangesSurfaceProps {
 export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirectory, repository, onClose, initialDiff, visible = true, onNavigatedToChat }) => {
   const { t } = useI18n();
   const { git, sourceControl } = useRuntimeAPIs();
+  const { settings: commitSettings } = useCommitSettings();
   // When the root is not itself a repository, changes come from the resolved
   // nested repository instead.
   const { rootIsGitRepo, gitDirectory, nestedRepos } = repository;
@@ -759,7 +761,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   }, []);
 
   const handleGenerateCommitMessage = React.useCallback(async () => {
-    if (!currentDirectory) return;
+    if (!currentDirectory || !commitSettings.generateCommitMessages) return;
     const selectedFilePaths = stagedChangeEntries.map((file) => file.path).sort();
     if (selectedFilePaths.length === 0) {
       toast.error(t('gitView.toast.selectFileToDescribe'));
@@ -767,7 +769,9 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     }
     setIsGeneratingMessage(true);
     try {
-      const { message } = await generateCommitMessage(currentDirectory, selectedFilePaths);
+      const { message } = await generateCommitMessage(currentDirectory, selectedFilePaths, {
+        reasoning: commitSettings.commitMessageReasoning,
+      });
       setCommitMessage(message.subject?.trim() ?? '');
       setGeneratedHighlights(Array.isArray(message.highlights) ? message.highlights : []);
     } catch (error) {
@@ -775,7 +779,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     } finally {
       setIsGeneratingMessage(false);
     }
-  }, [currentDirectory, stagedChangeEntries, t]);
+  }, [currentDirectory, stagedChangeEntries, commitSettings, t]);
 
   const handleCommit = async (options: { pushAfter?: boolean } = {}) => {
     if (!currentDirectory) return;
@@ -793,7 +797,11 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
     let recovery: ReturnType<typeof operationRecovery.start> = null;
     let commitOutcome: 'pending' | 'local' | 'published' = 'pending';
     try {
-      await git.createGitCommit(currentDirectory, commitMessage.trim(), { files: filesToCommit });
+      await git.createGitCommit(currentDirectory, commitMessage.trim(), {
+        files: filesToCommit,
+        changeId: commitSettings.commitMessageChangeId,
+        notes: commitSettings.commitMessageNotes,
+      });
       commitOutcome = 'local';
       toast.success(t('gitView.toast.commitCreated'));
       setCommitMessage('');
@@ -822,6 +830,15 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
       if (error instanceof BoundGitNetworkOperationError && error.code === 'stale-runtime') return;
       if (error instanceof BoundGitNetworkOperationError && publishChooser.errorMessage(error)) {
         toast.info(publishChooser.errorMessage(error));
+        return;
+      }
+      const extrasFailure = readCommitExtrasFailure(error);
+      if (extrasFailure) {
+        // The commit exists; only the requested extras are missing.
+        setCommitMessage('');
+        setGeneratedHighlights([]);
+        toast.warning(t(commitExtrasFailureKey(extrasFailure)));
+        await refreshAfterGitAction();
         return;
       }
       if (options.pushAfter) await refreshAfterGitAction();
@@ -1229,6 +1246,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
               onInsertHighlights={handleInsertHighlights}
               onGenerateMessage={handleGenerateCommitMessage}
               isGeneratingMessage={isGeneratingMessage}
+              generationEnabled={commitSettings.generateCommitMessages}
               onCommit={() => void handleCommit({ pushAfter: false })}
               onCommitAndPush={() => void handleCommit({ pushAfter: true })}
               commitAction={commitAction}
@@ -1263,7 +1281,13 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
           branch: pendingDirtySwitchBranch,
           directory: currentDirectory,
           sourceBranch: status?.current ?? null,
-          createCommit: async (directory, message, options) => { await git.createGitCommit(directory, message, options); },
+          createCommit: async (directory, message, options) => {
+            await git.createGitCommit(directory, message, {
+              ...options,
+              changeId: commitSettings.commitMessageChangeId,
+              notes: commitSettings.commitMessageNotes,
+            });
+          },
           preparePush: async () => {
             const executePush = await publishChooser.prepare('push');
             return async () => { await executePush(); };
@@ -1275,9 +1299,11 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
           t,
         }, message, pushAfter)}
         onGenerateMessage={async () => {
-          if (!currentDirectory) return '';
+          if (!currentDirectory || !commitSettings.generateCommitMessages) return '';
           const paths = (status?.files ?? []).map((file) => file.path).sort();
-          const { message } = await generateCommitMessage(currentDirectory, paths);
+          const { message } = await generateCommitMessage(currentDirectory, paths, {
+            reasoning: commitSettings.commitMessageReasoning,
+          });
           return message.subject?.trim() ?? '';
         }}
         onRevertAndSwitch={async () => {

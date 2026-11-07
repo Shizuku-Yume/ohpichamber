@@ -1332,18 +1332,35 @@ export function registerGitRoutes(app, {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
 
-      const { message, addAll, files, stageFiles } = req.body;
+      const { message, addAll, files, stageFiles, changeId, notes } = req.body;
       if (!message) {
         return res.status(400).json({ error: 'message is required' });
+      }
+      if ((changeId !== undefined && typeof changeId !== 'boolean') || (notes !== undefined && typeof notes !== 'boolean')) {
+        return res.status(400).json({ error: 'changeId and notes must be booleans when present', code: 'INVALID_REQUEST' });
       }
 
       const result = await commit(directory, message, {
         addAll,
         files,
         stageFiles,
+        changeId,
+        notes,
+        notesMessage: message,
       });
       res.json(result);
     } catch (error) {
+      if (error?.code === 'COMMIT_EXTRAS_FAILED') {
+        // The commit exists; report it and each requested extra that did not
+        // apply, so the client can tell the user what actually landed.
+        return res.status(error.status ?? 409).json({
+          error: error.message,
+          code: error.code,
+          commit: error.commit,
+          branch: error.branch,
+          extras: error.extras,
+        });
+      }
       console.error('Failed to commit:', error);
       res.status(500).json({ error: error.message || 'Failed to create commit' });
     }

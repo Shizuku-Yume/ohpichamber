@@ -53,6 +53,9 @@ const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
   'layoutAnimations', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard', 'worktreeArchiveOnDoneEnabled',
   'showOpenCodeUpdateNotifications', 'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled',
   'agentRenderToolEnabled', 'agentWorkflowToolEnabled', 'mobileReturnKeySends', 'savePastedImagesAsFiles',
+  // Commit-message controls. `lib/gitCommitSettings.ts` owns their defaults;
+  // the server only records what the user chose, so an absent key stays absent.
+  'generateCommitMessages', 'commitMessageReasoning', 'commitMessageNotes', 'commitMessageChangeId',
 ]);
 const LIVE_BROWSER_TABS_MIN = 1;
 const LIVE_BROWSER_TABS_MAX = 20;

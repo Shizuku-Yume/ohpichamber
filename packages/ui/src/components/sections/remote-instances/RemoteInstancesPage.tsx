@@ -508,6 +508,14 @@ export const RemoteInstancesPage: React.FC = () => {
   const directEditingHost = directEditingId ? directHosts.find((host) => host.id === directEditingId) ?? null : null;
   const directEditingRelayOnly = directEditingHost ? isRelayOnlyHost(directEditingHost) : false;
   const [remoteClients, setRemoteClients] = React.useState<RemoteClientRecord[]>([]);
+  // The Paired Devices list is for devices someone else paired. The desktop
+  // shell's own loopback record (`desktop-local`) is the operator's own token,
+  // not a remote device, so it is filtered out of the user-facing list. The raw
+  // records still drive pairing and revocation handling below.
+  const pairedDevices = React.useMemo(
+    () => remoteClients.filter((client) => client.clientKind !== 'desktop-local'),
+    [remoteClients],
+  );
   const [pendingPairings, setPendingPairings] = React.useState<PendingPairingRecord[]>([]);
   const [remoteClientsLoading, setRemoteClientsLoading] = React.useState(false);
   const [remoteClientLabel, setRemoteClientLabel] = React.useState('');
@@ -547,7 +555,10 @@ export const RemoteInstancesPage: React.FC = () => {
     }
     return t('settings.remoteInstances.clientAuth.addDevice.transport.lanUnavailableDesktopHint');
   })();
-  const revokedClientCount = React.useMemo(() => remoteClients.filter((client) => Boolean(client.revokedAt)).length, [remoteClients]);
+  const revokedClientCount = React.useMemo(
+    () => pairedDevices.filter((client) => Boolean(client.revokedAt)).length,
+    [pairedDevices],
+  );
   const [sshAddDialogOpen, setSshAddDialogOpen] = React.useState(false);
   const [sshAddMode, setSshAddMode] = React.useState<'saved' | 'manual'>('saved');
   const [sshHostSearch, setSshHostSearch] = React.useState('');
@@ -1595,9 +1606,9 @@ export const RemoteInstancesPage: React.FC = () => {
                     </Button>
                   </div>
                 ) : null}
-                {remoteClientsLoading && remoteClients.length === 0 && pendingPairings.length === 0 ? (
+                {remoteClientsLoading && pairedDevices.length === 0 && pendingPairings.length === 0 ? (
                   <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.state.loading')}</p>
-                ) : remoteClients.length === 0 && pendingPairings.length === 0 ? (
+                ) : pairedDevices.length === 0 && pendingPairings.length === 0 ? (
                   <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.state.empty')}</p>
                 ) : (
                   <>
@@ -1618,19 +1629,18 @@ export const RemoteInstancesPage: React.FC = () => {
                         </Button>
                       </div>
                     ))}
-                    {remoteClients.map((client) => {
-                      const isLocalDesktopClient = client.clientKind === 'desktop-local';
+                    {pairedDevices.map((client) => {
                       // Live presence: the server refreshes lastUsedAt on every
                       // authenticated request (writes throttled to 60s), so a
                       // device with activity in the last 90s is connected NOW.
                       // The list polls every 5s, keeping this fresh.
                       const lastUsedMs = client.lastUsedAt ? Date.parse(client.lastUsedAt) : Number.NaN;
                       const isOnline = !client.revokedAt
-                        && (isLocalDesktopClient || (Number.isFinite(lastUsedMs) && Date.now() - lastUsedMs < 90_000));
+                        && Number.isFinite(lastUsedMs) && Date.now() - lastUsedMs < 90_000;
                       const statusText = client.revokedAt
                         ? t('settings.remoteInstances.clientAuth.state.revoked')
                         : isOnline
-                          ? (client.lastTransport === 'relay' && !isLocalDesktopClient
+                          ? (client.lastTransport === 'relay'
                             ? t('settings.remoteInstances.clientAuth.state.connectedRelay')
                             : t('settings.remoteInstances.clientAuth.state.connectedDirect'))
                           : Number.isFinite(lastUsedMs)
@@ -1655,11 +1665,6 @@ export const RemoteInstancesPage: React.FC = () => {
                               {devicePlatformLabel(client.devicePlatform) ? (
                                 <span className="typography-micro text-muted-foreground oc-tile-inset px-1 rounded shrink-0 leading-none pb-px">
                                   {devicePlatformLabel(client.devicePlatform)}
-                                </span>
-                              ) : null}
-                              {isLocalDesktopClient ? (
-                                <span className="typography-micro text-muted-foreground oc-tile-inset px-1 rounded flex-shrink-0 leading-none pb-px">
-                                  {t('settings.remoteInstances.clientAuth.state.thisDevice')}
                                 </span>
                               ) : null}
                               <span className={cn('typography-micro truncate', isOnline && !client.revokedAt ? 'text-[var(--status-success)]' : 'text-muted-foreground')}>{statusText}</span>

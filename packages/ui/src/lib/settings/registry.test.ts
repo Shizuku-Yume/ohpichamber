@@ -225,6 +225,23 @@ describe('settings registry', () => {
     expect(useUIStore.getState().sessionRetentionAction).toBe('archive');
   });
 
+  test('persists the four commit-message controls, keeping absent distinct from false', () => {
+    const keys = ['generateCommitMessages', 'commitMessageReasoning', 'commitMessageNotes', 'commitMessageChangeId'] as const;
+    for (const key of keys) {
+      expect(SETTINGS_KEYS).toContain(key);
+      expect(SETTINGS_REGISTRY[key].scope).toBe('profile');
+      expect(MIRRORED_KEYS).toContain(key);
+      expect(parseSettingsDocument({ [key]: true })).toEqual({ [key]: true });
+      expect(parseSettingsDocument({ [key]: false })).toEqual({ [key]: false });
+      // A rejected value is dropped as absent, never replaced by a default.
+      expect(parseSettingsDocument({ [key]: 'true' })).toEqual({});
+    }
+    // Absent stays absent: the defaults belong to `lib/gitCommitSettings.ts`,
+    // not to the parser, so generation stays on for an untouched install.
+    expect(parseSettingsDocument({ gitmojiEnabled: true }))
+      .toEqual({ gitmojiEnabled: true });
+  });
+
   test('applies the hidden-sections list together with its explicit marker', () => {
     applySettingsToStores({ workStatusHiddenSections: ['mcp', 'telemetry'] });
     expect(useUIStore.getState().workStatusHiddenSections).toEqual(['mcp']);

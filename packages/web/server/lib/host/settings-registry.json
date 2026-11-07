@@ -445,6 +445,18 @@
     "gitmojiEnabled": {
       "scope": "profile"
     },
+    "generateCommitMessages": {
+      "scope": "profile"
+    },
+    "commitMessageReasoning": {
+      "scope": "profile"
+    },
+    "commitMessageNotes": {
+      "scope": "profile"
+    },
+    "commitMessageChangeId": {
+      "scope": "profile"
+    },
     "defaultFileViewerPreview": {
       "scope": "profile"
     },

@@ -3,9 +3,11 @@ import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import React from 'react';
 import { UsageCard } from './UsageCard';
 import { QuotaCredentials } from './QuotaCredentials';
+import { ClaudeCodeSignIn } from './ClaudeCodeSignIn';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import {
@@ -42,12 +44,14 @@ interface ModelInfo {
 
 export const UsagePage: React.FC = () => {
   const { t } = useI18n();
+  const enterprise = useEnterpriseMode();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const results = useQuotaStore((state) => state.results);
   const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const loadSettings = useQuotaStore((state) => state.loadSettings);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
+  const fetchProviderQuota = useQuotaStore((state) => state.fetchProviderQuota);
   const isInitialized = useConfigStore((state) => state.isInitialized);
   const workspaceId = useConfigStore((state) => state.workspaceId);
   const catalogReady = usageQuotaReady(isInitialized, workspaceId);
@@ -91,7 +95,12 @@ export const UsagePage: React.FC = () => {
   const providerMeta = QUOTA_PROVIDERS.find((provider) => provider.id === selectedProviderId);
   const providerName = providerMeta?.name ?? selectedProviderId ?? t('settings.usage.sidebar.title');
   const refreshError = selectedProviderId ? refreshErrors[selectedProviderId] : undefined;
-  const { usage, error: selectedProviderError, empty: showEmptyState } = resolveUsagePanelState(
+  const {
+    usage,
+    error: selectedProviderError,
+    empty: showEmptyState,
+    unconfigured: providerUnconfigured,
+  } = resolveUsagePanelState(
     selectedResult,
     refreshError,
     (error) => t('header.services.usageRefreshFailedStale', { error }),
@@ -204,8 +213,7 @@ export const UsagePage: React.FC = () => {
         />
       </SettingsSection>
 
-      {/* A provider without a stored credential is a normal empty state, not
-          a refresh failure. Real failures keep their own error banner below. */}
+      {/* No result at all: the page can only say so, and a fix would not apply. */}
       {showEmptyState && (
         <p className="typography-ui-label text-foreground pb-8">{t('settings.usage.page.state.noData')}</p>
       )}
@@ -215,9 +223,36 @@ export const UsagePage: React.FC = () => {
           UI consumer left; shown here it labeled DeepSeek with Claude's
           rate-limit message. */}
       {selectedProviderError && (
-        <div role="alert" className="mb-8 space-y-1">
+        <div className="mb-8 rounded-lg bg-[var(--status-error-background)] px-4 py-3">
           <p className="typography-ui-label font-medium text-[var(--status-error)]">{t('settings.usage.page.state.refreshFailedTitle')}</p>
-          <p className="typography-meta text-muted-foreground">{selectedProviderError}</p>
+          <p className="typography-meta text-[var(--status-error)]/80 mt-1">{selectedProviderError}</p>
+        </div>
+      )}
+
+      {/* A provider that answered without a stored credential is not a refresh
+          failure; the callout names the fix. Providers with an inline
+          credentials form already show it, so they skip the "go to Providers"
+          banner. */}
+      {providerUnconfigured && !credentialProviderId && (
+        <div className="mb-8 rounded-lg bg-[var(--status-warning-background)] px-4 py-3">
+          {/* Claude usage reads Claude's native login, which Providers cannot add. */}
+          {selectedProviderId === 'claude' ? (
+            <>
+              <p className="typography-ui-label font-medium text-[var(--status-warning)]">{t('settings.usage.page.state.claudeSignedOutTitle')}</p>
+              {enterprise ? (
+                <p className="typography-meta text-[var(--status-warning)]/80 mt-1">{t('settings.providers.native.enterprise')}</p>
+              ) : (
+                <ClaudeCodeSignIn onSignedIn={() => void fetchProviderQuota('claude', true)} />
+              )}
+            </>
+          ) : (
+            <>
+              <p className="typography-ui-label font-medium text-[var(--status-warning)]">{t('settings.usage.page.state.providerNotConfiguredTitle')}</p>
+              <p className="typography-meta text-[var(--status-warning)]/80 mt-1">
+                {t('settings.usage.page.state.providerNotConfiguredDescription')}
+              </p>
+            </>
+          )}
         </div>
       )}
 

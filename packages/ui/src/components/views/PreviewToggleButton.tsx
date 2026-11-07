@@ -41,7 +41,7 @@ export const PreviewToggleButton: React.FC<PreviewToggleButtonProps> = ({
       'size-6 p-0 transition-colors hover:bg-[var(--interactive-hover)] focus-visible:bg-[var(--interactive-hover)] active:bg-[var(--interactive-hover)]',
       isPreview
        ? 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)] hover:bg-[var(--interactive-selection)] focus-visible:bg-[var(--interactive-selection)] active:bg-[var(--interactive-selection)]'
-       : 'text-muted-foreground opacity-65 hover:opacity-100'
+       : 'text-muted-foreground opacity-65 hover:opacity-100',
      )}
     >
      <Icon name={isPreview ? 'eye' : 'eye-off'} className="size-4" aria-hidden="true" />

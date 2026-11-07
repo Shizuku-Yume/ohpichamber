@@ -28,7 +28,7 @@ beforeEach(() => {
   switchRuntimeEndpoint({ apiBaseUrl: 'https://title.test', runtimeKey: `title-${crypto.randomUUID()}` });
   invalidateSettingsCache();
   const fetcher = spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({}));
-  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models: [model], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false }));
+  const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async workspaceId => ({ workspaceId, revision: '0', models: [model], defaults: { model: null, thinkingLevel: null }, imageModels: [], planRoleAvailable: false }));
   restorers = [() => fetcher.mockRestore(), () => catalog.mockRestore()];
 });
 afterEach(() => { for (const restore of restorers.reverse()) restore(); invalidateSettingsCache(); });

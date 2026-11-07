@@ -30,7 +30,7 @@ describe('attachment routes', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('rejects a binary non-image attachment with 415 UNSUPPORTED_MEDIA_TYPE', async () => {
+  it('accepts a binary non-image attachment: the worker hands it off as a read target', async () => {
     const binaryData = Buffer.from([0x00, 0x01, 0x02, 0xff]).toString('base64');
     const res = await request(app)
       .post('/api/agent/v1/attachments')
@@ -44,11 +44,11 @@ describe('attachment routes', () => {
         data: binaryData,
       });
 
-    expect(res.status).toBe(415);
-    expect(res.body.code).toBe('UNSUPPORTED_MEDIA_TYPE');
+    expect(res.status).toBe(201);
+    expect(res.body.uri).toBe(`attachment://${res.body.attachmentId}`);
   });
 
-  it('rejects a text file claiming to be plain text but containing null bytes', async () => {
+  it('accepts a text file containing null bytes rather than refusing it', async () => {
     const binaryData = Buffer.from('hello\x00world').toString('base64');
     const res = await request(app)
       .post('/api/agent/v1/attachments')
@@ -62,23 +62,24 @@ describe('attachment routes', () => {
         data: binaryData,
       });
 
-    expect(res.status).toBe(415);
-    expect(res.body.code).toBe('UNSUPPORTED_MEDIA_TYPE');
+    expect(res.status).toBe(201);
+    expect(res.body.size).toBe(11);
   });
 
-  it('rejects an oversized text attachment with 413 PAYLOAD_TOO_LARGE', async () => {
-    // 5MB + 1 byte
-    const oversizedSize = 5 * 1024 * 1024 + 1;
-    const buffer = Buffer.alloc(oversizedSize, 0x61); // all 'a's
-    const res = await request(app)
+  it('still refuses an upload past the configured transport cap', async () => {
+    const small = express();
+    small.use('/api/agent/v1/attachments', createAttachmentRoutes({
+      express,
+      store,
+      resolveWorkspaceScope: async (id) => (id === 'w' ? scope : null),
+      maxBytes: 1024,
+    }));
+    const buffer = Buffer.alloc(1025, 0x61);
+    const res = await request(small)
       .post('/api/agent/v1/attachments')
       .send({
         workspaceId: 'w',
-        metadata: {
-          name: 'huge.txt',
-          mediaType: 'text/plain',
-          size: oversizedSize,
-        },
+        metadata: { name: 'huge.txt', mediaType: 'text/plain', size: buffer.length },
         data: buffer.toString('base64'),
       });
 

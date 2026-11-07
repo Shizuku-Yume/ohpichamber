@@ -1,7 +1,7 @@
-import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { isProbablyBinary } from '@oh-my-pi/pi-utils';
+import { formatBytes, isProbablyBinary } from '@oh-my-pi/pi-utils';
 import { createAgentSession, type ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
 import { EventBus } from '@oh-my-pi/pi-coding-agent/utils/event-bus';
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL, TASK_SUBAGENT_EVENT_CHANNEL, type SubagentLifecyclePayload, type SubagentProgressPayload, type SubagentEventPayload } from '@oh-my-pi/pi-coding-agent/task';
@@ -79,7 +79,41 @@ import planApprovedPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/plan-mo
 import planCompactPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/plan-mode-compact-instructions' with { type: 'text' };
 import { PlanReferenceSchema, PlanReviewSchema, type PlanReviewResponse } from '@openchamber/agent-contract';
 
-const MAX_AUTO_READ_TEXT_BYTES = 5 * 1024 * 1024;
+/** A text attachment under these bounds is inlined into the prompt instead of handed off by path. */
+const MAX_INLINE_ATTACHMENT_BYTES = 256 * 1024;
+/** Replace every character that could escape or break a `local://` name; the slash-free result stays one segment. */
+const SAFE_ATTACHMENT_NAME = /[^A-Za-z0-9._-]/g;
+
+/**
+ * Copy a Host-resolved attachment into the session's own `local://` scratch
+ * root and return its root-relative path.
+ *
+ * OMP serves `local://` at read tier and enforces containment on resolve, so
+ * the model can `read` it without a private Host absolute path ever entering
+ * the prompt or the canonical DTO. The Host bytes are copied, never moved:
+ * the attachment store keeps owning its own file.
+ */
+async function materializeAttachmentForRead(
+  manager: SessionManager,
+  sourcePath: string,
+  attachment: { attachmentId: string; name: string },
+): Promise<string> {
+  const rootCandidate = resolveLocalRoot({
+    getArtifactsDir: () => manager.getArtifactsDir(),
+    getSessionId: () => manager.getSessionId(),
+  });
+  await mkdir(rootCandidate, { recursive: true, mode: 0o700 });
+  const localRoot = await realpath(rootCandidate);
+  const safeName = attachment.name.replace(SAFE_ATTACHMENT_NAME, '_').replace(/^\.+/, '_') || 'attachment';
+  const relativeName = `attachments/${attachment.attachmentId}-${safeName}`;
+  const target = join(localRoot, relativeName);
+  // `local://` is root-relative; a private absolute path is never published.
+  const relativePath = relative(localRoot, target).split(sep).join('/');
+  if (relativePath.startsWith('..') || isAbsolute(relativePath)) throw new ProjectionError(400, 'INVALID_REQUEST', 'Attachment cannot be placed in the session scratch space');
+  await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+  await copyFile(sourcePath, target);
+  return relativePath;
+}
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' | 'steer' | 'follow-up' }>;
 type PreparedPrompt = { text: string; options: PromptOptions; context: Parameters<SessionManager['appendMessage']>[0][] };
 type NativeAdmission = { skillsAvailable: boolean; profile?: Agent | null };
@@ -933,16 +967,35 @@ export class WorkerSession {
       if (!reference) throw new ProjectionError(400, 'INVALID_REQUEST', 'Attachment has no Host-resolved file');
       if (attachment.mediaType.startsWith('image/')) {
         images.push({ type: 'image', data: (await readFile(reference.path)).toString('base64'), mimeType: attachment.mediaType });
-      } else {
-        if (attachment.size > MAX_AUTO_READ_TEXT_BYTES) {
-          throw new ProjectionError(413, 'PAYLOAD_TOO_LARGE', `Attachment "${attachment.name}" exceeds the maximum text size limit of 5 MB`);
-        }
-        if (await isProbablyBinary(reference.path)) {
-          throw new ProjectionError(415, 'UNSUPPORTED_MEDIA_TYPE', `Attachment "${attachment.name}" is a binary file; binary attachments are not supported`);
-        }
-        const content = (await readFile(reference.path)).toString('utf8');
-        contextMessages.push({ role: 'fileMention', files: [{ path: attachment.name, content }], timestamp: Date.now() });
+        continue;
       }
+      // Inlinable text travels as delimited context: OMP renders a
+      // `fileMention` as `<file path="…">…</file>`. A binary or oversized
+      // attachment instead becomes a usable `read` target — never a rejection,
+      // and never a private Host absolute path: the copy lands in the session's
+      // own `local://` scratch root, which OMP serves at read tier and
+      // containment-checks on resolve.
+      const { size } = await stat(reference.path);
+      const binary = await isProbablyBinary(reference.path);
+      if (!binary && size <= MAX_INLINE_ATTACHMENT_BYTES) {
+        // The size gate above already bounds this; a slice would silently hand
+        // the model a truncated file it believes is complete.
+        const content = await readFile(reference.path, 'utf8');
+        contextMessages.push({ role: 'fileMention', files: [{ path: attachment.name, content }], timestamp: Date.now() });
+        continue;
+      }
+      const relativePath = await materializeAttachmentForRead(this.session.sessionManager, reference.path, attachment);
+      const reason = binary ? 'binary file' : 'too large';
+      contextMessages.push({
+        role: 'fileMention',
+        files: [{
+          path: `local://${relativePath}`,
+          content: `(skipped auto-read: ${reason}, ${formatBytes(size)}). Read this file to inspect it.`,
+          byteSize: size,
+          skippedReason: binary ? 'binary' : 'tooLarge',
+        }],
+        timestamp: Date.now(),
+      });
     }
     if (operation.type === 'prompt') {
       for (const message of contextMessages) {

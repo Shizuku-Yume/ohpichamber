@@ -27,7 +27,7 @@ Het is geen eenmalige callback voor het opbouwen van de interface. Bouw uw UI en
 | `theme.tokens` | appkleuren voor achtergronden, tekst, interactiestatussen, primary en success/warning/error/info, plus `font`, `mono` en `radius`; geef deze vóór het opbouwen van de UI aan `applyHostReady` door |
 | `locale` | taalcode van de app |
 | `directory` | huidige projectmap, of `null` |
-| `session` | `{ id, title, busy }` of `null`; zonder titel wordt de sessie-ID gebruikt. `busy` is de livestatus. `model` en `agent`, de OpenCode-agent, zijn aanwezig wanneer de sessie die heeft. |
+| `session` | `{ id, title, busy }` of `null`; zonder titel wordt de sessie-ID gebruikt. `busy` is de livestatus. `model` en `agent`, de Host-agent, zijn aanwezig wanneer de sessie die heeft. |
 | `surface` | `panel` in de balk, `dialog` in het bijlagevenster, `page` schermvullend, `status` in Werkstatus, `file` als editor in Bestanden, `block` in een UI-blok in de chat |
 | `item` | waarvoor de weergave werd geopend, of `null`: het aangeklikte gekoppelde item met dezelfde velden als bij `attach`, inclusief `data`, een bericht met `kind: "message"` of een sessie met `kind: "session"` uit een opgegeven actie. Zie [Acties](/nl/sdk/#acties-opdrachten-en-de-badge). |
 | `connection` | `{ connected, account }` voor uw integratie |
@@ -406,14 +406,14 @@ Wanneer de gebruiker sessiereacties inschakelt, roept OpenChamber `comments.crea
 
 ## Verbruiksproviders
 
-Een service kan het verbruik naast de ingebouwde providers rapporteren: geef `provides: ["quota"]` op en noem in `contributes.quota.providers` de OpenCode-providers waarvan hij de aanmeldgegevens nodig heeft. OpenChamber noemt de provider `ext-<panel.id>`, tekent zijn kaart met de naam en het pictogram van de extensie en bevraagt hem zoals een ingebouwde provider.
+Een service kan het verbruik naast de ingebouwde providers rapporteren: geef `provides: ["quota"]` op en noem in `contributes.quota.providers` de model providers waarvan hij de aanmeldgegevens nodig heeft. OpenChamber noemt de provider `ext-<panel.id>`, tekent zijn kaart met de naam en het pictogram van de extensie en bevraagt hem zoals een ingebouwde provider.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-De goedkeuringsdialoog noemt die providers, en een versie die de lijst wijzigt, vraagt opnieuw. Bij elke vernieuwing stuurt OpenChamber één aanroep, `usage.read`, naar `POST /quota`, met in `input.credentials` de aanmeldgegevens die OpenCode bewaart voor elke genoemde provider waarvoor het die heeft (een API-sleutel of de tokens van een browseraanmelding) en verder niets uit de opslag. Een genoemde provider waarvoor OpenCode geen aanmeldgegevens heeft, wordt als niet ingesteld getoond en de service wordt niet aangeroepen; een lege lijst is toegestaan, voor een provider waarvan de sleutel in de eigen instellingen van de extensie staat.
+De goedkeuringsdialoog noemt die providers, en een versie die de lijst wijzigt, vraagt opnieuw. Bij elke vernieuwing stuurt OpenChamber één aanroep, `usage.read`, naar `POST /quota`, met in `input.credentials` de aanmeldgegevens die Host bewaart voor elke genoemde provider waarvoor het die heeft (een API-sleutel of de tokens van een browseraanmelding) en verder niets uit de opslag. Een genoemde provider waarvoor Host geen aanmeldgegevens heeft, wordt als niet ingesteld getoond en de service wordt niet aangeroepen; een lege lijst is toegestaan, voor een provider waarvan de sleutel in de eigen instellingen van de extensie staat.
 
 Lees de body met `readQuotaProviderRequest` en antwoord `{ ok: true, data }` met het resultaat dat een ingebouwde provider berekent: `ok`, `configured`, `error`, `planLabel` en `usage.windows` per vensternaam, elk met `usedPercent`, `windowSeconds`, `resetAt` (epoch in milliseconden) en een optionele `valueLabel` of `value`, plus `usage.models` voor vensters per model. OpenChamber leidt het resterende deel, de aftelling tot de reset en de opgemaakte tekst af, zodat de kaart overeenkomt met die van een ingebouwde provider.
 

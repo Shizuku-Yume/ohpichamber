@@ -148,16 +148,6 @@ The SDK adds `HostActionMessage`, `GuestActionResultMessage`, `GuestActionItem`,
 
 The runner cancels on runtime/catalog invalidation and marks the operation inactive synchronously, so queued messages cannot mutate host state during React teardown. Timeout, completion, frame-load failure, or host unmount clears the invocation and subscriptions. Unmount cleanup yields one microtask for Strict Mode's effect reattachment. Already accepted remote effects are not rolled back; no automatic retry. Web/desktop use the existing direct or relay frame loader; VS Code and mobile remain unsupported. `examples/hello-kit` demonstrates a background message-length toast.
 
-## OpenCode role
-
-The SDK owns `service.provides: ["opencode"]` and the implicit `opencode` capability in `manifest.ts`. The role needs no extra contribution. `requestedGuestCapabilities` requests both `service` and `opencode`; an existing service grant alone cannot approve the new access. `opencode` cannot be listed in `contributes.capabilities` and needs no scoped persisted schema.
-
-Services use `@opencode/client` directly under the [OpenCode access contract](./GUEST_SERVICES.md#opencode-access). The [host provider module](../web/server/lib/guests/opencode-provider/DOCUMENTATION.md) owns transport, the list of allowed reads, upstream selection and process-lifetime authorization; the SDK adds no transport helper or response envelope.
-
-### Why reading has its own capability
-
-Sessions and messages hold everything said in them, so a service that can read them is a different thing to approve from one that only runs. A distinct approval names that access and prevents an earlier service approval from silently granting it. The grant covers reads only: the host refuses everything else, so `opencode` will never mean more than that, and wider access would be a new capability the user approves.
-
 ## Source-control role
 
 `provides: ["source-control"]` plus `contributes.sourceControl` (`SourceControlContribution`, `manifest.ts`) make an extension a Git host. The SDK owns the manifest parse, the wire (`service-providers.ts`: `SOURCE_CONTROL_PROVIDER_PATH`, `SOURCE_CONTROL_PROVIDER_METHODS`, deadlines and caps, `readSourceControlProviderRequest`, the outbound types, `createSourceControlForge`) and the host's answer schemas (`sourceControlProviderSchemasV1` in `service-provider-schemas.ts`, from `@openchamber/sdk/schemas`). The host adapter that turns the contribution into a provider descriptor, the callback listener and the outbound proxy live in `packages/web/server/lib/source-control` and `lib/guests`. The service-side contract is in `GUEST_SERVICES.md`; `examples/source-control-provider` and its fake forge are the reference, run by `scripts/source-control-example.test.ts`.
@@ -254,27 +244,6 @@ Templates over the catalog, a render tree from a hidden frame, and views or imag
 ### Why a mention reads its row when picked and not at send
 
 A chip's text is what the agent reads, and the chip path already carries it, so reading at the pick reuses it and shows the failure while the user can still act on it. A read at send would need a new reference kind and a failure path through every sender. The text is as old as the pick.
-
-## OpenCode plugin
-
-`contributes.opencodePlugin` names a plugin folder the host hands to OpenCode. The host lists it in the OpenCode config file OpenChamber owns (`packages/web/server/lib/opencode/managed-config-file.js`, the same file that carries `contributes.skills`) while the extension is enabled, fully approved and not refused by enterprise mode, after OpenChamber's own plugins; a managed OpenCode watches that file and loads or drops the plugin within a couple of seconds, so Disable, a withdrawn approval and Remove take it out without a restart. The server tells the UI how that file reaches the OpenCode it works with, once per `GET /api/guests` as `opencodePlugins.delivery`:
-
-- `file`: a managed OpenCode reading our file. The main path; the extension's screen shows nothing about the plugin.
-- `restart`: the server's own environment sets `OPENCODE_CONFIG`, so the file is the user's and OpenChamber merges its plugins into `OPENCODE_CONFIG_CONTENT` instead; the plugin loads at the next OpenCode start. Only the server's shell environment makes this state: an `OPENCODE_CONFIG` set in Settings → Environment is replaced by the managed file.
-- `none`: OpenChamber did not start this OpenCode (`OPENCODE_SKIP_START`, `OPENCODE_PORT` or `OPENCODE_HOST` on this machine), which reads neither.
-- `remote`: an external OpenCode on another machine, which cannot load a folder from this one.
-
-In `restart` and `none` the screen says so in the words settled on OPE-367 and offers **Add to global config** (`POST /api/guests/:id/opencode-plugin/global-config`), which writes the plugin folder as a path entry into the user's global `opencode.json(c)`, the file every OpenCode on the machine reads and watches, so an external OpenCode on this machine loads it within seconds too. From then on the entry is the user's: the screen names the file and sends them to Settings → Plugins to manage it, disabling the extension leaves it, and removing an extension installed from a ZIP or Git deletes the package folder, after which OpenCode lists the entry as a failed plugin and keeps running until the user deletes it there (checked live on OpenCode 2.2.5). Nothing copies the plugin anywhere to keep such an entry alive. In `remote` the screen says the plugin cannot be loaded there and offers nothing. A folder listed by the managed file and by the global config at once (the button pressed under `restart`, then a managed start) is loaded once by OpenCode 2.2.5 (checked live), so the host filters neither list.
-
-Editing a folder install's plugin code while OpenCode runs: OpenCode used the new code on the next tool call without a restart or a config rewrite (OpenCode 2.2.5; the package watcher does not watch the plugin folder, so nothing is announced).
-
-### Why not the user's global config automatically
-
-That file is the user's. A plugin written there would outlive disabling the extension and even uninstalling OpenChamber, and would run in the TUI and every other OpenCode on the machine. The managed file is OpenChamber's, follows the extension's state, and reaches only the OpenCode OpenChamber runs; where it does not reach, the user is told and decides.
-
-### Where it does not apply
-
-VS Code and mobile load no extensions, so no plugin is delivered there and the manifest key is ignored with the rest of the catalog. A session inside an isolated space runs its own OpenCode in the container, with its own config layers; the host's managed file and global config never reach it, so an extension's plugin is absent from every session in a space.
 
 ## Session events
 

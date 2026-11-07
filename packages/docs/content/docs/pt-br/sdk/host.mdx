@@ -27,7 +27,7 @@ Não é um callback de montagem única. Monte a UI e registre assinaturas uma ve
 | `theme.tokens` | as cores do app (superfícies, texto, estados de interação, primária, success/warning/error/info), `font`, `mono` e `radius`. Passe isso para `applyHostReady` antes de montar a UI. |
 | `locale` | a tag de idioma do app |
 | `directory` | o diretório do projeto atual, ou `null` |
-| `session` | `{ id, title, busy }` ou `null`. Sem título, o id da sessão é usado no lugar. `busy` é o status ao vivo. `model` e `agent` (o agente do OpenCode) aparecem quando a sessão os tem. |
+| `session` | `{ id, title, busy }` ou `null`. Sem título, o id da sessão é usado no lugar. `busy` é o status ao vivo. `model` e `agent` (o agente do Host) aparecem quando a sessão os tem. |
 | `surface` | `panel` na barra lateral, `dialog` na janela de anexar, `page` em tela cheia, `status` no painel Work Status, `file` como editor de arquivos no Files, `block` em um bloco de UI no chat |
 | `item` | para que esta superfície foi aberta, ou `null`: o item anexado em que o usuário clicou (os mesmos campos que você passou para `attach`, incluindo `data`), uma mensagem (`kind: "message"`) ou uma sessão (`kind: "session"`) vinda de uma das suas ações declaradas. Veja [Ações](/sdk/#ações-comandos-e-o-selo). |
 | `connection` | `{ connected, account }` da sua integração |
@@ -382,14 +382,14 @@ Quando o usuário liga os comentários de sessão, o OpenChamber chama `comments
 
 ## Provedores de uso
 
-Um serviço pode informar o uso ao lado dos provedores integrados: declare `provides: ["quota"]` e liste em `contributes.quota.providers` os provedores do OpenCode cujas credenciais ele precisa. O OpenChamber chama o provedor de `ext-<panel.id>`, desenha o cartão dele com o nome e o ícone da extensão e o consulta como consulta um provedor integrado.
+Um serviço pode informar o uso ao lado dos provedores integrados: declare `provides: ["quota"]` e liste em `contributes.quota.providers` os provedores do Host cujas credenciais ele precisa. O OpenChamber chama o provedor de `ext-<panel.id>`, desenha o cartão dele com o nome e o ícone da extensão e o consulta como consulta um provedor integrado.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-O diálogo de aprovação lista esses provedores, e uma versão que muda a lista pergunta de novo. A cada atualização o OpenChamber envia uma chamada, `usage.read`, para `POST /quota`, com `input.credentials` trazendo a credencial que o OpenCode guarda para cada provedor listado para o qual ele tem uma (uma chave de API, ou os tokens de um login no navegador) e nada mais do armazenamento. Um provedor listado para o qual o OpenCode não guarda credencial aparece como não configurado e o serviço não é chamado; uma lista vazia é permitida, para um provedor cuja chave fica nas configurações da própria extensão.
+O diálogo de aprovação lista esses provedores, e uma versão que muda a lista pergunta de novo. A cada atualização o OpenChamber envia uma chamada, `usage.read`, para `POST /quota`, com `input.credentials` trazendo a credencial que o Host guarda para cada provedor listado para o qual ele tem uma (uma chave de API, ou os tokens de um login no navegador) e nada mais do armazenamento. Um provedor listado para o qual o Host não guarda credencial aparece como não configurado e o serviço não é chamado; uma lista vazia é permitida, para um provedor cuja chave fica nas configurações da própria extensão.
 
 Leia o corpo com `readQuotaProviderRequest` e responda `{ ok: true, data }` com o resultado que um provedor integrado calcula: `ok`, `configured`, `error`, `planLabel` e `usage.windows` por nome de janela, cada uma com `usedPercent`, `windowSeconds`, `resetAt` (época em milissegundos) e um `valueLabel` ou `value` opcional, mais `usage.models` para as janelas por modelo. O OpenChamber deriva a parte restante, a contagem até o reinício e os textos formatados, então o cartão bate com o de um provedor integrado.
 

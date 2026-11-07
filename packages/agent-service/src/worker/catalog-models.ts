@@ -293,10 +293,14 @@ export class NativeModels {
   // oauth credentials, or native keyless local providers. The full bundled
   // registry stays the source for ProviderCatalog, so Settings still offers
   // every connectable provider.
-  const all = this.context.modelRegistry.getAvailable('all');
-  const allowed = new Set(filterAvailableModelsByEnabledPatterns(all, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
+  // Chat models keep the exact candidate pool a native session resolves roles
+  // from (`getAvailable()`), so the composer never offers a model the session
+  // cannot start with. Image generators are a separate native kind and are asked
+  // for by kind instead of being filtered out of that pool by token limits.
+  const chatModels = this.context.modelRegistry.getAvailable();
+  const allowed = new Set(filterAvailableModelsByEnabledPatterns(chatModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
   const disabledProviders = new Set(cfgDisabledProviders.get(this.context.settings));
-  const models = all.filter(model => model.contextWindow !== null && model.maxTokens !== null && model.contextWindow > 0 && model.maxTokens > 0)
+  const models = chatModels
    .map(model => {
     const key = modelKey({ providerId: model.provider, modelId: model.id });
     return publicModel(model, this.metadata.models[key], !disabledProviders.has(model.provider) && allowed.has(key) && this.metadata.models[key]?.enabled !== false);
@@ -304,7 +308,7 @@ export class NativeModels {
   // Image generators answer a prompt with pictures and publish no token
   // limits, so they travel beside the chat models instead of through
   // `publicModel`: a `contextWindow` there would be invented.
-  const imageModels = all.filter(model => modelKind(model) === 'image')
+  const imageModels = this.context.modelRegistry.getAvailable('all').filter(model => modelKind(model) === 'image')
    .map(model => {
     const key = modelKey({ providerId: model.provider, modelId: model.id });
     const configured = this.metadata.models[key];

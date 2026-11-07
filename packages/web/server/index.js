@@ -109,7 +109,6 @@ import { createProjectContextRuntime } from './lib/project-context/runtime.js';
 import { createAgentMemoryRuntime } from './lib/agent-memory/runtime.js';
 import { createAgentMemoryActions } from './lib/agent-memory/actions.js';
 import { createMemoryProjectResolver } from './lib/agent-memory/project-resolution.js';
-import { isAgentMemoryFeatureAvailable } from './lib/agent-memory/feature-flag.js';
 import { createSpacesHost } from './lib/spaces/host.js';
 import { createSpaceArchive } from './lib/spaces/space-archive.js';
 import { CHAT_EXPORT_TIMEOUT_MS } from './lib/spaces/space-native-archive.js';
@@ -145,7 +144,7 @@ import { createSelectedCredentialResolver, createSelectedCredentialHandoff, crea
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
 import { createWorkflowsModule } from './lib/workflows/routes.js';
-import { isWorkflowFeatureAvailable } from './lib/workflows/feature-flag.js';
+import { isWorkflowFeatureAvailable } from './lib/workflows/routes.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createSessionLinker } from './lib/openchamber-sessions/session-link.js';
@@ -153,9 +152,11 @@ import { createTurnDurationRecorder } from './lib/openchamber-sessions/turn-dura
 import { createFileOpenRequester } from './lib/openchamber-control/file-open.js';
 import { applyConnectAttemptTimeout } from './lib/network-defaults.js';
 import { applyOutboundProxyFromEnv } from './lib/outbound-proxy.js';
+import { applySystemCertificates } from './lib/system-ca.js';
 
 // Background CLI launches enter here in a fresh process, without CLI defaults.
 applyConnectAttemptTimeout();
+applySystemCertificates();
 applyOutboundProxyFromEnv();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -792,13 +793,8 @@ const agentMemoryRuntime = createAgentMemoryRuntime({
  * that still reads or writes the store.
  */
 const isAgentMemoryEnabled = async () => {
- // The feature gate comes first: unreleased means absent, not merely switched
- // off, so no stored setting can bring it back.
- if (!isAgentMemoryFeatureAvailable()) {
-  return false;
- }
- const settings = await readSettingsFromDiskMigrated().catch(() => null);
- return settings?.agentMemoryToolEnabled === true;
+  const settings = await readSettingsFromDiskMigrated().catch(() => null);
+  return settings?.agentMemoryToolEnabled === true;
 };
 
 

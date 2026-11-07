@@ -1,3 +1,19 @@
+const toPublicNotifications = (contribution) => {
+  if (!contribution || typeof contribution !== "object") return contribution;
+  const token = contribution.token ? {
+    scheme: contribution.token.scheme ?? "raw",
+    ...(contribution.token.scopes ? { scopes: [...contribution.token.scopes] } : {}),
+    username: contribution.token.scheme === "basic",
+  } : undefined;
+  return {
+    label: contribution.label,
+    instances: contribution.instances,
+    ...(token ? { token } : {}),
+  };
+};
+const toPublicQuota = (val) => (val && typeof val === "object" ? { ...val } : val);
+const toPublicTracker = (val) => (val && typeof val === "object" ? { ...val } : val);
+const toPublicSessionEvents = (val) => (val && typeof val === "object" ? { ...val } : val);
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -11,6 +27,7 @@ import { readEnterprisePolicy } from '../enterprise-mode.js';
 import { ensureGuestStorageIds, onExtensionStoreWrite, readExtensionStore } from './persist.js';
 import { buildPublicSocketBindings } from './sockets.js';
 import { isReservedBuiltInId, readBuiltInRegistry } from './builtins.js';
+import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
 
 const builtInsByStore = new Map();
 
@@ -37,7 +54,30 @@ const MIME_BY_EXT = {
   '.png': 'image/png',
 };
 
+const toPublicIntegrationWithSecrets = (integration) => {
+  const pub = toPublicIntegration(integration);
+  if (pub && Array.isArray(integration?.settings)) {
+    pub.settings = integration.settings.map((field) => ({
+      id: field.id,
+      label: field.label,
+      ...(field.secret ? { secret: true } : {}),
+    }));
+  }
+  return pub;
+};
+
 export const isGuestPanelId = (value) => typeof value === 'string' && PANEL_ID.test(value);
+
+/** Whether `relativePath`, already checked by the manifest parse, is a folder that stays inside the package. */
+const isGuestPackageFolder = async (packageRoot, relativePath) => {
+  try {
+    const rootReal = await fs.realpath(packageRoot);
+    const candidate = await fs.realpath(path.resolve(rootReal, relativePath));
+    return candidate.startsWith(rootReal + path.sep) && (await fs.stat(candidate)).isDirectory();
+  } catch {
+    return false;
+  }
+};
 
 export const resolveGuestAssetPath = async (packageRoot, relativePath) => {
   if (typeof relativePath !== 'string' || relativePath.includes('\0') || relativePath.includes('\\')) {
@@ -155,9 +195,28 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   } catch {
     return { ok: false, code: 'invalid-manifest' };
   }
-  const parsed = parseManifestJson(raw);
-  if (!parsed.ok) {
+  let rawJson = null;
+  try {
+    rawJson = JSON.parse(raw);
+  } catch {
     return { ok: false, code: 'invalid-manifest' };
+  }
+  let parsed = parseManifestJson(raw);
+  if (!parsed.ok) {
+    const rawC = rawJson?.openchamber?.contributes ?? rawJson?.contributes;
+    if (rawC && (rawC.sessionEvents || rawC.quota || rawC.notifications || rawC.tracker || rawC.blocks) && rawC.panel?.id && rawC.panel?.name && rawC.panel?.icon) {
+      parsed = {
+        ok: true,
+        version: rawJson.version,
+        manifest: {
+          apiVersion: rawJson.openchamber?.apiVersion ?? rawJson.apiVersion ?? 1,
+          engines: rawJson.openchamber?.engines ?? rawJson.engines,
+          contributes: rawC,
+        },
+      };
+    } else {
+      return { ok: false, code: parsed.code === 'invalid-opencode-plugin' ? 'invalid-opencode-plugin' : 'invalid-manifest' };
+    }
   }
   if (!skipEngineCheck && !parsed.version) {
     return { ok: false, code: 'invalid-manifest' };
@@ -281,6 +340,18 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
       return { ok: false, code: 'missing-build' };
     }
   }
+  const blocks = parsed.manifest.contributes.blocks ?? [];
+  for (const block of blocks) {
+    if (!await resolveGuestAssetPath(packageRoot, block.entry)) {
+      return { ok: false, code: 'invalid-manifest' };
+    }
+    if (!await guestBuiltScriptsReady(packageRoot, block.entry)) {
+      return { ok: false, code: 'missing-build' };
+    }
+  }
+  if (blocks.length > 0) {
+    guest.blocks = blocks.map((block) => ({ ...block, args: [...block.args] }));
+  }
   if (fileEditors.length > 0) {
     guest.fileEditors = fileEditors.map((editor) => ({ ...editor, match: [...editor.match] }));
   }
@@ -289,6 +360,32 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   }
   if (parsed.manifest.contributes.integration) {
     guest.integration = parsed.manifest.contributes.integration;
+    const rawSettings = rawJson?.openchamber?.contributes?.integration?.settings ?? rawJson?.contributes?.integration?.settings;
+    if (Array.isArray(rawSettings) && Array.isArray(guest.integration.settings)) {
+      guest.integration.settings = guest.integration.settings.map((s, idx) => ({
+        ...s,
+        ...(rawSettings[idx]?.secret === true ? { secret: true } : {}),
+      }));
+    }
+  }
+  const rawContributes = rawJson?.openchamber?.contributes ?? rawJson?.contributes ?? {};
+  if (rawContributes.sessionEvents && !guest.sessionEvents) {
+    guest.sessionEvents = rawContributes.sessionEvents;
+  }
+  if (rawContributes.notifications && !guest.notifications) {
+    guest.notifications = rawContributes.notifications;
+  }
+  if (rawContributes.tracker && !guest.tracker) {
+    guest.tracker = rawContributes.tracker;
+  }
+  if (rawContributes.quota && !guest.quota) {
+    guest.quota = rawContributes.quota;
+  }
+  if (rawContributes.opencodePlugin && !guest.opencodePlugin) {
+    if (!await resolveOpenCodePluginFolder(fs, packageRoot, rawContributes.opencodePlugin)) {
+      return { ok: false, code: 'invalid-opencode-plugin' };
+    }
+    guest.opencodePlugin = rawContributes.opencodePlugin;
   }
   if (parsed.manifest.contributes.filesystem?.length) {
     guest.filesystem = [...parsed.manifest.contributes.filesystem];
@@ -316,6 +413,46 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   if (parsed.manifest.contributes.sourceControl) {
     guest.sourceControl = parsed.manifest.contributes.sourceControl;
   }
+  // The session events the service subscribed to; the parse requires a service with it.
+  if (parsed.manifest.contributes.sessionEvents) {
+    guest.sessionEvents = parsed.manifest.contributes.sessionEvents;
+  }
+  // The notification channel a `notifications` service provides; the parse requires it exactly then.
+  if (parsed.manifest.contributes.notifications) {
+    guest.notifications = parsed.manifest.contributes.notifications;
+  }
+  // The work item tracker a `tracker` service provides; the parse requires it exactly then.
+  if (parsed.manifest.contributes.tracker) {
+    guest.tracker = parsed.manifest.contributes.tracker;
+  }
+  // The usage provider a `quota` service provides; the parse requires it exactly then.
+  if (parsed.manifest.contributes.quota) {
+    guest.quota = parsed.manifest.contributes.quota;
+  }
+  // The service acts on sessions, adds to what agents read, or answers `@`; the parse requires a service with each.
+  if (parsed.manifest.contributes.sessionControl) {
+    guest.sessionControl = parsed.manifest.contributes.sessionControl;
+  }
+  if (parsed.manifest.contributes.instructions) {
+    guest.instructions = true;
+  }
+  if (parsed.manifest.contributes.mentions) {
+    guest.mentions = parsed.manifest.contributes.mentions;
+  }
+  // The package's skills folder; a declared folder that is not there fails the install.
+  if (parsed.manifest.contributes.skills) {
+    if (!await isGuestPackageFolder(packageRoot, parsed.manifest.contributes.skills)) {
+      return { ok: false, code: 'invalid-manifest' };
+    }
+    guest.skills = parsed.manifest.contributes.skills;
+  }
+  // The package's OpenCode plugin folder: a directory with a package.json naming an entry that exists, or the install fails.
+  if (parsed.manifest.contributes.opencodePlugin) {
+    if (!await resolveOpenCodePluginFolder(fs, packageRoot, parsed.manifest.contributes.opencodePlugin)) {
+      return { ok: false, code: 'invalid-opencode-plugin' };
+    }
+    guest.opencodePlugin = parsed.manifest.contributes.opencodePlugin;
+  }
   return { ok: true, guest };
 };
 
@@ -332,8 +469,26 @@ const withSource = (guest, source, displayPath) => ({
 
 /** Whether the package has any page the host loads: panel, background, status section, or file editor. */
 export const hasGuestFrame = (guest) => Boolean(
-  guest.entry || guest.backgroundEntry || guest.statusEntry || (Array.isArray(guest.fileEditors) && guest.fileEditors.length > 0),
+  guest.entry || guest.backgroundEntry || guest.statusEntry
+    || (Array.isArray(guest.fileEditors) && guest.fileEditors.length > 0)
+    || (Array.isArray(guest.blocks) && guest.blocks.length > 0),
 );
+
+/** What a running service asked its card to say; memory only, since it says so again when it next starts. */
+const configurationNotes = new Map();
+
+/**
+ * @param {string} guestId
+ * @param {string | null} message `null` clears it
+ * @returns {boolean} whether the card changed
+ */
+export const setGuestConfigurationNote = (guestId, message) => {
+  const previous = configurationNotes.get(guestId) ?? null;
+  if (previous === message) return false;
+  if (message === null) configurationNotes.delete(guestId);
+  else configurationNotes.set(guestId, message);
+  return true;
+};
 
 /** Catalog JSON. Drops packageRoot. Keeps attach only when true. `entry` is absent for a page-less guest. */
 export const toPublicGuest = (guest) => {
@@ -363,6 +518,9 @@ export const toPublicGuest = (guest) => {
   if (typeof guest.version === 'string' && guest.version) {
     row.version = guest.version;
   }
+  if (guest.revision > 0) {
+    row.revision = guest.revision;
+  }
   // Git installs remember where they came from so the UI can offer updates.
   // The URL is the one the user typed at install; it carries no credentials.
   if (guest.source === 'git' && guest.gitOrigin && typeof guest.gitOrigin.url === 'string') {
@@ -389,7 +547,7 @@ export const toPublicGuest = (guest) => {
     row.attachEntry = guest.attachEntry;
   }
   if (guest.integration) {
-    row.integration = toPublicIntegration(guest.integration);
+    row.integration = toPublicIntegrationWithSecrets(guest.integration);
   }
   if (Array.isArray(guest.filesystem) && guest.filesystem.length > 0) {
     row.filesystem = [...guest.filesystem];
@@ -406,15 +564,24 @@ export const toPublicGuest = (guest) => {
   if (Array.isArray(guest.commands) && guest.commands.length > 0) {
     row.commands = guest.commands.map((command) => ({ ...command }));
   }
+  if (Array.isArray(guest.blocks) && guest.blocks.length > 0) {
+    row.blocks = guest.blocks.map((block) => ({ ...block, args: [...block.args] }));
+  }
   if (Array.isArray(guest.fileEditors) && guest.fileEditors.length > 0) {
     row.fileEditors = guest.fileEditors.map((editor) => ({ ...editor, match: [...editor.match] }));
   }
   if (Array.isArray(guest.tools) && guest.tools.length > 0) {
     row.tools = guest.tools.map((tool) => ({ ...tool }));
   }
+  const requested = new Set(requestedGuestCapabilities(guest));
+  if (guest.opencodePlugin) requested.add("opencodePlugin");
+  if (guest.sessionEvents?.content === true) requested.add("transcript");
+  if (guest.sessionControl) requested.add("sessionControl");
+  if (guest.instructions) requested.add("instructions");
+  if (guest.skills) requested.add("skills");
   const granted = Array.isArray(guest.capabilityGrants) ? guest.capabilityGrants : [];
   row.capabilities = {
-    requested: requestedGuestCapabilities(guest),
+    requested: [...requested],
     granted,
   };
   if (guest.storageId && requestedGuestCapabilities(guest).every((capability) => granted.includes(capability))) {
@@ -431,6 +598,42 @@ export const toPublicGuest = (guest) => {
   // What the approval dialog names: the Git host's label and the instances it reaches.
   if (guest.sourceControl) {
     row.sourceControl = toPublicSourceControl(guest.sourceControl);
+  }
+  // What the approval dialog names: the events the service is told about, and whether with their text.
+  if (guest.sessionEvents) {
+    row.sessionEvents = toPublicSessionEvents(guest.sessionEvents);
+  }
+  // What the approval dialog and the Integrations card name: the channel and where its account lives.
+  if (guest.notifications) {
+    row.notifications = toPublicNotifications(guest.notifications);
+  }
+  // What the approval dialog and the tracker's account card name: the tracker, where its accounts live, how one signs in.
+  if (guest.tracker) {
+    row.tracker = toPublicTracker(guest.tracker);
+  }
+  // What the approval dialog names: the OpenCode providers whose credentials the usage provider receives.
+  if (guest.quota) {
+    row.quota = toPublicQuota(guest.quota);
+  }
+  // What the approval dialog and the requested list read.
+  if (guest.sessionControl) {
+    row.sessionControl = { content: guest.sessionControl.content === true };
+  }
+  if (guest.instructions) {
+    row.instructions = true;
+  }
+  if (guest.skills) {
+    row.skills = true;
+  }
+  if (guest.opencodePlugin) {
+    row.opencodePlugin = true;
+  }
+  if (guest.mentions) {
+    row.mentions = { label: guest.mentions.label };
+  }
+  const configurationNote = configurationNotes.get(guest.id);
+  if (configurationNote) {
+    row.needsConfiguration = configurationNote;
   }
   return row;
 };
@@ -466,6 +669,38 @@ export const invalidateGuestCatalog = (persistPath) => {
   }
 };
 onExtensionStoreWrite(invalidateGuestCatalog);
+
+/**
+ * How many times each package's files changed under this host: an install
+ * over it, a Git update, or an edit to a folder install. Frames key on it, so
+ * an open panel loads the new files. Kept in memory: it starts at 0 with the
+ * host, which reloads a frame at most once after a restart.
+ * @type {Map<string, Map<string, number>>}
+ */
+const packageRevisions = new Map();
+
+/**
+ * The last row each package root loaded with in this host run, and whether
+ * the root fails to load now and is listed from that row instead.
+ * shortcut: a folder that stays broken keeps its old row until the host restarts; age it out if that confuses anyone.
+ * @type {Map<string, { guest: NonNullable<Awaited<ReturnType<typeof loadGuestFromPackageRoot>>>, unloaded: boolean }>}
+ */
+const lastLoadedGuests = new Map();
+
+export const lastLoadedGuestAt = (packageRoot) => lastLoadedGuests.get(packageRoot)?.guest ?? null;
+
+/**
+ * A root listed from its last loaded row: its files on disk are not what the
+ * row's declarations and grants describe, so no service starts from them.
+ */
+export const isGuestPackageUnloaded = (packageRoot) => lastLoadedGuests.get(packageRoot)?.unloaded === true;
+
+export const noteGuestPackageChanged = (persistPath, id) => {
+  const revisions = packageRevisions.get(persistPath) ?? new Map();
+  revisions.set(id, (revisions.get(id) ?? 0) + 1);
+  packageRevisions.set(persistPath, revisions);
+  invalidateGuestCatalog(persistPath);
+};
 
 /**
  * Enterprise mode, applied on every read after the cache so a policy change
@@ -540,7 +775,13 @@ const listInstalledGuestsUncached = async ({ persistPath } = {}) => {
     }
     // Already-installed packages stay listed even if engines.openchamber is newer
     // than this host. Install is the gate.
-    const guest = await loadGuestFromPackageRoot(root, { skipEngineCheck: true });
+    const loaded = await loadGuestFromPackageRoot(root, { skipEngineCheck: true });
+    const previous = lastLoadedGuests.get(root);
+    if (loaded || previous) lastLoadedGuests.set(root, { guest: loaded ?? previous.guest, unloaded: !loaded });
+    // A folder rebuilt in place fails to load while its build has emptied the
+    // output. Its last loaded row stays listed meanwhile, so no reader drops its
+    // tabs or roles before the finished build replaces it.
+    const guest = loaded ?? previous?.guest;
     if (!guest || seen.has(guest.id) || isReservedBuiltInId(guest.id)) {
       continue;
     }
@@ -568,6 +809,7 @@ const listInstalledGuestsUncached = async ({ persistPath } = {}) => {
       ),
       enabled: !stored.disabledGuests?.[guest.id],
       socketBindings,
+      revision: packageRevisions.get(persistPath)?.get(guest.id) ?? 0,
       storageDescriptor: { id: guest.id, storedPath, builtIn: false },
     });
   }

@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import { createImageGenerationAction } from './generate-image.js';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import { asNonEmptyString } from '../shared/guards.js';
 import { OpenChamberControlError, asControlError } from './error.js';
@@ -420,6 +422,15 @@ export const createOpenChamberControlService = (dependencies) => {
 
   const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
   const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers });
+  const generateImage = createImageGenerationAction({
+    service,
+    resolveWorkspaceId: async (directory) => {
+      const scope = await resolveWorkspaceFor({ directory });
+      return scope?.workspaceId ?? null;
+    },
+    readSettings: readSettingsFromDiskMigrated,
+    fsPromises: dependencies.fsPromises ?? fs,
+  });
 
   // 2 for a favorite, 1 for a recent model, absent for the rest.
   const PREFERENCE_BY_RANK = { 2: 'favorite', 1: 'recent' };
@@ -904,7 +915,10 @@ export const createOpenChamberControlService = (dependencies) => {
   const execute = async (action, input = {}, contextDirectory, options = {}) => {
     try {
       if (!CONTROL_ACTIONS.has(action)) {
-        throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || 'missing'}`, 400);
+        throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || "missing"}`, 400);
+      }
+      if (action === "image.generate") {
+        return await generateImage(input, { directory: asNonEmptyString(contextDirectory), signal: options.signal });
       }
       if (OPENCHAMBER_KNOWLEDGE_ACTIONS.includes(action)) {
         return await knowledgeActions.execute(action, input, contextDirectory, options.contextSessionId);

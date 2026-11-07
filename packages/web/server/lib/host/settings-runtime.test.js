@@ -632,6 +632,27 @@ describe('settings runtime: preferences.json split', () => {
 });
 
 describe('settings runtime: per-surface profile keys', () => {
+  it('persists chatFontSize per-surface and uiFontWeight in the base profile', async () => {
+    const { runtime, tempRoot, cleanup } = await createMergingRuntime();
+    try {
+      await runtime.persistSettings({ chatFontSize: 100, uiFontWeight: 'regular' });
+      await runtime.persistSettings({ chatFontSize: 120, uiFontWeight: 'strong' }, { surface: 'mobile' });
+
+      const stored = await readJson(path.join(tempRoot, 'preferences.json'));
+      expect(stored.fields.chatFontSize.value).toBe(100);
+      expect(stored.fields.chatFontSize.surfaces.mobile.value).toBe(120);
+      expect(stored.fields.uiFontWeight.value).toBe('strong');
+      expect(stored.fields.uiFontWeight.surfaces).toBeUndefined();
+
+      expect((await runtime.readSettingsFromDisk({ surface: 'mobile' })).chatFontSize).toBe(120);
+      expect((await runtime.readSettingsFromDisk({ surface: 'desktop' })).chatFontSize).toBe(100);
+      expect((await runtime.readSettingsFromDisk({ surface: 'mobile' })).uiFontWeight).toBe('strong');
+      expect((await runtime.readSettingsFromDisk({ surface: 'desktop' })).uiFontWeight).toBe('strong');
+    } finally {
+      await cleanup();
+    }
+  });
+
   const readJson = async (filePath) => JSON.parse(await fsPromises.readFile(filePath, 'utf8'));
   // These sequences persist several times; the default stub replaces the
   // document with the changes, the real merge keeps the current document.

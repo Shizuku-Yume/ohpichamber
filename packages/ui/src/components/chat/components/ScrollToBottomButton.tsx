@@ -39,7 +39,6 @@ const ScrollAction: React.FC<{ onClick: () => void; children?: React.ReactNode }
  * into a 32px chip).
  */
 const WorkingPillBody: React.FC<{ onClick: () => void }> = ({ onClick }) => {
-    const { t } = useI18n();
     const { activeModel, working } = useAssistantStatus();
     const providers = useConfigStore((state) => state.providers);
 

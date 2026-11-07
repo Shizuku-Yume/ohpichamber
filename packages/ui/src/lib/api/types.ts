@@ -423,6 +423,26 @@ export interface GitCommitResult {
   commit: string;
   branch: string;
   summary: GitCommitSummary;
+  /** The `Change-Id` trailer the commit carries when it was requested. */
+  changeId?: string;
+  /** Whether the requested Git note was written on the commit. */
+  notes?: boolean;
+}
+
+/** One requested commit extra that did not apply; the commit itself exists. */
+export interface GitCommitExtraFailure {
+  extra: 'changeId' | 'notes';
+  code: string;
+  message: string;
+}
+
+/** `COMMIT_EXTRAS_FAILED`: the commit exists and `extras` says what did not apply. */
+export interface GitCommitExtrasFailure {
+  error: string;
+  code: 'COMMIT_EXTRAS_FAILED';
+  commit: string;
+  branch: string;
+  extras: { changeId: string | null; notes: boolean; failed: GitCommitExtraFailure[] };
 }
 
 export interface GitPushResult {
@@ -1096,6 +1116,10 @@ export interface CreateGitCommitOptions {
   addAll?: boolean;
   files?: string[];
   stageFiles?: string[];
+  /** Add the deterministic `Change-Id` trailer the review-host hook would have written. */
+  changeId?: boolean;
+  /** Write a Git note on the commit, recording its message. */
+  notes?: boolean;
 }
 
 export interface GitLogOptions {
@@ -1200,7 +1224,7 @@ export interface GitAPI {
   getGitUnpushedBranchCounts(directory: string, branches: string[]): Promise<GitUnpushedBranchCounts>;
   deleteGitBranch(directory: string, payload: GitDeleteBranchPayload): Promise<{ success: boolean }>;
   removeRemote(directory: string, payload: GitRemoveRemotePayload): Promise<{ success: boolean }>;
-  generateCommitMessage(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string }): Promise<{ message: GeneratedCommitMessage }>;
+  generateCommitMessage(directory: string, files: string[], options?: { zenModel?: string; providerId?: string; modelId?: string; reasoning?: boolean }): Promise<{ message: GeneratedCommitMessage }>;
   generatePullRequestDescription(
     directory: string,
     payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string }

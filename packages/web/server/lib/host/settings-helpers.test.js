@@ -735,6 +735,20 @@ describe('settings helpers', () => {
     });
   });
 
+  describe('commit-message control persistence', () => {
+    it('round-trips each control and keeps absent distinct from false', () => {
+      const helpers = createTestHelpersWithRealSanitizers();
+      // Missing generation is the default-on case the UI resolves; the server
+      // must not invent a value for it.
+      expect(helpers.sanitizeSettingsUpdate({ gitmojiEnabled: true })).toEqual({ gitmojiEnabled: true });
+      for (const key of ['generateCommitMessages', 'commitMessageReasoning', 'commitMessageNotes', 'commitMessageChangeId']) {
+        expect(helpers.sanitizeSettingsUpdate({ [key]: true })).toEqual({ [key]: true });
+        expect(helpers.sanitizeSettingsUpdate({ [key]: false })).toEqual({ [key]: false });
+        expect(helpers.sanitizeSettingsUpdate({ [key]: 'true' })).toEqual({});
+      }
+    });
+  });
+
   describe('session retention settings persistence', () => {
     it('round-trips archived-only retention and rejects non-boolean values', () => {
       const helpers = createTestHelpersWithRealSanitizers();
@@ -822,6 +836,7 @@ describe('settings registry gate', () => {
     codeBlockLineWrap: true, tableCellWrap: true, copyMessagesAsPlainText: true, showTurnChangedFiles: true, showExpandedBashTools: true, showExpandedEditTools: true, toolJsonViewMode: 'raw',
     timeFormatPreference: '24h', weekStartPreference: 'monday', messageStreamTransport: 'ws', diffLayoutPreference: 'inline', diffWrapLines: true, diffHideWhitespace: true,
     gitChangesViewMode: 'tree', gitmojiEnabled: true, defaultFileViewerPreview: true, directoryShowHidden: true, filesViewShowGitignored: true,
+    generateCommitMessages: true, commitMessageReasoning: false, commitMessageNotes: false, commitMessageChangeId: false,
     fileEditorKeymap: 'vim', fileEditorVimMappings: 'inoremap jk <Esc>', autoSaveEnabled: true, confirmFileTreeMove: false, autoCreateWorktree: true, sessionTabsEnabled: true,
     allowPromptingSubagentSessions: true, inputSpellcheckEnabled: true, enterToSend: true, enterToSendConfigured: true, persistChatDraft: true,
     largeTextPasteBehavior: 'attach', followUpBehavior: 'steer', queueModeEnabled: true, inputHistoryScope: 'global', inputHistoryLimit: 40,

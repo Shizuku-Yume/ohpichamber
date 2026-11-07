@@ -6,6 +6,7 @@ import { loadDesktopSettings, reportSettingsSaveState, updateDesktopSettings } f
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
+import { useCommitSettings } from '@/lib/gitCommitSettings';
 import { useI18n } from '@/lib/i18n';
 import {
   Select,
@@ -62,6 +63,7 @@ export const GitSettings: React.FC = () => {
   const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
   const setSettingsGitmojiEnabled = useConfigStore((state) => state.setSettingsGitmojiEnabled);
   const showGitignored = useFilesViewShowGitignored();
+  const { settings: commitSettings, setSetting: setCommitSetting } = useCommitSettings();
   const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
   const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
 
@@ -300,6 +302,44 @@ export const GitSettings: React.FC = () => {
           label={t('settings.openchamber.git.enableGitmoji')}
           ariaLabel={t('settings.openchamber.git.enableGitmojiAria')}
         />
+
+        <SettingsControlGroup
+          settingsItem="git.commit-generation"
+          title={t('settings.openchamber.git.commitGeneration.title')}
+        >
+          <SettingsCheckboxRow
+            settingsItem="git.commit-generation.generate"
+            checked={commitSettings.generateCommitMessages}
+            onChange={(checked) => setCommitSetting('generateCommitMessages', checked)}
+            label={t('settings.openchamber.git.commitGeneration.generateMessages.label')}
+            description={t('settings.openchamber.git.commitGeneration.generateMessages.desc')}
+            ariaLabel={t('settings.openchamber.git.commitGeneration.generateMessages.label')}
+          />
+          <SettingsCheckboxRow
+            settingsItem="git.commit-generation.reasoning"
+            checked={commitSettings.commitMessageReasoning}
+            onChange={(checked) => setCommitSetting('commitMessageReasoning', checked)}
+            label={t('settings.openchamber.git.commitGeneration.reasoning.label')}
+            description={t('settings.openchamber.git.commitGeneration.reasoning.desc')}
+            ariaLabel={t('settings.openchamber.git.commitGeneration.reasoning.label')}
+          />
+          <SettingsCheckboxRow
+            settingsItem="git.commit-generation.notes"
+            checked={commitSettings.commitMessageNotes}
+            onChange={(checked) => setCommitSetting('commitMessageNotes', checked)}
+            label={t('settings.openchamber.git.commitGeneration.notes.label')}
+            description={t('settings.openchamber.git.commitGeneration.notes.desc')}
+            ariaLabel={t('settings.openchamber.git.commitGeneration.notes.label')}
+          />
+          <SettingsCheckboxRow
+            settingsItem="git.commit-generation.change-id"
+            checked={commitSettings.commitMessageChangeId}
+            onChange={(checked) => setCommitSetting('commitMessageChangeId', checked)}
+            label={t('settings.openchamber.git.commitGeneration.changeId.label')}
+            description={t('settings.openchamber.git.commitGeneration.changeId.desc')}
+            ariaLabel={t('settings.openchamber.git.commitGeneration.changeId.label')}
+          />
+        </SettingsControlGroup>
 
         <SettingsCheckboxRow
           settingsItem="git.gitignored-files"

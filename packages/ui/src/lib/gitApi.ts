@@ -232,7 +232,7 @@ const collectRecentCommitSubjects = async (directory: string): Promise<string> =
 export async function generateCommitMessage(
   directory: string,
   files: string[],
-  options?: { providerId?: string; modelId?: string }
+  options?: { providerId?: string; modelId?: string; reasoning?: boolean }
 ): Promise<{ message: import('./api/types').GeneratedCommitMessage }> {
   const startedAt = Date.now();
   const runtime = getRuntimeSwitchRevision();
@@ -244,6 +244,7 @@ export async function generateCommitMessage(
     kind: 'commit',
     directory,
     selectedFiles: files.length,
+    reasoning: options?.reasoning === true,
   });
 
   const recentCommits = await collectRecentCommitSubjects(directory);
@@ -265,6 +266,7 @@ export async function generateCommitMessage(
       directory,
       format: { kind: 'json', schema: { type: 'object', properties: { subject: { type: 'string' }, highlights: { type: 'array', items: { type: 'string' } } }, required: ['subject', 'highlights'], additionalProperties: false } },
       role: 'commit',
+      reasoning: options?.reasoning === true,
     };
     if (options?.providerId && options.modelId) request.selection = { providerId: options.providerId, modelId: options.modelId };
     else if (currentProviderId && currentModelId) request.preferred = { providerId: currentProviderId, modelId: currentModelId };

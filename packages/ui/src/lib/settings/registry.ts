@@ -433,6 +433,13 @@ export const SETTINGS_REGISTRY = {
   diffHideWhitespace: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('diffHideWhitespace', (v) => useUIStore.getState().setDiffHideWhitespace(v)) }),
   gitChangesViewMode: field({ scope: 'profile', parse: parseOneOf(['flat', 'tree']), ui: uiStore('gitChangesViewMode', (v) => useUIStore.getState().setGitChangesViewMode(v)) }),
   gitmojiEnabled: field({ scope: 'profile', parse: parseBoolean }),
+  // Commit-message controls. A missing value is not `false`:
+  // `lib/gitCommitSettings.ts` owns the defaults (generation on, the rest off),
+  // so an install that never touched these keeps generating as it always did.
+  generateCommitMessages: field({ scope: 'profile', parse: parseBoolean }),
+  commitMessageReasoning: field({ scope: 'profile', parse: parseBoolean }),
+  commitMessageNotes: field({ scope: 'profile', parse: parseBoolean }),
+  commitMessageChangeId: field({ scope: 'profile', parse: parseBoolean }),
   defaultFileViewerPreview: field({ scope: 'profile', parse: parseBoolean }),
   directoryShowHidden: field({
     scope: 'profile',

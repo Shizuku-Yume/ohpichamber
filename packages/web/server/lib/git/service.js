@@ -10,6 +10,7 @@ import { promisify } from 'util';
 import { createRequire } from 'module';
 import crypto from 'node:crypto';
 import { fingerprintRemoteUrl } from '../source-control/url-redaction.js';
+import { addChangeIdToHead, readCommitChangeId } from '../source-control/change-id.js';
 import { createProjectIdFromPath } from '../projects/project-id.js';
 import { resolveWorktreeDirectory } from './worktree-directory.js';
 import { normalizeGitOutputPath } from './output-path.js';
@@ -4240,6 +4241,55 @@ export async function unstageFiles(directory, paths) {
   });
 }
 
+/**
+ * A Git note on `sha` recording the commit message itself. `-f` makes the write
+ * idempotent for the same commit: a repeated attempt replaces the note instead
+ * of failing on the one that is already there.
+ */
+const writeCommitNote = async (git, sha, message) => {
+  await git.raw(['notes', 'add', '-f', '-m', message, sha]);
+};
+
+/**
+ * Change-Id and Git note appended to a commit the caller explicitly asked for.
+ * Both run inside the caller's index-mutation queue, after the commit exists,
+ * and Change-Id runs first so a note lands on the amended (final) SHA. A
+ * message that already carries the trailer is answered with it: the amend
+ * never runs twice and no second trailer is written.
+ *
+ * Extra failures are reported, never swallowed: the commit exists, so the
+ * caller must be able to say which extras applied. The returned object is
+ * `{ changeId?, notes?, failed? }`, where `failed` lists the requested extras
+ * that did not apply and why.
+ */
+const applyCommitExtras = async (git, directoryPath, commit, options) => {
+  const applied = {};
+  const failed = [];
+  if (options.changeId) {
+    try {
+      const existing = await readCommitChangeId(directoryPath, commit);
+      if (existing) {
+        applied.changeId = existing;
+      } else {
+        const amended = await addChangeIdToHead(directoryPath, commit, { requireClean: false });
+        applied.changeId = amended.changeId;
+        applied.sha = amended.sha;
+      }
+    } catch (error) {
+      failed.push({ extra: 'changeId', code: error?.code ?? 'CHANGE_ID_FAILED', message: error?.message ?? 'Change-Id was not applied' });
+    }
+  }
+  if (options.notes) {
+    try {
+      await writeCommitNote(git, applied.sha ?? commit, options.notesMessage);
+      applied.notes = true;
+    } catch (error) {
+      failed.push({ extra: 'notes', code: 'GIT_NOTES_FAILED', message: error?.message ?? 'The Git note was not written' });
+    }
+  }
+  return { ...applied, failed };
+};
+
 export async function commit(directory, message, options = {}) {
   return withGitIndexMutationQueue(directory, async () => {
     const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
@@ -4357,11 +4407,36 @@ export async function commit(directory, message, options = {}) {
         });
       }
 
+      // The direct path stays byte-for-byte the same: no extra requested means
+      // no amend, no note, no second Git call.
+      const extras = options.changeId === true || options.notes === true
+        ? await applyCommitExtras(git, directoryPath, result.commit, {
+          changeId: options.changeId === true,
+          notes: options.notes === true,
+          notesMessage: typeof options.notesMessage === 'string' && options.notesMessage.trim() ? options.notesMessage.trim() : String(message).trim(),
+        })
+        : { failed: [] };
+      if (extras.failed.length > 0) {
+        // The commit exists; only the requested extras did not apply. The route
+        // turns this into a non-2xx body naming the commit and each failure, so
+        // a partial outcome is never reported as a clean commit.
+        const error = Object.assign(new Error('The commit was created but not every requested extra was applied'), {
+          code: 'COMMIT_EXTRAS_FAILED',
+          status: 409,
+          commit: extras.sha ?? result.commit,
+          branch: result.branch,
+          extras: { changeId: extras.changeId ?? null, notes: extras.notes === true, failed: extras.failed },
+        });
+        throw error;
+      }
+
       return {
         success: true,
-        commit: result.commit,
+        commit: extras.sha ?? result.commit,
         branch: result.branch,
-        summary: result.summary
+        summary: result.summary,
+        ...(extras.changeId ? { changeId: extras.changeId } : {}),
+        ...(extras.notes ? { notes: true } : {}),
       };
     } catch (error) {
       if (temporarilyUnstagedFiles.length > 0) {

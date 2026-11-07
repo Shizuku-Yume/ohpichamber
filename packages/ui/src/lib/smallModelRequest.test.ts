@@ -10,6 +10,11 @@ const model = (provider: string, modelId: string): Model => ({
   provider, modelId, name: modelId, modalities: ['text'], contextWindow: 8000, maxOutputTokens: 2000,
   reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null,
 });
+const reasoningModel = (provider: string, modelId: string, efforts: string[]): Model => ({
+  ...model(provider, modelId),
+  reasoningEffortSupported: true,
+  reasoningOptions: efforts.map((effort) => ({ reasoningEffort: effort, label: effort, budgetTokens: null })),
+});
 let models: Model[];
 let ompSettingsRoles: Record<string, string>;
 let restorers: Array<() => void>;
@@ -33,7 +38,7 @@ afterEach(() => { for (const restore of restorers.reverse()) restore(); invalida
 
 describe('canonical utility generation', () => {
   test('never switches a preferred provider to another subscription', async () => {
-    expect(await resolveSmallModel({ directory: '/repo' })).toEqual({ workspaceId: 'workspace-a', selection: { providerId: 'chosen', modelId: 'large' } });
+    expect(await resolveSmallModel({ directory: '/repo' })).toMatchObject({ workspaceId: 'workspace-a', selection: { providerId: 'chosen', modelId: 'large' } });
     models = [model('other', 'haiku')];
     expect((await resolveSmallModel({ directory: '/repo' })).selection).toBeNull();
   });
@@ -119,6 +124,46 @@ describe('canonical utility generation', () => {
       if (descriptor) Object.defineProperty(globalThis, 'window', descriptor);
       else Reflect.deleteProperty(globalThis, 'window');
     }
+  });
+
+  test('a reasoning-enabled completion asks for the effort the model advertises', async () => {
+    models = [model('chosen', 'large'), reasoningModel('chosen', 'thinker', ['low', 'medium', 'high'])];
+    ompSettingsRoles = { commit: 'chosen/thinker' };
+    let captured: CompletionRequest | undefined;
+    const complete = spyOn(canonicalClient, 'complete').mockImplementation(async (_workspace, input) => {
+      captured = input;
+      return { completionId: input.completionId, selection: input.selection, status: 'completed', output: { kind: 'text', text: 'ok' }, finishReason: 'complete', usage: null };
+    });
+    restorers.push(() => complete.mockRestore());
+
+    await requestSmallModel({ directory: '/repo', prompt: 'hello', role: 'commit', reasoning: true }, { notifyOnError: false });
+    expect(captured?.reasoningEffort).toBe('medium');
+
+    // Selecting the effort never invents a level the model does not offer.
+    models = [model('chosen', 'large'), { ...reasoningModel('chosen', 'thinker', ['low', 'high']) }];
+    await requestSmallModel({ directory: '/repo', prompt: 'hello', role: 'commit', reasoning: true }, { notifyOnError: false });
+    expect(captured?.reasoningEffort).toBe('low');
+  });
+
+  test('the same completion without the toggle stays at a null effort, and a model without reasoning support is never given one', async () => {
+    models = [model('chosen', 'plain'), reasoningModel('chosen', 'thinker', ['medium'])];
+    let captured: CompletionRequest | undefined;
+    const complete = spyOn(canonicalClient, 'complete').mockImplementation(async (_workspace, input) => {
+      captured = input;
+      return { completionId: input.completionId, selection: input.selection, status: 'completed', output: { kind: 'text', text: 'ok' }, finishReason: 'complete', usage: null };
+    });
+    restorers.push(() => complete.mockRestore());
+
+    await requestSmallModel({ directory: '/repo', prompt: 'hello', selection: { providerId: 'chosen', modelId: 'thinker' } }, { notifyOnError: false });
+    expect(captured?.reasoningEffort).toBeNull();
+
+    // Reasoning requested on a model with no advertised support: the request
+    // is left exactly as it was, instead of being refused for a bad effort.
+    models = [model('chosen', 'plain')];
+    await requestSmallModel({
+      directory: '/repo', prompt: 'hello', selection: { providerId: 'chosen', modelId: 'plain' }, reasoning: true,
+    }, { notifyOnError: false });
+    expect(captured?.reasoningEffort).toBeNull();
   });
 
   test('runtime changes during discovery never dispatch completion', async () => {

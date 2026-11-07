@@ -14,6 +14,7 @@ import {
   continueMerge,
   continueRebase,
   createBranch,
+  createGitCommit,
   deleteGitBranch,
   getGitBranches,
   getGitDiff,
@@ -26,6 +27,7 @@ import {
   getGitLog,
   getGitStatus,
   getGitWorktreeBootstrapStatus,
+  GitCommitExtrasError,
   gitRemoteListSchema,
   gitFetch,
   gitNetworkOperationSchema,
@@ -2026,6 +2028,58 @@ describe('batched project reads', () => {
         delivered += sent.directories.length;
       }
       expect(delivered).toBe(250);
+    } finally {
+      restoreMocks();
+    }
+  });
+});
+
+// The commit call is the one place the two persisted extras travel to the
+// server. A disabled toggle must not reach the wire at all, so an install that
+// never turned them on keeps the old request shape.
+describe('createGitCommit extras request', () => {
+  test('sends no extras unless the user turned them on', async () => {
+    installWindowMock();
+    try {
+      const calls = installFetchMock();
+      await createGitCommit('/repo', 'feat: plain', { files: ['a.txt'] });
+      const body = JSON.parse(String(calls[0]?.init?.body));
+      expect(body).toEqual({ message: 'feat: plain', addAll: false, files: ['a.txt'], stageFiles: undefined });
+      expect(body).not.toHaveProperty('changeId');
+      expect(body).not.toHaveProperty('notes');
+    } finally {
+      restoreMocks();
+    }
+  });
+
+  test('forwards the requested extras and returns what the server applied', async () => {
+    installWindowMock();
+    try {
+      globalThis.fetch = (async () => Response.json({
+        success: true, commit: 'b'.repeat(40), branch: 'main',
+        summary: { changes: 1, insertions: 1, deletions: 0 },
+        changeId: `I${'0'.repeat(40)}`, notes: true,
+      })) as typeof fetch;
+      const result = await createGitCommit('/repo', 'feat: both', { files: ['a.txt'], changeId: true, notes: true });
+      expect(result.changeId).toBe(`I${'0'.repeat(40)}`);
+      expect(result.notes).toBe(true);
+    } finally {
+      restoreMocks();
+    }
+  });
+
+  test('a partial extras failure rejects with the commit that exists', async () => {
+    installWindowMock();
+    try {
+      globalThis.fetch = (async () => Response.json({
+        error: 'The commit was created but not every requested extra was applied',
+        code: 'COMMIT_EXTRAS_FAILED', commit: 'c'.repeat(40), branch: 'main',
+        extras: { changeId: null, notes: false, failed: [{ extra: 'changeId', code: 'CHANGE_ID_PRESENT', message: 'no' }] },
+      }, { status: 409 })) as typeof fetch;
+      await expect(createGitCommit('/repo', 'feat: partial', { files: ['a.txt'], changeId: true }))
+        .rejects.toBeInstanceOf(GitCommitExtrasError);
+      await expect(createGitCommit('/repo', 'feat: partial', { files: ['a.txt'], changeId: true }))
+        .rejects.toMatchObject({ result: { code: 'COMMIT_EXTRAS_FAILED', commit: 'c'.repeat(40) } });
     } finally {
       restoreMocks();
     }

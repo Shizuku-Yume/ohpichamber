@@ -123,6 +123,17 @@ export async function readBranchChangeIds(directory, branch, base = null, { git 
 
 const refused = (message, code, status = 409) => Object.assign(new Error(message), { code, status });
 
+/**
+ * The last valid `Change-Id` trailer of one commit, or null. The commit path
+ * reads this for the commit it just wrote, so a message that already carries
+ * the trailer is answered instead of amended a second time.
+ */
+export async function readCommitChangeId(directory, sha, { git = runGit } = {}) {
+  const text = isString(sha) ? sha.trim() : '';
+  if (!SHA_RE.test(text)) throw invalidInput('sha must be a full commit SHA');
+  return changeIdOfMessage(directory, await git(directory, ['log', '-1', '--format=%B', text]), git);
+}
+
 // Left behind while a cherry-pick, revert, rebase or `git am` is stopped.
 const SEQUENCE_STATE = ['CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply'];
 
@@ -152,8 +163,12 @@ const sequenceInProgress = async (directory, git) => {
  * the current user; unlike it, a GPG signature on the old commit is dropped
  * (the new one is signed only when `commit.gpgSign` says so). Answers
  * `{ sha, changeId, branch }`.
+ *
+ * `requireClean: false` is for the commit path that just wrote the commit it
+ * amends: other unstaged files are the normal state there, and the amend reads
+ * only the commit object. Every other refusal still applies.
  */
-export async function addChangeIdToHead(directory, expectedHead, { git = runGit } = {}) {
+export async function addChangeIdToHead(directory, expectedHead, { git = runGit, requireClean = true } = {}) {
   const expected = isString(expectedHead) ? expectedHead.trim().toLowerCase() : '';
   if (!/^[0-9a-f]{40}$/.test(expected)) throw refused('expectedHead must be a full commit SHA', 'INVALID_REQUEST', 400);
   let branchRef;
@@ -165,7 +180,7 @@ export async function addChangeIdToHead(directory, expectedHead, { git = runGit 
   if (!branchRef.startsWith('refs/heads/')) throw refused('HEAD is not on a branch', 'DETACHED_HEAD');
   const head = (await git(directory, ['rev-parse', '--verify', 'HEAD^{commit}'])).trim();
   if (head !== expected) throw refused('HEAD moved; nothing was changed', 'STALE_HEAD');
-  if ((await git(directory, ['status', '--porcelain=v1', '--untracked-files=no'])).trim()) {
+  if (requireClean && (await git(directory, ['status', '--porcelain=v1', '--untracked-files=no'])).trim()) {
     throw refused('Commit or stash your changes first; nothing was changed', 'DIRTY_WORKTREE');
   }
   if (await refExists(directory, 'MERGE_HEAD', git)) throw refused('A merge is in progress; nothing was changed', 'MERGE_IN_PROGRESS');

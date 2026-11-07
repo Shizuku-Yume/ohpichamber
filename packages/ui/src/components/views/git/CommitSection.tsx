@@ -23,6 +23,12 @@ interface CommitSectionProps {
   hasPendingIndexMutation?: boolean;
   gitmojiEnabled: boolean;
   onOpenGitmojiPicker: () => void;
+  /**
+   * Whether the commit panel offers message generation. Manual commits never
+   * depend on it: only the generate action is hidden, the message field stays
+   * editable and every commit button keeps its own validity rules.
+   */
+  generationEnabled?: boolean;
 }
 
 export const CommitSection: React.FC<CommitSectionProps> = ({
@@ -40,6 +46,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
   hasPendingIndexMutation = false,
   gitmojiEnabled,
   onOpenGitmojiPicker,
+  generationEnabled = true,
 }) => {
   const { t } = useI18n();
   const hasStagedFiles = stagedCount > 0;
@@ -93,6 +100,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
         )}
 
         <div className="@container/commit-actions flex items-center gap-2 min-w-0">
+          {generationEnabled ? (
           <Button
             variant="outline"
             size="sm"
@@ -114,6 +122,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
             )}
             <span className="commit-actions__label">{t('gitView.commit.generate')}</span>
           </Button>
+          ) : null}
 
           <div className="flex-1" />
 

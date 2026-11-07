@@ -1,3 +1,4 @@
+import './testDom';
 import React from 'react';
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';

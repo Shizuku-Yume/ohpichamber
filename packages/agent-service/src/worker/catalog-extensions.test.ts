@@ -160,3 +160,46 @@ test('MCP rows publish only sanitized connection facts', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('server refuses toggling shadowed rows and leaves native settings unchanged', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-extensions-shadow-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(join(cwd, '.git'), { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  await mkdir(join(cwd, '.omp', 'skills', 'dup-skill'), { recursive: true });
+  await writeFile(join(cwd, '.omp', 'skills', 'dup-skill', 'SKILL.md'), '---\nname: dup-skill\ndescription: Winner\n---\nWINNER');
+  await mkdir(join(cwd, '.agents', 'skills', 'dup-skill'), { recursive: true });
+  await writeFile(join(cwd, '.agents', 'skills', 'dup-skill', 'SKILL.md'), '---\nname: dup-skill\ndescription: Shadowed\n---\nSHADOWED');
+
+  const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
+  try {
+    const ext = new NativeExtensions({
+      cwd, agentDirectory, worker, settings, extensionRoots: nativeExtensionRoots(settings),
+    });
+    const inventory = await ext.readInventory();
+    const winner = inventory.items.find(item => item.name === 'dup-skill' && !item.shadowed);
+    const shadowed = inventory.items.find(item => item.name === 'dup-skill' && item.shadowed);
+    expect(winner).toBeDefined();
+    expect(winner?.enabled).toBe(true);
+    expect(shadowed).toBeDefined();
+    expect(shadowed?.enabled).toBe(false);
+    expect(shadowed?.shadowedBy).toContain(winner?.path ?? '');
+
+    const disabledBefore = [...cfgDisabledExtensions.get(settings)];
+    await expect(ext.toggle({
+      expectedRevision: '0',
+      providerId: shadowed!.providerId,
+      extensionId: shadowed!.id,
+      enabled: false,
+    }, '1')).rejects.toThrow(/Shadowed extension items cannot be toggled/);
+
+    expect(cfgDisabledExtensions.get(settings)).toEqual(disabledBefore);
+    const refreshed = await ext.readInventory();
+    const winnerAfter = refreshed.items.find(item => item.name === 'dup-skill' && !item.shadowed);
+    expect(winnerAfter?.enabled).toBe(true);
+  } finally {
+    settings.cancelPendingSaves();
+    await rm(root, { recursive: true, force: true });
+  }
+});

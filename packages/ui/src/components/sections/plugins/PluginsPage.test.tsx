@@ -1,6 +1,8 @@
 import './testDom';
 import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import type {
+  ExtensionInventory,
+  ExtensionItem,
   InstalledPluginEntry,
   LocalExtensionEntry,
   LocalExtensionSource,
@@ -70,8 +72,10 @@ document.body.appendChild(container);
 let root: Root;
 
 beforeEach(async () => {
+  installTestDomGlobals();
   await useI18nStore.getState().setLocale('en');
   useUIStore.setState({ settingsProjectPath: null });
+  document.querySelectorAll('[data-slot="dialog-content"], [data-slot="dialog-overlay"]').forEach(el => el.remove());
   container.innerHTML = '';
   root = createRoot(container);
 });
@@ -110,8 +114,8 @@ test('applying plugin changes only calls the native apply after the confirmation
     catalog: { ...emptyCatalog, workers: [readyWorker] },
     loadedDirectory: '/repo',
     loadedRuntimeKey: getRuntimeKey(),
+    requestedScope: JSON.stringify([getRuntimeKey(), '/repo']),
     isLoading: false,
-    error: null,
     isMutating: false,
     lastMutation: null,
     doctor: null,
@@ -127,7 +131,7 @@ test('applying plugin changes only calls the native apply after the confirmation
     .find(button => button.textContent?.trim() === 'Restart idle sessions to apply');
   if (!applyButton) throw new Error('Missing runtime apply action');
   const applyActionName = applyButton.textContent?.trim();
-  await act(async () => { applyButton.dispatchEvent(new Event('click', { bubbles: true })); });
+  await act(async () => { applyButton.click(); });
   await settle();
 
   expect(applies).toBe(0);
@@ -139,7 +143,7 @@ test('applying plugin changes only calls the native apply after the confirmation
   const confirm = Array.from(dialog.querySelectorAll('button'))
     .find(button => !button.matches('[data-slot="dialog-close"]') && button.textContent?.trim() === applyActionName);
   if (!confirm) throw new Error('Missing apply confirmation action');
-  await act(async () => { confirm.dispatchEvent(new Event('click', { bubbles: true })); });
+  await act(async () => { confirm.click(); });
   await waitFor(() => applies === 1);
 
   expect(applies).toBe(1);
@@ -264,4 +268,71 @@ test('PluginsPage mounts without infinite re-render loop when catalog is null', 
   });
   await settle();
   expect(container.textContent).toContain('Plugins');
+});
+
+test('Extension Control Center caps row trigger badges and renders full triggers in inspector', async () => {
+  const longTriggers = [
+    'ast:grep($X.foo.bar.baz.qux())',
+    'glob:**/*.test.ts',
+    'glob:**/*.spec.ts',
+    'glob:src/**/*.tsx',
+  ];
+  const itemWithTriggers: ExtensionItem = {
+    id: 'ext_long_rule',
+    kind: 'rule',
+    name: 'long-trigger-rule',
+    providerId: 'agents',
+    providerName: 'Agent Dirs (.agent/.agents)',
+    scope: 'project',
+    path: '<workspace>/.agents/rules/long.md',
+    enabled: true,
+    shadowed: false,
+    toggleable: true,
+    triggers: longTriggers,
+    content: 'Rule body',
+  };
+  const inventoryWithTriggers: ExtensionInventory = {
+    providers: [
+      { id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['rule'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: 1 },
+    ],
+    items: [itemWithTriggers],
+    warnings: [],
+    kinds: [{ kind: 'rule', label: 'Rules' }],
+  };
+
+  usePluginsStore.setState({
+    catalog: { ...emptyCatalog, extensions: inventoryWithTriggers },
+    extensions: inventoryWithTriggers,
+    extensionRevision: '1',
+    loadedDirectory: '/repo',
+    loadedRuntimeKey: getRuntimeKey(),
+    isLoading: false,
+    error: null,
+    isMutating: false,
+    loadPlugins: async () => true,
+    lastMutation: null,
+    doctor: null,
+  });
+
+  await act(async () => {
+    root.render(<I18nProvider><PluginsPage /></I18nProvider>);
+  });
+  await settle();
+
+  // In the row: at most 2 chips rendered, plus +2 overflow badge
+  const rowButton = Array.from(container.querySelectorAll('button'))
+    .find(button => button.textContent?.includes('long-trigger-rule'));
+  expect(rowButton).toBeDefined();
+  const row = rowButton!.closest('.flex');
+  expect(row?.textContent).toContain('long-trigger-rule');
+  expect(row?.textContent).toContain('ast:grep($X.foo.bar.baz.qux())');
+  expect(row?.textContent).toContain('glob:**/*.test.ts');
+  expect(row?.textContent).toContain('+2');
+  expect(row?.textContent).not.toContain('glob:src/**/*.tsx');
+
+  // In inspector: full triggers including the 4th trigger are visible
+  expect(container.textContent).toContain('glob:src/**/*.tsx');
+  for (const trigger of longTriggers) {
+    expect(container.textContent).toContain(trigger);
+  }
 });

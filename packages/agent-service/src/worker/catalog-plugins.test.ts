@@ -4,7 +4,9 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { __resetDirsFromEnvForTests, getPluginsDir, getPluginsLockfile, getProjectPluginOverridesPath, setAgentDir } from '@oh-my-pi/pi-utils';
 import { PluginManager } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/manager';
+import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { NativePlugins } from './catalog-plugins.ts';
+import { nativeExtensionRoots } from './native-runtime.ts';
 import { PluginLocalSource } from './plugin-local-source.ts';
 import { MarketplaceManager, getMarketplacesRegistryPath, getInstalledPluginsRegistryPath, getMarketplacesCacheDir, getPluginsCacheDir } from '@oh-my-pi/pi-coding-agent/extensibility/plugins/marketplace';
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from '@oh-my-pi/pi-coding-agent/discovery/helpers';
@@ -58,19 +60,30 @@ async function fixture() {
   for (const key of ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME']) process.env[key] = join(root, key.toLowerCase());
   __resetDirsFromEnvForTests();
   setAgentDir(agentDirectory);
-  await writeFile(join(packageDirectory, 'package.json'), JSON.stringify({ name: '@native-proof/plugin', version: '1.0.0',
-    omp: { description: 'Native package proof', settings: {
-      greeting: { type: 'string' }, retries: { type: 'number', min: 0, max: 3 }, token: { type: 'string', secret: true },
-    } } }));
-  return { root, home, cwd, packageDirectory, plugins: new NativePlugins({ cwd, worker }), cleanup: async () => {
-    await resetNativeState();
-    for (const [key, value] of Object.entries(environment)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
+  await writeFile(join(packageDirectory, 'package.json'), JSON.stringify({
+    name: '@native-proof/plugin', version: '1.0.0',
+    omp: {
+      description: 'Native package proof', settings: {
+        greeting: { type: 'string' }, retries: { type: 'number', min: 0, max: 3 }, token: { type: 'string', secret: true },
+      }
     }
-    __resetDirsFromEnvForTests();
-    await rm(root, { recursive: true, force: true });
-  } };
+  }));
+  const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
+  const extensionRoots = nativeExtensionRoots(settings);
+  return {
+    root, home, cwd, agentDirectory, packageDirectory, settings,
+    plugins: new NativePlugins({ cwd, agentDirectory, worker, settings, extensionRoots }),
+    cleanup: async () => {
+      settings.cancelPendingSaves();
+      await resetNativeState();
+      for (const [key, value] of Object.entries(environment)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      __resetDirsFromEnvForTests();
+      await rm(root, { recursive: true, force: true });
+    },
+  };
 }
 
 nativeTest('native linked package round-trips enablement and validated settings without leaking declared or undeclared secrets', async () => {
@@ -80,8 +93,12 @@ nativeTest('native linked package round-trips enablement and validated settings 
     await native.link(context.packageDirectory);
     await native.setPluginSetting('@native-proof/plugin', 'undeclaredToken', 'must-never-leak');
     const target = { kind: 'package' as const, name: '@native-proof/plugin' };
-    await context.plugins.operation({ type: 'plugins.configure', request: { expectedRevision: '0', target,
-      enabled: false, settingsScope: 'global', settings: { greeting: 'hello', retries: 2, token: 'secret-token' } } }, '1');
+    await context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '0', target,
+        enabled: false, settingsScope: 'global', settings: { greeting: 'hello', retries: 2, token: 'secret-token' }
+      }
+    }, '1');
     const catalog = await context.plugins.read('1');
     const installed = catalog.plugins.find(plugin => plugin.name === target.name);
     expect(installed?.enabled).toBe(false);
@@ -105,13 +122,25 @@ nativeTest('native setting validation rejects the whole invalid patch before cha
   try {
     await new PluginManager(context.cwd).link(context.packageDirectory);
     const before = await readFile(getPluginsLockfile(), 'utf8');
-    await expect(context.plugins.operation({ type: 'plugins.configure', request: { expectedRevision: '0',
-      target: { kind: 'package', name: '@native-proof/plugin' }, settingsScope: 'global', settings: { greeting: 'not-committed', retries: 99 } } }, '1')).rejects.toMatchObject({ status: 400 });
+    await expect(context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '0',
+        target: { kind: 'package', name: '@native-proof/plugin' }, settingsScope: 'global', settings: { greeting: 'not-committed', retries: 99 }
+      }
+    }, '1')).rejects.toMatchObject({ status: 400 });
     expect(await readFile(getPluginsLockfile(), 'utf8')).toBe(before);
-    await expect(context.plugins.operation({ type: 'plugins.configure', request: { expectedRevision: '0',
-      target: { kind: 'package', name: '../../outside' }, enabled: true } }, '1')).rejects.toMatchObject({ status: 400 });
-    await expect(context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: '0',
-      source: { kind: 'package', spec: 'bad;touch injected' } } }, '1')).rejects.toMatchObject({ status: 400 });
+    await expect(context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '0',
+        target: { kind: 'package', name: '../../outside' }, enabled: true
+      }
+    }, '1')).rejects.toMatchObject({ status: 400 });
+    await expect(context.plugins.operation({
+      type: 'plugins.install', request: {
+        expectedRevision: '0',
+        source: { kind: 'package', spec: 'bad;touch injected' }
+      }
+    }, '1')).rejects.toMatchObject({ status: 400 });
     expect(await readFile(getPluginsLockfile(), 'utf8')).toBe(before);
   } finally { await context.cleanup(); }
 });
@@ -161,17 +190,29 @@ nativeTest('native marketplace project installs retain scoped enablement while d
     const pluginDirectory = join(marketplaceRoot, 'plugins', 'proof');
     await mkdir(pluginDirectory, { recursive: true });
     await writeFile(join(pluginDirectory, 'package.json'), await readFile(join(context.packageDirectory, 'package.json')));
-    await writeFile(join(marketplaceRoot, '.omp-plugin', 'marketplace.json'), JSON.stringify({ name: 'local-proof', owner: { name: 'Test' },
-      plugins: [{ name: 'proof', source: './plugins/proof', version: '1.0.0', description: 'Local native marketplace plugin' }] }));
-    const manager = new MarketplaceManager({ marketplacesRegistryPath: getMarketplacesRegistryPath(), installedRegistryPath: getInstalledPluginsRegistryPath(),
+    await writeFile(join(marketplaceRoot, '.omp-plugin', 'marketplace.json'), JSON.stringify({
+      name: 'local-proof', owner: { name: 'Test' },
+      plugins: [{ name: 'proof', source: './plugins/proof', version: '1.0.0', description: 'Local native marketplace plugin' }]
+    }));
+    const manager = new MarketplaceManager({
+      marketplacesRegistryPath: getMarketplacesRegistryPath(), installedRegistryPath: getInstalledPluginsRegistryPath(),
       projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(context.cwd), marketplacesCacheDir: getMarketplacesCacheDir(),
-      pluginsCacheDir: getPluginsCacheDir(), clearPluginRootsCache: clearPluginRootsAndCaches });
+      pluginsCacheDir: getPluginsCacheDir(), clearPluginRootsCache: clearPluginRootsAndCaches
+    });
     await manager.addMarketplace(marketplaceRoot);
-    await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: '0',
-      source: { kind: 'marketplace', name: 'proof', marketplace: 'local-proof', scope: 'project' } } }, '1');
+    await context.plugins.operation({
+      type: 'plugins.install', request: {
+        expectedRevision: '0',
+        source: { kind: 'marketplace', name: 'proof', marketplace: 'local-proof', scope: 'project' }
+      }
+    }, '1');
     const target = { kind: 'marketplace' as const, name: 'proof', marketplace: 'local-proof', scope: 'project' as const };
-    await context.plugins.operation({ type: 'plugins.configure', request: { expectedRevision: '1', target, enabled: false,
-      settingsScope: 'global', settings: { greeting: 'global greeting', token: 'global secret' } } }, '2');
+    await context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '1', target, enabled: false,
+        settingsScope: 'global', settings: { greeting: 'global greeting', token: 'global secret' }
+      }
+    }, '2');
     const installed = (await context.plugins.read('2')).plugins.find(plugin => plugin.target.kind === 'marketplace');
     expect(installed).toMatchObject({ name: 'proof', target, scope: 'workspace', enabled: false, settingsScope: 'global', globalSettings: { greeting: 'global greeting' }, settings: { greeting: 'global greeting' } });
     expect(JSON.stringify(installed)).not.toContain('global secret');
@@ -202,7 +243,14 @@ nativeTest('native plugin ownership follows actual resolver root rather than age
     await mkdir(join(context.cwd, '.omp'));
     const nested = join(context.cwd, 'nested');
     await mkdir(nested);
-    const inherited = await new NativePlugins({ cwd: nested, worker: { ...worker, workspaceId: 'nested-workspace' } }).operation({ type: 'plugins.owner' }, '0');
+    const nestedSettings = await Settings.loadIsolated({ cwd: nested, agentDir: context.agentDirectory });
+    const inherited = await new NativePlugins({
+      cwd: nested,
+      agentDirectory: context.agentDirectory,
+      worker: { ...worker, workspaceId: 'nested-workspace' },
+      settings: nestedSettings,
+      extensionRoots: nativeExtensionRoots(nestedSettings),
+    }).operation({ type: 'plugins.owner' }, '0');
     if (inherited.type !== 'plugins.owner') throw new Error('Expected native owner identity');
     expect(inherited.projectRegistryPath).toBe(join(context.cwd, '.omp', 'plugins', 'installed_plugins.json'));
   } finally { await context.cleanup(); }
@@ -216,8 +264,12 @@ nativeTest('global setting writes preserve native project overrides and expose s
     const path = getProjectPluginOverridesPath(context.cwd);
     const original = JSON.stringify({ settings: { '@native-proof/plugin': { greeting: 'project wins', token: 'project-only-secret' } } });
     await writeFile(path, original);
-    await context.plugins.operation({ type: 'plugins.configure', request: { expectedRevision: '0', target: { kind: 'package', name: '@native-proof/plugin' },
-      settingsScope: 'global', settings: { greeting: 'saved globally' } } }, '1');
+    await context.plugins.operation({
+      type: 'plugins.configure', request: {
+        expectedRevision: '0', target: { kind: 'package', name: '@native-proof/plugin' },
+        settingsScope: 'global', settings: { greeting: 'saved globally' }
+      }
+    }, '1');
     const installed = (await context.plugins.read('1')).plugins.find(plugin => plugin.name === '@native-proof/plugin');
     expect(installed).toMatchObject({ settingsScope: 'global', globalSettings: { greeting: 'saved globally' }, settings: { greeting: 'project wins' } });
     expect(installed?.settingDefinitions.find(setting => setting.key === 'greeting')).toMatchObject({ configured: true, globalConfigured: true, overridden: true });
@@ -255,11 +307,14 @@ nativeTest('marketplace source management reads, adds and removes native registr
     const sourceRoot = join(context.root, 'source-marketplace');
     await mkdir(join(sourceRoot, '.omp-plugin'), { recursive: true });
     await writeFile(join(sourceRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('source-proof', []));
-    await context.plugins.operation({ type: 'plugins.marketplace.manage',
-      request: { action: 'add', expectedRevision: '0', source: sourceRoot } }, '1');
+    await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'add', expectedRevision: '0', source: sourceRoot }
+    }, '1');
     const catalog = await context.plugins.read('1');
     expect(catalog.marketplaceSources).toEqual([expect.objectContaining({
-      name: 'source-proof', sourceType: 'local', sourceUri: sourceRoot })]);
+      name: 'source-proof', sourceType: 'local', sourceUri: sourceRoot
+    })]);
     expect(catalog.marketplace).toEqual([]);
 
     const state = await context.plugins.operation({ type: 'plugins.marketplace' }, '1');
@@ -267,15 +322,19 @@ nativeTest('marketplace source management reads, adds and removes native registr
     expect(state.result.sources.map(source => source.name)).toEqual(['source-proof']);
 
     // `list` is the manage read: it returns the same registry rows without a revision to commit.
-    const listed = await context.plugins.operation({ type: 'plugins.marketplace.manage',
-      request: { action: 'list' } }, '1');
+    const listed = await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'list' }
+    }, '1');
     if (listed.type !== 'plugins.marketplaceSources') throw new Error('Expected native marketplace source listing');
     expect(listed.result).toMatchObject({ workspaceId: worker.workspaceId, revision: '1' });
     expect(listed.result.sources).toEqual(state.result.sources);
     expect(listed.result.sources).toEqual([expect.objectContaining({ sourceType: 'local', catalogPath: expect.any(String) })]);
 
-    await context.plugins.operation({ type: 'plugins.marketplace.manage',
-      request: { action: 'remove', expectedRevision: '1', name: 'source-proof' } }, '2');
+    await context.plugins.operation({
+      type: 'plugins.marketplace.manage',
+      request: { action: 'remove', expectedRevision: '1', name: 'source-proof' }
+    }, '2');
     expect((await context.plugins.read('2')).marketplaceSources).toEqual([]);
   } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
 });
@@ -295,9 +354,11 @@ nativeTest('marketplace entries expose rich manifest metadata and update checks 
       commands: ['proof-command'], agents: ['proof-agent'], mcpServers: { proof: { command: 'proof-server' } },
       lspServers: ['./lsp.json'],
     }]));
-    const manager = new MarketplaceManager({ marketplacesRegistryPath: getMarketplacesRegistryPath(), installedRegistryPath: getInstalledPluginsRegistryPath(),
+    const manager = new MarketplaceManager({
+      marketplacesRegistryPath: getMarketplacesRegistryPath(), installedRegistryPath: getInstalledPluginsRegistryPath(),
       projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(context.cwd), marketplacesCacheDir: getMarketplacesCacheDir(),
-      pluginsCacheDir: getPluginsCacheDir(), clearPluginRootsCaches: undefined });
+      pluginsCacheDir: getPluginsCacheDir(), clearPluginRootsCaches: undefined
+    });
     await manager.addMarketplace(marketplaceRoot);
 
     const catalog = await context.plugins.read('0');
@@ -311,16 +372,23 @@ nativeTest('marketplace entries expose rich manifest metadata and update checks 
       },
     });
 
-    await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: '0',
-      source: { kind: 'marketplace', name: 'proof', marketplace: 'rich-proof', scope: 'user' } } }, '1');
+    await context.plugins.operation({
+      type: 'plugins.install', request: {
+        expectedRevision: '0',
+        source: { kind: 'marketplace', name: 'proof', marketplace: 'rich-proof', scope: 'user' }
+      }
+    }, '1');
     await writeFile(join(marketplaceRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('rich-proof', [{
-      name: 'proof', source: './plugins/proof', version: '2.0.0', description: 'Rich marketplace plugin' }]));
+      name: 'proof', source: './plugins/proof', version: '2.0.0', description: 'Rich marketplace plugin'
+    }]));
     await manager.updateMarketplace('rich-proof');
 
     const checked = await context.plugins.operation({ type: 'plugins.marketplace.checkUpdates' }, '1');
     if (checked.type !== 'plugins.updateCheck') throw new Error('Expected native update check');
-    expect(checked.result.updates).toEqual([{ pluginId: 'proof@rich-proof', scope: 'global',
-      target: { kind: 'marketplace', name: 'proof', marketplace: 'rich-proof', scope: 'user' }, from: '1.0.0', to: '2.0.0' }]);
+    expect(checked.result.updates).toEqual([{
+      pluginId: 'proof@rich-proof', scope: 'global',
+      target: { kind: 'marketplace', name: 'proof', marketplace: 'rich-proof', scope: 'user' }, from: '1.0.0', to: '2.0.0'
+    }]);
     expect((await context.plugins.read('1')).availableUpdates).toEqual(checked.result.updates);
   } finally { clearPluginRootsAndCaches(); await context.cleanup(); }
 });
@@ -339,13 +407,19 @@ nativeTest('batch upgrade installs only outdated marketplace plugins and preview
       { name: 'current', source: './plugins/current', version: '1.0.0', description: 'Current plugin' },
       { name: 'outdated', source: './plugins/outdated', version: '1.0.0', description: 'Outdated plugin' },
     ]));
-    const manager = new MarketplaceManager({ marketplacesRegistryPath: getMarketplacesRegistryPath(), installedRegistryPath: getInstalledPluginsRegistryPath(),
+    const manager = new MarketplaceManager({
+      marketplacesRegistryPath: getMarketplacesRegistryPath(), installedRegistryPath: getInstalledPluginsRegistryPath(),
       projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(context.cwd), marketplacesCacheDir: getMarketplacesCacheDir(),
-      pluginsCacheDir: getPluginsCacheDir(), clearPluginRootsCaches: undefined });
+      pluginsCacheDir: getPluginsCacheDir(), clearPluginRootsCaches: undefined
+    });
     await manager.addMarketplace(marketplaceRoot);
     for (const [index, name] of ['current', 'outdated'].entries()) {
-      await context.plugins.operation({ type: 'plugins.install', request: { expectedRevision: index === 0 ? '0' : '1',
-        source: { kind: 'marketplace', name, marketplace: 'upgrade-proof', scope: 'user' } } }, String(index + 1));
+      await context.plugins.operation({
+        type: 'plugins.install', request: {
+          expectedRevision: index === 0 ? '0' : '1',
+          source: { kind: 'marketplace', name, marketplace: 'upgrade-proof', scope: 'user' }
+        }
+      }, String(index + 1));
     }
     await writeFile(join(marketplaceRoot, 'plugins', 'outdated', 'package.json'), JSON.stringify({ name: '@native-proof/outdated', version: '2.0.0' }));
     await writeFile(join(marketplaceRoot, '.omp-plugin', 'marketplace.json'), marketplaceCatalog('upgrade-proof', [
@@ -354,12 +428,16 @@ nativeTest('batch upgrade installs only outdated marketplace plugins and preview
     ]));
     await manager.updateMarketplace('upgrade-proof');
 
-    const preview = await context.plugins.operation({ type: 'plugins.marketplace.previewUpgrade',
-      request: { target: { kind: 'marketplace', name: 'outdated', marketplace: 'upgrade-proof', scope: 'user' } } }, '2');
+    const preview = await context.plugins.operation({
+      type: 'plugins.marketplace.previewUpgrade',
+      request: { target: { kind: 'marketplace', name: 'outdated', marketplace: 'upgrade-proof', scope: 'user' } }
+    }, '2');
     if (preview.type !== 'plugins.upgradePreview') throw new Error('Expected native upgrade preview');
-    expect(preview.result.preview).toEqual([{ pluginId: 'outdated@upgrade-proof', scope: 'global',
+    expect(preview.result.preview).toEqual([{
+      pluginId: 'outdated@upgrade-proof', scope: 'global',
       target: { kind: 'marketplace', name: 'outdated', marketplace: 'upgrade-proof', scope: 'user' },
-      from: '1.0.0', to: '2.0.0', change: 'upgrade' }]);
+      from: '1.0.0', to: '2.0.0', change: 'upgrade'
+    }]);
 
     const before = (await context.plugins.read('2')).plugins.map(plugin => [plugin.name, plugin.version]);
     expect(before).toEqual([['current', '1.0.0'], ['outdated', '1.0.0']]);

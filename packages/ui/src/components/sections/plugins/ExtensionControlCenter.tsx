@@ -75,6 +75,15 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
     <ScopeChip scope={item.scope} />
     <SettingsCardChip>{item.providerName}</SettingsCardChip>
    </div>
+   {item.triggers.length === 0 ? null : (
+    <div className="flex min-w-0 flex-wrap items-center gap-1 pt-0.5">
+     {item.triggers.map(trigger => (
+      <SettingsCardChip key={trigger} title={trigger} className="max-w-full whitespace-normal break-all">
+       {trigger}
+      </SettingsCardChip>
+     ))}
+    </div>
+   )}
    {item.shadowedBy === undefined ? null : (
     <div className="flex min-w-0 items-baseline gap-2">
      <span className="shrink-0 typography-micro text-muted-foreground">{t('settings.extensions.detail.field.source')}</span>
@@ -113,7 +122,7 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
  );
 };
 
-export interface ExtensionControlCenterProps {
+interface ExtensionControlCenterProps {
  inventory: ExtensionInventory;
  disabled: boolean;
  onToggleProvider: (providerId: string, enabled: boolean) => void;
@@ -224,7 +233,7 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
            <StatusDot status={status} />
            <button
             type="button"
-            className="min-w-0 flex-1 text-start"
+            className="min-w-[6rem] flex-1 text-start"
             aria-pressed={selected?.id === item.id}
             onClick={() => setSelectedId(item.id)}
            >
@@ -232,8 +241,17 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
             <span className="block truncate font-mono typography-micro text-muted-foreground">{item.path}</span>
            </button>
            {item.triggers.length === 0 ? null : (
-            <div className="flex min-w-0 shrink flex-wrap justify-end gap-1">
-             {item.triggers.map(trigger => <SettingsCardChip key={trigger}>{trigger}</SettingsCardChip>)}
+            <div className="flex max-w-[40%] shrink items-center justify-end gap-1 overflow-hidden @xl:max-w-[45%]">
+             {item.triggers.slice(0, 2).map(trigger => (
+              <SettingsCardChip key={trigger} title={trigger} className="max-w-[7rem] truncate @xl:max-w-[9rem]">
+               {trigger}
+              </SettingsCardChip>
+             ))}
+             {item.triggers.length > 2 ? (
+              <SettingsCardChip title={item.triggers.slice(2).join(', ')}>
+               +{item.triggers.length - 2}
+              </SettingsCardChip>
+             ) : null}
             </div>
            )}
            {item.toggleable ? (

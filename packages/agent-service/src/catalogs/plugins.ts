@@ -24,7 +24,7 @@ export type NativeExtensionOperation = z.infer<typeof NativeExtensionOperationSc
 export const NativeExtensionResultSchemas = [
  z.strictObject({ type: z.literal('extensions.inventory'), state: ExtensionInventoryStateSchema }),
 ] as const;
-export const NativeExtensionResultSchema = z.discriminatedUnion('type', NativeExtensionResultSchemas);
+const NativeExtensionResultSchema = z.discriminatedUnion('type', NativeExtensionResultSchemas);
 export type NativeExtensionResult = z.infer<typeof NativeExtensionResultSchema>;
 
 export const NativePluginOperationSchemas = [

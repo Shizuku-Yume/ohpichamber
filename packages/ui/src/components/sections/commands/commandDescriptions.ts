@@ -2,7 +2,7 @@ import type { I18nKey } from '@/lib/i18n';
 import type { Command } from '@/stores/useCommandsStore';
 import { isCommandBuiltIn } from '@/stores/useCommandsStore';
 
-export const BUILTIN_COMMAND_DESCRIPTION_KEYS: Record<string, I18nKey> = {
+const BUILTIN_COMMAND_DESCRIPTION_KEYS: Record<string, I18nKey> = {
   compact: 'chat.commandAutocomplete.command.compactDescription',
   shake: 'chat.commandAutocomplete.command.shakeDescription',
   todo: 'chat.commandAutocomplete.command.todoDescription',

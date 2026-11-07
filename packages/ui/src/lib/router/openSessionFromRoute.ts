@@ -4,10 +4,6 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { setSessionOpener } from '@/sync/session-navigation';
 import { requestMessageFocus } from './messageFocus';
 
-// Only synchronous selection notifications inside a redirect replace history.
-let redirecting = false;
-export const isSessionOpenRedirect = (): boolean => redirecting;
-
 export type SessionOpenOptions = {
  /** The owning directory when the caller already knows it (a desktop event or a notification carries one). */
  directory?: string | null;
@@ -17,22 +13,17 @@ export type SessionOpenOptions = {
  requireKnownSession?: boolean;
 };
 
-type SessionOpenTarget = {
- sessionId: string;
- directory: string | null;
-};
-
 const resolveSessionDir = (session: Session | undefined): string | null => {
  if (!session) return null;
  return resolveGlobalSessionDirectory(session);
 };
 
-const selectTarget = (target: SessionOpenTarget, directoryHint: string | null): void => {
+const selectSession = (sessionId: string, directoryHint: string | null): void => {
  const state = useSessionUIStore.getState();
- const directory = directoryHint ?? state.getDirectoryForSession(target.sessionId) ?? target.directory;
+ const directory = directoryHint ?? state.getDirectoryForSession(sessionId);
  const directoryChanged = directory !== null && directory !== state.currentSessionDirectory;
- if (state.currentSessionId !== target.sessionId || directoryChanged) {
-  state.setCurrentSession(target.sessionId, directory);
+ if (state.currentSessionId !== sessionId || directoryChanged) {
+  state.setCurrentSession(sessionId, directory);
  }
 };
 
@@ -54,37 +45,24 @@ export async function openSession(sessionId: string, options: SessionOpenOptions
 
  const initialStore = useGlobalSessionsStore.getState();
  const initialSession = initialStore.entityById.get(requestedId);
- const initialTarget: SessionOpenTarget = {
-  sessionId: requestedId,
-  directory: resolveSessionDir(initialSession),
- };
- selectTarget(initialTarget, options.directory?.trim() || null);
+ selectSession(requestedId, options.directory?.trim() || resolveSessionDir(initialSession));
 
+ // Cold loads often do not know the owning directory yet, so the first
+ // selection guesses from the directory hint or cached entity. Once the global
+ // list arrives, update to the authoritative workspace directory.
  const snapshot = await ensureGlobalSessionsLoaded().catch(() => null);
  if (!snapshot) return;
 
  const latest = useSessionUIStore.getState();
- if (latest.currentSessionId !== initialTarget.sessionId) return;
+ if (latest.currentSessionId !== requestedId) return;
 
  const sessions = [...snapshot.activeSessions, ...snapshot.archivedSessions];
  const session = sessions.find((entry) => entry.sessionId === requestedId);
  if (!session) return;
 
- const target: SessionOpenTarget = {
-  sessionId: requestedId,
-  directory: resolveSessionDir(session),
- };
- if (target.sessionId !== latest.currentSessionId) {
-  redirecting = true;
-  try {
-   selectTarget(target, null);
-  } finally {
-   redirecting = false;
-  }
-  return;
- }
- if (!target.directory || target.directory === latest.currentSessionDirectory) return;
- latest.setCurrentSession(target.sessionId, target.directory);
+ const directory = resolveSessionDir(session);
+ if (!directory || directory === latest.currentSessionDirectory) return;
+ latest.setCurrentSession(requestedId, directory);
 }
 
 /**

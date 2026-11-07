@@ -60,7 +60,7 @@ const PANEL_TRANSITION_EASING = LAYOUT_ANIMATION_EASING;
  * eat a visible slice of every row's trailing value, and the shadows already
  * say there is more to see.
  */
-export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible, reserved = false, repositoryEnabled = true, overlay = false }) => {
+export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible, reserved = false, _besidePanel = false, repositoryEnabled = true, overlay = false }) => {
  const { t } = useI18n();
  // The card's fade and lift follow the side columns' animation setting.
  const panelTransitionMs = useLayoutAnimationMs();

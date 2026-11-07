@@ -5330,7 +5330,6 @@ export const dict = {
   "sessions.sidebar.header.actions.closeSessions": "세션 닫기",
   "sessions.sidebar.header.actions.addProject": "프로젝트 추가",
   "sessions.sidebar.header.actions.more": "더 보기",
-  "sessions.sidebar.header.actions.more": "더 보기",
   "sessions.sidebar.header.actions.newSession": "새 세션",
   "sessions.sidebar.header.actions.scheduledTasks": "예약 작업",
   "sessions.scheduledTasks.dialog.title": "예약 작업",

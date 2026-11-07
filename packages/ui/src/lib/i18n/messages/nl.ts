@@ -5330,7 +5330,6 @@ export const dict = {
   "sessions.sidebar.header.actions.closeSessions": "Sessies sluiten",
   "sessions.sidebar.header.actions.addProject": "Project toevoegen",
   "sessions.sidebar.header.actions.more": "Meer",
-  "sessions.sidebar.header.actions.more": "Meer",
   "sessions.sidebar.header.actions.newSession": "Nieuwe sessie",
   "sessions.sidebar.header.actions.scheduledTasks": "Geplande taken",
   "sessions.scheduledTasks.dialog.title": "Geplande taken",

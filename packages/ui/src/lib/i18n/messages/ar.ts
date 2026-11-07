@@ -416,7 +416,6 @@ export const dict = {
   "sessions.sidebar.header.actions.closeSessions": "إغلاق الجلسات",
   "sessions.sidebar.header.actions.addProject": "إضافة مشروع",
   "sessions.sidebar.header.actions.more": "المزيد",
-  "sessions.sidebar.header.actions.more": "المزيد",
   "sessions.sidebar.header.actions.newSession": "جلسة جديدة",
   "sessions.sidebar.header.actions.scheduledTasks": "المهام المجدولة",
   "sessions.scheduledTasks.dialog.title": "المهام المجدولة",

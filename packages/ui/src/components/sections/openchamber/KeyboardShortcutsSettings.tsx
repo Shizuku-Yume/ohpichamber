@@ -1,3 +1,4 @@
+import { shortcutSearchItemId } from '@/lib/settings/search';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { SettingsFieldRow, SettingsSection } from '@/components/sections/shared/SettingsSection';
@@ -128,7 +129,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
           >
             <div className="space-y-2">
               {categoryActions.map((action) => (
-                <SettingsFieldRow key={action.id} label={t(action.settingsLabelKey)}>
+                <SettingsFieldRow key={action.id} label={t(action.settingsLabelKey)} settingsItem={shortcutSearchItemId(action.id)} controlClassName="flex-wrap">
                   <kbd
                     className="min-w-32 rounded-md border border-border bg-muted px-2 py-1 text-center typography-meta font-mono text-foreground"
                   >

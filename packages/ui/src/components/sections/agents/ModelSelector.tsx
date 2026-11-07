@@ -158,6 +158,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             tooltipsEnabled={tooltipsEnabled && (isActuallyMobile ? isMobilePanelOpen : isDropdownOpen)}
             isFavorite={(entry) => isFavoriteModel(entry.providerId, entry.modelId)}
             onToggleFavorite={(entry) => toggleFavoriteModel(entry.providerId, entry.modelId)}
+            {...(isActuallyMobile ? {
+                autoFocus: false,
+                maxHeightClassName: 'min-h-0 flex-1',
+                providersStartCollapsed: true,
+                showKeyboardHints: false,
+            } : null)}
         />
     );
 

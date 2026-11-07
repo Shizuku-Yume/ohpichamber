@@ -9143,8 +9143,6 @@ export const dict = {
   "session.newWorktree.actions.startFromGitLabIssueMr": "A GitLab issue or merge request",
   "session.newWorktree.prNumber": "PR #{number}",
   "chat.emptyState.agentUnreachable": "Agent Service is not reachable",
-  "chat.composer.error.binaryAttachmentNotSupported": "This file is binary and can't be sent as text. Attach an image or a text file.",
-  "chat.composer.error.textAttachmentTooLarge": "This text attachment exceeds the 5 MB limit. Choose a smaller file.",
   "chat.messageBody.actions.openPreviewAria": "Open preview",
   "chat.messageBody.actions.openPreview": "Open preview",
   "chat.chatInput.focusMode.toggleAria": "Toggle focus mode",

@@ -230,9 +230,13 @@ const inspectTextContent = async (file: File): Promise<"text/plain" | undefined>
   return "text/plain"
 }
 
+/** Content that is neither known-text nor an image keeps whatever type the picker declared. */
+const isTextualMime = (type: string): boolean =>
+  type.startsWith("text/") || TEXT_MIMES.has(type) || type.endsWith("+json") || type.endsWith("+xml")
+
 const attachmentMime = (
   file: File,
-): OpenCodeAttachmentMimeType | Promise<"text/plain" | undefined> | undefined => {
+): OpenCodeAttachmentMimeType | Promise<string | undefined> | undefined => {
   const type = declaredMimeOf(file)
   const supportedMime = SUPPORTED_BINARY_MIMES.get(type)
   if (supportedMime) return supportedMime
@@ -241,11 +245,13 @@ const attachmentMime = (
   const fallback = SUPPORTED_BINARY_EXTENSIONS.get(extension)
   if ((!type || type === "application/octet-stream") && fallback) return fallback
 
-  if (type.startsWith("text/") || TEXT_MIMES.has(type) || type.endsWith("+json") || type.endsWith("+xml")) {
-    return "text/plain"
-  }
+  if (isTextualMime(type)) return "text/plain"
 
-  return inspectTextContent(file)
+  // A binary file is a valid attachment: the worker copies it into the
+  // session scratch space and hands the model a `read` target. So an
+  // unrecognized payload keeps its declared type instead of being dropped, and
+  // only content that sniffs as text is re-typed.
+  return inspectTextContent(file).then(mime => mime ?? (type || "application/octet-stream"))
 }
 
 const sourceText = (source: unknown): string => {

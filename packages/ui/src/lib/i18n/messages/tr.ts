@@ -9104,8 +9104,6 @@ export const dict = {
   "session.newWorktree.actions.startFromGitLabIssueMr": "Bir GitLab issue’su veya merge request’i",
   "session.newWorktree.prNumber": "PR #{number}",
   "chat.emptyState.agentUnreachable": "Agent Service'e ulaşılamıyor",
-  "chat.composer.error.binaryAttachmentNotSupported": "Bu dosya ikilidir ve metin olarak gönderilemez. Bir resim veya metin dosyası ekleyin.",
-  "chat.composer.error.textAttachmentTooLarge": "Bu metin eki 5 MB sınırını aşıyor. Daha küçük bir dosya seçin.",
   "chat.messageBody.actions.openPreviewAria": "Önizlemeyi aç",
   "chat.messageBody.actions.openPreview": "Önizlemeyi aç",
   "chat.chatInput.focusMode.toggleAria": "Odak modunu aç/kapat",

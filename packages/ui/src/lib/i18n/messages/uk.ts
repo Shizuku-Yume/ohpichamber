@@ -9098,8 +9098,6 @@ export const dict = {
   "session.newWorktree.actions.startFromGitLabIssueMr": "Issue або merge request з GitLab",
   "session.newWorktree.prNumber": "PR #{number}",
   "chat.emptyState.agentUnreachable": "Agent Service недоступний",
-  "chat.composer.error.binaryAttachmentNotSupported": "Цей файл є двійковим і не може бути надісланий як текст. Додайте зображення або текстовий файл.",
-  "chat.composer.error.textAttachmentTooLarge": "Це текстове вкладення перевищує обмеження в 5 МБ. Виберіть менший файл.",
   "chat.messageBody.actions.openPreviewAria": "Відкрити попередній перегляд",
   "chat.messageBody.actions.openPreview": "Відкрити попередній перегляд",
   "chat.chatInput.focusMode.toggleAria": "Перемкнути режим фокусування",

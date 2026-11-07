@@ -1397,11 +1397,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             }
         }
         const rawMessage = error instanceof Error ? error.message : '';
-        if (problemStatus === 415 || problemCode === 'UNSUPPORTED_MEDIA_TYPE' || rawMessage.toLowerCase().includes('binary')) {
-            return t('chat.composer.error.binaryAttachmentNotSupported');
+        // 415 no longer means "binary attachment": binary files travel as a
+        // `read` handoff, so it can only be a rejected upload envelope. 413 is
+        // the real transport cap (the per-attachment content limit is gone).
+        if (problemStatus === 415 || problemCode === 'UNSUPPORTED_MEDIA_TYPE') {
+            return t('chat.chatInput.toast.attachFileFailed');
         }
-        if (problemStatus === 413 || problemCode === 'PAYLOAD_TOO_LARGE' || rawMessage.includes('5 MB')) {
-            return t('chat.composer.error.textAttachmentTooLarge');
+        if (problemStatus === 413 || problemCode === 'PAYLOAD_TOO_LARGE') {
+            return t('chat.chatInput.toast.attachmentsTooLarge');
         }
         return rawMessage.toLowerCase().includes('runtime changed')
             ? t('chat.chatInput.toast.messageSendFailed')
@@ -2856,20 +2859,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         let lastOtherError: string | null = null;
         for (const file of otherFiles) {
             try {
-                if (file.size > 5 * 1024 * 1024) {
-                    lastOtherError = t('chat.composer.error.textAttachmentTooLarge');
-                    continue;
-                }
-                const sample = new Uint8Array(await file.slice(0, 8000).arrayBuffer());
-                if (sample.includes(0)) {
-                    lastOtherError = t('chat.composer.error.binaryAttachmentNotSupported');
-                    continue;
-                }
+                // Any picked file is attachable: the worker inlines small text
+                // and hands binary or oversized content to `read`. Only a real
+                // upload failure surfaces here.
                 if (await addAttachedFile(file)) {
                     attached = true;
                     attachedOtherNames.push(file.name);
                 } else if (!lastOtherError) {
-                    lastOtherError = t('chat.composer.error.binaryAttachmentNotSupported');
+                    lastOtherError = t('chat.chatInput.toast.attachFileFailed');
                 }
             } catch (error) {
                 console.error('File attach failed', error);
@@ -3406,22 +3403,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
         for (const file of list) {
             try {
-                const isImage = file.type.startsWith('image/');
-                if (!isImage) {
-                    if (file.size > 5 * 1024 * 1024) {
-                        lastError = t('chat.composer.error.textAttachmentTooLarge');
-                        continue;
-                    }
-                    const sample = new Uint8Array(await file.slice(0, 8000).arrayBuffer());
-                    if (sample.includes(0)) {
-                        lastError = t('chat.composer.error.binaryAttachmentNotSupported');
-                        continue;
-                    }
-                }
+                // File type and size no longer gate attachment: the worker
+                // decides inline vs `read` handoff. Only a real upload failure
+                // is reported.
                 if (await addAttachedFile(file)) {
                     attached = true;
-                } else if (!isImage && !lastError) {
-                    lastError = t('chat.composer.error.binaryAttachmentNotSupported');
+                } else if (!lastError) {
+                    lastError = t('chat.chatInput.toast.attachFileFailed');
                 }
             } catch (error) {
                 console.error('File attach failed', error);

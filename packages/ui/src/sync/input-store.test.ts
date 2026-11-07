@@ -217,23 +217,30 @@ describe("input-store attachments", () => {
     expect(useInputStore.getState().attachedFiles[0]?.dataUrl).toBe("data:text/plain;base64,e30=")
   })
 
-  test("rejects an unknown binary file after inspecting its contents", async () => {
-    const attached = await useInputStore.getState().addAttachedFile(
+  testWithMockFileReader("keeps an unknown binary file attachable so the worker can hand it to read", async () => {
+    const addPromise = useInputStore.getState().addAttachedFile(
       new File([new Uint8Array([0, 1, 2, 3])], "archive.bin", { type: "application/octet-stream" })
     )
+    await waitForReaderCount(1)
 
-    expect(attached).toBe(false)
-    expect(pendingReaders).toHaveLength(0)
-    expect(useInputStore.getState().attachedFiles).toEqual([])
+    resolveReader(pendingReaders[0], "data:application/octet-stream;base64,AAECAw==")
+
+    expect(await addPromise).toBe(true)
+    expect(useInputStore.getState().attachedFiles[0]?.filename).toBe("archive.bin")
+    expect(useInputStore.getState().attachedFiles[0]?.mimeType).toBe("application/octet-stream")
+    expect(useInputStore.getState().attachedFiles[0]?.size).toBe(4)
   })
 
-  test("rejects unknown content with too many control bytes", async () => {
-    const attached = await useInputStore.getState().addAttachedFile(
+  testWithMockFileReader("keeps content with many control bytes attachable under its declared type", async () => {
+    const addPromise = useInputStore.getState().addAttachedFile(
       new File([new Uint8Array([1, 2, 3, 65])], "encoded.custom", { type: "application/octet-stream" })
     )
+    await waitForReaderCount(1)
 
-    expect(attached).toBe(false)
-    expect(pendingReaders).toHaveLength(0)
+    resolveReader(pendingReaders[0], "data:application/octet-stream;base64,AQIDQQ==")
+
+    expect(await addPromise).toBe(true)
+    expect(useInputStore.getState().attachedFiles[0]?.mimeType).toBe("application/octet-stream")
   })
 
   testWithMockFileReader("accepts an unknown MIME type when its contents are text", async () => {

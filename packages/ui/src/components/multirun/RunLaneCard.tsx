@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils';
 import type { Session } from '@openchamber/agent-contract';
 import type { LaneSummary } from '@/lib/multirun/useLaneSummaries';
 import type { LaneStatus } from '@/lib/multirun/laneStatus';
+import { getSessionGoal, type SessionGoalStatus } from '@/lib/sessionGoalMetadata';
+import { sessionGoalMarkLabelKey, sessionGoalStatusColor } from '@/lib/sessionGoalPresentation';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import { LaneStatusIcon } from './LaneStatusIcon';
 
@@ -33,6 +35,22 @@ function LaneDuration({ session, busy, finishedAt }: { session: Session; busy: b
   const end = busy ? now : finishedAt;
   if (end === null) return null;
   return <span className="inline-flex items-center gap-1"><Icon name="time" className="size-3" />{formatDuration(end - session.createdAt)}</span>;
+}
+
+/** The goal this lane runs under; the sidebar's mark, in the same colours. */
+function LaneGoalMark({ status }: { status: SessionGoalStatus }): React.ReactNode {
+  const { t } = useI18n();
+  const label = t(sessionGoalMarkLabelKey[status]);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex shrink-0 items-center" role="img" aria-label={label}>
+          <Icon name="target" className="size-3.5" style={{ color: sessionGoalStatusColor[status] }} />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export type RunLaneCardProps = {
@@ -85,6 +103,7 @@ export function RunLaneCard({
   const reply = summary?.reply;
   const diff = summary?.diff;
   const excluded = fuseSource !== null && !fuseSource.checked;
+  const goal = getSessionGoal(session);
   const replyText = reply?.state === 'ready' ? reply.text : '';
 
   // What stands where the reply goes: a lane that needs the user or broke
@@ -150,6 +169,7 @@ export function RunLaneCard({
         {variantLabel ? (
           <span className="shrink-0 rounded border border-border px-1 typography-micro text-muted-foreground">{variantLabel}</span>
         ) : null}
+        {goal ? <LaneGoalMark status={goal.status} /> : null}
         <span className="ms-auto inline-flex shrink-0 items-center">
           {fuseSource ? (
             <span

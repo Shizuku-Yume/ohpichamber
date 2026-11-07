@@ -5329,6 +5329,7 @@ export const dict = {
   "layout.services.usage": "用量",
   "sessions.sidebar.header.actions.closeSessions": "关闭会话",
   "sessions.sidebar.header.actions.addProject": "添加项目",
+  "sessions.sidebar.header.actions.more": "更多",
   "sessions.sidebar.header.actions.newSession": "新建会话",
   "sessions.sidebar.header.actions.scheduledTasks": "计划任务",
   "sessions.scheduledTasks.dialog.title": "计划任务",

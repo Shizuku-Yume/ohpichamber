@@ -5251,6 +5251,7 @@ export const dict = {
   "layout.services.usage": "Kullanım",
   "sessions.sidebar.header.actions.closeSessions": "Session'ları kapat",
   "sessions.sidebar.header.actions.addProject": "Proje ekle",
+  "sessions.sidebar.header.actions.more": "Daha fazla",
   "sessions.sidebar.header.actions.newSession": "Yeni session",
   "sessions.sidebar.header.actions.scheduledTasks": "Zamanlanmış görevler",
   "sessions.scheduledTasks.dialog.title": "Zamanlanmış görevler",

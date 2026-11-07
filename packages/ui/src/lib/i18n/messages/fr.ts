@@ -5164,6 +5164,7 @@ export const dict = {
   "layout.services.usage": "Usage",
   "sessions.sidebar.header.actions.closeSessions": "Fermer les sessions",
   "sessions.sidebar.header.actions.addProject": "Ajouter un projet",
+  "sessions.sidebar.header.actions.more": "Plus",
   "sessions.sidebar.header.actions.newSession": "Nouvelle session",
   "sessions.sidebar.header.actions.scheduledTasks": "Tâches planifiées",
   "sessions.scheduledTasks.dialog.title": "Tâches planifiées",

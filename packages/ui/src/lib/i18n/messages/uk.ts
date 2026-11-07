@@ -5338,6 +5338,7 @@ export const dict = {
   "layout.services.usage": "Використання",
   "sessions.sidebar.header.actions.closeSessions": "Закрити сесії",
   "sessions.sidebar.header.actions.addProject": "Додати проєкт",
+  "sessions.sidebar.header.actions.more": "Ще",
   "sessions.sidebar.header.actions.newSession": "Нова сесія",
   "sessions.sidebar.header.actions.scheduledTasks": "Заплановані завдання",
   "sessions.scheduledTasks.dialog.title": "Заплановані завдання",

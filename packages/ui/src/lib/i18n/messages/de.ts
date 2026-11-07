@@ -5279,6 +5279,7 @@ export const dict = {
   "layout.services.usage": "Nutzung",
   "sessions.sidebar.header.actions.closeSessions": "Sitzungen schließen",
   "sessions.sidebar.header.actions.addProject": "Projekt hinzufügen",
+  "sessions.sidebar.header.actions.more": "Mehr",
   "sessions.sidebar.header.actions.newSession": "Neue Sitzung",
   "sessions.sidebar.header.actions.scheduledTasks": "Geplante Aufgaben",
   "sessions.scheduledTasks.dialog.title": "Geplante Aufgaben",

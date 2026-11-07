@@ -5329,6 +5329,7 @@ export const dict = {
   "layout.services.usage": "Użycie",
   "sessions.sidebar.header.actions.closeSessions": "Zamknij sesje",
   "sessions.sidebar.header.actions.addProject": "Dodaj projekt",
+  "sessions.sidebar.header.actions.more": "Więcej",
   "sessions.sidebar.header.actions.newSession": "Nowa sesja",
   "sessions.sidebar.header.actions.scheduledTasks": "Zaplanowane zadania",
   "sessions.sidebar.header.actions.searchSessions": "Szukaj sesji",

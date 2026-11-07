@@ -67,3 +67,52 @@ test('reads nested files and the unpacked flag from an asar header', () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('Windows packages require an unpacked decoder for the target architecture', () => {
+  for (const arch of ['x64', 'arm64']) {
+    const target = { platform: 'win32', arch };
+    const decoder = `node_modules/7zip-bin/win/${arch}/7za.exe`;
+    const files = completeApp().filter((file) => !file.path.startsWith('node_modules/7zip-bin/'));
+    assert.deepEqual(findPackagedAppContentProblems(files, target), [`${decoder} is missing`]);
+    assert.deepEqual(findPackagedAppContentProblems([...files, { path: decoder, unpacked: false }], target), [`${decoder} must be unpacked from the asar`]);
+    assert.deepEqual(findPackagedAppContentProblems([...files, { path: decoder, unpacked: true }], target), []);
+  }
+});
+
+test('packaging keeps only the target Windows decoder and no decoders on macOS or Linux', () => {
+  const builderPaths = [require.resolve('electron-builder')];
+  const { getNodeModuleFileMatcher } = require(require.resolve('app-builder-lib/out/fileMatcher.js', { paths: builderPaths }));
+  const { expandMacro } = require(require.resolve('app-builder-lib/out/util/macroExpander.js', { paths: builderPaths }));
+  const { build } = require('../package.json');
+  const appDir = path.resolve(__dirname, '..');
+  for (const targetOs of ['win', 'mac', 'linux']) {
+    for (const arch of ['x64', 'arm64']) {
+      const matcher = getNodeModuleFileMatcher(appDir, appDir, (pattern) => (
+        expandMacro(pattern, arch, {}, { os: targetOs })
+      ), build[targetOs], { config: build, debugLogger: { isEnabled: false } });
+      const filter = matcher.createFilter();
+      for (const decoderOs of ['win', 'mac', 'linux']) {
+        for (const decoderArch of ['ia32', 'x64', 'arm64']) {
+          const decoder = `node_modules/7zip-bin/${decoderOs}/${decoderArch}/7za${decoderOs === 'win' ? '.exe' : ''}`;
+          assert.equal(filter(path.join(appDir, decoder), { isDirectory: () => false }),
+            targetOs === 'win' && decoderOs === 'win' && arch === decoderArch,
+            `${targetOs}/${arch}: ${decoder}`);
+        }
+      }
+      assert.equal(filter(path.join(appDir, 'node_modules/7zip-bin/index.js'), { isDirectory: () => false }), true);
+    }
+  }
+});
+
+test('the web build output inside the archive is rejected', () => {
+  const files = [...completeApp(), { path: `${web}/dist/assets/index.js`, unpacked: false }];
+  assert.deepEqual(findPackagedAppContentProblems(files), [`${web}/dist must not be packaged (1 files found)`]);
+});
+
+test('ripgrep platform packages inside the archive are rejected', () => {
+  const files = [...completeApp(), { path: 'node_modules/@vscode/ripgrep-darwin-arm64/bin/rg', unpacked: false }];
+  assert.deepEqual(findPackagedAppContentProblems(files), [
+    '@vscode/ripgrep platform packages must not be packaged (1 files found); the binary ships in Resources/ripgrep',
+  ]);
+  assert.deepEqual(findPackagedAppContentProblems([...completeApp(), { path: 'node_modules/@vscode/ripgrep/lib/index.js', unpacked: false }]), []);
+});

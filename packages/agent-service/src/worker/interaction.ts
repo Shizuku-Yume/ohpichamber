@@ -108,6 +108,7 @@ export class WorkerInteraction {
     addAutocompleteProvider: () => {},
     setEditorComponent: () => {},
     getEditorComponent: () => undefined,
+    refreshTranscript: () => {},
     rerenderMessage: () => {},
     getLinkClicksAvailable: () => false,
     get theme(): Theme { ensureThemeSync(); return theme; },

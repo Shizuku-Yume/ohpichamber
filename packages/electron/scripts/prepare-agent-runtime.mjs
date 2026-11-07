@@ -127,9 +127,13 @@ export function prepareAgentRuntime({ bunPath = process.execPath, output = path.
     const packages = stageDependencyClosure(path.join(workspaceRoot, 'packages', 'agent-service'), temporary);
     const native = packages.find(item => item.name === `@oh-my-pi/pi-natives-${process.platform}-${process.arch}`);
     if (!native) throw new Error('Install the pinned platform pi-natives package before staging');
-    const onnx = packages.find(item => item.name === 'onnxruntime-node');
-    const onnxAddon = onnx && path.join(temporary, onnx.path, 'bin', 'napi-v6', process.platform, process.arch, 'onnxruntime_binding.node');
-    if (!onnxAddon || !fs.existsSync(onnxAddon)) throw new Error('Installed ONNX runtime native addon is missing');
+    // The SDK closure can hold several onnxruntime-node copies (fastembed pins an older
+    // napi-v3 build); the staged runtime needs the napi-v6 addon the SDK loads.
+    const onnxAddon = packages
+      .filter(item => item.name === 'onnxruntime-node')
+      .map(item => path.join(temporary, item.path, 'bin', 'napi-v6', process.platform, process.arch, 'onnxruntime_binding.node'))
+      .find(candidate => fs.existsSync(candidate));
+    if (!onnxAddon) throw new Error('Installed ONNX runtime native addon is missing');
     const binary = path.join(temporary, process.platform === 'win32' ? 'bun.exe' : 'bun');
     fs.copyFileSync(fs.realpathSync(bunPath), binary);
     fs.chmodSync(binary, 0o755);

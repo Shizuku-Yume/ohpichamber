@@ -146,7 +146,7 @@ test('shared native prompt preparation classifies no-op matches and expands each
   expect(await h.operation({ action: 'input.expand', request: { text: '/first\targument' } })).toEqual({ kind: 'prompt-input', result: { kind: 'text', content: '/first\targument' } });
 }, 60000);
 
-test('all 29 ALLOWED_BUILTIN_COMMANDS are projected as read-only inherited entries and file-backed commands remain editable', async () => {
+test('all 30 ALLOWED_BUILTIN_COMMANDS are projected as read-only inherited entries and file-backed commands remain editable', async () => {
   const h = await fixture();
   const catalogResult = await h.operation({ action: 'commands.read' });
   if (catalogResult.kind !== 'commands') throw new Error('Expected command catalog');

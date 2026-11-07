@@ -31,6 +31,7 @@ export const ALLOWED_BUILTIN_COMMANDS = [
   'tan',
   'seance',
   'advisor',
+  'unpin',
 ] as const;
 const READ_ONLY_BUILTIN_COMMANDS = {
   todo: true,

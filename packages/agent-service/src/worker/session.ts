@@ -12,6 +12,7 @@ import { AgentLifecycleManager } from '@oh-my-pi/pi-coding-agent/registry/agent-
 import { USER_INTERRUPT_LABEL } from '@oh-my-pi/pi-coding-agent/session/messages';
 import type { AgentMessage } from '@oh-my-pi/pi-agent-core';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
+import type { AgentSessionHandle } from '@oh-my-pi/pi-coding-agent/session/agent-session-handle';
 import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
@@ -1493,7 +1494,7 @@ export class WorkerSession {
         return { type: 'subagent.cancel', subagentId: operation.subagentId, cancelled: true };
       }
       case 'subagent.revive': {
-        let revived: AgentSession;
+        let revived: AgentSessionHandle;
         try { revived = await AgentLifecycleManager.global().ensureLive(operation.subagentId); }
         catch { throw new ProjectionError(404, 'SESSION_NOT_FOUND', 'The subagent is not revivable'); }
         // The instruction goes to the subagent's own session, so it is recorded

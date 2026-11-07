@@ -190,6 +190,10 @@ function getSettingTab(setting: OmpSetting): string {
     return 'model';
   }
   if (id.startsWith('compaction.')) return 'context';
+  if (id.startsWith('spotlight.')) return 'shellTools';
+  if (id.startsWith('tui.') || id === 'display.shellVisualization' || id === 'extensionRenderers.transcriptPresenters') return 'interaction';
+  if (id === 'update.auto') return 'interaction';
+  if (id === 'providers.openaiResponsesWebsockets' || id === 'task.workerThreads') return 'providers';
   if (id.startsWith('recap.')) return 'interaction';
   if (
     id === 'out.enabled' ||

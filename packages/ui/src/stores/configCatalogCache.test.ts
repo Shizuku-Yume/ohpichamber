@@ -6,9 +6,11 @@ import {
   CATALOG_PERSIST_SETTLE_MS,
   CATALOG_CACHE_SCHEMA,
   readCachedCatalog,
+  readLocalCatalogSnapshot,
   resetCatalogCacheForTests,
   writeCachedCatalog,
   writeCachedCatalogWhenSettled,
+  writeLocalCatalogSnapshot,
 } from './configCatalogCache';
 
 // A minimal in-memory IndexedDB covering what the cache uses: one object store
@@ -221,6 +223,65 @@ describe('configCatalogCache', () => {
     expect(records.size).toBe(CATALOG_CACHE_MAX_RECORDS);
     expect(await readCachedCatalog('runtime-a', '/project-0')).toBeNull();
     expect(await readCachedCatalog('runtime-a', `/project-${CATALOG_CACHE_MAX_RECORDS + 2}`)).not.toBeNull();
+  });
+});
+
+describe('synchronous localStorage snapshot', () => {
+  const makeLocalStorage = (): Storage => {
+    const entries = new Map<string, string>();
+    return {
+      get length() { return entries.size; },
+      clear: () => entries.clear(),
+      getItem: (key: string) => entries.get(key) ?? null,
+      key: (index: number) => [...entries.keys()][index] ?? null,
+      removeItem: (key: string) => { entries.delete(key); },
+      setItem: (key: string, value: string) => { entries.set(key, value); },
+    };
+  };
+  const localStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  let storage: Storage;
+
+  beforeEach(() => {
+    storage = makeLocalStorage();
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+  });
+  afterEach(() => {
+    if (localStorageDescriptor) Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  });
+
+  test('reads back synchronously for the same runtime and directory only', () => {
+    writeLocalCatalogSnapshot('runtime-a', '/project', { providers: [zen] });
+    const snapshot = readLocalCatalogSnapshot('runtime-a', '/project');
+    expect(snapshot?.providers?.map((entry) => entry.providerId)).toEqual(['zen']);
+    expect(readLocalCatalogSnapshot('runtime-b', '/project')).toBeNull();
+    expect(readLocalCatalogSnapshot('runtime-a', '/other')).toBeNull();
+  });
+
+  test('keeps the other half of the record and never stores credentials', () => {
+    writeLocalCatalogSnapshot('runtime-a', '/project', { providers: [zen] });
+    writeLocalCatalogSnapshot('runtime-a', '/project', { defaultProviders: { zen: 'big-pickle' } });
+    expect(readLocalCatalogSnapshot('runtime-a', '/project')?.defaultProviders).toEqual({ zen: 'big-pickle' });
+    expect(JSON.stringify(storage)).not.toContain(SECRET);
+  });
+
+  test('malformed or foreign snapshots are dropped instead of painted', () => {
+    storage.setItem('openchamber-config-catalog:4:runtime-a\n/project', '{not json');
+    expect(readLocalCatalogSnapshot('runtime-a', '/project')).toBeNull();
+    const otherKey = [...Array(storage.length).keys()].map((index) => storage.key(index)).find((key) => key?.includes('/project'));
+    expect(otherKey).toBeUndefined();
+    storage.setItem('openchamber-config-catalog:4:runtime-a\n/project', JSON.stringify({ key: 'x', schema: 1, runtimeKey: 'runtime-b', directoryKey: '/project', savedAt: 1, providers: [zen] }));
+    expect(readLocalCatalogSnapshot('runtime-a', '/project')).toBeNull();
+  });
+
+  test('a refusing localStorage write leaves continuity to the async cache', () => {
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+      ...makeLocalStorage(),
+      setItem: () => { throw new Error('QuotaExceededError'); },
+      getItem: () => null,
+    } });
+    expect(() => writeLocalCatalogSnapshot('runtime-a', '/project', { providers: [zen] })).not.toThrow();
+    expect(readLocalCatalogSnapshot('runtime-a', '/project')).toBeNull();
   });
 });
 

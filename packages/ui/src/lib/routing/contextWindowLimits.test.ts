@@ -12,6 +12,22 @@ describe('findAnsweringModelKey', () => {
     ])).toBe('openai/gpt');
   });
 
+  test('reads the canonical providerId/modelId of a synced answer', () => {
+    expect(findAnsweringModelKey([
+      { role: 'user' },
+      { role: 'assistant', providerId: 'openai', modelId: 'gpt-5' },
+    ])).toBe('openai/gpt-5');
+  });
+
+  test('prefers canonical ids over legacy ones on the same message', () => {
+    expect(findAnsweringModelKey([{ role: 'assistant', providerId: 'canonical', modelId: 'm2', providerID: 'legacy', modelID: 'm1' }]))
+      .toBe('canonical/m2');
+  });
+
+  test('keeps reading legacy providerID/modelID when canonical ids are absent', () => {
+    expect(findAnsweringModelKey([{ role: 'assistant', providerID: 'legacy', modelID: 'm1' }])).toBe('legacy/m1');
+  });
+
   test('is null before the first answer or when the answer names no model', () => {
     expect(findAnsweringModelKey([{ role: 'user' }])).toBeNull();
     expect(findAnsweringModelKey([{ role: 'assistant' }])).toBeNull();

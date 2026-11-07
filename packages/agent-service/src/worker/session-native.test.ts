@@ -135,7 +135,7 @@ function waitForGoal(worker: WorkerSession, predicate: () => boolean, timeoutMs?
  return pending.promise;
 }
 
-async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts }: {
+async function fixture({ respond, invoke, machineCommands = [], onSubagent = () => { }, denyWebSearch = false, denyLsp = false, planModel = false, reasoningEfforts, denyProviderUse }: {
  respond: (payload: ProviderRequest, root: string) => Promise<Response> | Response;
  invoke?: (request: HostActionRequest, signal: AbortSignal, root: string) => Promise<JsonValue>;
  machineCommands?: string[];
@@ -144,6 +144,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
  denyLsp?: boolean;
  planModel?: boolean;
  reasoningEfforts?: readonly string[];
+ denyProviderUse?: (attempt: number) => Error | undefined;
 }) {
  const root = await mkdtemp(join(tmpdir(), 'native-seams-'));
  const home = process.env.HOME;
@@ -198,6 +199,11 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
    return;
   }
   if (request.type === 'tool' && request.toolName === 'web_search') throw new Error('Host policy refused the tool operation');
+  if (request.type === 'tool' && request.toolName === 'provider.use') {
+   const refusal = denyProviderUse?.(hostRequests.filter(entry => entry.type === 'tool' && entry.toolName === 'provider.use').length);
+   if (refusal) throw refusal;
+   return;
+  }
   if (request.type === 'tool' && (HOST_TOOL_NAMES as readonly string[]).includes(request.toolName)) throw new Error('Host tools must use their domain capability owner, not generic tool grants');
   if (request.type === 'tool' && request.toolName === 'lsp') {
    if (denyLsp) throw new Error('Host policy refused the tool operation');
@@ -1392,6 +1398,61 @@ test('native child tool calls re-enter Host authorization', async () => {
   await harness.close();
  }
 }, 60000);
+
+test('provider.use authorization is requested once per provider/model/endpoint tuple for the worker lifetime', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ const turnDone = () => {
+  const done = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) done.resolve(); });
+  return { done: done.promise, unsubscribe };
+ };
+ const providerUseRequests = () => harness.hostRequests.filter(request => request.type === 'tool' && request.toolName === 'provider.use');
+ const first = turnDone();
+ try {
+  await harness.worker.operation({ type: 'prompt', runId: 'provider-use-first', request: prompt('First turn.') });
+  await first.done;
+  first.unsubscribe();
+  expect(providerUseRequests()).toHaveLength(1);
+  expect(providerUseRequests()[0]).toMatchObject({ input: { providerId: 'native-fixture', modelId: 'native-model' } });
+  const second = turnDone();
+  await harness.worker.operation({ type: 'prompt', runId: 'provider-use-second', request: prompt('Second turn.') });
+  await second.done;
+  second.unsubscribe();
+  // A later turn of the same worker reuses the cached approval instead of a new round-trip.
+  expect(providerUseRequests()).toHaveLength(1);
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('a denied provider.use is never cached, so the next turn asks the Host again', async () => {
+ // Deny only the first authorization: a cache that stored denials would skip the
+ // Host on the second turn and let the refused provider through.
+ const harness = await fixture({ respond: () => completion(), denyProviderUse: attempt => (attempt === 1 ? new Error('Host policy refused the provider') : undefined) });
+ const turnSettled = () => {
+  const done = Promise.withResolvers<void>();
+  const unsubscribe = harness.worker.session.subscribe(event => {
+   if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) done.resolve();
+  });
+  return { done: done.promise, unsubscribe };
+ };
+ const providerUseRequests = () => harness.hostRequests.filter(request => request.type === 'tool' && request.toolName === 'provider.use');
+ try {
+  // Prompt admission returns before the model call, so the refusal lands later in the turn.
+  const first = turnSettled();
+  await harness.worker.operation({ type: 'prompt', runId: 'provider-use-denied', request: prompt('Denied turn.') }).catch(() => undefined);
+  await first.done;
+  first.unsubscribe();
+  expect(providerUseRequests()).toHaveLength(1);
+  expect(harness.fatal()).toBe(false);
+  const second = turnSettled();
+  await harness.worker.operation({ type: 'prompt', runId: 'provider-use-retry', request: prompt('Retried turn.') });
+  await second.done;
+  second.unsubscribe();
+  // No cached denial: the retry performs a second full Host authorization.
+  expect(providerUseRequests()).toHaveLength(2);
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
 
 test('actual SDK edit reaches Host policy and projects its exact replace arguments', async () => {
  const input = {

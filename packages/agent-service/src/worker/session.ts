@@ -62,7 +62,7 @@ import { createHostToolExtension } from './host-tool.ts';
 import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
-import { generateSelectedModelTitle } from './auto-title.ts';
+import { DEFERRED_TITLE_SYSTEM_PROMPT, deferredTitleContext, generateSelectedModelTitle } from './auto-title.ts';
 import { cfgTitleRefreshOnReplan } from '@oh-my-pi/pi-coding-agent/utils/title-settings';
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
@@ -132,6 +132,8 @@ export class WorkerSession {
   readonly btw: RpcBtwController;
   private binding: Promise<void> = Promise.resolve();
   private readonly titleUnsubscribe: () => void;
+  /** Non-blocking initial MCP application; awaited only during close. */
+  mcpStartup: Promise<void> | undefined;
   private pendingTitleInput: string | undefined;
   private titleGeneration: Promise<void> | undefined;
   private titleAbort: AbortController | undefined;
@@ -379,7 +381,32 @@ export class WorkerSession {
       await capturePolicy?.();
       await hostAuthorize(request, context);
     };
+    // Successful provider.use approvals for this worker's lifetime, keyed by the
+    // exact (provider, model, endpoint) the Host authorized. Denials are never
+    // cached, so a policy change still refuses the next attempt; the first use of
+    // each key always performs the full Host `/authorization-policy` round-trip.
+    const authorizedProviderUses = new Set<string>();
+    const providerUseKey = (input: JsonObject): string | null => (
+      typeof input.providerId === 'string' && typeof input.modelId === 'string'
+        ? JSON.stringify([input.providerId, input.modelId, typeof input.endpoint === 'string' ? input.endpoint : null])
+        : null
+    );
     const authorizeTool = async (toolName: string, toolInput: JsonObject, approval?: { approvalId?: string; toolCallId: string }): Promise<void> => {
+      if (toolName === 'provider.use' && approval === undefined) {
+        const key = providerUseKey(toolInput);
+        if (key !== null && authorizedProviderUses.has(key)) return;
+        await capturePolicy?.();
+        const model = session?.model;
+        const nativeContext: NativePolicyContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined) };
+        if (model) {
+          nativeContext.providerId = model.provider;
+          nativeContext.modelId = model.id;
+          nativeContext.endpoint = model.baseUrl;
+        }
+        await hostAuthorize({ type: 'tool', toolName, input: toolInput }, nativeContext);
+        if (key !== null) authorizedProviderUses.add(key);
+        return;
+      }
       await capturePolicy?.();
       const model = session?.model;
       const nativeContext: NativePolicyContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined) };
@@ -587,9 +614,21 @@ export class WorkerSession {
       };
       await capturePolicy();
       projection = owned.projection;
+      // External MCP servers can take tens of seconds to handshake; the first
+      // prompt must not wait for them. Start the connection in the background,
+      // publish the ready catalog when it lands, and keep the worker open on
+      // failure (a slow or broken external server never fails the session).
       if (input.mcpConfiguration && mcp) {
-        const applied = await mcp.apply({ persistedRevision: input.mcpConfiguration.persistedRevision }, input.mcpConfiguration);
-        if (applied.outcome !== 'applied') throw new ProjectionError(503, 'MCP_APPLY_FAILED', 'Initial MCP configuration could not be applied');
+        const initialMcpConfiguration = input.mcpConfiguration;
+        owned.mcpStartup = mcp.apply({ persistedRevision: initialMcpConfiguration.persistedRevision }, initialMcpConfiguration)
+          .then(outcome => {
+            if (outcome.outcome !== 'applied') {
+              process.stderr.write(`${JSON.stringify({ type: 'mcp.runtime.failure', error: { code: 'MCP_APPLY_FAILED', detail: 'Initial MCP configuration was not applied; prompt admission stays available.' } })}\n`);
+            }
+          })
+          .catch(() => {
+            process.stderr.write(`${JSON.stringify({ type: 'mcp.runtime.failure', error: { code: 'MCP_APPLY_FAILED', detail: 'Initial MCP configuration could not be applied; prompt admission stays available.' } })}\n`);
+          });
       }
       // Skill publications are generation-local; an untouched configuration still has CAS revision zero.
       if (input.skillSources) await catalogs.skills.apply(input.skillSources, '1');
@@ -1223,20 +1262,33 @@ export class WorkerSession {
     const text = this.pendingTitleInput;
     if (!text) return;
     this.pendingTitleInput = undefined;
+    // OMP's deferred path: the reply has settled and the exchange itself is the
+    // only thing that can name this session. This covers a greeting (which names
+    // no task) and the retry after the title model declined the opening prompt.
+    const context = deferredTitleContext({
+      messages: this.session.agent.state.messages,
+      sessionName: this.session.sessionManager.getSessionName(),
+    });
     const controller = new AbortController();
     const generation = (async () => {
       try {
         const model = this.session.model;
         if (!model) return;
-        const title = await generateSelectedModelTitle({
-          session: this.session,
-          settings: this.session.settings,
-          firstMessage: text,
-          authorize: this.authorizeProviderUse,
-          signal: controller.signal,
-        });
-        if (!title || controller.signal.aborted || this.closed || this.session.sessionManager.getSessionName()) return;
-        await this.session.sessionManager.setSessionName(title, 'auto');
+        const title = await this.generateTitleFrom(text, controller);
+        if (controller.signal.aborted || this.closed || this.session.sessionManager.getSessionName()) return;
+        if (title) {
+          await this.session.sessionManager.setSessionName(title, 'auto');
+          await this.session.sessionManager.flush();
+          return;
+        }
+        // The model declined. Retry once from the conversation context in this
+        // same turn: no second agent_end arrives for this reply.
+        if (!context) return;
+        // The deferred attempt uses its own prompt: OMP's default one declines
+        // greetings, which would leave a greeting-only session untitled forever.
+        const retitled = await this.generateTitleFrom(context, controller, DEFERRED_TITLE_SYSTEM_PROMPT);
+        if (!retitled || controller.signal.aborted || this.closed || this.session.sessionManager.getSessionName()) return;
+        await this.session.sessionManager.setSessionName(retitled, 'auto');
         await this.session.sessionManager.flush();
       } catch {
         // A refused or unavailable title provider leaves the session untitled; it never fails the user run.
@@ -1247,6 +1299,17 @@ export class WorkerSession {
     void generation.finally(() => {
       if (this.titleGeneration === generation) this.titleGeneration = undefined;
       if (this.titleAbort === controller) this.titleAbort = undefined;
+    });
+  }
+
+  private async generateTitleFrom(source: string, controller: AbortController, customSystemPrompt?: string): Promise<string | null> {
+    return generateSelectedModelTitle({
+      session: this.session,
+      settings: this.session.settings,
+      firstMessage: source,
+      authorize: this.authorizeProviderUse,
+      signal: controller.signal,
+      customSystemPrompt,
     });
   }
 
@@ -1940,6 +2003,10 @@ export class WorkerSession {
     this.pendingTitleInput = undefined;
     await this.stopAutoTitle();
     this.interaction.close();
+    // Close the MCP owner first: it disconnects staged transports, so a pending
+    // 30 s handshake settles instead of stalling this worker's 5 s shutdown.
+    const mcpClosing = this.mcp?.close();
+    try { await this.mcpStartup; } catch { /* its failure is already reported as a runtime failure */ }
     try {
       await this.btw.close();
       await this.catalogs.close();
@@ -1963,7 +2030,7 @@ export class WorkerSession {
         try { await this.completion.close(); }
         finally {
           await Promise.allSettled([...this.operations]);
-          try { await this.shell.close(); } finally { await this.mcp?.close(); }
+          try { await this.shell.close(); } finally { await mcpClosing; }
         }
       } finally {
         this.session.setClientBridge(undefined);

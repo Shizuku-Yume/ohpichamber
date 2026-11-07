@@ -664,13 +664,16 @@ test('reopening a native session maps reasoningTokens usage into the canonical s
     await writeFile(file, `${rewritten.join('\n')}\n`);
     reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
     const restored = new WorkerProjection(reopened, 'session');
-    const expected = { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12,
+    // `reasoning` is the projected provider reasoning counter; it stays separate
+    // from totalTokens, which the provider already counts in full.
+    const expected = { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12, reasoning: 3,
       cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 } };
     const seeded = restored.seed().messages.find((message) => message.role === 'assistant');
     expect(seeded?.usage).toEqual(expected);
     const page = restored.history({ sessionId: 'session' }).messages.find((message) => message.role === 'assistant');
     expect(page?.usage).toEqual(expected);
     expect(seeded?.usage).not.toHaveProperty('reasoningTokens');
+    expect(seeded?.usage?.totalTokens).toBe(12);
   } finally {
     await reopened?.close();
     await manager.close();

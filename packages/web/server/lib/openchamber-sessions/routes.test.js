@@ -139,11 +139,125 @@ describe('canonical session route contracts', () => {
     const second = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
     expect(second.body.run).toMatchObject({ sessionId: 'ses_admitted', status: 'running' });
     expect(workerStarts).toBe(1);
-    expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(2);
+    // The first send reopens a cold root; the second reuses the confirmed live worker.
+    expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(1);
     const afterValid = calls.length;
     await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send({}).expect(400);
     expect(calls).toHaveLength(afterValid);
   });
+  it('retries one cold dispatch after a verified unloaded refusal and never duplicates an admitted run', async () => {
+    const calls = []; let live = false; let runs = 0;
+    const runtime = id => ({
+      sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+    });
+    const service = {
+      request: async (pathname, init = {}) => {
+        calls.push(pathname);
+        const id = decodeURIComponent(pathname.split('/').at(-2));
+        if (pathname.endsWith('/reopen')) { live = true; return Response.json(runtime(id)); }
+        if (pathname.endsWith('/runs')) {
+          runs += 1;
+          if (!live) return Response.json({ type: 'urn:ohpichamber:problem:SESSION_RESTORE_FAILED', title: 'Refused', status: 503, code: 'SESSION_RESTORE_FAILED', detail: 'The worker is unloaded', retryable: true }, { status: 503 });
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+        }
+        throw new Error(`Unexpected service request ${pathname}`);
+      }
+    };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: routeFixture.agentScopeStore,
+      service,
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = { input: { text: 'Warm prompt', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+    // A cold root reopens before its first dispatch.
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    expect(runs).toBe(1);
+    // The supervisor evicted the worker after this root was confirmed live: the
+    // cached dispatch is refused cold, reopens once, and runs on the retry.
+    calls.length = 0;
+    live = false;
+    const response = await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    expect(response.body.run).toMatchObject({ sessionId: 'ses_admitted', status: 'running' });
+    expect(runs).toBe(3);
+    expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(1);
+    expect(calls.filter(path => path.endsWith('/runs'))).toHaveLength(2);
+    // The third prompt rides the confirmed live worker: no reopen, no retry.
+    calls.length = 0;
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    expect(runs).toBe(4);
+    expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(0);
+    expect(calls.filter(path => path.endsWith('/runs'))).toHaveLength(1);
+  });
+
+  it('does not reopen or retry a busy or full service refusal', async () => {
+    for (const problem of [
+      { status: 409, code: 'RUN_ACTIVE', detail: 'A run is already active' },
+      { status: 409, code: 'COMMAND_IN_FLIGHT', detail: 'Another command is in flight' },
+      { status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'Session capacity is full', details: { reason: 'worker_capacity', activeRootWorkers: 4, maxActiveRootWorkers: 4 } },
+    ]) {
+      const calls = [];
+      const runtime = id => ({
+        sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+        createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+      });
+      const service = {
+        request: async (pathname, init = {}) => {
+          calls.push(pathname);
+          if (pathname.endsWith('/reopen')) return Response.json(runtime('ses_admitted'));
+          if (pathname.endsWith('/runs')) return Response.json({ type: `urn:ohpichamber:problem:${problem.code}`, title: 'Refused', ...problem, retryable: problem.status >= 500 }, { status: problem.status });
+          throw new Error(`Unexpected service request ${pathname}`);
+        }
+      };
+      const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+      const sessionService = createOpenChamberSessionService({
+        agentScopeStore: routeFixture.agentScopeStore,
+        service,
+        resolveWorkspaceScope: async () => validScope('workspace'),
+        resolveSessionScope: async id => validScope(id),
+        resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
+        directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+        archiveStore: createMemoryArchiveStore(),
+        sessionMetadataStore: createMemorySessionMetadataStore(),
+      });
+      const app = express();
+      const router = express.Router();
+      registerCanonicalSessionRoutes(router, sessionService);
+      app.use('/api/agent/v1/sessions', router);
+      const prompt = { input: { text: 'Busy prompt', attachments: [], context: [] }, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null } };
+      await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(problem.status);
+      // The cold reopen on the first send is expected; the refusal itself must not add one or replay the run.
+      expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(1);
+      expect(calls.filter(path => path.endsWith('/runs'))).toHaveLength(1);
+      // A failed dispatch voids the live confirmation, so the next send verifies again.
+      calls.length = 0;
+      await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(problem.status);
+      expect(calls.filter(path => path.endsWith('/reopen'))).toHaveLength(1);
+      expect(calls.filter(path => path.endsWith('/runs'))).toHaveLength(1);
+    }
+  });
+
   it('enforces Host admission invariant: rejects cold send when agentScopeStore is missing instead of bypassing admission', async () => {
     const calls = [];
     const service = {

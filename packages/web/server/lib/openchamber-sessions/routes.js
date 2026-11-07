@@ -14,6 +14,16 @@ const SessionForkRequestSchema = z.strictObject({ messageId: EntityIdSchema.opti
   { message: 'Selected forks require a public message ID; full forks do not accept one' },
 );
 const SessionReopenScopeSchema = z.strictObject({ rootSessionId: z.string().min(1), projectId: z.string().min(1), workspaceId: z.string().min(1), cwd: z.string().min(1), agentDirectory: z.string().min(1), agentDirectoryId: z.string().min(1), displayPath: z.string().min(1), env: z.record(z.string(), z.string()).optional() });
+const COLD_REFUSAL_CODES = new Set(['SESSION_NOT_FOUND', 'SERVICE_UNAVAILABLE', 'SESSION_RESTORE_FAILED']);
+/**
+ * A verified refusal that means the addressed root has no live worker, so a
+ * reopen may fix it. Capacity exhaustion and in-flight runs name a service
+ * that is up; retrying them would only repeat the same refusal.
+ */
+const isVerifiedColdRefusal = (error) => error?.refusalVerified === true
+  && COLD_REFUSAL_CODES.has(error?.code)
+  && !(error?.details && error.details.reason === 'worker_capacity');
+
 const parseCommand = (schema, payload) => {
   const parsed = schema.safeParse(payload);
   if (!parsed.success) throw new OpenChamberControlError('Session command is invalid', 400);
@@ -75,7 +85,17 @@ const createCanonicalSessionService = (dependencies) => {
   const request = async (pathname, init = {}) => {
     const response = await service.request(pathname, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
     const body = await response.json().catch(() => null);
-    if (!response.ok) { const problem = ProblemDetailsSchema.safeParse(body); const error = new OpenChamberControlError(problem.success ? problem.data.detail : body?.detail || body?.error || 'Agent service request failed', response.status); error.code = problem.success ? problem.data.code : body?.code; throw error; }
+    if (!response.ok) {
+      const problem = ProblemDetailsSchema.safeParse(body);
+      const error = new OpenChamberControlError(problem.success ? problem.data.detail : body?.detail || body?.error || 'Agent service request failed', response.status);
+      error.code = problem.success ? problem.data.code : body?.code;
+      // A well-formed problem proves the Agent Service refused the command, so
+      // a caller may distinguish a cold worker from an uncertain transport loss.
+      error.refusalVerified = problem.success;
+      error.retryable = problem.success ? problem.data.retryable : false;
+      if (problem.success && problem.data.details) error.details = problem.data.details;
+      throw error;
+    }
     return body;
   };
   const scopeFor = async (sessionId) => {
@@ -94,6 +114,12 @@ const createCanonicalSessionService = (dependencies) => {
     if (scope.workspaceId.startsWith('archive_')) throw new OpenChamberControlError('Deleted-space sessions are permanently read-only', 409, { code: 'SESSION_READ_ONLY', retryable: false });
   };
   const emit = (event) => { try { publishSessionEvent?.(event); } catch {} try { broadcastGlobalUiEvent?.(event); } catch {} };
+  // Roots this process confirmed live through a successful reopen or run
+  // acknowledgement. A warm send then dispatches without another reopen;
+  // delete, relocation, unload and a failed reopen forget the confirmation.
+  const liveRootSessions = new Set();
+  const rememberLive = (rootSessionId) => { liveRootSessions.add(rootSessionId); };
+  const forgetLive = (rootSessionId) => { liveRootSessions.delete(rootSessionId); };
   const metadata = { getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => {
     if (persistSessionMetadata) return persistSessionMetadata(id, patch, { directory });
     // The fallback owns the store for module tests and compositions without an
@@ -211,19 +237,32 @@ const createCanonicalSessionService = (dependencies) => {
     // before Agent Service prompt admission sees an unavailable runtime. Capture
     // and validation stay ahead of this so an invalid prompt starts no worker.
     // Steer and follow-up need an already-live run, so they never reopen.
-    if (operation === 'send') await reopen(scope);
+    // A root already confirmed live dispatches directly; only a verified cold
+    // refusal reopens and retries that same dispatch once.
+    if (operation === 'send' && !liveRootSessions.has(scope.rootSessionId)) await reopen(scope);
     let acknowledgment;
     let receipt;
     try {
       const pathname = operation === 'send' ? 'runs' : operation === 'steer' ? 'steer' : 'follow-up';
       const body = operation === 'send' ? { type: 'prompt', runId: deliveryRunId, request: capture.request, attachments: capture.attachments }
         : { request: capture.request, attachments: capture.attachments };
-      const response = await request(`/internal/sessions/${encodeURIComponent(sessionId)}/${pathname}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      const dispatch = () => request(`/internal/sessions/${encodeURIComponent(sessionId)}/${pathname}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+      let response;
+      try {
+        response = await dispatch();
+      } catch (error) {
+        // Only a verified cold refusal retries: it proves native admission never
+        // accepted this command, so resending cannot duplicate an admitted run.
+        if (operation !== 'send' || !isVerifiedColdRefusal(error)) throw error;
+        await reopen(scope);
+        response = await dispatch();
+      }
       if (operation === 'send') {
         const run = RunSchema.parse(response?.run);
         if (run.sessionId !== sessionId || run.runId !== deliveryRunId) throw new Error('Native run acknowledgement does not match the admitted command');
         acknowledgment = { run };
         receipt = { runId: run.runId, deliveryRunId, run };
+        rememberLive(scope.rootSessionId);
       } else {
         acknowledgment = (operation === 'steer' ? SteerAckSchema : FollowUpAckSchema).parse(response);
         if (acknowledgment.sessionId !== sessionId) throw new Error('Native acknowledgement does not match the admitted session');
@@ -231,8 +270,12 @@ const createCanonicalSessionService = (dependencies) => {
           : { deliveryRunId, followUpId: acknowledgment.followUpId, ack: acknowledgment };
       }
     } catch (error) {
+      // Any failed send path voids the live confirmation — a failed dispatch, a
+      // failed cold retry, or an acknowledgement that does not name this run.
+      // A later prompt then verifies the worker again instead of trusting memory.
+      if (operation === 'send') forgetLive(scope.rootSessionId);
       // A failed transport or malformed acknowledgement cannot prove that native execution did not accept the command.
-      if (claim && !(error instanceof OpenChamberControlError && error.statusCode < 500)) {
+      if (claim && !(error instanceof OpenChamberControlError && error.refusalVerified === true)) {
         throw new OpenChamberControlError('Command acceptance is uncertain; it will not be dispatched again', 409, { code: 'COMMAND_IN_FLIGHT', retryable: false });
       }
       throw error;
@@ -282,7 +325,15 @@ const createCanonicalSessionService = (dependencies) => {
     const runtime = RuntimeSessionSchema.parse(await request(`/internal/sessions/${encodeURIComponent(bootstrap.rootSessionId)}/reopen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bootstrap) }));
     if (runtime.sessionId !== bootstrap.rootSessionId || runtime.rootSessionId !== bootstrap.rootSessionId || runtime.projectId !== bootstrap.projectId || runtime.workspaceId !== bootstrap.workspaceId) throw new OpenChamberControlError('Session restore acknowledgement is outside the authorized scope', 502);
   };
-  const reopen = (scope) => withSessionAdmission(scope, 'reopen', scope.rootSessionId, () => reopenNative(scope));
+  const reopen = async (scope) => {
+    try {
+      await withSessionAdmission(scope, 'reopen', scope.rootSessionId, () => reopenNative(scope));
+      rememberLive(scope.rootSessionId);
+    } catch (error) {
+      forgetLive(scope.rootSessionId);
+      throw error;
+    }
+  };
   const open = async (id) => { const scope = await scopeFor(id); const snapshot = SessionSnapshotSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/snapshot`)); if (snapshot.session.sessionId !== id || snapshot.session.projectId !== scope.projectId || snapshot.session.workspaceId !== scope.workspaceId) throw new OpenChamberControlError('Session snapshot is outside the authorized scope', 502); return snapshot; };
   const history = async (id, query = '') => { const scope = await scopeFor(id); const page = HistoryPageSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}/history${query ? `?${query}` : ''}`)); if (page.sessionId !== id || page.turns.some(turn => turn.projectId !== undefined && turn.projectId !== scope.projectId) || page.messages.some(message => message.projectId !== undefined && message.projectId !== scope.projectId)) throw new OpenChamberControlError('Session history is outside the authorized scope', 502); return page; };
   const list = async (workspaceId) => {
@@ -493,7 +544,9 @@ const createCanonicalSessionService = (dependencies) => {
     await agentScopeStore.checkWorktreeScope(source.cwd, archiveClaimId);
     const rootSessionId = source.rootSessionId;
     if (relocationControls.has(rootSessionId)) throw new OpenChamberControlError('Session relocation is in progress', 409, { code: 'COMMAND_IN_FLIGHT' });
-    relocationControls.add(rootSessionId);
+    // Relocation retires the source worker, so a later prompt must reopen it.
+  forgetLive(rootSessionId);
+  relocationControls.add(rootSessionId);
     try {
       await recoverRelocation(rootSessionId);
       source = archiveClaimId ? await agentScopeStore.getSession(sessionId) : await resolveHostRelocationScope(sessionId);
@@ -678,13 +731,21 @@ const createCanonicalSessionService = (dependencies) => {
     const scope = await scopeFor(id);
     const reservation = await agentScopeStore.reserveSessionDelete(id);
     try {
+      // Deleting retires the worker, so no send may treat this root as live. The
+      // reopen below is a one-off restore for the DELETE itself, and the finally
+      // clears the confirmation it publishes.
+      forgetLive(scope.rootSessionId);
       if (!scope.workspaceId.startsWith('archive_')) await reopen(scope);
       const ack = SessionDeleteAckSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }));
       if (ack.sessionId !== id) throw new OpenChamberControlError('Session deletion acknowledgement identified another session', 502);
       if (scope.workspaceId.startsWith('archive_')) await onArchiveDeleted?.(scope, ack);
       else await agentScopeStore.removeSessionFamily(scope.rootSessionId);
       return ack;
-    } finally { agentScopeStore.releaseSessionDelete(reservation); }
+    } finally {
+      // Deleting retires the worker whether or not the delete was acknowledged.
+      forgetLive(scope.rootSessionId);
+      agentScopeStore.releaseSessionDelete(reservation);
+    }
   };
   const listArchivedWorktreeSessions = async ({ projectDirectory, archiveId }) => {
     if (!agentScopeStore) throw new OpenChamberControlError('Host archive authority is unavailable', 503);
@@ -707,7 +768,7 @@ const createCanonicalSessionService = (dependencies) => {
     }));
     return { sessions };
   };
-  const unloadWorker = async (id) => { try { await request(`/internal/workers/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {} };
+  const unloadWorker = async (id) => { forgetLive(id); try { await request(`/internal/workers/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {} };
   return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
 };
 

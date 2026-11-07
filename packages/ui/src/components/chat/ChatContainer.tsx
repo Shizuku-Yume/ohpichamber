@@ -1,3 +1,4 @@
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useMessageTTS } from "@/hooks/useMessageTTS";
 import { useAutoReadAloud } from "@/hooks/useAutoReadAloud";
 import { findLatestCompletedReply } from "@/lib/messages/latestReply";
@@ -1114,8 +1115,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
  // running, so status also marks the session as active for the auto-read
  // baseline.
  const sessionIsActive = sessionIsWorking
-  || sessionStatusForCurrent.type === "busy"
-  || sessionStatusForCurrent.type === "retry";
+  || sessionStatusForCurrent === "running"
+  || sessionStatusForCurrent === "awaiting_approval"
+  || sessionStatusForCurrent === "awaiting_input";
  useAutoReadAloud({
   sessionKey: currentSessionKey ?? "",
   ready: hasRenderableSessionSnapshot && sessionMessageLoadState.status === "ready",

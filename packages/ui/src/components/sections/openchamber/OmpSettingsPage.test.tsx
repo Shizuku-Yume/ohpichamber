@@ -33,7 +33,7 @@ const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
 const { CanonicalApiError, canonicalClient } = await import('@/api/canonicalClient');
-import type { ModelCatalog } from '@openchamber/agent-contract';
+import type { ModelCatalog, OmpSettingsState } from '@openchamber/agent-contract';
 import { ompSettingsI18n } from '@/lib/i18n/messages/ompSettingsI18n';
 const { OmpSettingsPage } = await import('./OmpSettingsPage');
 
@@ -299,4 +299,154 @@ test('safely parses roles record with malformed or non-string fields without thr
   // Verify default role was still safely extracted
   const defaultRow = container.querySelector('[data-settings-item="omp.modelRoles.default"]');
   expect(defaultRow?.textContent).toContain('anthropic/claude-3-7-sonnet');
+});
+
+test('eliminates all raw JSON textareas and renders structured controls for all complex settings', async () => {
+  const fullState = {
+    workspaceId: 'workspace_1',
+    revision: '10',
+    settings: [
+      ...stateWithRoles.settings,
+      {
+        id: 'enabledModels' as const,
+        type: 'array' as const,
+        value: ['anthropic/*', 'openai/gpt-4o-mini'],
+        default: [],
+        configured: true,
+        label: 'Enabled Models',
+      },
+      {
+        id: 'modelPresets' as const,
+        type: 'record' as const,
+        value: {
+          fastCoding: {
+            modelRoles: { default: 'openai/gpt-4o-mini', smol: 'openai/gpt-4o-mini' },
+            defaultThinkingLevel: 'low',
+          },
+        },
+        default: {},
+        configured: true,
+        label: 'Model Presets',
+      },
+      {
+        id: 'retry.fallbackChains' as const,
+        type: 'record' as const,
+        value: { default: ['openai/gpt-4o-mini', 'openai/o3-mini'] },
+        default: {},
+        configured: true,
+        label: 'Retry Fallback Chains',
+        group: 'Retry & Fallback',
+      },
+      {
+        id: 'retry.fallbackOn' as const,
+        type: 'enum' as const,
+        value: 'usage-limit',
+        default: 'any',
+        configured: true,
+        label: 'Fallback Trigger',
+        group: 'Retry & Fallback',
+      },
+      {
+        id: 'compaction.methodOrder' as const,
+        type: 'array' as const,
+        value: ['remote', 'snapcompact', 'handoff', 'shake', 'soft'],
+        default: ['remote', 'snapcompact', 'handoff', 'shake', 'soft'],
+        configured: true,
+        label: 'Compaction Method Order',
+        group: 'Compaction',
+      },
+      {
+        id: 'compaction.modelThresholds' as const,
+        type: 'record' as const,
+        value: { 'openai/gpt-4o': 90000, 'anthropic/*': 120000 },
+        default: {},
+        configured: true,
+        label: 'Model Thresholds',
+        group: 'Compaction',
+      },
+    ],
+  };
+
+  getSettings.mockResolvedValue(fullState as unknown as OmpSettingsState);
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+
+  // Acceptance requirement 1: EXACTLY ZERO <textarea> elements anywhere on OmpSettingsPage
+  const allTextareas = container.querySelectorAll('textarea');
+  expect(allTextareas.length).toBe(0);
+
+  // Acceptance requirement 2: All 9 canonical category tabs present in SortableTabsStrip
+  const tabElements = container.querySelectorAll('[data-tabs-strip] button, [role="tab"], .cursor-pointer');
+  const tabLabels = Array.from(tabElements).map(el => el.textContent?.trim()).filter(Boolean);
+  expect(tabLabels.some(l => l?.includes('Model') || l?.includes('模型'))).toBe(true);
+
+  // Acceptance requirement 3: enabledModels renders structured chip list
+  const enabledModelsRow = container.querySelector('[data-settings-item="omp.enabledModels"]');
+  expect(enabledModelsRow).not.toBeNull();
+  expect(enabledModelsRow?.textContent).toContain('anthropic/*');
+  expect(enabledModelsRow?.textContent).toContain('openai/gpt-4o-mini');
+  expect(enabledModelsRow?.querySelector('textarea')).toBeNull();
+
+  // Acceptance requirement 4: modelPresets renders structured preset editor
+  const presetsRow = container.querySelector('[data-settings-item="omp.modelPresets"]');
+  expect(presetsRow).not.toBeNull();
+  expect(presetsRow?.textContent).toContain('fastCoding');
+  expect(presetsRow?.querySelector('textarea')).toBeNull();
+
+  // Acceptance requirement 5: retry.fallbackChains renders structured chain editor
+  const chainsRow = container.querySelector('[data-settings-item="omp.retry.fallbackChains"]');
+  expect(chainsRow).not.toBeNull();
+  expect(chainsRow?.textContent).toContain('default');
+  expect(chainsRow?.textContent).toContain('openai/gpt-4o-mini');
+  expect(chainsRow?.querySelector('textarea')).toBeNull();
+
+  // Acceptance requirement 6: retry.fallbackOn renders single-select chips preserving enum
+  const fallbackOnRow = container.querySelector('[data-settings-item="omp.retry.fallbackOn"]');
+  expect(fallbackOnRow).not.toBeNull();
+  expect(fallbackOnRow?.querySelector('[role="group"]')).not.toBeNull();
+  expect(fallbackOnRow?.querySelector('textarea')).toBeNull();
+
+  // Acceptance requirement 7: compaction.methodOrder renders reorderable chips
+  const methodOrderRow = container.querySelector('[data-settings-item="omp.compaction.methodOrder"]');
+  expect(methodOrderRow).not.toBeNull();
+  expect(methodOrderRow?.textContent).toContain('Server compaction');
+  expect(methodOrderRow?.textContent).toContain('Snapcompact');
+  expect(methodOrderRow?.querySelector('textarea')).toBeNull();
+
+  // Acceptance requirement 8: compaction.modelThresholds renders structured number thresholds
+  const thresholdsRow = container.querySelector('[data-settings-item="omp.compaction.modelThresholds"]');
+  expect(thresholdsRow).not.toBeNull();
+  expect(thresholdsRow?.textContent).toContain('openai/gpt-4o');
+  expect(thresholdsRow?.textContent).toContain('90,000');
+  expect(thresholdsRow?.querySelector('textarea')).toBeNull();
+});
+
+test('provides full reactive i18n coverage in both English and Chinese for OMP settings', async () => {
+  // Verify English keys
+  expect(ompSettingsI18n.en['settings.omp.items.enabledModels.label']).toBe('Enabled models');
+  expect(ompSettingsI18n.en['settings.omp.tab.model.label']).toBe('Model & Roles');
+  expect(ompSettingsI18n.en['settings.omp.group.role_models.label']).toBe('Role Models');
+  expect(ompSettingsI18n.en['settings.omp.items.retry.fallbackOn.options.any']).toBe('Any error');
+
+  // Verify Chinese translations
+  expect(ompSettingsI18n['zh-CN']['settings.omp.items.enabledModels.label']).toBe('启用的模型');
+  expect(ompSettingsI18n['zh-CN']['settings.omp.tab.model.label']).toBe('模型与角色');
+  expect(ompSettingsI18n['zh-CN']['settings.omp.group.role_models.label']).toBe('角色模型');
+  expect(ompSettingsI18n['zh-CN']['settings.omp.items.retry.fallbackOn.options.any']).toBe('任意错误');
+
+  // Reactive test: Switch locale to zh-CN and render
+  await act(async () => {
+    useI18nStore.getState().setLocale('zh-CN');
+    await new Promise((r) => setTimeout(r, 50));
+  });
+  try {
+    getSettings.mockResolvedValue(state);
+    await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+    await settle();
+
+    expect(container.textContent).toContain('自动压缩');
+    expect(container.textContent).toContain('压缩阈值');
+  } finally {
+    await act(async () => { useI18nStore.getState().setLocale('en'); });
+  }
 });

@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
 import http2 from 'node:http2';
+import { RuntimeSessionSchema } from '@openchamber/agent-contract';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { createUiAuth } from './lib/ui-auth/ui-auth.js';
@@ -95,6 +96,8 @@ import { createNotificationTemplateRuntime } from './lib/notifications/template-
 import { createCanonicalQueueRuntime, createPromptQueueStore, registerCanonicalQueueRoutes } from './lib/message-queue/runtime.js';
 import { createDispatchResultsRuntime } from './lib/dispatch-results/runtime.js';
 import { createRoutingRuntime } from './lib/routing/runtime.js';
+import { registerHostPermissionRuntime } from './lib/permission-auto-accept/host-channel.js';
+import { createPermissionAutoAcceptRuntime, registerPermissionAutoAcceptRoutes } from './lib/permission-auto-accept/runtime.js';
 import { createJevClient } from './lib/routing/jev.js';
 import { createSessionWorkRuntime } from './lib/session-work/runtime.js';
 import { createSessionLineage } from './lib/session-lineage.js';
@@ -728,6 +731,12 @@ const openChamberSessionService = createOpenChamberSessionService({
      .catch((error) => console.warn('[agent-events] session observation failed:', error?.code ?? 'SERVICE_UNAVAILABLE'));
    }
   }
+  // A new top-level session starts in the default permission mode; the runtime
+  // never reaches back into existing sessions.
+  if (event?.type === 'openchamber:session-created' && sessionId) {
+   void permissionAutoAcceptRuntime?.applyDefaultMode(sessionId)
+    .catch((error) => console.warn('[permission-auto-accept] failed to apply the default mode:', error?.message ?? error));
+  }
  },
  sessionMetadataStore,
  directCommandAdmissionStore: hostSessionState.directCommandAdmissionStore,
@@ -918,6 +927,53 @@ const routingRuntime = createRoutingRuntime({
  broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
 });
 
+// The authoritative per-session permission policy (`ask`, `safety`, `auto`).
+// The Agent Service raises approval cards; this Host decides — before the card
+// reaches the user — whether the request is answered for them, and only tool
+// execution permissions ever pass through it.
+const permissionAutoAcceptRuntime = createPermissionAutoAcceptRuntime({
+ readSettingsFromDiskMigrated,
+ persistSettings,
+ broadcastGlobalUiEvent: broadcastOpenChamberUiEvent,
+ evaluatePermission: (permission, directory) => routingRuntime.evaluatePermission(permission, directory),
+ resolveLegacyEnabledMode: async () => ((await routingRuntime.legacySafetyNetEnabled()) ? 'safety' : 'auto'),
+ resolveSessionParent: async (sessionId) => {
+  try {
+   const response = await hostAgentRuntime.service.request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}`);
+   // A failed lookup is unknown lineage, not a root: caching it would keep a
+   // subagent from inheriting its parent after a transient error.
+   if (!response.ok) return undefined;
+   const parsed = RuntimeSessionSchema.safeParse(await response.json());
+   if (!parsed.success) return undefined;
+   const runtime = parsed.data;
+   const parent = runtime.parentSessionId;
+   return typeof parent === 'string' && parent && parent !== sessionId ? parent : null;
+  } catch { return undefined; }
+ },
+ // The Agent Service owns approval CAS; the Host only tells it that the
+ // authoritative mode changed, so approvals already waiting are reconsidered.
+ onSessionPolicyChanged: async (sessionId, mode) => {
+  try {
+   await hostAgentRuntime.service.request(`/internal/sessions/${encodeURIComponent(sessionId)}/permission-mode`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ mode }),
+   });
+  } catch (error) {
+   console.warn('[permission-auto-accept] mode push failed:', error?.message ?? error);
+  }
+ },
+});
+
+// The service asks the Host about modes and safety verdicts over IPC; it must
+// never default to an answering mode while this runtime is still unbuilt.
+registerHostPermissionRuntime(permissionAutoAcceptRuntime);
+
+// A request the policy held still needs the user, so only one that was
+// actually answered automatically skips its permission notification.
+notificationTriggerRuntime.setGetIsSessionAutoAccepting(
+ (sessionId, scope, approvalId) => permissionAutoAcceptRuntime.isPermissionAutoAnswered(sessionId, approvalId, scope?.cwd),
+);
 // "In work": Jev opens a session when real work starts in it and hints when a
 // turn looks like the end of it. The same turn-end call gates session assist.
 const sessionWorkRuntime = createSessionWorkRuntime({
@@ -1011,6 +1067,7 @@ globalMessageStreamHub.subscribeEvent(async (event, scope) => {
  sessionRuntime.processCanonicalEvent(event, scope);
  await messageQueueRuntime.observe({ ...scope, sessionId: event.sessionId }, event);
  sessionLineage.observe(event);
+ if (event.type === 'session.updated' && event.session) permissionAutoAcceptRuntime.observeSession(event.session);
  turnDurationRuntime.processCanonicalEvent(event, scope);
  sessionAssistRuntime.processCanonicalEvent(event, scope);
  sessionWorkRuntime.processCanonicalEvent(event, scope);
@@ -1158,6 +1215,7 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
   const settings = await readSettingsFromDiskMigrated();
   return sanitizeProjects(settings?.projects || []);
  },
+ setSessionAutoAccept: (sessionId, enabled, directory) => permissionAutoAcceptRuntime.setSessionPolicy(sessionId, enabled ? 'auto' : 'ask', directory),
  emitTaskRunEvent: (event) => {
   for (const client of uiOpenChamberEventClients) {
    try {
@@ -2103,9 +2161,8 @@ async function main(options = {}) {
   worktreeArchiveSessionService: openChamberSessionService,
   messageQueueRuntime,
   routingRuntime,
+  permissionAutoAcceptRuntime,
  });
-
- // After bootstrap: the upgrade gate needs the real UI auth controller.
  guestSurfaceRuntime = createGuestSurfaceRuntime({
   server,
   uiAuthController,

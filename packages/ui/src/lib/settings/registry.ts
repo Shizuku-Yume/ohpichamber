@@ -270,6 +270,11 @@ export const SETTINGS_REGISTRY = {
   skillCatalogs: field<SkillCatalogConfig[]>({ scope: 'instance', parse: parseSkillCatalogs }),
   defaultGitIdentityId: field({ scope: 'instance', parse: parseTrimmedString }),
   // The server keeps the message search index only while this is on.
+  // New top-level sessions start in this permission mode; the Host policy
+  // runtime writes the per-session modes and must not be set from a client.
+  permissionDefaultMode: field({ scope: 'profile', parse: parseOneOf(['ask', 'safety', 'auto']) }),
+  sessionGoalChecker: field({ scope: 'profile', parse: parseOneOf(['classifier', 'small-model']) }),
+  sessionGoalMaxAutoTurns: field({ scope: 'profile', parse: parseIntegerInRange(1, 200) }),
   messageSearchEnabled: field({
     scope: 'instance',
     surfaces: ['web', 'desktop', 'mobile'],

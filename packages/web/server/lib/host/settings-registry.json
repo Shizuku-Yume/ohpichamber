@@ -171,6 +171,15 @@
     "defaultGitIdentityId": {
       "scope": "instance"
     },
+    "permissionDefaultMode": {
+      "scope": "profile"
+    },
+    "sessionGoalChecker": {
+      "scope": "profile"
+    },
+    "sessionGoalMaxAutoTurns": {
+      "scope": "profile"
+    },
     "messageSearchEnabled": {
       "scope": "instance",
       "surfaces": [

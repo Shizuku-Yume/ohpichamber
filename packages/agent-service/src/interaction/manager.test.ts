@@ -458,6 +458,122 @@ describe('service-owned interaction CAS', () => {
     } finally { manager.closeSession('session-1'); }
   });
 
+  const permissionApproval: WorkerInteraction = {
+    ...approval, approvalId: 'permission-1', toolCallId: 'permission-call-1', permissionRequest: true,
+    sessionRuleKey: 'bash', policyTarget: { toolName: 'bash', pattern: '{"command":"rm -rf build"}' },
+  };
+
+  const authority = (modes: Record<string, 'ask' | 'safety' | 'auto'>, verdict: 'accept' | 'hold' | 'unavailable' = 'accept') => {
+    const resolveMode = vi.fn(async (sessionId: string) => modes[sessionId] ?? 'ask');
+    const evaluate = vi.fn(async () => verdict);
+    return { resolveMode, evaluate };
+  };
+  const withAuthority = (authorityInput: ReturnType<typeof authority>) => {
+    const operations: WorkerOperation[] = [];
+    const events: ProjectionInput[] = [];
+    const manager = new InteractionManager(60_000, undefined, authorityInput);
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { operations.push(operation); }, input => { events.push(input); });
+    return { manager, operations, events };
+  };
+  const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+  test('auto answers the execution gate through CAS and leaves every other card', async () => {
+    const { manager, operations, events } = withAuthority(authority({ 'session-1': 'auto' }));
+    try {
+      manager.onRequest('session-1', 'worker-1', permissionApproval);
+      await settle();
+      expect(manager.approvals('session-1')).toHaveLength(0);
+      expect(operations).toEqual([{ type: 'approval.resolve', approvalId: 'permission-1', decision: 'approve' }]);
+      // A request the policy answers itself is never advertised as a user card.
+      expect(events.filter(input => input.event.type === 'approval.requested' && input.event.approval.approvalId === 'permission-1')).toHaveLength(0);
+      expect(events.filter(input => input.event.type === 'approval.resolved' && input.event.approval.approvalId === 'permission-1')).toHaveLength(0);
+
+      // An extension dialog keeps its card even in auto mode.
+      manager.onRequest('session-1', 'worker-1', { ...permissionApproval, approvalId: 'dialog-1', toolCallId: 'dialog-call-1', permissionRequest: undefined });
+      // A question always keeps its card.
+      manager.onRequest('session-1', 'worker-1', { kind: 'question', questionId: 'q1', turnId: 'turn-1', prompt: 'Pick', schema: { questions: [{ id: 'a', question: 'a', options: [{ label: 'A' }] }] } });
+      await settle();
+      expect(manager.approvals('session-1')).toHaveLength(1);
+      expect(manager.questions('session-1')).toHaveLength(1);
+      expect(events.filter(input => input.event.type === 'approval.requested' && input.event.approval.approvalId === 'dialog-1')).toHaveLength(1);
+    } finally { manager.closeSession('session-1'); }
+  });
+
+  test('ask and a held or unavailable safety verdict keep the card', async () => {
+    for (const [mode, verdict] of [['ask', 'accept'], ['safety', 'hold'], ['safety', 'unavailable']] as const) {
+      const authorityInput = authority({ 'session-1': mode }, verdict);
+      const { manager, operations, events } = withAuthority(authorityInput);
+      try {
+        manager.onRequest('session-1', 'worker-1', permissionApproval);
+        await settle();
+        expect(manager.approvals('session-1')).toHaveLength(1);
+        // A held request is published exactly once, as the card the user acts on.
+        expect(events.filter(input => input.event.type === 'approval.requested')).toHaveLength(1);
+        if (mode === 'ask') expect(authorityInput.evaluate).not.toHaveBeenCalled();
+        else expect(authorityInput.evaluate).toHaveBeenCalledTimes(1);
+        expect(operations).toHaveLength(0);
+      } finally { manager.closeSession('session-1'); }
+    }
+  });
+
+  test('safety accepts only on the Host verdict and re-reads the mode after it', async () => {
+    const gate = Promise.withResolvers<'accept' | 'hold'>();
+    const resolveMode = vi.fn(async () => 'safety' as const);
+    const evaluate = vi.fn(async () => gate.promise);
+    const { manager, operations } = withAuthority({ resolveMode, evaluate });
+    try {
+      manager.onRequest('session-1', 'worker-1', permissionApproval);
+      expect(manager.approvals('session-1')).toHaveLength(1);
+      // The user drops to ask while the safety net runs: no approval may follow.
+      resolveMode.mockImplementation(async () => 'ask');
+      gate.resolve('accept');
+      await settle();
+      expect(manager.approvals('session-1')).toHaveLength(1);
+      expect(operations).toHaveLength(0);
+
+      // A worker replacement during the evaluation cannot approve the stale record.
+      const held = Promise.withResolvers<'accept'>();
+      const replacementOps: WorkerOperation[] = [];
+      const replacement = new InteractionManager(60_000, undefined, { resolveMode: async () => 'safety', evaluate: async () => held.promise });
+      replacement.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { replacementOps.push(operation); }, () => {});
+      replacement.onRequest('session-1', 'worker-1', permissionApproval);
+      replacement.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async operation => { replacementOps.push(operation); }, () => {});
+      held.resolve('accept');
+      await settle();
+      expect(replacementOps).toEqual([]);
+      replacement.closeSession('session-1');
+    } finally { manager.closeSession('session-1'); }
+  });
+
+  test('reconsidering pending approvals answers one already waiting on a mode switch', async () => {
+    const authorityInput = authority({});
+    const { manager, operations } = withAuthority(authorityInput);
+    try {
+      manager.onRequest('session-1', 'worker-1', permissionApproval);
+      await settle();
+      expect(manager.approvals('session-1')).toHaveLength(1);
+      authorityInput.resolveMode.mockImplementation(async () => 'auto');
+      manager.reconsiderPending('session-1');
+      await settle();
+      expect(operations).toEqual([{ type: 'approval.resolve', approvalId: 'permission-1', decision: 'approve' }]);
+      expect(manager.approvals('session-1')).toHaveLength(0);
+    } finally { manager.closeSession('session-1'); }
+  });
+
+  test('an explicit workspace deny wins over every mode', async () => {
+    const { manager, operations } = withAuthority(authority({ 'session-1': 'auto' }));
+    manager.loadPolicies('session-1', 'workspace-1', [{
+      policyId: 'policy-deny', revision: '1', scope: 'workspace', decision: 'deny',
+      target: { toolName: 'bash', pattern: '{"command":"rm -rf build"}' },
+    }]);
+    try {
+      manager.onRequest('session-1', 'worker-1', permissionApproval);
+      await settle();
+      expect(manager.approvals('session-1')).toHaveLength(0);
+      expect(operations).toEqual([{ type: 'approval.resolve', approvalId: 'permission-1', decision: 'reject' }]);
+    } finally { manager.closeSession('session-1'); }
+  });
+
   test('rejection, invalidation and failed native dispatch never leave execution consent', async () => {
     const input = { command: 'printf denied' };
     for (const scenario of ['reject', 'invalidate', 'dispatch-failed'] as const) {

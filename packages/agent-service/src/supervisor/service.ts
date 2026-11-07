@@ -38,13 +38,15 @@ import { WorkspaceCatalogs } from './workspaces.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
 import { WebSearchCoordinator } from './websearch.ts';
 import { ShellCoordinator } from './shell.ts';
-import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostSessionForkAckSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema, HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
+import type { PermissionMode } from './host-authorization-protocol.ts';
+import { HostAuthorizationScopeSchema, HostSessionBootstrapSchema, HostSessionPermissionModeSchema, HostSessionForkAckSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationFinalizedSchema, HostSessionRelocationPendingSchema, HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema } from './host-authorization-protocol.ts';
 import type { PrivateCredentialResolveResult, PrivateCredentialHandoffResult } from '../catalogs/private-credentials.ts';
 import type { CommandCatalogState, PromptTemplateCatalogState, FileResourceSkillCatalog, FileResourceExpandResult, FileResourcePromptInputResult, SkillSourceRevisions } from '@openchamber/agent-contract';
 import { HostSkillSourceCommitSchema, HostSkillSourceResultSchema, type HostSkillSourceOperation, type HostSkillSourceResult } from './file-resources-host-protocol.ts';
 const SessionForkRequestSchema = z.strictObject({ sourceSessionId: EntityIdSchema, entryId: EntityIdSchema.nullable(), mode: z.enum(['selected', 'full']), forkTicketId: EntityIdSchema.optional() }).refine(input => input.mode === 'full' || input.entryId !== null, { message: 'Selected forks require an entry identity', path: ['entryId'] });
 const SessionReopenRequestSchema = HostSessionBootstrapSchema.omit({ sessionFile: true });
 import type { NativeOperationDescriptor, HostActionRequest, HostActionResult, HostNativePolicySnapshot } from './host-authorization-protocol.ts';
+import type { PermissionAuthority } from '../interaction/manager.ts';
 interface ServiceOptions {
   workerEntrypoint: string;
   workerRuntime?: string;
@@ -53,6 +55,7 @@ interface ServiceOptions {
   port?: number;
   approvalPolicyCommit?: ApprovalPolicyCommit;
   approvalPolicyLoad?: ApprovalPolicyLoad;
+  permissionAuthority?: PermissionAuthority;
   policyCheck?: (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor) => Promise<WorkerPolicyResult>;
   invokeHostAction?: (rootSessionId: string, request: HostActionRequest, signal: AbortSignal) => Promise<HostActionResult>;
   hostSkillSource: (operation: HostSkillSourceOperation) => Promise<HostSkillSourceResult>;
@@ -95,6 +98,7 @@ type ServiceResponse =
   | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
   | CacheWarmingState | CacheWarmingApplyResult | OmpSettingsState
   | WebSearchConfigState | WebSearchMutationResult
+  | { sessionId: string; permissionMode: PermissionMode }
   | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse
   | PrivateCredentialResolveResult | PrivateCredentialHandoffResult
   | CommandCatalogState | PromptTemplateCatalogState | FileResourceSkillCatalog | FileResourceExpandResult | FileResourcePromptInputResult
@@ -190,7 +194,7 @@ export class AgentService {
         if (result.type !== 'mcp' || result.result.type !== 'persisted' || result.result.configuration.persistedRevision !== configuration.persistedRevision) throw new WorkerOperationError(503, 'MCP_CONFIG_WRITE_FAILED');
       },
     });
-    this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad);
+    this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad, options.permissionAuthority);
     this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
     this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog,
       this.sessions, options.stateDirectory, this.webSearch,
@@ -606,6 +610,14 @@ export class AgentService {
       if (questionRespond && request.method === 'POST') {
         const sessionId = identity(questionRespond[1]);
         respondJson(response, 200, await this.sessions.resolveQuestion(sessionId, identity(questionRespond[2]), await readBody(request, QuestionReplySchema))); return;
+      }
+      // The Host pushes a mode change here so a switch reaches approvals already waiting.
+      const privatePermissionMode = /^\/internal\/sessions\/([^/]+)\/permission-mode$/.exec(url.pathname);
+      if (privatePermissionMode && request.method === 'POST') {
+        const sessionId = identity(privatePermissionMode[1]);
+        const { mode } = await readBody(request, HostSessionPermissionModeSchema);
+        this.sessions.reconsiderPermissions(sessionId);
+        respondJson(response, 200, { sessionId, permissionMode: mode }); return;
       }
       const controlRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/control$/.exec(url.pathname);
       if (controlRoute && request.method === 'POST') {

@@ -94,6 +94,10 @@ async function main(): Promise<void> {
       port: requestedPort(process.argv.slice(2)),
       approvalPolicyCommit: policies.commit,
       approvalPolicyLoad: policies.load,
+      permissionAuthority: {
+        resolveMode: (sessionId) => policies.mode({ sessionId }),
+        evaluate: (sessionId, approval) => policies.evaluate({ sessionId, approval }),
+      },
       policyCheck: authorization.authorize,
       invokeHostAction: authorization.invoke,
       hostSkillSource: skillSources.execute,

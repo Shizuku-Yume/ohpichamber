@@ -800,7 +800,8 @@ describe('settings registry gate', () => {
     securityScopedBookmarks: ['bookmark'], pinnedDirectories: ['/home/testuser/project'],
     desktopLanAccessEnabled: true, desktopKeepAwakeEnabled: true, desktopMinimizeToTrayEnabled: true, desktopMacMenuBarEnabled: true, desktopLinuxNativeFrame: true, sidebarShowChatsSection: false,
     desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', gitlabClientId: 'gitlab-client', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
-    defaultGitIdentityId: 'global', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
+    defaultGitIdentityId: 'global', permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
+    sessionGoalChecker: 'classifier', sessionGoalMaxAutoTurns: 20,
     agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
     // Registry keys the settings-registry regeneration added; the gate fails
     // without a fixture line for each, and these are their real shapes.

@@ -21,6 +21,7 @@ import { registerBehaviorRoutes } from './behavior-routes.js';
 import { registerMessageSearchRoutes } from '../message-search/routes.js';
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
 import { registerRoutingRoutes } from '../routing/routes.js';
+import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
@@ -179,6 +180,7 @@ export const createFeatureRoutesRuntime = () => {
       worktreeBootstrapStore,
       messageQueueRuntime,
       routingRuntime,
+      permissionAutoAcceptRuntime,
       globalEventHub,
       resolveWorkspaceScope,
       resolveWorkspaceDirectory,
@@ -202,6 +204,7 @@ export const createFeatureRoutesRuntime = () => {
 
     registerMessageQueueRoutes(app, messageQueueRuntime, { resolveSessionScope: resolveHostSessionScope, listQueueScopes });
     registerRoutingRoutes(app, routingRuntime);
+    registerPermissionAutoAcceptRoutes(app, permissionAutoAcceptRuntime);
 
 
     registerProjectIconRoutes(app, {

@@ -1,0 +1,19 @@
+# 03: Restore permission auto-accept routes and bridge session permission modes to Agent Service
+
+**Effort:** ux-and-omp-parity-remediation
+**Task type:** bugfix
+**Blocked by:** None
+**Covers:** W2
+**Files:** `packages/web/server/index.js`; `packages/web/server/lib/host/feature-routes-runtime.js`; `packages/web/server/lib/permission-auto-accept/runtime.js`; `packages/agent-service/src/interaction/manager.ts`; `packages/agent-service/src/worker/native-permission-bridge.ts`; `packages/ui/src/stores/permissionStore.ts`
+**Read first:** `.workflow/specs/ux-and-omp-parity-remediation.md`; `.agents/skills/sync-state-invariants/SKILL.md`; `.agents/skills/ui-api-decoupling/SKILL.md`
+**Check:** `bun test packages/agent-service/src/interaction/ packages/agent-service/src/worker/native-permission-bridge.test.ts && npx vitest run packages/web/server/lib/` → exits 0 and verifies `GET/PUT /api/permission-auto-accept` and `ask / safety / auto` enforcement.
+- **Base commit:** 5ed41c2c184ba2131c6201db37ccff884bc97d69
+
+- [x] Restore the Host permission auto-accept runtime and routes (`GET /api/permission-auto-accept` and `PUT /api/permission-auto-accept/sessions/:sessionId`) and broadcast `permission-policy` control events on mode changes so `usePermissionStore.getState().setSessionMode` and the composer permission shield cycle cleanly without 404/parse errors.
+- [x] Bridge session permission modes (`ask`, `safety`, `auto`) to Agent Service `InteractionManager` / `NativePermissionBridge`: in `auto` mode, automatically approve tool execution requests without blocking on a user card; in `safety` mode, evaluate requests through the Jev safety classifier and only hold unsafe requests for user approval; in `ask` mode, prompt the user via the approval dock.
+- [x] Wire `setSessionAutoAccept` in `packages/web/server/index.js` for scheduled tasks (`task.execution.permissionAutoAccept`) and new-session default permission mode initialization.
+
+## Progress
+- Check before: `bun test packages/agent-service/src/interaction/ packages/agent-service/src/worker/native-permission-bridge.test.ts` failed — `packages/agent-service/src/interaction/` had no permission-mode coverage and `HostApprovalPolicies` sent the permission IPC families nested, which the Host supervisor rejects; `packages/web/server/lib/permission-auto-accept/` did not exist (the deleted runtime left the UI routes 404).
+- Check after: `bun test packages/agent-service/src/interaction/ packages/agent-service/src/worker/native-permission-bridge.test.ts` exits 0 (40 pass / 0 fail), including the real parent/child IPC test where the Host answers with the production `HostPermission*RequestSchema` / reply schemas, plus `auto`, `safety` hold, `safety` accept with a post-verdict mode re-read, pending-response on a mode switch and workspace-deny precedence. `bun x vitest run server/lib/` from `packages/web` (the check's canonical runner; `npx` fails in this worktree on an invalid `@huggingface/hub` tag) reports 447 passed / 9 skipped in a clean run and 445 passed with two unrelated timing failures in `relay/host-client.test.js` and `spaces/dispatcher.test.js` that pass in isolation. `bun run --cwd packages/agent-service type-check` and `bun run --cwd packages/agent-service build` exit 0.
+- Real runtime evidence (`/home/shizuku/Project/ohpichamber-omp-artifacts/ux-dispatch-2026-11-07/logs/ux-03-native-smoke.log`): against the Host web server with a real Agent Service child, OMP worker and provider model — `ask` shows the bash execution card and the file stays absent; switching that session to `auto` answers the card already waiting (run completes, file appears); `auto` from creation runs the tool with zero card observations; `safety` with no classifier keeps the card and the file absent; a committed workspace deny still refuses the command while the session is `auto`; questions stay empty.

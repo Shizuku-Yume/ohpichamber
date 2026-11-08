@@ -16,6 +16,7 @@ import { checkIsGitRepository } from '@/lib/gitApi';
 import { useDirectoryStore } from './useDirectoryStore';
 import { useProjectsStore } from './useProjectsStore';
 import { expandNativeFileResource } from '@/api/fileResourceExpansion';
+import { canonicalClient } from '@/api/canonicalClient';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
 import { createMultiRunSession } from '@/lib/multirun/createSession';
 import { multiRunGroupKey, type MultiRunMembership } from '@/lib/multirun/identity';
@@ -97,6 +98,8 @@ export async function dispatchRunPrompt(input: {
   variant?: string;
   reasoningEffort?: string;
   files?: PromptAttachment[];
+  /** Every lane starts a goal of its own, with its expanded prompt as the objective. */
+  goal?: { tokenBudget: number | null };
 }): Promise<void> {
   const directoryOwner = resolveWorkspaceDirectory(input.workspaceId);
   const session = useGlobalSessionsStore.getState().entityById.get(input.sessionId);
@@ -115,6 +118,16 @@ export async function dispatchRunPrompt(input: {
   assertCurrent();
   const expanded = await expandNativeFileResource(input.prompt, input.directory);
   assertCurrent();
+  if (input.goal) {
+    // Before the prompt, as on an ordinary send: a lane that cannot get its
+    // goal stays unstarted instead of running as a plain session.
+    await canonicalClient.goal(input.sessionId, {
+      op: 'create',
+      objective: (expanded?.content ?? input.prompt).trim(),
+      tokenBudget: input.goal.tokenBudget,
+    });
+    assertCurrent();
+  }
   const model = expanded?.modelSelection ?? { providerId: input.providerId, modelId: input.modelId };
   useSelectionStore.getState().saveSessionModelSelection(input.sessionId, model.providerId, model.modelId);
   useSelectionStore.getState().saveSessionAgentSelection(input.sessionId, '');
@@ -378,6 +391,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 variant: run.variant,
                 reasoningEffort: run.reasoningEffort,
                 files: [...(filesForMessage ?? []), ...(run.files ?? [])],
+                goal: params.goal,
               });
             } catch (err) {
               console.warn('[MultiRun] Failed to start run:', err);

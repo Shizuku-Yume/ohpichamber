@@ -2,6 +2,7 @@ import React from 'react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
 import { Icon } from '@/components/icon/Icon';
+import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -11,13 +12,15 @@ import { useConfigStore } from '@/stores/useConfigStore';
  * models without variants. `inline` sits inside a model chip, `trigger` stands
  * next to a model picker button.
  */
-export function ModelEffortMenu({ providerId, modelId, variant, onChange, appearance = 'inline', disabled = false }: {
+export function ModelEffortMenu({ providerId, modelId, variant, onChange, appearance = 'inline', disabled = false, tooltip }: {
   providerId: string;
   modelId: string;
   variant: string | undefined;
   onChange: (variant: string | undefined) => void;
   appearance?: 'inline' | 'trigger';
   disabled?: boolean;
+  /** Tooltip over the trigger; absent leaves the aria name to stand alone. */
+  tooltip?: string;
 }): React.ReactNode {
   const { t } = useI18n();
   const variants = useConfigStore(React.useCallback((state) => {
@@ -26,8 +29,7 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
   }, [modelId, providerId]));
   if (!variants) return null;
   const label = variant ?? t('multirun.modelMultiSelect.variant.default');
-  return (
-    <DropdownMenu>
+  const trigger = (
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -42,6 +44,10 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
           {appearance === 'trigger' ? <Icon name="arrow-down-s" /> : null}
         </button>
       </DropdownMenuTrigger>
+  );
+  return (
+    <DropdownMenu>
+      {tooltip ? <HoverTooltip label={tooltip}>{trigger}</HoverTooltip> : trigger}
       <DropdownMenuContent align="start">
         <DropdownMenuItem onSelect={() => onChange(undefined)}>
           {variant === undefined ? <Icon name="check" className="size-4" /> : <span className="size-4" />}

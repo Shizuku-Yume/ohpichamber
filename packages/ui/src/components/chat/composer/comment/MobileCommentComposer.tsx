@@ -77,11 +77,10 @@ export function MobileCommentComposer({ draft, theme: currentTheme, handlers }: 
     const snippets = useSnippetsStore((state) => state.snippets);
     const commentKeys = useCommentEnterSubmit();
     const languageContext = React.useMemo(() => {
+        // A canonical prompt template is named by its own trigger; the fork
+        // carries no separate alias list.
         const triggers = new Set<string>();
-        for (const snippet of snippets) {
-            triggers.add(snippet.name.toLowerCase());
-            for (const alias of snippet.aliases ?? []) triggers.add(alias.toLowerCase());
-        }
+        for (const snippet of snippets) triggers.add(snippet.name.toLowerCase());
         return commentLanguageContext(triggers);
     }, [snippets]);
     const getCaret = React.useCallback(() => editorRef.current?.getSelection().start ?? 0, []);

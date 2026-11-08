@@ -11,6 +11,8 @@ interface TurnItemProps {
  turn: Turn;
  renderMessage: (message: ChatMessageEntry) => React.ReactNode;
  assistantContent?: React.ReactNode;
+ /** The list's own sticky-header decision for this turn; the stored setting when absent. */
+ stickyUserHeader?: boolean;
  /** Keeps the gap between the turn and the row after it, when the turn is nothing but its prompt. */
  gapBelow?: boolean;
 }
@@ -40,12 +42,12 @@ const stickyHeaderBackground = (fadeRem: string): React.CSSProperties => ({
 const STICKY_HEADER_BACKGROUND_DESKTOP = stickyHeaderBackground('2.25rem');
 const STICKY_HEADER_BACKGROUND_MOBILE = stickyHeaderBackground('0.75rem');
 
-const TurnItem: React.FC<TurnItemProps> = ({ turn, renderMessage, assistantContent, gapBelow = false }) => {
+const TurnItem: React.FC<TurnItemProps> = ({ turn, renderMessage, assistantContent, stickyUserHeader: stickyOverride, gapBelow = false }) => {
  const { isMobile } = useDeviceInfo();
- const stickyUserHeader = useUIStore((state) => state.stickyUserHeader);
+ const stickySetting = useUIStore((state) => state.stickyUserHeader);
  const headerSticks = React.useMemo(
-  () => stickyUserHeader && turnHeaderCanStick(turn.userMessage),
-  [stickyUserHeader, turn.userMessage]
+  () => (stickyOverride ?? stickySetting) && turnHeaderCanStick(turn.userMessage),
+  [stickyOverride, stickySetting, turn.userMessage]
  );
 
  return (

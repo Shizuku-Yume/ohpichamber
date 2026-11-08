@@ -190,8 +190,8 @@ export type SessionSidebarRowModelArgs = {
   */
  detailedZoneRows?: boolean;
  foldersMap: SessionFoldersMap;
- groupSearchDataByGroup?: WeakMap<SessionGroup, GroupSearchData>;
- normalizedQuery?: string;
+ groupSearchDataByGroup: WeakMap<SessionGroup, GroupSearchData>;
+ normalizedQuery: string;
  collapsedProjects: ReadonlySet<string>;
  collapsedGroups: ReadonlySet<string>;
  collapsedFolders: ReadonlySet<string>;
@@ -687,7 +687,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
   const searchData = args.groupSearchDataByGroup?.get(group);
   if (searchData?.hasMatch !== true) return 0;
   const movedToZone = inZone.size > 0 ? searchData.filteredNodes.filter((node) => isMovedToZone(node.session.sessionId)) : [];
-  const sessionMatches = Math.max(0, searchData.matchedSessionCount - countSessionSearchMatches(movedToZone, args.normalizedQuery));
+  const sessionMatches = Math.max(0, searchData.matchedSessionCount - countSessionSearchMatches(movedToZone, args.normalizedQuery ?? ''));
   return sessionMatches + searchData.folderNameMatchCount + (searchData.groupMatches ? 1 : 0);
  };
 
@@ -775,7 +775,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
    name: entry.folder.name,
    parentId: entry.folder.parentId,
    nodeCount: entry.nodes.length,
-  })), { archivedBucket: group.isArchivedBucket === true, searchQuery: search ? args.normalizedQuery : '' });
+  })), { archivedBucket: group.isArchivedBucket === true, searchQuery: search ? (args.normalizedQuery ?? '') : '' });
   const visibleFolders = folderEntries.filter((entry) => visibleFolderKeys.has(entry.folder.id));
   const entryByIdentity = new Map(visibleFolders.map((entry) => [getSessionFolderIdentityKey(entry.scopeKey, entry.folder.id), entry]));
   const childFolders = new Map<string, FolderProjection[]>();
@@ -982,7 +982,7 @@ export const buildSessionSidebarRowModel = (args: SessionSidebarRowModelArgs): S
 
  // Activity items are only listed in zones, which count real matches only.
  const countZoneMatches = (item: SessionSidebarActivityItem): number => (
-  item.searchMatchCount ?? countSessionTreeQueryMatches(item.node, args.normalizedQuery)
+  item.searchMatchCount ?? countSessionTreeQueryMatches(item.node, args.normalizedQuery ?? '')
  );
  const appendActivityItems = (
   items: readonly SessionSidebarActivityItem[],

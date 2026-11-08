@@ -889,6 +889,80 @@ describe('Host metadata conversion authorization', () => {
   });
 });
 
+describe('POST /api/agent/v1/sessions/:sessionId/move-to-worktree', () => {
+  const scope = () => ({ ...validScope('ses_1'), cwd: testWorkspaceDirectory, agentDirectory: testAgentDirectory });
+  const buildApp = async (overrides = {}) => {
+    const express = (await import('express')).default;
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = await import('./routes.js');
+    const service = createOpenChamberSessionService({
+      service: { request: async () => Response.json({}) },
+      resolveWorkspaceScope: async () => null,
+      resolveSessionScope: async () => scope(),
+      resolveHostSessionScope: async () => scope(),
+      resolveHostRelocationScope: async () => scope(),
+      // The Host admission owner the route refuses to run without.
+      agentScopeStore: { checkWorktreeScope: async () => undefined },
+      resolveWorktreeTopLevel: async () => ({ prefix: '' }),
+      validateWorktreeDirectory: async () => ({ valid: true, insideWorktreeRoot: true }),
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async () => { throw new Error('not used'); },
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      sessionMetadataStore: { getState: async () => null, get: async () => null },
+      archiveStore: { getState: async () => null },
+      directCommandAdmissionStore: { claim: async () => true, accept: async () => true },
+      worktreeMove: {
+        getPathsWithoutChanges: async () => [],
+        createWorktree: async () => ({ name: 'fix-login', branch: 'fix-login', path: '/repo/app/worktrees/fix-login' }),
+        removeWorktree: async () => {},
+        waitForWorktreeReady: async () => ({ setupStillRunning: false }),
+        hydrateCheckout: async () => null,
+        bootstrapStore: { read: async () => null, write: async () => null },
+        stashPush: async () => ({ created: false }),
+        stashApply: async () => {},
+        stashDrop: async () => {},
+        listStashes: async () => [],
+        getBranches: async () => ({ all: ['main'], defaultBranches: { origin: 'main' } }),
+        resolvePrimaryWorktreeRoot: async () => ({ root: '/repo/app' }),
+        moveSession: (id) => [{ sessionId: id }],
+      },
+      ...overrides,
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, service);
+    app.use('/api/agent/v1/sessions', router);
+    return { app, request };
+  };
+
+  it('refuses a malformed move with a problem before any scope or Git work', async () => {
+    const { app, request } = await buildApp();
+    for (const body of [
+      {},
+      { worktree: {} },
+      { worktree: { name: '' } },
+      { worktree: { name: '/abs' } },
+      { worktree: { name: 'a/b' } },
+      { worktree: { name: 'ok' }, carry: 'src/a.ts' },
+      { worktree: { name: 'ok', existingBranch: 'release', startRef: 'main' } },
+    ]) {
+      const response = await request(app).post('/api/agent/v1/sessions/ses_1/move-to-worktree').send(body).expect(400);
+      expect(response.body).toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    }
+  });
+
+  it('refuses a session the Host does not admit, with no success body', async () => {
+    const { app, request } = await buildApp({ resolveHostRelocationScope: async () => null });
+    const response = await request(app)
+      .post('/api/agent/v1/sessions/ses_unknown/move-to-worktree')
+      .send({ worktree: { name: 'fix-login' } })
+      .expect(404);
+    expect(response.body).toMatchObject({ status: 404, code: 'SESSION_NOT_FOUND' });
+    expect(response.body).not.toHaveProperty('worktree');
+  });
+});
+
 describe('session.moveToWorktree', () => {
   const scope = (sessionId, overrides = {}) => ({ ...validScope(sessionId), ...overrides });
   const createMoveService = async (overrides = {}) => {

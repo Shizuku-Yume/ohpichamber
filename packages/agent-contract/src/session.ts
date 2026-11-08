@@ -269,3 +269,68 @@ export const SessionRelocateRequestSchema = z.strictObject({ workspaceId: Entity
 export type SessionRelocateRequest = z.infer<typeof SessionRelocateRequestSchema>;
 export const SessionRelocateResultSchema = z.strictObject({ sessions: z.array(SessionSchema).min(1) });
 export type SessionRelocateResult = z.infer<typeof SessionRelocateResultSchema>;
+
+/**
+ * git and the filesystem forbid control characters in a folder name, so one
+ * worktree name is checked against them beside the separators and the
+ * reserved symbols git rejects.
+ */
+const isWorktreeFolderName = (value: string): boolean => {
+  if (value === '.' || value === '..') return false;
+  if (/[\\/]/.test(value)) return false;
+  // oxlint-disable-next-line no-control-regex -- git and the filesystem forbid control characters in a folder name
+  return !/[\x00-\x1f<>:"|?*]/.test(value);
+};
+/** One relative folder name: never an absolute path, traversal or a separator. */
+const WorktreeNameSchema = z.string().min(1).max(200).refine(isWorktreeFolderName, {
+  message: 'Worktree name must be one folder name, relative to the worktree root',
+});
+/**
+ * A file whose uncommitted changes move with the session. It names a path
+ * inside the session's workspace, so it is relative and never absolute.
+ */
+const WorktreeCarryPathSchema = z.string().min(1).refine(
+  (value) => !pathIsAbsolute(value) && !value.startsWith('..') && value.trim() === value,
+  { message: 'Carried changes are workspace-relative file paths' },
+);
+const pathIsAbsolute = (value: string): boolean => value.startsWith('/') || value.startsWith('\\') || /^[A-Za-z]:/.test(value);
+/**
+ * A session moved into a new worktree of its repository. The Host names the
+ * folder and, optionally, the branch it starts from; `carry` lists the files
+ * whose uncommitted changes go along. A branch that already exists is taken
+ * as it is, so it never combines with a branch name or a start ref.
+ */
+export const SessionMoveToWorktreeRequestSchema = z.strictObject({
+  worktree: z.strictObject({
+    name: WorktreeNameSchema,
+    branchName: WorktreeNameSchema.optional(),
+    startRef: z.string().min(1).optional(),
+    existingBranch: z.string().min(1).optional(),
+  }).refine(
+    (worktree) => !(worktree.existingBranch && (worktree.branchName || worktree.startRef)),
+    { message: 'existingBranch checks out that branch as it is; do not combine it with branchName or startRef' },
+  ),
+  /** Workspace-relative files whose uncommitted changes move with the session. */
+  carry: z.array(WorktreeCarryPathSchema).default([]),
+});
+export type SessionMoveToWorktreeRequest = z.infer<typeof SessionMoveToWorktreeRequestSchema>;
+export const SessionMoveToWorktreeResultSchema = z.strictObject({
+  sessionId: EntityIdSchema,
+  /** The folder the session now runs in, inside the new worktree. */
+  directory: z.string().min(1),
+  previousDirectory: z.string().min(1),
+  worktree: z.strictObject({
+    name: z.string().min(1),
+    branch: z.string().min(1),
+    path: z.string().min(1),
+    startRef: z.string().min(1).optional(),
+    existingBranch: z.string().min(1).optional(),
+  }),
+  changesMoved: z.boolean(),
+  carried: z.array(z.string()),
+  /** The relocated session family, when the Host answered with it. */
+  sessions: z.array(SessionSchema).min(1).optional(),
+  startDirectoryFallback: z.string().min(1).optional(),
+  untrustedSetupCommandsSkipped: z.array(z.string()).optional(),
+});
+export type SessionMoveToWorktreeResult = z.infer<typeof SessionMoveToWorktreeResultSchema>;

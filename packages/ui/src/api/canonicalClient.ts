@@ -7,7 +7,7 @@ import type {
   ModelCatalog, ModelConfigureRequest, ModelDeleteRequest, ProviderCatalog, ProviderConfigureRequest,
   ProviderCredentialDeleteRequest, ProviderCredentialMutationResult, ProviderCredentialWriteRequest, ProviderDeleteRequest,
   ProviderMutationResult, QuestionReply, QuestionRequest, RunAbortAck, RunCreateRequest, Session, SessionCreateAck,
-  SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, SessionBranchRequest, SessionBranchResult, SessionRelocateResult, ShellJob,
+  SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, SessionBranchRequest, SessionBranchResult, SessionRelocateResult, SessionMoveToWorktreeRequest, SessionMoveToWorktreeResult, ShellJob,
   ShellOutput, ShellSnapshot, ShellStartRequest, ShellStdinRequest, ShellStdinResult, ShellStopRequest, ShellStreamResponse, SkillsApplyRequest, SkillsApplyResult,
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
@@ -277,6 +277,20 @@ export class CanonicalClient {
       if (!requested || !root || ids.size !== result.sessions.length || result.sessions.some((session) => session.workspaceId !== workspaceId || session.projectId !== root.projectId || session.rootSessionId !== root.rootSessionId))
         throw new Error('Relocation response does not match the requested destination session family');
       return result;
+    });
+  }
+  /**
+   * Moves this session into a new worktree of its repository. The Host makes
+   * the checkout, carries the named files' uncommitted changes, and relocates
+   * the session last; a failure removes the checkout and restores the changes,
+   * or names the stash that keeps them.
+   */
+  moveSessionToWorktree(sessionId: string, input: SessionMoveToWorktreeRequest, commandId?: string): Promise<SessionMoveToWorktreeResult> {
+    const parsed = C.SessionMoveToWorktreeRequestSchema.parse(input);
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/move-to-worktree`, scoped(C.SessionMoveToWorktreeResultSchema, result => result.sessionId === sessionId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headersFor(commandId) },
+      body: bodyFor(C.SessionMoveToWorktreeRequestSchema, parsed),
     });
   }
   createSession(input: SessionCreateRequest, commandId?: string): Promise<SessionCreateAck> {

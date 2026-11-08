@@ -1,10 +1,12 @@
-import type { Session } from '@openchamber/agent-contract';
+import type { Session, SessionMoveToWorktreeResult } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import { toast } from '@/components/ui';
 import { checkIsGitRepository, getGitStatus } from '@/lib/gitApi';
 import { normalizePath } from '@/lib/pathNormalization';
-import { createQuickWorktree, resolveFolderProjectRef, resolveProjectRef } from '@/lib/worktreeSessionCreator';
-import { getLatestWorktreeMetadata, removeProjectWorktree, type ProjectRef } from '@/lib/worktrees/worktreeManager';
+import { resolveFolderProjectRef, resolveProjectRef } from '@/lib/worktreeSessionCreator';
+import { generateBranchName } from '@/lib/git/branchNameGenerator';
+import { canonicalClient } from '@/api/canonicalClient';
+import { getLatestWorktreeMetadata, listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { checkoutHoldsDirectory, findWorktreeHoldingDirectory } from '@/lib/worktrees/worktreePaths';
 import { resolveWorktreeStartDirectory } from '@/lib/worktrees/worktreeStartDirectory';
 import { refreshGlobalSessionsForDirectories } from '@/stores/useGlobalSessionsStore';
@@ -12,7 +14,6 @@ import { isAmbiguousSendFailure } from '@/sync/send-failure-classification';
 import { getSessionLiveActivity, isSessionBusyNow, moveSessionToDirectory } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import type { WorktreeMetadata } from '@/types/worktree';
-import { waitForWorktreeGitReady } from '@/lib/worktrees/worktreeBootstrap';
 import { create } from 'zustand';
 
 export type SessionTreeMoveMessages = {
@@ -173,19 +174,6 @@ const rollbackMovedSessions = async (
   return failures;
 };
 
-const removeFailedWorktree = async (
-  project: ProjectRef,
-  worktree: WorktreeMetadata,
-  moveError: Error,
-): Promise<never> => {
-  try {
-    await removeProjectWorktree(project, worktree, { deleteLocalBranch: true });
-  } catch {
-    throw new Error(`Session move failed and the new worktree could not be removed: ${moveError.message}`);
-  }
-  throw moveError;
-};
-
 const refreshMovedDirectories = async (sourceDirectory: string, destinationDirectory: string | undefined): Promise<void> => {
   const directories = destinationDirectory ? [sourceDirectory, destinationDirectory] : [sourceDirectory];
   try {
@@ -324,38 +312,70 @@ const moveSessionTreeToProject = async (input: {
   return moveSessionTreeTransaction(input, async () => ({ directory: input.projectDirectory, metadata: null }));
 };
 
-const moveSessionTreeToQuickWorktree = async (input: {
+/**
+ * The session tree moves into a worktree the Host makes for it: the Host
+ * creates the checkout, carries whatever the caller names, and relocates the
+ * session last, so a failure on any of those is rolled back there and this
+ * client never holds a half-made checkout. The session is moved alone; a
+ * descendant that stays behind is its own session, not a broken tree.
+ */
+const moveSessionTreeToNewWorktree = async (input: {
   root: Session;
-  descendants: Session[];
   sourceDirectory: string;
-}): Promise<string> => {
-  return moveSessionTreeTransaction(input, async () => {
-    const project = resolveProjectRef(input.sourceDirectory);
-    if (!project) throw new Error('Unable to find the project for this session');
-
+  carry: readonly string[];
+}): Promise<SessionMoveToWorktreeResult> => {
+  const project = resolveProjectRef(input.sourceDirectory);
+  if (!project) throw new Error('Unable to find the project for this session');
+  const run = async (): Promise<SessionMoveToWorktreeResult> => {
     const sourceBranch = await checkIsGitRepository(input.sourceDirectory)
       ? await resolveSourceBranch(input.sourceDirectory, project.path)
       : null;
-    const worktree = await createQuickWorktree(project, sourceBranch ? { startRef: sourceBranch } : {});
-    if (!worktree) throw new Error('Worktree creation cancelled');
-    try {
-      await waitForWorktreeGitReady(worktree.path);
-    } catch (error) {
-      const setupError = error instanceof Error ? error : new Error(String(error));
-      return removeFailedWorktree(project, worktree, setupError);
-    }
-    // The worktree belongs to the project that owns the list; the session keeps its own project's folder.
-    const folderProject = await resolveFolderProjectRef(input.sourceDirectory) ?? project;
-    return {
-      directory: await resolveWorktreeStartDirectory(folderProject, worktree.path),
-      metadata: worktree,
-      // removeFailedWorktree force-deletes the worktree and its branch; the
-      // session's files never move, so nothing of the user's is in it yet.
-      // Called only for a definite rejection; the transaction keeps the
-      // worktree when the move outcome is unknown.
-      onMoveFailure: async (error) => removeFailedWorktree(project, worktree, error),
+    const name = generateBranchName();
+    const result = await canonicalClient.moveSessionToWorktree(input.root.sessionId, {
+      worktree: sourceBranch ? { name, startRef: sourceBranch } : { name },
+      carry: [...input.carry],
+    });
+    // The Host answers with the relocated sessions; adopt them and the new
+    // checkout before the next listing, so the sidebar shows where they are.
+    const destinationDirectory = result.directory;
+    const metadata: WorktreeMetadata = {
+      path: result.worktree.path,
+      projectDirectory: project.path,
+      branch: result.worktree.branch,
+      label: result.worktree.branch || result.worktree.name,
+      name: result.worktree.name,
+      worktreeStatus: 'ready',
+      worktreeSource: 'created-for-session',
     };
-  });
+    useSessionUIStore.getState().setWorktreeMetadata(input.root.sessionId, metadata, destinationDirectory);
+    for (const moved of result.sessions ?? []) {
+      if (moved.sessionId === input.root.sessionId) continue;
+      useSessionUIStore.getState().setWorktreeMetadata(moved.sessionId, metadata, destinationDirectory);
+    }
+    await listProjectWorktrees(project, { force: true }).catch(() => null);
+    await refreshMovedDirectories(input.sourceDirectory, destinationDirectory);
+    return result;
+  };
+  if (useSessionMoveState.getState().pendingSessionIds.has(input.root.sessionId)) throw new Error('Session move already in progress');
+  const previousMetadata = useSessionUIStore.getState().getWorktreeMetadata(input.root.sessionId);
+  setSessionMovePending(input.root.sessionId, true);
+  try {
+    return await run();
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    // A lost answer may have moved the session; the Host keeps the checkout
+    // either way, so the UI says the outcome is unknown instead of claiming a
+    // failure. Both directories are reconciled so the sidebar stops
+    // contradicting the toast before the next poll.
+    if (isAmbiguousSendFailure(failure)) {
+      await refreshMovedDirectories(input.sourceDirectory, undefined);
+      throw new SessionMoveOutcomeUnknownError(failure);
+    }
+    useSessionUIStore.getState().setWorktreeMetadata(input.root.sessionId, previousMetadata ?? null, input.sourceDirectory);
+    throw failure;
+  } finally {
+    setSessionMovePending(input.root.sessionId, false);
+  }
 };
 
 const executeSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
@@ -373,10 +393,11 @@ const executeSessionTreeMove = (intent: SessionTreeMoveIntent): void => {
         sourceDirectory: intent.sourceDirectory,
         projectDirectory: intent.projectDirectory,
       })
-    : moveSessionTreeToQuickWorktree({
+    // The Host moves the session family itself, so this asks for the root only.
+    : moveSessionTreeToNewWorktree({
         root: intent.root,
-        descendants: intent.descendants,
         sourceDirectory: intent.sourceDirectory,
+        carry: [],
       });
 
   void movePromise

@@ -9,6 +9,7 @@ import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-w
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
 import type { SyncEvent } from './opencode/events';
+import { workflowRunSchema, type WorkflowRun } from './workflows/model';
 import { classifyStreamPayload } from '@/sync/event-pipeline';
 import { SessionMetadataStateSchema, type SessionMetadataState } from '@openchamber/agent-contract';
 
@@ -227,8 +228,14 @@ const notificationPropertiesSchema = z.object({
 });
 
 export type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
-type OpenChamberEvent =
+export type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
+ /** An extension was installed, updated, approved, paused or removed: the catalog changed. */
+ | { type: 'guests-changed' }
+ /** A workflow run's state as the server last wrote it; the card and panel follow it. */
+ | { type: 'workflow-run'; run: WorkflowRun }
+ /** A workflow run the user deleted. */
+ | { type: 'workflow-run-removed'; runId: string; parentSessionId: string }
  /** `connectionId` names this connection on the server; absent from servers before tracked items. */
  | { type: 'event-stream-ready'; connectionId: string | null }
  | TrackedItemsChangedEvent
@@ -448,7 +455,23 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   return;
  }
 
- if (envelope.type === 'openchamber:event-stream-ready') {
+ if (envelope.type === 'openchamber:guests-changed') {
+  for (const listener of listeners) listener({ type: 'guests-changed' });
+  return;
+}
+ if (envelope.type === 'openchamber:workflow-run') {
+  const parsed = workflowRunSchema.safeParse(getEventProperties(envelope.properties)?.run);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'workflow-run', run: parsed.data });
+  return;
+ }
+ if (envelope.type === 'openchamber:workflow-run-removed') {
+  const raw = getEventProperties(envelope.properties);
+  const runId = typeof raw?.runId === 'string' ? raw.runId : '';
+  const parentSessionId = typeof raw?.parentSessionId === 'string' ? raw.parentSessionId : '';
+  if (runId && parentSessionId) for (const listener of listeners) listener({ type: 'workflow-run-removed', runId, parentSessionId });
+  return;
+ }
+if (envelope.type === 'openchamber:event-stream-ready') {
   reconnectAttempt = 0;
   const ready = eventStreamReadySchema.safeParse(envelope.properties);
   const connectionId = ready.success ? ready.data.connectionId ?? null : null;

@@ -20,6 +20,8 @@ import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
 import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
+import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
+import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useRelayLimitToast } from '@/hooks/useRelayLimitToast';
@@ -605,6 +607,12 @@ function App({ apis }: AppProps) {
   // this snapshot, so leaving it to the panel meant a user who never opened
   // Project notes sent every message with no memory index at all.
   useAgentMemorySync(currentDirectory || null);
+  // The extension catalog follows the server while the app runs: another
+  // window, another device, or an author rebuilding a folder install can
+  // change it, and the rail must not wait for a reload. Install links that
+  // reached the shell before this page could listen are taken here too.
+  useGuestCatalogSync();
+  useGuestInstallLinks();
   useBrowserProviderSync();
   useRoutingSync();
   useEnterprisePolicySync();

@@ -544,6 +544,23 @@ const pendingSessionLinksSchema = z.array(z.object({
 type PendingDesktopSessionLink = { sessionId: string; messageId: string | null; runtimeKey: string | null };
 
 /**
+ * Extension install links (`openchamber://extensions/install?url=…`) that
+ * reached the desktop app before this window could listen for them. Taking
+ * them removes them; outside the desktop local page there are none. The shell
+ * only lets an https repository through.
+ */
+export const takePendingDesktopExtensionInstalls = async (): Promise<string[]> => {
+ if (!isDesktopShell() || !isDesktopLocalOriginActive()) return [];
+ try {
+  const parsed = z.array(z.string()).safeParse(await invokeDesktop('desktop_take_pending_extension_installs'));
+  return parsed.success ? parsed.data : [];
+ } catch (error) {
+  console.warn('Failed to read pending extension installs', error);
+  return [];
+ }
+};
+
+/**
  * Session links (`openchamber://session/...`) that reached the desktop app
  * before this window could listen for them — the link that launched the app,
  * or "open in main window" from a closed main window. A link that names its

@@ -15,7 +15,6 @@ import {
   writeCachedWalkthrough,
   writePointer,
 } from './store.js';
-import { readWalkthroughModelOverride, readWalkthroughModelVariant } from './model-settings.js';
 import { loadSourceSections, parseSource, sourceKey, WalkthroughSourceError } from './sources.js';
 import { supportsChangeRequestPatch } from './pull-request.js';
 
@@ -205,32 +204,25 @@ export async function cancelWalkthroughGeneration({ directory, source: rawSource
 const modelLabel = (model) => `${model.providerID}/${model.modelID}`;
 
 /**
- * Resolve the model for this feature: the walkthrough override when set,
- * otherwise whatever the small-model chain resolves to.
+ * Resolve the model for this feature: an explicit per-review choice outranks the
+ * walkthrough's native `slow` role, which is what the user picks in Settings.
+ *
+ * `providerID` / `modelID` are the user's composer: without a model of its own
+ * choosing, the walkthrough stays on that provider rather than on whichever
+ * provider happens to be connected, and on that model when the provider has no
+ * small one.
  */
-/**
- * Resolve the model for this feature. An explicit per-review choice outranks the
- * saved setting, which in turn outranks the small-model chain — the user picking
- * a roomier model for a risky change is the most specific intent there is.
- */
-// `providerID` / `modelID` are the user's composer: without a model of its
-// own choosing, the walkthrough stays on that provider rather than on
-// whichever provider happens to be connected, and on that model when the
-// provider has no small one.
-// The saved thinking level goes with the saved model only: a model picked for
-// one review runs at its own default level.
-const resolveModel = (workspaceId, explicitModel, providerID, modelID) => {
-  const savedModel = readWalkthroughModelOverride();
-  const overrideModel = explicitModel || savedModel;
-  return describeSmallModel({
-    workspaceId,
-    outputReserveTokens: walkthroughOutputTokens,
-    overrideModel,
-    overrideVariant: overrideModel && overrideModel === savedModel ? readWalkthroughModelVariant() : undefined,
-    preferredProviderID: providerID || undefined,
-    preferredModelID: modelID || undefined,
-  });
-};
+const resolveModel = (workspaceId, explicitModel, providerID, modelID) => describeSmallModel({
+  workspaceId,
+  outputReserveTokens: walkthroughOutputTokens,
+  // An explicit per-review pick outranks the role; otherwise the walkthrough
+  // uses the native `slow` role, which the resolver falls back to the default
+  // role for.
+  overrideModel: explicitModel,
+  preferredProviderID: providerID || undefined,
+  preferredModelID: modelID || undefined,
+  role: 'slow',
+});
 
 export const __testing = { generationTimeoutMs, walkthroughOutputTokens };
 

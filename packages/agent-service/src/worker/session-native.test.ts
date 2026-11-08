@@ -440,6 +440,34 @@ test('aborting a goal pauses continuation until resume', async () => {
  } finally { await harness.close(); }
 }, 30000);
 
+test('a resumed goal gets a fresh turn budget instead of the cap it already hit', async () => {
+ const previousCap = process.env.OPENCHAMBER_SESSION_GOAL_MAX_AUTO_TURNS;
+ process.env.OPENCHAMBER_SESSION_GOAL_MAX_AUTO_TURNS = '1';
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  await harness.worker.operation({ type: 'goal', op: 'create', objective: 'One bounded turn at a time' });
+  await waitForGoal(harness.worker, () => harness.worker.mode().kind === 'goal' && harness.worker.mode().status === 'paused', 15000);
+  expect(harness.events.filter(input => input.event.type === 'run.started' && input.event.origin === 'goal')).toHaveLength(1);
+  expect(harness.journal.runtime().mode).toMatchObject({ kind: 'goal', status: 'paused', objective: 'One bounded turn at a time' });
+
+  // The explicit resume is a new budget: one more productive turn, then the cap pauses again.
+  // Native idle covers the continuation and the verdict, so the pause is settled when it returns.
+  await harness.worker.session.waitForIdle();
+  await harness.worker.operation({ type: 'goal', op: 'resume' });
+  // The resumed turn ends before its verdict lands, so wait for the pause itself.
+  await waitForGoal(harness.worker, () => harness.worker.mode().kind === 'goal' && harness.worker.mode().status === 'paused', 15000);
+  await harness.worker.session.waitForIdle();
+  expect(harness.events.filter(input => input.event.type === 'run.started' && input.event.origin === 'goal')).toHaveLength(2);
+  expect(harness.worker.mode()).toMatchObject({ kind: 'goal', status: 'paused' });
+  expect(harness.worker.continuationPending).toBe(false);
+  expect(harness.journal.runtime().activeRunId).toBeNull();
+ } finally {
+  if (previousCap === undefined) delete process.env.OPENCHAMBER_SESSION_GOAL_MAX_AUTO_TURNS;
+  else process.env.OPENCHAMBER_SESSION_GOAL_MAX_AUTO_TURNS = previousCap;
+  await harness.close();
+ }
+}, 30000);
+
 test('RPC goal continues three turns and retains completed mode', async () => {
  let calls = 0;
  const harness = await fixture({

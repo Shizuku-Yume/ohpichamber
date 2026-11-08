@@ -170,8 +170,8 @@ Each session worker owns a `GoalVerifyingController`, a subclass of OMP's native
 - A terminal `agent_end` with an active goal starts the check, and `continuationPending` is true while it runs, so the session is never reported settled mid-verification.
 - After the verdict the same terminal event is handed to the native controller. A `complete` verdict calls `completeGoalFromTool()` first, so OMP journals the completion from that event and no later event is needed; a `paused` verdict pauses the goal.
 - The judge is OMP's `resolveJudge` with purpose `goal-verification`, the session cost gate and `journalJudgmentUsage`, so billed attempts land on the session ledger. With `sessionGoalChecker: 'classifier'` (default) the `judge` role is used; `'small-model'` words the `smol`, `tiny` or `default` selector into the `judge` role.
-- The check sees the objective, the last eight message texts and tool calls, the todo phases and tokens used. When no judgement role resolves, the check produces no verdict: native continuation stands, and the cap still applies.
-- The cap (`sessionGoalMaxAutoTurns`, 1–200) counts turns per goal id; reaching it pauses the goal. A new goal re-arms the counter and the abort signal.
+- The check sees the objective, the last eight message texts and tool calls, the todo phases and tokens used. A failed or unresolvable judge produces no verdict: native continuation stands, and the cap still applies.
+- The cap (`sessionGoalMaxAutoTurns`, 1–200) counts turns per goal id; reaching it pauses the goal. A new goal, and an explicit `create`/`resume` of a paused one, re-arm the counter and the abort signal, so resuming diverts to a fresh budget instead of instantly re-hitting the cap. The check itself reports settled as soon as it has decided, so a just-paused goal is resumable without waiting for the promise to unwind.
 - `stopForHostAbort` aborts the in-flight judge, and a verdict for a replaced, dropped or paused goal is discarded.
 - When the verdict ends the goal, the controller reports a dropped continuation so the Host's pending-continuation marker clears.
 

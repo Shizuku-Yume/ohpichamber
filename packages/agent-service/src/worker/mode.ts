@@ -50,6 +50,13 @@ class GoalVerifyingController extends RpcGoalController {
   private verifiedGoalId: string | null = null;
   private turns = 0;
   private check: Promise<void> | null = null;
+  /**
+   * The in-flight check has already decided (paused/completed the goal), so the
+   * session is not busy any more even though the promise is still unwinding.
+   * Publishing `continuationPending` only when it resolves would leave the goal
+   * briefly un-resumable right after its own pause.
+   */
+  private decided = false;
 
   constructor(
     session: RpcGoalSession,
@@ -67,7 +74,26 @@ class GoalVerifyingController extends RpcGoalController {
   private readonly onContinuationDropped: (() => void) | undefined;
 
   /** A pending verdict is work: the session must not look settled while it runs. */
-  override get continuationPending(): boolean { return this.check !== null || super.continuationPending; }
+  override get continuationPending(): boolean { return (this.check !== null && !this.decided) || super.continuationPending; }
+
+  /**
+   * An explicit `create`/`resume` is the user starting or restarting automatic
+   * work, so it gets a fresh turn budget and a live abort signal. The native
+   * controller resets its own continuation state on the same commands; without
+   * this, a resumed goal would pause on the cap it already hit—same goal id, so
+   * `observe` never re-arms—and a host abort's dead signal would silence every
+   * later verdict. The reset lands before the scheduled continuation turn runs.
+   */
+  override async handle(command: RpcGoalCommand): Promise<RpcGoalResult> {
+    const result = await super.handle(command);
+    if (command.op === 'create' || command.op === 'resume') {
+      this.verifiedGoalId = null;
+      this.turns = 0;
+      this.abort = new AbortController();
+      this.decided = false;
+    }
+    return result;
+  }
 
   override observe(event: AgentSessionEvent): void {
     if (event.type !== 'agent_end' || event.isTerminal === false) {
@@ -85,6 +111,7 @@ class GoalVerifyingController extends RpcGoalController {
     }
     this.turns += 1;
     const abort = this.abort;
+    this.decided = false;
     this.check = this.verify(objective, goalId, abort.signal)
       .catch(() => {})
       .finally(() => {
@@ -120,24 +147,22 @@ class GoalVerifyingController extends RpcGoalController {
   private async verify(objective: string, goalId: string, signal: AbortSignal): Promise<void> {
     // The cap counts automatic goal turns for this goal, starting at the first check.
     if (this.turns >= this.maxAutoTurns) {
+      this.decided = true;
       await this.pause();
       return;
     }
     const context = this.context(objective);
     if (context.objectiveId !== goalId || signal.aborted) return;
-    const roles = this.judgeDeps.settings.getModelRoles();
-    // The small model is `smol`, then `tiny`, then the default role: whatever a
-    // cheap utility check would resolve on this session.
-    const smallModel = roles.smol || roles.tiny || roles.default;
-    // No usable judgement role means no checker: OMP's own continuation stands,
-    // and the turn cap still stops a runaway goal.
-    const judgeRole = this.checker === 'small-model' ? smallModel : roles.judge;
-    if (!judgeRole) return;
     let verdict: GoalVerdict | null;
     try {
+      // `classifier` leaves OMP's own `judge` role chain alone: the native
+      // resolver itself falls back to the session model, so an unconfigured
+      // role is not a reason to skip the check. `small-model` asks the native
+      // role resolver for `smol` and pins that selector to `judge`.
       const settings = this.checker === 'small-model'
-        ? this.judgeDeps.settings.overlay({ modelRoles: { ...roles, judge: smallModel } })
+        ? this.smallModelSettings()
         : this.judgeDeps.settings;
+      if (!settings) return;
       const judge = resolveJudge({ ...this.judgeDeps, settings, purpose: 'goal-verification' });
       const result = await judge.judge({ state: context, questions: GOAL_QUESTIONS }, { signal });
       verdict = decideGoalVerdict({
@@ -153,8 +178,24 @@ class GoalVerifyingController extends RpcGoalController {
     if (signal.aborted) return;
     const live = this.goalSession.getGoalModeState();
     if (!live?.enabled || live.goal.status !== 'active' || live.goal.id !== goalId) return;
+    this.decided = true;
     if (verdict === 'complete') await this.complete();
     else if (verdict === 'paused') await this.pause();
+  }
+
+  /**
+   * Settings whose `judge` role resolves through the cheap utility chain
+   * (`smol`, then `tiny`, then the session default), which is what a small
+   * checker is expected to run on. Null when no role resolves at all.
+   */
+  private smallModelSettings(): JudgeDeps['settings'] | null {
+    const roles = this.judgeDeps.settings.getModelRoles();
+    for (const role of ['smol', 'tiny', 'default'] as const) {
+      const selector = resolvedModelSelector(this.goalSession.resolveRoleModelWithThinking(role));
+      if (!selector) continue;
+      return this.judgeDeps.settings.overlay({ modelRoles: { ...roles, judge: selector } });
+    }
+    return null;
   }
 
   private async complete(): Promise<void> {
@@ -214,6 +255,13 @@ export function readGoalMaxAutoTurns(env: NodeJS.ProcessEnv = process.env): numb
   const parsed = Number(env[GOAL_MAX_TURNS_ENV]);
   if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > GOAL_MAX_AUTO_TURNS_LIMIT) return DEFAULT_GOAL_MAX_AUTO_TURNS;
   return parsed;
+}
+
+/** The `provider/model[:effort]` selector of a native role resolution, or null when none. */
+export function resolvedModelSelector(resolved: { model?: { provider: string; id: string } | undefined; thinkingLevel?: string | undefined }): string | null {
+  if (!resolved.model) return null;
+  const base = `${resolved.model.provider}/${resolved.model.id}`;
+  return resolved.thinkingLevel ? `${base}:${resolved.thinkingLevel}` : base;
 }
 
 export function readPlanAllowAgents(env: NodeJS.ProcessEnv = process.env): boolean {

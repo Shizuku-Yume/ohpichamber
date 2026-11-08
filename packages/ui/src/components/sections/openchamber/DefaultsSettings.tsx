@@ -259,25 +259,27 @@ export const DefaultsSettings: React.FC = () => {
     [rolesMap, updateRolesOnServer],
   );
 
-  /**
-   * The walkthrough model is read by the server from the app setting
-   * (`walkthroughModelOverride`), not from the native role. Writing both keeps
-   * the choice honest: the `slow` role stays configured for any native consumer,
-   * and the server actually uses the pick.
-   */
+  /** The walkthrough resolves its model through the native `slow` role. */
   const setWalkthroughModel = React.useCallback(
-    (selector: string) => {
-      setRole('slow', selector || '');
-      void updateDesktopSettings({
-        walkthroughModelOverride: selector || '',
-        walkthroughModelVariant: '',
-      });
-    },
+    (selector: string) => setRole('slow', selector || ''),
     [setRole],
   );
 
   /** The stored selector for a role, custom values included; '' means unset. */
   const roleModel = (role: string): string => roleSelectors[role] ?? '';
+
+  /**
+   * What a closed trigger shows for a selector. `SelectValue` otherwise prints
+   * the raw value, so sentinels (`__inherit__`, `__none__`), raw mode ids and
+   * custom selectors would leak into the control.
+   */
+  const selectorLabel = (selector: string): string => {
+    const model = models.find((m) => `${m.provider}/${m.modelId}` === selector);
+    if (model) return `${model.name || model.modelId} (${model.provider})`;
+    const mode = SESSION_MODE_OPTIONS.find((opt) => opt.value === selector);
+    if (mode) return t(mode.labelKey);
+    return `${selector} (${t('settings.omp.modelRoles.customModel')})`;
+  };
 
   /**
    * Small and walkthrough models are opt-outs: the toggle is what turns the
@@ -305,7 +307,7 @@ export const DefaultsSettings: React.FC = () => {
         disabled={disabled || isSavingOmp || !ompState}
       >
         <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={ariaLabel}>
-          <SelectValue placeholder={placeholder} />
+          <SelectValue placeholder={placeholder}>{value ? selectorLabel(value) : placeholder}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__inherit__">{placeholder}</SelectItem>
@@ -385,7 +387,9 @@ export const DefaultsSettings: React.FC = () => {
         className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
         aria-label={t('settings.openchamber.defaults.field.fallbackModel')}
       >
-        <SelectValue placeholder={t('settings.openchamber.defaults.field.fallbackModelNone')} />
+        <SelectValue placeholder={t('settings.openchamber.defaults.field.fallbackModelNone')}>
+          {fallbackRoles.current ? selectorLabel(fallbackRoles.current) : t('settings.openchamber.defaults.field.fallbackModelNone')}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="__none__">{t('settings.openchamber.defaults.field.fallbackModelNone')}</SelectItem>
@@ -432,7 +436,9 @@ export const DefaultsSettings: React.FC = () => {
                 className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                 aria-label={t('settings.openchamber.defaults.field.defaultModel')}
               >
-                <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')} />
+                <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')}>
+                  {selectedModelId ? selectorLabel(selectedModelId) : t('settings.omp.modelRoles.inheritFallback')}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__inherit__">
@@ -499,7 +505,7 @@ export const DefaultsSettings: React.FC = () => {
               className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
               aria-label={t('chat.chatInput.mode.label')}
             >
-              <SelectValue />
+              <SelectValue>{selectorLabel(defaultSessionMode)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {SESSION_MODE_OPTIONS.map((opt) => (
@@ -558,7 +564,7 @@ export const DefaultsSettings: React.FC = () => {
           info={t('settings.openchamber.defaults.smallModel.description')}
         />
         <SettingsFieldRow label={t('settings.openchamber.defaults.smallModel.title')}>
-          {roleSelect('smol', t('settings.openchamber.defaults.smallModel.title'), t('settings.openchamber.defaults.smallModel.useDefault'), usesOwnSmallModel)}
+          {roleSelect('smol', t('settings.openchamber.defaults.smallModel.title'), t('settings.openchamber.defaults.smallModel.useDefault'), !usesOwnSmallModel)}
         </SettingsFieldRow>
         <SettingsCheckboxRow
           settingsItem="sessions.walkthrough-use-default"
@@ -576,7 +582,7 @@ export const DefaultsSettings: React.FC = () => {
           label={t('settings.openchamber.defaults.walkthroughModel.title')}
           info={t('settings.openchamber.defaults.walkthroughModel.description')}
         >
-          {roleSelect('slow', t('settings.openchamber.defaults.walkthroughModel.title'), t('settings.openchamber.defaults.walkthroughModel.usesSmallModel'), usesOwnWalkthroughModel)}
+          {roleSelect('slow', t('settings.openchamber.defaults.walkthroughModel.title'), t('settings.openchamber.defaults.walkthroughModel.usesSmallModel'), !usesOwnWalkthroughModel)}
         </SettingsFieldRow>
       </SettingsSection>
 

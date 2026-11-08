@@ -28,7 +28,6 @@ has to ask for it.
   `gitea/resources.js`, Gerrit's `gerrit/resources.js`). It also
   says which providers walkthroughs serve: those whose descriptor has
   `capabilities.changeRequestPatch`.
-- `model-settings.js` — the feature's own model override.
 - `languages.js` — the languages the prose may be written in.
 - `index.js` — orchestration.
 - `routes.js` — `/api/walkthrough*`.
@@ -226,23 +225,17 @@ When a change consists only of generated files, generation is refused with
 
 ## Model selection
 
-The walkthrough has its own model setting (Settings → Sessions → Changes
-Walkthrough Model), read by `model-settings.js`:
+The walkthrough resolves its model from OMP's native `slow` model role
+(Settings → Sessions → Changes walkthrough model), the same record every other
+role lives in. The resolver is `describeSmallModel(..., { role: 'slow' })`,
+which falls back to the default role, so an unset walkthrough role still gets a
+working model. A model picked for one review passes
+`overrideModel` and outranks the role for that review only.
 
-`walkthroughModelOverride` (`provider/model`) is the whole contract: set, that
-model is used for this feature and nothing else; unset or empty, generation
-falls back to whatever the small-model chain resolves to. Choosing a model *is*
-the opt-out, so there is no separate toggle to disagree with the picker — the
-settings picker simply shows "Small model will be used" until a choice is made,
-and clearing it restores the fallback.
-
-`walkthroughModelVariant` is the thinking level chosen beside that model in
-Settings. It applies only while the walkthrough runs on the saved model: a
-model picked for one review runs at its own default level, and changing or
-clearing the saved model clears the level. The server checks it against the
-catalog the way the small model's level is checked (`small-model`'s
-`resolveModelVariant`). The level is not part of the cache key, so changing it
-keeps the review on screen until the user regenerates.
+There is no Host-side copy of the choice: the role is the record, and the app's
+settings snapshot carries nothing extra. The thinking level travels as part of
+the role's selector value (`provider/model:effort`), the same convention the
+default model uses.
 
 The separation exists because the two roles pull in opposite directions: the
 small model is chosen to be cheap and fast for recaps and commit messages, while

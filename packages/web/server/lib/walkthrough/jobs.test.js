@@ -103,31 +103,22 @@ describe('generation jobs', () => {
     expect(generateSmallModelText.mock.calls.at(-1)[0]).toMatchObject({ workspaceId: 'workspace-1' });
   });
 
-  it('runs the saved walkthrough model at its saved thinking level, and a model picked for one review at its own', async () => {
-    const settingsFile = path.join(TEMP_DATA_DIR, 'settings.json');
-    fs.writeFileSync(settingsFile, JSON.stringify({
-      walkthroughModelOverride: 'anthropic/claude-sonnet-5',
-      walkthroughModelVariant: 'high',
-    }));
+  it('resolves the walkthrough through the native slow role, and a model picked for one review overrides it', async () => {
+    generateSmallModelText.mockResolvedValue({ text: RESPONSE });
     describeSmallModel.mockResolvedValue({
       providerID: 'anthropic',
       modelID: 'claude-sonnet-5',
-      variant: 'high',
-      source: 'request',
+      source: 'modelRoles',
       inputCharBudget: 1_000_000,
       structuredOutput: true,
     });
-    generateSmallModelText.mockResolvedValue({ text: RESPONSE });
-    try {
-      await generateWalkthrough({ directory: '/repo', source: SOURCE, force: true });
-      expect(describeSmallModel.mock.calls.at(-1)[0]).toMatchObject({ overrideModel: 'anthropic/claude-sonnet-5', overrideVariant: 'high' });
-      expect(generateSmallModelText.mock.calls.at(-1)[0]).toMatchObject({ model: 'anthropic/claude-sonnet-5', variant: 'high' });
 
-      await generateWalkthrough({ directory: '/repo', source: SOURCE, force: true, model: 'openai/gpt-5.6' });
-      expect(describeSmallModel.mock.calls.at(-1)[0]).toMatchObject({ overrideModel: 'openai/gpt-5.6', overrideVariant: undefined });
-    } finally {
-      fs.rmSync(settingsFile, { force: true });
-    }
+    await generateWalkthrough({ directory: '/repo', source: SOURCE, force: true });
+    // The role is the walkthrough's own native model role; no Host-side copy.
+    expect(describeSmallModel.mock.calls.at(-1)[0]).toMatchObject({ role: 'slow', overrideModel: undefined });
+
+    await generateWalkthrough({ directory: '/repo', source: SOURCE, force: true, model: 'openai/gpt-5.6' });
+    expect(describeSmallModel.mock.calls.at(-1)[0]).toMatchObject({ role: 'slow', overrideModel: 'openai/gpt-5.6' });
   });
 
   it('runs a second request against the same job instead of paying twice', async () => {

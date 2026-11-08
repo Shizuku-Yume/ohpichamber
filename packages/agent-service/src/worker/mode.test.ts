@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   DEFAULT_GOAL_MAX_AUTO_TURNS, GOAL_MAX_AUTO_TURNS_LIMIT,
   decideGoalVerdict, readGoalChecker, readGoalMaxAutoTurns, readPlanAllowAgents,
+  resolvedModelSelector,
 } from './mode.ts';
 
 describe('goal preferences captured from the Host', () => {
@@ -25,6 +26,15 @@ describe('goal preferences captured from the Host', () => {
     expect(readPlanAllowAgents({})).toBe(false);
     expect(readPlanAllowAgents({ OPENCHAMBER_PLAN_ALLOW_AGENTS: 'true' })).toBe(true);
     expect(readPlanAllowAgents({ OPENCHAMBER_PLAN_ALLOW_AGENTS: '1' })).toBe(false);
+  });
+
+  test('a native role resolution becomes the selector the judge role accepts', () => {
+    expect(resolvedModelSelector({})).toBeNull();
+    expect(resolvedModelSelector({ model: { provider: 'anthropic', id: 'claude-haiku-4-5' } }))
+      .toBe('anthropic/claude-haiku-4-5');
+    // The role's own thinking level is part of the selector, not a fake picker value.
+    expect(resolvedModelSelector({ model: { provider: 'anthropic', id: 'claude-haiku-4-5' }, thinkingLevel: 'high' }))
+      .toBe('anthropic/claude-haiku-4-5:high');
   });
 
   test('the verdict follows the historical Jev thresholds', () => {

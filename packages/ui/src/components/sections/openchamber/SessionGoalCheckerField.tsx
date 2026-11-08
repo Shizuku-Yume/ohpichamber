@@ -51,17 +51,13 @@ export const SessionGoalCheckerField: React.FC<{ disabled?: boolean }> = ({ disa
      ]}
     />
    </SettingsFieldRow>
-   {checker === 'classifier' ? (
-    <p className={SETTINGS_HELPER_CLASS}>
-     {t('settings.openchamber.visual.goal.checker.jevMissing')}
-    </p>
-   ) : (
+   {checker === 'small-model' ? (
     <p className={SETTINGS_HELPER_CLASS}>
      {t('settings.openchamber.visual.goal.checker.viaSmallModel')}
      {' '}
      <SettingsInlineLink onClick={openSmallModelSettings}>{t('settings.openchamber.visual.goal.checker.smallModelLink')}</SettingsInlineLink>
     </p>
-   )}
+   ) : null}
   </div>
  );
 };

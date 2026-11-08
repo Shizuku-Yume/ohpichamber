@@ -2,7 +2,7 @@
 
 **Effort:** omp-through-m3
 **Task type:** bugfix
-**Base commit:** 572d323e2
+**Provenance:** historical base commit 572d323e2, recorded at completion; it is no longer in this repository's history, so it stays a plain note instead of a validated field.
 **Started:** 2026-10-22T05:35:28Z
 **Finished:** 2026-10-22T10:10:00Z
 

@@ -118,6 +118,8 @@ const losesMore = (now: OverviewWorktreeLosses, agreed: OverviewWorktreeLosses):
 export async function removeOverviewWorktree(input: {
   target: OverviewWorktreeTarget;
   agreed: OverviewWorktreeLosses;
+  /** Only from the failure toast's "Delete without teardown". */
+  skipTeardown?: boolean;
 }): Promise<OverviewRemoveOutcome> {
   const { target, agreed } = input;
   const path = target.worktree.path;
@@ -136,7 +138,7 @@ export async function removeOverviewWorktree(input: {
       const { failedIds } = await archiveSessions(sessions.map((session) => session.sessionId));
       if (failedIds.length > 0) throw new Error(`Could not archive ${failedIds.length} session(s)`);
     }
-    await removeProjectWorktree(target.project, target.worktree, { deleteLocalBranch: true });
+    await removeProjectWorktree(target.project, target.worktree, { deleteLocalBranch: true, skipTeardown: input.skipTeardown });
     return { kind: 'removed' };
   } catch (error) {
     return { kind: 'failed', error: error instanceof Error ? error : new Error(String(error)) };

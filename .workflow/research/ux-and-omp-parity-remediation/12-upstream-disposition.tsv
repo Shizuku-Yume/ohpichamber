@@ -1620,7 +1620,7 @@ M	packages/ui/src/hooks/useChatTimelineScroll.ts	adapt-pending	upstream changed 
 M	packages/ui/src/hooks/useCommitComparison.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no
 A	packages/ui/src/hooks/useComposerAddress.test.ts	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
 A	packages/ui/src/hooks/useComposerAddress.ts	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
-A	packages/ui/src/hooks/useComposerConfigDirectory.ts	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
+A	packages/ui/src/hooks/useComposerConfigDirectory.ts	excluded	excluded: the fork resolves commands per directory directly (`selectCommandsForDirectory`); the hook had no consumer and the upstream draft start-folder field does not exist	no
 A	packages/ui/src/hooks/useDictation.test.ts	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
 M	packages/ui/src/hooks/useDictation.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no
 M	packages/ui/src/hooks/useEffectiveDirectory.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no
@@ -1985,8 +1985,6 @@ M	packages/ui/src/lib/router/serializeRoute.ts	adapt-pending	upstream changed it
 A	packages/ui/src/lib/runtime-asset.ts	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
 M	packages/ui/src/lib/runtime-auth.test.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no
 M	packages/ui/src/lib/runtime-auth.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no
-A	packages/ui/src/lib/runtime-cleanup.test.ts	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
-A	packages/ui/src/lib/runtime-cleanup.ts	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
 M	packages/ui/src/lib/runtime-fetch.test.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no
 M	packages/ui/src/lib/runtime-fetch.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no
 M	packages/ui/src/lib/runtime-switch.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no

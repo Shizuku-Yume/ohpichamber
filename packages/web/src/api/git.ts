@@ -40,6 +40,7 @@ export const createWebGitAPI = (): GitAPI => ({
   validateGitWorktree: gitApiHttp.validateGitWorktree,
   createGitWorktree: gitApiHttp.createGitWorktree,
   deleteGitWorktree: gitApiHttp.deleteGitWorktree,
+  teardownGitWorktree: gitApiHttp.teardownGitWorktree,
   validateWorktreeDirectory: gitApiHttp.validateWorktreeDirectory,
   canonicalizeWorktreeState: gitApiHttp.canonicalizeWorktreeState,
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions) {
@@ -98,6 +99,7 @@ export const createWebGitAPI = (): GitAPI => ({
     preview: gitApiHttp.previewGitWorktree,
     create: gitApiHttp.createGitWorktree,
     remove: gitApiHttp.deleteGitWorktree,
+    teardown: gitApiHttp.teardownGitWorktree,
     snapshot: gitApiHttp.snapshotGitWorktree,
     archive: gitApiHttp.archiveGitWorktree,
     listArchives: gitApiHttp.listGitWorktreeArchives,

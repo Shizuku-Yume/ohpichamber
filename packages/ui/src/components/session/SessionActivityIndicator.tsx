@@ -10,12 +10,15 @@ import { cn } from '@/lib/utils';
  * (busy/retry), a pause kept open by a background subagent or a background
  * command, or a finished turn the user has not seen.
  */
-type SessionActivityIndicatorState = 'running' | 'subagent' | 'shell' | 'unread';
+type SessionActivityIndicatorState = 'running' | 'subagent' | 'shell' | 'pullRequest' | 'unread';
 
 const PRESENTATION = {
   running: { icon: 'circle', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.active' },
   subagent: { icon: 'robot', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.backgroundSubagent' },
   shell: { icon: 'terminal', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.backgroundCommand' },
+  // Waiting on a pull request shares the running circle: the row's linked pull
+  // request already puts that icon there, and the tooltip names the wait.
+  pullRequest: { icon: 'circle', colorClass: 'text-status-info', labelKey: 'sessions.sidebar.session.status.waitingOnPullRequest' },
   unread: { icon: 'checkbox-circle', colorClass: 'text-status-success', labelKey: 'sessions.sidebar.session.status.unread' },
 } as const satisfies Record<SessionActivityIndicatorState, { icon: IconName; colorClass: string; labelKey: string }>;
 

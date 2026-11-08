@@ -1102,6 +1102,14 @@ export interface GitCheckoutTrustInspection {
 export interface RemoveGitWorktreePayload {
   directory: string;
   deleteLocalBranch?: boolean;
+  /** Runs inside the worktree before anything is removed; a failure keeps the worktree. */
+  teardownCommand?: string;
+}
+
+/** Runs a worktree's teardown commands without removing it. */
+export interface TeardownGitWorktreePayload {
+  directory: string;
+  teardownCommand?: string;
 }
 
 /** Private ref (`refs/openchamber/runs/<group>/<session>`) holding a worktree snapshot. */
@@ -1201,6 +1209,8 @@ interface GitWorktreeAPI {
   preview?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   create?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
+  /** `directory` is the project; runs the worktree's teardown and keeps it. */
+  teardown?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
   /** `directory` is the worktree to snapshot. */
   snapshot?(directory: string, payload: GitWorktreeSnapshotPayload): Promise<GitWorktreeSnapshotResult>;
   setTitle?(directory: string, title: string): Promise<GitWorktreeTitleResult>;
@@ -1250,6 +1260,7 @@ export interface GitAPI {
   previewGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
+  teardownGitWorktree?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
   /** Amends HEAD with a host-computed Change-Id trailer; refuses unless HEAD is still `expectedHead`. */
   addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;

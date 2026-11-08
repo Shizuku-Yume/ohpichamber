@@ -4120,7 +4120,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     return (
         <>
         <form
-            ref={composerFormRef}
+            // One callback sets both the ref other hooks read and the route
+            // owner the search shortcut resolves through.
+            ref={setPromptHistorySearchForm}
             data-btw-composer={isBtwActive ? 'true' : undefined}
             onContextMenuCapture={() => {
                 largeTextPasteGesture.invalidate();
@@ -4292,6 +4294,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onEmojiSelect={handleEmojiSelect}
                         onClose={closeAutocomplete}
                     />
+                {/* The prompt-history search draws above the composer box:
+                    normal height as a zero-height row, expanded pinned to the
+                    box's bottom edge so it does not push the box around. */}
+                <div
+                    className={cn(isComposerExpanded ? 'absolute inset-s-0 inset-e-0 bottom-0 h-0' : 'relative h-0')}
+                    data-prompt-history-search-anchor
+                >
+                    {isPromptHistorySearchOpen && promptHistorySearch ? (
+                        <PromptHistorySearchPanel
+                            history={historyValues}
+                            initialQuery={promptHistorySearch.initialQuery}
+                            olderRequest={promptHistorySearch.olderRequest}
+                            onPick={pickPromptHistoryCandidate}
+                            onClose={closePromptHistorySearch}
+                        />
+                    ) : null}
+                </div>
                 {/* The lift shadow lives on this wrapper, away from the glass
                     box's backdrop-filter: on the same element Chromium grows
                     the glass layer by the shadow's blur, and that band painted

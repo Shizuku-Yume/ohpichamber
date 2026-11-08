@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ProviderResult, QuotaProviderId } from '@/types';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
-import { fetchExtensionQuotaProviders, quotaProviderIds, quotaProviderList, sameExtensionQuotaProviders, type ExtensionQuotaProvider } from '@/lib/quota/extensionProviders';
+import { fetchExtensionQuotaProviders, quotaProviderIds, sameExtensionQuotaProviders, type ExtensionQuotaProvider } from '@/lib/quota/extensionProviders';
 import type { DesktopSettings } from '@/lib/desktop';
 import { getDefaultModels } from '@/lib/quota/model-families';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';

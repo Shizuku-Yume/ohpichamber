@@ -34,7 +34,8 @@ export const useSessionAutoCleanup = ({ autoRun = true, enabled = true }: Cleanu
   const isRunning = useSessionRetentionRunStore((state) => state.isRunning);
   const includeInWork = useUIStore((state) => state.sessionRetentionIncludeInWork);
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
-  const workKeeps = sessionWorkEnabled && !includeInWork;
+  // The same rule the real pass uses, so the preview and the run agree.
+  const workKeeps = inWorkKeepsSessions({ sessionWorkEnabled, sessionRetentionIncludeInWork: includeInWork });
   // Pin changes must refresh the Settings preview of what cleanup would take.
   const pinnedIds = useSessionPinnedStore((state) => state.ids);
 

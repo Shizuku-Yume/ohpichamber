@@ -373,7 +373,7 @@ const CopyMessageLinkButton: React.FC<{ onCopyLink: () => void }> = ({ onCopyLin
     );
 };
 
-const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onCopyLink, onShowPopup, agentMention, onRevert, onFork, contextPinned, contextPinPending, onToggleContextPin, userActionsMode = 'inline', stickyUserHeaderEnabled = true, extraActions }: {
+const UserMessageBody = React.memo(({ workspaceId, messageId: _messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onCopyLink, onShowPopup, agentMention, onRevert, onFork, contextPinned, contextPinPending, onToggleContextPin, userActionsMode = 'inline', stickyUserHeaderEnabled = true, extraActions }: {
     messageId: string;
     workspaceId: string | undefined;
     parts: Part[];

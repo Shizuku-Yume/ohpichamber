@@ -1416,7 +1416,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             },
         };
         return handle;
-    }, [alignViewportAnchor, findMessageElement, messageIndexMap, mountWindowedMessage, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, settleNavigationTarget, turnIndexMap]);
+    }, [alignViewportAnchor, findMessageElement, messageIndexMap, mountWindowedMessage, resolveScrollContainer, revealFoldedMessage, scrollHistoryIndexIntoView, scrollMessageElementIntoView, settleNavigationTarget, turnIndexMap]);
 
     const rowContext = React.useMemo<TimelineRowContextValue>(() => ({
         stickyUserHeader,

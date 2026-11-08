@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { z } from 'zod';
@@ -8,6 +9,8 @@ import { HostSessionRelocationPrepareSchema, HostSessionRelocationPreparedSchema
 import { OpenChamberControlError, asControlError } from '../openchamber-control/error.js';
 import { asNonEmptyString } from '../shared/guards.js';
 import { buildLinkedIssuesPatch, parseLinkOperation } from './session-linked-issues.js';
+import { createSessionWorktreeMover } from './worktree-move.js';
+import { createStartDirectoryResolver } from './worktree-start-directory.js';
 const SessionForkAckSchema = z.strictObject({ sessionId: z.string().min(1), rootSessionId: z.string().min(1), sessionFile: z.string().min(1), sourceSessionId: z.string().min(1), entryId: z.string().min(1).nullable(), mode: z.enum(['selected', 'full']) });
 const SessionForkRequestSchema = z.strictObject({ messageId: EntityIdSchema.optional(), mode: z.enum(['selected', 'full']) }).refine(
   (input) => input.mode === 'selected' ? input.messageId !== undefined : input.messageId === undefined,
@@ -77,6 +80,13 @@ const createCanonicalSessionService = (dependencies) => {
   const { agentScopeStore, resolveHostRelocationScope } = dependencies;
   const relocationControls = new Set();
   const worktreeArchiveGeneration = `host_${process.pid}_${randomUUID()}`;
+  // The retained session-worktree move: same creation pipeline as the New
+  // worktree dialog, one stash for the carried files, and `relocate` for the
+  // move itself. Every dependency is injected so the decision stays testable
+  // and the Host owns the Git and bootstrap authority.
+  const worktreeMover = typeof dependencies.createSessionWorktreeMover === 'function'
+   ? dependencies.createSessionWorktreeMover(dependencies.worktreeMove ?? {})
+   : createSessionWorktreeMover(dependencies.worktreeMove ?? {});
   const requiredFunctions = [service?.request, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
     registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted,
     directCommandAdmissionStore?.claim, directCommandAdmissionStore?.accept];
@@ -769,7 +779,119 @@ const createCanonicalSessionService = (dependencies) => {
     return { sessions };
   };
   const unloadWorker = async (id) => { forgetLive(id); try { await request(`/internal/workers/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {} };
-  return { create, send, steer, followUp, fork, selectBranch, relocate, delete: remove, open, history, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
+  /**
+   * A session's own folder name inside its checkout, or the worktree root:
+   * the same rule the New worktree dialog applies (worktree-start-directory).
+   */
+  const resolveMoveStartDirectory = createStartDirectoryResolver({
+    resolveWorktreeTopLevel: dependencies.resolveWorktreeTopLevel,
+    validateWorktreeDirectory: dependencies.validateWorktreeDirectory,
+  });
+
+  // The setup commands a server-made worktree runs, with no client to show the
+  // trust prompt; the dialog resolves the same list and sends it as startCommand.
+  const resolveMoveSetup = async (sourceDirectory) => {
+    if (typeof dependencies.readWorktreeSetup !== 'function' || typeof dependencies.resolveProjectDirectory !== 'function') {
+      return { startCommand: '', untrustedSkipped: [] };
+    }
+    const project = await dependencies.resolveProjectDirectory(sourceDirectory).catch(() => null);
+    if (!project?.projectId) return { startCommand: '', untrustedSkipped: [] };
+    const setup = await dependencies.readWorktreeSetup(project.projectId);
+    return dependencies.worktreeSetupOf(setup, project.projectDirectory ?? sourceDirectory);
+  };
+
+  /**
+   * Move a session into a new worktree of its repository, carrying the files
+   * the agent names (`./worktree-move.js`). Authorization is decided here, on
+   * the authenticated scope, before anything is created:
+   * `agentScopeStore.checkWorktreeScope` refuses while an archive owns the
+   * scope, and the destination workspace must exist and belong to the same
+   * Host project before `relocate` is asked to move into it.
+   */
+  const moveToWorktree = async (sessionId, payload = {}, options = {}) => {
+    const input = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+    const worktree = input.worktree && typeof input.worktree === 'object' && !Array.isArray(input.worktree) ? input.worktree : {};
+    const name = asNonEmptyString(worktree.name);
+    if (!name) throw new OpenChamberControlError('worktree.name is required', 400);
+    // One relative folder name: no absolute path, traversal, or separator.
+    if (name.length > 200 || name === '.' || name === '..' || /[\\/]/.test(name) || /[\x00-\x1f<>:"|?*]/.test(name)) {
+      throw new OpenChamberControlError('worktree.name must be one folder name, relative to the worktree root', 400);
+    }
+    const existingBranch = asNonEmptyString(worktree.existingBranch);
+    const branchName = asNonEmptyString(worktree.branchName);
+    const startRef = asNonEmptyString(worktree.startRef);
+    if (existingBranch && (branchName || startRef)) {
+      throw new OpenChamberControlError('existingBranch checks out that branch as it is; do not combine it with branchName or startRef', 400);
+    }
+    const carryInput = input.carry ?? [];
+    if (!Array.isArray(carryInput) || carryInput.some((entry) => !asNonEmptyString(entry))) {
+      throw new OpenChamberControlError('carry is a list of file paths', 400);
+    }
+
+    // Authorization first: the source scope, its archive claim, and the
+    // caller's relation to it. The agent tool may only move its own session.
+    const source = await resolveHostRelocationScope(sessionId);
+    if (!source || source.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
+    assertWritableScope(source);
+    if (agentScopeStore) await agentScopeStore.checkWorktreeScope(source.cwd);
+    const caller = asNonEmptyString(options.contextSessionId);
+    if (caller && caller !== source.rootSessionId) {
+      throw new OpenChamberControlError('Only the session itself may move into a worktree', 403);
+    }
+
+    const carry = [...new Set(carryInput.map((entry) => entry.trim()))];
+    // Carry paths name files in the session's own workspace: a relative path
+    // that stays inside it, never an absolute path or a directory.
+    for (const entry of carry) {
+      if (path.isAbsolute(entry) || entry.startsWith('..')) {
+        throw new OpenChamberControlError('carry entries are workspace-relative file paths', 400);
+      }
+      const resolved = path.resolve(source.cwd, entry);
+      if (!resolved.startsWith(path.resolve(source.cwd) + path.sep)) {
+        throw new OpenChamberControlError('carry entries stay inside the session workspace', 400);
+      }
+    }
+
+    const setup = await resolveMoveSetup(source.cwd);
+    // The destination workspace does not exist yet: the checkout is made first,
+    // then admitted through the same Host scope owner every other route uses,
+    // and only then is the session relocated. The mover keeps the ordering (and
+    // the rollback) around this callback.
+    const moveSession = async (_sessionId, _startDirectory, { worktreeRoot }) => {
+      if (typeof dependencies.resolveWorkspaceDirectory !== 'function') throw new OpenChamberControlError('Host workspace discovery is unavailable', 503);
+      const destination = await dependencies.resolveWorkspaceDirectory(worktreeRoot);
+      if (!destination) throw new OpenChamberControlError('The new worktree was not admitted as a Host workspace', 503);
+      if (destination.projectId !== source.projectId) throw new OpenChamberControlError('The new worktree belongs to another Host project', 403);
+      const destinationScope = await (dependencies.resolveHostWorkspaceScope ?? resolveWorkspaceScope)(destination.workspaceId);
+      // Discovery may answer a workspace for another directory; the scope's
+      // cwd is what the relocation actually moves the session into.
+      if (!destinationScope || destinationScope.projectId !== source.projectId
+        || path.resolve(destinationScope.cwd) !== path.resolve(worktreeRoot)) {
+        throw new OpenChamberControlError('The new worktree Host scope is unavailable', 503);
+      }
+      const relocated = await relocate(sessionId, { workspaceId: destination.workspaceId });
+      return { workspaceId: destination.workspaceId, sessions: relocated.sessions };
+    };
+
+    const moved = await worktreeMover.move({
+      sessionId,
+      directory: source.cwd,
+      name,
+      ...(branchName ? { branchName } : {}),
+      ...(startRef ? { startRef } : {}),
+      ...(existingBranch ? { existingBranch } : {}),
+      carry,
+      startDirectory: async ({ worktreeRoot }) => {
+        const start = await resolveMoveStartDirectory({ projectPath: source.cwd, worktreeRoot });
+        return start;
+      },
+      setup,
+      moveSession,
+    });
+    return moved;
+  };
+
+  return { create, send, steer, followUp, fork, selectBranch, relocate, moveToWorktree, delete: remove, open, history, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
 };
 
 
@@ -925,4 +1047,8 @@ export const registerCanonicalSessionRoutes = (router, service) => {
   router.patch('/:sessionId/title', express.json({ limit: '64kb' }), (req, res) => call(res, () => service.rename(req.params.sessionId, req.body || {}), 'Failed to rename session'));
   router.post('/:sessionId/branch', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.selectBranch(req.params.sessionId, req.body || {}), 'Failed to select session branch'));
   router.post('/:sessionId/relocate', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.relocate(req.params.sessionId, req.body || {}), 'Failed to relocate session'));
+  // A session's own move into a new worktree: create the checkout, carry the
+  // named files, then relocate. The session id names the source scope, so no
+  // client-supplied directory is trusted.
+  router.post('/:sessionId/move-to-worktree', express.json({ limit: '256kb' }), (req, res) => call(res, () => service.moveToWorktree(req.params.sessionId, req.body || {}), 'Failed to move session into a worktree'));
 };

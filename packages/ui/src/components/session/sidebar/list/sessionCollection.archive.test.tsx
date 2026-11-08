@@ -1,48 +1,37 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { OpenCode } from '@opencode/client';
-import type { Session } from '@/lib/opencode/model';
-import { opencodeClient } from '@/lib/opencode/client';
+import type { Session } from '@openchamber/agent-contract';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { useSessionWarmingStore } from '@/stores/useSessionWarmingStore';
 import { resetSessionOrdering } from '@/sync/session-ordering';
 import { SyncProvider, useDirectoryStore } from '@/sync/sync-context';
 import { installHookTestDom } from '../test-utils/testDom';
 import { useSessionProjectCollection } from './sessionCollection';
 
-const CURRENT_DIRECTORY = '/workspace';
 const DIRECTORY = '/project';
 const KNOWN_DIRECTORIES = new Set([DIRECTORY]);
 const ARCHIVED_ID = 'ses_archived';
 const ACTIVE_ID = 'ses_active';
 const UNKNOWN_ID = 'ses_unknown';
 
-const createSdk = () => OpenCode.make({
-  baseUrl: 'https://sync.test',
-  fetch: async (request) => {
-    const path = new URL(request instanceof Request ? request.url : request.toString()).pathname;
-    if (path.endsWith('/event')) {
-      return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } });
-    }
-    const body = path.endsWith('/location')
-      ? { directory: CURRENT_DIRECTORY, project: { id: 'project', directory: CURRENT_DIRECTORY, canonical: CURRENT_DIRECTORY } }
-      : path.endsWith('/session/active') ? {}
-        : { data: [] };
-    return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
-  },
-});
-
 const session = (id: string, updated: number, archived = false, directory = DIRECTORY): Session => ({
-  id,
-  projectID: 'project',
-  directory,
+  sessionId: id,
+  projectId: 'project',
+  workspaceId: 'workspace',
+  displayPath: directory,
+  rootSessionId: id,
+  createdAt: 1,
+  updatedAt: updated,
+  archivedAt: archived ? updated : undefined,
+  epoch: 'epoch-1',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  mode: { kind: 'main' },
   title: id,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: archived ? { created: 1, updated, archived: updated } : { created: 1, updated },
-  model: { providerID: 'anthropic', id: 'claude', variant: 'high' },
-  agent: 'build',
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
 });
 
 type Collection = ReturnType<typeof useSessionProjectCollection>;
@@ -57,7 +46,7 @@ const Probe = () => {
 };
 
 const collectionIds = (key: 'sessions' | 'rootSessions' | 'orderedSessions'): string[] => (
-  collection?.[key].map((entry) => entry.id) ?? []
+  collection?.[key].map((entry) => entry.sessionId) ?? []
 );
 
 describe('useSessionProjectCollection archive coverage', () => {
@@ -70,7 +59,7 @@ describe('useSessionProjectCollection archive coverage', () => {
 
   const render = async () => {
     await act(async () => root.render(
-      <SyncProvider sdk={createSdk()} directory="">
+      <SyncProvider directory="">
         <Probe />
       </SyncProvider>,
     ));
@@ -90,19 +79,8 @@ describe('useSessionProjectCollection archive coverage', () => {
     window.__OPENCHAMBER_SURFACE__ = 'desktop';
     initialGlobalState = useGlobalSessionsStore.getState();
     resetSessionOrdering();
-    const spies = [
-      spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home' }),
-      spyOn(opencodeClient, 'getFilesystemHome').mockResolvedValue('/home'),
-      spyOn(opencodeClient, 'getLocation').mockResolvedValue({
-        directory: CURRENT_DIRECTORY,
-        project: { id: 'project', directory: CURRENT_DIRECTORY, canonical: CURRENT_DIRECTORY },
-      }),
-      spyOn(opencodeClient, 'getConfig').mockResolvedValue({}),
-      spyOn(opencodeClient, 'listProjects').mockResolvedValue([]),
-    ];
-    restoreSpies = spies.map((spy) => () => spy.mockRestore());
-    const warmingRefresh = spyOn(useSessionWarmingStore.getState(), 'refresh').mockResolvedValue();
-    restoreWarmingRefresh = () => warmingRefresh.mockRestore();
+    restoreSpies = [];
+    restoreWarmingRefresh = () => { };
     root = createRoot(dom.container);
     directoryStore = null;
     collection = null;
@@ -139,7 +117,7 @@ describe('useSessionProjectCollection archive coverage', () => {
     );
     await seedDirectory([session(ARCHIVED_ID, 30), session(UNKNOWN_ID, 40)]);
 
-    expect(useGlobalSessionsStore.getState().archivedSessions.map((entry) => entry.id)).toContain(ARCHIVED_ID);
+    expect(useGlobalSessionsStore.getState().archivedSessions.map((entry) => entry.sessionId)).toContain(ARCHIVED_ID);
     expect(collection?.archivedSessions).toEqual([]);
     for (const key of ['sessions', 'rootSessions', 'orderedSessions'] as const) {
       expect(collectionIds(key)).not.toContain(ARCHIVED_ID);

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test';
 import React, { act } from 'react';
 import { Window } from 'happy-dom';
-import type { Session } from '@/lib/opencode/model';
+import type { Session } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost' });
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -33,8 +33,6 @@ const { RuntimeAPIProvider } = await import('@/contexts/RuntimeAPIProvider');
 const { createWebAPIs } = await import('../../../../web/src/api');
 const { CommandPalette } = await import('./CommandPalette');
 const { SyncProvider } = await import('@/sync/sync-context');
-const { OpenCode } = await import('@opencode/client');
-const { settleOpenCodeTrust } = await import('@/lib/opencodeTrust');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
@@ -46,12 +44,12 @@ const originalProjects = useProjectsStore.getState();
 const originalSessions = useGlobalSessionsStore.getState();
 const originalSessionUI = useSessionUIStore.getState();
 const apis = createWebAPIs();
-const sdk = OpenCode.make({ baseUrl: 'http://palette.test', fetch: () => new Promise<Response>(() => undefined) });
 let root: ReturnType<typeof createRoot>;
 const session = (id: string, directory: string, title: string): Session => ({
-  id, directory, title, projectID: id, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 1 },
+  sessionId: id, projectId: id, workspaceId: directory, displayPath: directory, rootSessionId: id,
+  title, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+  metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
 
 beforeEach(() => {
@@ -61,14 +59,15 @@ beforeEach(() => {
   useUIStore.setState({ isCommandPaletteOpen: true });
   useProjectsStore.setState({ projects: [{ id: 'allowed', path: '/allowed' }] });
   useSessionUIStore.setState({ availableWorktreesByProject: new Map() });
-  useGlobalSessionsStore.setState({ activeSessions: [
-    session('allowed', '/allowed', 'Allowed conversation'),
-    session('declined', '/declined', 'Declined conversation'),
-  ] });
+  useGlobalSessionsStore.setState({
+    activeSessions: [
+      session('allowed', '/allowed', 'Allowed conversation'),
+      session('declined', '/declined', 'Declined conversation'),
+    ]
+  });
 });
 afterEach(async () => {
   await act(async () => root.unmount());
-  await settleOpenCodeTrust('skip');
   useUIStore.setState(originalUI, true);
   useProjectsStore.setState(originalProjects, true);
   useGlobalSessionsStore.setState(originalSessions, true);
@@ -85,7 +84,7 @@ afterAll(async () => {
 });
 
 test('recent sessions and name search exclude declined folders and react to admission', async () => {
-  await act(async () => root.render(<RuntimeAPIProvider apis={apis}><I18nProvider><SyncProvider sdk={sdk} directory="/allowed"><CommandPalette /></SyncProvider></I18nProvider></RuntimeAPIProvider>));
+  await act(async () => root.render(<RuntimeAPIProvider apis={apis}><I18nProvider><SyncProvider directory="/allowed"><CommandPalette /></SyncProvider></I18nProvider></RuntimeAPIProvider>));
   await act(async () => {
     // Settle the startup echo before simulating a new server-confirmed project.
     await ensureHomeDirectoryResolved();
@@ -104,9 +103,11 @@ test('recent sessions and name search exclude declined folders and react to admi
   });
   expect(document.body.textContent).not.toContain('Allowed conversation');
   expect(document.body.textContent).not.toContain('Declined conversation');
-  await act(async () => useProjectsStore.setState({ projects: [
-    { id: 'allowed', path: '/allowed' }, { id: 'declined', path: '/declined' },
-  ] }));
+  await act(async () => useProjectsStore.setState({
+    projects: [
+      { id: 'allowed', path: '/allowed' }, { id: 'declined', path: '/declined' },
+    ]
+  }));
   expect(document.body.textContent).toContain('Declined conversation');
   expect(useGlobalSessionsStore.getState().activeSessions).toHaveLength(2);
 });

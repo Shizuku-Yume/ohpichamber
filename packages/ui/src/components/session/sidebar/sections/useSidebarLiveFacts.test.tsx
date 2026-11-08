@@ -1,8 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import type { SyncEvent } from '@/lib/opencode/events';
-import type { Session } from '@/lib/opencode/model';
+import type { CanonicalEvent, Session, ShellJob } from '@openchamber/agent-contract';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { applyBackgroundShellEvents, resetBackgroundShells } from '@/sync/background-shells';
 import { replaceGlobalSessionStatusById, setSessionParentResolver } from '@/sync/global-session-status';
@@ -12,19 +11,60 @@ import { installHookTestDom } from '../test-utils/testDom';
 import { useSidebarLiveFacts } from './useSidebarLiveFacts';
 import type { SidebarLiveFacts } from './workFacts';
 
-// `time.idle` is stamped however much work the turn left running.
 const finished = (id: string, parentID?: string): Session => ({
-  id, parentID, projectID: 'p', directory: '/repo', title: id, cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated: 2, idle: 2 },
+  sessionId: id,
+  parentSessionId: parentID,
+  projectId: 'p',
+  workspaceId: '/repo',
+  displayPath: '/repo',
+  rootSessionId: parentID ?? id,
+  createdAt: 1,
+  updatedAt: 2,
+  epoch: 'epoch-1',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  mode: { kind: 'main' },
+  title: id,
+  metadata: { openchamber: { workbench: { lastIdleAt: 2 } } },
+  metadataRevision: '1',
+  archiveRevision: '0',
 });
 
-const shellStarted: SyncEvent = {
-  type: 'shell.started',
-  properties: { shell: { id: 'sh_1', sessionID: 'waiting', command: 'sleep 300', file: '/tmp/sh_1.out', startedAt: 1 } },
+const jobRunning: Extract<ShellJob, { status: 'running' }> = {
+  jobId: 'sh_1',
+  sessionId: 'waiting',
+  epoch: 'epoch_1',
+  workerGeneration: 'worker_1',
+  workspaceId: 'workspace_1',
+  projectId: 'p',
+  command: 'sleep 300',
+  background: true,
+  startedAt: 1,
+  outputCursor: '0',
+  status: 'running',
 };
-const shellEnded: SyncEvent = { type: 'shell.ended', properties: { shellID: 'sh_1', end: { kind: 'exited', status: 'exited', exit: 0 }, endedAt: 2 } };
-
+const shellStarted: CanonicalEvent = {
+  sessionId: 'waiting',
+  epoch: 'epoch_1',
+  sequence: '1',
+  timestamp: 1,
+  type: 'shell.updated',
+  job: jobRunning,
+};
+const shellEnded: CanonicalEvent = {
+  sessionId: 'waiting',
+  epoch: 'epoch_1',
+  sequence: '2',
+  timestamp: 2,
+  type: 'shell.updated',
+  job: {
+    ...jobRunning,
+    status: 'ended',
+    endedAt: 2,
+    termination: { reason: 'exit', exitCode: 0 },
+  },
+};
 const reset = () => {
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
   replaceGlobalSessionStatusById(new Map());
@@ -79,7 +119,7 @@ test('a session idling on a background subagent is running until it ends, then u
   await act(async () => {
     useGlobalSessionsStore.getState().upsertSessions([finished('child', 'waiting')]);
     setSessionParentResolver((id) => (id === 'child' ? 'waiting' : undefined));
-    replaceGlobalSessionStatusById(new Map([['child', { directory: '/repo', status: { type: 'busy' } }]]));
+    replaceGlobalSessionStatusById(new Map([['child', { directory: '/repo', status: 'running' }]]));
   });
   expectWaiting();
 

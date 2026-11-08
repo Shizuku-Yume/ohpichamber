@@ -83,6 +83,17 @@ export const hasActiveSubagent = (sessionId: string, activeSessionIds: ReadonlyS
   }
   return false;
 };
+export const collectOpenTurnSessionIds = (
+  activeSessionIds: ReadonlySet<string>,
+  waitingSessionIds: readonly Iterable<string>[],
+): ReadonlySet<string> => {
+  const open = new Set(activeSessionIds);
+  for (const activeId of activeSessionIds) forEachAncestorId(activeId, (ancestorId) => open.add(ancestorId));
+  for (const sessionIds of waitingSessionIds) {
+    for (const sessionId of sessionIds) open.add(sessionId);
+  }
+  return open;
+};
 const withBackgroundWork = (activeSessionIds: ReadonlySet<string>): ReadonlySet<string> => {
   let extended: Set<string> | null = null;
   const add = (id: string): void => { if (activeSessionIds.has(id)) return; extended ??= new Set(activeSessionIds); extended.add(id); };

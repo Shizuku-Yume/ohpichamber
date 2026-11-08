@@ -1,7 +1,5 @@
 import type * as React from 'react';
-const readMobileKeyboardVar = (name: string): number => (
- globalThis.document ? Number.parseFloat(globalThis.document.documentElement.style.getPropertyValue(name)) || 0 : 0
-);
+import { readMobileKeyboardVar } from '@/lib/mobileKeyboardInsets';
 
 /** A caret in viewport coordinates: the top and bottom of its line, and its x. */
 export type CaretCoords = { top: number; bottom: number; left: number };

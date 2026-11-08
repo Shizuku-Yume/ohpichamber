@@ -3,7 +3,7 @@ import { RiFolder6Line } from '@remixicon/react';
 
 import { Icon } from '@/components/icon/Icon';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, ProjectIconImage } from '@/lib/projectMeta';
+import { PROJECT_ICON_MAP, ProjectIconImage, resolveProjectColor } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
 
 /** The project fields the icon needs — a structural subset of the sheet's
@@ -25,7 +25,9 @@ export const MobileProjectIcon: React.FC<{
   const { currentTheme } = useThemeSystem();
 
   const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
-  const iconColor = project.color ? PROJECT_COLOR_MAP[project.color] ?? null : null;
+  // Hex colours are what projects take now; a legacy theme key keeps painting
+  // with its variable, and both resolve through the one owner.
+  const iconColor = resolveProjectColor(project.color);
 
   if (size === 'xs') {
     const fallbackIcon = ProjectIcon ? (
@@ -44,7 +46,11 @@ export const MobileProjectIcon: React.FC<{
         fallback={fallbackIcon}
       />
     ) : null;
-    const imageBackground = project.iconBackground ? { backgroundColor: project.iconBackground } : undefined;
+    // The colour only fills a tile behind an image; a symbol glyph already
+    // carries the colour, so painting it behind the glyph would fill a square.
+    const imageBackground = project.iconImage && project.iconBackground
+      ? { backgroundColor: project.iconBackground }
+      : undefined;
     return (
       <span
         className="flex size-3.5 shrink-0 items-center justify-center overflow-hidden rounded-[3px] text-muted-foreground"

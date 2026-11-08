@@ -55,7 +55,7 @@ describe('buildChatInputHistorySubmissions', () => {
 });
 
 describe('mapInputHistoryEntriesToValues', () => {
-  test('preserves desktop attachment.path on materialized history attachments', () => {
+  test('preserves the desktop file path as the materialized attachment agentPath', () => {
     const entries: InputHistoryEntry[] = [
       {
         text: 'desktop prompt',
@@ -74,9 +74,10 @@ describe('mapInputHistoryEntriesToValues', () => {
     ];
 
     const values = mapInputHistoryEntriesToValues(entries);
-    expect(values[0]?.attachments[0]?.filename).toBe('main.rs');
-    expect((values[0]?.attachments[0] as { path?: string })?.path).toBe('/home/user/project/src/main.rs');
-    expect(values[0]?.attachments[0]?.serverPath).toBe('/home/user/project/src/main.rs');
+    const attachment = values[0]?.attachments[0];
+    expect(attachment?.filename).toBe('main.rs');
+    expect(attachment?.agentPath).toBe('/home/user/project/src/main.rs');
+    expect(attachment?.serverPath).toBe('/home/user/project/src/main.rs');
   });
 
   test('keeps chronological order and materializes supported attachments', () => {

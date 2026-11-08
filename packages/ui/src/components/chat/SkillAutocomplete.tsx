@@ -30,7 +30,7 @@ interface SkillAutocompleteProps {
 
 const skillRowScope = (skill: SkillInfo): AutocompleteScope => {
   if (skill.name === "openchamber-extensions") return "openchamber";
-  return skill.scope === "project" ? "project" : "user";
+  return skill.scope === "workspace" ? "project" : "user";
 };
 
 export const SkillAutocomplete = React.forwardRef<SkillAutocompleteHandle, SkillAutocompleteProps>(({

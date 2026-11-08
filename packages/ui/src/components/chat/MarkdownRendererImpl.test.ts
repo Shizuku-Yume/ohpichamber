@@ -3,21 +3,27 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { getDefaultTheme } from '@/lib/theme/themes';
+import * as actualEffectiveDirectory from '@/hooks/useEffectiveDirectory';
 
 const browser = new Window({ url: 'http://localhost/' });
-Object.assign(globalThis, { window: browser, document: browser.document, navigator: browser.navigator,
+Object.assign(globalThis, {
+  window: browser, document: browser.document, navigator: browser.navigator,
   localStorage: browser.localStorage, sessionStorage: browser.sessionStorage, HTMLElement: browser.HTMLElement,
   HTMLAnchorElement: browser.HTMLAnchorElement, Element: browser.Element, Node: browser.Node, Text: browser.Text,
   SVGElement: browser.SVGElement, MutationObserver: browser.MutationObserver, DOMParser: browser.DOMParser,
   Event: browser.Event,
   Range: browser.Range,
-  XMLSerializer: browser.XMLSerializer, IntersectionObserver: browser.IntersectionObserver, ResizeObserver: browser.ResizeObserver });
+  requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
+  cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+  getComputedStyle: browser.getComputedStyle.bind(browser),
+  XMLSerializer: browser.XMLSerializer, IntersectionObserver: browser.IntersectionObserver, ResizeObserver: browser.ResizeObserver
+});
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, value: true });
 Object.defineProperty(globalThis, 'customElements', { configurable: true, value: browser.customElements });
 const state = { codeBlockLineWrap: false, tableCellWrap: true, copyMessagesAsPlainText: false, mermaidRenderingMode: 'svg', setCodeBlockLineWrap: () => undefined, setTableCellWrap: () => undefined, openContextFile: (_directory: string, _path: string) => undefined, openContextFileAtLine: (_directory: string, _path: string, _line: number, _column: number) => undefined };
 mock.module('@/stores/useUIStore', () => ({ useUIStore: Object.assign((select: (value: typeof state) => never) => select(state), { getState: () => state, subscribe: () => () => undefined }) }));
 mock.module('@/lib/router/openSessionFromRoute', () => ({ openSessionLink: async () => undefined }));
-mock.module('@/hooks/useEffectiveDirectory', () => ({ useEffectiveDirectory: () => '/project' }));
+mock.module('@/hooks/useEffectiveDirectory', () => ({ ...actualEffectiveDirectory, useEffectiveDirectory: () => '/project' }));
 const openedLinks: string[] = [];
 const actualUrlModule = await import('@/lib/url');
 mock.module('@/lib/url', () => ({
@@ -232,14 +238,18 @@ test('code rows and selection preserve intentional trailing blank lines', async 
 
 test('table columns preserve short content and allocate remaining width to long content', async () => {
   const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
-  const bounds = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+  const bounds = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
+    // A heading measured at min-content is as wide as its longest word.
+    if (this.style.width === 'min-content') return new window.DOMRect(0, 0, 60, 30);
     const width = this.tagName === 'TH' || this.tagName === 'TD' ? this.textContent?.includes('long') ? 600 : 120 : 502;
     return new window.DOMRect(0, 0, width, 30);
   });
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 502 });
   try {
+    // The long heading breaks between its words, so its column stays at the
+    // narrow minimum, plus the pixel a heading keeps against subpixel wrapping.
     await render('| long heading over short values | long |\n| --- | --- |\n| `id` | `long description` |');
-    expect(Array.from(host.querySelectorAll('col'), (col) => col.style.width)).toEqual(['120px', '380px']);
+    expect(Array.from(host.querySelectorAll('col'), (col) => col.style.width)).toEqual(['121px', '379px']);
     expect(host.querySelector('td')?.style.getPropertyValue('--oc-table-code-wrap')).toBe('nowrap');
     expect(host.querySelector<HTMLElement>('td:last-child')?.style.getPropertyValue('--oc-table-code-wrap')).toBe('normal');
   } finally {
@@ -254,7 +264,7 @@ test('a streaming table is not measured until the reply settles', async () => {
   const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 500 });
   let cellReadCount = 0;
-  const bounds = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+  const bounds = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
     if (this.tagName === 'TD' || this.tagName === 'TH') cellReadCount += 1;
     return new window.DOMRect(0, 0, 120, 30);
   });
@@ -286,8 +296,9 @@ test('Mermaid preserves the view across themes and restores controls and ASCII c
   const original = svg?.outerHTML;
   expect(original).toContain('var(--surface-foreground)');
   const toolbar = host.querySelector('[data-streamdown="mermaid-toolbar"]');
-  expect(toolbar?.classList.contains('absolute')).toBe(true);
-  expect(Array.from(toolbar?.querySelectorAll('button') ?? [], (button) => button.title))
+  // A row of its own above the diagram, never inside the block it would cover.
+  expect(toolbar?.closest('[data-streamdown="mermaid-block"]')).toBeNull();
+  expect(Array.from(toolbar?.querySelectorAll('button') ?? [], (button) => button.getAttribute('aria-label')))
     .toEqual(['Zoom in', 'Zoom out', 'Reset view', 'Copy', 'Download SVG']);
 
   // An early user action flushes the pending initial fit before the saved view.
@@ -310,7 +321,7 @@ test('Mermaid preserves the view across themes and restores controls and ASCII c
     const copy = host.querySelector<HTMLButtonElement>('[data-streamdown="mermaid-toolbar"] button');
     await act(async () => copy?.click());
     expect(write.mock.calls.at(-1)?.[0]).toBe(ascii?.textContent);
-    expect(copy?.title).toBe('Copied');
+    expect(copy?.getAttribute('aria-label')).toBe('Copied');
     expect(host.querySelector('[data-streamdown="mermaid-block"]')?.getAttribute('data-mermaid-render')).toBe('ascii');
   } finally {
     write.mockRestore();

@@ -1,9 +1,7 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { OpenCode } from '@opencode/client'
-import { opencodeClient } from '@/lib/opencode/client'
-import type { Message, Session } from '@/lib/opencode/model'
+import type { Message, Session } from '@openchamber/agent-contract'
 import { useSessionUIStore } from '@/sync/session-ui-store'
 import { SyncProvider, useDirectoryStore } from '@/sync/sync-context'
 import { installHookTestDom } from '../session/sidebar/test-utils/testDom'
@@ -13,45 +11,43 @@ import { useProjectsStore } from '@/stores/useProjectsStore'
 // The header's context readout is on screen for the whole session, so a
 // streamed step that leaves the context reading unchanged must not render it.
 
-const CURRENT_DIR = '/workspace'
 const DIR = '/repo'
 const SESSION_ID = 'ses_1'
 
-const createSdk = () => OpenCode.make({
-  baseUrl: 'https://sync.test',
-  fetch: async (request) => {
-    const path = new URL(request instanceof Request ? request.url : request.toString()).pathname
-    if (path.endsWith('/event')) {
-      return new Response(new ReadableStream(), { headers: { 'content-type': 'text/event-stream' } })
-    }
-    const body = path.endsWith('/location')
-      ? { directory: CURRENT_DIR, project: { id: 'project', directory: CURRENT_DIR, canonical: CURRENT_DIR } }
-      : path.endsWith('/session/active') ? {}
-      : { data: [] }
-    return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
-  },
-})
-
-const session = (updated: number): Session => ({
-  id: SESSION_ID,
-  projectID: 'proj_1',
-  directory: DIR,
+const session = (updatedAt: number): Session => ({
+  sessionId: SESSION_ID,
+  projectId: 'proj_1',
+  workspaceId: 'workspace',
+  displayPath: DIR,
+  rootSessionId: SESSION_ID,
+  createdAt: 1,
+  updatedAt,
+  epoch: 'epoch-1',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  mode: { kind: 'main' },
   title: 'One',
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-  time: { created: 1, updated },
-  agent: 'build',
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
 })
 
-const assistant = (id: string, total: number): Message => ({
-  id,
-  sessionID: SESSION_ID,
+const assistant = (messageId: string, total: number): Message => ({
+  messageId,
+  sessionId: SESSION_ID,
+  turnId: 'turn_1',
   role: 'assistant',
-  time: { created: 10 },
-  agent: 'build',
-  providerID: 'anthropic',
-  modelID: 'claude',
-  tokens: { input: total, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+  parts: [{ type: 'text', partId: `${messageId}_part`, content: 'test' }],
+  createdAt: 10,
+  usage: {
+    input: total,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: total,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  },
 })
 
 let store: ReturnType<typeof useDirectoryStore> | null = null
@@ -82,17 +78,7 @@ describe('useCurrentContextReading', () => {
     dom = installHookTestDom()
     previousSurface = window.__OPENCHAMBER_SURFACE__
     window.__OPENCHAMBER_SURFACE__ = 'desktop'
-    const spies = [
-      spyOn(opencodeClient, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home' }),
-      spyOn(opencodeClient, 'getFilesystemHome').mockResolvedValue('/home'),
-      spyOn(opencodeClient, 'getLocation').mockResolvedValue({
-        directory: CURRENT_DIR,
-        project: { id: 'project', directory: CURRENT_DIR, canonical: CURRENT_DIR },
-      }),
-      spyOn(opencodeClient, 'getConfig').mockResolvedValue({}),
-      spyOn(opencodeClient, 'listProjects').mockResolvedValue([]),
-    ]
-    restoreSpies = spies.map((spy) => () => spy.mockRestore())
+    restoreSpies = []
     previousSessionUI = useSessionUIStore.getState()
     useProjectsStore.setState({ projects: [{ id: 'repo', path: DIR }] })
     useSessionUIStore.setState({ currentSessionId: SESSION_ID, currentSessionDirectory: DIR })
@@ -100,7 +86,7 @@ describe('useCurrentContextReading', () => {
     store = null
     renders = 0
     await act(async () => root.render(
-      <SyncProvider sdk={createSdk()} directory="">
+      <SyncProvider directory="">
         <StoreProbe />
         <React.Profiler id="reading" onRender={() => { renders += 1 }}>
           <ReadingProbe />

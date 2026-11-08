@@ -100,8 +100,8 @@ export const toggleWorkCurrentSession = (t: Translate): PaletteCommand => () => 
   if (!useUIStore.getState().sessionWorkEnabled) return false;
   const sessionId = useSessionUIStore.getState().currentSessionId;
   if (!sessionId) return false;
-  const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.id === sessionId);
-  if (!session || session.parentID) return false;
+  const session = useGlobalSessionsStore.getState().activeSessions.find((entry) => entry.sessionId === sessionId);
+  if (!session || session.parentSessionId) return false;
   const directory = resolveGlobalSessionDirectory(session) ?? useDirectoryStore.getState().currentDirectory;
   if (!directory || isChatDirectoryPath(directory)) return false;
   const next = isSessionInWork(session) ? 'done' : 'open';

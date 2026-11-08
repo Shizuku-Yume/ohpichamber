@@ -408,7 +408,7 @@ export interface GitBranchDetails {
   behind?: number;
 }
 
-export type GitBranchListOptions = { remote?: 'local' };
+export type GitBranchListOptions = { remote?: 'local' | 'live' };
 
 export interface GitBranch {
   all: string[];

@@ -105,7 +105,7 @@ import {
 import { findSessionLinks, sessionLinkKey, type SessionLinkTarget } from '@/lib/sessionLinks';
 import { sessionMentionChip } from '@/lib/messages/sessionMentionChip';
 import { appOwnOrigins } from '@/lib/router/appOrigins';
-import { usePendingComposerReferences } from './composer/pendingComposerReferences';
+import { resolveComposerReferenceHandoffTarget, usePendingComposerReferences } from './composer/pendingComposerReferences';
 import { postLinearSessionStarted } from '@/lib/linearSessionStatus';
 import { Icon } from "@/components/icon/Icon";
 import { DraftPresetChips } from './DraftPresetChips';
@@ -542,7 +542,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
     const pendingGuestIssue = useInputStore((s) => s.pendingGuestIssue);
     const consumePendingGuestIssue = useInputStore((s) => s.consumePendingGuestIssue);
-    const pendingComposerReferenceCount = usePendingComposerReferences((s) => s.references.length);
+    const pendingComposerReferenceCount = usePendingComposerReferences((s) => s.pending.length);
 
     React.useEffect(() => {
         if (!newSessionDraftOpen || newSessionDraft.target !== 'chat' || message.trim().length === 0) return;
@@ -3478,13 +3478,23 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             handleGuestAttach(issue);
         }
     }, [columnPinned, consumePendingGuestIssue, handleGuestAttach, pendingGuestIssue]);
+    // A chip handed to this composer arrives in the slot it was addressed to;
+    // only a chip aimed at this identity is taken.
+    const composerReferenceHandoffTarget = React.useMemo(() => resolveComposerReferenceHandoffTarget({
+        columnPinned,
+        btwActive: isBtwActive,
+        currentSessionId,
+        draftOpen: newSessionDraftOpen,
+        workDraftId: newSessionDraft?.workDraftId ?? null,
+        runtimeKey: activeRuntimeKey,
+    }), [activeRuntimeKey, columnPinned, currentSessionId, isBtwActive, newSessionDraft?.workDraftId, newSessionDraftOpen]);
     React.useEffect(() => {
-        if (pendingComposerReferenceCount === 0 || columnPinned) return;
-        const references = usePendingComposerReferences.getState().consume();
+        if (pendingComposerReferenceCount === 0 || !composerReferenceHandoffTarget) return;
+        const references = usePendingComposerReferences.getState().consume(composerReferenceHandoffTarget);
         if (references.length > 0) {
             setLinkedReferences((current) => withComposerReferences(current, references));
         }
-    }, [columnPinned, pendingComposerReferenceCount]);
+    }, [composerReferenceHandoffTarget, pendingComposerReferenceCount]);
     const showLinearPicker = Boolean(runtimeLinear);
     const showDraftTargetSelectors = newSessionDraftOpen;
 

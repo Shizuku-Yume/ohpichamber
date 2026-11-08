@@ -29,6 +29,7 @@ import { LOCALES } from '@/lib/i18n/runtime';
 import { useI18nStore } from '@/lib/i18n/store';
 import { isInputHistoryLimit, isInputHistoryScope, type InputHistoryScope } from '@/lib/inputHistoryScope';
 import { normalizeMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
+import { hiddenSidebarSectionsSchema, sidebarPinListsSchema, sidebarSectionsSchema } from '@/lib/sidebarSections';
 import { isResponseStylePreset, type ResponseStylePreset } from '@/lib/responseStyle';
 import { isTerminalShell } from '@/lib/terminalShell';
 import { sanitizeWorkStatusHiddenSections, sanitizeWorkStatusSectionOrder } from '@/components/chat/work-status/sections';
@@ -368,6 +369,12 @@ export const SETTINGS_REGISTRY = {
  sidebarShowWorkSection: field({ scope: 'profile', perSurface: true, parse: parseBoolean, ui: sessionDisplayField('showWorkSection') }),
  sidebarShowPinnedSection: field({ scope: 'profile', perSurface: true, parse: parseBoolean, ui: sessionDisplayField('showPinnedSection') }),
  sidebarDetailedZoneRows: field({ scope: 'profile', perSurface: true, parse: parseBoolean, ui: sessionDisplayField('detailedZoneRows') }),
+ // The sections and pin lists are one arrangement for every surface; which of
+ // the user's sections a surface shows is its own. They are written through the
+ // store's setters, which record the instance they came from.
+ sidebarSections: field({ scope: 'profile', parse: fromSchema(sidebarSectionsSchema), ui: { read: () => useSessionDisplayStore.getState().sections, write: (value) => useSessionDisplayStore.getState().setSections(value), autoSave: false } }),
+ sidebarPinLists: field({ scope: 'profile', parse: fromSchema(sidebarPinListsSchema), ui: { read: () => useSessionDisplayStore.getState().pinLists, write: (value) => useSessionDisplayStore.getState().setPinLists(value), autoSave: false } }),
+ sidebarHiddenSections: field({ scope: 'profile', perSurface: true, parse: fromSchema(hiddenSidebarSectionsSchema), ui: { read: () => useSessionDisplayStore.getState().hiddenSections, write: (value) => useSessionDisplayStore.getState().setHiddenSections(value), autoSave: false } }),
 
  // ── Work status ──
  workStatusSectionOrder: field({

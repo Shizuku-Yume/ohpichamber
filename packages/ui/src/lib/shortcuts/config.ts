@@ -154,6 +154,18 @@ const SHORTCUT_GROUPS = {
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.toggle_dictation.label',
     },
     {
+      id: 'sessions_bulk_delete',
+      defaultBinding: 'mod+backspace',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.sessions_bulk_delete.label',
+    },
+    {
+      id: 'sessions_select_all',
+      defaultBinding: 'mod+a',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.sessions_select_all.label',
+    },
+    {
       id: 'permission_allow_once',
       defaultBinding: 'alt+enter',
       customizable: true,

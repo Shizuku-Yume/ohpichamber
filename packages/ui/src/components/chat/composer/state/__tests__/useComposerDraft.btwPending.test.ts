@@ -138,6 +138,27 @@ describe('/btw fork still being created', () => {
         }
     });
 
+    test('keeps the source draft when the destination cannot be written', () => {
+        writeChatDraft(parent, 'text from the parent', []);
+        const composer = renderComposer('text from the parent');
+        const storage = getDeferredSafeStorage();
+        const originalSetItem = storage.setItem;
+        // The destination write is the one that fails; nothing after it may run.
+        storage.setItem = () => undefined;
+        try {
+            act(() => { composer.result.controls()?.migrateDraft(parent, fork); });
+            // The move never happened: the source copy is still there.
+            expect(readChatDraft(parent).text).toBe('text from the parent');
+            expect(readChatDraft(fork).text).toBe('');
+        } finally {
+            storage.setItem = originalSetItem;
+            // The source is still what a composer opening it shows.
+            composer.render(parent);
+            expect(composer.result.text).toBe('text from the parent');
+            composer.teardown();
+        }
+    });
+
     test('keeps nothing under its placeholder identity', () => {
         const composer = renderComposer('first question');
         try {

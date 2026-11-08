@@ -259,16 +259,3 @@ export const publicEnterprisePolicy = (options) => {
  return { enterpriseMode, source, organization, policyError, networkAccessBlocked: enterpriseMode && !allowNetworkAccess };
 };
 
-export const watchEnterprisePolicy = ({ onChange, intervalMs = 15_000, read = readEnterprisePolicy } = {}) => {
- let last = JSON.stringify(read());
- const timer = setInterval(() => {
-  try {
-   const current = JSON.stringify(read());
-   if (current !== last) {
-    last = current;
-    onChange?.();
-   }
-  } catch { }
- }, intervalMs);
- return () => clearInterval(timer);
-};

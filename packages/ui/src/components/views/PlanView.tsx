@@ -329,12 +329,13 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
     cancel();
   }, [cancel]);
 
-  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }) => {
+  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }): boolean => {
     if (rangeOverride) {
       setLineSelection(rangeOverride);
     }
-    saveComment(textToSave, rangeOverride ?? lineSelection ?? undefined);
-    setLineSelection(null);
+    const saved = saveComment(textToSave, rangeOverride ?? lineSelection ?? undefined);
+    if (saved) setLineSelection(null);
+    return saved;
   }, [lineSelection, saveComment]);
 
   React.useEffect(() => {

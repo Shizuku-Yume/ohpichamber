@@ -113,6 +113,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useDraftSpaceTarget } from '@/lib/spaces/useDraftSpaceTarget';
 import { panelContentDirectory } from '@/lib/spaces/space-creation-requests';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
+import type { IconName } from '@/components/icon/icons';
 import { cancelWhenLayoutSettled, runWhenLayoutSettled } from '@/lib/layoutAnimation';
 import {
   FileTreeChevron,
@@ -184,32 +185,10 @@ const getParentDirectoryPath = (path: string): string => {
   return parent;
 };
 
-const OpenInAppListIcon = ({ label, iconDataUrl }: { label: string; iconDataUrl?: string }) => {
-  const [failed, setFailed] = React.useState(false);
-  const initial = label.trim().slice(0, 1).toUpperCase() || '?';
-
-  if (iconDataUrl && !failed) {
-    return (
-      <img
-        src={iconDataUrl}
-        alt=""
-        className="size-4 rounded-sm"
-        onError={() => setFailed(true)}
-      />
-    );
-  }
-
-  return (
-    <span
-      className={cn(
-        'size-4 rounded-sm flex items-center justify-center',
-        'oc-tile-inset text-[0.5625rem] font-medium text-muted-foreground'
-      )}
-    >
-      {initial}
-    </span>
-  );
-};
+/** The app's own sprite mark; the list draws the same glyphs as the header. */
+const OpenInAppListIcon = ({ icon }: { icon: IconName }) => (
+  <Icon name={icon} className="size-4" />
+);
 
 const sortNodes = (items: FileNode[]) =>
   items.slice().sort((a, b) => {
@@ -1343,13 +1322,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     }
   }, [isMobile, lineSelection]);
 
-  const handleSaveComment = React.useCallback((text: string, range?: { start: number; end: number }) => {
+  const handleSaveComment = React.useCallback((text: string, range?: { start: number; end: number }): boolean => {
     const finalRange = range ?? lineSelection ?? undefined;
     if (range) {
       setLineSelection(range);
     }
-    saveComment(text, finalRange);
-    setLineSelection(null);
+    const saved = saveComment(text, finalRange);
+    if (saved) setLineSelection(null);
+    return saved;
   }, [lineSelection, saveComment]);
 
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
@@ -2623,9 +2603,12 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     handleCloseFileRef.current = handleCloseFile;
   }, [handleCloseFile]);
   const closeTargetPath = selectedFile?.path ?? null;
+  // The surface's own box: a click in another zone of the app belongs to it,
+  // so this close target is only the most recent one while focus is here.
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     if (!visible || !closeTargetPath) return;
-    return registerCloseTabTarget(() => handleCloseFileRef.current(closeTargetPath));
+    return registerCloseTabTarget(() => handleCloseFileRef.current(closeTargetPath), rootRef);
   }, [closeTargetPath, visible]);
 
   const openPathSet = React.useMemo(() => new Set(openPaths), [openPaths]);
@@ -4155,7 +4138,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
             className="flex items-center gap-2"
             onClick={() => void handleOpenInApp(app)}
           >
-            <OpenInAppListIcon label={app.label} iconDataUrl={app.iconDataUrl} />
+            <OpenInAppListIcon icon={app.icon} />
             <span className="typography-ui-label text-foreground">{app.label}</span>
           </DropdownMenuItem>
         ))}
@@ -5504,7 +5487,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
   return (
     // Marks Files as a surface with its own Cmd/Ctrl+F, so Changes and the
     // walkthrough leave the key alone while focus is in here.
-    <div data-find-surface="" className="flex h-full min-h-0 overflow-hidden bg-background relative">
+    <div ref={rootRef} data-find-surface="" className="flex h-full min-h-0 overflow-hidden bg-background relative">
       <Dialogs
         activeDialog={activeDialog}
         dialogData={dialogData}

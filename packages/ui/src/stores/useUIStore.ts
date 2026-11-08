@@ -1160,6 +1160,12 @@ interface UIStore {
  agentKnowledgeToolEnabled: boolean;
  agentNotifyToolEnabled: boolean;
  agentRenderToolEnabled: boolean;
+ agentImageToolEnabled: boolean;
+ /** `provider/model` the image tool draws with; empty until the user picks one. */
+ agentImageModel: string;
+ agentSecretToolEnabled: boolean;
+ /** Whether OpenChamber's agent tools sit behind a code mode instead of being direct tools. */
+ agentToolsCodeMode: boolean;
  agentWorkflowToolEnabled: boolean;
  /** The isolated-spaces switch as saved; the server applies it at its next start. */
  isolatedSpacesEnabled: boolean;
@@ -1460,6 +1466,10 @@ interface UIStore {
  setAgentKnowledgeToolEnabled: (value: boolean) => void;
  setAgentNotifyToolEnabled: (value: boolean) => void;
  setAgentRenderToolEnabled: (value: boolean) => void;
+ setAgentImageToolEnabled: (value: boolean) => void;
+ setAgentImageModel: (value: string) => void;
+ setAgentSecretToolEnabled: (value: boolean) => void;
+ setAgentToolsCodeMode: (value: boolean) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
  setAgentMemoryFeatureAvailable: (value: boolean) => void;
@@ -1712,6 +1722,10 @@ export const useUIStore = create<UIStore>()(
     agentKnowledgeToolEnabled: true,
     agentNotifyToolEnabled: false,
     agentRenderToolEnabled: true,
+    agentImageToolEnabled: false,
+    agentImageModel: '',
+    agentSecretToolEnabled: true,
+    agentToolsCodeMode: false,
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
     agentMemoryFeatureAvailable: false,
@@ -3385,6 +3399,18 @@ export const useUIStore = create<UIStore>()(
     setAgentRenderToolEnabled: (value) => {
      set({ agentRenderToolEnabled: value });
     },
+    setAgentImageToolEnabled: (value) => {
+     set({ agentImageToolEnabled: value });
+    },
+    setAgentImageModel: (value) => {
+     set({ agentImageModel: value });
+    },
+    setAgentSecretToolEnabled: (value) => {
+     set({ agentSecretToolEnabled: value });
+    },
+    setAgentToolsCodeMode: (value) => {
+     set({ agentToolsCodeMode: value });
+    },
     setAgentWorkflowToolEnabled: (value) => {
      set({ agentWorkflowToolEnabled: value });
     },
@@ -3953,6 +3979,10 @@ export const useUIStore = create<UIStore>()(
      agentKnowledgeToolEnabled: state.agentKnowledgeToolEnabled,
      agentNotifyToolEnabled: state.agentNotifyToolEnabled,
      agentRenderToolEnabled: state.agentRenderToolEnabled,
+     agentImageToolEnabled: state.agentImageToolEnabled,
+     agentImageModel: state.agentImageModel,
+     agentSecretToolEnabled: state.agentSecretToolEnabled,
+     agentToolsCodeMode: state.agentToolsCodeMode,
      agentWorkflowToolEnabled: state.agentWorkflowToolEnabled,
      isolatedSpacesEnabled: state.isolatedSpacesEnabled,
      agentMemoryViewedAt: state.agentMemoryViewedAt,

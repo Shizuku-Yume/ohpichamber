@@ -66,13 +66,6 @@ export function toServerFileUrl(filepath: string): string {
  return `file://${encodeFilePath(normalized)}`;
 }
 
-/** POSIX root, UNC share, or Windows drive letter. */
-export function isLikelyAbsolutePath(value: string): boolean {
- return value.startsWith('/')
-  || value.startsWith('\\\\')
-  || /^[A-Za-z]:[\\/]/.test(value);
-}
-
 export { normalizePath } from '@/lib/pathNormalization';
 
 /**

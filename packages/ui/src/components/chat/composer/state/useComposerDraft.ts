@@ -346,10 +346,29 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             : (from && draftMemoryRef.current.get(getChatDraftIdentityKey(from)))
             || (persistEnabled ? readChatDraft(from) : null);
         if (!draft) return;
-        draftMemoryRef.current.set(getChatDraftIdentityKey(to), { text: draft.text, confirmedMentions: new Set(draft.confirmedMentions) });
+        const fromKey = from ? getChatDraftIdentityKey(from) : null;
+        const toKey = getChatDraftIdentityKey(to);
+        if (fromKey === toKey) return;
+        draftMemoryRef.current.set(toKey, { text: draft.text, confirmedMentions: new Set(draft.confirmedMentions) });
         if (persistEnabled) {
             writeChatDraft(to, draft.text, draft.confirmedMentions);
-            lastPersistedRef.current.set(getChatDraftIdentityKey(to), draftSignature(draft.text, draft.confirmedMentions));
+            lastPersistedRef.current.set(toKey, draftSignature(draft.text, draft.confirmedMentions));
+        }
+        // The migration MOVED the draft: leaving the source behind would let a
+        // switch back to it resurrect text that now belongs to the destination.
+        // Both copies go, memory first, so a persistence failure cannot leave
+        // this composer holding the old text under the new key.
+        if (!from || !fromKey) return;
+        draftMemoryRef.current.delete(fromKey);
+        lastPersistedRef.current.delete(fromKey);
+        if (persistEnabled) {
+            // Only clear what was actually moved; an unrelated draft stays.
+            if (readChatDraft(from)?.text === draft.text) clearChatDraft(from);
+        }
+        // A destination that fails to persist is recoverable: the source copy
+        // is restored so the text is never silently lost.
+        if (persistEnabled && readChatDraft(to)?.text !== draft.text) {
+            draftMemoryRef.current.set(fromKey, { text: draft.text, confirmedMentions: new Set(draft.confirmedMentions) });
         }
     }, [confirmedMentionsRef, messageRef, persistEnabled]);
 

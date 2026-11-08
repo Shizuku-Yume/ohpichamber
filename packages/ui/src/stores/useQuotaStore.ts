@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ProviderResult, QuotaProviderId } from '@/types';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
+import { fetchExtensionQuotaProviders, quotaProviderIds, quotaProviderList, sameExtensionQuotaProviders, type ExtensionQuotaProvider } from '@/lib/quota/extensionProviders';
 import type { DesktopSettings } from '@/lib/desktop';
 import { getDefaultModels } from '@/lib/quota/model-families';
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
@@ -18,6 +19,8 @@ let quotaGeneration = 0;
 let inFlightRuntimeLoad: Promise<void> | null = null;
 const quotaRequests = new Map<string, { controller: AbortController; promise: Promise<boolean> }>();
 const quotaRequestKey = (workspaceId: string, providerId: QuotaProviderId) => `${workspaceId}\0${providerId}`;
+let inFlightExtensionLoad: Promise<void> | null = null;
+let extensionLoadAgain = false;
 let quotaAutoRefreshConsumers = 0;
 let quotaAutoRefreshInterval: number | null = null;
 
@@ -29,6 +32,13 @@ interface QuotaSettingsState {
 }
 
 interface QuotaStore extends QuotaSettingsState {
+  /**
+   * The usage providers installed extensions serve on this instance, from
+   * `GET /api/quota/extensions`. Read when the instance loads and again
+   * whenever the server announces a catalog change; a failed read keeps the
+   * list it had.
+   */
+  extensionProviders: ExtensionQuotaProvider[];
   results: ProviderResult[];
   /** Instance whose quotas `results` describes, or `null` when nothing is loaded. */
   loadedRuntimeKey: string | null;
@@ -43,6 +53,8 @@ interface QuotaStore extends QuotaSettingsState {
   refreshErrors: Partial<Record<QuotaProviderId, string>>;
 
   loadSettings: () => Promise<void>;
+  /** Reads the extension provider list again; a provider that left takes its card with it. */
+  loadExtensionProviders: () => Promise<void>;
   fetchAllQuotas: () => Promise<void>;
   /** Resolves true when at least one provider answered — see `ensureLoadedForRuntime`. */
   fetchQuotas: (providerIds: QuotaProviderId[], options?: { invalidate?: boolean }) => Promise<boolean>;
@@ -70,8 +82,8 @@ interface QuotaStore extends QuotaSettingsState {
   resetForRuntimeSwitch: () => void;
 }
 
-const parseSettings = (data: DesktopSettings): QuotaSettingsState => {
-  const allProviderIds = QUOTA_PROVIDERS.map((provider) => provider.id);
+const parseSettings = (data: DesktopSettings, extensionProviders: readonly ExtensionQuotaProvider[]): QuotaSettingsState => {
+  const allProviderIds = quotaProviderIds(extensionProviders);
   const displayMode = data.usageDisplayMode === 'remaining' ? 'remaining' : 'usage';
   const dropdownProviderIds = data.usageDropdownProviders
     ? data.usageDropdownProviders.filter((entry): entry is QuotaProviderId =>
@@ -89,22 +101,66 @@ const parseSettings = (data: DesktopSettings): QuotaSettingsState => {
   };
 };
 
-const defaultQuotaSettings = (): QuotaSettingsState => ({
+const defaultQuotaSettings = (extensionProviders: readonly ExtensionQuotaProvider[] = []): QuotaSettingsState => ({
   displayMode: 'usage',
-  dropdownProviderIds: QUOTA_PROVIDERS.map((provider) => provider.id),
+  dropdownProviderIds: quotaProviderIds(extensionProviders),
   selectedModels: {},
   expandedFamilies: {},
 });
 
-const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
+const loadSettingsFromRuntime = async (extensionProviders: readonly ExtensionQuotaProvider[]): Promise<QuotaSettingsState> => {
   const settings = await loadDesktopSettings();
-  return settings ? parseSettings(settings) : defaultQuotaSettings();
+  return settings ? parseSettings(settings, extensionProviders) : defaultQuotaSettings(extensionProviders);
 };
+
+/**
+ * A new extension provider list from the server. Providers that left take
+ * their results, their errors and the page's selection with them, so a paused
+ * or removed extension's card is gone everywhere at once; providers that
+ * arrived are fetched once the instance has loaded, so their card fills
+ * without waiting for the next refresh.
+ */
+const applyExtensionProviders = (next: ExtensionQuotaProvider[]): void => {
+  const state = useQuotaStore.getState();
+  if (sameExtensionQuotaProviders(state.extensionProviders, next)) return;
+  const gone = state.extensionProviders.map((previous) => previous.id).filter((id) => !next.some((entry) => entry.id === id));
+  const isGone = (id: string): boolean => gone.some((goneId) => goneId === id);
+  for (const id of gone) {
+    quotaRequests.get(id)?.controller.abort();
+    quotaRequests.delete(id);
+  }
+  useQuotaStore.setState((current) => {
+    const refreshErrors = { ...current.refreshErrors };
+    for (const id of gone) delete refreshErrors[id];
+    return {
+      extensionProviders: next,
+      dropdownProviderIds: unknownProvidersDropped(current.dropdownProviderIds, quotaProviderIds(next)),
+      results: gone.length > 0 ? current.results.filter((result) => !isGone(result.providerId)) : current.results,
+      refreshErrors,
+      selectedProviderId: current.selectedProviderId !== null && isGone(current.selectedProviderId) ? null : current.selectedProviderId,
+      isFetchingProvider: Object.fromEntries(Object.entries(current.isFetchingProvider).filter(([id]) => !isGone(id))),
+      isLoading: quotaRequests.size > 0,
+    };
+  });
+  const { results, loadedRuntimeKey, fetchQuotas } = useQuotaStore.getState();
+  const arrived = next.map((entry) => entry.id).filter((id) => !results.some((result) => result.providerId === id) && !quotaRequests.has(id));
+  if (arrived.length > 0 && (loadedRuntimeKey !== null || results.length > 0)) void fetchQuotas(arrived);
+};
+
+/**
+ * The shown list narrowed to providers that still exist, keeping the user's
+ * order. A provider missing right now, such as a paused extension's, drops out
+ * and comes back with it.
+ */
+const unknownProvidersDropped = (shown: readonly QuotaProviderId[], known: readonly QuotaProviderId[]): QuotaProviderId[] => (
+  shown.filter((entry) => known.some((id) => id === entry))
+);
 
 export const useQuotaStore = create<QuotaStore>()(
   devtools(
     (set, get) => ({
       results: [],
+      extensionProviders: [],
       loadedRuntimeKey: null,
       loadedWorkspaceId: null,
       selectedProviderId: null,
@@ -121,12 +177,38 @@ export const useQuotaStore = create<QuotaStore>()(
       loadSettings: async () => {
         const generation = quotaGeneration;
         try {
-          const settings = await loadSettingsFromRuntime();
+          const settings = await loadSettingsFromRuntime(get().extensionProviders);
           if (generation !== quotaGeneration) return;
           set(settings);
         } catch (error) {
           console.warn('Failed to load usage settings:', error);
         }
+      },
+
+      loadExtensionProviders: async () => {
+        if (inFlightExtensionLoad) {
+          extensionLoadAgain = true;
+          return inFlightExtensionLoad;
+        }
+        const generation = quotaGeneration;
+        inFlightExtensionLoad = (async () => {
+          try {
+            const next = await fetchExtensionQuotaProviders();
+            if (generation !== quotaGeneration) return;
+            applyExtensionProviders(next);
+          } catch (error) {
+            // A failed read is not an empty list: the cards stay until the server answers.
+            if (generation === quotaGeneration) console.warn('Failed to load extension usage providers:', error);
+          }
+        })().finally(() => {
+          if (generation !== quotaGeneration) return;
+          inFlightExtensionLoad = null;
+          if (extensionLoadAgain) {
+            extensionLoadAgain = false;
+            void get().loadExtensionProviders();
+          }
+        });
+        return inFlightExtensionLoad;
       },
 
       fetchQuotas: async (providerIds, { invalidate = false } = {}) => {
@@ -146,7 +228,7 @@ export const useQuotaStore = create<QuotaStore>()(
       },
 
       fetchAllQuotas: async () => {
-        await get().fetchQuotas(QUOTA_PROVIDERS.map((provider) => provider.id));
+        await get().fetchQuotas(quotaProviderIds(get().extensionProviders));
       },
 
       fetchProviderQuota: async (providerId, invalidate = false) => {
@@ -237,6 +319,9 @@ export const useQuotaStore = create<QuotaStore>()(
 
         const generation = quotaGeneration;
         inFlightRuntimeLoad = (async () => {
+          // The instance's own provider list first: the settings read narrows
+          // the shown list against it.
+          await get().loadExtensionProviders();
           await get().loadSettings();
           if (generation !== quotaGeneration) return;
           const { dropdownProviderIds, fetchQuotas } = get();
@@ -263,6 +348,8 @@ export const useQuotaStore = create<QuotaStore>()(
           // `dropdownProviderIds` decides what gets fetched — carrying them
           // over would query the new instance through the old one's choices.
           ...defaultQuotaSettings(),
+          // The extensions' providers belong to the instance too.
+          extensionProviders: [],
           results: [],
           loadedRuntimeKey: null,
           loadedWorkspaceId: null,

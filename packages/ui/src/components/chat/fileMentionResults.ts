@@ -1,4 +1,4 @@
-import { scoreByFuzzyQuery } from '@/lib/search/fuzzySearch';
+import { rankByQuery } from '@/lib/search/fuzzySearch';
 import type { ProjectFileSearchHit } from '@/lib/host-filesystem';
 
 export type FileMentionHit = ProjectFileSearchHit & { kind: 'file' | 'directory' };
@@ -83,9 +83,7 @@ export function rankFileMentionResults(
       });
 
   const primary = tokens.reduce((longest, token) => (token.length > longest.length ? token : longest));
-  return scoreByFuzzyQuery(candidates, primary, pathOf, { limit, threshold: 0.4 }).map(
-    (scored) => scored.item,
-  );
+  return rankByQuery(candidates, primary, (hit) => [pathOf(hit)], { limit });
 }
 
 export function filterStaleRecentFiles<T extends { path: string }>(

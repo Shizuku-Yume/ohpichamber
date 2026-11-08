@@ -41,6 +41,8 @@ const FLASH_DURATION_MS = 1600;
 const POPOVER_OPEN_DELAY_MS = 400;
 const POPOVER_CLOSE_DELAY_MS = 250;
 const CORRIDOR_PADDING_PX = 6;
+// Frames a scrolled-to row may take to mount, and a renderer to settle.
+const ROW_MOUNT_FRAMES = 20;
 // Anything that moves the view by hand, including a page frame scrolling itself.
 const REVEAL_CANCEL_EVENTS = ['wheel', 'touchstart', 'pointerdown', 'openchamber:frame-scroll'] as const;
 
@@ -277,6 +279,7 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
             if (!isCurrent()) return;
             if (!scrolled && !mounted) return;
 
+            let misses = 0;
             const tryReveal = () => {
                 frame = null;
                 if (!isCurrent() || !scrollNode) { cancel(); return; }
@@ -285,14 +288,27 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                     ? findUiRenderQuoteRoot(scrollNode, messageId, anchor.page.partId)
                     : null;
                 const roots = anchor.page ? pageRoot ? [pageRoot] : [] : findChatQuoteRoots(scrollNode, messageId);
+
+
+
                 if (anchor.page?.kind === 'ui' && roots.length === 0 && !pageRowRequested
                     && scrollToUiPageRowRef.current?.(messageId)) {
                     pageRowRequested = true;
                     return;
                 }
-                // A lazy renderer draws raw source first; a failed match then
-                // says nothing until it settles.
-                if (roots.length === 0 || roots.some((root) => root.querySelector('[data-chat-quote-pending]'))) return;
+                // A row mounts on the frame after the scroll request, and a lazy
+                // renderer draws raw source first; an absent row or one still
+                // settling says nothing yet.
+                const pendingRenderer = roots.some((root) => root.querySelector('[data-chat-quote-pending]'));
+                if (roots.length === 0 || pendingRenderer) {
+                    // A missing row is a mount timing question, so frames answer
+                    // it; a pending renderer settles on its own mutation.
+                    if (!pendingRenderer && misses < ROW_MOUNT_FRAMES) {
+                        misses += 1;
+                        frame = window.requestAnimationFrame(tryReveal);
+                    }
+                    return;
+                }
                 const parts = resolveChatQuoteRanges(roots, anchor);
                 // An ambiguous or changed quote is final: the mounted text is
                 // what it is, so retrying cannot change the answer.
@@ -331,6 +347,8 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                 });
 
                 if (relevant) frame = window.requestAnimationFrame(tryReveal);
+
+
             });
             observer.observe(scrollNode, { childList: true, subtree: true, characterData: true });
             // Anything queued before this reveal is not a change it waits for.

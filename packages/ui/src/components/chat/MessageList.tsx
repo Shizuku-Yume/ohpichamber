@@ -1336,6 +1336,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return false;
                 }
 
+                // A folded-in message has no row until its fold opens, and its
+                // row then draws on a later frame.
+                revealFoldedMessage(messageId);
                 if (!findMessageElement(messageId)) mountWindowedMessage(messageId);
                 const didScroll = scrollMessageElementIntoView(messageId, behavior)
                     || scrollHistoryIndexIntoView(index);

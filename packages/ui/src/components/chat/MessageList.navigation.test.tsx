@@ -124,6 +124,11 @@ test('quote reveal opens real folded Activity, including a source prepended from
             <ChatQuoteHighlightLayer
                 store={quoteStore}
                 scrollNode={scrollNode}
+                // A message already in the list needs no history; the older turn
+                // is not there yet, so the layer waits for the load to finish.
+                loadHistoryUntilMessage={(id) => (messages.some((message) => message.messageId === id)
+                    ? Promise.resolve(true)
+                    : new Promise<boolean>((resolve) => { finishLoad = resolve; }))}
                 scrollToMessage={async (id, options) => ref.current?.scrollToMessageId(id, options) ?? false}
             />
         </>;

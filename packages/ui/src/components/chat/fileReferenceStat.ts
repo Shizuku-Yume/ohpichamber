@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { runtimeFetch } from '@/lib/runtime-fetch';
 
-import { normalizeReferencePath } from './fileReferenceParser';
+import { normalizeFilePath } from '@/lib/path-utils';
 
 const FILE_REFERENCE_STAT_CONCURRENCY = 4;
 const FILE_REFERENCE_STAT_CACHE_MAX = 1000;
@@ -17,7 +17,8 @@ const pendingFileReferenceStats: Array<() => void> = [];
 const statCacheKey = (directory: string, normalizedPath: string): string => `${directory}\u0000${normalizedPath}`;
 
 export const fileReferenceExists = (resolvedPath: string, effectiveDirectory: string): Promise<boolean> => {
-  const normalizedPath = normalizeReferencePath(resolvedPath);
+  // The path is already resolved: edge spaces belong to the file's name.
+  const normalizedPath = normalizeFilePath(resolvedPath, { preserveWhitespace: true });
   if (!normalizedPath) {
     return Promise.resolve(false);
   }
@@ -88,7 +89,7 @@ const fileStatSchema = z.object({ exists: z.boolean().optional() });
  * request must not read as a missing file.
  */
 export const checkFileReference = async (resolvedPath: string, effectiveDirectory: string): Promise<'exists' | 'missing' | 'failed'> => {
-  const normalizedPath = normalizeReferencePath(resolvedPath);
+  const normalizedPath = normalizeFilePath(resolvedPath, { preserveWhitespace: true });
   try {
     const response = await runtimeFetch('/api/fs/stat', {
       method: 'GET',

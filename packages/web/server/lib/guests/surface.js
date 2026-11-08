@@ -50,46 +50,10 @@ import {
 import {
   surfaceClipboardAnswerSchema,
   surfaceResizeAnswerSchema,
+  surfaceViewerMessageSchema,
 } from '@openchamber/sdk/schemas';
 
 import { GuestServiceError, holdGuestService, openGuestServiceRequest } from './service.js';
-import { z } from "zod";
-
-const modifiersSchema = z.object({
-  alt: z.boolean(),
-  ctrl: z.boolean(),
-  meta: z.boolean(),
-  shift: z.boolean(),
-});
-const finite = z.number().finite();
-const surfaceInputEventSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("pointer"),
-    action: z.enum(["down", "up", "move"]),
-    x: finite,
-    y: finite,
-    button: z.number().int().min(-1).max(4),
-    buttons: z.number().int().min(0).max(31),
-    modifiers: modifiersSchema,
-  }),
-  z.object({ type: z.literal("wheel"), x: finite, y: finite, deltaX: finite, deltaY: finite, modifiers: modifiersSchema }),
-  z.object({
-    type: z.literal("key"),
-    action: z.enum(["down", "up"]),
-    key: z.string().min(1).max(64),
-    code: z.string().max(64),
-    keyCode: z.number().int().min(0).max(255).optional(),
-    modifiers: modifiersSchema,
-  }),
-  z.object({ type: z.literal("text"), text: z.string().min(1).max(10_000) }),
-]);
-const surfaceViewerMessageSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("ack"), seq: z.number().int().min(0) }),
-  z.object({ type: z.literal("input"), events: z.array(surfaceInputEventSchema).min(1).max(128) }),
-  z.object({ type: z.literal("release") }),
-  z.object({ type: z.literal("resize"), width: z.number().int().min(1).max(8192), height: z.number().int().min(1).max(8192) }),
-  z.object({ type: z.literal("clipboard-read"), id: z.string().min(1).max(64) }),
-]);
 
 const SURFACE_WS_PATH = /^\/api\/guests\/([a-z][a-z0-9-]*)\/surface\/ws$/;
 /** Input batches and clipboard text; frames never travel viewer → host. */

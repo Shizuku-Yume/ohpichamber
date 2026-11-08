@@ -1,7 +1,3 @@
-const toPublicNotifications = (val) => (val && typeof val === "object" ? { ...val } : val);
-const toPublicQuota = (val) => (val && typeof val === "object" ? { ...val } : val);
-const toPublicTracker = (val) => (val && typeof val === "object" ? { ...val } : val);
-const toPublicSessionEvents = (val) => (val && typeof val === "object" ? { ...val } : val);
 import crypto from 'node:crypto';
 
 import {
@@ -15,7 +11,8 @@ import {
   notificationsProviderTimeoutMs,
   requestedGuestCapabilities,
   serviceProvides,
-  } from '@openchamber/sdk';
+  toPublicNotifications,
+} from '@openchamber/sdk';
 import { notificationsProviderSchemasV1 as schemas } from '@openchamber/sdk/schemas';
 
 import { isProviderUsername } from '../source-control/provider-id.js';

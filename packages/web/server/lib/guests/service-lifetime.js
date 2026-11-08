@@ -3,18 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { CronExpressionParser } from 'cron-parser';
 
 import {
-  SERVICE_SCHEDULE_IDLE_MS as sdkScheduleIdleMs,
-  SERVICE_SCHEDULE_PATH as sdkSchedulePath,
-  SERVICE_SCHEDULE_TIMEOUT_MS as sdkScheduleTimeoutMs,
-  SERVICE_SCHEDULE_WIRE_VERSION as sdkScheduleWireVersion,
+  SERVICE_SCHEDULE_IDLE_MS,
+  SERVICE_SCHEDULE_PATH,
+  SERVICE_SCHEDULE_TIMEOUT_MS,
+  SERVICE_SCHEDULE_WIRE_VERSION,
   isGuestApproved,
   requestedGuestCapabilities,
 } from '@openchamber/sdk';
-
-const SERVICE_SCHEDULE_PATH = sdkSchedulePath ?? '/schedule';
-const SERVICE_SCHEDULE_WIRE_VERSION = sdkScheduleWireVersion ?? 1;
-const SERVICE_SCHEDULE_TIMEOUT_MS = sdkScheduleTimeoutMs ?? 10_000;
-const SERVICE_SCHEDULE_IDLE_MS = sdkScheduleIdleMs ?? 10 * 60_000;
 
 /**
  * Services that run with nobody asking: `service.keepRunning` and

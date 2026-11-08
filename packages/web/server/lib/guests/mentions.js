@@ -1,27 +1,15 @@
 import {
-  MENTIONS_IDLE_MS as sdkIdleMs,
-  MENTIONS_ITEMS_MAX as sdkItemsMax,
-  MENTIONS_RESOLVE_PATH as sdkResolvePath,
-  MENTIONS_RESOLVE_TIMEOUT_MS as sdkResolveTimeoutMs,
-  MENTIONS_SEARCH_PATH as sdkSearchPath,
-  MENTIONS_SEARCH_TIMEOUT_MS as sdkSearchTimeoutMs,
-  MENTION_TEXT_MAX as sdkMentionTextMax,
+  MENTIONS_IDLE_MS,
+  MENTIONS_ITEMS_MAX,
+  MENTIONS_RESOLVE_PATH,
+  MENTIONS_RESOLVE_TIMEOUT_MS,
+  MENTIONS_SEARCH_PATH,
+  MENTIONS_SEARCH_TIMEOUT_MS,
+  MENTION_TEXT_MAX,
   isGuestApproved,
   requestedGuestCapabilities,
 } from '@openchamber/sdk';
-import * as fallbackConstants from './service-host-schemas.js';
-
-const MENTIONS_IDLE_MS = sdkIdleMs ?? fallbackConstants.MENTIONS_IDLE_MS;
-const MENTIONS_ITEMS_MAX = sdkItemsMax ?? fallbackConstants.MENTIONS_ITEMS_MAX;
-const MENTIONS_RESOLVE_PATH = sdkResolvePath ?? fallbackConstants.MENTIONS_RESOLVE_PATH;
-const MENTIONS_RESOLVE_TIMEOUT_MS = sdkResolveTimeoutMs ?? fallbackConstants.MENTIONS_RESOLVE_TIMEOUT_MS;
-const MENTIONS_SEARCH_PATH = sdkSearchPath ?? fallbackConstants.MENTIONS_SEARCH_PATH;
-const MENTIONS_SEARCH_TIMEOUT_MS = sdkSearchTimeoutMs ?? fallbackConstants.MENTIONS_SEARCH_TIMEOUT_MS;
-const MENTION_TEXT_MAX = sdkMentionTextMax ?? fallbackConstants.MENTION_TEXT_MAX;
-import { mentionItemSchema as sdkMentionItemSchema, mentionsResolveResultSchema as sdkMentionsResolveResultSchema } from '@openchamber/sdk/schemas';
-import { mentionItemSchema as fallbackMentionItemSchema, mentionsResolveResultSchema as fallbackMentionsResolveResultSchema } from './service-host-schemas.js';
-const mentionItemSchema = sdkMentionItemSchema ?? fallbackMentionItemSchema;
-const mentionsResolveResultSchema = sdkMentionsResolveResultSchema ?? fallbackMentionsResolveResultSchema;
+import { mentionItemSchema, mentionsResolveResultSchema } from '@openchamber/sdk/schemas';
 
 import { proxyGuestServiceRequest } from './service.js';
 

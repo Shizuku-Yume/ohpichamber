@@ -25,17 +25,6 @@ import { readEnterprisePolicy } from '../enterprise-mode.js';
  * The list names repositories, not package ids: a package declares its own
  * id, so an id would let a user ship any code under an allowed name.
  */
-const allRequestedGuestCapabilities = (guest) => {
-  const list = new Set(requestedGuestCapabilities(guest));
-  if (guest.service?.provides?.includes("opencode")) list.add("opencode");
-  if (guest.sessionEvents?.content === true || guest.service?.provides?.includes("transcript")) list.add("transcript");
-  if (guest.sessionControl) list.add("sessionControl");
-  if (guest.instructions) list.add("instructions");
-  if (guest.skills) list.add("skills");
-  if (guest.opencodePlugin) list.add("opencodePlugin");
-  return [...list];
-};
-
 const ENTERPRISE_GATED_CAPABILITIES = ['network', 'origins', 'service', 'transcript', 'sessionControl', 'instructions', 'skills', 'opencodePlugin', 'opencode'];
 
 /** `host/path` of a clone URL (https or scp-style ssh), for comparing two spellings of one repository. */
@@ -80,7 +69,10 @@ const isAllowedRepository = (gitUrl, allowed) => {
  */
 export const enterpriseBlockedCapabilities = (guest, { source, gitUrl } = {}, policy = readEnterprisePolicy()) => {
   if (!policy.enterpriseMode) return [];
-  const gated = allRequestedGuestCapabilities(guest).filter((capability) => ENTERPRISE_GATED_CAPABILITIES.includes(capability));
+  const requested = new Set(requestedGuestCapabilities(guest));
+  if (guest.opencodePlugin) requested.add("opencodePlugin");
+  if (guest.service?.provides?.includes("opencode")) requested.add("opencode");
+  const gated = [...requested].filter((capability) => ENTERPRISE_GATED_CAPABILITIES.includes(capability));
   if (gated.length === 0) return [];
   if (source === 'git' && isAllowedRepository(gitUrl, policy.allowedExtensions)) return [];
   if (source === 'path' && policy.allowLocalExtensions) return [];

@@ -212,7 +212,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({ agent, isSelected, onSele
               <span className="typography-ui-label font-normal truncate text-foreground">{agent.name}</span>
             </div>
             {agent.description && (
-              <div className="typography-micro text-muted-foreground/60 truncate leading-tight">{agent.description}</div>
+              <div className="typography-micro text-muted-foreground truncate leading-tight">{agent.description}</div>
             )}
           </button>
           <DropdownMenu open={isMenuOpen} onOpenChange={(open) => { if (open) setIsContextMenuOpen(false); onMenuOpenChange(open); }}>

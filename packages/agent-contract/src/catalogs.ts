@@ -219,6 +219,21 @@ export const ModelConfigureRequestSchema = z.strictObject({
 });
 export type ModelConfigureRequest = z.infer<typeof ModelConfigureRequestSchema>;
 
+// Image generators are configured as their own native record: they carry no
+// token budget, so the text `ModelSchema` must not be used to write them.
+export const ImageModelConfigureRequestSchema = z.strictObject({
+  expectedRevision: CounterSchema,
+  model: ImageModelSchema,
+});
+export type ImageModelConfigureRequest = z.infer<typeof ImageModelConfigureRequestSchema>;
+
+export const ImageModelMutationResultSchema = z.strictObject({
+  revision: CounterSchema,
+  selection: ModelSelectionSchema,
+  model: ImageModelSchema.nullable(),
+});
+export type ImageModelMutationResult = z.infer<typeof ImageModelMutationResultSchema>;
+
 export const ModelDeleteRequestSchema = z.strictObject({
   expectedRevision: CounterSchema,
   selection: ModelSelectionSchema,

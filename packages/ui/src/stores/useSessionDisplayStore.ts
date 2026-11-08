@@ -1,10 +1,29 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { getSettingsSurface } from '@/lib/settings/surface';
+import { getRuntimeKey, isTransientRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import type { SettingsSurface } from '@/lib/settings/registry';
+import {
+  DEFAULT_SIDEBAR_SECTIONS,
+  hiddenSidebarSectionsSchema,
+  sidebarPinListsSchema,
+  sidebarSectionsSchema,
+  type SidebarPinList,
+  type SidebarSectionEntry,
+} from '@/lib/sidebarSections';
 
 type ProjectSortOrder = 'manual' | 'a-z' | 'z-a' | 'date-added' | 'recent';
-export type ListSessionGrouping = 'project' | 'time';
+// Worktree groups inside a project. 'recent' floats worktrees with the latest
+// session activity to the top, so the list moves as sessions run; 'manual'
+// and 'a-z' keep positions stable.
+
+// The Tree/List pair the one view replaced, read only until a grouping is
+// chosen (`resolveSidebarGrouping`). 'projects' was Tree; 'timeline' was
+// List, laid out by `listSessionGrouping`.
+type SidebarViewMode = 'projects' | 'timeline';
+// `sidebarGrouping`, and the old List's: 'project' puts each project's sessions under its header;
+// 'time' lists every project's sessions together, newest activity first.
+type ListSessionGrouping = 'project' | 'time';
 type ProjectDisplayMode = 'all' | 'single';
 
 type SessionDisplayStore = {
@@ -12,7 +31,8 @@ type SessionDisplayStore = {
   singleProjectId: string | null;
   setProjectDisplayMode: (mode: ProjectDisplayMode) => void;
   setSingleProjectId: (projectId: string) => void;
-
+  sidebarViewMode: SidebarViewMode;
+  setSidebarViewMode: (mode: SidebarViewMode) => void;
   listSessionGrouping: ListSessionGrouping;
   setListSessionGrouping: (grouping: ListSessionGrouping) => void;
   /**
@@ -28,7 +48,6 @@ type SessionDisplayStore = {
   /** Local display preference; motion remains opt-in. */
   animatedActivityIndicators: boolean;
   setAnimatedActivityIndicators: (enabled: boolean) => void;
-
   /** The managed Chats block in the sidebar (web and desktop). */
   showChatsSection: boolean;
   /** The In work block; hidden, its sessions stay in their projects. */
@@ -41,12 +60,41 @@ type SessionDisplayStore = {
    * full-width rows have the room.
    */
   detailedZoneRows: boolean;
+  /**
+   * Worktrees named by their branch (a space by its own name) rather than by
+   * their task; the other name goes under it. Off by default.
+   */
+  worktreeNameByBranch: boolean;
+  /**
+   * The sidebar's sections in order, the built-in ones included
+   * (`lib/sidebarSections.ts`). Shared by every surface.
+   */
+  sections: SidebarSectionEntry[];
+  /** The named pin lists Pin to files works into. Shared by every surface. */
+  pinLists: SidebarPinList[];
+  /** The user's sections this surface hides; built-in ones keep their own show toggles. */
+  hiddenSections: string[];
+  /**
+   * The instance the sections, pin lists and hidden sections came from. They
+   * belong to that instance: switching to another drops them until its own
+   * settings arrive, so one server's sections never show on another.
+   */
+  sectionsOwner: string | null;
+  setSections: (sections: SidebarSectionEntry[]) => void;
+  setPinLists: (lists: SidebarPinList[]) => void;
+  setHiddenSections: (ids: string[]) => void;
+  // VS Code only: the compact webview keeps archived buckets inline because it
+  // has no room for the full Archive page. Web/desktop ignore this flag and
+  // always route archived sessions to the Archive page instead.
+  showArchivedSessions: boolean;
   projectSortOrder: ProjectSortOrder;
-
   setShowChatsSection: (show: boolean) => void;
   setShowWorkSection: (show: boolean) => void;
   setShowPinnedSection: (show: boolean) => void;
   setDetailedZoneRows: (detailed: boolean) => void;
+  setWorktreeNameByBranch: (byBranch: boolean) => void;
+  setShowArchivedSessions: (show: boolean) => void;
+  toggleArchivedSessions: () => void;
   setProjectSortOrder: (order: ProjectSortOrder) => void;
 };
 
@@ -59,9 +107,7 @@ export const migrateSessionDisplayState = (
     displayMode?: string;
     sessionGroupingMode?: string;
     stickyZoneHeaders?: boolean;
-    showArchivedSessions?: boolean;
     showRecentSection?: boolean;
-    sidebarViewMode?: string;
     worktreeSortOrder?: string;
   };
   if (version < 2) {
@@ -81,38 +127,23 @@ export const migrateSessionDisplayState = (
     delete state.sessionGroupingMode;
   }
   if (version < 7) {
-    // v7 removes the sticky-headers toggle: the projects view always pins its
-    // zone headers and the timeline never does.
+    // v7 removes the sticky-headers toggle: zone headers are always pinned.
     delete state.stickyZoneHeaders;
   }
-  if (version < 8) {
-    state.showRecentSection = false;
-  }
-  if (version < 9 && !state.worktreeSortOrder) {
-    state.worktreeSortOrder = 'manual';
-  }
   if (version < 10) {
-    delete state.showArchivedSessions;
+    // v10 removes Recent: In work holds the sessions being worked on, and the
+    // timeline view answers "what was I doing" across projects.
+    delete state.showRecentSection;
   }
   if (version < 11) {
-    if (state.showWorkSection === undefined) state.showWorkSection = true;
-    if (state.showPinnedSection === undefined) state.showPinnedSection = true;
-    if (state.keepWorkInPlace === undefined) state.keepWorkInPlace = false;
-    const legacyTimeline = state.sidebarViewMode === 'timeline';
-    if (state.sidebarGrouping === undefined || state.sidebarGrouping === null) {
-      state.sidebarGrouping = legacyTimeline ? 'time' : null;
-    }
-    if (state.listSessionGrouping === undefined) {
-      state.listSessionGrouping = legacyTimeline ? 'time' : 'project';
-    }
+    // v11 removes the worktree sort: a worktree is a work among the
+    // project's works, listed by activity like the rest.
+    delete state.worktreeSortOrder;
   }
   if (version < 12 && surface === 'mobile' && state.sidebarViewMode !== 'projects') {
+    // v12 gives the phone the works view, two-line by default. Its List always
+    // drew two lines, so a phone on List keeps them; Tree keeps its choice.
     state.detailedZoneRows = true;
-  }
-  if (version < 13) {
-    delete state.showRecentSection;
-    delete state.sidebarViewMode;
-    delete state.worktreeSortOrder;
   }
   return state;
 };
@@ -123,9 +154,9 @@ export const migrateSessionDisplayState = (
  * project both group under projects.
  */
 export const resolveSidebarGrouping = (
-  state: Pick<SessionDisplayStore, 'sidebarGrouping' | 'listSessionGrouping'>,
+  state: Pick<SessionDisplayStore, 'sidebarGrouping' | 'sidebarViewMode' | 'listSessionGrouping'>,
 ): ListSessionGrouping => state.sidebarGrouping
-  ?? (state.listSessionGrouping === 'time' ? 'time' : 'project');
+  ?? (state.sidebarViewMode === 'timeline' && state.listSessionGrouping === 'time' ? 'time' : 'project');
 
 export const useSessionDisplayStore = create<SessionDisplayStore>()(
   persist(
@@ -136,30 +167,67 @@ export const useSessionDisplayStore = create<SessionDisplayStore>()(
       singleProjectId: null,
       setProjectDisplayMode: (mode) => set({ projectDisplayMode: mode }),
       setSingleProjectId: (projectId) => set({ singleProjectId: projectId }),
-
+      // New installs start on the timeline. Stored state keeps an earlier
+      // choice, and VS Code always renders the grouped view.
+      sidebarViewMode: 'timeline',
+      setSidebarViewMode: (mode) => set({ sidebarViewMode: mode }),
       listSessionGrouping: 'project',
       setListSessionGrouping: (grouping) => set({ listSessionGrouping: grouping }),
       sidebarGrouping: null,
       setSidebarGrouping: (grouping) => set({ sidebarGrouping: grouping }),
       keepWorkInPlace: false,
       setKeepWorkInPlace: (keep) => set({ keepWorkInPlace: keep }),
-
       showChatsSection: true,
       showWorkSection: true,
+      // On for new installs: pinned work gets its own block on top. Stored
+      // state keeps an earlier choice.
       showPinnedSection: true,
       detailedZoneRows: getSettingsSurface() === 'mobile',
+      worktreeNameByBranch: false,
+      sections: [...DEFAULT_SIDEBAR_SECTIONS],
+      pinLists: [],
+      hiddenSections: [],
+      sectionsOwner: null,
+      // The same rules as a stored value: built-in sections kept, limits held.
+      setSections: (sections) => set({ sections: sidebarSectionsSchema.parse(sections), sectionsOwner: getRuntimeKey() }),
+      setPinLists: (lists) => set({ pinLists: sidebarPinListsSchema.parse(lists), sectionsOwner: getRuntimeKey() }),
+      setHiddenSections: (ids) => set({ hiddenSections: hiddenSidebarSectionsSchema.parse(ids), sectionsOwner: getRuntimeKey() }),
+      // Default to HIDDEN so the pre-hydration state matches the quiet/safe
+      // option: archived sessions must never flash visible on startup and then
+      // disappear once the persisted preference rehydrates.
+      showArchivedSessions: false,
       projectSortOrder: 'manual',
-
       setShowChatsSection: (show) => set({ showChatsSection: show }),
       setShowWorkSection: (show) => set({ showWorkSection: show }),
       setShowPinnedSection: (show) => set({ showPinnedSection: show }),
       setDetailedZoneRows: (detailed) => set({ detailedZoneRows: detailed }),
+      setWorktreeNameByBranch: (byBranch) => set({ worktreeNameByBranch: byBranch }),
+      setShowArchivedSessions: (show) => set({ showArchivedSessions: show }),
+      toggleArchivedSessions: () => set((state) => ({ showArchivedSessions: !state.showArchivedSessions })),
       setProjectSortOrder: (order) => set({ projectSortOrder: order }),
     }),
     {
       name: 'session-display-mode',
-      version: 13,
+      version: 12,
+      // v1→v2 adds projectSortOrder using the canonical manual ordering.
+      // v2→v3 replaces the previously shipped recent default with manual.
+      // v3→v4 removes displayMode (single sidebar row layout).
+      // v4→v5 adds the independent all-projects/single-project view mode.
+      // v5→v6 drops sessionGroupingMode in favour of sidebarViewMode.
+      // v6→v7 drops stickyZoneHeaders (derived from the view mode now).
+      // v7→v8 turned Recent off by default.
+      // v8→v9 added worktreeSortOrder; v10→v11 drops it again.
+      // v9→v10 drops showRecentSection (Recent is gone).
+      // v11→v12 turns two-line rows on for a phone that was on List.
       migrate: migrateSessionDisplayState,
+      // Sections cached by another build (an older one before a filter field
+      // existed) are read through the same rules as the stored setting.
+      merge: (persisted, current) => {
+        // SAFETY: `migrate` has already brought the stored state to this version's shape.
+        const state = (persisted ?? {}) as Partial<SessionDisplayStore>;
+        const sections = sidebarSectionsSchema.safeParse(state.sections ?? current.sections);
+        return { ...current, ...state, sections: sections.success ? sections.data : [...DEFAULT_SIDEBAR_SECTIONS] };
+      },
     },
   ),
 );
@@ -167,3 +235,18 @@ export const useSessionDisplayStore = create<SessionDisplayStore>()(
 export type {
   ProjectSortOrder
 };
+
+// The user's sections, pin lists and hidden sections are another instance's
+// once the client switches: back to the built-in sections until the new
+// instance's settings arrive (an instance without any keeps them).
+/** Drops the user's sections when they came from another instance than `runtimeKey`. */
+export const dropSectionsOfOtherInstance = (runtimeKey: string): void => {
+  const state = useSessionDisplayStore.getState();
+  if (state.sectionsOwner === null || state.sectionsOwner === runtimeKey || isTransientRuntimeKey(runtimeKey)) return;
+  useSessionDisplayStore.setState({ sections: [...DEFAULT_SIDEBAR_SECTIONS], pinLists: [], hiddenSections: [], sectionsOwner: null });
+};
+subscribeRuntimeEndpointWillChange(({ runtimeKey }) => dropSectionsOfOtherInstance(runtimeKey));
+// The stored copy may be another instance's when the app starts on a different
+// one. Checked once the boot code has set the instance (it runs in the same
+// task as this module), so a window opened on a saved host keeps its own.
+queueMicrotask(() => dropSectionsOfOtherInstance(getRuntimeKey()));

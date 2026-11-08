@@ -10,7 +10,7 @@ import {
   CompletionRequestSchema, CompletionCancelRequestSchema, EntityIdSchema,
   MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPOAuthRequestSchema, MCPSecretWriteRequestSchema,
   CacheWarmingUpdateRequestSchema,
-  ImageGenerateRequestSchema,
+  ImageGenerateRequestSchema, ImageModelConfigureRequestSchema,
   UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema,
   WebSearchUpdateRequestSchema, WebSearchCredentialWriteRequestSchema, WebSearchCredentialDeleteRequestSchema,
   OmpSettingsUpdateRequestSchema,
@@ -48,7 +48,7 @@ function match(actual: string, expected: string): void {
 function unwrap(result: CatalogResult) {
   switch (result.type) {
     case 'catalog.models': case 'catalog.providers': case 'catalog.agents': return result.catalog;
-    case 'catalog.image.generated': return result.result;
+    case 'catalog.image.generated': case 'catalog.image.mutated': return result.result;
     case 'catalog.provider.mutated': case 'catalog.model.mutated': case 'catalog.credential.mutated': case 'catalog.agent.mutated': return result.result;
     case 'catalog.provider.accounts': case 'catalog.provider.oauth.methods': case 'catalog.provider.oauth':
     case 'catalog.provider.models.discovered': case 'catalog.provider.configuration': return result.result;
@@ -309,10 +309,14 @@ export class WorkspaceRoutes {
       if (result.type !== 'completion' || result.result.type !== 'completion.result') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
       return { status: 200, body: result.result.result };
     }
-    const imageRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/images\/generate$/.exec(url.pathname);
+    const imageRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/images\/(generate|config)$/.exec(url.pathname);
     if (imageRoute) {
       if (request.method !== 'POST') return null;
       const workspaceId = id(imageRoute[1]);
+      if (imageRoute[2] === 'config') {
+        const body = await readBody(request, ImageModelConfigureRequestSchema);
+        return { status: 200, body: unwrap(await this.catalogs.operation(workspaceId, { type: 'catalog.image.configure', request: body })) };
+      }
       const body = await readBody(request, ImageGenerateRequestSchema);
       match(body.workspaceId, workspaceId);
       return { status: 200, body: unwrap(await this.catalogs.operation(workspaceId, { type: 'catalog.image.generate', request: body })) };

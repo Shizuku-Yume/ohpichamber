@@ -281,7 +281,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             disabled={busy}
           >
             <SelectTrigger aria-label={t('settings.providers.page.custom.field.protocol.label')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
-              <SelectValue />
+              <SelectValue>{protocolLabel(form.protocol, t)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {CUSTOM_PROVIDER_PROTOCOLS.map((protocol) => (

@@ -24,6 +24,8 @@ export type InputHistoryAttachment = {
   mimeType: string;
   size: number;
   reference: string;
+  /** Set when `reference` is the note standing in for a desktop file on disk. */
+  path?: string;
 };
 
 export type InputHistorySubmission = {
@@ -123,6 +125,7 @@ const attachmentSchema = z.object({
   mimeType: z.string().min(1),
   size: z.number().finite().nonnegative(),
   reference: z.string().min(1),
+  path: z.string().min(1).optional(),
 });
 
 const entrySchema = z.object({
@@ -404,7 +407,10 @@ const buildAttachmentKey = (attachment: AttachedFile): string => {
 
 const toRestorableAttachment = (attachment: AttachedFile): InputHistoryAttachment | null => {
   const reference = getAttachmentReference(attachment);
-  if (!reference || !canRestoreReference(reference)) return null;
+  if (!reference) return null;
+  // The note is a few lines, so unlike file content it may stay in history.
+  const path = attachment.agentPath && attachment.serverPath === attachment.agentPath ? attachment.agentPath : undefined;
+  if (!path && !canRestoreReference(reference)) return null;
   return {
     key: buildAttachmentKey(attachment),
     source: 'file-url',
@@ -412,6 +418,7 @@ const toRestorableAttachment = (attachment: AttachedFile): InputHistoryAttachmen
     mimeType: attachment.mimeType,
     size: attachment.size,
     reference,
+    path,
   };
 };
 
@@ -439,7 +446,8 @@ const areAttachmentsEqual = (
       && attachment.filename === candidate.filename
       && attachment.mimeType === candidate.mimeType
       && attachment.size === candidate.size
-      && attachment.reference === candidate.reference;
+      && attachment.reference === candidate.reference
+      && attachment.path === candidate.path;
   })
 );
 

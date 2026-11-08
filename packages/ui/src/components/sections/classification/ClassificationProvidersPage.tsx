@@ -182,7 +182,7 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
                       label={t('settings.classification.source.zenPromo.name')}
                       description={promoUsable
                         ? t('settings.classification.source.zenPromo.description')
-                        : t('settings.classification.source.zenPromo.ended')}
+                        : t('settings.classification.source.zenPromo.unavailable')}
                     />
                   ) : null}
                   <SettingsRadioOption

@@ -152,6 +152,16 @@ mock.module('@/contexts/useThemeSystem', () => ({ useThemeSystem: () => ({ curre
 mock.module('@/stores/useDesktopSshStore', () => ({ useDesktopSshStore: useDesktopSshStoreMock }));
 mock.module('@/lib/url', () => ({ openExternalUrl: async (url: string) => { openExternalCalls.push(url); } }));
 mock.module('@/lib/openchamberConfig', () => ({
+  fetchProjectSetup: async () => ({
+    trust: { hash: null, trusted: true },
+    setupWorktree: [],
+    setupWorktreeWait: false,
+    projectActions: mockedActionsState.actions.map((action) => ({ ...action, source: 'personal' })),
+    projectActionsPrimaryId: null,
+    draftStarters: [],
+    shared: { status: 'missing', path: '.openchamber/project.json', setupWorktree: [], setupWorktreeWait: null, projectActions: [], draftStarters: [], plansDir: null },
+    personal: { setupWorktree: [], setupWorktreeWait: null, setupWorktreeMode: 'append', worktreeDirectory: null, projectActions: mockedActionsState.actions, projectActionsPrimaryId: null, draftStarters: [], hiddenSharedActionIds: [], sharedTrust: null },
+  }),
   getProjectActionsState: async () => mockedActionsState,
   // The button loads the merged setup; the test's actions are personal, so nothing asks for trust.
   getProjectSetup: async () => ({
@@ -270,10 +280,12 @@ describe('ProjectActionsButton lifecycle', () => {
   test('adopting a saved URL action does not auto-open a different output URL', async () => {
     mockedActionsState.actions = [{ id: 'build', name: 'Build', command: 'echo hello', autoOpenUrl: true, openUrl: 'http://localhost:4000' }];
     const originalList = terminal.listSessions;
-    Object.assign(terminal, { listSessions: async () => [{
-      sessionId: 'peer-run', cwd: '/repo', status: 'running', createdAt: 1, mode: 'command',
-      purpose: { type: 'project-action', actionId: 'build', executionId: 'peer-execution' },
-    }] });
+    Object.assign(terminal, {
+      listSessions: async () => [{
+        sessionId: 'peer-run', cwd: '/repo', status: 'running', createdAt: 1, mode: 'command',
+        purpose: { type: 'project-action', actionId: 'build', executionId: 'peer-execution' },
+      }]
+    });
     try {
       await renderButton();
       await act(async () => { emitToSession('peer-run', { type: 'snapshot', sequence: 1, status: 'running', data: 'Local: http://localhost:5173/\n' }); });
@@ -283,10 +295,12 @@ describe('ProjectActionsButton lifecycle', () => {
 
   test('a second run keeps its tab and displays fresh output under a new terminal ID', async () => {
     const originalCreate = terminal.createSession;
-    Object.assign(terminal, { createSession: async (options: CreateTerminalOptions) => {
-      createCalls.push(options);
-      return { sessionId: options.sessionId, cols: 80, rows: 24, status: 'running', mode: 'command', purpose: options.purpose };
-    } });
+    Object.assign(terminal, {
+      createSession: async (options: CreateTerminalOptions) => {
+        createCalls.push(options);
+        return { sessionId: options.sessionId, cols: 80, rows: 24, status: 'running', mode: 'command', purpose: options.purpose };
+      }
+    });
     try {
       await renderButton();
       const button = host.querySelector('button');

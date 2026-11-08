@@ -63,7 +63,8 @@ const isKnownActiveSessionDirectory = (
   // The full app's global cache is authoritative for active-session retention.
   // A deleted worktree is not a deletion event, so its record must reach the
   // ownership resolver even when no current topology directory matches it.
-  if (!isVSCode && !session.archivedAt) return true;
+  if (!isVSCode) return true;
+  if (session.archivedAt) return true;
   const directory = normalizePath(resolveGlobalSessionDirectory(session) ?? session.displayPath)?.toLowerCase();
   if (!directory) return false;
   if (knownDirectories.size === 0) return false;

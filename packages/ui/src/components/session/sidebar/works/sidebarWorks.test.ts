@@ -55,7 +55,7 @@ describe('sidebar works', () => {
     const index = buildSidebarWorkIndex([section]);
     expect(index.bySessionId.get('review')?.key).toBe('session:root');
     expect(index.bySessionId.get('w2')?.key).toBe('p:wt');
-    expect(index.groupWorks.map((ref) => ref.key)).toEqual(['p:wt', 'p:empty-wt']);
+    expect(index.worktreeWorks.map((ref) => ref.key)).toEqual(['p:wt', 'p:empty-wt']);
   });
 
   test('an isolated space is one work with every session in it, like a worktree', () => {
@@ -70,7 +70,7 @@ describe('sidebar works', () => {
     const index = buildSidebarWorkIndex([{ ...section, groups: [...section.groups, space, archive] }]);
     expect(index.bySessionId.get('s1-review')?.key).toBe('p:space:abc');
     expect(index.bySessionId.get('s2')?.key).toBe('p:space:abc');
-    expect(index.groupWorks.map((ref) => ref.key)).toEqual(['p:wt', 'p:empty-wt', 'p:space:abc']);
+    expect(index.worktreeWorks.map((ref) => ref.key)).toEqual(['p:wt', 'p:empty-wt', 'p:space:abc']);
   });
 
   test('works come once each, in the order of their first matching session', () => {
@@ -82,11 +82,11 @@ describe('sidebar works', () => {
 
   describe('in work outside every added project', () => {
     const inWork = { metadata: { openchamber: { work: { state: 'open' } } } } as Partial<Session>;
-    const outside = { directory: '/not-a-project' };
+    const outside = { displayPath: '/not-a-project' };
     // `promoted` has no parentID but nests under `outside-root` by lineage (a
     // promoted /btw or a review), so its work is its root's.
     const promoted = node('promoted', [], { ...outside, ...inWork });
-    const subagent = node('subagent', [], { ...outside, ...inWork, parentID: 'outside-root' });
+    const subagent = node('subagent', [], { ...outside, ...inWork, parentSessionId: 'outside-root' });
     const outsideRoot = node('outside-root', [promoted, subagent], outside);
     const childrenMap = new Map([['outside-root', [promoted.session, subagent.session]]]);
     const rootOf = buildSessionRootIndex([outsideRoot.session, session('root')], childrenMap);
@@ -116,9 +116,9 @@ describe('sidebar works', () => {
 
     test('archived sessions, chats and sessions not in work are left out', () => {
       const index = buildSidebarWorkIndex([section]);
-      const archived = session('archived', { ...outside, ...inWork, time: { created: 1, updated: 1, archived: 2 } });
+      const archived = session('archived', { ...outside, ...inWork, archivedAt: 2 });
       const idle = session('idle', outside);
-      const chat = session('chat', { ...inWork, directory: '/home/.config/openchamber/chats/2026-10-26/session-1' });
+      const chat = session('chat', { ...inWork, displayPath: '/home/.config/openchamber/chats/2026-10-26/session-1' });
       const rootIndex = buildSessionRootIndex([archived, idle, chat], new Map());
       expect(orderInWorkWorks([archived, idle, chat], index, rootIndex, (directory) => directory?.includes('/chats/') ?? false))
         .toEqual([]);
@@ -132,14 +132,14 @@ describe('sidebar works', () => {
     const values = new Map([['lonely', 30], ['archived', 25], ['w1', 20], ['root', 10], ['old', 5]]);
     const order = ['lonely', 'w1', 'root'].map((id) => session(id));
     const anchors = buildWorktreeArchiveAnchors({
-      groupWorks: index.groupWorks,
+      groupWorks: index.worktreeWorks,
       archivedSessions: [
-        session('archived', { directory: '/wt' }),
-        session('old', { directory: '/empty-wt' }),
-        session('elsewhere', { directory: '/other' }),
+        session('archived', { displayPath: '/wt' }),
+        session('old', { displayPath: '/empty-wt' }),
+        session('elsewhere', { displayPath: '/other' }),
       ],
       orderedSessions: order,
-      orderValueOf: (entry) => values.get(entry.id) ?? 0,
+      orderValueOf: (entry) => values.get(entry.sessionId) ?? 0,
       isPinned: () => false,
     });
     expect([...anchors]).toEqual([['p:wt', 0.5], ['p:empty-wt', 2.5]]);

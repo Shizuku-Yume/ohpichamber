@@ -174,14 +174,14 @@ describe('useSessionListSync', () => {
   });
 
   test('head updates to visible arrays never advance the authoritative cleanup snapshot', () => {
-    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    act(() => root.render(<LifecycleProbe />));
     const baseline = state.cleanupInputs.at(-1)?.sessions;
     globalSessions.activeSessions = [];
     globalSessions.archivedSessions = [];
-    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    act(() => root.render(<LifecycleProbe />));
     expect(state.cleanupInputs.at(-1)?.sessions).toBe(baseline);
     globalSessions.authoritativeSessions = [];
-    act(() => root.render(<LifecycleProbe isVSCode={false} />));
+    act(() => root.render(<LifecycleProbe />));
     expect(state.cleanupInputs.at(-1)?.sessions).not.toBe(baseline);
   });
 

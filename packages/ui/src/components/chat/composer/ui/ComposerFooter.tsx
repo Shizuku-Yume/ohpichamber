@@ -28,7 +28,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { isDictationCaptureSupported } from '@/lib/dictation/use-dictation-audio-source';
 import { ModelControls } from '../../ModelControls';
 import { ComposerActionButtons } from './ComposerActionButtons';
-import { ComposerAttachmentControls } from './ComposerAttachmentControls';
+import { ComposerAttachmentControls, type ComposerTrackerPicker } from './ComposerAttachmentControls';
 import { FocusModeButton } from './FocusModeButton';
 import { ComposerModeSelector, type ComposerModeValue } from './ComposerModeSelector';
 import type { DraftGoalObjective, DraftSessionMode } from '@/sync/session-ui-store';
@@ -73,8 +73,10 @@ interface ComposerFooterProps {
     onOpenGitHubPicker: () => void;
     /** The host the project's issues and change requests come from. */
     repositoryProvider?: SourceControlProvider;
-    showLinearPicker?: boolean;
-    onOpenLinearPicker?: () => void;
+    /** The VS Code webview offers only local files, never the linked pickers. */
+    isVSCode: boolean;
+    /** One entry per signed-in tracker, in the server's order. */
+    trackerPickers?: readonly ComposerTrackerPicker[];
     attachGuests?: readonly GuestAttachItem[];
     onOpenGuestAttach?: (guestId: string) => void;
     onOpenAttachSheet: () => void;
@@ -93,8 +95,6 @@ interface ComposerFooterProps {
     onDictationActiveChange?: (active: boolean) => void;
     isBtw?: boolean;
     pinnedSelection?: ComposerModelSelection | null;
-    /** The composer's double Escape stops the run (not in the mini chat). */
-    escapeStops?: boolean;
     /** The composer's double Escape stops the run (not in the mini chat). */
     escapeStops?: boolean;
     /** Offers "Run on several models" in the model picker (desktop). */
@@ -152,8 +152,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
         onPickLocalFiles,
         onOpenGitHubPicker,
         repositoryProvider,
-        showLinearPicker,
-        onOpenLinearPicker,
+        isVSCode,
+        trackerPickers,
         attachGuests,
         onOpenGuestAttach,
         onOpenAttachSheet,
@@ -206,8 +206,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
                                 handlePickLocalFiles={onPickLocalFiles}
                                 openGitHubPicker={onOpenGitHubPicker}
                                 repositoryProvider={repositoryProvider}
-                                showLinearPicker={showLinearPicker}
-                                openLinearPicker={onOpenLinearPicker}
+                                isVSCode={isVSCode}
+                                trackerPickers={trackerPickers}
                                 onOpenSettings={isBtw ? undefined : onOpenSettings}
                                 onOpenMobileSheet={onOpenAttachSheet}
                                 attachGuests={attachGuests}
@@ -279,8 +279,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             handlePickLocalFiles={onPickLocalFiles}
                             openGitHubPicker={onOpenGitHubPicker}
                             repositoryProvider={repositoryProvider}
-                            showLinearPicker={showLinearPicker}
-                            openLinearPicker={onOpenLinearPicker}
+                            isVSCode={isVSCode}
+                            trackerPickers={trackerPickers}
                             onOpenSettings={isBtw ? undefined : onOpenSettings}
                             attachGuests={attachGuests}
                             onOpenGuestAttach={onOpenGuestAttach}

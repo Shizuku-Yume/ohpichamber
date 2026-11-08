@@ -153,6 +153,24 @@ const SHORTCUT_GROUPS = {
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.toggle_dictation.label',
     },
+    {
+      id: 'permission_allow_once',
+      defaultBinding: 'alt+enter',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_allow_once.label',
+    },
+    {
+      id: 'permission_allow_always',
+      defaultBinding: 'alt+shift+enter',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_allow_always.label',
+    },
+    {
+      id: 'permission_deny',
+      defaultBinding: 'alt+backspace',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_deny.label',
+    },
     { id: 'abort_run', defaultBinding: 'escape', customizable: false },
   ],
   models: [

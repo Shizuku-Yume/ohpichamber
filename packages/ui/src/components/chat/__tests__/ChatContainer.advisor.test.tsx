@@ -57,6 +57,9 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   if (path.endsWith('/commands')) return Response.json({ workspaceId: 'workspace-a', revision: '1', commands: [], builtinCommands: [] });
   if (path.endsWith('/session')) return Response.json({ data: [] });
   if (path.endsWith('/config')) return Response.json([]);
+  // The project registry is instance settings: the column is shown for a
+  // session whose folder is an admitted project.
+  if (path === '/api/config/settings') return Response.json({ projects: [{ id: 'project-a', path: '/workspace', label: 'Workspace' }], activeProjectId: 'project-a' });
   return Response.json({});
 });
 
@@ -85,6 +88,7 @@ const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
 const { ChatContainer } = await import('../ChatContainer');
 const { SyncProvider, useDirectoryStore } = await import('@/sync/sync-context');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
+const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { useAdvisorStore } = await import('@/stores/useAdvisorStore');
 const { useCleanseStore } = await import('@/stores/useCleanseStore');
 const { nativeClient, nativeHistory, nativeMessage, nativeSnapshot } = await import('@/sync/session-message-loader-test-fixtures');
@@ -137,6 +141,8 @@ const Seed = () => {
 
 describe('ChatContainer Advisor and Cleanse live projection smoke', () => {
   beforeEach(() => {
+    // The column only shows a session whose folder is an admitted project.
+    useProjectsStore.setState({ projects: [{ id: 'project-a', path: DIRECTORY, label: 'Workspace' }], activeProjectId: 'project-a' });
     useAdvisorStore.getState().reset();
     useCleanseStore.getState().reset();
     container = document.createElement('div');

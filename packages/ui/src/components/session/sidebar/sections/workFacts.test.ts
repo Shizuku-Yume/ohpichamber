@@ -1,0 +1,29 @@
+import { describe, expect, test } from 'bun:test';
+import type { Session } from '@openchamber/agent-contract';
+import { buildSidebarWorkFacts, EMPTY_SIDEBAR_LIVE_FACTS } from './workFacts';
+
+const session = (metadata: unknown): Session => ({
+  sessionId: 's1', projectId: 'p', workspaceId: 'p', displayPath: '.', rootSessionId: 's1',
+  title: 'Nightly triage', createdAt: 1, updatedAt: 2, epoch: 'epoch-1', headSequence: '0',
+  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+  metadata: (metadata ?? null) as Session['metadata'], metadataRevision: metadata ? '1' : '0', archiveRevision: '0',
+});
+
+const factsFor = (record: Session) => buildSidebarWorkFacts(
+  { kind: 'session', key: 'session:s1', projectId: 'p', rootSessionId: 's1' },
+  { sessionById: new Map([['s1', record]]), childrenMap: new Map(), runKeyBySessionId: new Map(), live: EMPTY_SIDEBAR_LIVE_FACTS, planSessionIds: new Set(), folderByMember: new Map([['s1', { folderId: 'folder', projectId: 'p' }]]) },
+);
+
+describe('buildSidebarWorkFacts', () => {
+  test('a session names the folder holding it', () => {
+    expect(factsFor(session({})).folderId).toBe('folder');
+  });
+
+  test('a session updated into a new record is read again', () => {
+    const before = session({ openchamber: { kind: 'scheduled' } });
+    expect(factsFor(before)).toMatchObject({ scheduled: true, inWork: false });
+    expect(factsFor(before)).toMatchObject({ scheduled: true, inWork: false });
+    const after = session({ openchamber: { kind: 'scheduled', work: { state: 'open', at: 3 } } });
+    expect(factsFor(after)).toMatchObject({ scheduled: true, inWork: true });
+  });
+});

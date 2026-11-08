@@ -132,7 +132,7 @@ export function MarkdownCode({ children, className, node, ...props }: React.Comp
     if (purpose && language !== 'mermaid' && language !== 'svg') onExportCode?.(code, language);
   }, [purpose, onExportCode, code, language]);
 
-  if (language === 'mermaid' || language === 'svg') {
+  if (language === 'mermaid' || language === 'svg' || (language === 'openui-lang' && presentation.uiBlocks)) {
     return (
       <defaultComponents.code {...props} node={node} className={className}>
         {children}
@@ -187,6 +187,7 @@ export function MarkdownCode({ children, className, node, ...props }: React.Comp
                 size="xs"
                 data-export-ignore
                 title={t(copied ? 'markdownRenderer.code.actions.copiedTitle' : 'markdownRenderer.code.actions.copyTitle')}
+                aria-label={t(copied ? 'markdownRenderer.code.actions.copiedTitle' : 'markdownRenderer.code.actions.copyTitle')}
                 onClick={copy}
               >
                 <Icon name={copied ? 'check' : 'file-copy'} className="size-3.5" />

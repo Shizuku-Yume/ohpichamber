@@ -84,7 +84,7 @@ describe('SourceControlProviderCard', () => {
   let tokenAccepted = true;
   // The provider whose card the server says the instance belongs on, if any.
   let tokenOwner: string | null = null;
-  let beforeActivation = async () => {};
+  let beforeActivation = async () => { };
   let available = { device: true, pat: true, cli: true };
   let withCliLogin = true;
   // Where the listed login came from: the CLI, or a stored token.
@@ -119,6 +119,7 @@ describe('SourceControlProviderCard', () => {
   };
 
   const sourceControl: SourceControlAPI = {
+    authSetSshUrl: async () => ({ sshUrl: null }),
     authInstances: async () => {
       instanceReads += 1;
       if (discoveryFails) throw new Error('Instance discovery failed');
@@ -152,6 +153,7 @@ describe('SourceControlProviderCard', () => {
     issuesList: unexpected, issueGet: unexpected, issueComments: unexpected, projectUpstream: unexpected,
     projectBranches: unexpected, references: unexpected, referenceDetail: unexpected,
     changeRequestListStatuses: unexpected,
+    changeRequestReviewState: unexpected, changeRequestReviewComment: unexpected, changeRequestReviewCommentUpdate: unexpected, changeRequestReviewCommentDelete: unexpected, changeRequestReviewDiscard: unexpected,
   };
   const apis: RuntimeAPIs = {
     runtime: { platform: 'web', isDesktop: false }, sourceControl,
@@ -192,7 +194,7 @@ describe('SourceControlProviderCard', () => {
     discoveryFails = false;
     tokenAccepted = true;
     tokenOwner = null;
-    beforeActivation = async () => {};
+    beforeActivation = async () => { };
     available = { device: true, pat: true, cli: true };
     withCliLogin = true;
     accountSource = 'cli';
@@ -479,7 +481,7 @@ describe('SourceControlProviderCard', () => {
     test('ignores an activation that finishes after a runtime round trip', async () => {
       await mount(gitlab);
       await addInstance('https://gitlab.example.com', firstInstance);
-      let finishActivation = () => {};
+      let finishActivation = () => { };
       const pendingActivation = new Promise<void>((resolve) => { finishActivation = resolve; });
       beforeActivation = () => pendingActivation;
       await click('Use glab CLI');

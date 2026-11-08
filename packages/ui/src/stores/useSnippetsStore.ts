@@ -10,6 +10,14 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 
 export type SnippetScope = FileResourceScope;
+
+/** The quick "save as snippet" dialog: text from a message, a selection or the composer. */
+export interface SnippetQuickCreate {
+  name?: string;
+  content: string;
+  /** Runs once the snippet is saved, with the name it got. */
+  onSaved?: (name: string) => void;
+}
 type SnippetInput = Omit<PromptTemplateCreateRequest, 'expectedRevision'>;
 type SnippetDraft = Pick<SnippetInput, 'name' | 'scope'> & Partial<Omit<SnippetInput, 'name' | 'scope'>>;
 
@@ -21,6 +29,9 @@ interface SnippetsStore {
   isLoading: boolean;
   selectedSnippetName: string | null;
   snippetDraft: SnippetDraft | null;
+  quickCreate: SnippetQuickCreate | null;
+  openQuickCreate: (request: SnippetQuickCreate) => void;
+  closeQuickCreate: () => void;
   setSelectedSnippet: (id: string | null) => void;
   setSnippetDraft: (draft: SnippetDraft | null) => void;
   loadSnippets: (directory?: string | null) => Promise<boolean>;
@@ -80,14 +91,16 @@ export const useSnippetsStore = create<SnippetsStore>()(devtools((set, get) => {
 
   return {
     snippets: [], catalog: null, catalogsByDirectory: new Map(), directory: null, isLoading: false,
-    selectedSnippetName: null, snippetDraft: null,
+    selectedSnippetName: null, snippetDraft: null, quickCreate: null,
+    openQuickCreate: (request) => set({ quickCreate: request }),
+    closeQuickCreate: () => set({ quickCreate: null }),
     setSelectedSnippet: (id) => set({ selectedSnippetName: id }),
     setSnippetDraft: (draft) => set({ snippetDraft: draft }),
     resetForRuntimeSwitch: () => {
       generation += 1;
       pendingLoads.clear();
       mutationRevisions.clear();
-      set({ snippets: [], catalog: null, catalogsByDirectory: new Map(), directory: null, isLoading: false, selectedSnippetName: null, snippetDraft: null });
+      set({ snippets: [], catalog: null, catalogsByDirectory: new Map(), directory: null, isLoading: false, selectedSnippetName: null, snippetDraft: null, quickCreate: null });
     },
     loadSnippets: async (requestedDirectory) => {
       let directory: string;

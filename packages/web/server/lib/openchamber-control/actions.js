@@ -25,6 +25,7 @@ const OPENCHAMBER_CONTROL_ACTION_DEFINITIONS = Object.freeze([
   { action: 'schedule.run', title: 'Run a scheduled task', description: 'Run taskId; scope with projectId or directory' },
   { action: 'schedule.delete', title: 'Delete a scheduled task', description: 'Delete taskId; scope with projectId or directory' },
   { action: 'schedule.toggle', title: 'Enable or disable a scheduled task', description: 'Enable or disable taskId; requires the disabled boolean' },
+  { action: 'session.moveToWorktree', title: 'Move a session into a new worktree', description: 'Move sessionId (default: this session) into a new worktree of its repository, made the way the New worktree dialog makes one; requires worktree.name. carry names the files whose uncommitted changes move with it. The session moves only after the worktree and the destination workspace exist; a failure removes the worktree and puts the carried changes back, or names the stash that keeps them' },
   { action: 'file.open', title: 'Show a file to the user', description: 'Open path in the user\'s file panel, in front of whatever they had open, so they can look at a result you produced: a screenshot, report, CSV, recording, or generated page. Relative to the session directory. Use it only when seeing the file moves the work forward, not for every file you touch' },
 ]);
 
@@ -236,7 +237,17 @@ export const resolveAgentToolAction = (requested, toolName) => {
 };
 
 /** Everything the callback route will dispatch, whichever tool asked. */
+
+export const OPENCHAMBER_IMAGE_ACTION_DEFINITIONS = Object.freeze([
+  { action: "image.generate", title: "Generate an image", description: "Requires prompt" },
+]);
+
+export const OPENCHAMBER_IMAGE_ACTIONS = Object.freeze(
+  OPENCHAMBER_IMAGE_ACTION_DEFINITIONS.map(({ action }) => action),
+);
+
 export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
+  ...OPENCHAMBER_IMAGE_ACTIONS,
   ...OPENCHAMBER_CONTROL_ACTIONS,
   ...OPENCHAMBER_WEB_ACTIONS,
   ...OPENCHAMBER_MEMORY_ACTIONS,

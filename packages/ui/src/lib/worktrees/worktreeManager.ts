@@ -6,8 +6,10 @@ import { formatMessage, useI18nStore } from '@/lib/i18n';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { git } from '@/lib/gitApi';
 import { runBoundRemoteBranchDelete } from '@/lib/boundGitNetworkOperation';
+import { resolveWorktreeTeardownCommands } from '@/lib/sharedTrustConfirmation';
 import {
   clearWorktreeBootstrapState,
+  getWorktreeBootstrapState,
   markWorktreeBootstrapPending,
   setWorktreeBootstrapState,
   startWorktreeBootstrapWatcher,
@@ -203,13 +205,14 @@ const deriveSdkWorktreeNameFromDirectory = (directory: string): string => {
   return parts[parts.length - 1] ?? normalized;
 };
 
-const buildSdkStartCommand = (args: {
+/** The project's commands joined for one shell, with `{root}` replaced. */
+const buildWorktreeCommands = (args: {
   projectDirectory: string;
-  setupCommands: string[];
-}): string | undefined => {
+  commands: string[];
+}): { commands: string | undefined } => {
   const commands: string[] = [];
 
-  for (const raw of args.setupCommands) {
+  for (const raw of args.commands) {
     const trimmed = raw.trim();
     if (!trimmed) continue;
     commands.push(
@@ -218,7 +221,34 @@ const buildSdkStartCommand = (args: {
   }
 
   const joined = commands.filter(Boolean).join(' && ');
-  return joined.trim().length > 0 ? joined : undefined;
+  return { commands: joined.trim().length > 0 ? joined : undefined };
+};
+
+const buildSdkStartCommand = (args: {
+  projectDirectory: string;
+  setupCommands: string[];
+}): string | undefined => buildWorktreeCommands({ projectDirectory: args.projectDirectory, commands: args.setupCommands }).commands;
+
+/**
+ * What the server runs in the worktree before it goes; may ask for trust
+ * first, unless `ask` is false (a removal nobody started by hand), where
+ * untrusted shared commands reject instead. Nothing is asked for a checkout
+ * the server runs no teardown in: one whose bootstrap failed never ran its
+ * setup, and a contributor fork runs no project command before its checkout
+ * trust passes.
+ */
+export const resolveWorktreeTeardownCommand = async (
+  project: ProjectRef,
+  worktree: WorktreeMetadata,
+  { ask = true }: { ask?: boolean } = {},
+): Promise<string | undefined> => {
+  if (getWorktreeBootstrapState(worktree.path)?.status === 'failed') return undefined;
+  if (worktree.provenance?.kind === 'contributor-fork') return undefined;
+  const { commands } = buildWorktreeCommands({
+    projectDirectory: normalizePath(project.path),
+    commands: await resolveWorktreeTeardownCommands(project, { ask }),
+  });
+  return commands;
 };
 
 const toCreatePayload = (args: {
@@ -809,6 +839,8 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
     sourceControl: Pick<SourceControlAPI, 'repositoryBinding'>;
     git: Pick<GitAPI, 'planNetworkOperation' | 'executeNetworkOperation' | 'getNetworkOperation'>;
   };
+  /** Only from the failure toast's "Delete without teardown" after the teardown failed. */
+  skipTeardown?: boolean;
 }): Promise<void> {
   const projectDirectory = normalizePath(project.path);
 
@@ -821,7 +853,15 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   }
   markWorktreeRemoving(worktree.path);
   try {
+    let teardownCommand = options?.skipTeardown === true ? undefined : await resolveWorktreeTeardownCommand(project, worktree);
     if (deleteRemote && branchName && remoteName && options?.network) {
+      // The teardown runs before the remote branch goes, so a failing teardown
+      // deletes nothing; the removal then has nothing left to run.
+      const teardownFirst = teardownCommand;
+      if (teardownFirst) {
+        await git.worktree.teardown(projectDirectory, { directory: worktree.path, teardownCommand: teardownFirst });
+        teardownCommand = undefined;
+      }
       await runBoundRemoteBranchDelete({
         branch: branchName,
         directory: projectDirectory,
@@ -833,6 +873,7 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
     const raw = await git.worktree.remove(projectDirectory, {
       directory: worktree.path,
       deleteLocalBranch,
+      teardownCommand,
     });
     if (!raw?.success) {
       throw new Error('Worktree removal failed');

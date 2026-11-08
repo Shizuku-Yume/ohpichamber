@@ -3,6 +3,22 @@ import { z } from 'zod';
 import { isAppLinkUrl } from '@/lib/url';
 import { isSessionDeepLink } from '@/lib/sessionLinks';
 
+const EXTENSION_INSTALL_PREFIX = 'openchamber://extensions/install?';
+
+const parseExtensionInstallLink = (href: string): { kind: 'url' | 'path'; source: string } | null => {
+  if (!href.toLowerCase().startsWith(EXTENSION_INSTALL_PREFIX)) return null;
+  const params = new URLSearchParams(href.slice(EXTENSION_INSTALL_PREFIX.length));
+  const path = params.get('path');
+  if (path) return path.startsWith('/') || /^[a-z]:[\\/]/i.test(path) ? { kind: 'path', source: path } : null;
+  const url = params.get('url');
+  if (!url) return null;
+  try {
+    return new URL(url).protocol === 'https:' ? { kind: 'url', source: url } : null;
+  } catch {
+    return null;
+  }
+};
+
 const allowedAttributes = new Set(['align', 'alt', 'checked', 'colSpan', 'controls', 'disabled', 'height', 'href', 'media', 'open', 'playsInline', 'preload', 'rel', 'rowSpan', 'src', 'srcSet', 'start', 'target', 'title', 'type', 'width']);
 const urlAttribute = z.string();
 
@@ -23,7 +39,7 @@ function safeLink(value: string): boolean {
   if (value !== value.trim() || /\s/.test(value)) return false;
   return relativeOrHttp(value) || localFile(value) || isAppLinkUrl(value)
     || /^(?:mailto|tel|sms|callto|cid|xmpp|irc|ircs|news|nntp|feed|webcal):/i.test(value)
-    || isSessionDeepLink(value);
+    || isSessionDeepLink(value) || parseExtensionInstallLink(value) !== null;
 }
 
 export function rehypeMarkdownPolicy() {

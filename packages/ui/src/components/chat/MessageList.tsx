@@ -14,7 +14,7 @@ import { buildLiveStreamingEntry } from './lib/turns/streamingTailEntry';
 import { FULL_MESSAGE_WINDOW, TurnMessageWindowContext, createTurnMessageWindowStore } from './lib/turns/turnMessageWindow';
 import { attachToolResultsForDisplay, getNormalizedMessageForDisplay } from './lib/messageDisplayNormalization';
 import { useUIStore } from '@/stores/useUIStore';
-import { isHiddenUserMessage } from './message/hiddenUserMessage';
+import { turnHeaderCanStick as canStickPrompt } from './lib/turns/stickyPrompt';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
 import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
 import { streamPerfCount, streamPerfMark, streamPerfMeasure } from '@/stores/utils/streamDebug';
@@ -84,7 +84,7 @@ interface MessageListProps {
     endPinningReleased?: boolean;
     composerOverlayHeight?: number;
     onIsAtEndChange?: (isAtEnd: boolean) => void;
-    onListMetricsChange?: (metrics: { readonly footerSize: number }) => void;
+    onListMetricsChange?: (metrics: { readonly headerSize: number; readonly footerSize: number }) => void;
     onTimelineDataChange?: () => void;
     listHeader?: React.ReactNode;
     listFooter?: React.ReactNode;
@@ -251,7 +251,7 @@ export const TurnBlock = React.memo(({
     const showReasoningTraces = useUIStore((state) => state.showReasoningTraces);
     // A hidden prompt has nothing to pin.
     const turnHeaderCanStick = React.useMemo(
-        () => !isHiddenUserMessage(turn.userMessage),
+        () => canStickPrompt(turn.userMessage),
         [turn.userMessage]
     );
     const turnUiState = turnUiStates.get(turn.turnId) ?? { isExpanded: defaultActivityExpanded };
@@ -702,7 +702,7 @@ type TimelineListProps = {
     endPinningReleased: boolean;
     composerOverlayHeight: number;
     onIsAtEndChange: (isAtEnd: boolean) => void;
-    onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
+    onListMetricsChange: (metrics: { readonly headerSize: number; readonly footerSize: number }) => void;
     onTimelineDataChange: () => void;
     listHeader?: React.ReactNode;
     listFooter?: React.ReactNode;
@@ -1037,7 +1037,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         onTimelineDataChange?.();
     });
 
-    const stableListMetricsChange = useStableEvent((metrics: { readonly footerSize: number }) => {
+    const stableListMetricsChange = useStableEvent((metrics: { readonly headerSize: number; readonly footerSize: number }) => {
         onListMetricsChange?.(metrics);
     });
 
@@ -1336,6 +1336,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return false;
                 }
 
+                // A folded-in message has no row until its fold opens, and its
+                // row then draws on a later frame.
+                revealFoldedMessage(messageId);
                 if (!findMessageElement(messageId)) mountWindowedMessage(messageId);
                 const didScroll = scrollMessageElementIntoView(messageId, behavior)
                     || scrollHistoryIndexIntoView(index);
@@ -1413,7 +1416,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             },
         };
         return handle;
-    }, [alignViewportAnchor, findMessageElement, messageIndexMap, mountWindowedMessage, resolveScrollContainer, scrollHistoryIndexIntoView, scrollMessageElementIntoView, settleNavigationTarget, turnIndexMap]);
+    }, [alignViewportAnchor, findMessageElement, messageIndexMap, mountWindowedMessage, resolveScrollContainer, revealFoldedMessage, scrollHistoryIndexIntoView, scrollMessageElementIntoView, settleNavigationTarget, turnIndexMap]);
 
     const rowContext = React.useMemo<TimelineRowContextValue>(() => ({
         stickyUserHeader,

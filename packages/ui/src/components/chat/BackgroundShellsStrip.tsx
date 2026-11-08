@@ -1,3 +1,4 @@
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Icon } from '@/components/icon/Icon';
@@ -115,9 +116,9 @@ const ShellRow: React.FC<{
         {/* The row shows one truncated line; the tooltip keeps the command's
             own line breaks and indentation and wraps only overlong lines. */}
         <TooltipContent side="top" sideOffset={6} className="max-w-[min(36rem,90vw)] [text-wrap:wrap]">
-          <pre className="max-h-[50vh] overflow-y-auto whitespace-pre-wrap break-words font-mono typography-meta">
+          <ScrollableOverlay as="pre" outerClassName="max-h-[50vh]" className="whitespace-pre-wrap break-words font-mono typography-meta" disableHorizontal>
             {shell.command}
-          </pre>
+          </ScrollableOverlay>
         </TooltipContent>
       </Tooltip>
 
@@ -174,7 +175,7 @@ export const BackgroundShellsStrip: React.FC<BackgroundShellsStripProps> = React
   if (shells.length === 1) {
     return (
       <>
-        <div role="group" className="border-b border-border/60" aria-label={t('chat.backgroundShells.aria')}>
+        <div role="group" className="border-b border-edge" aria-label={t('chat.backgroundShells.aria')}>
           <ShellRow shell={shells[0]!} rootSessionId={sessionId} onSelect={setSelectedShell} />
         </div>
         <JobsSheetDialog
@@ -189,7 +190,7 @@ export const BackgroundShellsStrip: React.FC<BackgroundShellsStripProps> = React
 
   // The whole header toggles the list, as the queue header does.
   return (
-    <div role="group" className="border-b border-border/60" aria-label={t('chat.backgroundShells.aria')}>
+    <div role="group" className="border-b border-edge" aria-label={t('chat.backgroundShells.aria')}>
       <div className="flex h-10 items-center ps-3 pe-3">
         <Button
           type="button"

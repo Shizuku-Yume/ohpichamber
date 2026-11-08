@@ -122,7 +122,13 @@ const SelectionSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
       }}
      >
       <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('settings.webSearch.section.provider')}>
-       <SelectValue />
+       <SelectValue>
+        {selected.kind === 'off'
+         ? t('settings.webSearch.option.off')
+         : selected.kind === 'default'
+          ? t('settings.webSearch.option.default')
+          : (selectedProvider?.name ?? selected.id)}
+       </SelectValue>
       </SelectTrigger>
       <SelectContent>
        <SelectItem value="default">{t('settings.webSearch.option.default')}</SelectItem>
@@ -178,7 +184,9 @@ const SelectionSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
         className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
         aria-label={t('settings.webSearch.native.addFallback')}
        >
-        <SelectValue placeholder={t('settings.webSearch.native.addFallback')} />
+        <SelectValue placeholder={t('settings.webSearch.native.addFallback')}>
+         {t('settings.webSearch.native.addFallback')}
+        </SelectValue>
        </SelectTrigger>
        <SelectContent>
         <SelectItem value={ADD_FALLBACK_VALUE}>{t('settings.webSearch.native.addFallback')}</SelectItem>

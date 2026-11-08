@@ -33,6 +33,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import type { ProjectEntry } from '@/lib/api/types';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
+import { usePrWatchStore } from '@/sync/pr-watch';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
@@ -186,6 +187,9 @@ export function useOverviewData(): OverviewData {
   const hasLoaded = useGlobalSessionsStore((state) => state.hasLoaded);
   const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
   const shellSessionIds = useBackgroundShellsStore((state) => state.sessionIds);
+  // A session the user asked the host to watch a pull request for is waiting
+  // on it, so its row says so while nothing else on it is running.
+  const prWatches = usePrWatchStore((state) => state.bySession);
   const blockingBySession = useGlobalBlockingRequestsStore((state) => state.bySession);
   const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
@@ -255,8 +259,12 @@ export function useOverviewData(): OverviewData {
       const root = rootOf(id, entityById);
       if (!map.has(root)) map.set(root, 'shell');
     }
+    for (const id of prWatches.keys()) {
+      const root = rootOf(id, entityById);
+      if (!map.has(root)) map.set(root, 'pullRequest');
+    }
     return map;
-  }, [activeSessionIds, entityById, shellSessionIds]);
+  }, [activeSessionIds, entityById, prWatches, shellSessionIds]);
 
   const blockingByRoot = React.useMemo(() => {
     const map = new Map<string, OverviewBlocking>();

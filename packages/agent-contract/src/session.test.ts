@@ -6,6 +6,7 @@ import {
   RunStatusSchema, RuntimeSessionSchema, SessionCreateAckSchema, SessionCreateRequestSchema,
   SessionDeleteAckSchema, SessionDeleteRequestSchema, SessionRuntimeStatusSchema, SessionSchema,
   SteerAckSchema, SteerRequestSchema, SubagentSchema, SessionControlRequestSchema, SessionControlAckSchema, SessionModeSchema,
+  SessionMoveToWorktreeRequestSchema, SessionMoveToWorktreeResultSchema,
 } from './session.ts';
 import { SubagentControlAckSchema, SubagentControlRequestSchema } from './requests.ts';
 
@@ -212,5 +213,53 @@ describe('session schemas', () => {
     expect(SteerAckSchema.safeParse({ ...steered, acceptedAt: '2026-01-01T00:00:00.000Z' }).success).toBe(false);
     expect(FollowUpRequestSchema.safeParse({ ...followUp, request: { ...prompt, input: { text: 'hello' } } }).success).toBe(false);
     expect(FollowUpAckSchema.safeParse({ sessionId: id, runId: pendingRun.runId, acceptedAt: timestamp }).success).toBe(false);
+  });
+});
+
+
+describe('session.moveToWorktree schemas', () => {
+  const moved = {
+    sessionId: id,
+    directory: 'feature-login',
+    previousDirectory: '.',
+    worktree: { name: 'feature-login', branch: 'feature-login', path: '/host/worktrees/feature-login', startRef: 'main' },
+    changesMoved: false,
+    carried: [],
+  };
+
+  test('a request names one relative folder and workspace-relative carried files', () => {
+    expect(SessionMoveToWorktreeRequestSchema.parse({ worktree: { name: 'feature-login' } }))
+      .toEqual({ worktree: { name: 'feature-login' }, carry: [] });
+    expect(SessionMoveToWorktreeRequestSchema.parse({
+      worktree: { name: 'feature-login', branchName: 'feature-login', startRef: 'main' },
+      carry: ['src/app.ts'],
+    })).toMatchObject({ carry: ['src/app.ts'] });
+    expect(SessionMoveToWorktreeRequestSchema.parse({ worktree: { name: 'existing', existingBranch: 'release' } }))
+      .toMatchObject({ worktree: { existingBranch: 'release' } });
+  });
+
+  test('rejects a folder name that is absolute, traversing or reserved', () => {
+    for (const name of ['/abs', '..', '.', 'a/b', 'a\\b', 'a:b', 'a*', 'a\u0000b', '']) {
+      expect(SessionMoveToWorktreeRequestSchema.safeParse({ worktree: { name } }).success).toBe(false);
+    }
+  });
+
+  test('rejects carried changes that leave the workspace, and an existing branch mixed with a start ref', () => {
+    for (const carry of [['/etc/passwd'], ['../outside.txt'], [' src/a.ts '], [''], ['C:\\abs.txt']]) {
+      expect(SessionMoveToWorktreeRequestSchema.safeParse({ worktree: { name: 'ok' }, carry }).success).toBe(false);
+    }
+    expect(SessionMoveToWorktreeRequestSchema.safeParse({
+      worktree: { name: 'ok', existingBranch: 'release', startRef: 'main' },
+    }).success).toBe(false);
+    expect(SessionMoveToWorktreeRequestSchema.safeParse({ worktree: { name: 'ok' }, extra: true }).success).toBe(false);
+  });
+
+  test('a result names the session, its new folder, the checkout and what moved', () => {
+    expect(SessionMoveToWorktreeResultSchema.parse(moved)).toEqual(moved);
+    expect(SessionMoveToWorktreeResultSchema.safeParse({ ...moved, sessionId: undefined }).success).toBe(false);
+    expect(SessionMoveToWorktreeResultSchema.safeParse({ ...moved, changesMoved: undefined }).success).toBe(false);
+    expect(SessionMoveToWorktreeResultSchema.safeParse({ ...moved, carried: undefined }).success).toBe(false);
+    expect(SessionMoveToWorktreeResultSchema.safeParse({ ...moved, worktree: { name: 'x', branch: 'x' } }).success).toBe(false);
+    expect(SessionMoveToWorktreeResultSchema.safeParse({ ...moved, sessions: [] }).success).toBe(false);
   });
 });

@@ -1,9 +1,9 @@
 import { z } from 'zod';
 import { createRequire } from 'node:module';
 
-import { isAgentMemoryFeatureAvailable } from '../agent-memory/feature-flag.js';
+export const isAgentMemoryFeatureAvailable = () => true;
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
-import { isWorkflowFeatureAvailable } from '../workflows/feature-flag.js';
+export const isWorkflowFeatureAvailable = () => true;
 import { idleStopSchema } from '../spaces/idle-stop.js';
 import { isPermissionMode } from '../permission-auto-accept/modes.js';
 
@@ -106,6 +106,7 @@ export const createSettingsHelpers = (dependencies) => {
   const SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH = 128;
   const PWA_ORIENTATION_VALUES = new Set(['system', 'portrait', 'landscape']);
   const MOBILE_KEYBOARD_MODE_VALUES = new Set(['native', 'resize-content']);
+  const UI_FONT_WEIGHT_VALUES = new Set(['regular', 'balanced', 'strong']);
   const TERMINAL_SHELL_VALUES = new Set(['auto', 'bash', 'zsh', 'sh', 'fish', 'pwsh', 'powershell', 'cmd', 'dash', 'ksh', 'nu']);
   const SESSION_MODE_VALUES = new Set(['main', 'plan', 'vibe', 'goal']);
   const SIDEBAR_PROJECT_DISPLAY_MODE_VALUES = new Set(['all', 'single']);
@@ -435,6 +436,9 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.customMonoFont === 'string') {
       result.customMonoFont = candidate.customMonoFont.slice(0, 100);
+    }
+    if (UI_FONT_WEIGHT_VALUES.has(candidate.uiFontWeight)) {
+      result.uiFontWeight = candidate.uiFontWeight;
     }
     if (typeof candidate.githubClientId === 'string') {
       const trimmed = candidate.githubClientId.trim();
@@ -837,6 +841,9 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.fontSize === 'number' && Number.isFinite(candidate.fontSize)) {
       result.fontSize = Math.max(50, Math.min(200, Math.round(candidate.fontSize)));
+    }
+    if (typeof candidate.chatFontSize === 'number' && Number.isFinite(candidate.chatFontSize)) {
+      result.chatFontSize = Math.max(50, Math.min(200, Math.round(candidate.chatFontSize)));
     }
     if (typeof candidate.terminalFontSize === 'number' && Number.isFinite(candidate.terminalFontSize)) {
       result.terminalFontSize = Math.max(9, Math.min(52, Math.round(candidate.terminalFontSize)));

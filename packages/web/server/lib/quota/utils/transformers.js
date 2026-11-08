@@ -1,3 +1,15 @@
+import fs from 'node:fs';
+
+export const readJsonFile = (filePath) => {
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const raw = fs.readFileSync(filePath, "utf8").trim();
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
 export { asNonEmptyString } from '../../shared/guards.js';
 
 export const asObject = (value) => (value && typeof value === 'object' ? value : null);

@@ -81,6 +81,8 @@ import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
 import { createMessageSearchRuntime } from './lib/message-search/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
+import { createUnregisteredScheduledWorktreeBridge } from './lib/scheduled-tasks/worktree-bridge.js';
+import { createUnregisteredSessionWorktreeMoveBridge } from './lib/openchamber-sessions/worktree-move-bridge.js';
 import { resolveScheduledTaskOptions, resolveSessionDefaults } from './lib/scheduled-tasks/session-defaults.js';
 import { createScheduledTaskContext } from './lib/scheduled-tasks/existing-session.js';
 import { createChatsScope } from './lib/scheduled-tasks/chats-scope.js';
@@ -107,12 +109,12 @@ import { extensionsPersistPath } from './lib/guests/persist.js';
 import { createGuestSurfaceRuntime } from './lib/guests/surface.js';
 import { BROWSER_PROVIDER_IDLE_MS } from '@openchamber/sdk';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
+import { worktreeSetupOf } from './lib/projects/worktree-setup.js';
 import { ensureChatsDir, migrateLegacyUserDirs } from './lib/data-dir-migration.js';
 import { createProjectContextRuntime } from './lib/project-context/runtime.js';
 import { createAgentMemoryRuntime } from './lib/agent-memory/runtime.js';
 import { createAgentMemoryActions } from './lib/agent-memory/actions.js';
 import { createMemoryProjectResolver } from './lib/agent-memory/project-resolution.js';
-import { isAgentMemoryFeatureAvailable } from './lib/agent-memory/feature-flag.js';
 import { createSpacesHost } from './lib/spaces/host.js';
 import { createSpaceArchive } from './lib/spaces/space-archive.js';
 import { CHAT_EXPORT_TIMEOUT_MS } from './lib/spaces/space-native-archive.js';
@@ -120,7 +122,7 @@ import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
 import { spacesHostEnabled } from './lib/spaces/release.js';
-import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, getWorktrees } from './lib/git/service.js';
+import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, validateWorktreeDirectory, getWorktrees } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
 import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-storage.js';
@@ -148,7 +150,7 @@ import { createSelectedCredentialResolver, createSelectedCredentialHandoff, crea
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
 import { createWorkflowsModule } from './lib/workflows/routes.js';
-import { isWorkflowFeatureAvailable } from './lib/workflows/feature-flag.js';
+import { isWorkflowFeatureAvailable } from './lib/workflows/routes.js';
 import { createPluginNotificationEmitter } from './lib/notifications/emit-route.js';
 import { OpenChamberControlError } from './lib/openchamber-control/error.js';
 import { createSessionLinker } from './lib/openchamber-sessions/session-link.js';
@@ -156,9 +158,11 @@ import { createTurnDurationRecorder } from './lib/openchamber-sessions/turn-dura
 import { createFileOpenRequester } from './lib/openchamber-control/file-open.js';
 import { applyConnectAttemptTimeout } from './lib/network-defaults.js';
 import { applyOutboundProxyFromEnv } from './lib/outbound-proxy.js';
+import { applySystemCertificates } from './lib/system-ca.js';
 
 // Background CLI launches enter here in a fresh process, without CLI defaults.
 applyConnectAttemptTimeout();
+applySystemCertificates();
 applyOutboundProxyFromEnv();
 
 const __filename = fileURLToPath(import.meta.url);
@@ -705,14 +709,45 @@ const updateSessionMetadataWith = async (sessionID, decide, { directory = '' } =
  }
  return result;
 };
+// The Git routes register later; until they do, a session move refuses
+// rather than pretending it created a checkout.
+const sessionWorktreeMoveBridge = createUnregisteredSessionWorktreeMoveBridge();
 const openChamberSessionService = createOpenChamberSessionService({
  service: hostAgentRuntime.service,
+ // One creation pipeline, one bootstrap and one stash owner for the move: the
+ // same Git operations the New worktree dialog and the scheduler use.
+ worktreeMove: {
+  get createWorktree() { return sessionWorktreeMoveBridge.createWorktree ?? undefined; },
+  get removeWorktree() { return sessionWorktreeMoveBridge.removeWorktree ?? undefined; },
+  get hydrateCheckout() { return sessionWorktreeMoveBridge.hydrateCheckout ?? undefined; },
+  get waitForWorktreeReady() { return sessionWorktreeMoveBridge.waitForWorktreeReady ?? undefined; },
+  get bootstrapStore() { return sessionWorktreeMoveBridge.bootstrapStore ?? undefined; },
+  get stashPush() { return sessionWorktreeMoveBridge.stashPush ?? undefined; },
+  get getPathsWithoutChanges() { return sessionWorktreeMoveBridge.getPathsWithoutChanges ?? undefined; },
+  get stashApply() { return sessionWorktreeMoveBridge.stashApply ?? undefined; },
+  get stashDrop() { return sessionWorktreeMoveBridge.stashDrop ?? undefined; },
+  get listStashes() { return sessionWorktreeMoveBridge.listStashes ?? undefined; },
+  get getBranches() { return sessionWorktreeMoveBridge.getBranches ?? undefined; },
+  get resolvePrimaryWorktreeRoot() { return sessionWorktreeMoveBridge.resolvePrimaryWorktreeRoot ?? undefined; },
+  get resolveWorktreeSetup() { return sessionWorktreeMoveBridge.resolveWorktreeSetup ?? undefined; },
+  warn: (message, error) => console.warn(message, error instanceof Error ? error.message : String(error)),
+ },
  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
  resolveWorkspaceDirectory: agentScopeRuntime.resolveWorkspaceDirectory,
  resolveHostWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
  resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
  resolveHostRelocationScope: hostAgentRuntime.resolveHostRelocationScope,
+ // The move resolves the worktree's start folder and the project's trusted
+ // setup commands through the same owners the dialog reads.
+ resolveWorktreeTopLevel,
+ // The move's start-folder check uses the Git module's own rule.
+ validateWorktreeDirectory: (directory, worktreeRoot) => validateWorktreeDirectory(directory, worktreeRoot),
+ resolveProjectDirectory: async (directory) => {
+  const resolved = await agentScopeRuntime.resolveWorkspaceDirectory(directory);
+  return resolved ? { projectId: resolved.projectId, projectDirectory: resolved.projectDirectory } : null;
+ },
+ worktreeSetupOf,
  agentScopeStore,
  listWorkspaceScopes,
  registerSessionScope: agentScopeRuntime.registerSessionScope,
@@ -814,11 +849,6 @@ const agentMemoryRuntime = createAgentMemoryRuntime({
  * that still reads or writes the store.
  */
 const isAgentMemoryEnabled = async () => {
- // The feature gate comes first: unreleased means absent, not merely switched
- // off, so no stored setting can bring it back.
- if (!isAgentMemoryFeatureAvailable()) {
-  return false;
- }
  const settings = await readSettingsFromDiskMigrated().catch(() => null);
  return settings?.agentMemoryToolEnabled === true;
 };
@@ -1203,7 +1233,7 @@ const startupPipelineRuntime = createStartupPipelineRuntime({
  createServerStartupRuntime,
 });
 
-
+const scheduledWorktreeBridge = createUnregisteredScheduledWorktreeBridge();
 const scheduledTasksRuntime = createScheduledTasksRuntime({
  projectConfigRuntime,
  chatsScope: scheduledChatsScope,
@@ -1215,6 +1245,15 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
  createChatWorkspace: agentScopeRuntime.createChatWorkspace,
  messageQueueRuntime,
  isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
+ createTaskWorktree: (input) => {
+  const create = scheduledWorktreeBridge.create;
+  if (!create) {
+   return Promise.reject(new Error('worktree creation is unavailable'));
+  }
+  return create(input);
+ },
+ removeTaskWorktree: (input) => scheduledWorktreeBridge.remove(input),
+ isGitRepository: (projectDirectory) => scheduledWorktreeBridge.isGitRepository(projectDirectory),
  readSessionDefaults: async (projectID) => {
   const settings = await readSettingsFromDiskMigrated();
   const project = sanitizeProjects(settings?.projects || []).find((entry) => entry.id === projectID) ?? null;
@@ -1553,7 +1592,10 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  getSpacesHost: () => spacesHost,
 });
 
-const gracefulShutdown = (...args) => gracefulShutdownRuntime.gracefulShutdown(...args);
+const gracefulShutdown = (...args) => {
+ featureRoutesRuntime.dispose();
+ return gracefulShutdownRuntime.gracefulShutdown(...args);
+};
 
 async function main(options = {}) {
  await hostSessionState.initialize();
@@ -2102,6 +2144,7 @@ async function main(options = {}) {
  });
 
  await featureRoutesRuntime.registerRoutes(app, {
+  themesDir: OPENCHAMBER_USER_THEMES_DIR,
   environmentStore,
   environmentRuntime,
   listConfiguredProjects,
@@ -2136,6 +2179,7 @@ async function main(options = {}) {
   managedChatsRoot: OPENCHAMBER_CHATS_DIR,
   normalizeDirectoryPath,
   resolveProjectDirectory,
+  readWorktreeSetup: (projectId) => projectConfigRuntime.readProjectSetup(projectId),
   resolveOptionalProjectDirectory,
   validateDirectoryPath,
   readCustomThemesFromDisk,
@@ -2164,6 +2208,8 @@ async function main(options = {}) {
   sessionKnowledgeRuntime,
   scheduledTasksRuntime,
   scheduledTaskService,
+  scheduledWorktreeBridge,
+  sessionWorktreeMoveBridge,
   openChamberSessionService,
   openChamberControlService,
   getOpenChamberEventClients: () => uiOpenChamberEventClients,
@@ -2204,6 +2250,18 @@ async function main(options = {}) {
   terminalRebindWindowMs: TERMINAL_INPUT_WS_REBIND_WINDOW_MS,
   terminalMaxRebindsPerWindow: TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW,
   environmentRuntime,
+  // The terminal panel is authoritative on the Host: a session opened, closed
+  // or killed here (from another window or a project action) invalidates every
+  // open panel through the same SSE stream the rest of the UI listens to.
+  broadcastUiEvent: (event) => {
+   for (const client of uiOpenChamberEventClients) {
+    try {
+     writeSseEvent(client, event);
+    } catch {
+     uiOpenChamberEventClients.delete(client);
+    }
+   }
+  },
   startAgentService: () => startAgentService().catch((error) => {
    console.error('Agent Service startup failed:', error instanceof Error ? error.message : String(error));
   }),

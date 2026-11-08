@@ -60,6 +60,13 @@ type GlobalSessionsState = {
       warm; retain newer mutations and stop after an authoritative load. */
   rehydrateManagedChatSessions: () => void;
   loadSessions: (fallbackActive?: Session[]) => Promise<LoadResult>;
+  /**
+   * The cheap pass between full loads: a fresh list, applied as mutations so a
+   * reply that arrived elsewhere shows up without waiting for the next full
+   * snapshot. It removes nothing, because a list that does not mention a
+   * session is not the authority for a child's or an archived one's absence.
+   */
+  refreshSessionHead: () => Promise<boolean>;
   refreshSessionsForDirectories: (directories: Iterable<string>, fallbackActive?: Session[]) => Promise<LoadResult>;
   applySnapshot: (activeSessions: Session[], archivedSessions: Session[], status?: GlobalSessionsStatus) => void;
   applySessionMutations: (mutations: readonly GlobalSessionMutation[]) => void;
@@ -93,6 +100,7 @@ const withDirectorySessionRefreshSlot = async <T>(task: () => Promise<T>): Promi
 };
 
 let inflightLoad: Promise<LoadResult> | null = null;
+let inflightHead: Promise<boolean> | null = null;
 // Bumped on runtime switch: an in-flight load from the previous instance must
 // not apply its (stale) snapshot after the reset.
 let loadGeneration = 0;
@@ -706,6 +714,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
   resetForRuntimeSwitch: () => {
     loadGeneration += 1;
     inflightLoad = null;
+    inflightHead = null;
     resetWorkspaceDirectories();
     set({
       ...buildManagedChatSessionsState(readPersistedSessionSeed()),
@@ -806,6 +815,49 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
     };
     void loadPromise.then(clearInflightLoad, clearInflightLoad);
     return loadPromise;
+  },
+
+  refreshSessionHead: async () => {
+    if (inflightLoad) {
+      await inflightLoad;
+      return get().status === 'ready';
+    }
+    if (inflightHead) return inflightHead;
+    // Only a complete load establishes the baseline this pass compares to.
+    if (!get().hasLoaded) {
+      await get().loadSessions();
+      return get().status === 'ready';
+    }
+    const generation = loadGeneration;
+    const baselineRevision = get().mutationRevision;
+    const headPromise = (async () => {
+      try {
+        const result = await canonicalClient.listSessions();
+        if (generation !== loadGeneration) return false;
+        set((state) => {
+          const mutations: GlobalSessionMutation[] = [];
+          for (const session of result.items) {
+            // A mutation this client applied after the read began wins.
+            if ((state.mutationRevisionBySessionId.get(session.sessionId) ?? 0) > baselineRevision) continue;
+            const existing = state.entityById.get(session.sessionId);
+            const merged = mergeSessionDirectoryMetadata(session, existing);
+            if (!existing || !isSameSessionRecord(existing, merged)) mutations.push({ type: 'upsert', session: merged });
+          }
+          return mutations.length > 0 ? applySessionMutations(state, mutations) : state;
+        });
+        raiseSessionOrderingBaselines(result.items.flatMap((session) => {
+          const committed = get().entityById.get(session.sessionId);
+          return committed && committed.archivedAt === undefined ? [committed] : [];
+        }));
+        return true;
+      } catch (error) {
+        if (generation === loadGeneration) console.warn('[GlobalSessions] Failed to refresh session head:', error);
+        return false;
+      }
+    })();
+    inflightHead = headPromise;
+    void headPromise.finally(() => { if (inflightHead === headPromise) inflightHead = null; });
+    return headPromise;
   },
 
   refreshSessionsForDirectories: async (directories, fallbackActive) => {

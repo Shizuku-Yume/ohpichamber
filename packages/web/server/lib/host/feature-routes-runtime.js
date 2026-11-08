@@ -7,6 +7,7 @@ import { registerSourceControlRoutes } from '../source-control/routes.js';
 import { registerLinearRoutes } from '../linear/routes.js';
 import { registerGuestRoutes, settleGuestDeactivationListeners } from '../guests/routes.js';
 import { listInstalledGuests, registerBuiltInGuests } from '../guests/catalog.js';
+import { proxyGuestServiceRequest } from '../guests/service.js';
 import { extensionsPersistPath } from '../guests/persist.js';
 import { registerGitRoutes } from '../git/routes.js';
 import { registerDevServerRoutes } from '../dev-servers/routes.js';
@@ -23,8 +24,10 @@ import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
 import { registerRoutingRoutes } from '../routing/routes.js';
 import { registerPermissionAutoAcceptRoutes } from '../permission-auto-accept/runtime.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
+import { createThemeFolderWatch } from './theme-watch.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
+import { fillScheduledWorktreeBridge } from '../scheduled-tasks/worktree-bridge.js';
 import { createTrackedItemsService } from '../tracked-items/service.js';
 import { createProviderReadCache } from '../provider-read-cache/index.js';
 import { createTrackedItemReaders } from '../tracked-items/readers.js';
@@ -53,12 +56,23 @@ import { createManagedSshInventory } from '../git/credentials.js';
 import { createContributorProvenanceStore } from '../git/contributor-provenance-storage.js';
 import { createGitNetworkOperationStore } from '../git/network-operation-storage.js';
 import { readEffectiveGitTransportRevision } from '../git/transport-config.js';
-import { completeWorktreeCheckoutHydration, configureRepositoryTransport } from '../git/service.js';
+import {
+  completeWorktreeCheckoutHydration, configureRepositoryTransport,
+  deleteBranch as deleteBranchService, isGitRepository as isGitRepositoryService,
+  removeWorktree as removeWorktreeService, waitForActiveWorktreeBootstrap, getWorktreeBootstrapStatus,
+  stashPush as gitStashPushService, getPathsWithoutChanges as gitPathsWithoutChangesService,
+  stashApply as gitStashApplyService, stashDrop as gitStashDropService,
+  listStashes as gitListStashesService, getBranches as gitBranchesService,
+} from '../git/service.js';
+import { fillSessionWorktreeMoveBridge } from '../openchamber-sessions/worktree-move-bridge.js';
+import { OpenChamberControlError } from '../openchamber-control/error.js';
+import { worktreeSetupOf } from '../projects/worktree-setup.js';
 import { createPrivateRepositoryIdentityResolver } from '../source-control/repository-identity.js';
 import { createSourceControlAuditStore } from '../source-control/audit-storage.js';
 
 export const createFeatureRoutesRuntime = () => {
   let skillRepositoryDependencies = null;
+  let themeFolderWatch = null;
   const gitRuntimeIdentity = Object.freeze({
     id: `server_${crypto.randomUUID()}`,
     platform: process.env.OPENCHAMBER_RUNTIME === 'desktop' ? 'desktop' : 'web',
@@ -193,6 +207,8 @@ export const createFeatureRoutesRuntime = () => {
       resolveCredential,
       resolvePrimaryWorktreeRoot,
       resolveWorktreeTopLevel,
+      sessionWorktreeMoveBridge,
+      readWorktreeSetup,
       openchamberVersion,
     } = routeDependencies;
 
@@ -201,6 +217,26 @@ export const createFeatureRoutesRuntime = () => {
       saveImportedTheme,
       deleteImportedTheme,
     });
+
+    const customThemesDir = routeDependencies.themesDir ?? (openchamberUserConfigRoot ? path.join(openchamberUserConfigRoot, 'themes') : null);
+    themeFolderWatch?.stop();
+    themeFolderWatch = customThemesDir
+      ? createThemeFolderWatch({
+        fsPromises,
+        path,
+        themesDir: customThemesDir,
+        onChange: () => {
+          const clients = getOpenChamberEventClients();
+          for (const client of clients) {
+            try {
+              writeSseEvent(client, { type: 'openchamber:themes-changed', properties: {} });
+            } catch {
+              clients.delete(client);
+            }
+          }
+        },
+      })
+      : null;
 
     registerMessageQueueRoutes(app, messageQueueRuntime, { resolveSessionScope: resolveHostSessionScope, listQueueScopes });
     registerRoutingRoutes(app, routingRuntime);
@@ -253,7 +289,35 @@ export const createFeatureRoutesRuntime = () => {
 
     const { getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
 
-    registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential });
+    // Extension usage providers read their own service; the catalog row is
+    // re-read per request, so pause, removal or a withdrawn grant drops the
+    // provider without a second registry to keep in step.
+    const extensionQuotaGuests = () => listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) });
+    registerQuotaRoutes(app, {
+      getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential,
+      listExtensionQuotaGuests: extensionQuotaGuests,
+      // The extension's approved provider list, never the whole credential store.
+      readExtensionCredential: async (req, guest, nativeProviderId) => {
+        const selections = await listQuotaSelections(req).catch(() => []);
+        const selection = selections.find((entry) => entry.providerId === nativeProviderId) ?? null;
+        if (!selection) return null;
+        // The resolver takes exactly its request fields; a selection also
+        // carries public catalog fields it would reject as unknown keys.
+        const { workspaceId, agentDirectoryId, providerId, credentialRef } = selection;
+        return resolveCredential({ workspaceId, agentDirectoryId, providerId, credentialRef, purpose: 'quota' }).catch(() => null);
+      },
+      requestExtensionService: (guest, params) => proxyGuestServiceRequest({
+        guestId: guest.id,
+        guestName: guest.name,
+        packageRoot: guest.packageRoot,
+        service: guest.service,
+        granted: guest.capabilityGrants,
+        persistPath: extensionsPersistPath(openchamberDataDir),
+        // One process per extension a panel ever touched otherwise stays for good.
+        idleStopMs: guest.service.keepRunning ? undefined : 10 * 60_000,
+        ...params,
+      }),
+    });
     const gitBinary = resolveGitBinaryForSpawn();
     // One server token store for every provider. OAuth tokens that expire
     // (GitLab's live two hours) are renewed before they lapse, through the
@@ -534,6 +598,16 @@ export const createFeatureRoutesRuntime = () => {
         { name: 'withdraw an extension Git host', listener: (event) => extensionSourceControlProviders.deactivated(event) },
       ]),
       onGuestActivated: () => extensionSourceControlProviders.reconcile(),
+      onGuestsChanged: () => {
+        const clients = getOpenChamberEventClients();
+        for (const client of clients) {
+          try {
+            writeSseEvent(client, { type: 'openchamber:guests-changed', properties: {} });
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
       surfaceViewerHeaders,
       trackers,
     });
@@ -576,6 +650,49 @@ export const createFeatureRoutesRuntime = () => {
     });
     registerLinearRoutes(app);
     registerTrackerRoutes(app, { registry: trackers });
+    // The session service was built before Git routes: fill the move bridge
+    // with the same creation pipeline and stash operations the dialog uses.
+    if (routeDependencies.sessionWorktreeMoveBridge) {
+      fillSessionWorktreeMoveBridge(routeDependencies.sessionWorktreeMoveBridge, {
+        createWorktree: gitWorktreeCreation?.createWorktree,
+        removeWorktree: removeWorktreeService,
+        hydrateCheckout: networkOperations.hydrateBoundCheckout,
+        // The move must not relocate into a checkout whose setup is still
+        // running: the rest of the pipeline (bootstrap status values) is the
+        // same one the worktree status route reads.
+        waitForWorktreeReady: async (directory) => {
+          await waitForActiveWorktreeBootstrap(directory);
+          const status = await getWorktreeBootstrapStatus(directory, { bootstrapStore: worktreeBootstrapStore });
+          if (status?.status === 'failed') throw new OpenChamberControlError(`Worktree bootstrap failed: ${status.error || 'unknown error'}`, 500);
+          if (status?.status !== 'ready' || status?.phase !== 'setup-ready') {
+            throw new OpenChamberControlError('Worktree bootstrap has not completed', 503);
+          }
+          return { setupStillRunning: false };
+        },
+        bootstrapStore: worktreeBootstrapStore,
+        stashPush: gitStashPushService,
+        getPathsWithoutChanges: gitPathsWithoutChangesService,
+        stashApply: gitStashApplyService,
+        stashDrop: gitStashDropService,
+        listStashes: gitListStashesService,
+        getBranches: gitBranchesService,
+        resolvePrimaryWorktreeRoot,
+        resolveWorktreeSetup: async (directory) => {
+          const scope = await routeDependencies.resolveWorkspaceDirectory?.(directory).catch(() => null);
+          if (!scope || typeof routeDependencies.readWorktreeSetup !== 'function') return { startCommand: '', untrustedSkipped: [] };
+          return worktreeSetupOf(await routeDependencies.readWorktreeSetup(scope.projectId), scope.projectDirectory ?? directory);
+        },
+      });
+    }
+    if (routeDependencies.scheduledWorktreeBridge) {
+      fillScheduledWorktreeBridge(routeDependencies.scheduledWorktreeBridge, {
+        createWorktree: gitWorktreeCreation?.createWorktree,
+        removeWorktree: removeWorktreeService,
+        deleteBranch: deleteBranchService,
+        isGitRepository: isGitRepositoryService,
+        bootstrapStore: worktreeBootstrapStore,
+      });
+    }
     registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
     ({ overridesForDirectory: magicPromptOverridesForDirectory } = registerMagicPromptRoutes(app, {
       fsPromises,
@@ -634,5 +751,13 @@ export const createFeatureRoutesRuntime = () => {
     },
     /** Writes the Git credential helper's endpoint file; a no-op until the Git routes are registered. */
     publishRepositoryCredentialEndpoint: async () => { await gitRepositoryCredentialRuntime?.publish(); },
+    dispose() {
+      themeFolderWatch?.stop();
+      themeFolderWatch = null;
+    },
+    stopThemeWatch() {
+      themeFolderWatch?.stop();
+      themeFolderWatch = null;
+    },
   };
 };

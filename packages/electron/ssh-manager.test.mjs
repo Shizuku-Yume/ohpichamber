@@ -139,6 +139,7 @@ printf '4321\\n'`);
     expect(calls).toHaveLength(1);
     expect(calls[0].command).toBe('ssh');
     expect(calls[0].options.windowsHide).toBe(true);
+    expect(calls[0].options.stdio[0]).toBe('ignore');
     expect(calls[0].args).toContain('ControlMaster=no');
     expect(calls[0].args).toContain('ControlPath=none');
     expect(calls[0].args).toContain('StrictHostKeyChecking=accept-new');
@@ -496,6 +497,7 @@ printf '4321\\n'`);
     manager.runRemoteCommand = async () => [
       '/home/pi/.openchamber/npm-global/bin/openchamber\t1.2.3',
       '/usr/bin/openchamber\t0.9.0',
+      '/opt/canary/bin/openchamber\t1.2.4-canary.20261030.7',
       '',
     ].join('\n');
 
@@ -504,6 +506,7 @@ printf '4321\\n'`);
     expect(candidates).toEqual([
       { binPath: '/home/pi/.openchamber/npm-global/bin/openchamber', version: '1.2.3' },
       { binPath: '/usr/bin/openchamber', version: '0.9.0' },
+      { binPath: '/opt/canary/bin/openchamber', version: '1.2.4-canary.20261030.7' },
     ]);
   });
 
@@ -624,7 +627,8 @@ printf '4321\\n'`);
           const server = host.servers.find((entry) => entry.port === Number(probedPort[1]));
           if (!server) return 'INFO_STATUS=000\nAUTH_STATUS=0\nHEALTH_STATUS=000\n';
           // /api/system/info is public, so only the auth status tells a fitting password apart.
-          const offered = script.match(/"password":"([^"]*)"/);
+          const offered = script.match(/"password":"([^"]*)"/)
+            || (script.includes('--data-urlencode password@-') && host.environmentPassword && [null, host.environmentPassword]);
           let authStatus = 0;
           if (offered) authStatus = !server.password ? 400 : offered[1] === server.password ? 200 : 401;
           if (offered && server.rateLimited) authStatus = 429;
@@ -650,7 +654,7 @@ printf '4321\\n'`);
         if (servedPort) {
           host.started.push(Number(servedPort[2]));
           const servedPassword = script.match(/OPENCHAMBER_UI_PASSWORD='([^']*)'/);
-          host.servers.push({ port: Number(servedPort[2]), version: '1.2.3', bindHost: servedPort[1], password: servedPassword?.[1] });
+          host.servers.push({ port: Number(servedPort[2]), version: '1.2.3', bindHost: servedPort[1], password: servedPassword?.[1] ?? host.environmentPassword });
           return `${servedPort[2]}\n`;
         }
         throw new Error(`Unexpected remote command: ${script}`);
@@ -724,6 +728,27 @@ printf '4321\\n'`);
 
     test('an instance without a password leaves password-protected servers alone', async () => {
       const { host, manager } = createRemoteHost([{ port: 30001, version: '1.1.0', password: 'secret' }]);
+
+      const result = await manager.ensureRemoteServer(managed(), parsed, '/unused.sock');
+
+      expect(host.stopped).toEqual([]);
+      expect(result.remotePort).not.toBe(30001);
+    });
+
+    test('reconnecting reuses a server protected by the password the remote login shell sets', async () => {
+      const { host, manager } = createRemoteHost();
+      host.environmentPassword = 'profile-secret';
+
+      const first = await manager.ensureRemoteServer(managed(), parsed, '/unused.sock');
+      const second = await manager.ensureRemoteServer(managed(), parsed, '/unused.sock');
+
+      expect(second).toMatchObject({ remotePort: first.remotePort, startedByUs: false });
+      expect(host.started).toEqual([first.remotePort]);
+    });
+
+    test('a server protected by another password than the remote login shell sets stays someone else\'s', async () => {
+      const { host, manager } = createRemoteHost([{ port: 30001, version: '1.1.0', password: 'someone-else' }]);
+      host.environmentPassword = 'profile-secret';
 
       const result = await manager.ensureRemoteServer(managed(), parsed, '/unused.sock');
 

@@ -1,4 +1,5 @@
 import React from 'react';
+import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
 import {
   DndContext,
   MouseSensor,
@@ -29,6 +30,8 @@ import {
   type ContextSurfaceDescriptor,
 } from '@/lib/surfaces/registry';
 import {
+  formatShortcutForDisplay,
+  getEffectiveShortcutCombo,
   getEffectiveShortcutPrefix,
   isShortcutPrefixHeld,
 } from '@/lib/shortcuts';
@@ -88,6 +91,13 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
   showOrderNumber,
   onSelect,
 }) => {
+  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+  const surfacePrefix = getEffectiveShortcutPrefix('switch_context_surface', shortcutOverrides);
+  const surfaceShortcut = surface.id === 'terminal'
+    ? formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_terminal', shortcutOverrides), '')
+    : (surfacePrefix && orderNumber != null && orderNumber <= 10
+      ? formatShortcutForDisplay(`${surfacePrefix}+${orderNumber === 10 ? '0' : orderNumber}`)
+      : undefined);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: surface.id,
   });
@@ -96,85 +106,85 @@ const ContextPanelRailItem: React.FC<RailItemProps> = ({
 
   return (
     <ContextMenu>
-    <ContextMenuTrigger
-      render={(
-        <div
-          ref={setNodeRef}
-          style={{ transform: CSS.Translate.toString(transform), transition }}
-          className={cn('relative', isDragging && 'z-10 opacity-70')}
-        />
-      )}
-    >
-      <Tooltip delayDuration={RAIL_TOOLTIP_DELAY_MS}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            {...attributes}
-            {...listeners}
-            onClick={() => onSelect(surface)}
-            aria-label={badgeAriaLabel ?? label}
-            aria-pressed={isActive}
-            data-context-surface={surface.id}
-            className={cn(
-              'flex h-9 w-9 touch-none select-none items-center justify-center rounded-md transition-colors',
-              isActive
-                ? 'text-primary'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {surface.id === 'diff' ? (
-              <DiffViewIcon className="h-[18px] w-[18px]" />
-            ) : (
-              <GuestIcon
-                icon={surface.icon}
-                iconSrc={surface.iconSrc}
-                className="h-[18px] w-[18px]"
-              />
-            )}
-            {showOrderNumber && orderNumber != null ? (
-              <span
-                aria-hidden="true"
-                className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-muted px-1 text-[0.625rem] font-medium leading-none text-muted-foreground"
-              >
-                {orderNumber === 10 ? '0' : orderNumber}
-              </span>
-            ) : displayBadgeCount ? (
-              <span
-                aria-hidden="true"
-                // Muted digits on the muted surface sat at almost the same
-                // luminance as the glyph they overlap. The count is a live
-                // signal, so it takes the info tone on its own opaque chip.
-                className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] font-semibold leading-none"
-                style={{
-                  backgroundColor: 'var(--status-info-background)',
-                  color: 'var(--status-info)',
-                }}
-              >
-                {displayBadgeCount}
-              </span>
-            ) : showActivityDot ? (
-              <span
-                aria-hidden="true"
-                className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--status-info)]"
-              />
-            ) : null}
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left" sideOffset={8}>
-          <div className="flex flex-col gap-0.5">
-            <span>{label}</span>
-            <span className="typography-micro text-muted-foreground">{description}</span>
-            {badgeDescription ? (
-              <span className="typography-micro text-muted-foreground">{badgeDescription}</span>
-            ) : null}
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </ContextMenuTrigger>
-    <ContextMenuContent>
-      {/* Placement is per surface: the same menu the panel's own tab strip offers. */}
-      <ZoneMoveMenuItems mode={surface.mode} />
-    </ContextMenuContent>
+      <ContextMenuTrigger
+        render={(
+          <div
+            ref={setNodeRef}
+            style={{ transform: CSS.Translate.toString(transform), transition }}
+            className={cn('relative', isDragging && 'z-10 opacity-70')}
+          />
+        )}
+      >
+        <Tooltip delayDuration={RAIL_TOOLTIP_DELAY_MS}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              {...attributes}
+              {...listeners}
+              onClick={() => onSelect(surface)}
+              aria-label={badgeAriaLabel ?? label}
+              aria-pressed={isActive}
+              data-context-surface={surface.id}
+              className={cn(
+                'flex h-9 w-9 touch-none select-none items-center justify-center rounded-md transition-colors',
+                isActive
+                  ? 'text-primary'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {surface.id === 'diff' ? (
+                <DiffViewIcon className="h-[18px] w-[18px]" />
+              ) : (
+                <GuestIcon
+                  icon={surface.icon}
+                  iconSrc={surface.iconSrc}
+                  className="h-[18px] w-[18px]"
+                />
+              )}
+              {showOrderNumber && orderNumber != null ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-muted px-1 text-[0.625rem] font-medium leading-none text-muted-foreground"
+                >
+                  {orderNumber === 10 ? '0' : orderNumber}
+                </span>
+              ) : displayBadgeCount ? (
+                <span
+                  aria-hidden="true"
+                  // Muted digits on the muted surface sat at almost the same
+                  // luminance as the glyph they overlap. The count is a live
+                  // signal, so it takes the info tone on its own opaque chip.
+                  className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[0.625rem] font-semibold leading-none"
+                  style={{
+                    backgroundColor: 'var(--status-info-background)',
+                    color: 'var(--status-info)',
+                  }}
+                >
+                  {displayBadgeCount}
+                </span>
+              ) : showActivityDot ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[var(--status-info)]"
+                />
+              ) : null}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={8}>
+            <div className="flex flex-col gap-0.5">
+              <TooltipLabelWithShortcut label={label} shortcut={surfaceShortcut} />
+              <span className="typography-micro text-muted-foreground">{description}</span>
+              {badgeDescription ? (
+                <span className="typography-micro text-muted-foreground">{badgeDescription}</span>
+              ) : null}
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        {/* Placement is per surface: the same menu the panel's own tab strip offers. */}
+        <ZoneMoveMenuItems mode={surface.mode} />
+      </ContextMenuContent>
     </ContextMenu>
   );
 };
@@ -324,9 +334,10 @@ export const ContextPanelRail: React.FC = () => {
       return;
     }
 
+    // dnd-kit hands back its own id type; the registry ids are the strings it was given.
     const orderedIds = sortContextSurfaces(useUIStore.getState().contextRailOrder, guestSurfaces).map((surface) => surface.id);
-    const fromIndex = orderedIds.indexOf(active.id as (typeof orderedIds)[number]);
-    const toIndex = orderedIds.indexOf(over.id as (typeof orderedIds)[number]);
+    const fromIndex = orderedIds.findIndex((id) => id === String(active.id));
+    const toIndex = orderedIds.findIndex((id) => id === String(over.id));
     if (fromIndex === -1 || toIndex === -1) {
       return;
     }
@@ -370,19 +381,19 @@ export const ContextPanelRail: React.FC = () => {
                 badgeCount={badgeCount}
                 badgeAriaLabel={badgeCount !== null
                   ? t(
-                      isGuestBadge
-                        ? (badgeCount === 1 ? 'contextRail.surface.plugin.badgeAriaSingle' : 'contextRail.surface.plugin.badgeAriaPlural')
-                        : (badgeCount === 1 ? 'contextRail.surface.git.changesCountAriaSingle' : 'contextRail.surface.git.changesCountAriaPlural'),
-                      { label, count: badgeCount },
-                    )
+                    isGuestBadge
+                      ? (badgeCount === 1 ? 'contextRail.surface.plugin.badgeAriaSingle' : 'contextRail.surface.plugin.badgeAriaPlural')
+                      : (badgeCount === 1 ? 'contextRail.surface.git.changesCountAriaSingle' : 'contextRail.surface.git.changesCountAriaPlural'),
+                    { label, count: badgeCount },
+                  )
                   : null}
                 badgeDescription={badgeCount !== null
                   ? t(
-                      isGuestBadge
-                        ? (badgeCount === 1 ? 'contextRail.surface.plugin.badgeTooltipSingle' : 'contextRail.surface.plugin.badgeTooltipPlural')
-                        : (badgeCount === 1 ? 'contextRail.surface.git.changesCountTooltipSingle' : 'contextRail.surface.git.changesCountTooltipPlural'),
-                      { count: badgeCount },
-                    )
+                    isGuestBadge
+                      ? (badgeCount === 1 ? 'contextRail.surface.plugin.badgeTooltipSingle' : 'contextRail.surface.plugin.badgeTooltipPlural')
+                      : (badgeCount === 1 ? 'contextRail.surface.git.changesCountTooltipSingle' : 'contextRail.surface.git.changesCountTooltipPlural'),
+                    { count: badgeCount },
+                  )
                   : null}
                 orderNumber={index + 1}
                 showOrderNumber={revealNumbers}

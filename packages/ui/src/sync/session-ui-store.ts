@@ -43,6 +43,7 @@ import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { noteDraftSendWaiting, waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { getWorktreeSetupWaitEnabled } from "@/lib/openchamberConfig"
+import { createSessionDraftId } from "@/stores/useSessionDraftsStore"
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
 import {
   getSyncSessions,
@@ -514,6 +515,13 @@ export type SessionUIState = {
     metadata?: SessionMetadata,
     selection?: SessionCreateSelection,
   ) => Promise<Session | null>
+  /**
+   * Seeds the in-memory selection a fresh session sends its first message
+   * with, from the catalog of the agents it was created against. The
+   * authoritative record stays with the session; this only fills the composer
+   * state that `sendMessage` reads for a session nothing has opened yet.
+   */
+  initializeNewOpenChamberSession: (sessionId: string, agents: readonly unknown[]) => void
   deleteSession: (sessionId: string, options?: DeleteSessionOptions) => Promise<boolean>
   deleteSessions: (sessionIds: string[], options?: DeleteSessionsOptions) => Promise<{ deletedIds: string[]; failedIds: string[] }>
   archiveSession: (sessionId: string) => Promise<boolean>
@@ -1185,6 +1193,15 @@ const flattenWorktreeMap = (map: Map<string, WorktreeMetadata[]>): WorktreeMetad
 
 const PERSISTED_WORKTREE_MAP = readPersistedWorktreeTopology(runtimeMemoryKey())
 
+/**
+ * Counts deliberate navigation (a session pick, a user-opened draft). A session
+ * parked because its directory is not admitted yet is dropped when the count
+ * moves: the user went somewhere else.
+ */
+let admissionNavigationRevision = 0;
+
+export const getAdmissionNavigationRevision = (): number => admissionNavigationRevision;
+
 export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create<SessionUIState>()((set, get) => ({
   currentSessionId: null,
   currentSessionDirectory: null,
@@ -1208,6 +1225,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
   // setCurrentSession
   // ---------------------------------------------------------------------------
   setCurrentSession: (id, directoryHint?: string | null, transition?: "submitted-draft") => {
+    admissionNavigationRevision += 1
     const runtimeKey = getRuntimeKey()
     const materializedDraftSessionId = id && transition === "submitted-draft" ? id : null
     // Publish the transition identity before closing the draft. Those are two
@@ -1389,6 +1407,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
 
   openNewSessionDraft: (options) => {
+    if (!options?.automatic) admissionNavigationRevision += 1
     // A USER-initiated draft open is a navigation choice: the next cold launch
     // should land on the draft, not re-open the session left behind — drop the
     // persisted last-session pointer for this runtime. `automatic: true` marks
@@ -1498,6 +1517,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
     const nextDraft: NewSessionDraftState = {
       draftId: nextDraftId++,
+      // Every project draft gets its own composer key, so two drafts in one
+      // folder never share text and a caller can address a chip to this one.
+      workDraftId: options?.workDraftId ?? createSessionDraftId(),
       open: true,
       target,
       preparedChatDirectory: null,
@@ -1776,6 +1798,19 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     if (nextDirectory && nextDirectory !== useDirectoryStore.getState().currentDirectory) {
       useDirectoryStore.getState().setDirectory(nextDirectory)
     }
+  },
+
+  initializeNewOpenChamberSession: (sessionId, _agents) => {
+    // A session the flow created but has not opened yet: its composer reads
+    // the per-session selection, so start it from the config store's resolved
+    // defaults rather than leaving it empty.
+    const config = useConfigStore.getState()
+    const selection = useSelectionStore.getState()
+    if (selection.getSessionModelSelection(sessionId)) return
+    if (config.currentProviderId && config.currentModelId) {
+      selection.saveSessionModelSelection(sessionId, config.currentProviderId, config.currentModelId)
+    }
+    if (config.currentAgentName) selection.saveSessionAgentSelection(sessionId, config.currentAgentName)
   },
 
   resolvePendingDraftWorktreeTarget: (requestId, directory, options) =>

@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { CanonicalEventSchema, SessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
 import { isEnterpriseMode } from '../enterprise-mode.js';
 import { redactGitText } from '../git/redaction.js';
-import { truncateNotificationText } from './message.js';
+import { genericNotificationTitle, truncateNotificationText } from './message.js';
+import { pullRequestNotificationTitle } from './pull-request-locales.js';
 import {
   defaultNotificationTemplates,
   notificationTexts,
@@ -20,7 +22,7 @@ export const createNotificationTriggerRuntime = (deps) => {
     prepareNotificationLastMessage, buildTemplateVariables, fetchLastAssistantMessageText,
     resolveNotificationTemplate, shouldApplyResolvedTemplateMessage,
     emitDesktopNotification, broadcastUiNotification, sendPushToAllUiSessions, sendApnsToAllUiSessions,
-    isAnyInteractiveClientVisible, now = Date.now,
+    isAnyInteractiveClientVisible, now = Date.now, deliverToExtensionChannels = null,
   } = deps;
   if (typeof sessionService?.open !== 'function' || typeof sessionService?.list !== 'function' || typeof resolveSessionScope !== 'function') {
     throw new TypeError('Canonical session reader and Host scope resolver are required');
@@ -174,6 +176,7 @@ export const createNotificationTriggerRuntime = (deps) => {
       while (notified.size > 500) notified.delete(notified.values().next().value);
     }
     await fanoutPush({ title, body, phoneBody, tag, data: { url: deepLink(event.sessionId), sessionId: event.sessionId, sessionName, type: kind } });
+    sendToChannels({ kind, title, body, tag, sessionId: event.sessionId, directory: resolved.cwd, sessionName }, settings);
   };
   const processCanonicalEvent = async (input, scope) => {
     if (stopped) return;
@@ -214,21 +217,85 @@ export const createNotificationTriggerRuntime = (deps) => {
         .finally(() => { if (pending.get(key) === entry) pending.delete(key); });
     }, 500);
   };
+  const sendToChannels = ({ kind, title, body, tag, sessionId, directory, sessionName }, settings) => {
+    if (typeof deliverToExtensionChannels !== 'function') return;
+    const enterprise = isEnterpriseMode();
+    const notification = {
+      kind,
+      title: enterprise ? genericNotificationTitle(kind) : title,
+      body: enterprise ? '' : body,
+      tag,
+      at: Date.now(),
+      sessionId: sessionId || null,
+      sessionName: enterprise ? null : (typeof sessionName === 'string' && sessionName.trim() ? sessionName.trim() : null),
+      directory: enterprise ? null : (typeof directory === 'string' && directory ? directory : null),
+      url: sessionId ? deepLink(sessionId) : null,
+    };
+    Promise.resolve(deliverToExtensionChannels({ notification, requireHidden: settings?.notificationMode !== 'always' })).catch((error) => {
+      console.warn('[Notification] extension channel delivery failed:', error?.message ?? error);
+    });
+  };
+
+  const notifyPullRequest = async ({ item, event }) => {
+    const settings = await readSettingsFromDisk();
+    if (settings.notifyOnPullRequests === false) return;
+    if (settings.notificationMode !== 'always' && getIsWindowFocused?.()) return;
+    const title = pullRequestNotificationTitle(settings.locale, event);
+    if (!title) return;
+    const body = `${item.owner}/${item.repo}#${item.number}`;
+    const tag = `pull-request-${createHash('sha256').update(`${item.instance}\n${body}`).digest('hex').slice(0, 16)}-${event}`;
+    const payload = { title, body, tag, kind: 'pull-request', requireHidden: settings.notificationMode !== 'always' };
+    if (settings.nativeNotificationsEnabled) {
+      const desktopNotificationDelivered = emitDesktopNotification(payload);
+      broadcastUiNotification(payload, { desktopNotificationDelivered });
+    }
+    await fanoutPush({ title, body, phoneBody: `${title}: ${body}`, tag, data: { url: '/', type: 'pull-request' } }, { requireNoSse: true });
+    sendToChannels({ kind: 'pull-request', title, body, tag }, settings);
+  };
+
   return {
     processCanonicalEvent,
     setAutoAcceptSession(sessionId, enabled) { if (enabled) autoAcceptingSessions.add(sessionId); else autoAcceptingSessions.delete(sessionId); },
     setGetIsWindowFocused(resolver) { getIsWindowFocused = resolver; },
     setGetIsSessionAutoAccepting(resolver) { getIsSessionAutoAccepting = resolver; },
     clearPendingPushBadge() { pendingPushTags.clear(); },
-    async sendGoalSettlePush({ sessionId, status, title, body }) {
-      const scope = await resolveSessionScope(sessionId);
-      let sessionName = '';
+    async sendGoalSettlePush({ sessionId, directory, status, title, body }) {
+      const scope = await resolveSessionScope(sessionId).catch(() => ({ cwd: directory }));
+      let sessionName = "";
       try { sessionName = safeText((await buildTemplateVariables(null, sessionId, scope)).session_name, scope); } catch { /* Generic push remains useful. */ }
-      const type = status === 'complete' ? 'goal_complete' : status === 'budgetLimited' ? 'goal_budget' : 'goal_blocked';
+      const type = status === "complete" ? "goal_complete" : status === "budgetLimited" ? "goal_budget" : "goal_blocked";
+      const tag = `goal-${sessionId}`;
       await fanoutPush({ title: safeText(title, scope), body: safeText(body, scope),
-        phoneBody: phoneBodyOf(safeText(title, scope), safeText(body, scope)) || safeText(title, scope), tag: `goal-${sessionId}`,
+        phoneBody: phoneBodyOf(safeText(title, scope), safeText(body, scope)) || safeText(title, scope), tag,
         data: { url: deepLink(sessionId), sessionId, sessionName, type } });
+      const settings = await readSettingsFromDisk();
+      sendToChannels({ kind: type, title: safeText(title, scope), body: safeText(body, scope), tag, sessionId, directory: directory ?? scope?.cwd, sessionName }, settings);
     },
+    async notifyAutoReviewEnded({ sessionId, directory, status, error }) {
+      const settings = await readSettingsFromDisk();
+      if (settings.notifyOnCompletion === false) return;
+      if (settings.notificationMode !== "always" && getIsWindowFocused?.()) return;
+      const texts = notificationTexts(settings.locale);
+      const { title, body } = {
+        clean: { title: texts.reviewCleanTitle, body: texts.reviewCleanBody },
+        disputed: { title: texts.reviewDisputedTitle, body: texts.reviewDisputedBody },
+        limit: { title: texts.reviewLimitTitle, body: texts.reviewLimitBody },
+        failed: { title: texts.reviewFailedTitle, body: truncateNotificationText(error ?? "", 240) },
+      }[status] ?? {};
+      if (!title) return;
+      const tag = `review-${sessionId}`;
+      if (settings.nativeNotificationsEnabled) {
+        const payload = { title, body, tag, kind: "review", sessionId, directory, requireHidden: settings.notificationMode !== "always" };
+        const desktopNotificationDelivered = emitDesktopNotification(payload);
+        broadcastUiNotification(payload, { desktopNotificationDelivered });
+      }
+      const scope = await resolveSessionScope(sessionId).catch(() => ({ cwd: directory }));
+      let sessionName = "";
+      try { sessionName = safeText((await buildTemplateVariables(null, sessionId, scope)).session_name, scope); } catch {}
+      await fanoutPush({ title, body, phoneBody: phoneBodyOf(title, body) || title, tag, data: { url: deepLink(sessionId), sessionId, sessionName, type: "review" } });
+      sendToChannels({ kind: "review", title, body, tag, sessionId, directory: directory ?? scope?.cwd, sessionName }, settings);
+    },
+    notifyPullRequest,
     invalidateSession(sessionId) { clearPending(sessionId); goalNotified.delete(sessionId); },
     stop() { stopped = true; for (const entry of pending.values()) clearTimeout(entry.timer); pending.clear(); },
   };

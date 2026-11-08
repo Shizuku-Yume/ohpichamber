@@ -1,3 +1,4 @@
+import { Input } from '@/components/ui/input';
 import React from 'react';
 
 import { NumberInput } from '@/components/ui/number-input';
@@ -14,6 +15,7 @@ import {
   SETTINGS_NUMBER_INPUT_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
+  SettingsStackedField,
   SETTINGS_OPTION_STACK_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
@@ -80,6 +82,45 @@ const NESTED_OPTION_CLASS = 'ps-6';
 const useChipOptions = <T extends string>(options: ChipOption<T>[]) => {
   const { t } = useI18n();
   return React.useMemo(() => options.map((option) => ({ value: option.id, label: t(option.labelKey) })), [options, t]);
+};
+
+export const DEFAULT_SELECTION_APPROVAL_TEXT = 'Sounds good';
+
+type UIStoreWithApproval = {
+  selectionApprovalText?: string;
+  setSelectionApprovalText?: (value: string) => void;
+};
+
+const setApprovalText = (val: string) => {
+  const store = useUIStore.getState() as unknown as UIStoreWithApproval;
+  if (typeof store.setSelectionApprovalText === 'function') {
+    store.setSelectionApprovalText(val);
+  } else {
+    useUIStore.setState({ selectionApprovalText: val } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
+  }
+};
+
+const SelectionApprovalField: React.FC = () => {
+  const { t } = useI18n();
+  const selectionApprovalText = useUIStore((state) => (state as unknown as UIStoreWithApproval).selectionApprovalText ?? '');
+
+  return (
+    <SettingsStackedField
+      className="pt-3"
+      label={t('settings.openchamber.visual.field.selectionApprovalText')}
+      info={t('settings.openchamber.visual.field.selectionApprovalTextInfo')}
+      settingsItem="chat.selection-approval-text"
+    >
+      <Input
+        value={selectionApprovalText}
+        placeholder={DEFAULT_SELECTION_APPROVAL_TEXT}
+        maxLength={1000}
+        onChange={(event) => setApprovalText(event.target.value)}
+        aria-label={t('settings.openchamber.visual.field.selectionApprovalText')}
+        dir="auto"
+      />
+    </SettingsStackedField>
+  );
 };
 
 /** How the transcript reads: agent activity, layout, formatting, search. */
@@ -259,6 +300,7 @@ const MessagesTab: React.FC = () => {
           info={t('settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip')}
           settingsItem="chat.inline-assistant-actions"
         />
+        <SelectionApprovalField />
       </SettingsSection>
 
       <SettingsSection title={t('settings.layout.chat.section.formatting')} contentClassName="space-y-3">

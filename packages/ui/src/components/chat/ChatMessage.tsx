@@ -1,3 +1,4 @@
+import { MessageSliceContext } from "./message/messageSliceContext";
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -132,6 +133,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [copiedMessage, setCopiedMessage] = React.useState(false);
     const handleCopyLink = useCopyMessageLink(message.sessionId, message.messageId);
+    const slice = React.useContext(MessageSliceContext);
+    const sliceName = slice?.from ? `${slice.from.partId}:${slice.from.offset}` : undefined;
+
     const [expandedTools, setExpandedTools] = React.useState<Set<string>>(() => readExpandedToolsCache(message.messageId));
     const [collapsedTools, setCollapsedTools] = React.useState<Set<string>>(() => readCollapsedToolsCache(message.messageId));
     const [popupContent, setPopupContent] = React.useState<ToolPopupContent>({
@@ -486,8 +490,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                     isUser ? (isMobile ? 'pt-2' : 'pt-4') : assistantTopPaddingClass,
                     isUser ? 'pb-0' : (isFollowedByAssistant || nextIsHiddenUserMessage) ? 'pb-0' : 'pb-2'
                 )}
-                id={`message-${message.messageId}`}
+                id={sliceName ? undefined : `message-${message.messageId}`}
                 data-message-id={message.messageId}
+                data-message-slice={sliceName}
+                data-message-continues={slice?.to ? "" : undefined}
+                data-message-row={slice ? `${slice.index}/${slice.count}` : undefined}
                 ref={messageContainerRef}
             >
                 <div className="chat-message-column relative">

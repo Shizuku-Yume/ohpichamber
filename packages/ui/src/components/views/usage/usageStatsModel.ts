@@ -1,10 +1,10 @@
 import type { UsageStats, UsageTokens } from '@openchamber/agent-contract';
 
-export type UsageRange = '7d' | '30d' | '90d' | 'all';
+export type UsageRange = '1d' | '7d' | '30d' | '90d' | 'all';
 
-export const USAGE_RANGES: readonly UsageRange[] = ['7d', '30d', '90d', 'all'];
+export const USAGE_RANGES: readonly UsageRange[] = ['1d', '7d', '30d', '90d', 'all'];
 
-const RANGE_DAYS = { '7d': 7, '30d': 30, '90d': 90 } satisfies Record<Exclude<UsageRange, 'all'>, number>;
+const RANGE_DAYS = { '1d': 1, '7d': 7, '30d': 30, '90d': 90 } satisfies Record<Exclude<UsageRange, 'all'>, number>;
 
 /** Past this many days the chart groups days into weeks so bars stay readable. */
 const MAX_DAILY_BARS = 92;

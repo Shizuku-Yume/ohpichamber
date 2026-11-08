@@ -41,8 +41,8 @@ const renderBranchSheet = async (onCreateCustomWorktree?: () => void) => {
                 worktreeBranchOptions={[]}
                 branchItems={[{ value: '/repo', label: 'main' }]}
                 showBranchSelector
-                onProjectChange={() => {}}
-                onDirectoryChange={() => {}}
+                onProjectChange={() => { }}
+                onDirectoryChange={() => { }}
                 onCreateCustomWorktree={onCreateCustomWorktree}
                 theme={themes[0]}
                 openPicker="branch"

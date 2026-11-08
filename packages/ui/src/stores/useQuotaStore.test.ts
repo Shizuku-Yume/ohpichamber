@@ -6,7 +6,10 @@ let isInitialized = true
 let workspaceId = "workspace-a"
 const fetched: string[] = []
 
-type StubPayload = { usageDropdownProviders: string[] } | ProviderResult
+type StubPayload =
+  | { usageDropdownProviders: string[] }
+  | { extensions: unknown[] }
+  | ProviderResult
 let quotaRequestsFail = false
 let quotaFails = false;
 // Holds a quota request open until the test lets it answer.
@@ -28,6 +31,9 @@ mock.module("@/lib/runtime-fetch", () => ({
   runtimeFetch: async (path: string) => {
     fetched.push(path)
     if (quotaRequestsFail) throw new Error("network down")
+    // The instance's usage providers are read before its settings: the saved
+    // selection is narrowed against them.
+    if (path === "/api/quota/extensions") return json({ extensions: [] })
     if (path.startsWith("/api/config/settings")) return json({ usageDropdownProviders: ["claude"] })
     if (quotaGate) await quotaGate()
     // A reachable instance reporting a provider failure, which is different
@@ -159,7 +165,8 @@ describe("Usage quotas are loaded once per ready instance", () => {
       useQuotaStore.getState().ensureLoadedForRuntime(),
     ])
 
-    expect(fetched.filter((path) => path.startsWith("/api/quota/"))).toHaveLength(1)
+    expect(fetched.filter((path) => path === "/api/quota/extensions")).toHaveLength(1)
+    expect(fetched.filter((path) => path === "/api/quota/claude")).toHaveLength(1)
   })
 
   test("a switch drops the previous instance's display settings", async () => {
@@ -225,7 +232,7 @@ describe("A provider-account switch re-reads the trackers", () => {
     // The stub resolves synchronously, so the in-flight request is stood in for
     // with one that has not answered yet. What matters is that the switch does
     // not hand back that request's promise.
-    let release = (): void => {}
+    let release = (): void => { }
     const gate = new Promise<void>((resolve) => { release = resolve })
     const realFetch = runtimeFetchModule.runtimeFetch
     mock.module("@/lib/runtime-fetch", () => ({

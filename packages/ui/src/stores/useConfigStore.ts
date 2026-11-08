@@ -12,7 +12,7 @@ import { hostFilesystem } from '@/lib/host-filesystem';
 
 import { scopeMatches, subscribeToConfigChanges } from "@/lib/configSync";
 import type { ModelMetadata } from "@/types";
-import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
+import { createDeferredSafeJSONStorage, getSafeStorage } from "./utils/safeStorage";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 import { useSelectionStore } from "@/sync/selection-store";
 import { useUIStore } from "@/stores/useUIStore";
@@ -54,11 +54,14 @@ interface OpenChamberDefaults {
     zenModel?: string;
     messageStreamTransport?: 'auto' | 'ws' | 'sse';
     dictationEnabled?: boolean;
+    dictationAutoSend?: boolean;
     sttProvider?: 'local' | 'openai-compatible';
     sttServerUrl?: string;
+    sttEndpointPath?: string;
     sttModel?: string;
     sttLocalModel?: string;
     sttLanguage?: string;
+    sttCorrectTranscript?: boolean;
 }
 
 // Directory activation re-reads the OpenChamber defaults, which are global,
@@ -134,11 +137,14 @@ const toOpenChamberDefaults = (data: DesktopSettings): OpenChamberDefaults => {
         zenModel: zenModel.length > 0 ? zenModel : undefined,
         messageStreamTransport: data.messageStreamTransport,
         dictationEnabled: data.dictationEnabled,
+        dictationAutoSend: data.dictationAutoSend,
         sttProvider: data.sttProvider,
         sttServerUrl: data.sttServerUrl,
+        sttEndpointPath: data.sttEndpointPath,
         sttModel: data.sttModel,
         sttLocalModel: data.sttLocalModel,
         sttLanguage: data.sttLanguage,
+        sttCorrectTranscript: data.sttCorrectTranscript,
     };
 };
 
@@ -364,6 +370,13 @@ const resolveFallbackModel = (
         return { providerId: firstProvider.providerId, modelId: firstModel.modelId };
     }
     return null;
+};
+
+export type DirectoryDefaultSelection = {
+    agentName: string | undefined;
+    providerId: string;
+    modelId: string;
+    variant: string | undefined;
 };
 
 type DefaultAgentModelSelection = {
@@ -1294,13 +1307,18 @@ interface ConfigStore {
     openaiCompatibleUrl: string;
     openaiCompatibleVoice: string;
     openaiCompatibleTtsModel: string;
+    /** Optional resource path for the OpenAI-compatible speech endpoint. */
+    openaiCompatibleTtsEndpointPath: string;
     // STT (dictation) settings
     dictationEnabled: boolean;
+    dictationAutoSend: boolean;
     sttProvider: 'local' | 'openai-compatible';
     sttServerUrl: string;
+    sttEndpointPath: string;
     sttModel: string;
     sttLocalModel: string;
     sttLanguage: string;
+    sttCorrectTranscript: boolean;
     showMessageTTSButtons: boolean;
     autoReadAloudEnabled: boolean;
     ttsInputMode: 'sanitized' | 'raw' | 'summarized';
@@ -1329,12 +1347,16 @@ interface ConfigStore {
     setOpenaiCompatibleUrl: (url: string) => void;
     setOpenaiCompatibleVoice: (voice: string) => void;
     setOpenaiCompatibleTtsModel: (model: string) => void;
+    setOpenaiCompatibleTtsEndpointPath: (path: string) => void;
     setDictationEnabled: (enabled: boolean) => void;
+    setDictationAutoSend: (enabled: boolean) => void;
     setSttProvider: (provider: 'local' | 'openai-compatible') => void;
     setSttServerUrl: (url: string) => void;
+    setSttEndpointPath: (path: string) => void;
     setSttModel: (model: string) => void;
     setSttLocalModel: (model: string) => void;
     setSttLanguage: (lang: string) => void;
+    setSttCorrectTranscript: (enabled: boolean) => void;
     setShowMessageTTSButtons: (show: boolean) => void;
     setAutoReadAloudEnabled: (enabled: boolean) => void;
     setTtsInputMode: (mode: 'sanitized' | 'raw' | 'summarized') => void;
@@ -1361,6 +1383,12 @@ interface ConfigStore {
     getCurrentModelVariants: () => string[];
     /** The effort the active project or Settings configures for this model; `undefined` for any model that is not a configured default. */
     getDefaultVariantForModel: (providerId: string, modelId: string) => string | undefined;
+    /**
+     * What a new session in `directory` should send its first message with:
+     * the same cascade the composer resolves, read against that directory's
+     * own catalog. Returns null when nothing resolves a model.
+     */
+    resolveDirectoryDefaultSelection: (directory: string) => Promise<DirectoryDefaultSelection | null>;
     /**
      * `keepModel` switches the agent alone. It is for following a switch the
      * session already made: OpenCode keeps a session on its own model when the
@@ -1670,6 +1698,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     }
                     return 'kokoro';
                 })(),
+                openaiCompatibleTtsEndpointPath: getSafeStorage().getItem('openaiCompatibleTtsEndpointPath') ?? '',
                 // Voice input (dictation) master toggle - default enabled
                 dictationEnabled: (() => {
                     if (typeof window !== 'undefined') {
@@ -1677,6 +1706,13 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                         if (saved === 'false') return false;
                     }
                     return true;
+                })(),
+                dictationAutoSend: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = getSafeStorage().getItem('dictationAutoSend');
+                        if (saved !== null) return saved === 'true';
+                    }
+                    return false;
                 })(),
                 // STT provider: 'local' (server-side sherpa-onnx) or 'openai-compatible'
                 sttProvider: (() => {
@@ -1696,6 +1732,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     }
                     return 'http://localhost:8001/v1';
                 })(),
+                sttEndpointPath: getSafeStorage().getItem('sttEndpointPath') ?? '',
                 sttModel: (() => {
                     if (typeof window !== 'undefined') {
                         const saved = localStorage.getItem('sttModel');
@@ -1717,6 +1754,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     }
                     return '';
                 })(),
+                sttCorrectTranscript: globalThis.localStorage?.getItem('sttCorrectTranscript') === 'true',
                 // Show TTS buttons on messages - disabled by default until user enables it
                 showMessageTTSButtons: (() => {
                     if (typeof window !== 'undefined') {
@@ -2424,6 +2462,38 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     return modelVariantIds(get().getCurrentModel());
                 },
 
+                resolveDirectoryDefaultSelection: async (directory) => {
+                    const configDirectory = resolveConfigDirectory(directory);
+                    if (!configDirectory) return null;
+                    const directoryKey = toConfigDirectoryKey(configDirectory);
+                    // The directory's own catalog: a new worktree session runs elsewhere than the
+                    // composer that opened the dialog.
+                    const [, , defaults] = await Promise.all([
+                        get().loadProviders({ directory: configDirectory, source: 'resolveDirectoryDefaultSelection' }).catch(() => undefined),
+                        useAgentsStore.getState().loadAgents(configDirectory).catch(() => undefined),
+                        Promise.resolve(getProjectDefaultsForConfigDirectory(configDirectory)),
+                    ]);
+                    const state = get();
+                    const isActive = state.activeDirectoryKey === directoryKey;
+                    const snapshot = state.directoryScoped[directoryKey];
+                    const providers = isActive ? state.providers : (snapshot?.providers ?? []);
+                    const resolved = resolveDefaultAgentModelSelection({
+                        providers,
+                        projectDefaultModel: defaults.projectDefaultModel,
+                        projectDefaultVariant: defaults.projectDefaultVariant,
+                        settingsDefaultModel: state.settingsDefaultModel,
+                        allowFallback: state.settingsDefaultsLoaded,
+                        fallbackPrefs: readFallbackModelPrefs(),
+                    });
+                    if (!resolved.providerId || !resolved.modelId) return null;
+                    return {
+                        agentName: resolved.agentName,
+                        providerId: resolved.providerId,
+                        modelId: resolved.modelId,
+                        variant: resolved.variant,
+                    };
+                },
+
                 getDefaultVariantForModel: (providerId: string, modelId: string) => {
                     const state = get();
                     return resolveConfiguredDefaultVariant({
@@ -2545,11 +2615,14 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             settingsZenModel: defaults.zenModel,
                             settingsMessageStreamTransport: defaults.messageStreamTransport ?? state.settingsMessageStreamTransport,
                             dictationEnabled: typeof defaults.dictationEnabled === 'boolean' ? defaults.dictationEnabled : state.dictationEnabled,
+                            dictationAutoSend: defaults.dictationAutoSend ?? state.dictationAutoSend,
                             sttProvider: defaults.sttProvider ?? state.sttProvider,
                             sttServerUrl: defaults.sttServerUrl ?? state.sttServerUrl,
+                            sttEndpointPath: defaults.sttEndpointPath ?? state.sttEndpointPath,
                             sttModel: defaults.sttModel ?? state.sttModel,
                             sttLocalModel: defaults.sttLocalModel ?? state.sttLocalModel,
                             sttLanguage: defaults.sttLanguage ?? state.sttLanguage,
+                            sttCorrectTranscript: defaults.sttCorrectTranscript ?? state.sttCorrectTranscript,
                         };
                         return next;
                     });
@@ -3100,12 +3173,29 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     }
                 },
 
+                setOpenaiCompatibleTtsEndpointPath: (path: string) => {
+                    set({ openaiCompatibleTtsEndpointPath: path });
+                    getSafeStorage().setItem('openaiCompatibleTtsEndpointPath', path);
+                },
+
                 setDictationEnabled: (enabled: boolean) => {
                     set({ dictationEnabled: enabled });
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('dictationEnabled', String(enabled));
                     }
                     updateDesktopSettings({ dictationEnabled: enabled }).catch(() => {});
+                },
+
+                setDictationAutoSend: (enabled: boolean) => {
+                    set({ dictationAutoSend: enabled });
+                    getSafeStorage().setItem('dictationAutoSend', String(enabled));
+                    updateDesktopSettings({ dictationAutoSend: enabled }).catch(() => {});
+                },
+
+                setSttCorrectTranscript: (enabled: boolean) => {
+                    set({ sttCorrectTranscript: enabled });
+                    globalThis.localStorage?.setItem('sttCorrectTranscript', String(enabled));
+                    updateDesktopSettings({ sttCorrectTranscript: enabled }).catch(() => {});
                 },
 
                 setSttProvider: (provider: 'local' | 'openai-compatible') => {
@@ -3124,6 +3214,12 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     updateDesktopSettings({ sttServerUrl: url }).catch(() => {});
                 },
 
+
+                setSttEndpointPath: (path: string) => {
+                    set({ sttEndpointPath: path });
+                    getSafeStorage().setItem('sttEndpointPath', path);
+                    updateDesktopSettings({ sttEndpointPath: path }).catch(() => {});
+                },
 
                 setSttModel: (model: string) => {
                     set({ sttModel: model });
@@ -3525,6 +3621,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     settingsZenModel: state.settingsZenModel,
                     settingsMessageStreamTransport: state.settingsMessageStreamTransport,
                     dictationEnabled: state.dictationEnabled,
+                    dictationAutoSend: state.dictationAutoSend,
                     speechRate: state.speechRate,
                     speechPitch: state.speechPitch,
                     speechVolume: state.speechVolume,

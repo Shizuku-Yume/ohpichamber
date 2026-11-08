@@ -63,8 +63,8 @@ const isKnownActiveSessionDirectory = (
   // The full app's global cache is authoritative for active-session retention.
   // A deleted worktree is not a deletion event, so its record must reach the
   // ownership resolver even when no current topology directory matches it.
-  if (!isVSCode) return true;
-  if (session.archivedAt) return true;
+  if (!isVSCode && !session.archivedAt) return true;
+  if (isVSCode && session.archivedAt) return true;
   const directory = normalizePath(resolveGlobalSessionDirectory(session) ?? session.displayPath)?.toLowerCase();
   if (!directory) return false;
   if (knownDirectories.size === 0) return false;
@@ -294,7 +294,13 @@ export const useSessionProjectCollection = ({
 }: UseSessionProjectCollectionArgs): UseSessionProjectCollectionResult => {
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const globalStructure = useGlobalSessionsStore((state) => state.structure);
-  const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
+  const rawArchivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
+  const archivedSessions = React.useMemo(() => {
+    const known = new Set([...knownDirectories].map((directory) => isVSCode ? directory.toLowerCase() : directory));
+    return rawArchivedSessions.filter((session) => (
+      isChatDirectoryPath(resolveGlobalSessionDirectory(session) ?? session.displayPath) ? !isVSCode : isKnownActiveSessionDirectory(session, known, isVSCode)
+    ));
+  }, [isVSCode, knownDirectories, rawArchivedSessions]);
   const hasAuthoritativeGlobalSessions = useGlobalSessionsStore((state) => state.status === 'ready');
   const pinnedSessionIds = useSessionPinnedStore((state) => state.ids);
   const sessionOrderRanks = useSessionOrderingStore(React.useCallback(
@@ -302,8 +308,8 @@ export const useSessionProjectCollection = ({
     [isVisible],
   ));
   const globalSessionIds = React.useMemo(
-    () => new Set(globalActiveSessions.map((session) => session.sessionId)),
-    [globalActiveSessions],
+    () => new Set([...globalActiveSessions, ...rawArchivedSessions].map((session) => session.sessionId)),
+    [globalActiveSessions, rawArchivedSessions],
   );
   // Only the live sessions the global cache does not hold yet: the merge drops
   // a covered session's live copy, so its live bumps (`time.updated` on every

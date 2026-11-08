@@ -36,8 +36,15 @@ export interface ComposerLanguageContext {
     inputMode: 'normal' | 'shell';
     /** Lowercased names of the agents that can be mentioned. */
     knownAgentNames: ReadonlySet<string>;
-    /** Mention paths confirmed by the picker, a drop, or a restored draft. */
+    /** See `MentionClassifier.confirmedMentions`. A live set, read on every pass. */
     confirmedMentions: ReadonlySet<string>;
+    /** Changes when `confirmedMentions` did without the text changing, to repaint. */
+    confirmedMentionsRevision?: number;
+    /**
+     * Lets a double click turn a file or agent chip back into text. `dismiss`
+     * records it in `confirmedMentions`; `hint` joins the chip's tooltip.
+     */
+    mentionDismissal?: { dismiss: (name: string) => void; hint: string };
     /** Lowercased command and built-in names invocable with `/`. */
     knownSlashNames: ReadonlySet<string>;
     /** Native prompt template names invocable with a leading `/`. */
@@ -54,6 +61,13 @@ export interface ComposerLanguageContext {
     knownSkillNames?: ReadonlySet<string>;
     /** Theme variant for the file-type icons on citation chips; dark when absent. */
     fileIconVariant?: 'light' | 'dark';
+    /**
+     * The session or message each `[[…]]` link mention resolves to, keyed by
+     * `sessionLinkKey`; without it a resolved link stays plain text.
+     */
+    sessionLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
+    /** Link origins the mention syntax accepts; the app's own when absent. */
+    sessionLinkOrigins?: readonly string[];
 }
 
 /** Mention ranges alone — the composer also needs these to resolve references. */

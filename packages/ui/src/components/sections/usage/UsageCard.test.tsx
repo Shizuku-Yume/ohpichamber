@@ -7,8 +7,9 @@ const dom = new Window();
 Object.assign(globalThis, { window: dom, document: dom.document, localStorage: dom.localStorage, HTMLElement: dom.HTMLElement, Event: dom.Event });
 const { createRoot } = await import('react-dom/client');
 const { flushSync } = await import('react-dom');
+const { act } = await import('react');
 const { UsageCard } = await import('./UsageCard');
-const { I18nProvider } = await import('@/lib/i18n');
+const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
 
 const balanceWindow: UsageWindow = {
   usedPercent: null,
@@ -39,6 +40,52 @@ const render = (window: UsageWindow) => {
 
 afterEach(() => {
   for (const container of containers.splice(0)) container.remove();
+  void useI18nStore.getState().setLocale('en');
+});
+
+test('changes the credits-used message when locale changes with the same quota sample', async () => {
+  const window = { ...balanceWindow, valueLabel: undefined, creditsUsed: 3233.27 };
+  const container = render(window);
+  expect(container.textContent).toContain('3,233.3 Credits Used');
+
+  await act(async () => {
+    useI18nStore.setState({
+      dictionary: {
+        ...useI18nStore.getState().dictionary,
+        'quota.value.creditsUsed': 'Використано кредитів: {credits}',
+      },
+    });
+  });
+
+  expect(container.textContent).toContain('Використано кредитів: 3,233.3');
+  expect(container.textContent).not.toContain('Credits Used');
+  expect(container.querySelector('[role="progressbar"]')).toBeNull();
+  expect(window.creditsUsed).toBe(3233.27);
+});
+
+test('cached Zen values update when the locale changes without another quota request', async () => {
+  const originalLocale = useI18nStore.getState();
+  const count = render({ ...balanceWindow, valueLabel: undefined, value: { kind: 'requests', count: 292 } });
+  const spend = render({ ...balanceWindow, valueLabel: undefined, value: { kind: 'spend', spent: 2, limit: null } });
+  const capped = render({ ...percentWindow, value: { kind: 'spend', spent: 2, limit: 10 } });
+  expect(count.textContent).toContain('Requests: 292');
+  expect(spend.textContent).toContain('$2.00 spent');
+  expect(capped.textContent).toContain('$2.00 of $10.00');
+
+  await act(async () => {
+    useI18nStore.setState({
+      dictionary: {
+        ...useI18nStore.getState().dictionary,
+        'quota.value.requests': 'Запити: {count}',
+        'quota.value.spent': '{spent} Витрачено',
+        'settings.usage.consoleBudgets.spentOf': '{spent} з {limit}',
+      },
+    });
+  });
+  expect(count.textContent).toContain('Запити: 292');
+  expect(spend.textContent).toContain('Витрачено');
+  expect(capped.textContent).toContain(' з ');
+  await act(async () => { await useI18nStore.getState().setLocale(originalLocale.locale); });
 });
 
 test('a balance-only window shows its value without a progress bar or "used" caption', () => {

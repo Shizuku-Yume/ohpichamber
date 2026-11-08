@@ -25,7 +25,7 @@ export function CollapsedActivityIndicator({
       : t('sessions.sidebar.session.status.questionPending');
     return (
       <span
-        className={cn('inline-flex shrink-0 items-center', state === 'permission' ? 'text-destructive' : 'text-status-info', className)}
+        className={cn('inline-flex shrink-0 items-center text-status-warning', className)}
         aria-label={label}
         title={label}
       >
@@ -39,7 +39,7 @@ export function CollapsedActivityIndicator({
 export const CollapsedSessionActivityIndicator: React.FC<{
   nodes: SessionNode[];
   blockingSessionIds?: readonly string[];
-  includeUnreadSubtasks: boolean;
+  includeUnreadSubtasks?: boolean;
 }> = ({ nodes, blockingSessionIds, includeUnreadSubtasks }) => {
   const resolved = useCollapsedSessionActivityState({ nodes, blockingSessionIds, includeUnreadSubtasks });
   if (!resolved) return null;

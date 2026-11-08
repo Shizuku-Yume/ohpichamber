@@ -1,3 +1,7 @@
+import { useUIStore } from '@/stores/useUIStore';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
+import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 /**
  * The composer's footer row.
  *
@@ -24,7 +28,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { isDictationCaptureSupported } from '@/lib/dictation/use-dictation-audio-source';
 import { ModelControls } from '../../ModelControls';
 import { ComposerActionButtons } from './ComposerActionButtons';
-import { ComposerAttachmentControls } from './ComposerAttachmentControls';
+import { ComposerAttachmentControls, type ComposerTrackerPicker } from './ComposerAttachmentControls';
 import { FocusModeButton } from './FocusModeButton';
 import { ComposerModeSelector, type ComposerModeValue } from './ComposerModeSelector';
 import type { DraftGoalObjective, DraftSessionMode } from '@/sync/session-ui-store';
@@ -69,8 +73,10 @@ interface ComposerFooterProps {
     onOpenGitHubPicker: () => void;
     /** The host the project's issues and change requests come from. */
     repositoryProvider?: SourceControlProvider;
-    showLinearPicker?: boolean;
-    onOpenLinearPicker?: () => void;
+    /** The VS Code webview offers only local files, never the linked pickers. */
+    isVSCode: boolean;
+    /** One entry per signed-in tracker, in the server's order. */
+    trackerPickers?: readonly ComposerTrackerPicker[];
     attachGuests?: readonly GuestAttachItem[];
     onOpenGuestAttach?: (guestId: string) => void;
     onOpenAttachSheet: () => void;
@@ -89,6 +95,8 @@ interface ComposerFooterProps {
     onDictationActiveChange?: (active: boolean) => void;
     isBtw?: boolean;
     pinnedSelection?: ComposerModelSelection | null;
+    /** The composer's double Escape stops the run (not in the mini chat). */
+    escapeStops?: boolean;
     /** Offers "Run on several models" in the model picker (desktop). */
     onRunInParallel?: () => void;
     /** Set while the composer is in "Run in parallel" mode: the primary action launches the run. */
@@ -103,7 +111,7 @@ function AgentStartupNote({ className }: { className?: string }) {
     return (
         <span
             role="status"
-            className={cn('min-w-0 truncate self-center typography-micro text-muted-foreground/70', className)}
+            className={cn('min-w-0 truncate self-center typography-micro text-muted-foreground', className)}
             title={t('chat.chatInput.waitingForAgentHint')}
         >
             {t('chat.chatInput.waitingForAgent')}
@@ -113,6 +121,7 @@ function AgentStartupNote({ className }: { className?: string }) {
 
 function ComposerFooterView(props: ComposerFooterProps) {
     const { t } = useI18n();
+    const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
     const {
         isMobile,
         sessionId: currentSessionId,
@@ -143,8 +152,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
         onPickLocalFiles,
         onOpenGitHubPicker,
         repositoryProvider,
-        showLinearPicker,
-        onOpenLinearPicker,
+        isVSCode,
+        trackerPickers,
         attachGuests,
         onOpenGuestAttach,
         onOpenAttachSheet,
@@ -197,8 +206,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
                                 handlePickLocalFiles={onPickLocalFiles}
                                 openGitHubPicker={onOpenGitHubPicker}
                                 repositoryProvider={repositoryProvider}
-                                showLinearPicker={showLinearPicker}
-                                openLinearPicker={onOpenLinearPicker}
+                                isVSCode={isVSCode}
+                                trackerPickers={trackerPickers}
                                 onOpenSettings={isBtw ? undefined : onOpenSettings}
                                 onOpenMobileSheet={onOpenAttachSheet}
                                 attachGuests={attachGuests}
@@ -216,26 +225,33 @@ function ComposerFooterView(props: ComposerFooterProps) {
                         <div className="flex items-center min-w-0 gap-x-1 justify-end">
                             {waitingForAgent ? <AgentStartupNote /> : null}
                             <div className="flex items-center gap-x-1 flex-shrink-0">
-                                {!isBtw && showDictation ? <button
-                                    type="button"
-                                    className={footerIconButtonClass}
-                                    // Keep the soft keyboard open (same guard as
-                                    // PermissionAutoAcceptButton); the recording
-                                    // engine lives in the wrapper-level
-                                    // ComposerDictation instance.
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onPointerDownCapture={(event) => {
-                                        if (event.pointerType === 'touch') {
-                                            event.preventDefault();
-                                        }
-                                    }}
-                                    onClick={onStartDictation}
-                                    disabled={dictationActive}
-                                    title={t('chat.dictation.start')}
-                                    aria-label={t('chat.dictation.start')}
-                                >
-                                    <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
-                                </button> : null}
+                                {!isBtw && showDictation ? (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className={footerIconButtonClass}
+                                                onMouseDown={(event) => event.preventDefault()}
+                                                onPointerDownCapture={(event) => {
+                                                    if (event.pointerType === "touch") {
+                                                        event.preventDefault();
+                                                    }
+                                                }}
+                                                onClick={onStartDictation}
+                                                disabled={dictationActive}
+                                                aria-label={t("chat.dictation.start")}
+                                            >
+                                                <Icon name="mic" className={cn(iconSizeClass, "text-current")} />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                            <TooltipLabelWithShortcut
+                                                label={t("chat.dictation.start")}
+                                                shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo("toggle_dictation", shortcutOverrides), "")}
+                                            />
+                                        </TooltipContent>
+                                    </Tooltip>
+                                ) : null}
                                 <ComposerActionButtons
                                     isMobile={isMobile}
                                     footerIconButtonClass={footerIconButtonClass}
@@ -263,8 +279,8 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             handlePickLocalFiles={onPickLocalFiles}
                             openGitHubPicker={onOpenGitHubPicker}
                             repositoryProvider={repositoryProvider}
-                            showLinearPicker={showLinearPicker}
-                            openLinearPicker={onOpenLinearPicker}
+                            isVSCode={isVSCode}
+                            trackerPickers={trackerPickers}
                             onOpenSettings={isBtw ? undefined : onOpenSettings}
                             attachGuests={attachGuests}
                             onOpenGuestAttach={onOpenGuestAttach}

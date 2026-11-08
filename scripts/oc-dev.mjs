@@ -13,8 +13,8 @@
  *
  * See `scripts/oc-dev.config.example.json` for the shape. The config can set
  * local device/app preferences such as `ios.deviceName`, `ios.useXcodeBeta`,
- * `ios.xcodeAppName`, and `electron.opencodeConfigDir` (prefilled when the
- * Electron start asks for a separate OpenCode config directory), and can
+ * `ios.xcodeAppName`, and `electron.agentConfigDir` (prefilled when the
+ * Electron start asks for a separate agent config directory), and can
  * define `remoteDeployments`. Remote deploy
  * menu entries are shown only when configured. Maintainer-only actions such as
  * release creation are hidden unless `features.releaseTools` is true.
@@ -23,7 +23,7 @@
  * Direct unsupported commands fail with a clear error instead of relying on
  * prompts for safety.
  */
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,7 +40,7 @@ const configPath = path.join(os.homedir(), '.config', 'openchamber', 'oc-dev.jso
 const GLOBAL_PORT = '2606';
 const TESTING_PORT = '1202';
 const TESTING_DIR = 'testing-dev';
-const REMOTE_RUNTIME_ENV = 'PATH=$HOME/.opencode/bin:$HOME/.local/bin:$HOME/.bun/bin:$PATH; if [ -z "${OPENCODE_BINARY:-}" ]; then OPENCODE_CANDIDATE=$(command -v opencode 2>/dev/null || true); if [ -n "$OPENCODE_CANDIDATE" ]; then export OPENCODE_BINARY="$OPENCODE_CANDIDATE"; fi; fi';
+const REMOTE_RUNTIME_ENV = 'PATH=$HOME/.omp/bin:$HOME/.local/bin:$HOME/.bun/bin:$PATH; if [ -z "${OMP_BINARY:-}" ]; then OMP_CANDIDATE=$(command -v omp 2>/dev/null || true); if [ -n "$OMP_CANDIDATE" ]; then export OMP_BINARY="$OMP_CANDIDATE"; fi; fi';
 
 const isTty = Boolean(process.stdout.isTTY) && Boolean(process.stdin.isTTY);
 const isMac = process.platform === 'darwin';
@@ -54,10 +54,9 @@ Actions:
   build-deploy-web                 Build web package and deploy
   remote-deploy-web                Deploy to configured remote target
   start-web-dev                    Start web development loop
-  start-mobile-dev                 Start mobile app with dev server live reload
   mobile-tools                     Mobile build/sync/deploy helper menu
   start-electron-app               Start Electron app in dev mode
-  prepare-agent-runtime           Stage and verify the Agent Runtime for Electron
+  prepare-agent-runtime            Stage and verify the Agent Runtime for Electron
   build-electron-app               Build Electron app artifacts
   create-release                   Validate and bump release version
 
@@ -66,14 +65,13 @@ Options:
   --deployment-mode <global|testing>
   --remote-id <id>                 Remote deployment id from ${configPath}
   --target <test-api|test-ui>      Compatibility alias for remote deployment selection
-  --web-mode <hmr|hmr-react-scan|hmr-lan|full>
-  --mobile-mode <ios-sim-local|ios-sim-lan|android-local|android-lan>
+  --web-mode <hmr|hmr-react-scan|hmr-lan>
   --mobile-task <task>
   --adb-address <host:port>        Wireless ADB address for android-connect
   --version <semver>
-  --opencode-config-dir <path>     OpenCode config directory for the started Electron app
-                                   (OPENCODE_CONFIG_DIR); lets a v2 checkout run beside a v1
-                                   install without sharing opencode.json
+  --agent-config-dir <path>        Agent config directory for the started Electron app
+                                   (PI_CONFIG_DIR); keeps a scratch checkout from reading the
+                                   developer's own agent settings
   -h, --help
 
 Mobile tasks:
@@ -114,9 +112,6 @@ function parseArgs(argv) {
       case '--web-mode':
         options.webMode = readValue();
         break;
-      case '--mobile-mode':
-        options.mobileMode = readValue();
-        break;
       case '--mobile-task':
         options.mobileTask = readValue();
         break;
@@ -126,8 +121,8 @@ function parseArgs(argv) {
       case '--version':
         options.version = readValue();
         break;
-      case '--opencode-config-dir':
-        options.opencodeConfigDir = readValue();
+      case '--agent-config-dir':
+        options.agentConfigDir = readValue();
         break;
       default:
         if (arg.startsWith('-')) throw new Error(`Unknown option: ${arg}`);
@@ -200,8 +195,6 @@ function normalizeAction(action = '') {
     'deploy-web': 'build-deploy-web',
     'build/deploy-web': 'build-deploy-web',
     'web-dev': 'start-web-dev',
-    'mobile-dev': 'start-mobile-dev',
-    'ios-sim-dev': 'start-mobile-dev',
     mobile: 'mobile-tools',
     'mobile-menu': 'mobile-tools',
     'remote-deploy-web': 'remote-deploy-web',
@@ -249,16 +242,6 @@ function validateAdbAddress(address) {
   }
   return normalized;
 }
-
-function detectLanIp() {
-  for (const addresses of Object.values(os.networkInterfaces())) {
-    for (const address of addresses || []) {
-      if (address.family === 'IPv4' && !address.internal) return address.address;
-    }
-  }
-  return '';
-}
-
 
 function latestFileByExtensions(directory, extensions) {
   if (!existsSync(directory)) return '';
@@ -450,71 +433,16 @@ async function startWebDev(options) {
     { value: 'hmr', label: 'Web HMR' },
     { value: 'hmr-react-scan', label: 'Web HMR + React Scan' },
     { value: 'hmr-lan', label: 'Web HMR LAN/mobile' },
-    { value: 'full', label: 'Web prod-like' },
   ], 'Select web dev mode');
 
   if (mode === 'hmr-react-scan') {
-    run('bun', ['run', 'dev:web:hmr'], { env: { VITE_ENABLE_REACT_SCAN: '1' } });
+    run('bun', ['run', 'dev'], { env: { VITE_ENABLE_REACT_SCAN: '1' } });
   } else if (mode === 'hmr-lan') {
     log.info('Starting web HMR LAN/mobile loop. Open the LAN URL printed after startup.');
-    run('bun', ['run', 'dev:web:hmr'], { env: { OPENCHAMBER_HMR_HOST: '0.0.0.0' } });
-  } else if (mode === 'full') {
-    run('bun', ['run', 'dev:web:full']);
+    run('bun', ['run', 'dev'], { env: { OPENCHAMBER_HMR_HOST: '0.0.0.0' } });
   } else {
-    run('bun', ['run', 'dev:web:hmr']);
+    run('bun', ['run', 'dev']);
   }
-}
-
-async function startMobileDev(options) {
-  const mobileModeChoices = [
-    { value: 'ios-sim-local', label: 'iOS Simulator local' },
-    { value: 'ios-sim-lan', label: 'iOS Simulator LAN' },
-    { value: 'android-local', label: 'Android emulator local' },
-    { value: 'android-lan', label: 'Android device LAN' },
-  ].filter((choice) => isMac || !choice.value.startsWith('ios-'));
-  const mode = await chooseValue(options.mobileMode, mobileModeChoices, 'Select mobile dev mode');
-
-  if (mode.startsWith('ios-') && !isMac) {
-    throw new Error('iOS mobile dev actions require macOS and Xcode.');
-  }
-
-  const hmrPort = process.env.OPENCHAMBER_HMR_UI_PORT || '5180';
-  let hmrBindHost = '127.0.0.1';
-  let liveReloadHost = '127.0.0.1';
-  let platform = 'ios';
-  let extraArgs = [];
-
-  if (mode === 'ios-sim-lan' || mode === 'android-lan') {
-    hmrBindHost = '0.0.0.0';
-    liveReloadHost = detectLanIp();
-    if (!liveReloadHost) throw new Error('Could not detect LAN IP.');
-  }
-  if (mode.startsWith('android')) platform = 'android';
-  if (mode === 'android-local') extraArgs = ['--forwardPorts', `${hmrPort}:${hmrPort}`];
-
-  log.step(`Starting mobile UI dev server on ${hmrBindHost}:${hmrPort}`);
-  const devServer = spawn('bun', ['x', 'vite', '--config', 'local-dev-mobile-vite.config.mjs', '--host', hmrBindHost, '--port', hmrPort, '--strictPort'], {
-    cwd: repoRoot,
-    stdio: 'inherit',
-    env: { ...process.env, OPENCHAMBER_DISABLE_PWA_DEV: '1' },
-  });
-
-  const stopDevServer = () => {
-    if (!devServer.killed) devServer.kill('SIGTERM');
-  };
-  process.once('SIGINT', () => {
-    stopDevServer();
-    process.exit(130);
-  });
-  process.once('SIGTERM', () => {
-    stopDevServer();
-    process.exit(143);
-  });
-
-  await new Promise((resolve) => setTimeout(resolve, 6000));
-  run('node', ['scripts/with-mobile-env.mjs', `bunx cap run ${platform} --live-reload --host ${liveReloadHost} --port ${hmrPort} ${extraArgs.join(' ')}`], { cwd: path.join(repoRoot, 'packages/mobile') });
-  log.info('Mobile UI dev server is still running. Press Ctrl+C to stop.');
-  await new Promise((resolve) => devServer.on('exit', resolve));
 }
 
 async function mobileTools(options, config) {
@@ -573,37 +501,36 @@ async function mobileTools(options, config) {
 }
 
 /**
- * Environment for a started dev app. `OPENCODE_CONFIG_DIR` reaches the
- * OpenChamber server and the managed OpenCode it spawns, so one machine can
- * run a v2 checkout and a v1 install side by side: they share the sessions
- * database (separate tables) but not the config file, which v1 rejects once
- * v2 has written to it.
+ * Environment for a started dev app. `PI_CONFIG_DIR` reaches the Agent
+ * Service and the agent workers it supervises, so one machine can run a
+ * scratch checkout beside the developer's own agent settings: the runs share
+ * the sessions database but not the agent config.
  */
-function devAppEnv(opencodeConfigDir) {
-  if (!opencodeConfigDir) return {};
-  const configDir = path.resolve(opencodeConfigDir.replace(/^~(?=$|\/)/, os.homedir()));
-  if (!existsSync(configDir)) throw new Error(`OpenCode config directory not found: ${configDir}`);
-  log.info(`Using OpenCode config directory ${configDir}`);
-  return { OPENCODE_CONFIG_DIR: configDir };
+function devAppEnv(agentConfigDir) {
+  if (!agentConfigDir) return {};
+  const configDir = path.resolve(agentConfigDir.replace(/^~(?=$|\/)/, os.homedir()));
+  if (!existsSync(configDir)) throw new Error(`Agent config directory not found: ${configDir}`);
+  log.info(`Using agent config directory ${configDir}`);
+  return { PI_CONFIG_DIR: configDir };
 }
 
 /**
  * The flag wins; otherwise an interactive run asks, with the last directory
- * from `oc-dev.json` (`electron.opencodeConfigDir`) prefilled; a non-TTY run
- * keeps OpenCode's default directory instead of hanging on a prompt.
+ * from `oc-dev.json` (`electron.agentConfigDir`) prefilled; a non-TTY run
+ * keeps the agent's default directory instead of hanging on a prompt.
  */
-async function chooseOpencodeConfigDir(options, config) {
-  if (options.opencodeConfigDir) return options.opencodeConfigDir;
+async function chooseAgentConfigDir(options, config) {
+  if (options.agentConfigDir) return options.agentConfigDir;
   if (!isTty) return '';
-  const remembered = config.electron?.opencodeConfigDir || '';
+  const remembered = config.electron?.agentConfigDir || '';
   const mode = await chooseValue('', [
-    { value: 'default', label: 'Default (~/.config/opencode)' },
-    { value: 'separate', label: 'Separate directory', hint: 'run this checkout beside a v1 install' },
-  ], 'OpenCode config for the Electron app');
+    { value: 'default', label: 'Default (~/.omp/agent)' },
+    { value: 'separate', label: 'Separate directory', hint: 'run this checkout beside your own agent settings' },
+  ], 'Agent config for the Electron app');
   if (mode === 'default') return '';
   const value = await text({
-    message: 'OpenCode config directory',
-    initialValue: remembered || path.join(os.homedir(), '.config', 'opencode-v2'),
+    message: 'Agent config directory',
+    initialValue: remembered || path.join(os.homedir(), '.omp', 'profiles', 'dev', 'agent'),
     validate: (input) => (input.trim() ? undefined : 'Enter a directory path'),
   });
   if (isCancel(value)) {
@@ -614,7 +541,7 @@ async function chooseOpencodeConfigDir(options, config) {
 }
 
 async function startElectronApp(options, config) {
-  const env = devAppEnv(await chooseOpencodeConfigDir(options, config));
+  const env = devAppEnv(await chooseAgentConfigDir(options, config));
   run('bun', ['run', 'electron:dev'], { env });
 }
 
@@ -659,7 +586,6 @@ async function chooseAction(config) {
   const options = [
     { value: 'build-deploy-web', label: 'Build/Deploy web' },
     { value: 'start-web-dev', label: 'Start web dev' },
-    { value: 'start-mobile-dev', label: 'Start mobile dev' },
     { value: 'mobile-tools', label: 'Mobile tools' },
     { value: 'start-electron-app', label: 'Start Electron app' },
     { value: 'prepare-agent-runtime', label: 'Prepare Agent Runtime' },
@@ -697,9 +623,6 @@ async function main() {
       break;
     case 'start-web-dev':
       await startWebDev(options);
-      break;
-    case 'start-mobile-dev':
-      await startMobileDev(options);
       break;
     case 'mobile-tools':
       await mobileTools(options, config);

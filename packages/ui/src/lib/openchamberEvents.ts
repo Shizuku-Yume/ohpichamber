@@ -5,9 +5,11 @@ import { isRelayModeActive } from './relay/runtime-tunnel';
 import { subscribeRuntimeEndpointChanged } from './runtime-switch';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
+import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-watch';
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
 import type { SyncEvent } from './opencode/events';
+import { workflowRunSchema, type WorkflowRun } from './workflows/model';
 import { classifyStreamPayload } from '@/sync/event-pipeline';
 import { SessionMetadataStateSchema, type SessionMetadataState } from '@openchamber/agent-contract';
 
@@ -226,8 +228,16 @@ const notificationPropertiesSchema = z.object({
 });
 
 export type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
-type OpenChamberEvent =
+export type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
+ /** An extension was installed, updated, approved, paused or removed: the catalog changed. */
+ | { type: 'guests-changed' }
+ /** A terminal session was created, exited, restarted or removed. */
+ | { type: 'terminal-sessions-changed' }
+ /** A workflow run's state as the server last wrote it; the card and panel follow it. */
+ | { type: 'workflow-run'; run: WorkflowRun }
+ /** A workflow run the user deleted. */
+ | { type: 'workflow-run-removed'; runId: string; parentSessionId: string }
  /** `connectionId` names this connection on the server; absent from servers before tracked items. */
  | { type: 'event-stream-ready'; connectionId: string | null }
  | TrackedItemsChangedEvent
@@ -238,6 +248,7 @@ type OpenChamberEvent =
  | RoutingPermissionHeldEvent
  | RoutingSafetySkippedEvent
  | MessageQueueUpdatedEvent
+ | PrWatchUpdatedEvent
  | PermissionPolicyEvent
  /** The host follows this space's queue again; what changed in a gap is read from the space. */
  | { type: 'space-queue-stream'; spaceId: string }
@@ -446,7 +457,27 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   return;
  }
 
- if (envelope.type === 'openchamber:event-stream-ready') {
+ if (envelope.type === 'openchamber:guests-changed') {
+  for (const listener of listeners) listener({ type: 'guests-changed' });
+  return;
+}
+ if (envelope.type === 'openchamber:terminal-sessions-changed') {
+  for (const listener of listeners) listener({ type: 'terminal-sessions-changed' });
+  return;
+ }
+ if (envelope.type === 'openchamber:workflow-run') {
+  const parsed = workflowRunSchema.safeParse(getEventProperties(envelope.properties)?.run);
+  if (parsed.success) for (const listener of listeners) listener({ type: 'workflow-run', run: parsed.data });
+  return;
+ }
+ if (envelope.type === 'openchamber:workflow-run-removed') {
+  const raw = getEventProperties(envelope.properties);
+  const runId = typeof raw?.runId === 'string' ? raw.runId : '';
+  const parentSessionId = typeof raw?.parentSessionId === 'string' ? raw.parentSessionId : '';
+  if (runId && parentSessionId) for (const listener of listeners) listener({ type: 'workflow-run-removed', runId, parentSessionId });
+  return;
+ }
+if (envelope.type === 'openchamber:event-stream-ready') {
   reconnectAttempt = 0;
   const ready = eventStreamReadySchema.safeParse(envelope.properties);
   const connectionId = ready.success ? ready.data.connectionId ?? null : null;
@@ -468,6 +499,13 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
 
  if (envelope.type === 'openchamber:message-queue.updated') {
   const parsed = messageQueueUpdatedEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener(parsed.data);
+  }
+  return;
+ }
+ if (envelope.type === 'openchamber:pr-watch.updated') {
+  const parsed = prWatchUpdatedEventSchema.safeParse(envelope);
   if (parsed.success) {
    for (const listener of listeners) listener(parsed.data);
   }

@@ -32,10 +32,11 @@ import { useDeviceInfo } from '@/lib/device';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
+import { toastContextFileOpenFailure, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
 import { toast } from '@/components/ui';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import type { Session } from '@openchamber/agent-contract';
+import { isSessionDirectoryAdmitted } from '@/sync/session-admission-rule';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo, shortcutRegistry } from '@/lib/shortcuts';
 import { showRuntimeStatus } from '@/lib/runtimeStatus';
@@ -564,9 +565,12 @@ export const CommandPalette: React.FC = () => {
   // ---------------------------------------------------------------------------
   // Sessions
   // ---------------------------------------------------------------------------
+  const worktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
   const orderedActiveSessions = React.useMemo(
-    () => orderVisibleRootSessions(activeSessions, pinnedSessionIds, sessionOrderRanks),
-    [activeSessions, pinnedSessionIds, sessionOrderRanks],
+    () => orderVisibleRootSessions(activeSessions.filter((session) => (
+      isSessionDirectoryAdmitted(resolveGlobalSessionDirectory(session) ?? session.displayPath, projects, worktreesByProject)
+    )), pinnedSessionIds, sessionOrderRanks),
+    [activeSessions, pinnedSessionIds, projects, sessionOrderRanks, worktreesByProject],
   );
 
   const allBranches = useGitAllBranches();
@@ -796,7 +800,7 @@ export const CommandPalette: React.FC = () => {
       if (!currentRoot) return;
       const validation = await validateContextFileOpen(filesApi, filePath, { directory: currentRoot });
       if (!validation.ok) {
-        toast.error(getContextFileOpenFailureMessage(validation.reason));
+        toastContextFileOpenFailure(filePath, validation);
         return;
       }
       openContextFile(currentRoot, filePath);

@@ -75,6 +75,8 @@ export const useSessionListSync = () => {
     };
   }, []);
 
+  // The fork's global list is authoritative as a whole once its status is
+  // ready; there is no separate snapshot to prefer.
   const cleanupSessions = React.useMemo(
     () => [...globalActiveSessions, ...archivedSessions],
     [archivedSessions, globalActiveSessions],

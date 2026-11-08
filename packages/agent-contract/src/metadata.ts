@@ -42,6 +42,20 @@ const workbenchFields = {
 const workbenchSchema = z.strictObject(workbenchFields);
 const turnFields = { endedAt: TimestampSchema, durationMs: z.number().finite().nonnegative() };
 const turnSchema = z.strictObject(turnFields);
+// One answer to a UI block of a reply: the block is found again by the message
+// it sat in and its own key, so a reload shows the choices the user made.
+const uiBlockAnswerFields = {
+  messageId: EntityIdSchema, block: z.string().min(1),
+  answer: z.strictObject({
+    picks: z.array(z.object({
+      button: z.string().optional(), value: z.string().optional(), note: z.string().optional(),
+    })),
+    values: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+    skipped: z.array(z.string()),
+  }),
+  answeredAt: TimestampSchema,
+};
+const uiBlockAnswersSchema = z.record(z.string(), z.strictObject(uiBlockAnswerFields));
 const linkedItemFields = { id: EntityIdSchema, title: z.string(), url: z.string(), linkedAt: TimestampSchema };
 const linkedAuthorFields = { author: z.string().optional(), authorAvatarUrl: z.string().optional() };
 const linkedIssueSchema = z.discriminatedUnion('kind', [
@@ -84,6 +98,7 @@ const operationalSchema = z.strictObject({
   linked_issues: z.array(linkedIssueSchema).optional(), work: workSchema.optional(), reviewOffer: reviewOfferSchema.optional(),
   pinned: pinnedSchema.optional(), workbench: workbenchSchema.optional(), turn: turnSchema.optional(),
   reviewSessionID: EntityIdSchema.optional(), kind: z.literal('review').optional(), originalSessionID: EntityIdSchema.optional(), multirun: multirunSchema.optional(),
+  uiBlockAnswers: uiBlockAnswersSchema.optional(),
 });
 export const SessionMetadataSchema = z.strictObject({
   folder: z.string().optional(), isPinned: z.boolean().optional(),
@@ -136,6 +151,7 @@ export const SessionMetadataPatchSchema = z.strictObject({
       turn: turnSchema.nullable().optional(),
       reviewSessionID: EntityIdSchema.nullable().optional(), kind: z.literal('review').nullable().optional(),
       originalSessionID: EntityIdSchema.nullable().optional(), multirun: multirunSchema.nullable().optional(),
+      uiBlockAnswers: uiBlockAnswersSchema.nullable().optional(),
     }).nullable().optional(),
   })
 });

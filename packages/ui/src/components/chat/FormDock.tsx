@@ -1,3 +1,5 @@
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
 import type { QuestionRequest } from '@openchamber/agent-contract';
@@ -271,20 +273,32 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
                         {t('chat.formDock.waiting', { count: String(waiting) })}
                     </span>
                 ) : null}
-                <button type="button" onClick={() => void handleCopy('markdown')} title={t('chat.questionCard.copyMarkdown')} aria-label={t('chat.questionCard.copyMarkdown')} className={iconButtonClass}>
-                    <Icon name="file-text" className="size-3" />
-                </button>
-                <button type="button" onClick={() => void handleCopy('json')} title={t('chat.questionCard.copyJson')} aria-label={t('chat.questionCard.copyJson')} className={iconButtonClass}>
-                    <Icon name="code" className="size-3" />
-                </button>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <button type="button" onClick={() => void handleCopy('markdown')} aria-label={t('chat.questionCard.copyMarkdown')} className={iconButtonClass}>
+                            <Icon name="file-text" className="size-3" />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6}>{t('chat.questionCard.copyMarkdown')}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <button type="button" onClick={() => void handleCopy('json')} aria-label={t('chat.questionCard.copyJson')} className={iconButtonClass}>
+                            <Icon name="code" className="size-3" />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6}>{t('chat.questionCard.copyJson')}</TooltipContent>
+                </Tooltip>
             </>}
         >
             {!collapsed ? (
                 <div onKeyDown={handlePanelKeyDown}>
-                    <div
+                    <ScrollableOverlay
                         ref={bodyRef}
-                        className="max-h-[50vh] overflow-y-auto overscroll-contain px-1.5"
-                        style={availableMaxHeight === undefined ? undefined : { maxHeight: Math.max(120, availableMaxHeight - 96) }}
+                        preventOverscroll
+                        outerClassName="max-h-[50vh] min-h-0"
+                        outerStyle={availableMaxHeight === undefined ? undefined : { maxHeight: Math.max(120, availableMaxHeight - 96) }}
+                        className="px-1.5"
                     >
                         {currentQuestion ? (
                             <FormFieldControl
@@ -303,7 +317,7 @@ const FormDockPanel: React.FC<{ form: QuestionRequest; forms: QuestionRequest[] 
                                 <FormMarkdownFallback prompt={form.prompt} />
                             </div>
                         )}
-                    </div>
+                    </ScrollableOverlay>
 
                     <div className="flex items-center gap-1.5 px-3 pb-2 pt-1">
                         <Button variant="ghost" size="xs" disabled={isResponding} onClick={() => void handleDismiss()}>

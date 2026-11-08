@@ -137,6 +137,28 @@ const DEFAULT_EFFORT_OPTIONS: readonly { value: string; labelKey: I18nKey }[] = 
 
 type Values = Record<string, OmpSettingValue>;
 
+/** The label a model list shows for a selector, for the trigger to render too. */
+const modelOptionLabel = (models: Model[], selector: string): string => {
+  const model = models.find((candidate) => `${candidate.provider}/${candidate.modelId}` === selector);
+  return model ? `${model.name || model.modelId} (${selector})` : selector;
+};
+
+/** The label a thinking list shows for a level, for the trigger to render too. */
+const thinkingOptionLabel = (translate: (key: I18nKey) => string, effort: string): string => {
+  if (effort === 'default') return translate('settings.omp.modelRoles.thinkingDefault');
+  if (effort === 'auto') return translate('settings.omp.modelRoles.thinkingAuto');
+  const option = DEFAULT_EFFORT_OPTIONS.find((entry) => entry.value === effort);
+  return option ? translate(option.labelKey) : effort;
+};
+
+/** The label a role list shows for a role, for the trigger to render too. */
+const roleOptionLabel = (translate: (key: I18nKey) => string, roleId: string): string => {
+  const definition = OMP_MODEL_ROLES.find((role) => role.id === roleId);
+  if (!definition) return roleId;
+  const i18n = ROLE_I18N[roleId];
+  return `${i18n ? translate(i18n.label) : roleId} (${definition.tag})`;
+};
+
 const ROLE_I18N: Record<string, { label: I18nKey; desc: I18nKey }> = {
   default: { label: 'settings.omp.modelRoles.role.default.label', desc: 'settings.omp.modelRoles.role.default.desc' },
   smol: { label: 'settings.omp.modelRoles.role.smol.label', desc: 'settings.omp.modelRoles.role.smol.desc' },
@@ -329,7 +351,9 @@ const EnabledModelsEditor: React.FC<{
               }}
             >
               <SelectTrigger className="h-8 text-xs max-w-xs">
-                <SelectValue placeholder={t('settings.omp.enabledModels.addPattern')} />
+                <SelectValue placeholder={t('settings.omp.enabledModels.addPattern')}>
+                {selectedCatalogModel ? modelOptionLabel(models, selectedCatalogModel) : undefined}
+              </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => {
@@ -420,7 +444,9 @@ const AddRoleOverrideRow: React.FC<{
     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-dashed">
       <Select value={selectedRole} onValueChange={setSelectedRole} disabled={disabled}>
         <SelectTrigger className="h-7 text-xs w-36">
-          <SelectValue placeholder={t('settings.omp.modelPresets.selectRole')} />
+          <SelectValue placeholder={t('settings.omp.modelPresets.selectRole')}>
+          {selectedRole ? roleOptionLabel(t, selectedRole) : undefined}
+        </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {availableRoles.map((r) => {
@@ -437,7 +463,9 @@ const AddRoleOverrideRow: React.FC<{
 
       <Select value={selectedModel} onValueChange={setSelectedModel} disabled={disabled}>
         <SelectTrigger className="h-7 text-xs flex-1 min-w-[160px]">
-          <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')} />
+          <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')}>
+            {selectedModel ? modelOptionLabel(models, selectedModel) : undefined}
+          </SelectValue>
         </SelectTrigger>
         <SelectContent>
           {models.map((m) => {
@@ -585,7 +613,7 @@ const ModelPresetsEditor: React.FC<{
                     disabled={disabled}
                   >
                     <SelectTrigger className="h-8 text-xs">
-                      <SelectValue />
+                      <SelectValue>{thinkingOptionLabel(t, effort)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="default" className="text-xs">
@@ -628,7 +656,9 @@ const ModelPresetsEditor: React.FC<{
                           disabled={disabled}
                         >
                           <SelectTrigger className="h-8 text-xs flex-1">
-                            <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')} />
+                            <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')}>
+                              {modelVal ? modelOptionLabel(models, modelVal) : undefined}
+                            </SelectValue>
                           </SelectTrigger>
                           <SelectContent>
                             {models.map((m) => {
@@ -694,7 +724,9 @@ const ModelPresetsEditor: React.FC<{
             />
             <Select value={newPresetModel} onValueChange={setNewPresetModel}>
               <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')} />
+                <SelectValue placeholder={t('settings.omp.modelPresets.selectModel')}>
+                  {newPresetModel ? modelOptionLabel(models, newPresetModel) : undefined}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => {
@@ -710,7 +742,7 @@ const ModelPresetsEditor: React.FC<{
             <div className="flex items-center gap-2">
               <Select value={newPresetEffort} onValueChange={setNewPresetEffort}>
                 <SelectTrigger className="h-8 text-xs flex-1">
-                  <SelectValue />
+                  <SelectValue>{thinkingOptionLabel(t, newPresetEffort)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="default" className="text-xs">
@@ -893,7 +925,9 @@ const RetryFallbackChainsEditor: React.FC<{
                     }}
                   >
                     <SelectTrigger className="h-7 text-xs flex-1">
-                      <SelectValue placeholder={t('settings.omp.fallbackChains.addModel')} />
+                      <SelectValue placeholder={t('settings.omp.fallbackChains.addModel')}>
+                        {modelInputs[key] ? modelOptionLabel(models, modelInputs[key]) : undefined}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {models.map((m) => {
@@ -1198,7 +1232,9 @@ const CompactionModelThresholdsEditor: React.FC<{
                 }}
               >
                 <SelectTrigger className="h-8 text-xs w-[160px]">
-                  <SelectValue placeholder={t('settings.omp.modelThresholds.pickModel')} />
+                  <SelectValue placeholder={t('settings.omp.modelThresholds.pickModel')}>
+                    {newPattern || undefined}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {models.map((m) => {
@@ -1560,7 +1596,9 @@ const ModelRolesSection: React.FC<{
                       className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                       aria-label={t('settings.omp.modelRoles.modelAria', { role: roleLabel })}
                     >
-                      <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')} />
+                      <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')}>
+                        {isExplicit ? modelOptionLabel(models, parsed.model) : t('settings.omp.modelRoles.inheritFallback')}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__fallback__" className="text-xs italic">
@@ -1591,7 +1629,14 @@ const ModelRolesSection: React.FC<{
                         className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                         aria-label={t('settings.omp.modelRoles.effortAria', { role: roleLabel })}
                       >
-                        <SelectValue placeholder={t('settings.omp.modelRoles.thinkingDefault')} />
+                        <SelectValue placeholder={t('settings.omp.modelRoles.thinkingDefault')}>
+                          {parsed.effort
+                            ? (reasoningOptions.find((opt) => opt.reasoningEffort === parsed.effort)?.label
+                              || (DEFAULT_EFFORT_OPTIONS.find((opt) => opt.value === parsed.effort)
+                                ? t(DEFAULT_EFFORT_OPTIONS.find((opt) => opt.value === parsed.effort)!.labelKey)
+                                : parsed.effort))
+                            : t('settings.omp.modelRoles.thinkingDefault')}
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__default__" className="text-xs italic">

@@ -1,4 +1,8 @@
 import React from 'react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo, getEffectiveShortcutPrefix, UNASSIGNED_SHORTCUT } from '@/lib/shortcuts';
+import { useUIStore } from '@/stores/useUIStore';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
 import {
@@ -35,6 +39,7 @@ import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
 import { closeSessionTabAndActivateNeighbour } from '@/lib/sessionTabs';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionUnread } from '@/sync/session-unread';
 import { useIsSessionAiRenamePending } from '@/sync/use-session-ai-rename';
 import { useMultiRunMemberIds } from '@/lib/multirun/useMultiRuns';
@@ -104,6 +109,7 @@ const contextComponents: SessionTabMenuComponents = {
  */
 const SessionTabItem: React.FC<{
  tab: SessionTab;
+ tabNumber: number;
  isActive: boolean;
  suppressControls: boolean;
  onSelect: (tab: SessionTab) => void;
@@ -112,8 +118,13 @@ const SessionTabItem: React.FC<{
  closeOtherTabs: (id: string) => void;
  onMenuOpenChangeComplete?: (open: boolean) => void;
  children?: React.ReactNode;
-}> = ({ tab, isActive, suppressControls, onSelect, onClose, renderMenu, closeOtherTabs, onMenuOpenChangeComplete, children }) => {
+}> = ({ tab, tabNumber, isActive, suppressControls, onSelect, onClose, renderMenu, closeOtherTabs, onMenuOpenChangeComplete, children }) => {
  const { t } = useI18n();
+ const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+ const tabPrefix = getEffectiveShortcutPrefix('switch_session_tab', shortcutOverrides);
+ const tabShortcut = tabPrefix && tabPrefix !== UNASSIGNED_SHORTCUT && tabNumber <= 9
+  ? formatShortcutForDisplay(`${tabPrefix}+${tabNumber}`)
+  : undefined;
  const [menuOpen, setMenuOpen] = React.useState(false);
  // Keeps the overlay (the dropdown's anchor) mounted through the close animation.
  const [menuVisible, setMenuVisible] = React.useState(false);
@@ -207,9 +218,16 @@ const SessionTabItem: React.FC<{
                           activation and does not jump when the tab swaps
                           its content. */}
          {isActive ? children : (
-          <div className="flex min-w-0 flex-col justify-center">
-           <span dir="auto" className="block max-w-full overflow-hidden whitespace-nowrap text-left text-[13px] font-medium leading-4">{title}</span>
-          </div>
+          <Tooltip delayDuration={350}>
+           <TooltipTrigger asChild>
+            <div className="flex min-w-0 flex-col justify-center">
+             <span dir="auto" className="block max-w-full overflow-hidden whitespace-nowrap text-left text-[13px] font-medium leading-4">{title}</span>
+            </div>
+           </TooltipTrigger>
+           <TooltipContent side="bottom" sideOffset={8}>
+            <TooltipLabelWithShortcut label={title} shortcut={tabShortcut} />
+           </TooltipContent>
+          </Tooltip>
          )}
         </div>
         {isAiRenaming ? (
@@ -353,6 +371,17 @@ export const SessionTabsStrip: React.FC<{
   }
  }, [closeOtherTabs, currentSessionId, handleSelect, tabs]);
 
+ // The "+" after the tabs starts a session where these tabs are: the open
+ // session's folder, or the open draft's. TitlebarLeftControls leaves its own
+ // new-session button hidden while the strip is on screen, because this one
+ // starts in the right folder rather than in the project root.
+ const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+ const openNewSessionHere = React.useCallback(() => {
+  const { currentSessionId: openId, newSessionDraft, openNewSessionDraft } = useSessionUIStore.getState();
+  const directory = openId ? useDirectoryStore.getState().currentDirectory : newSessionDraft.directoryOverride;
+  openNewSessionDraft(directory ? { directoryOverride: directory } : undefined);
+ }, []);
+
  const sensors = useSensors(
   useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
   useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
@@ -421,10 +450,11 @@ export const SessionTabsStrip: React.FC<{
      onDragEnd={handleDragEnd}
     >
      <SortableContext items={tabIdsInOrder} strategy={horizontalListSortingStrategy}>
-      {tabs.map((tab) => (
+      {tabs.map((tab, index) => (
        <SessionTabItem
         key={tab.id}
         tab={tab}
+        tabNumber={index + 1}
         isActive={tab.id === currentSessionId}
         suppressControls={tab.id === currentSessionId && suppressActiveTabControls}
         onSelect={handleSelect}
@@ -449,6 +479,23 @@ export const SessionTabsStrip: React.FC<{
      </div>
     ) : null}
    </div>
+   {/* Right after the last tab, outside the scroller so it stays in view when
+       the tabs overflow. */}
+   <Tooltip>
+    <TooltipTrigger asChild>
+     <button
+      type="button"
+      onClick={openNewSessionHere}
+      aria-label={t('sessions.sidebar.header.actions.newSession')}
+      className="app-region-no-drag ms-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+     >
+      <Icon name="add" className="size-4" />
+     </button>
+    </TooltipTrigger>
+    <TooltipContent side="bottom" sideOffset={6}>
+     <TooltipLabelWithShortcut label={t('sessions.sidebar.header.actions.newSession')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('new_chat', shortcutOverrides), '')} />
+    </TooltipContent>
+   </Tooltip>
   </div>
  );
 };

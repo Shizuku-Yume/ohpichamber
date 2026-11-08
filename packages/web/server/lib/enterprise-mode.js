@@ -79,70 +79,70 @@ const WINDOWS_PROGRAM_DATA = 'C:\\ProgramData';
  * redirecting it cannot hide a policy the administrator placed there.
  */
 export const policyFilePaths = ({ platform = process.platform, env = process.env } = {}) => {
-  if (platform === 'darwin') return ['/Library/Application Support/OpenChamber/policy.json'];
-  if (platform === 'win32') {
-    const fixed = path.win32.join(WINDOWS_PROGRAM_DATA, 'OpenChamber', 'policy.json');
-    const programData = (env.ProgramData ?? '').trim();
-    const fromEnv = programData ? path.win32.join(programData, 'OpenChamber', 'policy.json') : null;
-    return fromEnv && fromEnv.toLowerCase() !== fixed.toLowerCase() ? [fixed, fromEnv] : [fixed];
-  }
-  return ['/etc/openchamber/policy.json'];
+ if (platform === 'darwin') return ['/Library/Application Support/OpenChamber/policy.json'];
+ if (platform === 'win32') {
+  const fixed = path.win32.join(WINDOWS_PROGRAM_DATA, 'OpenChamber', 'policy.json');
+  const programData = (env.ProgramData ?? '').trim();
+  const fromEnv = programData ? path.win32.join(programData, 'OpenChamber', 'policy.json') : null;
+  return fromEnv && fromEnv.toLowerCase() !== fixed.toLowerCase() ? [fixed, fromEnv] : [fixed];
+ }
+ return ['/etc/openchamber/policy.json'];
 };
 
 // A blank string counts as unset, so a template with empty fields pins nothing.
 const optionalText = z.string().trim().transform((value) => value || undefined).optional();
 
 const policyFileSchema = z.object({
-  enterpriseMode: z.boolean().optional(),
-  organization: optionalText,
-  relayUrl: optionalText,
-  allowNetworkAccess: z.boolean().optional(),
-  // Git repository URLs, not package ids: a package names its own id, so a
-  // user could ship any code under an allowed one.
-  allowedExtensions: z.array(z.string().trim().min(1)).max(200).optional(),
-  allowLocalExtensions: z.boolean().optional(),
-  jev: z.object({ url: optionalText, model: optionalText, apiKey: optionalText }).optional(),
-  hideBuiltinSkillCatalogs: z.boolean().optional(),
+ enterpriseMode: z.boolean().optional(),
+ organization: optionalText,
+ relayUrl: optionalText,
+ allowNetworkAccess: z.boolean().optional(),
+ // Git repository URLs, not package ids: a package names its own id, so a
+ // user could ship any code under an allowed one.
+ allowedExtensions: z.array(z.string().trim().min(1)).max(200).optional(),
+ allowLocalExtensions: z.boolean().optional(),
+ jev: z.object({ url: optionalText, model: optionalText, apiKey: optionalText }).optional(),
+ hideBuiltinSkillCatalogs: z.boolean().optional(),
 }).refine((policy) => !policy.jev || policy.jev.url || (!policy.jev.model && !policy.jev.apiKey), {
-  message: '"jev" needs a "url"',
-  path: ['jev'],
+ message: '"jev" needs a "url"',
+ path: ['jev'],
 });
 
 /** The file's content; throws an Error saying what is wrong with it. */
 const parsePolicyFile = (text) => {
-  let raw;
-  try {
-    // Windows PowerShell 5 writes UTF-8 with a byte-order mark.
-    raw = JSON.parse(text.replace(/^\uFEFF/, ''));
-  } catch (error) {
-    throw new Error(`not valid JSON (${error.message})`);
-  }
-  const parsed = policyFileSchema.safeParse(raw);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    const field = issue.path.length > 0 ? `"${issue.path.join('.')}": ` : '';
-    throw new Error(`${field}${issue.message}`);
-  }
-  const { enterpriseMode, organization, relayUrl, allowNetworkAccess, allowedExtensions, allowLocalExtensions, jev, hideBuiltinSkillCatalogs } = parsed.data;
-  return {
-    enterpriseMode: enterpriseMode === true,
-    organization: organization ?? null,
-    relayUrl,
-    allowNetworkAccess,
-    allowedExtensions,
-    allowLocalExtensions,
-    jev: jev?.url ? { url: jev.url, model: jev.model ?? null, apiKey: jev.apiKey ?? null } : undefined,
-    hideBuiltinSkillCatalogs: hideBuiltinSkillCatalogs === true,
-  };
+ let raw;
+ try {
+  // Windows PowerShell 5 writes UTF-8 with a byte-order mark.
+  raw = JSON.parse(text.replace(/^\uFEFF/, ''));
+ } catch (error) {
+  throw new Error(`not valid JSON (${error.message})`);
+ }
+ const parsed = policyFileSchema.safeParse(raw);
+ if (!parsed.success) {
+  const issue = parsed.error.issues[0];
+  const field = issue.path.length > 0 ? `"${issue.path.join('.')}": ` : '';
+  throw new Error(`${field}${issue.message}`);
+ }
+ const { enterpriseMode, organization, relayUrl, allowNetworkAccess, allowedExtensions, allowLocalExtensions, jev, hideBuiltinSkillCatalogs } = parsed.data;
+ return {
+  enterpriseMode: enterpriseMode === true,
+  organization: organization ?? null,
+  relayUrl,
+  allowNetworkAccess,
+  allowedExtensions,
+  allowLocalExtensions,
+  jev: jev?.url ? { url: jev.url, model: jev.model ?? null, apiKey: jev.apiKey ?? null } : undefined,
+  hideBuiltinSkillCatalogs: hideBuiltinSkillCatalogs === true,
+ };
 };
 
 const defaultReadFile = (filePath) => fs.readFileSync(filePath, 'utf8');
 
 let lastWarning = null;
 const warnOnce = (message) => {
-  if (message === lastWarning) return;
-  lastWarning = message;
-  console.warn(`[enterprise] ${message}`);
+ if (message === lastWarning) return;
+ lastWarning = message;
+ console.warn(`[enterprise] ${message}`);
 };
 
 /**
@@ -151,30 +151,30 @@ const warnOnce = (message) => {
  * be used.
  */
 const readPolicyFile = ({ platform = process.platform, env = process.env, readFile = defaultReadFile } = {}) => {
-  for (const filePath of policyFilePaths({ platform, env })) {
-    let text;
-    try {
-      text = readFile(filePath);
-    } catch (error) {
-      if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') continue;
-      const message = `cannot read ${filePath}: ${error?.message || error}`;
-      warnOnce(`${message}; enterprise mode stays on`);
-      return { status: 'invalid', path: filePath, error: message };
-    }
-    try {
-      return { status: 'ok', path: filePath, policy: parsePolicyFile(text) };
-    } catch (error) {
-      const message = `${filePath}: ${error.message}`;
-      warnOnce(`${message}; enterprise mode stays on`);
-      return { status: 'invalid', path: filePath, error: message };
-    }
+ for (const filePath of policyFilePaths({ platform, env })) {
+  let text;
+  try {
+   text = readFile(filePath);
+  } catch (error) {
+   if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') continue;
+   const message = `cannot read ${filePath}: ${error?.message || error}`;
+   warnOnce(`${message}; enterprise mode stays on`);
+   return { status: 'invalid', path: filePath, error: message };
   }
-  return { status: 'absent' };
+  try {
+   return { status: 'ok', path: filePath, policy: parsePolicyFile(text) };
+  } catch (error) {
+   const message = `${filePath}: ${error.message}`;
+   warnOnce(`${message}; enterprise mode stays on`);
+   return { status: 'invalid', path: filePath, error: message };
+  }
+ }
+ return { status: 'absent' };
 };
 
 const envFlag = (env, name) => {
-  const value = (env[name] ?? '').trim().toLowerCase();
-  return value === '1' || value === 'true';
+ const value = (env[name] ?? '').trim().toLowerCase();
+ return value === '1' || value === 'true';
 };
 
 const envString = (env, name) => (env[name] ?? '').trim() || null;
@@ -188,74 +188,74 @@ const envList = (env, name) => (env[name] ?? '').split(',').map((entry) => entry
  * came from, for the UI and the logs.
  */
 export const readEnterprisePolicy = (options = {}) => {
-  const env = options.env ?? process.env;
-  const file = readPolicyFile(options);
+ const env = options.env ?? process.env;
+ const file = readPolicyFile(options);
 
-  if (file.status === 'invalid') {
-    return {
-      enterpriseMode: true,
-      source: 'policy-file',
-      organization: null,
-      policyError: file.error,
-      relayUrl: null,
-      jev: null,
-      allowNetworkAccess: false,
-      allowedExtensions: [],
-      allowLocalExtensions: false,
-      // Fails closed like the rest: a broken policy offers no catalog it might have hidden.
-      hideBuiltinSkillCatalogs: true,
-    };
-  }
-
-  const fromFile = file.status === 'ok' ? file.policy : null;
-  const fileGoverns = fromFile?.enterpriseMode === true;
-  const enterpriseMode = fileGoverns || envFlag(env, 'OPENCHAMBER_ENTERPRISE_MODE');
-
-  // With the file in charge the environment adds nothing (see above).
-  const envJevUrl = fileGoverns ? null : envString(env, 'OPENCHAMBER_JEV_URL');
-  const jev = fromFile?.jev
-    ?? (envJevUrl
-      ? { url: envJevUrl, model: envString(env, 'OPENCHAMBER_JEV_MODEL'), apiKey: envString(env, 'OPENCHAMBER_JEV_API_KEY') }
-      : null);
-  const relayUrl = fromFile?.relayUrl ?? (fileGoverns ? null : envString(env, 'OPENCHAMBER_RELAY_URL'));
-  const allowNetworkAccess = fromFile?.allowNetworkAccess
-    ?? (fileGoverns ? false : envFlag(env, 'OPENCHAMBER_ALLOW_NETWORK_ACCESS'));
-  const allowedExtensions = fromFile?.allowedExtensions
-    ?? (fileGoverns ? [] : envList(env, 'OPENCHAMBER_ALLOWED_EXTENSIONS'));
-  const allowLocalExtensions = fromFile?.allowLocalExtensions
-    ?? (fileGoverns ? false : envFlag(env, 'OPENCHAMBER_ALLOW_LOCAL_EXTENSIONS'));
-
+ if (file.status === 'invalid') {
   return {
-    enterpriseMode,
-    source: fileGoverns ? 'policy-file' : enterpriseMode ? 'environment' : null,
-    organization: fromFile?.organization ?? null,
-    policyError: null,
-    relayUrl,
-    jev,
-    allowNetworkAccess,
-    allowedExtensions,
-    allowLocalExtensions,
-    // File only, in or out of enterprise mode: the environment is the user's to edit.
-    hideBuiltinSkillCatalogs: fromFile?.hideBuiltinSkillCatalogs === true,
+   enterpriseMode: true,
+   source: 'policy-file',
+   organization: null,
+   policyError: file.error,
+   relayUrl: null,
+   jev: null,
+   allowNetworkAccess: false,
+   allowedExtensions: [],
+   allowLocalExtensions: false,
+   // Fails closed like the rest: a broken policy offers no catalog it might have hidden.
+   hideBuiltinSkillCatalogs: true,
   };
+ }
+
+ const fromFile = file.status === 'ok' ? file.policy : null;
+ const fileGoverns = fromFile?.enterpriseMode === true;
+ const enterpriseMode = fileGoverns || envFlag(env, 'OPENCHAMBER_ENTERPRISE_MODE');
+
+ // With the file in charge the environment adds nothing (see above).
+ const envJevUrl = fileGoverns ? null : envString(env, 'OPENCHAMBER_JEV_URL');
+ const jev = fromFile?.jev
+  ?? (envJevUrl
+   ? { url: envJevUrl, model: envString(env, 'OPENCHAMBER_JEV_MODEL'), apiKey: envString(env, 'OPENCHAMBER_JEV_API_KEY') }
+   : null);
+ const relayUrl = fromFile?.relayUrl ?? (fileGoverns ? null : envString(env, 'OPENCHAMBER_RELAY_URL'));
+ const allowNetworkAccess = fromFile?.allowNetworkAccess
+  ?? (fileGoverns ? false : envFlag(env, 'OPENCHAMBER_ALLOW_NETWORK_ACCESS'));
+ const allowedExtensions = fromFile?.allowedExtensions
+  ?? (fileGoverns ? [] : envList(env, 'OPENCHAMBER_ALLOWED_EXTENSIONS'));
+ const allowLocalExtensions = fromFile?.allowLocalExtensions
+  ?? (fileGoverns ? false : envFlag(env, 'OPENCHAMBER_ALLOW_LOCAL_EXTENSIONS'));
+
+ return {
+  enterpriseMode,
+  source: fileGoverns ? 'policy-file' : enterpriseMode ? 'environment' : null,
+  organization: fromFile?.organization ?? null,
+  policyError: null,
+  relayUrl,
+  jev,
+  allowNetworkAccess,
+  allowedExtensions,
+  allowLocalExtensions,
+  // File only, in or out of enterprise mode: the environment is the user's to edit.
+  hideBuiltinSkillCatalogs: fromFile?.hideBuiltinSkillCatalogs === true,
+ };
 };
 
 export const isEnterpriseMode = (options) => readEnterprisePolicy(options).enterpriseMode;
 
 /** Whether enterprise mode keeps this server off the network (loopback only). */
 export const isNetworkAccessBlocked = (options) => {
-  const policy = readEnterprisePolicy(options);
-  return policy.enterpriseMode && !policy.allowNetworkAccess;
+ const policy = readEnterprisePolicy(options);
+ return policy.enterpriseMode && !policy.allowNetworkAccess;
 };
 
 export const ENTERPRISE_MODE_ERROR = 'Not available in enterprise mode: this operation is blocked by enterprise policy.';
 
 export const NETWORK_ACCESS_BLOCKED_ERROR = 'Enterprise mode keeps OpenChamber on this machine: it does not listen on a network address. '
-  + 'An administrator can allow it with "allowNetworkAccess": true in the policy file, or OPENCHAMBER_ALLOW_NETWORK_ACCESS=1 where the environment turns enterprise mode on.';
+ + 'An administrator can allow it with "allowNetworkAccess": true in the policy file, or OPENCHAMBER_ALLOW_NETWORK_ACCESS=1 where the environment turns enterprise mode on.';
 
 /** What a client may know about the policy; pinned endpoints and keys stay on the server. */
 export const publicEnterprisePolicy = (options) => {
-  const { enterpriseMode, source, organization, policyError, allowNetworkAccess } = readEnterprisePolicy(options);
-  return { enterpriseMode, source, organization, policyError, networkAccessBlocked: enterpriseMode && !allowNetworkAccess };
+ const { enterpriseMode, source, organization, policyError, allowNetworkAccess } = readEnterprisePolicy(options);
+ return { enterpriseMode, source, organization, policyError, networkAccessBlocked: enterpriseMode && !allowNetworkAccess };
 };
 

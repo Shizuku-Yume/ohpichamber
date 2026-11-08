@@ -1,10 +1,13 @@
 import { isDesktopShell } from '@/lib/desktop';
 
+/** True on Linux, where Chromium middle-click pastes the PRIMARY selection. */
+export const isLinuxPlatform = (): boolean => navigator.platform.toLowerCase().startsWith('linux');
+
 /** True when running inside the native Capacitor shell (iOS/Android app), not the web/PWA. */
 export const isCapacitorApp = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  const capacitor = (window as typeof window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
-  return capacitor?.isNativePlatform?.() === true || window.location.protocol === 'capacitor:';
+ if (typeof window === 'undefined') return false;
+ const capacitor = (window as typeof window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+ return capacitor?.isNativePlatform?.() === true || window.location.protocol === 'capacitor:';
 };
 
 /**
@@ -14,8 +17,8 @@ export const isCapacitorApp = (): boolean => {
  * platform with real touch points (or a legacy explicit iPad UA).
  */
 export const isIPadApp = (): boolean => {
-  if (typeof window === 'undefined' || !isCapacitorApp()) return false;
-  return getClientPlatform() === 'ios' && isIPadDevice();
+ if (typeof window === 'undefined' || !isCapacitorApp()) return false;
+ return getClientPlatform() === 'ios' && isIPadDevice();
 };
 
 /**
@@ -24,11 +27,11 @@ export const isIPadApp = (): boolean => {
  * Mac has them.
  */
 export const isIPadDevice = (): boolean => {
-  if (typeof navigator === 'undefined') return false;
-  const userAgent = navigator.userAgent || '';
-  const maxTouchPoints = navigator.maxTouchPoints ?? 0;
-  return /iPad/i.test(userAgent)
-    || (/Macintosh|MacIntel/i.test(userAgent) && maxTouchPoints > 1);
+ if (typeof navigator === 'undefined') return false;
+ const userAgent = navigator.userAgent || '';
+ const maxTouchPoints = navigator.maxTouchPoints ?? 0;
+ return /iPad/i.test(userAgent)
+  || (/Macintosh|MacIntel/i.test(userAgent) && maxTouchPoints > 1);
 };
 
 type ClientPlatform = 'ios' | 'android' | 'desktop' | 'web';
@@ -39,11 +42,11 @@ type ClientPlatform = 'ios' | 'android' | 'desktop' | 'web';
  * mobile push while visible.
  */
 export const getClientPlatform = (): ClientPlatform => {
-  if (typeof window !== 'undefined') {
-    const capacitor = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor;
-    const native = capacitor?.getPlatform?.();
-    if (native === 'ios' || native === 'android') return native;
-  }
-  if (isDesktopShell()) return 'desktop';
-  return 'web';
+ if (typeof window !== 'undefined') {
+  const capacitor = (window as typeof window & { Capacitor?: { getPlatform?: () => string } }).Capacitor;
+  const native = capacitor?.getPlatform?.();
+  if (native === 'ios' || native === 'android') return native;
+ }
+ if (isDesktopShell()) return 'desktop';
+ return 'web';
 };

@@ -373,7 +373,7 @@ const CopyMessageLinkButton: React.FC<{ onCopyLink: () => void }> = ({ onCopyLin
     );
 };
 
-const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onCopyLink, onShowPopup, agentMention, onRevert, onFork, contextPinned, contextPinPending, onToggleContextPin, userActionsMode = 'inline', stickyUserHeaderEnabled = true, extraActions }: {
+const UserMessageBody = React.memo(({ workspaceId, messageId: _messageId, parts, messageCreatedAt, isMobile, alwaysShowActions = isMobile, hasTouchInput, hasTextContent, onCopyMessage, copiedMessage, onCopyLink, onShowPopup, agentMention, onRevert, onFork, contextPinned, contextPinPending, onToggleContextPin, userActionsMode = 'inline', stickyUserHeaderEnabled = true, extraActions }: {
     messageId: string;
     workspaceId: string | undefined;
     parts: Part[];
@@ -801,7 +801,6 @@ const UserMessageBody = React.memo(({ workspaceId, messageId, parts, messageCrea
                         <React.Fragment key={`user-text-${index}`}>
                             <UserTextPart
                                 part={part}
-                                messageId={messageId}
                                 isMobile={isMobile}
                                 agentMention={mentionForPart}
                                 messageExpanded={messageExpanded}
@@ -2176,7 +2175,7 @@ const AssistantMessageBody = React.memo(({
         if (splitLiveActivity && liveFinalActivity) {
             return [
                 <LiveActivityCollapse key="final-message-activity" expanded={liveFinalActivity.expanded}
-                    id={liveFinalActivity.contentId} animateOnMount={liveFinalActivity.animateCollapse}>
+                    id={liveFinalActivity.contentId}>
                     {activityRendered}
                 </LiveActivityCollapse>,
                 ...answerRendered,

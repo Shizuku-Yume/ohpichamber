@@ -1,3 +1,5 @@
+import { isBtwPendingComposerKey } from "@/lib/btw";
+import { isMentionEntryInText } from '../language/mentions';
 /**
  * Per-session draft persistence for the composer.
  *
@@ -138,7 +140,11 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         // user deleted must not resurrect as a file reference on restore.
         const activeMentions = new Set<string>();
         for (const mention of confirmedMentionsRef.current) {
-            if (draft.includes(`@${mention}`)) activeMentions.add(mention);
+            if (isMentionEntryInText(mention, draft)) activeMentions.add(mention);
+        }
+        if (isBtwPendingComposerKey(target.sessionId)) {
+            draftMemoryRef.current.set(key, { text: draft, confirmedMentions: activeMentions });
+            return;
         }
         confirmedMentionsRef.current = activeMentions;
 
@@ -296,7 +302,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         const isCurrent = target && current && getChatDraftIdentityKey(target) === getChatDraftIdentityKey(current);
         const existing = isCurrent
             ? { text: messageRef.current, confirmedMentions: confirmedMentionsRef.current }
-            : (targetKey && draftMemoryRef.current.get(targetKey)) || (persistEnabled ? readChatDraft(target) : null);
+            : (targetKey && draftMemoryRef.current.get(targetKey)) || (isBtwPendingComposerKey(target?.sessionId) ? null : persistEnabled ? readChatDraft(target) : null);
         const text = existing?.text && existing.text !== draft ? `${existing.text}\n\n${draft}` : draft;
         const mentions = new Set([...(existing?.confirmedMentions ?? []), ...confirmedMentions]);
         if (targetKey) draftMemoryRef.current.set(targetKey, { text, confirmedMentions: mentions });
@@ -305,7 +311,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             confirmedMentionsRef.current = new Set(mentions);
             setMessage(text);
         }
-        if (persistEnabled && target) {
+        if (persistEnabled && target && !isBtwPendingComposerKey(target.sessionId)) {
             writeChatDraft(target, text, mentions);
             lastPersistedRef.current.set(getChatDraftIdentityKey(target), draftSignature(text, mentions));
         }
@@ -340,11 +346,33 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             : (from && draftMemoryRef.current.get(getChatDraftIdentityKey(from)))
             || (persistEnabled ? readChatDraft(from) : null);
         if (!draft) return;
-        draftMemoryRef.current.set(getChatDraftIdentityKey(to), { text: draft.text, confirmedMentions: new Set(draft.confirmedMentions) });
-        if (persistEnabled) {
-            writeChatDraft(to, draft.text, draft.confirmedMentions);
-            lastPersistedRef.current.set(getChatDraftIdentityKey(to), draftSignature(draft.text, draft.confirmedMentions));
+        const fromKey = from ? getChatDraftIdentityKey(from) : null;
+        const toKey = getChatDraftIdentityKey(to);
+        if (fromKey === toKey) return;
+        draftMemoryRef.current.set(toKey, { text: draft.text, confirmedMentions: new Set(draft.confirmedMentions) });
+        if (!persistEnabled) {
+            if (fromKey) {
+                draftMemoryRef.current.delete(fromKey);
+                lastPersistedRef.current.delete(fromKey);
+            }
+            return;
         }
+        writeChatDraft(to, draft.text, draft.confirmedMentions);
+        lastPersistedRef.current.set(toKey, draftSignature(draft.text, draft.confirmedMentions));
+        // The migration MOVED the draft: leaving the source behind would let a
+        // switch back to it resurrect text that now belongs to the destination.
+        // The source is cleared only after the destination is confirmed written,
+        // so a failed destination write leaves the text recoverable where it was.
+        if (!fromKey) return;
+        if (readChatDraft(to)?.text !== draft.text) {
+            draftMemoryRef.current.set(fromKey, { text: draft.text, confirmedMentions: new Set(draft.confirmedMentions) });
+            lastPersistedRef.current.delete(toKey);
+            return;
+        }
+        draftMemoryRef.current.delete(fromKey);
+        lastPersistedRef.current.delete(fromKey);
+        // Only clear what was actually moved; an unrelated draft stays.
+        if (from && readChatDraft(from).text === draft.text) clearChatDraft(from);
     }, [confirmedMentionsRef, messageRef, persistEnabled]);
 
     return { persistNow, handoffDraft, restoreDraft, migrateDraft };

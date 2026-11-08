@@ -799,7 +799,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
             <Button
               variant={connected ? 'outline' : 'default'}
               size="xs"
-              
+
               onClick={() => void handleConnectionAction()}
               disabled={busy}
             >
@@ -1008,7 +1008,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                   }}
                 >
                   <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} disabled={busy || isReadOnly}>
-                    <SelectValue />
+                    <SelectValue>{draft.transport.type === 'sse' ? REMOTE_TRANSPORT_LABELS.sse : REMOTE_TRANSPORT_LABELS.http}</SelectValue>
                   </SelectTrigger>
                   <SelectContent align="end">
                     <SelectItem value="http">{REMOTE_TRANSPORT_LABELS.http}</SelectItem>

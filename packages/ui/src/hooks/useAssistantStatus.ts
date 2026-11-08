@@ -6,6 +6,7 @@ import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectorySync, useSessionMessages, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
 import { useSessionActivity } from './useSessionActivity';
+import type { AgentStatus } from '@/lib/agentStatus';
 
 type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
 
@@ -18,6 +19,8 @@ interface WorkingSummary {
     isCooldown: boolean;
     lifecyclePhase: MessageStreamPhase | null;
     statusText: string | null;
+    /** The same activity as a dictionary key, so the pill and status row localize it. */
+    status: AgentStatus | null;
     isGenericStatus: boolean;
     isWaitingForPermission: boolean;
     canAbort: boolean;
@@ -66,6 +69,7 @@ const DEFAULT_WORKING: WorkingSummary = {
     isCooldown: false,
     lifecyclePhase: null,
     statusText: null,
+    status: null,
     isGenericStatus: true,
     isWaitingForPermission: false,
     canAbort: false,
@@ -128,8 +132,62 @@ type ParsedStatusResult = {
     activePartType: 'text' | 'tool' | 'reasoning' | 'editing' | undefined;
     activeToolName: string | undefined;
     statusText: string;
+    status: AgentStatus;
     isGenericStatus: boolean;
 };
+
+// The dictionary keys behind each bucket's phrase; a tool the catalogue has no
+// phrase for reads as its name.
+const BUCKET_STATUS = {
+    read: 'chat.agentStatus.read',
+    search: 'chat.agentStatus.search',
+    edit: 'chat.agentStatus.edit',
+    command: 'chat.agentStatus.command',
+    lookup: 'chat.agentStatus.lookup',
+    delegate: 'chat.agentStatus.delegate',
+    question: 'chat.agentStatus.question',
+    skill: 'chat.agentStatus.skill',
+} as const;
+const COUNTED_STATUS = {
+    read: 'chat.agentStatus.read.count',
+    edit: 'chat.agentStatus.edit.count',
+    command: 'chat.agentStatus.command.count',
+    delegate: 'chat.agentStatus.delegate.count',
+    skill: 'chat.agentStatus.skill.count',
+} as const;
+
+const getToolStatus = (toolName: string, count = 1): AgentStatus => {
+    const bucket = TOOL_BUCKETS[toolName];
+    if (!bucket) return { key: 'chat.agentStatus.usingTool', name: toolName.replace(/[_-]+/g, ' ').trim() };
+    const counted = (COUNTED_STATUS as Record<string, string | undefined>)[bucket];
+    const single = (BUCKET_STATUS as Record<string, string | undefined>)[bucket];
+    if (count > 1 && counted) return { key: counted as AgentStatus['key'], count };
+    if (single) return { key: single as AgentStatus['key'] };
+    // plan and evaluate are OMP's own tools; the catalogue has no phrase for them.
+    return { key: 'chat.agentStatus.usingTool', name: bucket };
+};
+
+/** The generic phrase's dictionary key, picked by the same hash as its text. */
+const WORKING_STATUS_KEYS = [
+    'chat.agentStatus.working',
+    'chat.agentStatus.generic.processing',
+    'chat.agentStatus.generic.preparing',
+    'chat.agentStatus.generic.warmingUp',
+    'chat.agentStatus.generic.gearsTurning',
+    'chat.agentStatus.generic.computing',
+    'chat.agentStatus.generic.calculating',
+    'chat.agentStatus.generic.analyzing',
+    'chat.agentStatus.generic.wheelsSpinning',
+    'chat.agentStatus.generic.calibrating',
+    'chat.agentStatus.generic.synthesizing',
+    'chat.agentStatus.generic.connectingDots',
+    'chat.agentStatus.generic.inspectingLogic',
+    'chat.agentStatus.generic.weighingOptions',
+] as const;
+
+const getStableWorkingStatus = (key: string): AgentStatus => ({
+    key: WORKING_STATUS_KEYS[hashString(key) % WORKING_STATUS_KEYS.length] ?? 'chat.agentStatus.working',
+});
 
 const getToolStatusPhrase = (toolName: string, count = 1): string => {
     const bucket = TOOL_BUCKETS[toolName];
@@ -202,8 +260,15 @@ export const createParsedStatus = (parts: Part[], genericKey: string): ParsedSta
         if (activePartType === 'tool' && activeToolName) return activeToolPhrase ?? getToolStatusPhrase(activeToolName);
         return getStableWorkingPhrase(genericKey);
     })();
+    const status: AgentStatus = isGenericStatus
+        ? getStableWorkingStatus(genericKey)
+        : activePartType === 'editing'
+            ? getToolStatus(activeToolName ?? 'edit', runningToolCounts.get(TOOL_BUCKETS[activeToolName ?? 'edit'] ?? 'edit') ?? 1)
+            : activePartType === 'tool' && activeToolName
+                ? getToolStatus(activeToolName, runningToolCounts.get(TOOL_BUCKETS[activeToolName] ?? activeToolName) ?? 1)
+                : { key: 'chat.agentStatus.composing' };
 
-    return { activePartType, activeToolName, statusText, isGenericStatus };
+    return { activePartType, activeToolName, statusText, status, isGenericStatus };
 };
 
 const encodeParsedStatus = (status: ParsedStatusResult): string => {
@@ -212,17 +277,31 @@ const encodeParsedStatus = (status: ParsedStatusResult): string => {
         status.activeToolName ?? '',
         status.statusText,
         status.isGenericStatus ? '1' : '0',
+        // The key is what the pill localizes; its text is only the fallback.
+        JSON.stringify([status.status.key, status.status.count ?? null, status.status.name ?? null]),
     ].join(STATUS_SIGNATURE_SEPARATOR);
 };
 
 const decodeParsedStatus = (signature: string): ParsedStatusResult => {
-    const [activePartType, activeToolName, statusText = 'working', isGenericStatus] = signature.split(STATUS_SIGNATURE_SEPARATOR);
+    const [activePartType, activeToolName, statusText = 'working', isGenericStatus, encodedStatus] = signature.split(STATUS_SIGNATURE_SEPARATOR);
+    let status: AgentStatus = { key: 'chat.agentStatus.working' };
+    if (encodedStatus) {
+        try {
+            const [key, count, name] = JSON.parse(encodedStatus) as [AgentStatus['key'], number | null, string | null];
+            status = { key };
+            if (count !== null) status.count = count;
+            if (name !== null) status.name = name;
+        } catch {
+            // A signature from an older build carries no key; the text stands in.
+        }
+    }
     return {
         activePartType: activePartType === 'text' || activePartType === 'tool' || activePartType === 'reasoning' || activePartType === 'editing'
             ? activePartType
             : undefined,
         activeToolName: activeToolName || undefined,
         statusText,
+        status,
         isGenericStatus: isGenericStatus === '1',
     };
 };
@@ -376,6 +455,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             isCooldown,
             lifecyclePhase: isStreaming ? 'streaming' : isCooldown ? 'cooldown' : null,
             statusText: isWorking ? parsedStatus.statusText : null,
+            status: isWorking ? parsedStatus.status : null,
             isGenericStatus: isWorking ? parsedStatus.isGenericStatus : true,
             isWaitingForPermission: false,
             canAbort: isWorking,
@@ -424,6 +504,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         return {
             ...baseWorking,
             statusText: 'waiting for permission',
+            status: { key: 'chat.agentStatus.waitingPermission' },
             isWaitingForPermission: true,
             canAbort: false,
             retryInfo: null,

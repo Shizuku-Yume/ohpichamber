@@ -38,7 +38,9 @@ const childStores = {
   },
   clearBootstrapDemand: (owner: string) => state.clearedOwners.push(owner),
 };
-type GlobalSessionsState = { activeSessions: never[]; archivedSessions: never[]; status: 'ready' };
+// The fork's global list is authoritative as a whole once its status is
+// ready; there is no separate snapshot beside it.
+type GlobalSessionsState = { activeSessions: unknown[]; archivedSessions: unknown[]; status: 'ready' };
 const globalSessions: GlobalSessionsState = { activeSessions: [], archivedSessions: [], status: 'ready' };
 
 mock.module('@/sync/sync-context', () => ({
@@ -171,6 +173,27 @@ describe('useSessionListSync', () => {
     expect(state.globalRefreshes).toBe(0);
     expect(state.subscriptions).toBe(2);
     expect(state.unsubscriptions).toBe(1);
+  });
+
+  test('head updates to visible arrays never advance the authoritative cleanup snapshot', () => {
+    const kept = { sessionId: 'kept' };
+    globalSessions.activeSessions = [kept];
+    act(() => root.render(<LifecycleProbe />));
+    const baseline = state.cleanupInputs.at(-1)?.sessions;
+    expect(baseline).toEqual([kept]);
+
+    // A head refresh republishes the same sessions in new arrays; the
+    // snapshot the cleanup reconciles against keeps the same content.
+    globalSessions.activeSessions = [{ ...kept }];
+    globalSessions.archivedSessions = [];
+    act(() => root.render(<LifecycleProbe />));
+    expect(state.cleanupInputs.at(-1)?.sessions).toEqual(baseline);
+
+    // A session the snapshot no longer holds must still reach cleanup, or its
+    // deletion would never be reconciled.
+    globalSessions.activeSessions = [];
+    act(() => root.render(<LifecycleProbe />));
+    expect(state.cleanupInputs.at(-1)?.sessions).toEqual([]);
   });
 
   test('cancels a pending control-event refresh before a layout remount', async () => {

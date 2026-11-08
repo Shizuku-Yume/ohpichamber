@@ -33,6 +33,13 @@ export interface CreateMultiRunParams {
   setupCommands?: string[];
   /** Fuse the lanes automatically once all of them finish. */
   autoFusion?: MultiRunAutoFusion;
+  /** Every lane starts a goal of its own, with its prompt as the objective. */
+  goal?: MultiRunGoal;
+}
+
+export interface MultiRunGoal {
+  /** Applies to each lane separately. */
+  tokenBudget: number | null;
 }
 
 export interface CreateMultiRunResult {

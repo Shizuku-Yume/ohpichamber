@@ -1,6 +1,10 @@
+import { useConfigStore } from '@/stores/useConfigStore';
+import { useMessageTTS } from "@/hooks/useMessageTTS";
+import { useAutoReadAloud } from "@/hooks/useAutoReadAloud";
+import { findLatestCompletedReply } from "@/lib/messages/latestReply";
 import React from 'react';
 import { createPortal } from 'react-dom';
-import type { Message as CanonicalMessage, Part } from '@openchamber/agent-contract';
+import type { Message as CanonicalMessage, Part, Turn } from '@openchamber/agent-contract';
 
 import { ChatInput } from './ChatInput';
 import { CHAT_INPUT_EDITOR_SELECTOR } from './composer/editor/dom';
@@ -90,6 +94,7 @@ import {
  useParentSession,
  useSessionDirectory,
  useSession,
+ useDirectorySync,
 } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
@@ -108,11 +113,13 @@ import { createFirstVisibleSessionPerformanceTracker } from '@/sync/session-load
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 
 const EMPTY_MESSAGES: CanonicalMessage[] = [];
+const EMPTY_TURNS: readonly Turn[] = [];
 const IDLE_SESSION_STATUS = 'idle' as const;
 const CHAT_FORCE_SCROLL_BOTTOM_EVENT = 'openchamber:chat-force-scroll-bottom';
 const DRAFT_EXIT_DURATION_MS = 120;
 const COMPOSER_MOVE_DURATION_MS = 180;
 const CHAT_SCROLL_STYLE = {
+ minWidth: 1,
  overflowAnchor: 'none',
  overscrollBehavior: 'contain',
  overscrollBehaviorY: 'contain',
@@ -202,7 +209,7 @@ type ChatViewportProps = {
  messageListRef: React.RefObject<MessageListHandle | null>;
  registerList: (list: TimelineListHandle | null) => void;
  onIsAtEndChange: (isAtEnd: boolean) => void;
- onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
+ onListMetricsChange: (metrics: { readonly headerSize: number; readonly footerSize: number }) => void;
  onTimelineDataChange: () => void;
  renderedMessages: CanonicalMessage[];
  isLoadingOlder: boolean;
@@ -889,6 +896,12 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   suspendPartUpdatesForMessageId: streamingMessageId,
  });
  const sessionMessages = currentSessionId ? sessionMessageRecords : EMPTY_MESSAGES;
+ // The session's turns are the authority for what has actually finished:
+ // a reply only exists once the newest prompt's turn says it completed.
+ const sessionTurns = useDirectorySync(
+  React.useCallback((state) => (currentSessionId ? state.snapshot[currentSessionId]?.turns ?? EMPTY_TURNS : EMPTY_TURNS), [currentSessionId]),
+  effectiveSessionDirectory,
+ );
  const authSessionExpired = useAuthSessionStore((store) => store.state !== 'ok');
  const wasAuthExpiredRef = React.useRef(false);
  const sessionMessageLoadState = useSessionMessageLoadState(
@@ -1097,6 +1110,31 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   openNewSessionDraft({ automatic: true });
  }, [autoOpenDraft, liveSessionId, draftOpen, openNewSessionDraft]);
 
+ const autoReadAloudEnabled = useConfigStore((state) => state.autoReadAloudEnabled);
+ const latestCompletedReply = React.useMemo(
+  () => findLatestCompletedReply(sessionTurns, sessionMessages),
+  [sessionMessages, sessionTurns],
+ );
+ // Use the reply's own messageId as the reading key so the message
+ // button shows the auto-started reading as playing and can stop it.
+ const { play: playAutoReadAloud } = useMessageTTS(latestCompletedReply?.messageId);
+ // Permission prompts pause sessionIsWorking while the turn is still
+ // running, so status also marks the session as active for the auto-read
+ // baseline.
+ const sessionIsActive = sessionIsWorking
+  || sessionStatusForCurrent === "running"
+  || sessionStatusForCurrent === "awaiting_approval"
+  || sessionStatusForCurrent === "awaiting_input";
+ useAutoReadAloud({
+  sessionKey: currentSessionKey ?? "",
+  ready: hasRenderableSessionSnapshot && sessionMessageLoadState.status === "ready",
+  sessionIsActive,
+  reply: latestCompletedReply,
+  turns: sessionTurns,
+  enabled: autoReadAloudEnabled && !pinned && !readOnly,
+  play: playAutoReadAloud,
+ });
+
  const activeTurnChangeRef = React.useRef<(turnId: string | null) => void>(() => { });
  const handleActiveTurnChange = React.useCallback((turnId: string | null) => {
   activeTurnChangeRef.current(turnId);
@@ -1164,7 +1202,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   isFollowingProgrammatically,
   showScrollButton,
   userOwnsScroll,
-  viewportAtEnd,
   nearContentStart,
  } = useChatTimelineScroll({
   currentSessionId,
@@ -1739,6 +1776,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         <ChatQuoteHighlightLayer
          store={chatQuoteHighlights}
          scrollNode={scrollNode}
+         loadHistoryUntilMessage={(messageId) => loadHistoryUntilMessage(messageId, Number.POSITIVE_INFINITY)}
          scrollToMessage={timelineController.scrollToMessage}
         />
         <div
@@ -1835,7 +1873,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               ref={registerFloatingPanelClearanceReader}
               className={cn(
                'oc-recap-hint pointer-events-none absolute bottom-full inset-x-0 mb-2 transition-opacity duration-300 ease-out',
-               !viewportAtEnd && 'opacity-0',
+               !isPinned && 'opacity-0',
               )}
               style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
              >

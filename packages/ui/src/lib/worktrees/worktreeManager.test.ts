@@ -41,8 +41,49 @@ const attachmentState = {
   attachments: new Map<string, { worktreeStatus: 'pending' | 'ready'; worktreeRoot: string }>(),
 };
 
+// The shape `fetchProjectSetup` answers with: no shared commands, so nothing
+// asks for trust; an empty teardown, so the removal carries none.
+const EMPTY_PROJECT_SETUP = {
+  trust: { hash: null, trusted: true },
+  setupWorktree: [] as string[],
+  setupWorktreeWait: false,
+  teardownWorktree: [] as string[],
+  projectActions: [],
+  projectActionsPrimaryId: null,
+  draftStarters: [],
+  shared: {
+    status: 'missing' as const,
+    path: '.openchamber/project.json',
+    setupWorktree: [] as string[],
+    setupWorktreeWait: null,
+    teardownWorktree: [] as string[],
+    projectActions: [],
+    draftStarters: [],
+    plansDir: null,
+  },
+  personal: {
+    setupWorktree: [] as string[],
+    setupWorktreeWait: null,
+    setupWorktreeMode: 'append' as const,
+    worktreeDirectory: null,
+    teardownWorktree: [] as string[],
+    projectActions: [],
+    projectActionsPrimaryId: null,
+    draftStarters: [],
+    hiddenSharedActionIds: [] as string[],
+    sharedTrust: null,
+  },
+};
+
+const realOpenchamberConfig = await import('@/lib/openchamberConfig');
 mock.module('@/lib/openchamberConfig', () => ({
+  ...realOpenchamberConfig,
   substituteCommandVariables: (command: string) => command,
+  // Removal asks the project what to run before the worktree goes; nothing
+  // configured means no teardown, and no trust prompt either.
+  fetchProjectSetup: async () => EMPTY_PROJECT_SETUP,
+  getProjectSetup: async () => EMPTY_PROJECT_SETUP,
+  updateProjectSetup: async () => true,
 }));
 
 mock.module('@/components/ui', () => ({
@@ -56,10 +97,16 @@ mock.module('@/lib/i18n', () => ({
   useI18nStore: { getState: () => ({ dictionary: {} }) },
 }));
 
+// Partial on purpose: another test file in this process imports the bootstrap
+// module too, and replacing it wholesale would hide helpers it needs.
+const realWorktreeBootstrap = await import('@/lib/worktrees/worktreeBootstrap');
 mock.module('@/lib/worktrees/worktreeBootstrap', () => ({
+  ...realWorktreeBootstrap,
   clearWorktreeBootstrapState: mock(),
   markWorktreeBootstrapPending: mock(),
   setWorktreeBootstrapState: mock(),
+  // Removal skips the teardown of a checkout whose bootstrap failed.
+  getWorktreeBootstrapState: () => null,
   startWorktreeBootstrapWatcher: (directory: string, options?: { onReady?: () => void }) => {
     bootstrapWatcherCalls.push(directory);
     bootstrapWatcherOptions.push(options ?? {});
@@ -90,7 +137,12 @@ mock.module('@/sync/session-ui-store', () => ({
   },
 }));
 
+// A partial mock: the manager's neighbours in the same test process import
+// other git helpers from this module, and replacing it wholesale would empty
+// theirs. Only what the manager touches is replaced.
+const realGitApi = await import('@/lib/gitApi');
 mock.module('@/lib/gitApi', () => ({
+  ...realGitApi,
   deleteRemoteBranch: mock(),
   git: {
     worktree: {
@@ -108,6 +160,7 @@ mock.module('@/lib/gitApi', () => ({
         createPayloads.push(payload);
         return Promise.resolve(createdWorktreeResult);
       }),
+      teardown: mock(() => Promise.resolve({ success: true })),
       validate: mock((_directory: string, payload: unknown) => {
         validatePayloads.push(payload);
         return Promise.resolve({ ok: true, errors: [] });
@@ -538,8 +591,11 @@ describe('worktreeManager list invalidation', () => {
     });
 
     test('the row shows the removal until git answers, then leaves with it', async () => {
+      // The removal resolves the project's teardown first, so git's call lands
+      // a tick later; hold its answer where the test can reach it either way.
       let answerGit: (value: { success: boolean }) => void = () => undefined;
-      removeImplementation = () => new Promise((resolve) => { answerGit = resolve; });
+      const gitRemoval = new Promise<{ success: boolean }>((resolve) => { answerGit = resolve; });
+      removeImplementation = () => gitRemoval;
       try {
         const removal = removeProjectWorktree({ id: 'path:/repo', path: '/repo' }, target);
         expect(isWorktreeRemoving(target.path)).toBe(true);

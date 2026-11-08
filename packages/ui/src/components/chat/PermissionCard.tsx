@@ -90,7 +90,7 @@ export const PermissionRequestContent: React.FC<{ permission: ApprovalRequest }>
 
             {preview ? (
                 <div className="mb-2">
-                    <ScrollableOverlay outerClassName="max-h-[60vh]" className="tool-output-surface p-1 rounded-xl border border-border/20 bg-transparent">
+                    <ScrollableOverlay outerClassName="max-h-[60vh]" className="tool-output-surface p-1 rounded-xl border border-edge-muted bg-transparent">
                         <WorkerHighlightedCode
                             language={command ? 'bash' : 'json'}
                             code={preview}

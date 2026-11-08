@@ -95,7 +95,6 @@ import {
 
 const MOBILE_SETTINGS_PAGES = [
   'general',
-  'isolated-spaces',
   'appearance',
   'chat',
   'notifications',

@@ -85,8 +85,10 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     const url = new URL(calls[0].slice(4), 'http://localhost');
     expect(url.pathname).toBe('/api/agent/v1/usage');
     expect(Object.fromEntries(url.searchParams)).toEqual({ from: '1', to: '1000', timezone: 'America/New_York', workspaceId, projectId: 'project_expected' });
-    const tools: C.UsageToolsResponse = { totals: { calls: 1, succeeded: 0, failed: 0, unfinished: 1 },
-      usage: [{ name: 'read', calls: 1, succeeded: 0, failed: 0, unfinished: 1, durationP50: null }], partial: false };
+    const tools: C.UsageToolsResponse = {
+      totals: { calls: 1, succeeded: 0, failed: 0, unfinished: 1 },
+      usage: [{ name: 'read', calls: 1, succeeded: 0, failed: 0, unfinished: 1, durationP50: null }], partial: false
+    };
     respondWith(tools);
     expect(await client.getUsageTools(input)).toEqual(tools);
     expect(calls[1]).toContain('GET /api/agent/v1/usage/tools?');
@@ -177,9 +179,9 @@ describe('CanonicalClient real HTTP scope boundary', () => {
       ['models', () => client.getModels(workspaceId)], ['providers', () => client.getProviders(workspaceId)], ['agents', () => client.getAgents(workspaceId)],
     ] as const) {
       if (field === 'models') {
-        respondWith({ workspaceId: 'workspace_other', revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
+        respondWith({ workspaceId: 'workspace_other', revision: '0', models: [], imageModels: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
         await expect(invoke()).rejects.toThrow();
-        respondWith({ workspaceId, revision: '0', models: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
+        respondWith({ workspaceId, revision: '0', models: [], imageModels: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: false });
       } else {
         respondWith({ workspaceId: 'workspace_other', revision: '0', [field]: [] });
         await expect(invoke()).rejects.toThrow();
@@ -526,10 +528,14 @@ describe('CanonicalClient real SSE protocol boundary', () => {
 });
 describe('CanonicalClient native web search boundary', () => {
   test('validates workspace and exact CAS revision, propagates aborts, and keeps credentials write-only', async () => {
-    const provider: C.WebSearchProviderEntry = { providerId: 'web/tavily', name: 'Tavily', configured: true, requiresCredential: true,
-      isSelfHosted: false, credentialWritable: true, credentialConfigured: true };
-    const state = (revision: string): C.WebSearchConfigState => ({ workspaceId, revision, enabled: true, selectedProviderId: 'web/tavily',
-      fallbackProviderIds: [], timeoutSeconds: 60, providers: [provider] });
+    const provider: C.WebSearchProviderEntry = {
+      providerId: 'web/tavily', name: 'Tavily', configured: true, requiresCredential: true,
+      isSelfHosted: false, credentialWritable: true, credentialConfigured: true
+    };
+    const state = (revision: string): C.WebSearchConfigState => ({
+      workspaceId, revision, enabled: true, selectedProviderId: 'web/tavily',
+      fallbackProviderIds: [], timeoutSeconds: 60, providers: [provider]
+    });
     const mutation = (revision: string): C.WebSearchMutationResult => ({ state: state(revision), status: 'applied', persistence: 'persisted', workers: [] });
     let seenBody: unknown;
     respondWith(state('1'));

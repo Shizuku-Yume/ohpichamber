@@ -21,6 +21,7 @@ import type {
   CreateGitWorktreePayload,
   GitWorktreeCreateResult,
   RemoveGitWorktreePayload,
+  TeardownGitWorktreePayload,
   GitWorktreeSnapshotPayload,
   GitWorktreeSnapshotResult,
   ArchiveGitWorktreePayload,
@@ -1591,13 +1592,29 @@ export async function deleteGitWorktree(directory: string, payload: RemoveGitWor
     body: JSON.stringify(payload ?? {}),
   });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to delete worktree');
-  }
-
+  // A removal stopped by the project's teardown commands carries its code, so
+  // the failure toast can offer to go on without the teardown.
+  if (!response.ok) throw await worktreeCodeAwareError(response, 'Failed to delete worktree');
   return response.json();
 }
+
+export async function teardownGitWorktree(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/worktrees/teardown`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw await worktreeCodeAwareError(response, 'Failed to tear down worktree');
+  return response.json();
+}
+
+/** The server's code on a kept worktree, so a caller can tell a teardown failure. */
+const worktreeCodeAwareError = async (response: Response, fallback: string): Promise<Error> => {
+  const body = z.object({ error: z.string().optional(), code: z.string().optional() }).catch({})
+    .parse(await response.json().catch(() => null));
+  const message = body.error || response.statusText || fallback;
+  return body.code ? new GitWorktreeRequestError(body.code, message, response.status) : new Error(message);
+};
 
 const worktreeTitleResultSchema = z.object({ title: z.string(), branch: z.string() });
 
@@ -2097,13 +2114,16 @@ export async function getCommitFileDiff(
   directory: string,
   hash: string,
   filePath: string,
-  isBinary: boolean
+  isBinary: boolean,
+  previousPath?: string
 ): Promise<CommitFileDiffResponse> {
   const response = await runtimeFetch(
     buildUrl(`${API_BASE}/commit-file-diff`, directory, {
       hash,
       path: filePath,
       binary: isBinary ? 'true' : undefined,
+      // A rename's diff is read against the path it had before.
+      previousPath,
     })
   );
   if (!response.ok) {

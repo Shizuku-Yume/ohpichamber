@@ -33,7 +33,7 @@ import {
   type TokenSegmentKey,
   type UsageRange,
 } from './usageStatsModel';
-import { selectUsageStatsEntry, selectUsageToolsEntry, useUsageStatsStore, type UsageToolsEntry } from './usageStatsStore';
+import { selectUsageStatsEntry, selectUsageToolsEntry, useTodayRollover, useUsageStatsStore, type UsageToolsEntry } from './usageStatsStore';
 
 /** Select value for the unfiltered report; project values are OpenChamber project ids. */
 const ALL_PROJECTS = '__all__';
@@ -54,6 +54,7 @@ const TOKEN_SEGMENT_LABEL_KEYS = {
 } as const satisfies Record<TokenSegmentKey, I18nKey>;
 
 const RANGE_LABEL_KEYS = {
+  '1d': 'usageStats.range.1d',
   '7d': 'usageStats.range.7d',
   '30d': 'usageStats.range.30d',
   '90d': 'usageStats.range.90d',
@@ -74,6 +75,11 @@ function useUsageStats(range: UsageRange, projectDirectory: string | null) {
   React.useEffect(() => {
     void load(request);
   }, [load, request, entry]);
+
+  // Today spans local midnight: re-read it once the day changes while the page
+  // stays open, since the cached entry would otherwise keep yesterday's buckets.
+  const reload = React.useCallback(() => void load(request), [load, request]);
+  useTodayRollover(range === '1d', reload);
 
   const refresh = React.useCallback(() => void load(request, { force: true }), [load, request]);
 

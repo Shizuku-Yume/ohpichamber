@@ -188,6 +188,15 @@ export const setServiceSocketOverride = async (guestId, socketId, persistPath, s
 /**
  * @param {string} guestId
  */
+const lastFailures = new Map();
+
+export const getServiceFailure = (guestId) => lastFailures.get(guestId) ?? null;
+
+/** A reinstall under the same id must not inherit the removed one's failure. */
+export const forgetServiceFailure = (guestId) => {
+  lastFailures.delete(guestId);
+};
+
 export const getServiceStatus = (guestId) => {
   const runtime = runtimes.get(guestId);
   if (!runtime) {

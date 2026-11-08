@@ -62,6 +62,7 @@ const HostToolActions = {
   memory: ['memory.read', 'memory.list', 'memory.save', 'memory.delete'],
   openchamber_knowledge: ['knowledge.list', 'knowledge.save', 'knowledge.delete', 'knowledge.show'],
   notify: ['notify.send'],
+  openchamber_image: ['image.generate'],
 } as const;
 export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
   z.strictObject({ toolName: z.literal('openchamber'), action: z.enum(HostToolActions.openchamber), input: JsonObjectSchema, sessionId: EntityIdSchema }),
@@ -69,6 +70,7 @@ export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
   z.strictObject({ toolName: z.literal('memory'), action: z.enum(HostToolActions.memory), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('openchamber_knowledge'), action: z.enum(HostToolActions.openchamber_knowledge), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('notify'), action: z.enum(HostToolActions.notify), input: JsonObjectSchema, sessionId: EntityIdSchema }),
+  z.strictObject({ toolName: z.literal('openchamber_image'), action: z.enum(HostToolActions.openchamber_image), input: JsonObjectSchema, sessionId: EntityIdSchema }),
 ]);
 export type HostActionRequest = z.infer<typeof HostActionRequestSchema>;
 export const HostActionResultSchema = z.discriminatedUnion('ok', [

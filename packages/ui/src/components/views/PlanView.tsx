@@ -44,7 +44,8 @@ import { createPlanSaveQueue } from '@/lib/planSaveQueue';
 import { getRuntimeKey, getRuntimeSwitchRevision, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { createWorktreeSessionForNewBranch } from '@/lib/worktreeSessionCreator';
-import { TodoSendDialog, type TodoSendExecution } from '@/components/session/TodoSendDialog';
+import { TodoSendDialog } from '@/components/session/TodoSendDialog';
+import type { TodoSendExecution } from '@/components/session/todoSendExecution';
 import { Icon } from "@/components/icon/Icon";
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { loadMagicPrompts } from '@/lib/magicPrompts';
@@ -329,12 +330,13 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null, savedProj
     cancel();
   }, [cancel]);
 
-  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }) => {
+  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }): boolean => {
     if (rangeOverride) {
       setLineSelection(rangeOverride);
     }
-    saveComment(textToSave, rangeOverride ?? lineSelection ?? undefined);
-    setLineSelection(null);
+    const saved = saveComment(textToSave, rangeOverride ?? lineSelection ?? undefined);
+    if (saved) setLineSelection(null);
+    return saved;
   }, [lineSelection, saveComment]);
 
   React.useEffect(() => {

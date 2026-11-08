@@ -1,8 +1,11 @@
 import type { I18nKey } from '@/lib/i18n/store';
-import { ISOLATED_SPACES_RELEASED } from '@/lib/spaces/release';
 import { useUIStore } from '@/stores/useUIStore';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
+import { getCustomizableShortcutActions } from '@/lib/shortcuts';
+
+/** The search anchor of one shortcut's row: the id the Shortcuts page names it by. */
+export const shortcutSearchItemId = (actionId: string): string => `shortcuts.action.${actionId}`;
 
 interface SettingsSearchItem {
   id: string;
@@ -19,7 +22,7 @@ export interface SettingsSearchResult extends SettingsSearchItem {
   pageTitle: string;
 }
 
-interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
+export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContext {
   isMobile: boolean;
   isDesktopLocalOrigin: boolean;
   // macOS desktop shell — for controls that only render on darwin (e.g. dock badge).
@@ -260,6 +263,21 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.interfaceFontSize',
     keywords: ['font', 'text size', 'ui scale'],
+    isAvailable: (ctx) => !ctx.isMobile,
+  },
+  {
+    id: 'appearance.chat-font-size',
+    page: 'appearance',
+    titleKey: 'settings.openchamber.visual.field.chatFontSize',
+    keywords: ['chat', 'font', 'text size', 'messages'],
+    isAvailable: (ctx) => !ctx.isMobile,
+  },
+  {
+    id: 'appearance.interface-font-weight',
+    page: 'appearance',
+    titleKey: 'settings.openchamber.visual.field.interfaceFontWeight',
+    descriptionKey: 'settings.openchamber.visual.field.interfaceFontWeightInfo',
+    keywords: ['font weight', 'bold', 'regular', 'balanced', 'strong', 'typography'],
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {
@@ -860,24 +878,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['agent', 'tool', 'notify', 'notification', 'alert', 'ping', 'openchamber'],
   },
   {
-    id: 'general.isolated-spaces',
-    page: 'isolated-spaces',
-    titleKey: 'settings.openchamber.spaces.field.enabled',
-    descriptionKey: 'settings.openchamber.spaces.field.enabledInfo',
-    keywords: ['isolated', 'space', 'spaces', 'container', 'docker', 'sandbox', 'agent'],
-    // Hidden from everyone until the feature's first release.
-    isAvailable: () => ISOLATED_SPACES_RELEASED,
-  },
-  {
-    id: 'general.isolated-spaces-idle-stop',
-    page: 'isolated-spaces',
-    titleKey: 'settings.openchamber.spaces.idleStop.enabled',
-    descriptionKey: 'settings.openchamber.spaces.idleStop.enabledInfo',
-    keywords: ['idle', 'stop', 'space', 'spaces', 'container', 'hours', 'timeout', 'sleep'],
-    // Rendered only while the switch is on and the feature is released.
-    isAvailable: () => ISOLATED_SPACES_RELEASED && useUIStore.getState().isolatedSpacesEnabled,
-  },
-  {
     id: 'sessions.agent-memory-tool',
     page: 'general',
     titleKey: 'settings.openchamber.tools.field.agentMemoryTool',
@@ -1411,6 +1411,16 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.openchamber.keyboardShortcuts.tooltip',
     keywords: ['keyboard', 'hotkeys', 'bindings'],
   },
+  // Every in-app shortcut the page lists, by its own name. The system-wide
+  // ones (category `desktop`) live on General.
+  ...getCustomizableShortcutActions()
+    .filter((action) => action.category !== 'desktop')
+    .map((action): SettingsSearchItem => ({
+      id: shortcutSearchItemId(action.id),
+      page: 'shortcuts',
+      titleKey: action.settingsLabelKey,
+      keywords: ['shortcut', 'hotkey', 'keyboard', 'keybinding'],
+    })),
   {
     id: 'voice.playback',
     page: 'voice',
@@ -1650,3 +1660,15 @@ export function buildSettingsSearchResults({
     }];
   });
 }
+
+/** Static anchors used to seed the first-install baseline. */
+export const SETTINGS_ANCHOR_PAGES: ReadonlyMap<string, SettingsPageSlug> = new Map(
+  SETTINGS_SEARCH_ITEMS.map((item) => [item.id, item.page] as const),
+);
+
+export const getAvailableSettingsAnchorPages = (ctx: SettingsSearchAvailabilityContext): ReadonlyMap<string, SettingsPageSlug> => new Map(
+  SETTINGS_SEARCH_ITEMS.filter((item) => {
+    const page = getSettingsPageMeta(item.page);
+    return page && (!page.isAvailable || page.isAvailable(ctx)) && (!item.isAvailable || item.isAvailable(ctx));
+  }).map((item) => [item.id, item.page] as const),
+);

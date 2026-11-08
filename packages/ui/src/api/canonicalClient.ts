@@ -7,12 +7,13 @@ import type {
   ModelCatalog, ModelConfigureRequest, ModelDeleteRequest, ProviderCatalog, ProviderConfigureRequest,
   ProviderCredentialDeleteRequest, ProviderCredentialMutationResult, ProviderCredentialWriteRequest, ProviderDeleteRequest,
   ProviderMutationResult, QuestionReply, QuestionRequest, RunAbortAck, RunCreateRequest, Session, SessionCreateAck,
-  SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, SessionBranchRequest, SessionBranchResult, SessionRelocateResult, ShellJob,
+  SessionCreateRequest, SessionDeleteAck, SessionMetadataPatch, SessionMetadataState, SessionSnapshot, SessionBranchRequest, SessionBranchResult, SessionRelocateResult, SessionMoveToWorktreeRequest, SessionMoveToWorktreeResult, ShellJob,
   ShellOutput, ShellSnapshot, ShellStartRequest, ShellStdinRequest, ShellStdinResult, ShellStopRequest, ShellStreamResponse, SkillsApplyRequest, SkillsApplyResult,
   SkillsCatalogState, SkillExpandRequest, SkillExpandResult, CompletionRequest, CompletionResult, CompletionCancelRequest, CompletionCancelResult,
   MCPCatalogRead, MCPConfigureRequest, MCPApplyRequest, MCPApplyResult, MCPReconnectRequest, MCPOAuthRequest, MCPOAuthResult, SteerAck, SteerRequest, Workspace,
   WorkspaceList, ProjectList, QueueAppendRequest, QueueDeleteRequest, QueueReorderRequest, QueueState, Subagent,
   OmpSettingsState, OmpSettingsUpdateRequest,
+  ImageModel, ImageGenerateRequest, ImageGenerateResult,
 } from '@openchamber/agent-contract';
 
 export class CanonicalApiError extends Error {
@@ -278,6 +279,20 @@ export class CanonicalClient {
       return result;
     });
   }
+  /**
+   * Moves this session into a new worktree of its repository. The Host makes
+   * the checkout, carries the named files' uncommitted changes, and relocates
+   * the session last; a failure removes the checkout and restores the changes,
+   * or names the stash that keeps them.
+   */
+  moveSessionToWorktree(sessionId: string, input: SessionMoveToWorktreeRequest, commandId?: string): Promise<SessionMoveToWorktreeResult> {
+    const parsed = C.SessionMoveToWorktreeRequestSchema.parse(input);
+    return request(`/api/agent/v1/sessions/${id(sessionId)}/move-to-worktree`, scoped(C.SessionMoveToWorktreeResultSchema, result => result.sessionId === sessionId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headersFor(commandId) },
+      body: bodyFor(C.SessionMoveToWorktreeRequestSchema, parsed),
+    });
+  }
   createSession(input: SessionCreateRequest, commandId?: string): Promise<SessionCreateAck> {
     const { projectId, workspaceId } = input;
     return request('/api/agent/v1/sessions', scoped(C.SessionCreateAckSchema, result => result.session.projectId === projectId && result.session.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.SessionCreateRequestSchema, input) });
@@ -406,6 +421,18 @@ export class CanonicalClient {
   deleteQueueItem(sessionId: string, queueItemId: string, input: QueueDeleteRequest): Promise<QueueState> { return request(`/api/agent/v1/sessions/${id(sessionId)}/queue/${id(queueItemId)}`, scoped(C.QueueStateSchema, result => result.sessionId === sessionId), { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.QueueDeleteRequestSchema, input, body => body.queueItemId === queueItemId) }); }
 
   getModels(workspaceId: string): Promise<ModelCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/models`, scoped(C.ModelCatalogSchema, result => result.workspaceId === workspaceId)); }
+  async listImageModels(workspaceId: string): Promise<ImageModel[]> {
+    const catalog = await this.getModels(workspaceId);
+    return catalog.imageModels;
+  }
+  generateImage(workspaceId: string, input: Omit<ImageGenerateRequest, 'workspaceId'>, signal?: AbortSignal): Promise<ImageGenerateResult> {
+    const payload = C.ImageGenerateRequestSchema.parse({ ...input, workspaceId });
+    return request(
+      `/api/agent/v1/workspaces/${id(workspaceId)}/images/generate`,
+      scoped(C.ImageGenerateResultSchema, result => result.model.providerId === payload.selection.providerId && result.model.modelId === payload.selection.modelId),
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal },
+    );
+  }
 
   getOmpSettings(workspaceId: string, signal?: AbortSignal): Promise<OmpSettingsState> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/settings`, scoped(C.OmpSettingsStateSchema, result => result.workspaceId === workspaceId), { signal });
@@ -681,3 +708,4 @@ export class CanonicalClient {
 
 export const canonicalClient = new CanonicalClient();
 export type { SessionList };
+export type { ImageModel, ImageGenerateRequest, ImageGenerateResult } from '@openchamber/agent-contract';

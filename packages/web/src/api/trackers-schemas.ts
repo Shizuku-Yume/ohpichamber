@@ -10,6 +10,8 @@ import type {
   TrackerAccount,
   TrackerAuthStart,
   TrackerAuthStatus,
+  TrackerConnectFailureCode,
+  TrackerConnectResult,
   TrackerComment,
   TrackerItem,
   TrackerItemResult,
@@ -163,6 +165,18 @@ export const authStatusSchema: z.ZodType<TrackerAuthStatus> = z.union([
     accounts: listOf(accountSchema),
   }),
 ]);
+
+const CONNECT_FAILURES = ['UNSUPPORTED', 'INSTANCE_REQUIRED', 'INSTANCE_MISMATCH', 'UNSUPPORTED_INSTANCE', 'TOKEN_REQUIRED', 'TOKEN_REFUSED', 'USERNAME_REQUIRED', 'USERNAME_INVALID', 'CLIENT_MISSING', 'CONNECT_SUPERSEDED', 'TRACKER_UNAVAILABLE'] as const satisfies readonly TrackerConnectFailureCode[];
+const connectFailureSchema = z.object({ error: z.string().optional(), code: z.string().optional() });
+
+/** One connect route's answer: `ok` on a 2xx, else the server's own code and message where it gave them. */
+export const connectResultOf = async (response: Response): Promise<TrackerConnectResult> => {
+  if (response.ok) return { ok: true };
+  const failure = connectFailureSchema.safeParse(await response.json().catch(() => null));
+  if (!failure.success) return { ok: false, code: 'failed', message: null };
+  const known = z.enum(CONNECT_FAILURES).safeParse(failure.data.code);
+  return { ok: false, code: known.success ? known.data : 'failed', message: failure.data.error?.trim() || null };
+};
 
 export const authStartSchema: z.ZodType<TrackerAuthStart> = z.object({
   authorizationUrl: text,

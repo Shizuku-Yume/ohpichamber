@@ -1,3 +1,4 @@
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import React from 'react';
 import {
     Dialog,
@@ -342,7 +343,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                     </div>
                 )}
 
-                <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
+                <ScrollableOverlay ref={listRef} outerClassName="min-h-0 flex-1" disableHorizontal>
                     {filteredMessages.length === 0 ? (
                         <div className="text-center text-muted-foreground py-8">
                             {searchQuery ? t('chat.timeline.empty.search') : t('chat.timeline.empty.session')}
@@ -368,11 +369,11 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                                 <React.Fragment key={message.messageId}>
                                     {showDateGroup && (
                                         <div className="sticky top-0 z-10 flex items-center gap-3 bg-surface-elevated/95 py-2 backdrop-blur-sm">
-                                            <div className="h-px flex-1 bg-border/60" />
+                                            <div className="h-px flex-1 bg-edge" />
                                             <span className="typography-meta text-muted-foreground">
                                                 {dateGroup}
                                             </span>
-                                            <div className="h-px flex-1 bg-border/60" />
+                                            <div className="h-px flex-1 bg-edge" />
                                         </div>
                                     )}
                                     <div
@@ -447,10 +448,10 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                             );
                         })
                     )}
-                </div>
+                </ScrollableOverlay>
 
                 {isMobile ? (
-                    <div className="mt-2 flex shrink-0 items-center justify-center gap-2 border-t border-border/60 pt-2">
+                    <div className="mt-2 flex shrink-0 items-center justify-center gap-2 border-t border-edge pt-2">
                         {turnActions}
                     </div>
                 ) : (

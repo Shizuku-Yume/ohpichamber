@@ -1,9 +1,9 @@
+export const isWorkflowFeatureAvailable = () => true;
 import express from 'express';
 import { z } from 'zod';
 
 import { asControlError } from '../openchamber-control/error.js';
 import { createWorkflowAgentSessions } from './agent-session.js';
-import { isWorkflowFeatureAvailable } from './feature-flag.js';
 import { createWorkflowRuntime } from './runtime.js';
 import { createWorkflowRunStore } from './store.js';
 

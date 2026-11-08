@@ -157,11 +157,15 @@ describe('native plugin Host authorization and enterprise boundary', () => {
 });
 
 it('shares native plugin CAS across distinct agent directories while keeping provider CAS and named profiles independent', async () => {
+  // A named profile owns its agent directory (agent-service native-runtime),
+  // so a workspace run under a profile registers that directory, not an
+  // arbitrary one: the Host scope and the worker storage are the same place.
+  const profileAgentDirectory = (profile) => path.join(directory, '.omp', 'profiles', profile, 'agent');
   const registerWorkspace = async (workspaceId, agentDirectoryId, profile = '', sharedCwd) => {
     const cwd = sharedCwd ?? path.join(directory, workspaceId);
-    const agentDirectory = path.join(directory, agentDirectoryId);
+    const agentDirectory = profile ? profileAgentDirectory(profile) : path.join(directory, agentDirectoryId);
     if (sharedCwd === undefined) await fs.mkdir(cwd);
-    await fs.mkdir(agentDirectory);
+    await fs.mkdir(agentDirectory, { recursive: true });
     const scope = { workspaceId, projectId: 'plugin_project', agentDirectoryId, cwd, agentDirectory };
     const response = await service.request(`/internal/workspaces/${workspaceId}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -209,24 +213,34 @@ it('shares native plugin CAS across distinct agent directories while keeping pro
   expect((await authorized(request(app).get(endpoint)).expect(200)).body.revision).toBe('1');
 }, 60_000);
 
-it('re-registering a workspace profile replaces the idle native owner rather than relabeling a cached worker', async () => {
+it('re-registering a workspace keeps its native owner catalog and refuses a different agent directory', async () => {
   const scope = scopes.get('plugin_workspace');
   expect((await authorized(request(app).get(endpoint)).expect(200)).body.revision).toBe('0');
   await authorized(request(app).put(`${endpoint}/local/rebind-proof.ts`)).send({ expectedRevision: '0',
     extensionId: 'rebind-proof.ts', content: 'export default function () {}\n' }).expect(200);
-  const rebind = async profile => {
-    const registered = await service.request('/internal/workspaces/plugin_workspace', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: scope.projectId, agentDirectoryId: scope.agentDirectoryId,
-        cwd: scope.cwd, agentDirectory: scope.agentDirectory, env: nativeEnvironment(profile) }),
-    });
-    expect(registered.status).toBe(201);
-  };
-  await rebind('rebound-plugin-profile');
-  const rebound = (await authorized(request(app).get(endpoint)).expect(200)).body;
-  expect(rebound.revision).toBe('0');
-  expect(rebound.localExtensions).toContainEqual({ extensionId: 'rebind-proof.ts', relativePath: '.omp/extensions/rebind-proof.ts' });
-  await rebind('');
-  expect((await authorized(request(app).get(endpoint)).expect(200)).body.revision).toBe('1');
+
+  // The same workspace re-registered with its own directory keeps the cached
+  // owner and the catalog it already persisted, instead of starting over.
+  const repeated = await service.request('/internal/workspaces/plugin_workspace', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId: scope.projectId, agentDirectoryId: scope.agentDirectoryId,
+      cwd: scope.cwd, agentDirectory: scope.agentDirectory, env: nativeEnvironment('') }),
+  });
+  expect(repeated.status).toBe(201);
+  expect((await authorized(request(app).get(endpoint)).expect(200)).body).toMatchObject({
+    revision: '1',
+    localExtensions: [{ extensionId: 'rebind-proof.ts', relativePath: '.omp/extensions/rebind-proof.ts' }],
+  });
   expect((await authorized(request(app).get('/api/agent/v1/workspaces/plugin_workspace/providers')).expect(200)).body.revision).toBe('0');
+
+  // A named profile owns its agent directory (agent-service native-runtime),
+  // so pointing this workspace at a profile directory would relabel the
+  // cached native owner: registration refuses instead of doing that quietly.
+  const rebindProfileAgentDirectory = path.join(directory, '.omp', 'profiles', 'rebound-plugin-profile', 'agent');
+  await fs.mkdir(rebindProfileAgentDirectory, { recursive: true });
+  await expect(service.request('/internal/workspaces/plugin_workspace', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ projectId: scope.projectId, agentDirectoryId: 'plugin_profile_agent',
+      cwd: scope.cwd, agentDirectory: rebindProfileAgentDirectory, env: nativeEnvironment('rebound-plugin-profile') }),
+  })).rejects.toThrow('Host workspace scope cannot change');
 }, 60_000);

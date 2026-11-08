@@ -43,9 +43,13 @@ export function buildChatInputHistorySubmissions({
   return submissions.length > 0 ? submissions : undefined;
 }
 
-function materializeHistoryAttachment(attachment: InputHistoryAttachment): AttachedFile | null {
+interface HistoryAttachmentWithPath extends InputHistoryAttachment {
+  path?: string;
+}
+
+function materializeHistoryAttachment(attachment: HistoryAttachmentWithPath): AttachedFile | null {
   if (attachment.source === 'file-url') {
-    if (!attachment.reference || attachment.reference.startsWith('data:')) return null;
+    if (!attachment.reference || (attachment.reference.startsWith('data:') && !attachment.path)) return null;
     return {
       id: `history-${attachment.key}`,
       file: new File([], attachment.filename, { type: attachment.mimeType }),
@@ -54,7 +58,8 @@ function materializeHistoryAttachment(attachment: InputHistoryAttachment): Attac
       filename: attachment.filename,
       size: attachment.size,
       source: 'local',
-      serverPath: attachment.reference,
+      serverPath: attachment.path ?? attachment.reference,
+      agentPath: attachment.path,
     };
   }
 
@@ -66,7 +71,7 @@ export function mapInputHistoryEntriesToValues(
 ): Array<MessageHistoryValue<AttachedFile>> {
   return entries.map((entry) => ({
     text: entry.text,
-    attachments: entry.restorableAttachments
+    attachments: (entry.restorableAttachments as readonly HistoryAttachmentWithPath[])
       .map(materializeHistoryAttachment)
       .filter((attachment): attachment is AttachedFile => attachment !== null),
   }));

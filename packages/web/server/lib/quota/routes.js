@@ -1,9 +1,23 @@
 import express from 'express';
 import { giftResetTypes, useZaiGiftReset } from './providers/zai.js';
 import { requireSelectedCredential, SELECTED_CREDENTIAL_UNAVAILABLE } from './providers/selected-credential.js';
+import { extensionQuotaGuest, listExtensionQuotaProviders } from './extension-registry.js';
+import { readExtensionQuotaProvider } from './extension-service.js';
+import { isExtensionQuotaProviderId } from './extension-registry.js';
 
-export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential }) {
+export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential, listExtensionQuotaGuests, readExtensionCredential, requestExtensionService }) {
   if (typeof getQuotaProviders !== 'function' || typeof resolveQuotaSelection !== 'function' || typeof listQuotaSelections !== 'function' || typeof resolveCredential !== 'function') throw new TypeError('Quota routes require selected workspace catalogs and credential resolver');
+  // The extension catalog is the authority; a read that fails is a failed
+  // list, never a short one built from a stale registry.
+  app.get('/api/quota/extensions', async (_req, res) => {
+    if (typeof listExtensionQuotaGuests !== 'function') return res.json({ extensions: [] });
+    try {
+      res.json({ extensions: listExtensionQuotaProviders(await listExtensionQuotaGuests()) });
+    } catch (error) {
+      console.warn('[quota] extension usage providers could not be listed:', error?.message ?? error);
+      return res.status(503).json({ error: 'Extension usage provider catalog unavailable' });
+    }
+  });
   app.get('/api/quota/providers', async (req, res) => {
     try {
       const selections = await listQuotaSelections(req);
@@ -15,6 +29,25 @@ export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelect
     }
   });
   app.get('/api/quota/:providerId', async (req, res) => {
+    const providerId = req.params.providerId;
+    // An installed extension serves its own usage provider; the built-in
+    // registry has no entry for it, and the reverse is also true.
+    if (isExtensionQuotaProviderId(providerId)) {
+      if (typeof listExtensionQuotaGuests !== 'function' || typeof requestExtensionService !== 'function' || typeof readExtensionCredential !== 'function')
+        return res.status(503).json({ error: 'Extension usage providers are unavailable on this server' });
+      try {
+        const guest = extensionQuotaGuest(await listExtensionQuotaGuests(), providerId);
+        if (!guest) return res.status(404).json({ error: 'Unsupported provider' });
+        const result = await readExtensionQuotaProvider({
+          guest,
+          readCredential: (nativeProviderId) => readExtensionCredential(req, guest, nativeProviderId),
+          request: (params) => requestExtensionService(guest, params),
+        });
+        return res.json(result);
+      } catch {
+        return res.status(503).json({ error: 'Extension usage provider unavailable' });
+      }
+    }
     try {
       const providers = await getQuotaProviders();
       let selection;

@@ -13,6 +13,8 @@ import {
 } from './session-activity-timing';
 import { countSyncPerformance } from './performance-diagnostics';
 import { hasRunningShell, useBackgroundShellsStore } from './background-shells';
+import { useWorkflowActivityStore } from './workflow-activity';
+import { usePrWatchStore } from './pr-watch';
 
 type GlobalSessionStatusEntry = { status: SessionRuntimeStatus; directory: string };
 type GlobalSessionStatusState = {
@@ -82,6 +84,17 @@ export const hasActiveSubagent = (sessionId: string, activeSessionIds: ReadonlyS
     if (found) return true;
   }
   return false;
+};
+export const collectOpenTurnSessionIds = (
+  activeSessionIds: ReadonlySet<string>,
+  waitingSessionIds: readonly Iterable<string>[],
+): ReadonlySet<string> => {
+  const open = new Set(activeSessionIds);
+  for (const activeId of activeSessionIds) forEachAncestorId(activeId, (ancestorId) => open.add(ancestorId));
+  for (const sessionIds of waitingSessionIds) {
+    for (const sessionId of sessionIds) open.add(sessionId);
+  }
+  return open;
 };
 const withBackgroundWork = (activeSessionIds: ReadonlySet<string>): ReadonlySet<string> => {
   let extended: Set<string> | null = null;
@@ -255,5 +268,16 @@ export const applyGlobalSessionStatusSnapshot = (
   for (const id of covered) forEachAncestorId(id, (ancestorId) => timingScope.add(ancestorId));
   reconcileSessionActivityTiming(withBackgroundWork(active), (id) => timingScope.has(id));
   setState(statuses, observed);
+};
+
+/** The first of the sessions `useSessionTurnActivity` reads as working, or null. */
+export const useFirstSessionWithOpenTurn = (sessionIds: readonly string[]): string | null => {
+  const inTurn = useGlobalSessionStatusStore((state) => (
+    sessionIds.find((id) => state.activeSessionIds.has(id) || hasActiveSubagent(id, state.activeSessionIds)) ?? null
+  ));
+  const inWorkflow = useWorkflowActivityStore((state) => sessionIds.find((id) => state.runningSessionIds.has(id)) ?? null);
+  const onShell = useBackgroundShellsStore((state) => sessionIds.find((id) => state.sessionIds.has(id)) ?? null);
+  const onPullRequest = usePrWatchStore((state) => sessionIds.find((id) => state.bySession.has(id)) ?? null);
+  return inTurn ?? inWorkflow ?? onShell ?? onPullRequest;
 };
 

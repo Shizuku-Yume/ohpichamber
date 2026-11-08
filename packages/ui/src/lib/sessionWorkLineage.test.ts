@@ -43,18 +43,18 @@ describe('resolveSessionNestingParentId', () => {
   });
 
   test('the folder wins: an origin in another folder, unknown or archived leaves a root', () => {
-    const elsewhere = session('elsewhere', { displayPath: '/wt', parentSessionId: 'root' });
-    const unknown = session('unknown', { parentSessionId: 'missing' });
+    const elsewhere = session('elsewhere', { displayPath: '/wt', metadata: { openchamber: { kind: 'review', originalSessionID: 'root' } } });
+    const unknown = session('unknown', { metadata: { openchamber: { kind: 'review', originalSessionID: 'missing' } } });
     const archivedOrigin = session('old', { archivedAt: 2 });
-    const fromArchived = session('child', { parentSessionId: 'old' });
+    const fromArchived = session('child', { metadata: { openchamber: { kind: 'review', originalSessionID: 'old' } } });
     const all = [root, elsewhere, unknown, archivedOrigin, fromArchived];
     expect([elsewhere, unknown, fromArchived].map((entry) => resolve(entry, all))).toEqual([null, null, null]);
   });
 
   test('a multi-run lane stays a root, and a recorded loop does not nest', () => {
     const lane = session('lane', { parentSessionId: 'root', metadata: { openchamber: { multirun: { version: 1 } } } as unknown as Session['metadata'], metadataRevision: '1' });
-    const a = session('a', { parentSessionId: 'b' });
-    const b = session('b', { parentSessionId: 'a' });
+    const a = session('a', { metadata: { openchamber: { kind: 'review', originalSessionID: 'b' } } });
+    const b = session('b', { metadata: { openchamber: { kind: 'review', originalSessionID: 'a' } } });
     const all = [root, lane, a, b];
     expect(resolve(lane, all)).toBeNull();
     expect(resolve(a, all)).toBeNull();

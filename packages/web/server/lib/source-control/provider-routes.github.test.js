@@ -472,6 +472,11 @@ describe('GET /api/source-control/github/references', () => {
         checks: expect.objectContaining({ state: 'failure', failure: 1, total: 1 }),
         mergeable: false,
         mergeableState: 'dirty',
+        // The sidebar summary always carries the merge-queue and auto-merge
+        // slots, so a card can show them without a second read.
+        isInMergeQueue: false,
+        mergeQueueEntry: null,
+        autoMergeRequest: null,
       }],
     });
 
@@ -517,6 +522,9 @@ describe('GET /api/source-control/github/references', () => {
       checks: expect.objectContaining({ state: 'failure', failure: 1, total: 1 }),
       mergeable: false,
       mergeableState: 'dirty',
+      isInMergeQueue: false,
+      mergeQueueEntry: null,
+      autoMergeRequest: null,
     }]);
   });
 
@@ -641,6 +649,20 @@ describe('GitHub Enterprise references on a trusted enterprise checkout', () => 
 
     // The rejected ref's group never reaches the summaries.
     expect(fetch.mock.calls.some(([url]) => String(url).includes('/graphql'))).toBe(false);
+  });
+
+  it('reads the status of a pull request a link named outside the network, and refuses it to the same read without the link', async () => {
+    const fetch = vi.fn(async (url) => {
+      const endpoint = new URL(url);
+      if (endpoint.pathname === '/api/v3/repos/example/project') return response({ full_name: 'example/project', fork: false });
+      if (endpoint.pathname === '/api/graphql') return response({ data: {} });
+      throw new Error(`Unexpected GitHub request: ${endpoint.pathname}`);
+    });
+    vi.stubGlobal('fetch', fetch);
+
+    const query = { ...readContext(project), pulls: 'someone/else#5@github.example.com' };
+    await request(app).get('/api/source-control/github/references/status').query(query).expect(400);
+    await request(app).get('/api/source-control/github/references/status').query({ ...query, linked: '1' }).expect(200);
   });
 
   it("resolves a detail request naming an enterprise host with that host's Octokit, even when the same repo also exists on github.com", async () => {

@@ -6,6 +6,9 @@ export type {
   TrackerAuthStart,
   TrackerAuthStatus,
   TrackerComment,
+  TrackerConnectFailureCode,
+  TrackerConnectResult,
+  TrackerConnectTokenInput,
   TrackerContainer,
   TrackerContainerMapping,
   TrackerDescriptor,
@@ -19,6 +22,7 @@ export type {
   TrackerLiveSummary,
   TrackerMappingResult,
   TrackerMappingWrite,
+  TrackerOAuthClientInput,
   TrackerPeopleFilter,
   TrackerPerson,
   TrackerPreferences,
@@ -63,7 +67,12 @@ import type {
   CommentInput,
   DiscussionCloseReason,
   DiscussionCommentInput,
+  ChangeRequestReviewStateResult,
   ReviewChangeRequestInput,
+  ReviewCommentDeleteInput,
+  ReviewCommentInput,
+  ReviewCommentUpdateInput,
+  ReviewDiscardInput,
   SetDiscussionAnswerInput,
   SetDiscussionStateInput,
   SetStateInput,
@@ -403,7 +412,7 @@ export interface GitBranchDetails {
   behind?: number;
 }
 
-export type GitBranchListOptions = { remote?: 'local' };
+export type GitBranchListOptions = { remote?: 'local' | 'live' };
 
 export interface GitBranch {
   all: string[];
@@ -642,8 +651,12 @@ export type GitManagedSshCandidate =
       capability: { status: 'unavailable'; reason: 'unreadable' | 'encrypted-or-unverifiable' | 'insecure-permissions' };
     };
 
-export type GitManagedSshIntent = { operation: 'inventory' | 'discover' }
-  | { operation: 'import'; candidateId: string; expectedFingerprint: string; confirmed: true };
+/**
+ * `passphrase` is needed only to read or import an encrypted candidate; the
+ * server never stores it. Omitted for inventory, which reads nothing.
+ */
+export type GitManagedSshIntent = { operation: 'inventory' | 'discover'; passphrase?: string }
+  | { operation: 'import'; candidateId: string; expectedFingerprint: string; confirmed: true; passphrase?: string };
 
 export type GitManagedSshResult =
   | { status: 'available'; credentials: GitManagedSshCredential[] }
@@ -762,6 +775,8 @@ export type GitNetworkOperationErrorCode =
   | 'RUNTIME_UNSUPPORTED'
   | 'GIT_LFS_CLIENT_MISSING'
   | 'CHECKOUT_TOO_LARGE'
+  // The server refuses a remote whose URL embeds a user name before `@`.
+  | 'REMOTE_URL_USERINFO'
   | 'UNKNOWN';
 
 export interface GitNetworkOperationError<Code extends GitNetworkOperationErrorCode = GitNetworkOperationErrorCode> {
@@ -1087,6 +1102,14 @@ export interface GitCheckoutTrustInspection {
 export interface RemoveGitWorktreePayload {
   directory: string;
   deleteLocalBranch?: boolean;
+  /** Runs inside the worktree before anything is removed; a failure keeps the worktree. */
+  teardownCommand?: string;
+}
+
+/** Runs a worktree's teardown commands without removing it. */
+export interface TeardownGitWorktreePayload {
+  directory: string;
+  teardownCommand?: string;
 }
 
 /** Private ref (`refs/openchamber/runs/<group>/<session>`) holding a worktree snapshot. */
@@ -1186,6 +1209,8 @@ interface GitWorktreeAPI {
   preview?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   create?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
+  /** `directory` is the project; runs the worktree's teardown and keeps it. */
+  teardown?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
   /** `directory` is the worktree to snapshot. */
   snapshot?(directory: string, payload: GitWorktreeSnapshotPayload): Promise<GitWorktreeSnapshotResult>;
   setTitle?(directory: string, title: string): Promise<GitWorktreeTitleResult>;
@@ -1235,6 +1260,7 @@ export interface GitAPI {
   previewGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
   deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
+  teardownGitWorktree?(directory: string, payload: TeardownGitWorktreePayload): Promise<{ success: boolean }>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
   /** Amends HEAD with a host-computed Change-Id trailer; refuses unless HEAD is still `expectedHead`. */
   addChangeIdToHead?(directory: string, expectedHead: string): Promise<{ sha: string; changeId: string }>;
@@ -1445,6 +1471,8 @@ export interface ProjectEntry {
   id: string;
   path: string;
   label?: string;
+  /** Where `label` came from: the folder name, or a name the user typed. */
+  labelSource?: 'auto' | 'manual';
   icon?: string | null;
   iconImage?: {
     mime: string;
@@ -2004,6 +2032,10 @@ export type ProviderReadsRefreshScope = { item: RepositoryItemRef } | { lists: t
 
 /** Live fields of a known PR, refreshed in batches for list surfaces. */
 export type ChangeRequestLiveSummary = RepositoryItemRef & {
+  /** Queued for merge on the host, or waiting on a merge method's conditions. */
+  isInMergeQueue?: boolean;
+  mergeQueueEntry?: { state: string; position: number } | null;
+  autoMergeRequest?: { enabledAt: string; mergeMethod: string } | null;
   state: GitHubPullRequest['state'];
   draft: boolean;
   title: string;
@@ -2070,6 +2102,8 @@ type RepositoryReferenceCommon = {
   labels: Label[];
   commentCount: number;
   sourceRepo: RepositorySelector & { source: string };
+  /** Read through a link, outside the project's repository network: it can be read and attached, never acted on. */
+  linked?: true;
   /** The provider's own project id (GitLab's is numeric); absent on GitHub, where `owner/repo` is the id. */
   projectId?: string;
   /** The provider the item was read from; the adapter stamps it from the read context. */
@@ -2270,6 +2304,8 @@ export interface SourceControlAPI {
    * when the instance belongs on another provider's card.
    */
   authSetToken(identity: SourceControlIdentity, token: string, options?: { username?: string }): Promise<SourceControlAuthStatus>;
+  /** Stores the instance's separate SSH address, or removes it with null. Providers without one answer unsupported. */
+  authSetSshUrl(identity: SourceControlIdentity, sshUrl: string | null): Promise<{ sshUrl: string | null }>;
   authDisconnect(identity: SourceControlIdentity, accountId: string): Promise<{ removed: boolean }>;
   authActivate(identity: SourceControlIdentity, accountId: string): Promise<SourceControlAuthStatus>;
   authSetCliDisabled(identity: SourceControlIdentity, disabled: boolean): Promise<{ disabled: boolean }>;
@@ -2289,6 +2325,12 @@ export interface SourceControlAPI {
   changeRequestReplyToThread(payload: ThreadReplyInput): Promise<SourceControlMutationReceipt<SourceControlEmptyMutationResult>>;
   changeRequestResolveThread(payload: ThreadResolveInput): Promise<SourceControlMutationReceipt<SourceControlEmptyMutationResult>>;
   changeRequestReview(payload: ReviewChangeRequestInput): Promise<SourceControlMutationReceipt<SourceControlReviewMutationResult>>;
+  /** The viewer's review draft and the open threads on the diff (`features.reviewDrafts`). */
+  changeRequestReviewState(context: SourceControlReadContext, ref: { owner: string; repo: string; number: number }): Promise<ChangeRequestReviewStateResult>;
+  changeRequestReviewComment(payload: ReviewCommentInput): Promise<SourceControlMutationReceipt<SourceControlEmptyMutationResult>>;
+  changeRequestReviewCommentUpdate(payload: ReviewCommentUpdateInput): Promise<SourceControlMutationReceipt<SourceControlEmptyMutationResult>>;
+  changeRequestReviewCommentDelete(payload: ReviewCommentDeleteInput): Promise<SourceControlMutationReceipt<SourceControlEmptyMutationResult>>;
+  changeRequestReviewDiscard(payload: ReviewDiscardInput): Promise<SourceControlMutationReceipt<SourceControlEmptyMutationResult>>;
   issueComment(payload: CommentInput): Promise<SourceControlMutationReceipt<SourceControlEmptyMutationResult>>;
   changeRequestSetState(payload: SetStateInput): Promise<SourceControlMutationReceipt<SourceControlStateMutationResult>>;
   issueSetState(payload: SetStateInput): Promise<SourceControlMutationReceipt<SourceControlStateMutationResult>>;
@@ -2690,7 +2732,17 @@ export interface LinearAPI {
   preferencesSet(preferences: LinearPreferences): Promise<LinearPreferences>;
 }
 
+/** Linux's PRIMARY buffer; only a local desktop page reaches it. */
+export interface ClipboardAPI {
+  selection: {
+    readText(): Promise<string>;
+    writeText(text: string): Promise<void>;
+  };
+}
+
 export interface RuntimeAPIs {
+  /** Linux desktop's native PRIMARY buffer; absent in browsers and remote pages. */
+  clipboard?: ClipboardAPI;
   /** Native local picker. Web/mobile fall back to their browser file input. */
   themeFiles?: {
     pick(): Promise<{ status: 'unsupported' } | { status: 'picked'; file: { name: string; size: number; text: string } | null }>;

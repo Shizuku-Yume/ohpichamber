@@ -549,6 +549,10 @@
       "scope": "profile",
       "perSurface": true
     },
+    "chatFontSize": {
+      "scope": "profile",
+      "perSurface": true
+    },
     "terminalFontSize": {
       "scope": "profile",
       "perSurface": true
@@ -567,6 +571,9 @@
       "scope": "profile"
     },
     "customMonoFont": {
+      "scope": "profile"
+    },
+    "uiFontWeight": {
       "scope": "profile"
     },
     "padding": {

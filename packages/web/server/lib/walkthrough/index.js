@@ -211,6 +211,9 @@ const modelLabel = (model) => `${model.providerID}/${model.modelID}`;
  * choosing, the walkthrough stays on that provider rather than on whichever
  * provider happens to be connected, and on that model when the provider has no
  * small one.
+ * A free zen model without a login counts as unset here, and the small-model
+ * chain decides (`../small-model/DOCUMENTATION.md`, *Free tier and the
+ * session fallback*).
  */
 const resolveModel = (workspaceId, explicitModel, providerID, modelID) => describeSmallModel({
   workspaceId,

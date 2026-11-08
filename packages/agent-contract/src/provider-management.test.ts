@@ -69,7 +69,8 @@ test('discovery permits intentional write-only credentials but rejects unsafe en
 
 test('configuration reads expose header names only and reject returned secret values', () => {
   const configuration = { providerId: 'models_local', name: 'Local models', endpoint: discovery.endpoint, protocol: discovery.protocol, credentialRef: account.credentialRef };
-  const read = { revision: '7', configuration, headerNames: ['Authorization', 'X-Local'], models: [] };
+  // `imageModels` is defaulted, so a read without it parses to an empty list.
+  const read = { revision: '7', configuration, headerNames: ['Authorization', 'X-Local'], models: [], imageModels: [] };
   expect(ProviderConfigurationReadSchema.parse(read)).toEqual(read);
   for (const extra of [{ headers: { Authorization: 'Bearer secret' } }, { apiKey: 'secret' }, { credential: { key: 'secret' } }]) {
     expect(ProviderConfigurationReadSchema.safeParse({ ...read, ...extra }).success).toBe(false);

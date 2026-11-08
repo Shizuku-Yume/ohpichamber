@@ -23,12 +23,18 @@ const isOlderThanCutoff = (session: Session, cutoff: number, onlyArchived: boole
 };
 
 /** Sessions the user asked to keep: pinned on this client, or in the In work block. */
+/** In work keeps a session unless retention was told to take those too. */
+export const inWorkKeepsSessions = (settings: { sessionWorkEnabled: boolean; sessionRetentionIncludeInWork: boolean }): boolean => (
+  settings.sessionWorkEnabled && !settings.sessionRetentionIncludeInWork
+);
+
 export const isSessionKeptByUser = (
   session: Session,
   pinnedIds: Set<string> = useSessionPinnedStore.getState().ids,
   directory: string | null = resolveGlobalSessionDirectory(session),
+  workKeeps: boolean = inWorkKeepsSessions(useUIStore.getState()),
 ): boolean => (
-  session.metadata?.openchamber?.work?.state === 'open'
+  (workKeeps && session.metadata?.openchamber?.work?.state === 'open')
   || session.metadata?.isPinned === true
   || isSessionPinned(pinnedIds, directory, session.sessionId)
 );

@@ -6,7 +6,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsSection } from '@/components/sections/shared/SettingsSection';
-import { SettingsAddCard, SETTINGS_CARD_GRID_CLASS } from '@/components/sections/shared/SettingsCards';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import {
   Dialog,
@@ -30,6 +29,8 @@ import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 
 import { AddCatalogDialog } from './AddCatalogDialog';
 import { InstallSkillDialog } from './InstallSkillDialog';
+import { SkillsCatalogRows } from './SkillsCatalogRows';
+import { skillCatalogUrl } from './skillCatalogUrl';
 
 type SkillsMode = 'manual' | 'external';
 
@@ -38,25 +39,6 @@ interface SkillsCatalogPageProps {
   onModeChange: (mode: SkillsMode) => void;
   showModeTabs?: boolean;
 }
-
-const GITHUB_REPO_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
-
-const getRepoUrl = (source: string): string | null => {
-  const trimmed = source.trim();
-  if (!GITHUB_REPO_PATTERN.test(trimmed)) {
-    return null;
-  }
-  return `https://github.com/${trimmed}`;
-};
-
-const getSkillUrl = (item: SkillsCatalogItem): string | null => {
-  const repoUrl = getRepoUrl(item.repoSource);
-  if (!repoUrl) {
-    return null;
-  }
-  const skillPath = [item.repoSubpath, item.skillDir].filter(Boolean).join('/');
-  return skillPath ? `${repoUrl}/tree/HEAD/${skillPath}` : repoUrl;
-};
 
 let cachedStarsFormatter: { locale: string; formatter: Intl.NumberFormat } | null = null;
 
@@ -121,18 +103,18 @@ const SourceCard: React.FC<{
       onClick={onSelect}
       aria-pressed={isActive}
       className={cn(
-        'oc-surface-elevated flex min-h-24 w-full items-start gap-3 rounded-lg border bg-surface-elevated p-3.5 text-start transition-colors',
+        'oc-tile w-full min-h-24 text-start rounded-lg p-3.5 flex gap-3 items-start',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isActive
-          ? 'border-border bg-interactive-selection text-interactive-selection-foreground'
-          : 'border-border hover:border-interactive-border-hover'
+          ? 'bg-interactive-selection text-interactive-selection-foreground'
+          : 'oc-tile-hover'
       )}
     >
       <span className="min-w-0 flex-1 block">
         <span className="flex items-center gap-2">
           <span className="typography-ui-label font-medium text-foreground truncate">{source.label}</span>
           {isLoading ? (
-            <Icon name="refresh" className="size-3 shrink-0 animate-spin text-muted-foreground" />
+            <Icon name="refresh" className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
           ) : (
             skillsCount !== null && (
               <span className="typography-micro text-muted-foreground shrink-0">
@@ -148,7 +130,7 @@ const SourceCard: React.FC<{
               className="typography-micro text-muted-foreground flex items-center gap-1"
               title={t('settings.skills.catalog.page.source.stars', { count: stars })}
             >
-              <Icon name="star" className="size-3" />
+              <Icon name="star" className="h-3 w-3" />
               {formatStars(stars)}
             </span>
           )}
@@ -206,11 +188,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
   const settingsDirectory = useSettingsDirectory();
 
   React.useEffect(() => {
-    setSelectedSkillKeys(new Set());
-    setUninstallItems([]);
-    setInstallDialogOpen(false);
     void loadCatalog();
-  }, [loadCatalog, settingsDirectory]);
+  }, [loadCatalog]);
 
   // Load every source in the background so global search covers all of them.
   React.useEffect(() => {
@@ -328,9 +307,12 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     const remaining: SkillsCatalogItem[] = [];
     const refreshedSources = new Set<string>();
     for (const item of uninstallItems) {
-      const directory = settingsDirectory;
-      const badge = item.installed;
-      const success = directory && badge.isInstalled ? await deleteSkill({ scope: badge.scope, authoredSkillId: badge.authoredSkillId }, directory) : false;
+      // A downloaded skill lives either in the user's skills root or in the
+      // project's; the canonical entry says which when it is installed at all.
+      const installed = item.installed;
+      const directory = installed?.isInstalled && installed.scope === 'workspace' ? settingsDirectory : null;
+      const success = (!installed?.isInstalled || installed.scope !== 'workspace' || Boolean(directory))
+        && await deleteSkill(item.skillName, directory);
       if (success) {
         refreshedSources.add(item.sourceId);
         setSelectedSkillKeys((current) => {
@@ -402,7 +384,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
       >
       {showModeTabs && (
             <div className="mb-4">
-              <div className="h-10">
+              <div className="h-7">
                 <SortableTabsStrip
                   items={[
                     { id: 'manual', label: t('settings.skills.catalog.page.mode.manual') },
@@ -427,14 +409,13 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
 
         <div data-settings-item="skills.catalog.search" className="mb-5">
           <div className="relative max-w-md">
-            <Icon name="search" className="absolute inset-s-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Icon name="search" className="absolute inset-s-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('settings.skills.catalog.page.searchAllPlaceholder')}
-              inputSize="compact"
-              className={cn('w-full ps-8', search && 'pe-8')}
+              className={cn('h-8 ps-8 w-full', search && 'pe-8')}
             />
             {search && (
               <button
@@ -443,10 +424,10 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                   setSearch('');
                   searchInputRef.current?.focus();
                 }}
-                className="absolute inset-e-2 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                className="absolute inset-e-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-4 w-4 rounded text-muted-foreground hover:text-foreground transition-colors"
                 title={t('settings.skills.catalog.page.search.clear')}
               >
-                <Icon name="close" className="size-3" />
+                <Icon name="close" className="h-3 w-3" />
               </button>
             )}
           </div>
@@ -458,7 +439,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
           settingsItem="skills.catalog.source"
           contentClassName="space-y-0"
         >
-          <div className={`${SETTINGS_CARD_GRID_CLASS} py-1.5`}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1.5">
             {sources.map((src) => (
               <SourceCard
                 key={src.id}
@@ -471,21 +452,33 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               />
             ))}
 
-            <SettingsAddCard
-              settingsItem="skills.catalog.add-catalog"
-              label={t('settings.skills.catalog.page.source.addOwnTitle')}
-              hint={t('settings.skills.catalog.page.source.addOwnDescription')}
+            <button
+              type="button"
+              data-settings-item="skills.catalog.add-catalog"
               onClick={() => {
                 setEditingCatalogId(null);
                 setCatalogDialogOpen(true);
               }}
-            />
+              className="min-h-24 text-start rounded-lg border border-dashed border-[color-mix(in_srgb,var(--foreground)_14%,transparent)] oc-tile-hover p-3.5 flex gap-3 items-start transition-colors"
+            >
+              <span className="flex items-center justify-center rounded-md bg-transparent text-muted-foreground w-8 h-8 shrink-0">
+                <Icon name="add" className="h-4 w-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="typography-ui-label text-muted-foreground block">
+                  {t('settings.skills.catalog.page.source.addOwnTitle')}
+                </span>
+                <span className="typography-micro text-muted-foreground block mt-0.5">
+                  {t('settings.skills.catalog.page.source.addOwnDescription')}
+                </span>
+              </span>
+            </button>
           </div>
         </SettingsSection>
 
         {lastCatalogError && (
           <SettingsSection>
-            <div className="rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-background)] px-4 py-3">
+            <div className="rounded-lg bg-[var(--status-error-background)] px-4 py-3">
               <div className="typography-ui-label font-medium text-[var(--status-error)]">{t('settings.skills.catalog.page.error.catalogTitle')}</div>
               <div className="typography-meta text-[var(--status-error)]/80 mt-1">{lastCatalogError.message}</div>
               {lastCatalogError.kind === 'authRequired' && isCustomSource && (
@@ -511,7 +504,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               <span className="typography-micro font-medium uppercase tracking-wide text-muted-foreground truncate">
                 {listTitle}
               </span>
-              <span className="typography-micro text-muted-foreground/70 shrink-0">
+              <span className="typography-micro text-muted-foreground shrink-0">
                 {t('settings.skills.catalog.page.foundCount', { count: filtered.length })}
               </span>
             </div>
@@ -602,18 +595,21 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               </div>
             ) : filtered.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground">
-                <p className="typography-body">{t('settings.skills.catalog.page.empty.noSkillsTitle')}</p>
+                <p className="typography-ui-label">{t('settings.skills.catalog.page.empty.noSkillsTitle')}</p>
                 <p className="typography-meta mt-1 opacity-75">{t('settings.skills.catalog.page.empty.noSkillsDescription')}</p>
               </div>
             ) : (
-              <div className="divide-y divide-[var(--surface-subtle)]">
-                {filtered.map((item) => {
-                  const installed = item.installed?.isInstalled;
-                  const installedScope = item.installed.isInstalled ? t(item.installed.scope === 'workspace' ? 'settings.skills.sidebar.section.project' : 'settings.skills.sidebar.section.user') : null;
-                  const skillUrl = getSkillUrl(item);
+              <SkillsCatalogRows
+                items={filtered}
+                itemKey={itemKey}
+                renderRow={(item) => {
+                  const installedEntry = item.installed;
+                  const installed = installedEntry?.isInstalled === true;
+                  const installedScope = installedEntry?.isInstalled ? installedEntry.scope : null;
+                  const skillUrl = skillCatalogUrl(item);
 
                   return (
-                    <div key={`${item.sourceId}:${item.skillDir}`} className="py-2">
+                    <div className="py-2">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -639,10 +635,10 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                           {item.description ? (
                             <div className="typography-meta text-muted-foreground mt-0.5 line-clamp-2">{item.description}</div>
                           ) : (
-                            <div className="typography-meta text-muted-foreground/50 mt-0.5 italic">{t('settings.skills.catalog.shared.noDescription')}</div>
+                            <div className="typography-meta text-muted-foreground mt-0.5 italic">{t('settings.skills.catalog.shared.noDescription')}</div>
                           )}
 
-                          <div className="typography-micro text-muted-foreground/80 mt-1 flex items-center gap-2 min-w-0">
+                          <div className="typography-micro text-muted-foreground mt-1 flex items-center gap-2 min-w-0">
                             {skillUrl ? (
                               <a
                                 href={skillUrl}
@@ -651,7 +647,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                                 className="font-mono hover:underline truncate inline-flex items-center gap-1"
                                 title={t('settings.skills.catalog.page.skill.viewOnGithub')}
                               >
-                                <Icon name="github" className="size-3 shrink-0" />
+                                <Icon name="github" className="h-3 w-3 shrink-0" />
                                 {item.repoSource}
                               </a>
                             ) : (
@@ -692,7 +688,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                               onClick={() => setUninstallItems([item])}
                               title={t('settings.skills.sidebar.deleteDialog.title')}
                             >
-                              <Icon name="check" className="size-4" />
+                              <Icon name="check" className="h-4 w-4" />
                             </Button>
                           ) : (
                             <Button
@@ -711,8 +707,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                       </div>
                     </div>
                   );
-                })}
-              </div>
+                }}
+              />
             )}
         </SettingsSection>
       </SettingsPageLayout>

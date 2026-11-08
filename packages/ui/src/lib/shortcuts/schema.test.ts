@@ -5,7 +5,9 @@ import {
   getShortcutBindingConflicts,
   getShortcutAction,
   parseShortcut,
+  PALETTE_COMMANDS,
   SHORTCUT_SCHEMA,
+  UNASSIGNED_SHORTCUT,
   type ShortcutCategory,
 } from './index';
 
@@ -62,18 +64,28 @@ describe('shortcut schema', () => {
     expect(getShortcutAction('focus_input')?.category).toBe('session');
   });
 
+  test('palette commands are bindable and every one starts unassigned', () => {
+    const palette = SHORTCUT_SCHEMA.filter((action) => (PALETTE_COMMANDS as readonly string[]).includes(action.id));
+    expect(palette.map((action) => action.id).sort()).toEqual([...PALETTE_COMMANDS].sort());
+    for (const action of palette) {
+      expect(action.defaultBinding).toBe(UNASSIGNED_SHORTCUT);
+      expect(action.customizable).toBe(true);
+    }
+  });
+
   test('splits the held digit prefixes between session tabs and surfaces', () => {
     expect(getShortcutAction('switch_session_tab')?.defaultBinding).toBe('mod');
     expect(getShortcutAction('switch_context_surface')?.defaultBinding).toBe('mod+alt');
   });
 
-  test('every action ships with a default binding', () => {
-    // Palette-only commands live outside this schema entirely; an action in
-    // the schema without a binding would be dead weight in Settings.
-    // Desktop-category actions are the exception: they register as OS-level
-    // global shortcuts, not in-app bindings, so their default is unassigned.
+  test('every action ships with a default binding, except the ones nobody chose', () => {
+    // A command with no default of its own still belongs in the schema so it
+    // can be bound at all: the palette's commands, and the desktop-category
+    // actions that register as OS-level global shortcuts. Everything else
+    // without a binding would be dead weight in Settings.
     for (const action of SHORTCUT_SCHEMA) {
       if (action.category === 'desktop') continue;
+      if ((PALETTE_COMMANDS as readonly string[]).includes(action.id)) continue;
       expect(getEffectiveShortcutCombo(action.id)).not.toBe('');
     }
   });
@@ -98,8 +110,8 @@ describe('shortcut schema', () => {
   test('detects conflicts against customizable and internal bindings', () => {
     const customizableConflict = getShortcutBindingConflicts('new_chat', 'mod+p')
       .find((conflict) => conflict.action.id === 'open_command_palette');
-    const internalConflict = getShortcutBindingConflicts('new_chat', 'mod+f')
-      .find((conflict) => conflict.action.id === 'find_in_file');
+    const internalConflict = getShortcutBindingConflicts('new_chat', 'mod+s')
+      .find((conflict) => conflict.action.id === 'save_file');
     const internalPrefixConflict = getShortcutBindingConflicts('new_chat', 'mod+s x')
       .find((conflict) => conflict.action.id === 'save_file');
     const leaderPrefixConflict = getShortcutBindingConflicts('new_chat', 'mod+k')
@@ -119,37 +131,37 @@ describe('shortcut schema', () => {
 });
 
 describe('shortcut defaults', () => {
-    // Two actions silently sharing a default binding would race at dispatch
-    // (registry insertion order decides). Pairs that intentionally share a
-    // combo because they can never be active in the same runtime must be
-    // whitelisted here explicitly.
-    const RUNTIME_EXCLUSIVE_BINDING_PAIRS: ReadonlyArray<ReadonlySet<string>> = [];
+  // Two actions silently sharing a default binding would race at dispatch
+  // (registry insertion order decides). Pairs that intentionally share a
+  // combo because they can never be active in the same runtime must be
+  // whitelisted here explicitly.
+  const RUNTIME_EXCLUSIVE_BINDING_PAIRS: ReadonlyArray<ReadonlySet<string>> = [];
 
-    test('no two actions share a normalized default binding', () => {
-        const byBinding = new Map<string, string[]>();
-        for (const action of SHORTCUT_SCHEMA) {
-            const combo = getEffectiveShortcutCombo(action.id);
-            if (!combo) continue;
-            const list = byBinding.get(combo) ?? [];
-            list.push(action.id);
-            byBinding.set(combo, list);
-        }
-        const conflicts = [...byBinding.entries()]
-            .filter(([, ids]) => ids.length > 1)
-            .filter(([, ids]) => !RUNTIME_EXCLUSIVE_BINDING_PAIRS.some(
-                (pair) => ids.every((id) => pair.has(id)),
-            ))
-            .map(([combo, ids]) => `"${combo}" shared by ${ids.join(', ')}`);
-        expect(conflicts).toEqual([]);
-    });
+  test('no two actions share a normalized default binding', () => {
+    const byBinding = new Map<string, string[]>();
+    for (const action of SHORTCUT_SCHEMA) {
+      const combo = getEffectiveShortcutCombo(action.id);
+      if (!combo) continue;
+      const list = byBinding.get(combo) ?? [];
+      list.push(action.id);
+      byBinding.set(combo, list);
+    }
+    const conflicts = [...byBinding.entries()]
+      .filter(([, ids]) => ids.length > 1)
+      .filter(([, ids]) => !RUNTIME_EXCLUSIVE_BINDING_PAIRS.some(
+        (pair) => ids.every((id) => pair.has(id)),
+      ))
+      .map(([combo, ids]) => `"${combo}" shared by ${ids.join(', ')}`);
+    expect(conflicts).toEqual([]);
+  });
 
-    test('overrides recorded under the flat-file era still resolve', () => {
-        // The persisted override format is a flat Record<string, string> and
-        // must keep resolving through the schema after the module split.
-        const overrides = { close_session_tab: 'alt+q', open_command_palette: 'mod+shift+k' };
-        expect(getEffectiveShortcutCombo('close_session_tab', overrides)).toBe('alt+q');
-        expect(getEffectiveShortcutCombo('open_command_palette', overrides)).toBe('mod+shift+k');
-        // Unknown ids stay inert rather than throwing.
-        expect(getEffectiveShortcutCombo('close_session_tab', { ghost_action: 'mod+z', close_session_tab: 'alt+q' } as Record<string, string>)).toBe('alt+q');
-    });
+  test('overrides recorded under the flat-file era still resolve', () => {
+    // The persisted override format is a flat Record<string, string> and
+    // must keep resolving through the schema after the module split.
+    const overrides = { close_session_tab: 'alt+q', open_command_palette: 'mod+shift+k' };
+    expect(getEffectiveShortcutCombo('close_session_tab', overrides)).toBe('alt+q');
+    expect(getEffectiveShortcutCombo('open_command_palette', overrides)).toBe('mod+shift+k');
+    // Unknown ids stay inert rather than throwing.
+    expect(getEffectiveShortcutCombo('close_session_tab', { ghost_action: 'mod+z', close_session_tab: 'alt+q' } as Record<string, string>)).toBe('alt+q');
+  });
 });

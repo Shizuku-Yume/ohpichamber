@@ -46,6 +46,18 @@ describe('theme import persistence', () => {
     expect(await runtime.saveImportedTheme(definition)).toEqual(theme);
   });
 
+  it('deletes a broken theme file that the list still shows from its last valid version', async () => {
+    const { app, runtime, themesDir } = await setup();
+    const theme = await runtime.saveImportedTheme(definition);
+    const file = path.join(themesDir, `${theme.metadata.id}.json`);
+    await request(app).get('/api/config/themes').expect(200);
+    await fs.writeFile(file, '{"metadata": {');
+    const response = await request(app).get('/api/config/themes').expect(200);
+    expect(response.body.themes.map((entry) => entry.metadata.id)).toEqual([theme.metadata.id]);
+    await request(app).delete(`/api/config/themes/${theme.metadata.id}`).expect(200);
+    await expect(fs.access(file)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('does not follow a symlink during deletion or report deletion failure as success', async () => {
     const { app, root, themesDir } = await setup();
     await fs.mkdir(themesDir);
@@ -85,10 +97,12 @@ describe('theme import persistence', () => {
   });
 
   it('allows deleting a readable theme beside an unreadable sibling, but does not treat failed reads as absence', async () => {
-    const { runtime, themesDir } = await setup({ readFile: async (file, ...args) => {
-      if (path.basename(file) === 'unreadable.json') throw Object.assign(new Error('denied'), { code: 'EACCES' });
-      return fs.readFile(file, ...args);
-    } });
+    const { runtime, themesDir } = await setup({
+      readFile: async (file, ...args) => {
+        if (path.basename(file) === 'unreadable.json') throw Object.assign(new Error('denied'), { code: 'EACCES' });
+        return fs.readFile(file, ...args);
+      }
+    });
     const theme = await runtime.saveImportedTheme(definition);
     await fs.writeFile(path.join(themesDir, 'unreadable.json'), JSON.stringify(definition));
     await runtime.deleteImportedTheme(theme.metadata.id);

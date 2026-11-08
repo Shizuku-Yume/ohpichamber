@@ -15,7 +15,12 @@ import { spaceIdOfDirectory } from '@/lib/spaces/space-route';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { useUIStore } from '@/stores/useUIStore';
 
-export const SpaceApplyButton: React.FC<{ directory: string | null | undefined; className: string; iconClassName: string }> = ({ directory, className, iconClassName }) => {
+export const SpaceApplyButton: React.FC<{
+  directory: string | null | undefined;
+  /** Sizing and colour of the button where it sits; the tooltip still names it. */
+  className?: string;
+  iconClassName?: string;
+}> = ({ directory, className = '', iconClassName = '' }) => {
   const { t } = useI18n();
   const enabled = useUIStore((state) => state.isolatedSpacesEnabled);
   const spaceId = spaceIdOfDirectory(directory);

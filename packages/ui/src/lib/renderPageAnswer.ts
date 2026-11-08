@@ -14,9 +14,7 @@ const errorSchema = z.object({ error: z.string().min(1) }).catch({ error: '' });
 export async function answerRenderedPage(input: {
     sessionId: string;
     callId: string;
-    summary: string;
-    data: JsonValue;
-}): Promise<void> {
+} & ({ summary: string; data: JsonValue } | { notDrawn: string[] } | { declined: true })): Promise<void> {
     const response = await runtimeFetch('/api/openchamber/render/answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

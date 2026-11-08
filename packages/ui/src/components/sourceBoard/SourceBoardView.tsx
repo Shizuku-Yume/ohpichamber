@@ -77,7 +77,7 @@ import { SourceBoardAcrossNote } from './SourceBoardAcrossNote';
 import { SourceBoardChecksDialog } from './SourceBoardChecksDialog';
 import { SourceBoardLabels, SourceBoardReviewers } from './SourceBoardMetaEditors';
 import { SourceBoardContainerPicker, SourceBoardProjectPicker, SourceBoardRepositoryPicker } from './SourceBoardPickers';
-import { choiceForFocus, resolveBoardTab, shouldRememberAll, useBoardRepository } from './boardRepository';
+import { choiceForFocus, resolveBoardTab, shouldRememberAll, useBoardRepository, useLinkRepository } from './boardRepository';
 import { isSameRepositoryItemLink } from './openTrackerItem';
 import { usePullAttachments } from './pullAttachments';
 import { useThreadActions } from './threadActions';
@@ -331,12 +331,21 @@ const SourceBoard: React.FC<{ layout: SourceBoardLayout; onLeave?: () => void; o
     }
 
     return (
-        // Remounted per source and project: a new list starts with an empty search.
-        <SourceBoardBody
+        <>
+            {tab === 'repository' && repository.discoveryFailed && repository.status === 'ready' ? (
+                <div role="status" className="flex shrink-0 items-center gap-2 px-3 py-2 typography-meta text-muted-foreground">
+                    <span>{t('gitView.empty.discoverFailed')}</span>
+                    <Button size="sm" variant="outline" onClick={repository.retry}>{t('gitView.empty.retryDiscovery')}</Button>
+                </div>
+            ) : null}
+            {/* Remounted per source and project: a new list starts with an empty search. */}
+            <SourceBoardBody
             key={`${tab}:${tab === 'repository' ? `${allRepositories ? 'all:' : ''}${directory}` : containerId ?? ''}`}
             tab={tab}
             project={project}
             directory={directory}
+            repositoryDiscoveryPending={repository.discoveryPending}
+            projectRoot={projectRoot}
             allRepositories={allRepositories}
             trackerContainerId={containerId}
             mapping={mapping}
@@ -349,7 +358,8 @@ const SourceBoard: React.FC<{ layout: SourceBoardLayout; onLeave?: () => void; o
             onScreen={onScreen}
             onLeave={onLeave}
             onClose={onClose}
-        />
+            />
+        </>
     );
 };
 
@@ -358,6 +368,10 @@ const SourceBoardBody: React.FC<{
     project: ProjectEntry | null;
     /** The folder the board reads; the project's root while it lists `allRepositories`. */
     directory: string | null;
+    /** A remembered repository can still change the body's directory and key. */
+    repositoryDiscoveryPending: boolean;
+    /** The project's root, which a pinned link's repository is looked up under. */
+    projectRoot: string | null;
     /** The repositories listed together, or null while one folder is read. */
     allRepositories: readonly string[] | null;
     /** The tracker container (Linear team) a tracker tab lists; null lists every one. */
@@ -379,7 +393,7 @@ const SourceBoardBody: React.FC<{
     onLeave?: () => void;
     /** The phone page's close button. */
     onClose?: () => void;
-}> = ({ tab, project, directory, allRepositories, trackerContainerId, mapping, projects, scopePicker, kinds, initialRepositoryKind, onSelectKind, layout, onScreen, onLeave, onClose }) => {
+}> = ({ tab, project, directory, repositoryDiscoveryPending, projectRoot, allRepositories, trackerContainerId, mapping, projects, scopePicker, kinds, initialRepositoryKind, onSelectKind, layout, onScreen, onLeave, onClose }) => {
     const isMobile = layout === 'mobile';
     const { t } = useI18n();
     const { sourceControl, trackers } = useRuntimeAPIs();
@@ -387,14 +401,21 @@ const SourceBoardBody: React.FC<{
     // An item another surface asked to show: an issue or PR by its link, a
     // tracker item by its identifier. It is read on its own, not typed into the
     // search: the list stays as it was, and the preview opens on the item.
-    const [pinnedLink, setPinnedLink] = React.useState<{ kind: RepositoryReferenceKind; url: string } | null>(null);
+    const [pinnedLink, setPinnedLink] = React.useState<{ kind: RepositoryReferenceKind; url: string; focus?: typeof repositoryFocus } | null>(null);
     const [pinnedTrackerId, setPinnedTrackerId] = React.useState<string | null>(null);
     // Counts the requests to show an item, so each is shown once, and the one
     // shown before never answers for the one just asked.
     const [pinRequest, setPinRequest] = React.useState(0);
+    // The item is read through the repository its link names, which under an
+    // established root may be a submodule the list does not read: opened from
+    // there, its labels, comments and Changes links belong to that repository.
+    const pinnedLinkFolder = useLinkRepository(projectRoot ?? '', pinnedLink?.url ?? '', {
+        enabled: Boolean(projectRoot && pinnedLink && tab === 'repository'),
+    });
+    const pinnedDirectory = pinnedLink && pinnedLinkFolder.status === 'ready' ? pinnedLinkFolder.directory : directory;
     const pinnedSingle = useRepositoryReferenceList({
-        enabled: tab === 'repository' && pinnedLink !== null && allRepositories === null,
-        directory,
+        enabled: tab === 'repository' && pinnedLink !== null && allRepositories === null && pinnedLinkFolder.status === 'ready',
+        directory: pinnedDirectory,
         kind: pinnedLink?.kind ?? 'issue',
         filter: DEFAULT_REPOSITORY_FILTER,
         query: pinnedLink?.url ?? '',
@@ -407,21 +428,43 @@ const SourceBoardBody: React.FC<{
         query: pinnedLink?.url ?? '',
     });
     const pinnedLookup = allRepositories ? pinnedAcross : pinnedSingle;
+
+    const urls = useRepositoryUrlMatcher();
+    // Past the project's fork network a link is read with the project's account
+    // where that account's host is the link's, and only read.
+    const outsideDirectory = allRepositories?.[0] ?? pinnedDirectory;
+    const pinnedFolderValue = useRepositoryReadContext(pinnedLink ? outsideDirectory : null);
+    const pinnedFolderContext = pinnedFolderValue && pinnedFolderValue !== 'missing' ? pinnedFolderValue : null;
+    const pinnedHost = pinnedLink ? urls.match(pinnedLink.url) : null;
+    const namesPinnedLink = (item: RepositoryReference) => pinnedLink !== null && isSameRepositoryItemLink(item.url, pinnedLink.url, urls);
+    const pinnedAcrossItem = tab === 'repository' && allRepositories ? pinnedAcross.items.find(namesPinnedLink) ?? null : null;
+    const pinnedAskedItem = allRepositories ? pinnedAcrossItem : (tab === 'repository' ? pinnedSingle.items.find(namesPinnedLink) ?? null : null);
+    const asksOutside = tab === 'repository' && pinnedLink !== null && (allRepositories !== null || pinnedLinkFolder.status === 'ready')
+        && !pinnedAskedItem
+        && (pinnedLookup.status === 'ready' || pinnedLookup.status === 'unavailable' || (pinnedLookup.status === 'error' && !pinnedLinkFolder.owned))
+        && pinnedFolderContext !== null && pinnedHost?.provider === pinnedFolderContext.provider && pinnedHost.instance === pinnedFolderContext.instance;
+    const pinnedOutside = useRepositoryReferenceList({
+        enabled: asksOutside,
+        directory: outsideDirectory,
+        kind: pinnedLink?.kind ?? 'issue',
+        filter: DEFAULT_REPOSITORY_FILTER,
+        query: pinnedLink?.url ?? '',
+        linked: true,
+    });
+    const pinnedOutsideItem = asksOutside ? pinnedOutside.items.find(namesPinnedLink) ?? null : null;
     // A tracker's get takes its human identifier as well as its own id.
     const { detail: pinnedTracker, followed: pinnedTrackerFollowed } = useTrackerItemDetail(
         tracker && pinnedTrackerId ? { provider: tracker, id: pinnedTrackerId } : null,
         true,
     );
-    const urls = useRepositoryUrlMatcher();
     // Only the item the link names: a lookup that fell back to a search lists others.
-    const namesPinnedLink = (item: RepositoryReference) => pinnedLink !== null && isSameRepositoryItemLink(item.url, pinnedLink.url, urls);
-    const pinnedAcrossItem = tab === 'repository' && allRepositories ? pinnedAcross.items.find(namesPinnedLink) ?? null : null;
-    const pinnedReference = tab === 'repository' && !allRepositories ? pinnedSingle.items.find(namesPinnedLink) ?? null : pinnedAcrossItem;
-    // Across repositories the item names the folder it was read through.
-    const pinnedFolder = pinnedAcrossItem?.directory;
+    const pinnedReference = tab === 'repository' ? pinnedAskedItem ?? pinnedOutsideItem : null;
+    // Across repositories the item names the folder it was read through;
+    // singly, that is the folder its link resolved to.
+    const pinnedFolder = pinnedOutsideItem ? outsideDirectory : allRepositories ? pinnedAcrossItem?.directory : pinnedDirectory;
     const pinnedTrackerItem = tracker && pinnedTracker.status === 'ready' ? pinnedTracker.value : null;
     const pinnedItem = React.useMemo<ReferencePickerItem | null>(() => {
-        if (pinnedReference) return { source: 'repository', reference: pinnedReference, directory: pinnedFolder };
+        if (pinnedReference) return { source: 'repository', reference: pinnedReference, directory: pinnedFolder ?? undefined };
         if (pinnedTrackerItem) return { source: 'tracker', provider: pinnedTrackerItem.provider, item: pinnedTrackerItem };
         return null;
     }, [pinnedFolder, pinnedTrackerItem, pinnedReference]);
@@ -455,30 +498,40 @@ const SourceBoardBody: React.FC<{
         useSourceBoardStore.getState().clearTrackerFocus();
     }, [trackerFocus, setQuery]);
     const repositoryFocus = useSourceBoardStore((state) => (tab === 'repository' ? state.repositoryFocus : null));
+    // Taken once per request: a remount after discovery re-pins the same item,
+    // while the store keeps it until it has actually been shown.
+    const takenRepositoryFocusRef = React.useRef<typeof repositoryFocus>(null);
     React.useEffect(() => {
-        if (!repositoryFocus) return;
+        if (!repositoryFocus || takenRepositoryFocusRef.current === repositoryFocus) return;
+        takenRepositoryFocusRef.current = repositoryFocus;
         setPinRequest((request) => request + 1);
         selectRepositoryKind(repositoryFocus.kind);
         setQuery('');
-        setPinnedLink({ kind: repositoryFocus.kind, url: repositoryFocus.query });
-        useSourceBoardStore.getState().clearRepositoryFocus();
+        setPinnedLink({ kind: repositoryFocus.kind, url: repositoryFocus.query, focus: repositoryFocus });
     }, [repositoryFocus, selectRepositoryKind, setQuery]);
     // Shown once found; the user then moves on from it like from any row. The
     // commit that takes a new request still holds the previous item, and the
     // previous request was already shown, so it is not shown over again.
     React.useEffect(() => {
-        if (!pinnedItem || shownPinRequestRef.current === pinRequest) return;
-        shownPinRequestRef.current = pinRequest;
-        showItem(referencePickerItemKey(pinnedItem));
-    }, [pinRequest, pinnedItem, showItem]);
+        if (!pinnedItem) return;
+        if (shownPinRequestRef.current !== pinRequest) {
+            shownPinRequestRef.current = pinRequest;
+            showItem(referencePickerItemKey(pinnedItem));
+        }
+        const focus = useSourceBoardStore.getState().repositoryFocus;
+        if (!repositoryDiscoveryPending && pinnedLink?.focus && focus === pinnedLink.focus) useSourceBoardStore.getState().clearRepositoryFocus();
+    }, [pinRequest, pinnedItem, pinnedLink, repositoryDiscoveryPending, showItem]);
     // Not found: a link the project's host does not know opens in the browser;
     // a tracker identifier is searched for instead.
     const pinnedLinkStatus = pinnedLookup.status;
     React.useEffect(() => {
+        if (allRepositories === null && pinnedLinkFolder.status !== 'ready') return;
         if (!pinnedLink || pinnedLinkStatus === 'loading' || pinnedReference) return;
         void openExternalUrl(pinnedLink.url);
+        const focus = useSourceBoardStore.getState().repositoryFocus;
+        if (pinnedLink.focus && focus === pinnedLink.focus) useSourceBoardStore.getState().clearRepositoryFocus();
         setPinnedLink(null);
-    }, [pinnedLink, pinnedLinkStatus, pinnedReference]);
+    }, [allRepositories, pinnedLink, pinnedLinkFolder.status, pinnedLinkStatus, pinnedReference]);
     const pinnedTrackerStatus = pinnedTracker.status;
     React.useEffect(() => {
         if (!pinnedTrackerId || pinnedTrackerStatus !== 'error') return;
@@ -653,7 +706,15 @@ const SourceBoardBody: React.FC<{
         </Button>
     );
 
-    const preview = (
+    const pinnedDiscoveryError = pinnedLink !== null && allRepositories === null && pinnedLinkFolder.status === 'failed' ? (
+        <div role="status" className="flex flex-col items-center justify-center gap-3 p-4 text-center typography-meta text-muted-foreground">
+            <span>{t('gitView.empty.discoverFailed')}</span>
+            <Button size="sm" variant="outline" onClick={pinnedLinkFolder.retry}>
+                {t('gitView.empty.retryDiscovery')}
+            </Button>
+        </div>
+    ) : null;
+    const preview = pinnedDiscoveryError ?? (
         <ReferencePreview
             item={previewItem}
             directory={itemDirectory(previewItem, browser.directory)}

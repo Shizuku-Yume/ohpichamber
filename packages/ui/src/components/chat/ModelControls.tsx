@@ -141,12 +141,13 @@ const formatUsdCurrency = (value: number) => new Intl.NumberFormat(getCurrentInt
     minimumFractionDigits: 2,
 }).format(value);
 
-const formatKnowledgeDate = (value: Date) => new Intl.DateTimeFormat(getCurrentIntlLocale(), { month: 'short', year: 'numeric' }).format(value);
+const formatKnowledgeDate = (value: Date) => new Intl.DateTimeFormat(getCurrentIntlLocale(), { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(value);
 
-const formatReleaseDate = (value: Date) => new Intl.DateTimeFormat(getCurrentIntlLocale(), {
+const formatReleaseDate = (value: Date, timeZone?: string) => new Intl.DateTimeFormat(getCurrentIntlLocale(), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    timeZone,
 }).format(value);
 
 

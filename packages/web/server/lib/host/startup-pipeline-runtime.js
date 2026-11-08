@@ -53,6 +53,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       attachSignals,
       apiOnly,
       dictationModelsDir,
+      broadcastUiEvent,
     } = options;
 
     const terminalRuntime = createTerminalRuntime({
@@ -71,6 +72,9 @@ export const createStartupPipelineRuntime = (dependencies) => {
       TERMINAL_INPUT_WS_REBIND_WINDOW_MS: terminalRebindWindowMs,
       TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW: terminalMaxRebindsPerWindow,
       environmentRuntime,
+      // Session create/close/kill is authoritative on the Host, so the UI
+      // hears about it instead of rediscovering terminals on the next focus.
+      broadcastUiEvent,
     });
 
     const dictationRuntime = createDictationRuntime({

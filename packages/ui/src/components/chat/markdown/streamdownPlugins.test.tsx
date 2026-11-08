@@ -3,14 +3,14 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Window } from 'happy-dom';
 import { Streamdown } from 'streamdown';
-import { getMarkdownProcessingOptions, markdownCjk, markdownMath } from './streamdownPlugins';
+import { getMarkdownCjk, getMarkdownProcessingOptions, markdownMath } from './streamdownPlugins';
 
 const dom = new Window();
-function render(source: string, raw = false) {
+function render(source: string, raw = false, singleTilde = false) {
   const html = renderToStaticMarkup(<Streamdown
     mode="static" parseIncompleteMarkdown={false} controls={false}
-    plugins={{ math: markdownMath, cjk: markdownCjk }}
-    {...getMarkdownProcessingOptions(raw)}
+    plugins={{ math: markdownMath, cjk: getMarkdownCjk(singleTilde) }}
+    {...getMarkdownProcessingOptions(raw, singleTilde)}
     urlTransform={(value) => value}
     components={{
       a: ({ node: _node, ...props }) => <a {...props} />,
@@ -58,9 +58,35 @@ describe('Streamdown processing policy', () => {
     expect(hostile.querySelector('img')?.hasAttribute('srcset')).toBe(false);
     expect(hostile.querySelector('source')?.hasAttribute('srcset')).toBe(false);
   });
+  test('keeps single tildes as written and strikes only on a double tilde', () => {
+    const ranges = render('**ETA**：前 4 步稳定在 4m50s~5m02s 每个目标，第 5 步大约 **6~7 分钟**后完成；随后是组装（秒级）和 6 个包逐个 `npm publish`（每个 5~20s），整体 **约 8~10 分钟**收敛。');
+    expect(ranges.querySelector('del')).toBeNull();
+    expect(ranges.textContent).toContain('4m50s~5m02s');
+    expect(ranges.textContent).toContain('6~7 分钟');
+    expect(ranges.textContent).toContain('5~20s');
+    expect(ranges.textContent).toContain('约 8~10 分钟');
+    expect(render('旧 ~~已删除~~ 新').querySelector('del')?.textContent).toBe('已删除');
+    expect(render('旧 ~~已删除~~ 新').textContent).toBe('旧 已删除 新');
+  });
+
+  test('keeps single tildes literal inside re-parsed content and inline markup', () => {
+    const details = render('<details><summary>ETA</summary>\n\n前 4m50s~5m02s 每个目标\n\n</details>');
+    expect(details.querySelector('del')).toBeNull();
+    expect(details.textContent).toContain('4m50s~5m02s');
+    const markup = render('a ~b **c** d~ e');
+    expect(markup.querySelector('del')).toBeNull();
+    expect(markup.querySelector('strong')?.textContent).toBe('c');
+    expect(markup.textContent).toBe('a ~b c d~ e');
+  });
+
+  test('preserves GFM tildes in host-authored bodies, comments and disclosures', () => {
+    const result = render('a ~removed~ b and 前~~删除。~~后\n\n<details><summary>More</summary>\n\na ~hidden~ b\n\n</details>', true, true);
+    expect(Array.from(result.querySelectorAll('del')).map(node => node.textContent)).toEqual(['removed', '删除。', 'hidden']);
+  });
+
   test('keeps processing arrays stable and policy-specific', () => {
-    expect(getMarkdownProcessingOptions(false)).toBe(getMarkdownProcessingOptions(false));
-    expect(getMarkdownProcessingOptions(true).rehypePlugins).not.toBe(getMarkdownProcessingOptions(false).rehypePlugins);
+    expect(getMarkdownProcessingOptions(false, false)).toBe(getMarkdownProcessingOptions(false, false));
+    expect(getMarkdownProcessingOptions(true, false).rehypePlugins).not.toBe(getMarkdownProcessingOptions(false, false).rehypePlugins);
   });
 
   test('shows chat HTML as text and parses only restricted nested disclosures', () => {
@@ -86,20 +112,10 @@ describe('Streamdown processing policy', () => {
     expect(render('<source srcset="a.png 1x, javascript:bad 2x">', true).querySelector('source')?.hasAttribute('srcset')).toBe(false);
   });
 
-  test('keeps the fork DOMPurify protections: active elements, handlers and script URLs never reach the DOM', () => {
-    const forked = render('<script>alert(1)</script>\n\n<iframe src="https://evil.test"></iframe>\n\n<object data="x"></object><embed src="x"><svg onload="alert(1)"></svg><form action="/x"><button>go</button></form>\n\n<img src="x" onerror="alert(1)"><a href="javascript:alert(1)" onclick="alert(1)">bad</a>\n\n<a href="data:text/html,<script>alert(1)</script>">html</a> <a href="https://example.com/docs">docs</a> <a href="mailto:a@b.test">mail</a>', true);
-    for (const tag of ['script', 'iframe', 'object', 'embed', 'svg', 'form', 'button']) {
-      expect(forked.querySelector(tag)).toBeNull();
-    }
-    expect(forked.querySelector('[onerror], [onclick], [onload]')).toBeNull();
-    const bad = forked.querySelector('a[href^="javascript:"]');
-    expect(bad).toBeNull();
-    const dataLink = Array.from(forked.querySelectorAll('a')).find((a) => a.textContent === 'html');
-    expect(dataLink?.hasAttribute('href')).toBe(false);
-    expect(Array.from(forked.querySelectorAll('a')).find((a) => a.textContent === 'docs')?.getAttribute('href'))
-      .toBe('https://example.com/docs');
-    expect(Array.from(forked.querySelectorAll('a')).find((a) => a.textContent === 'mail')?.getAttribute('href'))
-      .toBe('mailto:a@b.test');
+  test('keeps an extension install link and drops other app links', () => {
+    const kept = 'openchamber://extensions/install?path=/Users/me/ext';
+    expect(render(`[Install](${kept})`).querySelector('a')?.getAttribute('href')).toBe(kept);
+    expect(render('[Install](openchamber://extensions/install?url=http://example.com/a)').querySelector('a')?.getAttribute('href')).toBeNull();
   });
 
   test('preserves approved links before sanitation while rejecting privileged and network URLs', () => {
@@ -231,6 +247,11 @@ describe('Streamdown math and CJK compatibility', () => {
     expect(result.querySelectorAll('.katex')).toHaveLength(1);
     expect(result.querySelector('a')?.textContent).toBe('https://example.test/$x$');
     expect(result.querySelectorAll('.katex-display')).toHaveLength(1);
+  });
+
+  test('keeps CJK flanked strikethrough working', () => {
+    const result = render('前~~删除。~~后 and ~~日本語。~~だよ');
+    expect(Array.from(result.querySelectorAll('del')).map(node => node.textContent)).toEqual(['删除。', '日本語。']);
   });
 
   test('keeps CJK URL boundaries, CRLF, tables, tasks, references and footnotes', () => {

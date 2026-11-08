@@ -85,7 +85,7 @@ const createTestRuntime = ({ entries, files, stats }) => createThemeRuntime({
   path: { join: (...parts) => parts.join('/') },
   themesDir: '/themes',
   maxThemeJsonBytes: 512 * 1024,
-  logger: { warn: () => {} },
+  logger: { warn: () => { } },
 });
 
 describe('theme runtime', () => {
@@ -139,6 +139,26 @@ describe('theme runtime', () => {
       const themes = await runtime.readCustomThemesFromDisk();
 
       expect(themes).toEqual([]);
+    });
+    it('keeps the last valid version of a theme file while it is broken, and drops it once the file is gone', async () => {
+      const valid = validTheme('editing');
+      const entries = [fileEntry('editing.json')];
+      const files = { '/themes/editing.json': JSON.stringify(valid) };
+      const stats = { '/themes/editing.json': { isFile: () => true, size: 1024 } };
+      const runtime = createTestRuntime({ entries, files, stats });
+
+      expect((await runtime.readCustomThemesFromDisk()).map((theme) => theme.metadata.id)).toEqual(['editing']);
+
+      files['/themes/editing.json'] = 'broken JSON';
+      expect((await runtime.readCustomThemesFromDisk()).map((theme) => theme.metadata.id)).toEqual(['editing']);
+
+      entries.length = 0;
+      delete files['/themes/editing.json'];
+      expect(await runtime.readCustomThemesFromDisk()).toEqual([]);
+
+      entries.push(fileEntry('editing.json'));
+      files['/themes/editing.json'] = 'broken JSON';
+      expect(await runtime.readCustomThemesFromDisk()).toEqual([]);
     });
   });
 });

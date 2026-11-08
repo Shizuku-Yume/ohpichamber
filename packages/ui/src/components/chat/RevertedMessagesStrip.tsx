@@ -1,3 +1,10 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+const attachmentBasename = (value: string): string => {
+  const normalized = /^(?:[A-Za-z]:\\|\\\\)/.test(value) ? value.replace(/\\/g, "/") : value;
+  const segments = normalized.split("/");
+  return segments[segments.length - 1] || value;
+};
+import { ScrollableOverlay } from "@/components/ui/ScrollableOverlay";
 import React from 'react';
 import type { Part } from '@openchamber/agent-contract';
 import { Icon } from '@/components/icon/Icon';
@@ -27,7 +34,7 @@ const getRevertedPreview = (parts: Part[], fallback: string): string => {
 
     if (text) return text;
     const filePart = parts.find((part) => part.type === 'attachment');
-    return filePart?.name ? `[${filePart.name}]` : fallback;
+    return filePart?.name ? `[${attachmentBasename(filePart.name)}]` : fallback;
 };
 
 const ROW_CLASS = 'flex h-10 min-w-0 items-center gap-2 pl-3 pr-1.5';
@@ -81,24 +88,30 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
         }
     };
 
+    const restoreLabel = items.length === 1 ? t('chat.revertPopover.restore') : t('chat.revertPopover.restoreAll');
     const restoreButton = (
-        <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={restoring}
-            onClick={() => { void restore(); }}
-            onMouseDown={(event) => event.preventDefault()}
-            className="shrink-0 text-primary/80 hover:bg-transparent hover:text-primary"
-        >
-            {restoring ? <Icon name="loader-4" className="size-3 animate-spin" aria-hidden="true" /> : null}
-            {items.length === 1 ? t('chat.revertPopover.restore') : t('chat.revertPopover.restoreAll')}
-        </Button>
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={restoring}
+                    onClick={() => { void restore(); }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    className="shrink-0 text-primary/80 hover:bg-transparent hover:text-primary"
+                >
+                    {restoring ? <Icon name="loader-4" className="size-3 animate-spin" aria-hidden="true" /> : null}
+                    {restoreLabel}
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>{restoreLabel}</TooltipContent>
+        </Tooltip>
     );
 
     if (items.length === 1) {
         return (
-            <div role="group" className={`${ROW_CLASS} border-b border-border/60`} aria-label={t('chat.revertPopover.title')}>
+            <div role="group" className={`${ROW_CLASS} border-b border-edge`} aria-label={t('chat.revertPopover.title')}>
                 <Icon name="arrow-go-back" className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                 <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{items[0].text}</span>
                 {restoreButton}
@@ -112,7 +125,7 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
     // The header toggles the list, as the background commands header does;
     // Restore stays on it, so the decision never hides behind the toggle.
     return (
-        <div role="group" className="border-b border-border/60" aria-label={t('chat.revertPopover.title')}>
+        <div role="group" className="border-b border-edge" aria-label={t('chat.revertPopover.title')}>
             <div className="flex h-10 items-center gap-2 pl-3 pr-1.5">
                 <Button
                     type="button"
@@ -133,15 +146,14 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
                 {restoreButton}
             </div>
             {expanded ? (
-                <div id={listId} className="max-h-40 overflow-y-auto overscroll-contain">
+                <ScrollableOverlay id={listId} outerClassName="max-h-40" className="overscroll-contain">
                     {items.map((item) => (
                         <div key={item.id} className={ROW_CLASS}>
-                            {/* Lines the text up with the header label after its icon. */}
                             <span className="size-3.5 shrink-0" aria-hidden="true" />
                             <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">{item.text}</span>
                         </div>
                     ))}
-                </div>
+                </ScrollableOverlay>
             ) : null}
         </div>
     );

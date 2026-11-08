@@ -9,6 +9,14 @@
  * session the user is going to, so the composer waits until its column
  * shows the live selection. Taking it earlier would save it into the
  * outgoing session's draft and leave the incoming one empty.
+ *
+ * Two addresses are taken here, and nothing else. The column's own (`null` for
+ * the main chat, its session id for a pinned chat) is what surfaces acting on
+ * the chat on screen write — a `/btw` fork, being that same composer, takes
+ * them while it is expanded and the parent takes them once it is collapsed.
+ * The session this composer shows is what a session-scoped restore writes (a
+ * reverted message's prompt), so the fork takes its own and the parent's waits
+ * for the parent to come back.
  */
 
 import React from 'react';
@@ -18,40 +26,51 @@ import { useChatColumnActions, useChatColumnSession } from '../../chatColumnSess
 import { appendInlineText, appendWithLineBreaks } from '../text';
 
 export interface PendingComposerTextOptions {
-    /** Off while the composer is talking to a `/btw` fork. */
-    enabled: boolean;
-    /** Who this composer takes text for; see input-store `pendingInputTarget`. */
-    target: string | null;
-    setMessage: React.Dispatch<React.SetStateAction<string>>;
-    focus: () => void;
+ /**
+  * False while another surface owns this composer's text: an expanded `/btw`
+  * answer keeps the pending text for the composer the user returns to.
+  */
+ enabled?: boolean;
+ /** Column role: null for the main chat's composer, a session id for a pinned one. */
+ target: string | null;
+ /** The session this composer is showing, which a session-scoped restore addresses. */
+ sessionId?: string | null;
+ setMessage: React.Dispatch<React.SetStateAction<string>>;
+ focus: () => void;
 }
 
-export function usePendingComposerText({ enabled, target, setMessage, focus }: PendingComposerTextOptions): void {
-    const column = useChatColumnSession();
-    const { pinned } = useChatColumnActions();
-    // A pinned column keeps its own session and takes only text addressed to it.
-    const columnBehindSelection = useSessionUIStore((state) => (
-        column !== null && !pinned && column.sessionId !== state.currentSessionId
-    ));
-    const pendingInputText = useInputStore((state) => state.pendingInputText);
-    const focusRef = React.useRef(focus);
-    focusRef.current = focus;
+export function usePendingComposerText({ enabled = true, target, sessionId = null, setMessage, focus }: PendingComposerTextOptions): void {
+ const column = useChatColumnSession();
+ const { pinned } = useChatColumnActions();
+ // A pinned column keeps its own session and takes only text addressed to it.
+ const columnBehindSelection = useSessionUIStore((state) => (
+  column !== null && !pinned && column.sessionId !== state.currentSessionId
+ ));
+ const pendingInputText = useInputStore((state) => state.pendingInputText);
+ const pendingInputTarget = useInputStore((state) => state.pendingInputTarget);
+ const pendingRestore = useInputStore((state) => sessionId ? state.pendingSessionRestores.get(sessionId) : undefined);
+ const focusRef = React.useRef(focus);
+ focusRef.current = focus;
 
-    React.useEffect(() => {
-        if (!enabled || columnBehindSelection || pendingInputText === null) return;
-        const pending = useInputStore.getState().consumePendingInputText(target);
-        if (!pending?.text) return;
-        if (pending.mode === 'append') {
-            setMessage((prev) => {
-                const next = pending.text;
-                if (!next.trim()) return prev;
-                return appendWithLineBreaks(prev, next);
-            });
-        } else if (pending.mode === 'append-inline') {
-            setMessage((prev) => appendInlineText(prev, pending.text));
-        } else {
-            setMessage(pending.text);
-        }
-        setTimeout(() => focusRef.current(), 0);
-    }, [columnBehindSelection, enabled, pendingInputText, setMessage, target]);
+ React.useEffect(() => {
+  if (!enabled || columnBehindSelection) return;
+  const store = useInputStore.getState();
+  const restored = sessionId ? store.consumePendingSessionRestore(sessionId) : null;
+  if (restored !== null) setMessage(restored);
+  const pending = store.consumePendingInputText(target);
+  if (restored !== null) setTimeout(() => focusRef.current(), 0);
+  if (!pending?.text) return;
+  if (pending.mode === 'append') {
+   setMessage((prev) => {
+    const next = pending.text;
+    if (!next.trim()) return prev;
+    return appendWithLineBreaks(prev, next);
+   });
+  } else if (pending.mode === 'append-inline') {
+   setMessage((prev) => appendInlineText(prev, pending.text));
+  } else {
+   setMessage(pending.text);
+  }
+  setTimeout(() => focusRef.current(), 0);
+ }, [columnBehindSelection, enabled, pendingRestore, pendingInputTarget, pendingInputText, sessionId, setMessage, target]);
 }

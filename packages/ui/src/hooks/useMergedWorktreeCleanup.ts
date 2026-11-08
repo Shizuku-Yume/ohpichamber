@@ -18,7 +18,7 @@ import { archiveWorktreeWork, takeRestoredWorktree } from '@/lib/worktrees/workt
 import { isWorktreeRemoving } from '@/lib/worktrees/worktreeRemovalState';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { getFreshestPrStatusForBranch, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
+import { getFreshestBranchStatusForDirectory, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -52,7 +52,7 @@ const writeHandled = (entries: string[]): void => {
 // PR status comes from what the sidebar keeps fresh; this asks GitHub nothing.
 const listCandidates = (): MergedWorktreeCandidate[] => {
   const projects = useProjectsStore.getState().projects;
-  const entries = useGitHubPrStatusStore.getState().entries;
+  const prState = useGitHubPrStatusStore.getState();
   const candidates: MergedWorktreeCandidate[] = [];
   for (const [projectPath, worktrees] of useSessionUIStore.getState().availableWorktreesByProject) {
     const project = projects.find((entry) => normalizePath(entry.path) === projectPath);
@@ -61,8 +61,10 @@ const listCandidates = (): MergedWorktreeCandidate[] => {
       const worktreePath = normalizePath(worktree.path);
       const branch = worktree.branch?.trim();
       if (!worktreePath || !branch || worktreePath === projectPath || worktree.worktreeStatus !== 'ready') continue;
-      const status = getFreshestPrStatusForBranch(entries, worktreePath, branch);
-      const pr = status?.pr;
+      // The status the sidebar keeps fresh, read for the worktree's own directory.
+      const status = getFreshestBranchStatusForDirectory(prState, worktreePath, branch);
+      // Either shape of the status: a change request, or the older pull request.
+      const pr = status?.changeRequest ?? status?.pr ?? null;
       if (pr?.state !== 'merged') continue;
       candidates.push({
         worktree,

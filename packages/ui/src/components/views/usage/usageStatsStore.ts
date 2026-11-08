@@ -153,8 +153,14 @@ export function createUsageStatsStore(
           // Written under the key the read started for: switching filters
           // while it runs never lets it land on another filter.
           patch(key, { stats, fetchedAt: startedAt, loading: false, error: null });
-          // A refreshed report moves the window, so tools already shown follow it.
-          if (get().toolsRequested) void get().loadTools(request, { force: Boolean(get().toolEntries[key]?.tools) });
+          // A refreshed report moves the window: any tool read still in flight
+          // answered for the old one and must not land, and the tools shown
+          // follow the report that is now on screen.
+          if (get().toolsRequested) {
+            currentToolReads.delete(key);
+            if (get().toolEntries[key]) patchTools(key, { loading: false });
+            void get().loadTools(request, { force: true });
+          }
         } catch (error) {
           if (signal.aborted || runtimeKey() !== runtime) return;
           // A failed read keeps the last report; it never becomes zeros.
@@ -178,13 +184,26 @@ export function createUsageStatsStore(
         const read = Symbol('usage tools read');
         currentToolReads.set(key, read);
         const isDropped = () => signal.aborted || runtimeKey() !== runtime || currentToolReads.get(key) !== read;
+        // The report may have moved window without superseding this read (a
+        // refresh that started after it): its answer names the old bounds.
+        const windowMoved = () => get().entries[key]?.stats?.range !== window;
         patchTools(key, { loading: true });
         try {
           const tools = await toolsFetcher(request, window, signal);
           if (isDropped()) return;
+          if (windowMoved()) {
+            patchTools(key, { loading: false });
+            void get().loadTools(request, { force: true });
+            return;
+          }
           patchTools(key, { tools, loading: false, error: null });
         } catch (error) {
           if (isDropped()) return;
+          if (windowMoved()) {
+            patchTools(key, { loading: false });
+            void get().loadTools(request, { force: true });
+            return;
+          }
           patchTools(key, { loading: false, error: error instanceof Error ? error.message : String(error) });
         }
       },

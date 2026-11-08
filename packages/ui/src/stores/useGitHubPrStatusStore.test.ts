@@ -9,7 +9,17 @@ import type {
 import { getBoundSourceControlReadContexts } from "@/lib/source-control/identity"
 
 let runtimeKey = "runtime-a"
-mock.module("@/lib/runtime-switch", () => ({ getRuntimeKey: () => runtimeKey }))
+// The real module, with only the runtime key and its per-instance guard faked:
+// the store and its dependencies import other exports from it.
+const runtimeSwitch = await import("@/lib/runtime-switch")
+mock.module("@/lib/runtime-switch", () => ({
+  ...runtimeSwitch,
+  getRuntimeKey: () => runtimeKey,
+  captureRuntimeInstance: () => {
+    const captured = runtimeKey
+    return () => captured === runtimeKey
+  },
+}))
 
 const { trackedItemKey } = await import("@/lib/trackedItems/model")
 const {

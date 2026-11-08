@@ -14,17 +14,17 @@ import { useI18n } from '@/lib/i18n';
 
 type TodoSendTarget = 'session' | 'worktree';
 
-export type TodoSendExecution = {
-  providerID: string;
-  modelID: string;
-  variant: string;
-  runAsGoal?: boolean;
-};
+// One execution contract for the dialog and the flow that spends it: the
+// dialog's picks are recorded in `picked`, everything else follows the
+// directory the session lands in.
+import type { TodoSendExecution } from './todoSendExecution';
 
 const getInitialExecution = (params: { providerID: string; modelID: string; variant: string }): TodoSendExecution => ({
   providerID: params.providerID,
   modelID: params.modelID,
   variant: params.variant,
+  agent: '',
+  picked: { model: false, variant: false, agent: false },
 });
 type TodoSendDialogProps = {
   open: boolean;

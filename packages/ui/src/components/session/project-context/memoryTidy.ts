@@ -1,7 +1,6 @@
 import type { AgentMemoryEntry, AgentMemoryScope } from '@/lib/agentMemoryApi';
 import { captureDefaultSendSelection } from '@/lib/defaultSendSelection';
 import { loadMagicPrompts } from '@/lib/magicPrompts';
-import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 
 const formatDate = (timestamp: number): string => new Date(timestamp).toISOString().slice(0, 10);
@@ -56,14 +55,16 @@ export const startMemoryTidy = async (input: {
 
  const store = useSessionUIStore.getState();
  const session = await store.createSession(input.title, input.projectPath, undefined, {
-  model: { providerID: selection.providerID, id: selection.modelID, variant: selection.variant },
+  model: { providerId: selection.providerID, modelId: selection.modelID },
+  variant: selection.variant,
   agent: selection.agentName,
  });
  const sessionId = session?.sessionId;
  if (!sessionId) return { ok: false, reason: 'create-failed' };
 
  const directory = session.displayPath || input.projectPath;
- store.initializeNewOpenChamberSession(sessionId, useConfigStore.getState().agents ?? []);
+ // The new session's composer starts from the catalog it was created against.
+ store.initializeNewOpenChamberSession(sessionId, []);
  store.setCurrentSession(sessionId, directory);
  try {
   await store.sendMessage(

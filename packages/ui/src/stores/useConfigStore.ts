@@ -372,6 +372,13 @@ const resolveFallbackModel = (
     return null;
 };
 
+export type DirectoryDefaultSelection = {
+    agentName: string | undefined;
+    providerId: string;
+    modelId: string;
+    variant: string | undefined;
+};
+
 type DefaultAgentModelSelection = {
     agentName: string | undefined;
     providerId?: string;
@@ -1376,6 +1383,12 @@ interface ConfigStore {
     getCurrentModelVariants: () => string[];
     /** The effort the active project or Settings configures for this model; `undefined` for any model that is not a configured default. */
     getDefaultVariantForModel: (providerId: string, modelId: string) => string | undefined;
+    /**
+     * What a new session in `directory` should send its first message with:
+     * the same cascade the composer resolves, read against that directory's
+     * own catalog. Returns null when nothing resolves a model.
+     */
+    resolveDirectoryDefaultSelection: (directory: string) => Promise<DirectoryDefaultSelection | null>;
     /**
      * `keepModel` switches the agent alone. It is for following a switch the
      * session already made: OpenCode keeps a session on its own model when the
@@ -2447,6 +2460,38 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                 getCurrentModelVariants: () => {
                     return modelVariantIds(get().getCurrentModel());
+                },
+
+                resolveDirectoryDefaultSelection: async (directory) => {
+                    const configDirectory = resolveConfigDirectory(directory);
+                    if (!configDirectory) return null;
+                    const directoryKey = toConfigDirectoryKey(configDirectory);
+                    // The directory's own catalog: a new worktree session runs elsewhere than the
+                    // composer that opened the dialog.
+                    const [, , defaults] = await Promise.all([
+                        get().loadProviders({ directory: configDirectory, source: 'resolveDirectoryDefaultSelection' }).catch(() => undefined),
+                        useAgentsStore.getState().loadAgents(configDirectory).catch(() => undefined),
+                        Promise.resolve(getProjectDefaultsForConfigDirectory(configDirectory)),
+                    ]);
+                    const state = get();
+                    const isActive = state.activeDirectoryKey === directoryKey;
+                    const snapshot = state.directoryScoped[directoryKey];
+                    const providers = isActive ? state.providers : (snapshot?.providers ?? []);
+                    const resolved = resolveDefaultAgentModelSelection({
+                        providers,
+                        projectDefaultModel: defaults.projectDefaultModel,
+                        projectDefaultVariant: defaults.projectDefaultVariant,
+                        settingsDefaultModel: state.settingsDefaultModel,
+                        allowFallback: state.settingsDefaultsLoaded,
+                        fallbackPrefs: readFallbackModelPrefs(),
+                    });
+                    if (!resolved.providerId || !resolved.modelId) return null;
+                    return {
+                        agentName: resolved.agentName,
+                        providerId: resolved.providerId,
+                        modelId: resolved.modelId,
+                        variant: resolved.variant,
+                    };
                 },
 
                 getDefaultVariantForModel: (providerId: string, modelId: string) => {

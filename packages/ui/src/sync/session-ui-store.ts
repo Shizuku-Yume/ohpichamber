@@ -514,6 +514,13 @@ export type SessionUIState = {
     metadata?: SessionMetadata,
     selection?: SessionCreateSelection,
   ) => Promise<Session | null>
+  /**
+   * Seeds the in-memory selection a fresh session sends its first message
+   * with, from the catalog of the agents it was created against. The
+   * authoritative record stays with the session; this only fills the composer
+   * state that `sendMessage` reads for a session nothing has opened yet.
+   */
+  initializeNewOpenChamberSession: (sessionId: string, agents: readonly unknown[]) => void
   deleteSession: (sessionId: string, options?: DeleteSessionOptions) => Promise<boolean>
   deleteSessions: (sessionIds: string[], options?: DeleteSessionsOptions) => Promise<{ deletedIds: string[]; failedIds: string[] }>
   archiveSession: (sessionId: string) => Promise<boolean>
@@ -1787,6 +1794,19 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     if (nextDirectory && nextDirectory !== useDirectoryStore.getState().currentDirectory) {
       useDirectoryStore.getState().setDirectory(nextDirectory)
     }
+  },
+
+  initializeNewOpenChamberSession: (sessionId, _agents) => {
+    // A session the flow created but has not opened yet: its composer reads
+    // the per-session selection, so start it from the config store's resolved
+    // defaults rather than leaving it empty.
+    const config = useConfigStore.getState()
+    const selection = useSelectionStore.getState()
+    if (selection.getSessionModelSelection(sessionId)) return
+    if (config.currentProviderId && config.currentModelId) {
+      selection.saveSessionModelSelection(sessionId, config.currentProviderId, config.currentModelId)
+    }
+    if (config.currentAgentName) selection.saveSessionAgentSelection(sessionId, config.currentAgentName)
   },
 
   resolvePendingDraftWorktreeTarget: (requestId, directory, options) =>

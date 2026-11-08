@@ -25,10 +25,6 @@ import type { DraftStarterRef } from '@/lib/draftStarters';
 import { sanitizeStarterRefs } from '@/lib/draftStarters';
 import { getFilesViewShowGitignored, setFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { isMonoFontOption, isUiFontOption, UI_FONT_WEIGHT_OPTIONS, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
-import {
-  DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, type SessionGoalChecker,
-} from '@/lib/sessionGoalTurnLimit';
-import type { PermissionMode } from '@/stores/utils/permissionAutoAccept';
 import { LOCALES } from '@/lib/i18n/runtime';
 import { useI18nStore } from '@/lib/i18n/store';
 import { isInputHistoryLimit, isInputHistoryScope, type InputHistoryScope } from '@/lib/inputHistoryScope';

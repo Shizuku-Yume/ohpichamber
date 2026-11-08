@@ -14,11 +14,11 @@ const fork: ChatDraftIdentity = { ...parent, sessionId: 'fork-1' };
 
 function renderComposer(initialText: string) {
     const dom = installHookTestDom();
-    const originalRaf = globalThis.requestAnimationFrame;
-    const originalCancelRaf = globalThis.cancelAnimationFrame;
+    const originalRaf = Object.getOwnPropertyDescriptor(globalThis, 'requestAnimationFrame');
+    const originalCancelRaf = Object.getOwnPropertyDescriptor(globalThis, 'cancelAnimationFrame');
     // Restoring a draft asks for a frame; the text is what this file asserts.
-    globalThis.requestAnimationFrame = () => 0;
-    globalThis.cancelAnimationFrame = () => undefined;
+    Object.defineProperty(globalThis, 'requestAnimationFrame', { configurable: true, writable: true, value: () => 0 });
+    Object.defineProperty(globalThis, 'cancelAnimationFrame', { configurable: true, writable: true, value: () => undefined });
     const root = createRoot(dom.container);
     const mentionsRef: React.RefObject<Set<string>> = { current: new Set() };
     let controlsForTest: ComposerDraftControls | undefined;
@@ -30,6 +30,7 @@ function renderComposer(initialText: string) {
         React.useEffect(() => { messageRef.current = message; }, [message]);
         const controls = useComposerDraft({
             message, messageRef, setMessage, confirmedMentionsRef: mentionsRef, identity,
+            persistEnabled: true,
             initialDraft: { text: '', identity },
         });
         result.text = message;
@@ -46,8 +47,10 @@ function renderComposer(initialText: string) {
         render,
         teardown: () => {
             act(() => { root.unmount(); });
-            globalThis.requestAnimationFrame = originalRaf;
-            globalThis.cancelAnimationFrame = originalCancelRaf;
+            if (originalRaf) Object.defineProperty(globalThis, 'requestAnimationFrame', originalRaf);
+            else Reflect.deleteProperty(globalThis, 'requestAnimationFrame');
+            if (originalCancelRaf) Object.defineProperty(globalThis, 'cancelAnimationFrame', originalCancelRaf);
+            else Reflect.deleteProperty(globalThis, 'cancelAnimationFrame');
             dom.restore();
         },
     };

@@ -41,7 +41,7 @@ test('dirty branch switching publishes through the managed chooser and keeps the
       refresh: async () => { events.push('refresh'); },
       close: () => { events.push('close'); },
       checkout: async (branch: string) => { events.push(`checkout:${branch}`); },
-      toast: { success: () => {}, error: () => { events.push('error'); } },
+      toast: { success: () => { }, error: () => { events.push('error'); } },
       t: (key: string) => key,
     }, 'Save changes', outcome !== 'local');
     expect(events).toEqual(outcome === 'local'
@@ -80,7 +80,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   let nestedIsRepository = true;
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
-    if (url.pathname === '/api/fs/home' || url.pathname === '/api/session-folders') return new Promise<Response>(() => {});
+    if (url.pathname === '/api/fs/home' || url.pathname === '/api/session-folders') return new Promise<Response>(() => { });
     requests.push(url);
     switch (url.pathname) {
       case '/api/git/remotes': return Response.json([]);
@@ -93,11 +93,15 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
         const revision = guest ? 3 : 1;
         return Response.json({
           status: 'bound', revision,
-          repository: { supported: true, repositoryId: id, configRevision: 'rev', bare: false,
-            remotes: [{ name: guest ? 'upstream' : 'origin', fetch: ENDPOINT, push: ENDPOINT }] },
-          binding: { repositoryId: id, configRevision: 'rev', revision, state: 'bound',
+          repository: {
+            supported: true, repositoryId: id, configRevision: 'rev', bare: false,
+            remotes: [{ name: guest ? 'upstream' : 'origin', fetch: ENDPOINT, push: ENDPOINT }]
+          },
+          binding: {
+            repositoryId: id, configRevision: 'rev', revision, state: 'bound',
             providers: [{ provider: guest ? 'ext-source-control-provider' : 'github', instance: 'github.com', accountId: guest ? 'ext-source-control-provider#7' : ACCOUNT_ID, primaryRemote: guest ? 'upstream' : 'origin', readiness: 'ready', endpoint: ENDPOINT }],
-            remotes: [], auxiliary: [] },
+            remotes: [], auxiliary: []
+          },
         });
       }
       case '/api/git/branch-base': return Response.json({ base: null });
@@ -174,7 +178,7 @@ test('mobile comparisons drill into files, retry, resume, change source, and yie
   const render = () => act(async () => {
     root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
       <MobileChangesPane rootDirectory={directory}
-        repository={{ rootIsGitRepo: true, gitDirectory: directory, nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null }}
+        repository={{ rootIsGitRepo: true, gitDirectory: directory, nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true }}
         visible={visible} initialDiff={initialDiff} />
     </RuntimeAPIContext.Provider></I18nProvider>);
   });
@@ -387,12 +391,12 @@ test('bounds Revert All fan-out to two in-flight revert requests', async () => {
   let revertCalls = 0;
   let activeReverts = 0;
   let peakReverts = 0;
-  let releaseReverts: () => void = () => {};
+  let releaseReverts: () => void = () => { };
   const revertGate = new Promise<void>((resolve) => { releaseReverts = () => resolve(); });
   const originalFetch = globalThis.fetch;
   globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
     const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
-    if (url.pathname === '/api/fs/home' || url.pathname === '/api/session-folders') return new Promise<Response>(() => {});
+    if (url.pathname === '/api/fs/home' || url.pathname === '/api/session-folders') return new Promise<Response>(() => { });
     switch (url.pathname) {
       case '/api/git/remotes': return Response.json([]);
       case '/api/git/remote-url': return Response.json({ url: null });
@@ -446,7 +450,7 @@ test('bounds Revert All fan-out to two in-flight revert requests', async () => {
     await act(async () => {
       root.render(<I18nProvider><RuntimeAPIContext.Provider value={apis}>
         <MobileChangesPane rootDirectory="/repo"
-          repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null }}
+          repository={{ rootIsGitRepo: true, gitDirectory: '/repo', nestedRepos: null, nestedRepoSelection: null, repositoryOptions: null, repositoriesKnown: true }}
           visible />
       </RuntimeAPIContext.Provider></I18nProvider>);
     });

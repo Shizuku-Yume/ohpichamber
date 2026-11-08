@@ -4,6 +4,8 @@ import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import { Window } from 'happy-dom';
 
 import type { Snippet } from '@/types/snippet';
+import { SyncProvider } from '@/sync/sync-context';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import type { SnippetAutocompleteHandle } from './SnippetAutocomplete';
 
 let SnippetAutocomplete: typeof import('./SnippetAutocomplete')['SnippetAutocomplete'];
@@ -15,12 +17,14 @@ let host: HTMLDivElement;
 let restore: Array<() => void>;
 const globals = new Map<string, PropertyDescriptor | undefined>();
 
-const snippet = (name: string, aliases: string[] = []): Snippet => ({
+const snippet = (name: string): Snippet => ({
+  templateId: `tpl-${name}`,
   name,
+  description: `${name} desc`,
   content: `${name} body`,
-  aliases,
-  filePath: `/snippets/${name}.md`,
-  source: 'global',
+  scope: 'workspace',
+  source: 'workspace',
+  editable: true,
 });
 
 beforeEach(async () => {
@@ -55,7 +59,11 @@ beforeEach(async () => {
     () => useUIStore.setState(priorUI),
   ];
   useUIStore.setState({ isMobile: false });
-  useSnippetsStore.setState({ snippets: [snippet('fix-pr', ['ship']), snippet('deploy')], loadSnippets: async () => true, quickCreate: null });
+  useDirectoryStore.setState({ currentDirectory: '/test' });
+  useSnippetsStore.setState({
+    catalogsByDirectory: new Map([['/test', { workspaceId: 'ws-test', templates: [snippet('deploy'), snippet('fix-pr')], revision: '1' }]]),
+    loadSnippets: async () => true,
+  });
   host = document.createElement('div');
   document.body.appendChild(host);
   const { createRoot } = await import('react-dom/client');
@@ -76,52 +84,46 @@ afterEach(async () => {
 
 const rowLabels = () => Array.from(host.querySelectorAll<HTMLElement>('.cursor-pointer')).map((row) => row.textContent?.trim());
 
-async function mountPicker(searchQuery: string, draftText?: string) {
+async function mountPicker(searchQuery: string) {
   const handle = React.createRef<SnippetAutocompleteHandle>();
   const selected: string[] = [];
-  const saved: string[] = [];
   await act(async () => root.render(
-    <I18nProvider>
-      <SnippetAutocomplete
-        ref={handle}
-        searchQuery={searchQuery}
-        onClose={() => undefined}
-        onSnippetSelect={(_snippet, trigger) => selected.push(trigger)}
-        draftText={draftText}
-        onDraftSaved={(name) => saved.push(name)}
-      />
-    </I18nProvider>,
+    <SyncProvider directory="/test">
+      <I18nProvider>
+        <SnippetAutocomplete
+          ref={handle}
+          searchQuery={searchQuery}
+          onClose={() => undefined}
+          onSnippetSelect={(_snippet, trigger) => { selected.push(trigger); }}
+        />
+      </I18nProvider>
+    </SyncProvider>,
   ));
   const press = (key: string) => act(async () => handle.current?.handleKeyDown(key));
-  return { press, selected, saved };
+  return { press, selected };
 }
 
-test('a new name in a draft offers to save the draft first, and Enter opens the dialog without writing', async () => {
-  const { press, saved } = await mountPicker('ship-it', 'Run the CI and push');
-  expect(rowLabels().slice(0, 2)).toEqual(['Save draft as #ship-it', 'Create #ship-it']);
-
-  await press('Enter');
-  const request = useSnippetsStore.getState().quickCreate;
-  expect(request?.name).toBe('ship-it');
-  expect(request?.content).toBe('Run the CI and push');
-  // The token leaves the composer only once the dialog saves.
-  expect(saved).toEqual([]);
-  request?.onSaved?.('ship-it');
-  expect(saved).toEqual(['ship-it']);
-});
-
-test('a name a snippet answers to offers no create row, and Enter picks the match', async () => {
-  const { press, selected } = await mountPicker('ship', 'Run the CI');
-  expect(rowLabels()).not.toContain('Create #ship');
+test('pressing Enter on the add row opens snippet settings', async () => {
+  const { press } = await mountPicker('ship-it');
   expect(rowLabels()[0]).toBe('Add new snippet');
 
-  await press('Enter');
-  expect(selected).toEqual(['ship']);
-  expect(useSnippetsStore.getState().quickCreate).toBeNull();
+  await press('Enter'); // selectedIndex is 0 when no matches
+  const { useUIStore } = await import('@/stores/useUIStore');
+  expect(useUIStore.getState().settingsPage).toBe('snippets');
+  expect(useUIStore.getState().isSettingsDialogOpen).toBe(true);
 });
 
-test('an empty draft offers only to create the typed name', async () => {
-  await mountPicker('brand-new', '  ');
-  expect(rowLabels()[0]).toBe('Create #brand-new');
-  expect(rowLabels()).not.toContain('Save draft as #brand-new');
+test('a name a snippet answers to selects the match on Enter', async () => {
+  const { press, selected } = await mountPicker('fix');
+  expect(rowLabels().some((label) => label?.includes('fix-pr'))).toBe(true);
+
+  await press('Enter');
+  expect(selected).toEqual(['fix-pr']);
+});
+
+test('ArrowDown navigates to the next snippet', async () => {
+  const { press, selected } = await mountPicker('');
+  await press('ArrowDown');
+  await press('Enter');
+  expect(selected).toEqual(['fix-pr']);
 });

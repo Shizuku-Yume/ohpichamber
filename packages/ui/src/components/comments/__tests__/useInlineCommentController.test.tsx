@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { installHookTestDom } from '@/components/session/sidebar/test-utils/testDom';
-import { OpenCode } from '@opencode/client';
+import { CanonicalClient } from '@/api/canonicalClient';
 import { toast } from '@/components/ui';
 import { I18nProvider } from '@/lib/i18n';
 import { SyncProvider } from '@/sync/sync-context';
@@ -23,7 +23,7 @@ describe('inline comment target', () => {
   let frameDescriptor: PropertyDescriptor | undefined;
   let controller: ReturnType<typeof useInlineCommentController<Range>>;
   const saveComment = (text: string, range?: Range) => controller.saveComment(text, range);
-  const sdk = OpenCode.make({ baseUrl: 'http://comments.test', fetch: () => new Promise<Response>(() => undefined) });
+  const client = new CanonicalClient();
 
   const Harness = () => {
     controller = useInlineCommentController<Range>({
@@ -53,7 +53,7 @@ describe('inline comment target', () => {
     useInlineCommentDraftStore.setState({ drafts: {} });
     await act(async () => root.render(
       <I18nProvider>
-        <SyncProvider sdk={sdk} directory={directory}>
+        <SyncProvider client={client} directory={directory}>
           <Harness />
         </SyncProvider>
       </I18nProvider>,

@@ -87,6 +87,7 @@ describe('native provider management UI contracts', () => {
       configuration: { providerId: 'custom', name: 'Custom', endpoint: 'https://example.com', protocol: 'responses', credentialRef: null },
       headerNames: ['Authorization', 'X-Tenant'],
       models: [],
+      imageModels: [],
     });
     expect(form.headerNames).toEqual(['Authorization', 'X-Tenant']);
     expect(form.headers).toEqual([]);

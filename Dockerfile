@@ -6,7 +6,7 @@ FROM base AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY bun-patches ./bun-patches
-COPY vendor/omp/650f3a10 ./vendor/omp/650f3a10
+COPY vendor/omp/b5a6b2f7 ./vendor/omp/b5a6b2f7
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web/package.json ./packages/web/
 COPY packages/electron/package.json ./packages/electron/

@@ -7284,7 +7284,6 @@ const archiveRegisteredWorktree = async ({ directory, id, worktreeDirectory, tar
  // A folder deleted outside the app leaves nothing to record, so the snapshot
  // equals the commit it stood on. Git also reports a folder that only lost its
  // `.git` file as prunable; its files are still there, so that one must fail.
- console.log('DEBUG FOLDER GONE:', { prunable: entry.prunable, exists: await checkPathExists(worktreeDirectory) });
  const folderGone = entry.prunable === true && !(await checkPathExists(worktreeDirectory));
  const snapshot = folderGone
   ? await commitSnapshot(context.primaryWorktree, {

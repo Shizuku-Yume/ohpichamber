@@ -2145,6 +2145,18 @@ async function main(options = {}) {
   terminalRebindWindowMs: TERMINAL_INPUT_WS_REBIND_WINDOW_MS,
   terminalMaxRebindsPerWindow: TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW,
   environmentRuntime,
+  // The terminal panel is authoritative on the Host: a session opened, closed
+  // or killed here (from another window or a project action) invalidates every
+  // open panel through the same SSE stream the rest of the UI listens to.
+  broadcastUiEvent: (event) => {
+   for (const client of uiOpenChamberEventClients) {
+    try {
+     writeSseEvent(client, event);
+    } catch {
+     uiOpenChamberEventClients.delete(client);
+    }
+   }
+  },
   startAgentService: () => startAgentService().catch((error) => {
    console.error('Agent Service startup failed:', error instanceof Error ? error.message : String(error));
   }),

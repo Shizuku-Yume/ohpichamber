@@ -1776,6 +1776,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         <ChatQuoteHighlightLayer
          store={chatQuoteHighlights}
          scrollNode={scrollNode}
+         loadHistoryUntilMessage={(messageId) => loadHistoryUntilMessage(messageId, Number.POSITIVE_INFINITY)}
          scrollToMessage={timelineController.scrollToMessage}
         />
         <div

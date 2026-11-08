@@ -24,7 +24,7 @@ type ShortcutConfig = {
 //   screenshots).
 // Everything else lives only in the command palette, outside this schema.
 /** Commands the palette also lists; bindable here, unassigned until the person sets them. */
-const PALETTE_COMMANDS = [
+export const PALETTE_COMMANDS = [
   'open_new_worktree_dialog',
   'add_project',
   'show_context_usage',

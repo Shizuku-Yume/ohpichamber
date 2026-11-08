@@ -76,6 +76,7 @@ let providerReads = 0;
 
 /** The connected server: it serves acme and lists its items through the neutral reads. */
 const sourceControl: SourceControlAPI = {
+ authSetSshUrl: async () => ({ sshUrl: null }),
  providers: async () => { providerReads += 1; return [acme]; },
  references: async (_context, query): Promise<RepositoryReferencePage> => ({
   connected: true, repo: null, items: servedReferences[query.kind], cursor: null, hasMore: false, total: servedReferences[query.kind].length,

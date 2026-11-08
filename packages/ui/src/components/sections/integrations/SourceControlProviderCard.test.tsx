@@ -119,6 +119,7 @@ describe('SourceControlProviderCard', () => {
   };
 
   const sourceControl: SourceControlAPI = {
+    authSetSshUrl: async () => ({ sshUrl: null }),
     authInstances: async () => {
       instanceReads += 1;
       if (discoveryFails) throw new Error('Instance discovery failed');

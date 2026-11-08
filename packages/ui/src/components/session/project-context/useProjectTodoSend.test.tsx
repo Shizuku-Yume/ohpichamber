@@ -3,7 +3,7 @@ import React, { act } from 'react';
 import { Window } from 'happy-dom';
 import type { Session } from '@openchamber/agent-contract';
 import type { Root } from 'react-dom/client';
-import type { TodoSendExecution } from '../TodoSendDialog';
+import type { TodoSendExecution } from '../todoSendExecution';
 
 const browser = new Window({ url: 'http://runtime.test' });
 const descriptors = new Map<string, PropertyDescriptor | undefined>();
@@ -77,7 +77,7 @@ test('new-session todo sends project overrides from one snapshot, not global pro
   root = createRoot(host);
   await act(async () => root?.render(<I18nProvider><Harness /></I18nProvider>));
   await act(async () => action.sendToNewSession('todo', 'ship'));
-  await act(async () => action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '' }));
+  await act(async () => action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '', agent: '', picked: { model: false, variant: false, agent: false } }));
   expect(promptReads).toEqual(['/repo']);
   expect(sent).toEqual([{ visible: 'Project ship', instructions: 'Project instructions ship' }]);
 });
@@ -101,7 +101,7 @@ test('worktree todo reads prompts and routes to the created nested project direc
   root = createRoot(host);
   await act(async () => root?.render(<I18nProvider><Harness /></I18nProvider>));
   await act(async () => action.sendToNewWorktreeSession('todo', 'ship'));
-  await act(async () => action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '' }));
+  await act(async () => action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '', agent: '', picked: { model: false, variant: false, agent: false } }));
   expect(reads).toEqual(['/trees/branch/subdir']);
   expect(selected).toEqual([['nested-session', '/trees/branch/subdir']]);
   expect(sent).toEqual([['Nested ship', 'Nested instructions', { runtimeKey: 'todo-nested', sessionId: 'nested-session', directory: '/trees/branch/subdir' }]]);
@@ -131,7 +131,7 @@ test.each(['creation', 'prompts'])('todo send stops after an A-B-A runtime switc
   await act(async () => root?.render(<I18nProvider><Harness /></I18nProvider>));
   await act(async () => action.sendToNewSession('todo', 'ship'));
   let operation!: Promise<void>;
-  await act(async () => { operation = action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '' }); await reached; });
+  await act(async () => { operation = action.confirmSend({ providerID: 'provider', modelID: 'model', variant: '', agent: '', picked: { model: false, variant: false, agent: false } }); await reached; });
   switchRuntimeEndpoint({ apiBaseUrl: 'http://other.test', runtimeKey: 'todo-other' });
   switchRuntimeEndpoint({ apiBaseUrl: 'http://runtime.test', runtimeKey: 'todo-aba' });
   await act(async () => { release(); await operation; });

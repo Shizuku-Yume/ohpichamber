@@ -5,7 +5,9 @@ import {
   getShortcutBindingConflicts,
   getShortcutAction,
   parseShortcut,
+  PALETTE_COMMANDS,
   SHORTCUT_SCHEMA,
+  UNASSIGNED_SHORTCUT,
   type ShortcutCategory,
 } from './index';
 
@@ -63,8 +65,8 @@ describe('shortcut schema', () => {
   });
 
   test('palette commands are bindable and every one starts unassigned', () => {
-    const palette = SHORTCUT_SCHEMA.filter((action) => action.settingsLabelKey?.includes('open_new_worktree_dialog') || PALETTE_ROWS.has(action.id));
-    expect(palette.map((action) => action.id).sort()).toEqual([...PALETTE_ROWS].sort());
+    const palette = SHORTCUT_SCHEMA.filter((action) => (PALETTE_COMMANDS as readonly string[]).includes(action.id));
+    expect(palette.map((action) => action.id).sort()).toEqual([...PALETTE_COMMANDS].sort());
     for (const action of palette) {
       expect(action.defaultBinding).toBe(UNASSIGNED_SHORTCUT);
       expect(action.customizable).toBe(true);
@@ -81,11 +83,9 @@ describe('shortcut schema', () => {
     // can be bound at all: the palette's commands, and the desktop-category
     // actions that register as OS-level global shortcuts. Everything else
     // without a binding would be dead weight in Settings.
-    const unassignedOnPurpose = new Set(['UNASSIGNED_SHORTCUT']);
-    void unassignedOnPurpose;
     for (const action of SHORTCUT_SCHEMA) {
       if (action.category === 'desktop') continue;
-      if (isPaletteCommandWithoutDefault(action.id)) continue;
+      if ((PALETTE_COMMANDS as readonly string[]).includes(action.id)) continue;
       expect(getEffectiveShortcutCombo(action.id)).not.toBe('');
     }
   });

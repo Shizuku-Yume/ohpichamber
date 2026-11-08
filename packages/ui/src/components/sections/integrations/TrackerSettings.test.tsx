@@ -54,6 +54,7 @@ describe('TrackerSettings', () => {
     preferencesGet: async (provider) => { calls.push(`preferences:${provider}`); return { sessionComments: false }; },
     list: unexpected, refreshListReads: unexpected, get: unexpected, states: unexpected, updateState: unexpected,
     mappingSet: unexpected, sessionStatusPost: unexpected, preferencesSet: unexpected,
+    authConnectToken: unexpected, authSaveOAuthClient: unexpected,
   };
   const apis: RuntimeAPIs = {
     runtime: { platform: 'web', isDesktop: false }, trackers,

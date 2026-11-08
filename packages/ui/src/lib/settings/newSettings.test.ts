@@ -9,7 +9,7 @@ import {
 import { SETTINGS_ANCHOR_PAGES, type SettingsSearchAvailabilityContext } from './search';
 
 const runtimeCtx: SettingsSearchAvailabilityContext = {
-  isVSCode: false, isWeb: true, isDesktop: false, isMobile: false,
+  isWeb: true, isDesktop: false, isMobile: false,
   isDesktopLocalOrigin: false, isMac: false, isWindows: false, isLinux: false,
   routingAvailable: false, enterpriseMode: false, jevBlockedByEnterprise: false,
 };

@@ -36,9 +36,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { statusToGitCode, type TurnSnapshotDiff } from './turnSnapshotDiff';
+import { statusToGitCode } from './turnSnapshotDiff';
 import { projectLastTurnDiffs } from './turnDiffProjection';
-import type { Message } from '@openchamber/agent-contract';
 import { toast } from '@/components/ui';
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';

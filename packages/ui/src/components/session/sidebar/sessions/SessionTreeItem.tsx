@@ -44,6 +44,7 @@ type SessionTreeItemRenderProps = Context & Pick<SessionNodeItemProps,
  depth?: number;
  /** A work of its own; on by default for a top row, never for what nests under it. */
  ownsWork?: boolean;
+ ownerProjectId?: string | null;
  renderExtras?: SessionNodeRenderExtras;
 };
 
@@ -74,6 +75,7 @@ function SessionTreeItemComponent({
  ownsWork = true,
  groupDirectory,
  projectId,
+ ownerProjectId,
  folderOwnerKey,
  selectionScopeKey,
  archivedBucket = false,
@@ -193,6 +195,7 @@ function SessionTreeItemComponent({
    ownsWork={ownsWork}
    groupDirectory={groupDirectory}
    projectId={projectId}
+   ownerProjectId={ownerProjectId}
    folderOwnerKey={folderOwnerKey}
    selectionScopeKey={selectionScopeKey}
    archivedBucket={archivedBucket}

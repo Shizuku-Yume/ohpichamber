@@ -1056,6 +1056,8 @@ interface UIStore {
  autoDeleteAfterDays: number;
  sessionRetentionAction: SessionRetentionAction;
  sessionRetentionOnlyArchived: boolean;
+ /** Retention also takes sessions in the In work block. Off by default: they stay until Done. */
+ sessionRetentionIncludeInWork: boolean;
  /** Archive a worktree's sessions and remove it once its PR is merged. Off by default. */
  mergedWorktreeCleanupEnabled: boolean;
  /** Done on a worktree in work also archives it. Off by default: Done then only takes it out of In work. */
@@ -1380,6 +1382,7 @@ interface UIStore {
  setAutoDeleteAfterDays: (days: number) => void;
  setSessionRetentionAction: (value: SessionRetentionAction) => void;
  setSessionRetentionOnlyArchived: (value: boolean) => void;
+ setSessionRetentionIncludeInWork: (value: boolean) => void;
  setAutoDeleteLastRunAt: (timestamp: number | null) => void;
  setMessageLimit: (value: number) => void;
  setFontSize: (size: number) => void;
@@ -1643,6 +1646,7 @@ export const useUIStore = create<UIStore>()(
     autoDeleteAfterDays: 30,
     sessionRetentionAction: 'archive',
     sessionRetentionOnlyArchived: false,
+    sessionRetentionIncludeInWork: false,
     mergedWorktreeCleanupEnabled: false,
     worktreeArchiveOnDoneEnabled: false,
     autoDeleteLastRunAt: null,
@@ -2842,6 +2846,10 @@ export const useUIStore = create<UIStore>()(
      }));
     },
 
+    setSessionRetentionIncludeInWork: (value: boolean) => {
+     set({ sessionRetentionIncludeInWork: value });
+    },
+
     setAutoDeleteLastRunAt: (timestamp) => {
      set({ autoDeleteLastRunAt: timestamp });
     },
@@ -3916,6 +3924,7 @@ export const useUIStore = create<UIStore>()(
      autoDeleteAfterDays: state.autoDeleteAfterDays,
      sessionRetentionAction: state.sessionRetentionAction,
      sessionRetentionOnlyArchived: state.sessionRetentionOnlyArchived,
+     sessionRetentionIncludeInWork: state.sessionRetentionIncludeInWork,
      mergedWorktreeCleanupEnabled: state.mergedWorktreeCleanupEnabled,
      worktreeArchiveOnDoneEnabled: state.worktreeArchiveOnDoneEnabled,
      autoDeleteLastRunAt: state.autoDeleteLastRunAt,

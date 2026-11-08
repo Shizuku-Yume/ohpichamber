@@ -5,6 +5,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import {
   buildSessionRetentionCandidates,
+  inWorkKeepsSessions,
   isSessionKeptByUser,
   RETENTION_INTERVAL_MS,
   RETENTION_KEEP_RECENT,
@@ -31,6 +32,9 @@ export const useSessionAutoCleanup = ({ autoRun = true, enabled = true }: Cleanu
   const status = useGlobalSessionsStore((state) => state.status);
   const activeSessionIds = useGlobalSessionStatusStore((state) => state.activeSessionIds);
   const isRunning = useSessionRetentionRunStore((state) => state.isRunning);
+  const includeInWork = useUIStore((state) => state.sessionRetentionIncludeInWork);
+  const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
+  const workKeeps = sessionWorkEnabled && !includeInWork;
   // Pin changes must refresh the Settings preview of what cleanup would take.
   const pinnedIds = useSessionPinnedStore((state) => state.ids);
 
@@ -45,8 +49,10 @@ export const useSessionAutoCleanup = ({ autoRun = true, enabled = true }: Cleanu
     action,
     onlyArchived,
     activeSessionIds,
-    isKept: (session) => isSessionKeptByUser(session, pinnedIds),
-  }), [activeSessions, archivedSessions, currentSessionId, autoDeleteAfterDays, action, onlyArchived, activeSessionIds, pinnedIds]);
+    // Pins and the In work block's setting change what cleanup may take; the
+    // preview must follow both.
+    isKept: (session) => isSessionKeptByUser(session, pinnedIds, undefined, workKeeps),
+  }), [activeSessions, archivedSessions, currentSessionId, autoDeleteAfterDays, action, onlyArchived, activeSessionIds, pinnedIds, workKeeps]);
 
   React.useEffect(() => {
     if (!enabled || !autoRun || !autoDeleteEnabled || autoDeleteAfterDays <= 0

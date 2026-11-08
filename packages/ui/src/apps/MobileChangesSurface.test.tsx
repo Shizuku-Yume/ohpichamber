@@ -1,9 +1,14 @@
 import React, { act } from 'react';
-import { expect, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { GitLogEntry, GitStatus } from '@/lib/api/types';
 import { commitAndSwitchDirtyBranch } from '@/lib/source-control/dirty-branch-switch';
 import type { SourceControlAuthStatus, SourceControlUser } from '@/lib/source-control/types';
+
+// These cases cover the repository panes, not the transcript: the turn scope's
+// sync read is answered empty rather than standing up a provider for it.
+const actualSyncContext = await import('@/sync/sync-context');
+mock.module('@/sync/sync-context', () => ({ ...actualSyncContext, useSessionMessages: () => [] }));
 
 // Pull requests are read through the checkout's bound GitHub context, so the
 // repository here is bound to an account the auth store knows as valid.

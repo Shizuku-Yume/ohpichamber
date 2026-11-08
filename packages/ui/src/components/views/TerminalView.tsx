@@ -30,7 +30,6 @@ import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { terminalSnapshotSize } from '@/lib/terminalApi';
 import { closeTerminalTab } from '@/lib/terminalTabClose';
-import { closeTerminalTab } from '@/lib/terminalTabClose';
 import { extractProxiedPorts, extractTerminalPreviewUrl, isTerminalPreviewUrlAvailable } from '@/lib/terminalPreview';
 import { reachesDevServersThroughTunnel } from '@/lib/browser/devTunnel';
 import { useI18n } from '@/lib/i18n';

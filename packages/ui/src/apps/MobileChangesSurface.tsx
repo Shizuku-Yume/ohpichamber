@@ -170,37 +170,6 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  // nested repository instead.
  const { rootIsGitRepo, gitDirectory, nestedRepos } = repository;
  const requestedRepository = usePullRequestSelectionStore((state) => state.changesRepositories.get(rootDirectory));
- const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
- const sessionMessages = useSessionMessages(mode === 'turn' ? currentSessionId ?? '' : '', rootDirectory || undefined);
- // Last turn mirrors the desktop Diff view: projected from the transcript's
- // own edit evidence, because the Host keeps no per-turn snapshot.
- const turnDiffs = React.useMemo(
-  () => (mode === 'turn' ? projectLastTurnDiffs(sessionMessages, rootDirectory || null) : []),
-  [mode, rootDirectory, sessionMessages],
- );
- const turnFiles = React.useMemo<GitComparisonFile[]>(() => turnDiffs.flatMap((diff) => {
-  if (!diff.file) return [];
-  return [{
-   path: diff.file,
-   status: statusToGitCode(diff.status),
-   insertions: diff.additions ?? 0,
-   deletions: diff.deletions ?? 0,
-   patch: diff.patch,
-  }];
- }), [turnDiffs]);
- const turnDiffData = React.useMemo(() => {
-  const map = new Map<string, MobileDiffData>();
-  for (const diff of turnDiffs) {
-   if (!diff.file) continue;
-   if (typeof diff.patch === 'string') {
-    const isBinary = isBinaryPatch(diff.patch);
-    map.set(diff.file, { original: '', modified: '', isBinary, fileDiff: isBinary ? undefined : fileDiffFromPatch(diff.file, diff.patch) });
-    continue;
-   }
-   map.set(diff.file, { original: diff.before ?? '', modified: diff.after ?? '' });
-  }
-  return map;
- }, [turnDiffs]);
  const currentDirectory = requestedRepository ?? gitDirectory ?? rootDirectory;
  const status = useGitStatus(currentDirectory || null);
  const choosesPushDestination = useIsContributorWorktree(currentDirectory);
@@ -268,6 +237,37 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  }));
  const mode = navigation.ownerKey === ownerKey ? navigation.mode : 'working';
  const route = navigation.ownerKey === ownerKey ? navigation.route : LIST_ROUTE;
+ const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+ const sessionMessages = useSessionMessages(mode === 'turn' ? currentSessionId ?? '' : '', rootDirectory || undefined);
+ // Last turn mirrors the desktop Diff view: projected from the transcript's
+ // own edit evidence, because the Host keeps no per-turn snapshot.
+ const turnDiffs = React.useMemo(
+  () => (mode === 'turn' ? projectLastTurnDiffs(sessionMessages, rootDirectory || null) : []),
+  [mode, rootDirectory, sessionMessages],
+ );
+ const turnFiles = React.useMemo<GitComparisonFile[]>(() => turnDiffs.flatMap((diff) => {
+  if (!diff.file) return [];
+  return [{
+   path: diff.file,
+   status: statusToGitCode(diff.status),
+   insertions: diff.additions ?? 0,
+   deletions: diff.deletions ?? 0,
+   patch: diff.patch,
+  }];
+ }), [turnDiffs]);
+ const turnDiffData = React.useMemo(() => {
+  const map = new Map<string, MobileDiffData>();
+  for (const diff of turnDiffs) {
+   if (!diff.file) continue;
+   if (typeof diff.patch === 'string') {
+    const isBinary = isBinaryPatch(diff.patch);
+    map.set(diff.file, { original: '', modified: '', isBinary, fileDiff: isBinary ? undefined : fileDiffFromPatch(diff.file, diff.patch) });
+    continue;
+   }
+   map.set(diff.file, { original: diff.before ?? '', modified: diff.after ?? '' });
+  }
+  return map;
+ }, [turnDiffs]);
  const [modeMenuOpen, setModeMenuOpen] = React.useState(false);
  const changeMode = React.useCallback((nextMode: ChangesMode) => {
   setNavigation({ ownerKey, mode: nextMode, route: LIST_ROUTE });

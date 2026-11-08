@@ -68,7 +68,7 @@ A	.github/workflows/release-windows.yml	excluded	excluded: fork removed upstream
 M	.github/workflows/release.yml	excluded	excluded: fork removed upstream collaboration and CI	no
 M	.github/workflows/stale.yml	excluded	excluded: fork removed upstream collaboration and CI	no
 A	.github/workflows/windows-signed-build.yml	excluded	excluded: fork removed upstream collaboration and CI	no
-M	.openchamber/project.json	adapt-pending	upstream changed it; fork content still needs the delta ported	no
+M	.openchamber/project.json	kept-fork-change	kept-fork-change: fork keeps its own project actions (DevHMR only); upstream adds its own dev/mobile actions this fork does not run	yes
 A	.openchamber/workflows/pr-triage-finish.js	adopted	taken whole from upstream/main and verified identical	yes
 A	.openchamber/workflows/pr-triage-review.js	adopted	taken whole from upstream/main and verified identical	yes
 M	.opencode/agent/issue-intake.md	excluded	excluded: fork-owned agent guidance	no
@@ -80,7 +80,7 @@ M	.opencode/commands/pr-review.md	excluded	excluded: fork-owned agent guidance	n
 M	AGENTS.md	excluded	excluded: fork-owned root document	no
 M	CHANGELOG.md	excluded	excluded: legacy release notes copy	no
 M	CONTRIBUTING.md	excluded	excluded: fork-owned root document	no
-M	Dockerfile	adapt-pending	upstream changed it; fork content still needs the delta ported	no
+M	Dockerfile	adapted	adapted: container staged vendor/omp/650f3a10 while the lock resolves 18.18.0; now points at vendor/omp/b5a6b2f7	yes
 M	README.md	excluded	excluded: fork-owned root document	no
 M	SECURITY.md	excluded	excluded: fork-owned root document	no
 A	bun-patches/@codemirror%2Fview@6.43.15.patch	adopted	taken whole from upstream/main and verified identical	yes
@@ -96,9 +96,9 @@ A	changelog/2.6.0.md	excluded	excluded: maintainer-owned release notes	no
 A	changelog/2.6.1.md	excluded	excluded: maintainer-owned release notes	no
 M	changelog/index.json	excluded	excluded: maintainer-owned release notes	no
 M	docs/CUSTOM_THEMES.md	adapted	adapted: three-way merged upstream documentation with fork facts (>=3.0.0 engine floor, no VS Code/OpenCode references, Host credential store)	no
-M	flake.lock	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
-M	flake.nix	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
-M	knip.json	adapt-pending	upstream changed it; fork content still needs the delta ported	no
+M	flake.lock	kept-fork-deleted	kept-fork-deleted: nix packaging was dropped with the OMP migration; the fork builds through bun and Docker	no
+M	flake.nix	kept-fork-deleted	kept-fork-deleted: nix packaging was dropped with the OMP migration; the fork builds through bun and Docker	no
+M	knip.json	adapted	adapted: sdk guest-check script registered; the fork entry set keeps its own entries	yes
 A	nix/README.md	excluded	excluded: no fork packaging counterpart	no
 A	nix/bun-cache.nix	excluded	excluded: no fork packaging counterpart	no
 M	nix/gui.nix	excluded	excluded: no fork packaging counterpart	no
@@ -3006,14 +3006,14 @@ M	packages/web/src/sw.ts	adapt-pending	upstream changed it; fork content still n
 A	packages/web/src/useRouter.test.tsx	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
 A	packages/web/vite-react-babel-cache.ts	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
 M	packages/web/vite.config.ts	adapt-pending	upstream changed it; fork content still needs the delta ported	no
-M	scripts/brand/DOCUMENTATION.md	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
+M	scripts/brand/DOCUMENTATION.md	kept-fork-deleted	kept-fork-deleted: brand generator was not adopted (e62ef3371): it writes the retired vscode assets and server/lib/opencode paths	no
 A	scripts/brand/canary.mjs	adopted	taken whole from upstream/main and verified identical	yes
-M	scripts/brand/generate.mjs	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
+M	scripts/brand/generate.mjs	kept-fork-deleted	kept-fork-deleted: brand generator was not adopted (e62ef3371): it writes the retired vscode assets and server/lib/opencode paths	no
 M	scripts/brand/geometry.mjs	adopted	taken whole from upstream/main and verified identical	yes
-M	scripts/brand/raster.mjs	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
+M	scripts/brand/raster.mjs	kept-fork-deleted	kept-fork-deleted: brand generator was not adopted (e62ef3371): it writes the retired vscode assets and server/lib/opencode paths	no
 A	scripts/changelog/canary-notes.mjs	adopted	taken whole from upstream/main and verified identical	yes
 A	scripts/changelog/canary-notes.test.mjs	adopted	taken whole from upstream/main and verified identical	yes
-M	scripts/dev-vscode.mjs	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
+M	scripts/dev-vscode.mjs	kept-fork-deleted	kept-fork-deleted: VS Code extension retired with the OMP migration (24f1012c1)	no
 D	scripts/dev-web-full.mjs	applied-upstream-deletion	upstream deleted it and the fork already lacks it	n/a
 M	scripts/dev-web-hmr.mjs	adopted	taken whole from upstream/main and verified identical	yes
 M	scripts/generate-icon-sprite.mjs	adopted	taken whole from upstream/main and verified identical	yes
@@ -3028,7 +3028,7 @@ A	scripts/model-bench/tasks.json	adopted	taken whole from upstream/main and veri
 M	scripts/oc-dev.mjs	adapted	upstream dev-loop delta taken (dev:web:hmr -> dev, prod-like and mobile-dev modes dropped) and the remaining OpenCode config/CLI wiring renamed to PI_CONFIG_DIR and omp	no
 M	scripts/perf/DOCUMENTATION.md	adapted-partial	19 line(s) still name the removed OpenCode runtime: rate the model name asks for. OpenCode still produces its real event stream.	no
 M	scripts/perf/cdp.mjs	adopted	taken whole from upstream/main and verified identical	yes
-M	scripts/perf/chat-quote-popover.browser.test.mjs	adapt-pending	upstream added or renamed it; not yet present on the task branch	no
+M	scripts/perf/chat-quote-popover.browser.test.mjs	adopted	adopted: upstream browser test adopted as written; it drives the retained ChatQuoteMarkPopover	yes
 M	scripts/perf/compare-runs.mjs	adopted	taken whole from upstream/main and verified identical	yes
 M	scripts/perf/compare-runs.test.mjs	adopted	taken whole from upstream/main and verified identical	yes
 A	scripts/perf/page-signals.mjs	adopted	taken whole from upstream/main and verified identical	yes

@@ -220,6 +220,8 @@ const normalizeDirectoryPath = (value: string): string => {
  return normalized;
 };
 
+export const DEFAULT_SELECTION_APPROVAL_TEXT = 'Sounds good';
+
 const clampContextPanelWidth = (width: number): number => {
  if (!Number.isFinite(width)) {
   return CONTEXT_ZONE_DEFAULT_WIDTH;
@@ -1192,6 +1194,8 @@ interface UIStore {
  projectKnowledgePlanRequest: { projectContextId: string; planId: string } | null;
  inputSpellcheckEnabled: boolean;
  largeTextPasteBehavior: LargeTextPasteBehavior;
+ /** Feedback text the selection-approval button sends; empty uses the view's default wording. */
+ selectionApprovalText: string;
  enterToSend: boolean;
  enterToSendConfigured: boolean;
  mobileReturnKeySends: boolean;
@@ -1468,6 +1472,7 @@ interface UIStore {
  clearProjectKnowledgePlanRequest: () => void;
  setInputSpellcheckEnabled: (value: boolean) => void;
  setLargeTextPasteBehavior: (value: LargeTextPasteBehavior) => void;
+ setSelectionApprovalText: (value: string) => void;
  setEnterToSend: (value: boolean) => void;
  setMobileReturnKeySends: (value: boolean) => void;
  setEnterToSendConfigured: (value: boolean) => void;
@@ -1718,6 +1723,7 @@ export const useUIStore = create<UIStore>()(
     projectKnowledgePlanRequest: null,
     inputSpellcheckEnabled: false,
     largeTextPasteBehavior: DEFAULT_LARGE_TEXT_PASTE_BEHAVIOR,
+    selectionApprovalText: '',
     enterToSend: false,
     enterToSendConfigured: false,
     mobileReturnKeySends: false,
@@ -3420,6 +3426,9 @@ export const useUIStore = create<UIStore>()(
     setLargeTextPasteBehavior: (value) => {
      set({ largeTextPasteBehavior: normalizeLargeTextPasteBehavior(value) });
     },
+    setSelectionApprovalText: (value) => {
+     set({ selectionApprovalText: value });
+    },
     setEnterToSend: (value) => {
      set({ enterToSend: value });
     },
@@ -3949,6 +3958,7 @@ export const useUIStore = create<UIStore>()(
      agentMemoryViewedAt: state.agentMemoryViewedAt,
      inputSpellcheckEnabled: state.inputSpellcheckEnabled,
      largeTextPasteBehavior: state.largeTextPasteBehavior,
+     selectionApprovalText: state.selectionApprovalText,
      enterToSend: state.enterToSend,
      enterToSendConfigured: state.enterToSendConfigured,
      mobileReturnKeySends: state.mobileReturnKeySends,

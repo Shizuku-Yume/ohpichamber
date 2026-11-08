@@ -746,7 +746,9 @@ providers:
       }));
     });
     await new Promise<void>(resolve => mockServer.listen(0, '127.0.0.1', resolve));
-    const port = (mockServer.address() as any).port;
+    const address = mockServer.address();
+    if (address === null || typeof address === 'string') throw new Error('mock server did not bind a port');
+    const port = address.port;
     try {
       // Re-write models.yml pointing custom-generator-1 to the mock server endpoint
       await writeFile(fixture.writer.modelsPath, `

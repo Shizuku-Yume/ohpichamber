@@ -3,8 +3,6 @@ import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { showOpenCodeStatus } from '@/lib/openCodeStatus';
-import { restartOpenCodeWithFeedback } from '@/lib/restartOpenCode';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { isSessionPinned } from '@/lib/sessionPins';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
@@ -41,8 +39,9 @@ export const showContextUsage: PaletteCommand = () => {
   useUIStore.getState().openContextOverview(directory);
 };
 
+/** The app's diagnostics live in About (the dialog shows them in dev builds). */
 export const showDiagnosticTimeline: PaletteCommand = () => {
-  void showOpenCodeStatus();
+  useUIStore.getState().setAboutDialogOpen(true);
 };
 
 export const openOverview: PaletteCommand = () => {
@@ -72,10 +71,6 @@ const openProjectNotesTab = (tab: 'notes' | 'todos'): boolean => {
 export const openNotes: PaletteCommand = () => openProjectNotesTab('notes');
 
 export const openTodos: PaletteCommand = () => openProjectNotesTab('todos');
-
-export const restartOpenCode = (t: Translate): PaletteCommand => () => {
-  void restartOpenCodeWithFeedback(t);
-};
 
 export const pinCurrentSession = (t: Translate): PaletteCommand => () => {
   const sessionId = useSessionUIStore.getState().currentSessionId;

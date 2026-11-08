@@ -31,6 +31,8 @@ const AGENT_ROUTES = [
  { method: 'GET', pattern: /^\/usage\/tools$/, response: C.UsageToolsResponseSchema, query: ['from', 'to', 'timezone', 'workspaceId', 'projectId'], usage: true },
  { method: 'GET', pattern: /^\/subagents$/, response: z.array(C.SubagentSchema), query: ['sessionId'], subagent: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/models$/, response: C.ModelCatalogSchema },
+ { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/images\/generate$/, request: C.ImageGenerateRequestSchema, response: C.ImageGenerateResultSchema, imageEgress: true },
+ { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/images\/config$/, request: C.ImageModelConfigureRequestSchema, response: C.ImageModelMutationResultSchema, providerEntry: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers$/, response: C.ProviderCatalogSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/oauth-methods$/, response: C.ProviderOAuthMethodsSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/discover$/, request: C.ProviderModelDiscoveryRequestSchema, response: C.ProviderModelDiscoveryResultSchema, providerEntry: true },
@@ -267,6 +269,8 @@ export function registerCanonicalHostRoutes(app, {
   if (service.getState().phase !== 'ready') return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Agent Service is not ready.');
   if (route.providerEntry && isEnterpriseMode(enterprisePolicyOptions))
    return problem(res, 403, 'enterprise_mode', 'Provider entry is not available in enterprise mode.');
+  if (route.imageEgress && isEnterpriseMode(enterprisePolicyOptions))
+   return problem(res, 403, 'enterprise_mode', 'Image generation is not available in enterprise mode.');
   if (route.pluginEgress && isEnterpriseMode(enterprisePolicyOptions))
    return problem(res, 403, 'enterprise_mode', 'Native plugin package management and marketplace access are not available in enterprise mode.');
   if (route.request && !req.is('application/json'))

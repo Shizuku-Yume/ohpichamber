@@ -45,6 +45,10 @@ import { useRepositoryBinding } from '@/lib/source-control/repository-binding';
 import { commitAndSwitchDirtyBranch } from '@/lib/source-control/dirty-branch-switch';
 import { hasConfigChangedGrant } from '@/lib/source-control/types';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useSessionMessages } from '@/sync/sync-context';
+import { projectLastTurnDiffs } from '@/components/views/turnDiffProjection';
+import { statusToGitCode } from '@/components/views/turnSnapshotDiff';
 import { useNestedGitDirectory } from '@/hooks/useNestedGitDirectory';
 import { useBranchComparisonBase } from '@/hooks/useBranchComparisonBase';
 import { useCommitComparison } from '@/hooks/useCommitComparison';
@@ -89,11 +93,12 @@ import { normalizePath } from '@/lib/pathNormalization';
 type SyncAction = 'fetch' | 'pull' | 'sync' | 'publish' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
 
-type ChangesMode = 'working' | 'branch' | 'commit' | 'pr';
+type ChangesMode = 'working' | 'turn' | 'branch' | 'commit' | 'pr';
 type ChangesRoute =
  | { type: 'list' }
  | { type: 'diff'; path: string; staged: boolean }
  | { type: 'comparison'; path: string; sourceKey: string }
+ | { type: 'turn'; path: string }
  | { type: 'walkthrough' };
 interface ChangesNavigation {
  ownerKey: string;
@@ -232,6 +237,37 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  }));
  const mode = navigation.ownerKey === ownerKey ? navigation.mode : 'working';
  const route = navigation.ownerKey === ownerKey ? navigation.route : LIST_ROUTE;
+ const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+ const sessionMessages = useSessionMessages(mode === 'turn' ? currentSessionId ?? '' : '', rootDirectory || undefined);
+ // Last turn mirrors the desktop Diff view: projected from the transcript's
+ // own edit evidence, because the Host keeps no per-turn snapshot.
+ const turnDiffs = React.useMemo(
+  () => (mode === 'turn' ? projectLastTurnDiffs(sessionMessages, rootDirectory || null) : []),
+  [mode, rootDirectory, sessionMessages],
+ );
+ const turnFiles = React.useMemo<GitComparisonFile[]>(() => turnDiffs.flatMap((diff) => {
+  if (!diff.file) return [];
+  return [{
+   path: diff.file,
+   status: statusToGitCode(diff.status),
+   insertions: diff.additions ?? 0,
+   deletions: diff.deletions ?? 0,
+   patch: diff.patch,
+  }];
+ }), [turnDiffs]);
+ const turnDiffData = React.useMemo(() => {
+  const map = new Map<string, MobileDiffData>();
+  for (const diff of turnDiffs) {
+   if (!diff.file) continue;
+   if (typeof diff.patch === 'string') {
+    const isBinary = isBinaryPatch(diff.patch);
+    map.set(diff.file, { original: '', modified: '', isBinary, fileDiff: isBinary ? undefined : fileDiffFromPatch(diff.file, diff.patch) });
+    continue;
+   }
+   map.set(diff.file, { original: diff.before ?? '', modified: diff.after ?? '' });
+  }
+  return map;
+ }, [turnDiffs]);
  const [modeMenuOpen, setModeMenuOpen] = React.useState(false);
  const changeMode = React.useCallback((nextMode: ChangesMode) => {
   setNavigation({ ownerKey, mode: nextMode, route: LIST_ROUTE });
@@ -1013,6 +1049,20 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   return renderListState(<MobileChangesState loading message={t('gitView.loading.checkingRepository')} />);
  }
 
+ if (route.type === 'turn') {
+  return (
+   <MobileDiffDetail
+    path={route.path}
+    subtitle={t('diffView.scope.lastTurn')}
+    diff={turnDiffData.get(route.path) ?? null}
+    fileExists={turnFiles.some((file) => file.path === route.path)}
+    error={null}
+    onBack={() => setRoute({ type: 'list' })}
+    onRetry={() => setRoute({ type: 'list' })}
+   />
+  );
+ }
+
  if (route.type === 'diff') {
   return (
    <MobileDiffDetail
@@ -1028,7 +1078,7 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
   );
  }
 
- const modeLabel = mode === 'pr' ? t(changeRequestCopy('session.githubIntegration.tabs.pullRequests', prComparison.provider)) : mode === 'branch' ? t('diffView.scope.branch') : mode === 'commit' ? t('commitComparison.mode') : t('mobile.nav.changes');
+ const modeLabel = mode === 'pr' ? t(changeRequestCopy('session.githubIntegration.tabs.pullRequests', prComparison.provider)) : mode === 'branch' ? t('diffView.scope.branch') : mode === 'commit' ? t('commitComparison.mode') : mode === 'turn' ? t('diffView.scope.lastTurn') : t('mobile.nav.changes');
  const sourceLabel = mode === 'branch' && branchComparison.base
   ? branchRefLabel(branchComparison.base)
   : mode === 'commit' ? selectedCommitHash?.slice(0, 8) : mode === 'pr' && selectedPr ? `#${selectedPr.number}` : null;
@@ -1128,9 +1178,10 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
      </DropdownMenuTrigger>
      <DropdownMenuContent align="start">
       <DropdownMenuRadioGroup value={mode} onValueChange={(value) => {
-       if (value === 'working' || value === 'branch' || value === 'commit' || value === 'pr') changeMode(value);
+       if (value === 'working' || value === 'turn' || value === 'branch' || value === 'commit' || value === 'pr') changeMode(value);
       }}>
        <DropdownMenuRadioItem value="working" className="min-h-8 items-center">{t('mobile.nav.changes')}</DropdownMenuRadioItem>
+       <DropdownMenuRadioItem value="turn" className="min-h-8 items-center">{t('diffView.scope.lastTurn')}</DropdownMenuRadioItem>
        {showBranchOption && <DropdownMenuRadioItem value="branch" className="min-h-8 items-center">{t('diffView.scope.branch')}</DropdownMenuRadioItem>}
        <DropdownMenuRadioItem value="commit" className="min-h-8 items-center">{t('commitComparison.mode')}</DropdownMenuRadioItem>
        <DropdownMenuRadioItem value="pr" className="min-h-8 items-center">{t(changeRequestCopy('session.githubIntegration.tabs.pullRequests', prComparison.provider))}</DropdownMenuRadioItem>
@@ -1240,7 +1291,13 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
      isLoading={syncAction !== null || commitAction !== null}
     />
    )}
-   {mode !== 'working' ? (
+   {mode === 'turn' ? (
+    <div className="min-h-0 flex-1">
+     {turnFiles.length === 0
+      ? <MobileChangesState message={t('diffView.state.noLastTurnChanges')} />
+      : <MobileComparisonFileList files={turnFiles} onSelect={(path) => setRoute({ type: 'turn', path })} />}
+    </div>
+   ) : mode !== 'working' ? (
     <div className="min-h-0 flex-1">{renderComparison()}</div>
    ) : changeEntries.length > 0 ? (
     <div className="flex min-h-0 flex-1 flex-col">

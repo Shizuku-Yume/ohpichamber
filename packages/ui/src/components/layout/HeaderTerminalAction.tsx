@@ -9,7 +9,10 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
+import { toast } from '@/components/ui';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
+import { closeTerminalTab } from '@/lib/terminalTabClose';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { cn } from '@/lib/utils';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
@@ -33,24 +36,29 @@ export const HeaderTerminalAction: React.FC<HeaderTerminalActionProps> = ({
   className,
 }) => {
   const { t } = useI18n();
+  const { terminal } = useRuntimeAPIs();
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
-  const normalizedDirectory = React.useMemo(
-    () => (directory ? normalizeContextPanelDirectoryKey(directory) : ''),
+  // One key for the terminal store, the context panel and the surface it shows:
+  // the store partitions by directory, so an unresolved one would be a state
+  // key nothing on screen ever reads.
+  const resolvedDirectory = React.useMemo(
+    () => normalizeContextPanelDirectoryKey(directory ?? ''),
     [directory],
   );
 
   const isTerminalShown = useUIStore((state) => {
-    if (!normalizedDirectory) return false;
-    const panel = state.contextPanelByDirectory[normalizedDirectory];
+    if (!resolvedDirectory) return false;
+    const panel = state.contextPanelByDirectory[resolvedDirectory];
     return shownContextModes(panel, state.contextSurfaceZones).has('terminal');
   });
 
   const terminalState = useTerminalStore((state) => (
-    directory ? state.getDirectoryState(directory) : undefined
+    resolvedDirectory ? state.getDirectoryState(resolvedDirectory) : undefined
   ));
 
   const tabs = terminalState?.tabs ?? [];
   const activeTabId = terminalState?.activeTabId ?? null;
+  const hasDirectory = resolvedDirectory.length > 0;
 
   const terminalShortcut = React.useMemo(() => (
     formatShortcutForDisplay(getEffectiveShortcutCombo('toggle_terminal', shortcutOverrides), '')
@@ -61,39 +69,51 @@ export const HeaderTerminalAction: React.FC<HeaderTerminalActionProps> = ({
     : t('header.actions.toggleTerminalPanelAria');
 
   const handleToggleTerminal = React.useCallback(() => {
-    const dir = directory || '';
-    const key = normalizeContextPanelDirectoryKey(dir);
-    useUIStore.getState().openContextSurface(key, 'terminal');
-  }, [directory]);
+    if (!hasDirectory) return;
+    useUIStore.getState().openContextSurface(resolvedDirectory, 'terminal');
+  }, [hasDirectory, resolvedDirectory]);
 
   const handleCreateTab = React.useCallback(() => {
-    const dir = directory || '';
-    const tabId = useTerminalStore.getState().createTab(dir);
-    useTerminalStore.getState().setActiveTab(dir, tabId);
-    const key = normalizeContextPanelDirectoryKey(dir);
+    if (!hasDirectory) return;
+    const tabId = useTerminalStore.getState().createTab(resolvedDirectory);
+    if (!tabId) return;
+    useTerminalStore.getState().setActiveTab(resolvedDirectory, tabId);
     const uiState = useUIStore.getState();
-    const isShown = shownContextModes(uiState.contextPanelByDirectory[key], uiState.contextSurfaceZones).has('terminal');
+    const isShown = shownContextModes(uiState.contextPanelByDirectory[resolvedDirectory], uiState.contextSurfaceZones).has('terminal');
     if (!isShown) {
-      uiState.openContextSurface(key, 'terminal');
+      uiState.openContextSurface(resolvedDirectory, 'terminal');
     }
-  }, [directory]);
+  }, [hasDirectory, resolvedDirectory]);
 
   const handleSelectTab = React.useCallback((tabId: string) => {
-    const dir = directory || '';
-    useTerminalStore.getState().setActiveTab(dir, tabId);
-    const key = normalizeContextPanelDirectoryKey(dir);
+    if (!hasDirectory) return;
+    useTerminalStore.getState().setActiveTab(resolvedDirectory, tabId);
     const uiState = useUIStore.getState();
-    const isShown = shownContextModes(uiState.contextPanelByDirectory[key], uiState.contextSurfaceZones).has('terminal');
+    const isShown = shownContextModes(uiState.contextPanelByDirectory[resolvedDirectory], uiState.contextSurfaceZones).has('terminal');
     if (!isShown) {
-      uiState.openContextSurface(key, 'terminal');
+      uiState.openContextSurface(resolvedDirectory, 'terminal');
     }
-  }, [directory]);
+  }, [hasDirectory, resolvedDirectory]);
 
+  // The terminal's own tab strip closes through the same lifecycle: the backend
+  // shell ends before the tab leaves the store, and a failed close keeps the tab
+  // visible so the running shell is never hidden.
   const handleCloseTab = React.useCallback((e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
-    const dir = directory || '';
-    useTerminalStore.getState().closeTab(dir, tabId);
-  }, [directory]);
+    if (!hasDirectory) return;
+    const surfaceTab = useUIStore.getState().contextPanelByDirectory[resolvedDirectory]?.tabs
+      .find((tab) => tab.mode === 'terminal');
+    void closeTerminalTab({
+      terminal,
+      directory: resolvedDirectory,
+      tabId,
+      onLastTab: surfaceTab
+        ? () => useUIStore.getState().closeContextPanelTab(resolvedDirectory, surfaceTab.id)
+        : undefined,
+    }).catch((error: unknown) => {
+      toast.error(error instanceof Error && error.message ? error.message : t('terminalView.error.sessionEnded'));
+    });
+  }, [hasDirectory, resolvedDirectory, t, terminal]);
 
   return (
     <div className={cn('inline-flex items-center', className)}>
@@ -102,6 +122,7 @@ export const HeaderTerminalAction: React.FC<HeaderTerminalActionProps> = ({
           <button
             type="button"
             onClick={handleToggleTerminal}
+            disabled={!hasDirectory}
             aria-label={t('header.actions.toggleTerminalPanelAria')}
             aria-pressed={isTerminalShown}
             className={cn(
@@ -126,10 +147,11 @@ export const HeaderTerminalAction: React.FC<HeaderTerminalActionProps> = ({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
+                disabled={!hasDirectory}
                 aria-label={t('layout.mainTab.terminal')}
                 className={cn(
                   'app-region-no-drag -ms-1 inline-flex h-8 w-5 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover hover:text-foreground transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
                 )}
               >
                 <Icon name="arrow-down-s" className="h-3.5 w-3.5" />

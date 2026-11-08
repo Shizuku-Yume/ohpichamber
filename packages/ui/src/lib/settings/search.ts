@@ -1,5 +1,4 @@
 import type { I18nKey } from '@/lib/i18n/store';
-import { ISOLATED_SPACES_RELEASED } from '@/lib/spaces/release';
 import { useUIStore } from '@/stores/useUIStore';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
@@ -873,24 +872,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.tools.field.agentNotifyTool',
     descriptionKey: 'settings.openchamber.tools.field.agentNotifyToolInfo',
     keywords: ['agent', 'tool', 'notify', 'notification', 'alert', 'ping', 'openchamber'],
-  },
-  {
-    id: 'general.isolated-spaces',
-    page: 'isolated-spaces',
-    titleKey: 'settings.openchamber.spaces.field.enabled',
-    descriptionKey: 'settings.openchamber.spaces.field.enabledInfo',
-    keywords: ['isolated', 'space', 'spaces', 'container', 'docker', 'sandbox', 'agent'],
-    // Hidden from everyone until the feature's first release.
-    isAvailable: () => ISOLATED_SPACES_RELEASED,
-  },
-  {
-    id: 'general.isolated-spaces-idle-stop',
-    page: 'isolated-spaces',
-    titleKey: 'settings.openchamber.spaces.idleStop.enabled',
-    descriptionKey: 'settings.openchamber.spaces.idleStop.enabledInfo',
-    keywords: ['idle', 'stop', 'space', 'spaces', 'container', 'hours', 'timeout', 'sleep'],
-    // Rendered only while the switch is on and the feature is released.
-    isAvailable: () => ISOLATED_SPACES_RELEASED && useUIStore.getState().isolatedSpacesEnabled,
   },
   {
     id: 'sessions.agent-memory-tool',

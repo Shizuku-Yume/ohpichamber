@@ -18,6 +18,8 @@ const createHarness = (settings = {
   agentWebToolEnabled: true,
   agentMemoryToolEnabled: true,
   agentNotifyToolEnabled: true,
+  agentImageToolEnabled: true,
+  agentImageModel: 'openrouter/openai/gpt-image-2',
 }, overrides = {}) => {
   const created = [];
   const sent = [];
@@ -52,6 +54,10 @@ const createHarness = (settings = {
       requests.push(pathname);
       if (pathname.endsWith('/models')) return Response.json({ workspaceId: 'workspace-1', revision: '1', models: [{ modelId: 'model-1' }] });
       if (pathname.endsWith('/providers')) return Response.json({ workspaceId: 'workspace-1', revision: '1', providers: [{ providerId: 'provider-1' }] });
+      if (pathname.includes('/images/generate')) return Response.json({
+        model: { providerId: 'openrouter', modelId: 'openai/gpt-image-2' },
+        images: [{ data: Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').toString('base64'), mimeType: 'image/png' }],
+      });
       return Response.json({});
     },
   };
@@ -137,8 +143,10 @@ describe('OpenChamber control service canonical consumers', () => {
     expect(sent[0].sessionId).toBe('session-new');
   });
   it('creates native goals before CLI create, send and fork prompts', async () => {
-    const h = createHarness({ agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true,
-      agentNotifyToolEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5000 });
+    const h = createHarness({
+      agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true,
+      agentNotifyToolEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5000
+    });
     const created = await h.control.execute('session.create', {
       model: 'provider-1/model-1', prompt: 'Create objective', goal: true,
     }, '/repo/app');
@@ -227,6 +235,15 @@ describe('OpenChamber control service canonical consumers', () => {
     await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'notify', action: 'notify.send', sessionId: 'session-1', input: { title: 't' },
     })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'notify tool is disabled' });
+    await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_image', action: 'image.generate', sessionId: 'session-1', input: { prompt: 'a cat' },
+    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber_image tool is disabled' });
+    const imageResult = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_image', action: 'image.generate', sessionId: 'session-1', input: { prompt: 'a cat' },
+    });
+    expect(imageResult.ok).toBe(true);
+    expect(imageResult.value.model).toBe('openrouter/openai/gpt-image-2');
+    expect(imageResult.value.images).toHaveLength(1);
     const conflictHarness = createHarness(undefined, {
       resolveProjectContextId: async () => 'project-1',
       projectContextRuntime: {
@@ -251,18 +268,22 @@ describe('models.search over the canonical catalog', () => {
     service: {
       request: async (pathname) => {
         if (pathname.endsWith('/models')) {
-          return Response.json({ workspaceId: 'workspace-1', revision: '1', models: [
-            { provider: 'a', modelId: 'new', name: 'Alpha New', variants: [{ variant: 'high' }], status: 'active' },
-            { provider: 'a', modelId: 'older', name: 'Alpha Older', variants: [], status: 'active' },
-            { provider: 'a', modelId: 'secret', name: 'Alpha Secret', variants: [], status: 'deprecated' },
-            { provider: 'b', modelId: 'old', name: 'Beta Old', variants: [], status: 'deprecated' },
-            { provider: 'b', modelId: 'newer', name: 'Beta Newer', variants: [], status: 'beta' },
-          ] });
+          return Response.json({
+            workspaceId: 'workspace-1', revision: '1', models: [
+              { provider: 'a', modelId: 'new', name: 'Alpha New', variants: [{ variant: 'high' }], status: 'active' },
+              { provider: 'a', modelId: 'older', name: 'Alpha Older', variants: [], status: 'active' },
+              { provider: 'a', modelId: 'secret', name: 'Alpha Secret', variants: [], status: 'deprecated' },
+              { provider: 'b', modelId: 'old', name: 'Beta Old', variants: [], status: 'deprecated' },
+              { provider: 'b', modelId: 'newer', name: 'Beta Newer', variants: [], status: 'beta' },
+            ]
+          });
         }
         if (pathname.endsWith('/providers')) {
-          return Response.json({ workspaceId: 'workspace-1', revision: '1', providers: [
-            { providerId: 'a', name: 'Alpha' }, { providerId: 'b', name: 'Beta' },
-          ] });
+          return Response.json({
+            workspaceId: 'workspace-1', revision: '1', providers: [
+              { providerId: 'a', name: 'Alpha' }, { providerId: 'b', name: 'Beta' },
+            ]
+          });
         }
         return Response.json({});
       },

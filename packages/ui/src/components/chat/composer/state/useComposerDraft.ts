@@ -1,5 +1,5 @@
 import { isBtwPendingComposerKey } from "@/lib/btw";
-import { isMentionEntryInText } from "../../language/mentions";
+import { isMentionEntryInText } from '../language/mentions';
 /**
  * Per-session draft persistence for the composer.
  *

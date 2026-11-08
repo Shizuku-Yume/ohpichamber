@@ -1,4 +1,3 @@
-import { requestOpenCodeTrust } from '@/lib/opencodeTrust';
 import { normalizePath } from '@/lib/pathNormalization';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -29,8 +28,8 @@ const pending = new Map<string, { sessionIds: Map<string, boolean>; request: Pro
 let generation = 0;
 subscribeRuntimeEndpointWillChange(() => { generation += 1; pending.clear(); });
 
-/** The same trust prompt serves background discoveries and explicit navigation. */
-const tryAdmitSession = (sessionId: string, directory: string, deliberate = false): Promise<boolean> => {
+/** A discovered directory is admitted through the project it belongs to, without a trust prompt. */
+const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean> => {
   const normalized = normalizePath(directory);
   if (!normalized) return Promise.resolve(false);
   if (isSessionAdmitted(normalized)) return Promise.resolve(true);
@@ -55,7 +54,6 @@ const tryAdmitSession = (sessionId: string, directory: string, deliberate = fals
     if (!isVSCodeRuntime()) await ensureChatsRootDirectory();
     if (!currentSession()) return false;
     if (isSessionAdmitted(normalized)) return true;
-    if (!await requestOpenCodeTrust(normalized, { deliberate, background: !deliberate, throwOnError: true })) return false;
     const currentId = currentSession();
     if (!currentId) return false;
     if (isSessionAdmitted(normalized)) return true;
@@ -71,8 +69,8 @@ const tryAdmitSession = (sessionId: string, directory: string, deliberate = fals
   return request;
 };
 
-export const admitSession = (sessionId: string, directory: string, deliberate = false): Promise<boolean> => (
-  tryAdmitSession(sessionId, directory, deliberate).catch((error) => {
+export const admitSession = (sessionId: string, directory: string): Promise<boolean> => (
+  tryAdmitSession(sessionId, directory).catch((error) => {
     console.warn('[session-admission] Could not register the session project:', error);
     return false;
   })

@@ -23,6 +23,24 @@ type ShortcutConfig = {
 //   switches context panel surfaces (mod+shift+digit is reserved by macOS
 //   screenshots).
 // Everything else lives only in the command palette, outside this schema.
+/** Commands the palette also lists; bindable here, unassigned until the person sets them. */
+const PALETTE_COMMANDS = [
+  'open_new_worktree_dialog',
+  'add_project',
+  'show_context_usage',
+  'show_opencode_status',
+  'open_overview',
+  'reload_ui',
+  'restart_opencode',
+  'open_archive',
+  'open_notes',
+  'open_todos',
+  'pin_current_session',
+  'copy_current_session_id',
+  'toggle_work_current_session',
+  'open_multi_run',
+] as const;
+
 const SHORTCUT_GROUPS = {
   session: [
     {
@@ -330,6 +348,14 @@ const SHORTCUT_GROUPS = {
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.cycle_theme.label',
     },
+    // The palette's own commands, each bindable but unset by default so
+    // nothing fires that the person did not ask for.
+    ...PALETTE_COMMANDS.map((id) => ({
+      id,
+      defaultBinding: UNASSIGNED_SHORTCUT,
+      customizable: true as const,
+      settingsLabelKey: `settings.openchamber.keyboardShortcuts.action.${id}.label` as const,
+    })),
   ],
   // Desktop-shell capabilities: registered as OS-level global shortcuts rather
   // than in-app keybindings, so they carry no in-app default binding. The

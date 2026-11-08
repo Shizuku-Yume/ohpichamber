@@ -532,8 +532,8 @@ describe('checkForUpdates on the update channels', () => {
 
     const result = await checkForUpdates({ currentVersion: '2.5.3', appType: 'vscode' });
 
-    expect(result.version).toBe('2.5.3');
-    expect(result.available).toBe(false);
+    expect(result.version).toBe('2.5.4-canary.20261031.7');
+    expect(result.available).toBe(true);
   });
 });
 

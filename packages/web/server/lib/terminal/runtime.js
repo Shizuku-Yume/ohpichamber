@@ -12,10 +12,15 @@ import { consumeTerminalThemeQueries, terminalThemeModeReport } from './theme-re
 import { buildTerminalShellLaunch, createTerminalShellResolver, normalizeTerminalShell } from './shells.js';
 import { stripAppImageArgv0Leak, stripAppImageLauncherEnv, resolvePosixPtyLaunch } from '../inherited-env.js';
 import { shutdownTerminalProcesses } from './shutdown.js';
+import { bunVersionRunsBunPty } from './bun-pty-support.js';
 import { isOpaqueOriginRequest, isPasswordlessSocketOriginAllowed } from '../security/request-security.js';
 
 const MAX_SESSIONS = 20;
 const MAX_HISTORY_BYTES = 512 * 1024;
+const HISTORY_SEGMENT_BYTES = 8 * 1024;
+const MAX_SOCKET_BUFFER_BYTES = 4 * 1024 * 1024;
+const OUTPUT_BATCH_MS = 12;
+const MAX_OUTPUT_BATCH_CHARS = 32 * 1024;
 const MAX_INPUT_CHARS = 65_536;
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const TERMINATION_GRACE_MS = 1000;
@@ -82,22 +87,120 @@ const findPendingActionCreate = (pendingSessionCreates, resolvedCwd, purpose) =>
   }
   return null;
 };
-const trimHistory = (history) => {
-  const bytes = Buffer.from(history);
-  if (bytes.byteLength <= MAX_HISTORY_BYTES) return history;
-  let start = bytes.byteLength - MAX_HISTORY_BYTES;
-  while (start < bytes.byteLength && (bytes[start] & 0xc0) === 0x80) start += 1;
-  return bytes.subarray(start).toString('utf8');
+const newHistory = () => ({ chunks: [], head: 0, offset: 0, bytes: 0, original: [], originalTail: '', originalLast: '' });
+const historyText = (history) => history.original
+  ? history.original.join('') + history.originalTail
+  : Buffer.concat(history.chunks.slice(history.head).map((chunk, index) => chunk.buffer.subarray(index === 0 ? history.offset : 0, chunk.length))).toString('utf8');
+const appendHistoryBytes = (history, bytes) => {
+  let offset = 0;
+  while (offset < bytes.length) {
+    let tail = history.chunks.at(-1);
+    if (!tail || tail.length === HISTORY_SEGMENT_BYTES) {
+      tail = { buffer: Buffer.allocUnsafe(HISTORY_SEGMENT_BYTES), length: 0 };
+      history.chunks.push(tail);
+    }
+    const length = Math.min(bytes.length - offset, HISTORY_SEGMENT_BYTES - tail.length);
+    bytes.copy(tail.buffer, tail.length, offset, offset + length);
+    tail.length += length;
+    offset += length;
+  }
+  history.bytes += bytes.length;
 };
+const removeHistoryTail = (history, count) => {
+  history.bytes -= count;
+  while (count > 0) {
+    const tail = history.chunks.at(-1);
+    const removed = Math.min(tail.length, count);
+    tail.length -= removed;
+    count -= removed;
+    if (!tail.length) history.chunks.pop();
+  }
+};
+const appendOriginal = (history, text) => {
+  let offset = 0;
+  while (offset < text.length) {
+    const length = Math.min(text.length - offset, HISTORY_SEGMENT_BYTES - history.originalTail.length);
+    history.originalTail += text.slice(offset, offset + length);
+    offset += length;
+    if (history.originalTail.length === HISTORY_SEGMENT_BYTES) {
+      history.original.push(history.originalTail);
+      history.originalTail = '';
+    }
+  }
+  history.originalLast = text.at(-1);
+};
+const appendHistory = (history, text) => {
+  if (!text) return;
+  // Buffer.from encodes an unmatched high surrogate as U+FFFD. Until the first
+  // trim, the next chunk can still complete that UTF-16 pair.
+  let encoded = text;
+  if (history.original && /[\uD800-\uDBFF]/.test(history.originalLast) && /^[\uDC00-\uDFFF]/.test(text)) {
+    removeHistoryTail(history, 3);
+    encoded = history.originalLast + text;
+  }
+  const bytes = Buffer.from(encoded);
+  if (history.bytes + bytes.length <= MAX_HISTORY_BYTES) {
+    appendHistoryBytes(history, bytes);
+    if (history.original) appendOriginal(history, text);
+    return;
+  }
+
+  // A large PTY callback replaces the entire scrollback. Copy only its aligned
+  // suffix so a slice cannot keep the callback's much larger buffer alive.
+  if (bytes.length >= MAX_HISTORY_BYTES) {
+    let start = bytes.length - MAX_HISTORY_BYTES;
+    while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) start += 1;
+    history.chunks = []; history.head = 0; history.offset = 0; history.bytes = 0;
+    appendHistoryBytes(history, bytes.subarray(start));
+    history.original = null;
+    history.originalTail = '';
+    return;
+  }
+
+  appendHistoryBytes(history, bytes);
+
+  let remove = history.bytes - MAX_HISTORY_BYTES;
+  let removed = 0;
+  while (remove > 0) {
+    const available = history.chunks[history.head].length - history.offset;
+    if (remove < available) { history.offset += remove; removed += remove; break; }
+    remove -= available;
+    removed += available;
+    history.head += 1;
+    history.offset = 0;
+  }
+  while (history.head < history.chunks.length) {
+    const chunk = history.chunks[history.head];
+    if (history.offset === chunk.length) { history.head += 1; history.offset = 0; continue; }
+    if ((chunk.buffer[history.offset] & 0xc0) !== 0x80) break;
+    history.offset += 1;
+    removed += 1;
+  }
+  history.bytes -= removed;
+  history.original = null;
+  history.originalTail = '';
+  if (history.head > 128) { history.chunks = history.chunks.slice(history.head); history.head = 0; }
+};
+
+export async function loadTerminalPtyProvider(bunVersion = globalThis.Bun?.version, importPty = (name) => import(name)) {
+  if (bunVersionRunsBunPty(bunVersion)) {
+    try { const pty = await importPty('bun-pty'); return { spawn: pty.spawn, backend: 'bun-pty' }; } catch { /* fall through */ }
+  }
+  const pty = await importPty('node-pty');
+  return { spawn: pty.spawn, backend: 'node-pty' };
+}
 
 export function createTerminalRuntime({
   app, server, fs, path, uiAuthController, buildAugmentedPath, searchPathFor, isExecutable,
   isRequestOriginAllowed, rejectWebSocketUpgrade, TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS,
   loadPtyProvider, terminalTerminationGraceMs = TERMINATION_GRACE_MS, shutdownProcesses = shutdownTerminalProcesses,
   environmentRuntime = null,
+  broadcastUiEvent = () => {},
   logger = console,
 }) {
   const sessions = new Map();
+  // Invalidation only: clients read the authoritative list without command text.
+  const announceSessionsChanged = () => broadcastUiEvent({ type: 'openchamber:terminal-sessions-changed', properties: {} });
   const pendingSessionCreates = new Map();
   const pendingSessionRestarts = new Map();
   const connections = new Set();
@@ -110,13 +213,7 @@ export function createTerminalRuntime({
 
   const getPtyProvider = async () => {
     if (!ptyProviderPromise) {
-      ptyProviderPromise = loadPtyProvider ? loadPtyProvider() : (async () => {
-        if (typeof globalThis.Bun !== 'undefined') {
-          try { const pty = await import('bun-pty'); return { spawn: pty.spawn, backend: 'bun-pty' }; } catch { /* fall through */ }
-        }
-        const pty = await import('node-pty');
-        return { spawn: pty.spawn, backend: 'node-pty' };
-      })();
+      ptyProviderPromise = (loadPtyProvider ?? loadTerminalPtyProvider)();
     }
     return ptyProviderPromise;
   };
@@ -146,8 +243,9 @@ export function createTerminalRuntime({
         // need no `env -u` below.
         stripAppImageLauncherEnv(env);
         const shellLaunch = buildTerminalShellLaunch(executable, { mode, command, loginShell });
-        // bun-pty merges the native OS environ back in, so the POSIX launch is
-        // wrapped with `env -u` for the variables deleted above.
+        // bun-pty 0.5 gives the child exactly `env`; the POSIX launch is still
+        // wrapped with `env -u` for the variables deleted above, so a backend
+        // that merges the native OS environ cannot bring them back.
         const launch = resolvePosixPtyLaunch(shellLaunch.executable, shellLaunch.args);
         const options = { name: 'xterm-256color', cwd, cols, rows, env };
         if (process.platform === 'win32') options.useConpty = true;
@@ -189,7 +287,44 @@ export function createTerminalRuntime({
 
   const send = (socket, message) => {
     if (socket?.readyState !== 1) return false;
-    try { socket.send(createTerminalWsControlFrame(message), { binary: true }); return true; } catch { return false; }
+    try {
+      const frame = createTerminalWsControlFrame(message);
+      if (socket.bufferedAmount + frame.length > MAX_SOCKET_BUFFER_BYTES) {
+        socket.terminate();
+        return false;
+      }
+      socket.send(frame, { binary: true });
+      return true;
+    } catch { return false; }
+  };
+
+  const flushOutput = (session) => {
+    if (session.outputTimer) clearTimeout(session.outputTimer);
+    session.outputTimer = null;
+    const output = session.pendingOutput;
+    if (!output) return;
+    session.pendingOutput = null;
+    const raw = output.raw.join('');
+    const replay = output.replay.join('');
+    publish(session, { t: 'output', d: raw, ...(raw !== replay ? { r: replay } : {}) });
+  };
+
+  // Output after a quiet spell goes out at once, so a keystroke echo never
+  // waits for the timer. Output that follows within OUTPUT_BATCH_MS joins one
+  // frame, and the window stays open while the burst continues.
+  const openOutputWindow = (session) => {
+    session.outputTimer = setTimeout(() => {
+      session.outputTimer = null;
+      if (!session.pendingOutput) return;
+      flushOutput(session);
+      openOutputWindow(session);
+    }, OUTPUT_BATCH_MS);
+  };
+
+  const discardOutput = (session) => {
+    if (session.outputTimer) clearTimeout(session.outputTimer);
+    session.outputTimer = null;
+    session.pendingOutput = null;
   };
 
   const closeAttachments = (sessionId, code, message) => {
@@ -200,7 +335,7 @@ export function createTerminalRuntime({
   };
 
   const snapshot = (session) => ({
-    t: 'snapshot', v: 3, s: session.id, q: session.sequence, history: session.history,
+    t: 'snapshot', v: 3, s: session.id, q: session.sequence, history: historyText(session.history),
     // The PTY size the history was drawn for: a client replays history at this
     // size before fitting its own viewport, so shell output wrapped for one
     // width never gets re-laid-out at another.
@@ -227,7 +362,7 @@ export function createTerminalRuntime({
     try {
       while (session.eventQueue.length > 0) {
         const event = session.eventQueue.shift();
-        if (event.process !== session.process) continue;
+        if (session.retired || event.process !== session.process) continue;
         if (event.type === 'output') {
           const theme = consumeTerminalThemeQueries(session.pendingThemeControlSequence, event.data, {
             themeMode: session.themeMode,
@@ -240,10 +375,14 @@ export function createTerminalRuntime({
           for (const response of theme.responses) session.process?.write(response);
           const sanitized = sanitizeTerminalHistoryChunk(session.pendingHistoryControlSequence, event.data);
           session.pendingHistoryControlSequence = sanitized.pending;
-          session.history = trimHistory(session.history + sanitized.visible);
+          appendHistory(session.history, sanitized.visible);
           session.lastActivity = Date.now();
-          publish(session, { t: 'output', d: event.data, ...(sanitized.visible !== event.data ? { r: sanitized.visible } : {}) });
+          const output = session.pendingOutput ??= { raw: [], replay: [], chars: 0 };
+          output.raw.push(event.data); output.replay.push(sanitized.visible); output.chars += event.data.length;
+          if (output.chars >= MAX_OUTPUT_BATCH_CHARS) flushOutput(session);
+          else if (!session.outputTimer) { flushOutput(session); openOutputWindow(session); }
         } else {
+          flushOutput(session);
           session.pendingHistoryControlSequence = '';
           session.pendingThemeControlSequence = '';
           session.status = 'exited';
@@ -251,6 +390,7 @@ export function createTerminalRuntime({
           session.signal = Number.isInteger(event.signal) ? event.signal : null;
           session.process = null;
           publish(session, { t: 'exit', exitCode: session.exitCode, signal: session.signal });
+          if (sessions.get(session.id) === session) announceSessionsChanged();
         }
       }
     } finally { session.draining = false; }
@@ -288,7 +428,8 @@ export function createTerminalRuntime({
   const startSession = async (session, { cwd, cols, rows, themeMode = 'dark', terminalBackground, terminalForeground, shell, loginShell, mode = INTERACTIVE_TERMINAL_MODE, command = null, purpose = TERMINAL_PURPOSE }, clear = true) => {
     await validateCwd(cwd);
     const spawned = await spawnPty({ cwd, cols, rows, themeMode, shell, loginShell, mode, command });
-    if (clear) { session.history = ''; session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; }
+    if (clear) { discardOutput(session); session.history = newHistory(); session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; }
+    session.retired = false;
     session.cwd = cwd; session.cols = cols; session.rows = rows; session.process = spawned.process;
     session.backend = spawned.backend; session.shell = spawned.shell; session.loginShell = spawned.loginShell; session.status = 'running'; session.exitCode = null; session.signal = null;
     session.shellExecutable = spawned.shellExecutable;
@@ -352,9 +493,11 @@ export function createTerminalRuntime({
     if (!existing && sessions.size - superseded.length + pendingSessionCreates.size >= MAX_SESSIONS) throw new Error('Maximum terminal sessions reached');
     const pendingEntry = { cwd: resolvedCwd, shell: normalizedShell, loginShell, mode: launchMode.mode, command: launchMode.command, purpose: normalizedPurpose, cancelled: false, promise: null };
     const creation = (async () => {
-      const session = existing ?? { id, sequence: 0, history: '', pendingHistoryControlSequence: '', pendingThemeControlSequence: '', eventQueue: [], draining: false, createdAt: Date.now() };
+      const session = existing ?? { id, sequence: 0, history: newHistory(), pendingHistoryControlSequence: '', pendingThemeControlSequence: '', eventQueue: [], draining: false, createdAt: Date.now() };
       const ptyProcess = await startSession(session, { cwd, cols, rows, themeMode, terminalBackground, terminalForeground, shell: normalizedShell, loginShell, mode: launchMode.mode, command: launchMode.command, purpose: normalizedPurpose });
       if (pendingEntry.cancelled) {
+        session.retired = true;
+        discardOutput(session);
         session.process = null;
         await terminateProcess(ptyProcess, true);
         throw new Error('Terminal session was closed during creation');
@@ -362,9 +505,12 @@ export function createTerminalRuntime({
       for (const previous of superseded) {
         if (sessions.get(previous.id) !== previous || previous.status !== 'exited') continue;
         sessions.delete(previous.id);
+        previous.retired = true;
+        discardOutput(previous);
         closeAttachments(previous.id, 'SUPERSEDED', 'Terminal replaced by a new action run');
       }
       sessions.set(id, session);
+      announceSessionsChanged();
       return session;
     })();
     pendingEntry.promise = creation;
@@ -392,6 +538,7 @@ export function createTerminalRuntime({
       if (message.t === 'attach') {
         const attachment = { initializing: true, pending: [] };
         connection.attachments.set(id, attachment);
+        flushOutput(session);
         const initial = snapshot(session);
         send(socket, initial);
         for (const event of attachment.pending) if (event.q > initial.q) send(socket, event);
@@ -556,9 +703,11 @@ export function createTerminalRuntime({
       }
       session.process = spawned.process; session.backend = spawned.backend; session.shell = spawned.shell; session.loginShell = spawned.loginShell; session.cwd = cwd; session.cols = cols; session.rows = rows;
       session.shellExecutable = spawned.shellExecutable;
-      session.history = ''; session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; session.status = 'running'; session.exitCode = null; session.signal = null; session.eventQueue.length = 0;
+      flushOutput(session);
+      session.history = newHistory(); session.pendingHistoryControlSequence = ''; session.pendingThemeControlSequence = ''; session.themeModeEnabled = false; session.status = 'running'; session.exitCode = null; session.signal = null; session.eventQueue.length = 0;
       session.themeMode = themeMode === 'light' ? 'light' : 'dark'; session.terminalBackground = terminalBackground; session.terminalForeground = terminalForeground;
-       wire(session, spawned.process); void terminateProcess(oldProcess); publish(session, { t: 'restarted', history: '' });
+      wire(session, spawned.process); void terminateProcess(oldProcess); publish(session, { t: 'restarted', history: '' });
+      announceSessionsChanged();
     });
     pendingSessionRestarts.set(session.id, restart);
     try {
@@ -580,6 +729,9 @@ export function createTerminalRuntime({
       return res.json({ success: true });
     }
     sessions.delete(session.id);
+    announceSessionsChanged();
+    flushOutput(session);
+    session.retired = true;
     closeAttachments(session.id, 'CLOSED', 'Terminal closed');
     await terminateProcess(session.process);
     res.json({ success: true });
@@ -589,9 +741,10 @@ export function createTerminalRuntime({
     const killedSessionIds = [];
     for (const [id, session] of sessions) {
       if ((sessionId && id !== sessionId) || (!sessionId && cwd && session.cwd !== cwd)) continue;
-      sessions.delete(id); closeAttachments(id, 'KILLED', 'Terminal was killed'); void terminateProcess(session.process, true); killedSessionIds.push(id); killedCount += 1;
+      sessions.delete(id); flushOutput(session); session.retired = true; closeAttachments(id, 'KILLED', 'Terminal was killed'); void terminateProcess(session.process, true); killedSessionIds.push(id); killedCount += 1;
     }
     res.json({ success: true, killedCount, killedSessionIds });
+    if (killedCount > 0) announceSessionsChanged();
   });
 
   const idleSweep = setInterval(() => {
@@ -599,13 +752,15 @@ export function createTerminalRuntime({
     for (const [id, session] of sessions) {
       const attached = [...connections].some((connection) => connection.attachments.has(id));
       if (!attached && now - session.lastActivity > IDLE_TIMEOUT_MS) {
-        sessions.delete(id); closeAttachments(id, 'IDLE_TIMEOUT', 'Terminal expired after being idle'); void terminateProcess(session.process, true);
+        sessions.delete(id); session.retired = true; discardOutput(session); closeAttachments(id, 'IDLE_TIMEOUT', 'Terminal expired after being idle'); void terminateProcess(session.process, true);
+        announceSessionsChanged();
       }
     }
   }, 5 * 60 * 1000);
 
   const stop = async () => {
     server.off('upgrade', upgradeHandler); clearInterval(idleSweep);
+    for (const session of sessions.values()) { session.retired = true; discardOutput(session); }
     for (const client of wsServer?.clients ?? []) client.terminate();
     for (const pending of pendingSessionCreates.values()) pending.cancelled = true;
     await Promise.allSettled([
@@ -615,7 +770,9 @@ export function createTerminalRuntime({
     const terminals = [...sessions.values()]
       .filter(session => session.status === 'running' && session.process)
       .map(session => ({ process: session.process, shellExecutable: session.shellExecutable }));
+    const hadSessions = sessions.size > 0;
     sessions.clear();
+    if (hadSessions) announceSessionsChanged();
     await shutdownProcesses(terminals);
     await Promise.allSettled([...pendingTerminations]);
     if (!wsServer) return;

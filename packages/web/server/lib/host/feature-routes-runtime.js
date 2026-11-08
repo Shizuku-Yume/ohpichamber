@@ -553,6 +553,16 @@ export const createFeatureRoutesRuntime = () => {
         { name: 'withdraw an extension Git host', listener: (event) => extensionSourceControlProviders.deactivated(event) },
       ]),
       onGuestActivated: () => extensionSourceControlProviders.reconcile(),
+      onGuestsChanged: () => {
+        const clients = getOpenChamberEventClients();
+        for (const client of clients) {
+          try {
+            writeSseEvent(client, { type: 'openchamber:guests-changed', properties: {} });
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
       surfaceViewerHeaders,
       trackers,
     });

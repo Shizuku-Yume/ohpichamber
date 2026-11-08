@@ -33,14 +33,20 @@ const historyPage = (messages = [], turns = []) => ({
   turns, messages, nextCursor: null,
 });
 const settledHistory = (model, finishedAt = NOW - 60_000) => historyPage([
-  { messageId: 'user_1', sessionId: 's1', turnId: 'turn_1', role: 'user', createdAt: finishedAt - 1000,
-    parts: [{ partId: 'user_text', type: 'text', content: 'Investigate the regression.' }] },
-  { messageId: 'answer_1', sessionId: 's1', turnId: 'turn_1', role: 'assistant', createdAt: finishedAt - 100,
+  {
+    messageId: 'user_1', sessionId: 's1', turnId: 'turn_1', role: 'user', createdAt: finishedAt - 1000,
+    parts: [{ partId: 'user_text', type: 'text', content: 'Investigate the regression.' }]
+  },
+  {
+    messageId: 'answer_1', sessionId: 's1', turnId: 'turn_1', role: 'assistant', createdAt: finishedAt - 100,
     providerId: model.providerID, modelId: model.modelID,
     parts: [{ partId: 'answer_text', type: 'text', content: 'The bounded fix is ready.' },
-      { partId: 'answer_tool', type: 'tool_result', toolCallId: 'tool_1', toolName: 'bash', output: 'private tool output', isError: false }] },
-], [{ turnId: 'turn_1', sessionId: 's1', runId: 'run_1', status: 'completed',
-  userMessageId: 'user_1', assistantMessageIds: ['answer_1'], startedAt: finishedAt - 1000, finishedAt }]);
+    { partId: 'answer_tool', type: 'tool_result', toolCallId: 'tool_1', toolName: 'bash', output: 'private tool output', isError: false }]
+  },
+], [{
+  turnId: 'turn_1', sessionId: 's1', runId: 'run_1', status: 'completed',
+  userMessageId: 'user_1', assistantMessageIds: ['answer_1'], startedAt: finishedAt - 1000, finishedAt
+}]);
 const catalogModel = (model, variants) => ({
   provider: model.providerID, modelId: model.modelID, name: model.modelID,
   modalities: ['text'], contextWindow: 128_000, maxOutputTokens: 8_000,
@@ -77,23 +83,28 @@ const makeRuntime = async ({
       }
       if (url.pathname === '/api/agent/v1/workspaces/workspace_a/models') {
         if (state.catalog instanceof Error) return Response.json({ detail: state.catalog.message, code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
-        return Response.json({ workspaceId: SCOPE.workspaceId, revision: '1', models: state.catalog, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: true });
+        return Response.json({ workspaceId: SCOPE.workspaceId, revision: '1', models: state.catalog, imageModels: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: true });
       }
       if (url.pathname === '/api/agent/v1/workspaces/workspace_a/providers') {
         if (state.providerError) return Response.json({ detail: state.providerError.message, code: 'SERVICE_UNAVAILABLE' }, { status: 503 });
-        return Response.json({ workspaceId: SCOPE.workspaceId, revision: '1',
-          providers: Object.keys(state.credentials).map((providerId) => ({ providerId, name: providerId,
+        return Response.json({
+          workspaceId: SCOPE.workspaceId, revision: '1',
+          providers: Object.keys(state.credentials).map((providerId) => ({
+            providerId, name: providerId,
             endpoint: null, protocol: null, authMethods: ['api-key'],
-            auth: { status: 'configured', method: 'api-key', source: 'stored-credential', credentialRef: `cred_${providerId}` } })),
+            auth: { status: 'configured', method: 'api-key', source: 'stored-credential', credentialRef: `cred_${providerId}` }
+          })),
         });
       }
       throw new Error(`Unexpected Agent Service operation: ${resource}`);
     }),
   };
-  const jev = { ask: vi.fn(async () => {
-    if (state.askError) throw state.askError;
-    return { answers: state.answers, ms: 12 };
-  }) };
+  const jev = {
+    ask: vi.fn(async () => {
+      if (state.askError) throw state.askError;
+      return { answers: state.answers, ms: 12 };
+    })
+  };
   const resolveCredential = vi.fn(async (selection) => {
     if (state.credentialError) throw state.credentialError;
     return state.credentials[selection.providerId];
@@ -283,11 +294,15 @@ describe('prompt-cache hysteresis from settled native history', () => {
     expect((await route({ choice: 'docs', config })).decision.category).toBe('docs');
   });
   it('ignores unfinished answers and uses the most recent settled model even when another request is pending', async () => {
-    const pending = { messageId: 'pending', sessionId: 's1', turnId: 'turn_pending', role: 'user', createdAt: NOW,
-      parts: [{ partId: 'pending_text', type: 'text', content: 'push it' }] };
+    const pending = {
+      messageId: 'pending', sessionId: 's1', turnId: 'turn_pending', role: 'user', createdAt: NOW,
+      parts: [{ partId: 'pending_text', type: 'text', content: 'push it' }]
+    };
     const settled = settledHistory(HARD);
-    const pendingTurn = { turnId: 'turn_pending', sessionId: 's1', runId: 'run_pending', status: 'running',
-      userMessageId: 'pending', assistantMessageIds: [], startedAt: NOW };
+    const pendingTurn = {
+      turnId: 'turn_pending', sessionId: 's1', runId: 'run_pending', status: 'running',
+      userMessageId: 'pending', assistantMessageIds: [], startedAt: NOW
+    };
     expect((await route({ history: historyPage([...settled.messages, pending], [...settled.turns, pendingTurn]) })).decision.category).toBe('hard');
     const unfinished = settledHistory(HARD);
     unfinished.turns[0].status = 'running';
@@ -303,17 +318,21 @@ describe('prompt-cache hysteresis from settled native history', () => {
 });
 
 describe('permission safety', () => {
-  const permission = { approvalId: 'approval_a', sessionId: 's1', turnId: 'turn_a', toolCallId: 'tool_a',
+  const permission = {
+    approvalId: 'approval_a', sessionId: 's1', turnId: 'turn_a', toolCallId: 'tool_a',
     version: '1', epoch: '1', workerGeneration: 'worker_a', requestedAt: NOW, status: 'pending',
     toolName: 'bash', actionType: 'bash_command', commandSummary: 'git push --force origin main',
-    details: { command: 'git push --force origin main' } };
+    details: { command: 'git push --force origin main' }
+  };
   it('holds risky requests across reconciliation, and forgets them after resolution', async () => {
     const { runtime, jev, state } = await makeRuntime({ answers: { ask: { noul: 0.9 }, kind: { choice: 'git_history' } } });
     expect(await runtime.evaluatePermission(permission)).toEqual({ action: 'hold', score: 0.9, kind: 'git_history' });
     state.answers = { ask: { noul: 0.1 } };
     expect(await runtime.evaluatePermission(permission)).toEqual({ action: 'hold', score: 0.9, kind: 'git_history' });
-    expect(jev.ask.mock.calls[0][0].state.permission).toEqual({ type: 'bash_command', toolName: 'bash',
-      commandSummary: permission.commandSummary, details: permission.details });
+    expect(jev.ask.mock.calls[0][0].state.permission).toEqual({
+      type: 'bash_command', toolName: 'bash',
+      commandSummary: permission.commandSummary, details: permission.details
+    });
     expect(jev.ask).toHaveBeenCalledTimes(1);
     expect(runtime.heldPermissions()).toEqual([{ permissionId: 'approval_a', score: 0.9, kind: 'git_history' }]);
     runtime.forgetPermission(permission.approvalId);
@@ -455,9 +474,11 @@ describe('classifier policy and durable settings', () => {
     expect(resolveCredential).not.toHaveBeenCalled();
   });
   it('describes catalog presence without resolving keys, then resolves only the selected provider at use time', async () => {
-    const { runtime, state, resolveCredential, jev } = await makeRuntime({ token: null, classifierSource: 'openrouter', credentials: {
-      openrouter: { type: 'api_key', key: 'private-key' }, 'vercel-ai-gateway': { type: 'api_key', key: 'unselected-secret' },
-    } });
+    const { runtime, state, resolveCredential, jev } = await makeRuntime({
+      token: null, classifierSource: 'openrouter', credentials: {
+        openrouter: { type: 'api_key', key: 'private-key' }, 'vercel-ai-gateway': { type: 'api_key', key: 'unselected-secret' },
+      }
+    });
     const described = await runtime.describe(SCOPE.workspaceId);
     expect(described).toMatchObject({ jevAvailable: true, classification: { effective: 'openrouter' } });
     expect(resolveCredential).not.toHaveBeenCalled();
@@ -497,10 +518,12 @@ describe('classifier probe and HTTP boundary', () => {
   });
   it('sends the selected endpoint credentials only in HTTP authorization and sends its exact URL/model', async () => {
     const requests = [];
-    const client = createJevClient({ fetchImpl: async (url, init) => {
-      requests.push({ url, headers: init.headers, body: JSON.parse(init.body) });
-      return Response.json({ answers: { probe: { choice: 'blue', confidence: 0.98 } } });
-    } });
+    const client = createJevClient({
+      fetchImpl: async (url, init) => {
+        requests.push({ url, headers: init.headers, body: JSON.parse(init.body) });
+        return Response.json({ answers: { probe: { choice: 'blue', confidence: 0.98 } } });
+      }
+    });
     const endpoint = classifierEndpoint('custom', { customEndpoint: { url: 'https://company.example/arbitrary/decision', model: 'jev-org', key: 'private-key' } });
     await client.ask({ state: {}, questions: {} }, endpoint);
     expect(requests[0]).toMatchObject({ url: endpoint.url, headers: { authorization: 'Bearer private-key' }, body: { model: 'jev-org' } });

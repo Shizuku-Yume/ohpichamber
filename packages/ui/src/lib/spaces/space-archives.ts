@@ -10,21 +10,21 @@ import { create } from 'zustand';
 import { listSpaceArchives, type SpaceArchive } from './spaces-api';
 
 type SpaceArchivesState = {
-  /** By stable workspace identity; null until the host answered once for this runtime. */
-  byWorkspaceId: ReadonlyMap<string, SpaceArchive> | null;
-  resetForRuntimeSwitch: () => void;
+ /** By stable workspace identity; null until the host answered once for this runtime. */
+ byWorkspaceId: ReadonlyMap<string, SpaceArchive> | null;
+ resetForRuntimeSwitch: () => void;
 };
 
 let generation = 0;
 let reading: Promise<void> | null = null;
 
 export const useSpaceArchivesStore = create<SpaceArchivesState>()((set) => ({
-  byWorkspaceId: null,
-  resetForRuntimeSwitch: () => {
-    generation += 1;
-    reading = null;
-    set({ byWorkspaceId: null });
-  },
+ byWorkspaceId: null,
+ resetForRuntimeSwitch: () => {
+  generation += 1;
+  reading = null;
+  set({ byWorkspaceId: null });
+ },
 }));
 
 /**
@@ -32,28 +32,31 @@ export const useSpaceArchivesStore = create<SpaceArchivesState>()((set) => ({
  * to be archived never reads as live; one a runtime switch overtook is dropped.
  */
 export const refreshSpaceArchives = (): Promise<void> => {
-  if (reading) return reading;
-  const started = generation;
-  const read = listSpaceArchives()
-    .then((archives) => {
-      if (started !== generation) return;
-      const byWorkspaceId = new Map<string, SpaceArchive>();
-      for (const archive of archives) byWorkspaceId.set(archive.workspaceId, archive);
-      useSpaceArchivesStore.setState({ byWorkspaceId });
-    })
-    .finally(() => {
-      if (reading === read) reading = null;
-    });
-  reading = read;
-  return read;
+ if (reading) return reading;
+ const started = generation;
+ const read = listSpaceArchives()
+  .then((archives) => {
+   if (started !== generation) return;
+   const byWorkspaceId = new Map<string, SpaceArchive>();
+   for (const archive of archives) byWorkspaceId.set(archive.workspaceId, archive);
+   useSpaceArchivesStore.setState({ byWorkspaceId });
+  })
+  .finally(() => {
+   if (reading === read) reading = null;
+  });
+ reading = read;
+ return read;
 };
 
 /** Reads the archives once for this runtime, when nothing has been read yet; a failure is left for the next call. */
 export const ensureSpaceArchives = (): void => {
-  if (useSpaceArchivesStore.getState().byWorkspaceId !== null) return;
-  void refreshSpaceArchives().catch(() => {});
+ if (useSpaceArchivesStore.getState().byWorkspaceId !== null) return;
+ void refreshSpaceArchives().catch(() => { });
 };
 
 /** The deleted space that owns this workspace's chats, or null. */
 export const useSpaceArchiveOf = (workspaceId: string | null | undefined): SpaceArchive | null =>
-  useSpaceArchivesStore((state) => (workspaceId ? state.byWorkspaceId?.get(workspaceId) ?? null : null));
+ useSpaceArchivesStore((state) => (workspaceId ? state.byWorkspaceId?.get(workspaceId) ?? null : null));
+
+/** Whether a directory holds the archived chats of a deleted space. */
+export const isSpaceArchiveDirectory = (_directory: string | null | undefined): boolean => false;

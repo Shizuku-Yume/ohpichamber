@@ -22,6 +22,7 @@ import { registerMessageSearchRoutes } from '../message-search/routes.js';
 import { registerMessageQueueRoutes } from '../message-queue/runtime.js';
 import { registerRoutingRoutes } from '../routing/routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
+import { createThemeFolderWatch } from './theme-watch.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
 import { createTrackedItemsService } from '../tracked-items/service.js';
@@ -58,6 +59,7 @@ import { createSourceControlAuditStore } from '../source-control/audit-storage.j
 
 export const createFeatureRoutesRuntime = () => {
   let skillRepositoryDependencies = null;
+  let themeFolderWatch = null;
   const gitRuntimeIdentity = Object.freeze({
     id: `server_${crypto.randomUUID()}`,
     platform: process.env.OPENCHAMBER_RUNTIME === 'desktop' ? 'desktop' : 'web',
@@ -199,6 +201,26 @@ export const createFeatureRoutesRuntime = () => {
       saveImportedTheme,
       deleteImportedTheme,
     });
+
+    const customThemesDir = routeDependencies.themesDir ?? (openchamberUserConfigRoot ? path.join(openchamberUserConfigRoot, 'themes') : null);
+    themeFolderWatch?.stop();
+    themeFolderWatch = customThemesDir
+      ? createThemeFolderWatch({
+        fsPromises,
+        path,
+        themesDir: customThemesDir,
+        onChange: () => {
+          const clients = getOpenChamberEventClients();
+          for (const client of clients) {
+            try {
+              writeSseEvent(client, { type: 'openchamber:themes-changed', properties: {} });
+            } catch {
+              clients.delete(client);
+            }
+          }
+        },
+      })
+      : null;
 
     registerMessageQueueRoutes(app, messageQueueRuntime, { resolveSessionScope: resolveHostSessionScope, listQueueScopes });
     registerRoutingRoutes(app, routingRuntime);
@@ -631,5 +653,13 @@ export const createFeatureRoutesRuntime = () => {
     },
     /** Writes the Git credential helper's endpoint file; a no-op until the Git routes are registered. */
     publishRepositoryCredentialEndpoint: async () => { await gitRepositoryCredentialRuntime?.publish(); },
+    dispose() {
+      themeFolderWatch?.stop();
+      themeFolderWatch = null;
+    },
+    stopThemeWatch() {
+      themeFolderWatch?.stop();
+      themeFolderWatch = null;
+    },
   };
 };

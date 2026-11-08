@@ -793,8 +793,8 @@ const agentMemoryRuntime = createAgentMemoryRuntime({
  * that still reads or writes the store.
  */
 const isAgentMemoryEnabled = async () => {
-  const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return settings?.agentMemoryToolEnabled === true;
+ const settings = await readSettingsFromDiskMigrated().catch(() => null);
+ return settings?.agentMemoryToolEnabled === true;
 };
 
 
@@ -1478,7 +1478,10 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  getSpacesHost: () => spacesHost,
 });
 
-const gracefulShutdown = (...args) => gracefulShutdownRuntime.gracefulShutdown(...args);
+const gracefulShutdown = (...args) => {
+ featureRoutesRuntime.dispose();
+ return gracefulShutdownRuntime.gracefulShutdown(...args);
+};
 
 async function main(options = {}) {
  await hostSessionState.initialize();
@@ -2027,6 +2030,7 @@ async function main(options = {}) {
  });
 
  await featureRoutesRuntime.registerRoutes(app, {
+  themesDir: OPENCHAMBER_USER_THEMES_DIR,
   environmentStore,
   environmentRuntime,
   listConfiguredProjects,

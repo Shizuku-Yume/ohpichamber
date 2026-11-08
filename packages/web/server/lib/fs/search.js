@@ -28,10 +28,11 @@ const shouldSkipSearchDirectory = (name, includeHidden) => {
   return FILE_SEARCH_EXCLUDED_DIRS.has(name.toLowerCase());
 };
 
-const listDirectoryEntries = async (dirPath, fsPromises) => {
+const listDirectoryEntries = async (dirPath, fsPromises, strict) => {
   try {
     return await fsPromises.readdir(dirPath, { withFileTypes: true });
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return [];
   }
 };
@@ -104,9 +105,6 @@ export const createGitCheckIgnoreTimeoutMs = () => {
 
 export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinaryForSpawn, workspaceSearch = false }) => {
   const gitCheckIgnoreTimeoutMs = createGitCheckIgnoreTimeoutMs();
-  const readDirectory = (directory) => workspaceSearch
-    ? fsPromises.readdir(directory, { withFileTypes: true })
-    : listDirectoryEntries(directory, fsPromises);
 
   const readIgnoredPaths = async (directory, names, signal) => {
     if ((!workspaceSearch && names.length === 0) || signal?.aborted) return new Set();
@@ -150,7 +148,7 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
         child.on('close', () => finish(stdout));
         child.on('error', () => finish(''));
         if (!workspaceSearch) {
-          child.stdin.on('error', () => {});
+          child.stdin.on('error', () => { });
           child.stdin.end(`${names.join('\0')}\0`);
         }
       });
@@ -161,7 +159,7 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
   };
 
   const searchFilesystemFiles = async (rootPath, options) => {
-    const { limit, query, includeHidden, respectGitignore, signal } = options;
+    const { limit, query, includeHidden, respectGitignore, type = 'file', signal, strict = false } = options;
     const includeHiddenEntries = Boolean(includeHidden);
     const normalizedQuery = query.trim().toLowerCase();
     const matchAll = normalizedQuery.length === 0;
@@ -189,7 +187,12 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
       const batch = queue.splice(0, FILE_SEARCH_MAX_CONCURRENCY);
 
       const dirResults = await Promise.all(batch.map(async ({ dir, gitRoot }) => {
-        const dirents = await readDirectory(dir);
+        // The walk's root is the search the caller asked for, not one entry
+        // among many: a workspace search that cannot read it must fail
+        // rather than answer as if the tree were empty.
+        const dirents = dir === rootPath && workspaceSearch
+          ? await fsPromises.readdir(dir, { withFileTypes: true })
+          : await listDirectoryEntries(dir, fsPromises, strict && dir === rootPath);
         // A nested checkout has its own index and ignore rules.
         if (!workspaceSearch || dirents.some((entry) => entry.name === '.git')) gitRoot = dir;
         if (workspaceSearch && shouldRespectGitignore && !ignoredByRoot.has(gitRoot)) {
@@ -225,10 +228,8 @@ export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinar
               visited.add(entryPath);
               queue.push({ dir: entryPath, gitRoot });
             }
-            continue;
-          }
-
-          if (!dirent.isFile()) {
+            if (type !== 'directory') continue;
+          } else if (type === 'directory' || !dirent.isFile()) {
             continue;
           }
 

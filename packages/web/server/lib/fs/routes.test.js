@@ -2561,13 +2561,13 @@ describe('GET /api/fs/search', () => {
 
   it('honors both toggles including gitignored build directories', async () => {
     const ask = await register();
-    expect((await ask({ query: 'needle' })).body.files.map((file) => file.relativePath)).toEqual(['needle.ts']);
-    expect((await ask({ query: 'needle', includeHidden: 'true' })).body.files.map((file) => file.relativePath).sort())
+    expect((await ask({ query: 'needle' })).body.map((file) => file.relativePath)).toEqual(['needle.ts']);
+    expect((await ask({ query: 'needle', includeHidden: 'true' })).body.map((file) => file.relativePath).sort())
       .toEqual(['.needle.ts', 'needle.ts']);
     const expanded = await ask({ query: 'needle', respectGitignore: 'false' });
-    expect(expanded.body.files.map((file) => file.relativePath).sort()).toEqual(['build/needle.ts', 'needle.ts']);
+    expect(expanded.body.map((file) => file.relativePath).sort()).toEqual(['build/needle.ts', 'needle.ts']);
     expect(expanded.getHeader('cache-control')).toBe('no-store');
-    expect((await ask({ query: 'needle', includeHidden: 'true', respectGitignore: 'false', limit: '1' })).body.files).toHaveLength(1);
+    expect((await ask({ query: 'needle', includeHidden: 'true', respectGitignore: 'false', limit: '1' })).body).toHaveLength(1);
   });
 
   it('stops the walk and sends nothing once the client closes the response', async () => {
@@ -2617,7 +2617,7 @@ describe('GET /api/fs/search', () => {
     try {
       const ask = await register();
       const response = await ask({ directory: link, query: 'needle', respectGitignore: 'false' });
-      expect(response.body.files.every((file) => file.path.startsWith(`${link}${path.sep}`))).toBe(true);
+      expect(response.body.every((file) => file.path.startsWith(`${link}${path.sep}`))).toBe(true);
       expect((await ask({ directory: path.join(repo, 'absent') })).statusCode).toBe(404);
     } finally {
       await rm(link, { force: true });
@@ -2646,7 +2646,7 @@ describe('GET /api/fs/search', () => {
     await nativeFs.writeFile(path.join(nested, 'keep-needle.ts'), '');
     await nativeFs.writeFile(path.join(nested, 'drop-needle.ts'), '');
 
-    const files = (await ask({ query: 'needle', includeHidden: 'true' })).body.files;
+    const files = (await ask({ query: 'needle', includeHidden: 'true' })).body;
     expect(files.map((file) => file.relativePath)).toEqual([
       'needle.ts', '.needle.ts', 'src/keep-needle.ts', 'nested/keep-needle.ts', 'build/tracked-needle.ts',
     ]);
@@ -2654,27 +2654,79 @@ describe('GET /api/fs/search', () => {
   });
 
   it('refreshes ignore rules on the next query and isolates requested directories', async () => {
-    const other = await mkdtemp(path.join(tmpdir(), 'oc-file-search-other-'));
+    await mkdir(path.join(repo, 'src'));
+    await nativeFs.writeFile(path.join(repo, 'src/needle.ts'), '');
     try {
-      execFileSync('git', ['init', '-q'], { cwd: other });
-      await nativeFs.writeFile(path.join(other, 'needle.ts'), '');
       const ask = await register();
-      expect((await ask({ query: 'needle' })).body.files.map((file) => file.relativePath)).toEqual(['needle.ts']);
+      expect((await ask({ query: 'needle', respectGitignore: 'false' })).body.map((file) => file.relativePath).sort())
+        .toEqual(['build/needle.ts', 'needle.ts', 'src/needle.ts']);
       await nativeFs.writeFile(path.join(repo, '.gitignore'), 'build/\nneedle.ts\n');
-      expect((await ask({ query: 'needle' })).body.files).toEqual([]);
-      expect((await ask({ directory: other, query: 'needle' })).body.files.map((file) => file.relativePath)).toEqual(['needle.ts']);
+      expect((await ask({ query: 'needle' })).body).toEqual([]);
+      expect((await ask({ directory: path.join(repo, 'src'), query: 'needle', respectGitignore: 'false' })).body.map((file) => file.relativePath)).toEqual(['needle.ts']);
     } finally {
-      await rm(other, { recursive: true, force: true });
+      await rm(path.join(repo, 'src'), { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a search root outside the workspace instead of enumerating it', async () => {
+    const outside = await mkdtemp(path.join(tmpdir(), 'oc-file-search-outside-'));
+    try {
+      await nativeFs.writeFile(path.join(outside, 'secret-needle.txt'), '');
+      const ask = await register();
+      const response = await ask({ directory: outside, query: 'needle' });
+      expect(response.statusCode).toBe(400);
+      expect(response.body).toEqual({ error: 'Path is outside of active workspace' });
+      // A symlink that leaves the workspace is refused on its canonical target.
+      const escapeLink = `${repo}-escape`;
+      await nativeFs.symlink(outside, escapeLink);
+      try {
+        expect((await ask({ directory: escapeLink, query: 'needle' })).statusCode).toBe(400);
+      } finally {
+        await rm(escapeLink, { force: true });
+      }
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('reports a root readdir failure instead of answering an empty search', async () => {
+    const root = await nativeFs.realpath(repo);
+    const fsPromises = {
+      ...nativeFs,
+      readdir: vi.fn(async (target, options) => {
+        if (target === root) {
+          const error = new Error('root unavailable');
+          error.code = 'EACCES';
+          throw error;
+        }
+        return nativeFs.readdir(target, options);
+      }),
+    };
+    const ask = await register({ fsPromises });
+    const response = await ask({ query: 'needle' });
+    expect(response.statusCode).toBe(403);
+    expect(response.body).toEqual({ error: 'Access to directory denied', reason: 'os-permission' });
+  });
+
+  it('returns directories when the client asks for them', async () => {
+    await mkdir(path.join(repo, 'src'));
+    try {
+      const ask = await register();
+      expect((await ask({ query: 'src', type: 'directory', respectGitignore: 'false' })).body.map((hit) => hit.relativePath))
+        .toEqual(['src']);
+      expect((await ask({ query: 'src', type: 'file', respectGitignore: 'false' })).body).toEqual([]);
+    } finally {
+      await rm(path.join(repo, 'src'), { recursive: true, force: true });
     }
   });
 
   it('respects an ignored search root while retaining tracked exceptions', async () => {
     const ask = await register();
     const query = { directory: path.join(repo, 'build'), query: 'needle' };
-    expect((await ask(query)).body.files).toEqual([]);
+    expect((await ask(query)).body).toEqual([]);
     await nativeFs.writeFile(path.join(repo, 'build/other-needle.ts'), '');
     execFileSync('git', ['add', '-f', 'build/needle.ts'], { cwd: repo });
-    expect((await ask(query)).body.files.map((file) => file.relativePath)).toEqual(['needle.ts']);
+    expect((await ask(query)).body.map((file) => file.relativePath)).toEqual(['needle.ts']);
   });
 });
 

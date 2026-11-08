@@ -465,6 +465,149 @@ describe('canonical scheduled execution', () => {
   h.runtime.stop();
  });
 });
+describe('scheduled worktree cleanup', () => {
+ const makeProject = async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'oc-scheduled-worktree-'));
+  const projectPath = path.join(tempRoot, 'repo');
+  await mkdir(projectPath, { recursive: true });
+  const projectConfigRuntime = await createProjectConfigRuntime({
+   fsPromises: await import('fs/promises'),
+   path,
+   projectsDirPath: path.join(tempRoot, 'config'),
+   createTaskID: () => 'task-fixed-id',
+  });
+  return { tempRoot, projectPath, projectConfigRuntime, cleanup: () => rm(tempRoot, { recursive: true, force: true }) };
+ };
+
+ const baseTask = (overrides = {}) => ({
+  id: 'task', name: 'Daily', enabled: false, schedule: { kind: 'daily', times: ['09:00'], timezone: 'UTC' },
+  execution: { prompt: 'Do the work', providerID: 'provider', modelID: 'model' }, state: {}, runInWorktree: true, ...overrides,
+ });
+
+ const scopeFor = (directory) => ({ hostProjectId: 'host-project', projectId: 'project', workspaceId: 'workspace', cwd: directory });
+
+ const makeRuntime = ({ projectConfigRuntime, projectPath, workspace, sessionService, overrides = {} }) => {
+  const removeCalls = [];
+  const runtime = createScheduledTasksRuntime({
+   projectConfigRuntime,
+   listProjects: async () => [{ id: 'host-project', path: projectPath }],
+   listWorkspaceScopes: async () => ({ items: [{ workspaceId: workspace.workspaceId }], errors: {} }),
+   resolveWorkspaceScope: async () => workspace,
+   sessionService,
+   messageQueueRuntime: { hasScheduledTask: async () => false, getState: async () => ({ revision: '0', items: [] }), append: async () => { }, cancelScheduledTask: async () => { } },
+   createTaskWorktree: async () => ({ directory: workspace.cwd, branch: 'feature/task' }),
+   removeTaskWorktree: async (input) => { removeCalls.push(input); },
+   isGitRepository: async () => true,
+   logger: { warn() { }, info() { } },
+   ...overrides,
+  });
+  return { runtime, removeCalls };
+ };
+
+ it('removes the run worktree and its branch when dispatch fails after creation', async () => {
+  const project = await makeProject();
+  try {
+   const workspace = scopeFor(project.projectPath);
+   const sessionService = { create: async () => { throw new Error('Session creation failed'); }, send: async () => { throw new Error('unreachable'); } };
+   await project.projectConfigRuntime.upsertScheduledTask('host-project', baseTask());
+   const { runtime, removeCalls } = makeRuntime({ ...project, workspace, sessionService });
+   await runtime.syncProject('host-project');
+   const result = await runtime.runNow('host-project', 'task');
+   expect(result).toMatchObject({ ok: false, error: 'Session creation failed' });
+   expect(removeCalls).toEqual([{
+    projectDirectory: project.projectPath,
+    worktreeDirectory: workspace.cwd,
+    branch: 'feature/task',
+    deleteLocalBranch: true,
+   }]);
+   expect(await project.projectConfigRuntime.listScheduledWorktreeCleanups()).toEqual([]);
+   runtime.stop();
+  } finally {
+   await project.cleanup();
+  }
+ });
+
+ it('removes the failed run worktree even when the task keeps worktrees', async () => {
+  const project = await makeProject();
+  try {
+   const workspace = scopeFor(project.projectPath);
+   const sessionService = { create: async () => { throw new Error('Session creation failed'); }, send: async () => { throw new Error('unreachable'); } };
+   await project.projectConfigRuntime.upsertScheduledTask('host-project', baseTask({ cleanupWorktree: false }));
+   const { runtime, removeCalls } = makeRuntime({ ...project, workspace, sessionService });
+   await runtime.syncProject('host-project');
+   expect(await runtime.runNow('host-project', 'task')).toMatchObject({ ok: false });
+   // No usable run exists, so nothing may keep the worktree.
+   expect(removeCalls).toEqual([{
+    projectDirectory: project.projectPath,
+    worktreeDirectory: workspace.cwd,
+    branch: 'feature/task',
+    deleteLocalBranch: true,
+   }]);
+   runtime.stop();
+  } finally {
+   await project.cleanup();
+  }
+ });
+
+ it('journals a kept worktree and removes it once its session is idle', async () => {
+  const project = await makeProject();
+  try {
+   const workspace = scopeFor(project.projectPath);
+   const sessionService = {
+    create: async () => ({ session: { sessionId: 'run-session', rootSessionId: 'run-session', projectId: workspace.projectId, workspaceId: workspace.workspaceId, displayPath: '.', createdAt: 1, updatedAt: 1, epoch: 'epoch', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }, metadata: null, metadataRevision: '0', archiveRevision: '0' } }),
+    send: async (sessionId) => ({ run: { sessionId, runId: 'run', status: 'running', createdAt: 1 } }),
+    open: async () => ({ session: { runtimeStatus: 'idle' } }),
+   };
+   const { runtime, removeCalls } = makeRuntime({ ...project, workspace, sessionService });
+   await project.projectConfigRuntime.upsertScheduledTask('host-project', baseTask());
+   await runtime.syncProject('host-project');
+   expect(await runtime.runNow('host-project', 'task')).toMatchObject({ ok: true, sessionID: 'run-session' });
+   const records = await project.projectConfigRuntime.listScheduledWorktreeCleanups();
+   expect(records).toHaveLength(1);
+   expect(records[0]).toMatchObject({
+    projectID: 'host-project', worktreeDirectory: workspace.cwd, sessionID: 'run-session', branch: 'feature/task',
+   });
+   await vi.waitFor(() => expect(removeCalls).toHaveLength(1));
+   await vi.waitFor(async () => expect(await project.projectConfigRuntime.listScheduledWorktreeCleanups()).toEqual([]));
+   runtime.stop();
+  } finally {
+   await project.cleanup();
+  }
+ });
+
+ it('resumes a journal record left by a previous process', async () => {
+  const project = await makeProject();
+  try {
+   const worktreeDirectory = path.join(project.tempRoot, 'worktree');
+   await mkdir(worktreeDirectory, { recursive: true });
+   const info = await stat(worktreeDirectory, { bigint: true });
+   const identity = `${info.dev}:${info.ino}`;
+   await project.projectConfigRuntime.saveScheduledWorktreeCleanup('host-project', {
+    projectDirectory: project.projectPath, worktreeDirectory, sessionID: 'old-session',
+    branch: 'feature/old', startedAt: 1, directoryIdentity: identity, ownerPID: 0, phase: 'waiting',
+   });
+   const removeCalls = [];
+   const runtime = createScheduledTasksRuntime({
+    projectConfigRuntime: project.projectConfigRuntime,
+    listProjects: async () => [{ id: 'host-project', path: project.projectPath }],
+    listWorkspaceScopes: async () => ({ items: [], errors: {} }),
+    resolveWorkspaceScope: async () => null,
+    sessionService: { open: async () => { throw { statusCode: 404 }; } },
+    messageQueueRuntime: { hasScheduledTask: async () => false, getState: async () => ({ revision: '0', items: [] }), append: async () => { }, cancelScheduledTask: async () => { } },
+    removeTaskWorktree: async (input) => { removeCalls.push(input); },
+    logger: { warn() { }, info() { } },
+   });
+   await runtime.start();
+   await vi.waitFor(() => expect(removeCalls).toHaveLength(1));
+   expect(removeCalls[0]).toMatchObject({ worktreeDirectory, branch: 'feature/old', deleteLocalBranch: true });
+   await vi.waitFor(async () => expect(await project.projectConfigRuntime.listScheduledWorktreeCleanups()).toEqual([]));
+   runtime.stop();
+  } finally {
+   await project.cleanup();
+  }
+ });
+});
+
 describe('managed chat directory authority', () => {
  it('rejects a date-directory alias before creating any child outside the managed root', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'scheduled-chat-boundary-'));

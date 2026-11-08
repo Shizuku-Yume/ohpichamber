@@ -1028,9 +1028,11 @@ export const registerFsRoutes = (app, dependencies) => {
   return res.json({ paths: await workspaceFileNames.find(project.directory, name) });
  });
 
+ const filesystemSearch = createFsSearchRuntime({ fsPromises, path, spawn, resolveGitBinaryForSpawn, workspaceSearch: true });
  app.get('/api/fs/search', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const query = isString(req.query.query) ? String(req.query.query) : '';
+  const type = req.query.type === 'directory' ? 'directory' : 'file';
   const requestedLimit = isString(req.query.limit) ? Number.parseInt(String(req.query.limit), 10) : Number.NaN;
   const limit = Number.isInteger(requestedLimit)
    ? Math.min(Math.max(1, requestedLimit), 500)
@@ -1038,67 +1040,76 @@ export const registerFsRoutes = (app, dependencies) => {
   const includeHidden = req.query.includeHidden === 'true';
   const respectGitignore = req.query.respectGitignore !== 'false';
 
+  const project = await resolveProjectDirectory(req);
   const rawPath = typeof req.query.directory === 'string' && req.query.directory.trim().length > 0
    ? req.query.directory.trim()
-   : '';
-  let requestedPath = '';
-  let resolvedPath = '';
-  try {
-   if (rawPath) {
-    requestedPath = path.resolve(normalizeDirectoryPath(rawPath));
-   } else {
-    const project = await resolveProjectDirectory(req);
-    if (!project.directory) {
-     return res.status(400).json({ error: project.error || 'Active workspace is required' });
-    }
-    requestedPath = path.resolve(normalizeDirectoryPath(project.requestedDirectory || project.directory));
-   }
-   resolvedPath = await realpathCache.resolve(requestedPath);
-   const stats = await fsPromises.stat(resolvedPath);
-   if (!stats.isDirectory()) {
-    return res.status(400).json({ error: 'Specified path is not a directory', reason: 'not-directory' });
-   }
-  } catch (error) {
-   const err = error;
-   const code = err && typeof err === 'object' && 'code' in err ? err.code : undefined;
-   if (code === 'ENOENT') {
-    return res.status(404).json({ error: 'Directory not found', reason: 'not-found' });
-   }
-   if (isOsPermissionError(err)) {
-    return sendOsPermissionDenied(res, 'Access to directory denied');
-   }
-   return res.status(500).json({ error: (error && error.message) || 'Failed to search files' });
+   : project.requestedDirectory || project.directory;
+  if (!rawPath) {
+   return res.status(400).json({ error: project.error || 'Active workspace is required' });
   }
 
-  const fsSearch = createFsSearchRuntime({ fsPromises, path, spawn, resolveGitBinaryForSpawn, workspaceSearch: true });
   // A client that moved on (a new letter, a closed list) ends the walk and its
   // Git reads instead of letting them finish for nobody.
   const abort = new AbortController();
   res.on('close', () => abort.abort());
   // A client gone during the checks above has already closed the response.
-  if (res.destroyed) abort.abort();
-  let results;
+  if (res.destroyed) return undefined;
+
   try {
-   results = await fsSearch.searchFilesystemFiles(resolvedPath, {
-    query,
-    limit,
-    includeHidden,
-    respectGitignore,
-    signal: abort.signal,
+   const requestedPath = path.resolve(normalizeDirectoryPath(rawPath));
+   const canonicalRoot = await realpathCache.resolve(requestedPath);
+   // Every search target is a workspace path: the walk enumerates directory
+   // contents, so an unauthorized root would leak entries outside the project
+   // and the managed roots. Containment is decided on canonical paths, which
+   // keeps a symlinked alias of the workspace valid while a link leaving it
+   // stays refused.
+   const candidateBases = [project.directory, project.requestedDirectory, ...managedRoots, ...chatsRoots];
+   // A repository worktree outside the project's own folder is a workspace
+   // too; the context resolver is the only place that knows its base.
+   try {
+    const context = await resolveWorkspacePathFromContext({
+     req, targetPath: rawPath, resolveProjectDirectory, path, os, fsPromises, normalizeDirectoryPath, managedRoots, chatsRoots,
+    });
+    if (context.ok) candidateBases.push(context.base);
+   } catch {
+    // Authorization below still fails closed on the canonical bases.
+   }
+   let authorized = false;
+   for (const base of candidateBases) {
+    if (!base) continue;
+    let canonicalBase;
+    try {
+     canonicalBase = await fsPromises.realpath(path.resolve(normalizeDirectoryPath(base)));
+    } catch (error) {
+     if (error.code === 'ENOENT') continue;
+     throw error;
+    }
+    if (isPathWithinRoot(canonicalRoot, canonicalBase, path, os)) {
+     authorized = true;
+     break;
+    }
+   }
+   if (!authorized) return res.status(400).json({ error: 'Path is outside of active workspace' });
+   const stats = await fsPromises.stat(canonicalRoot);
+   if (!stats.isDirectory()) {
+    return res.status(400).json({ error: 'Specified path is not a directory', reason: 'not-directory' });
+   }
+   if (abort.signal.aborted) return undefined;
+   const hits = await filesystemSearch.searchFilesystemFiles(canonicalRoot, {
+    query, limit, type, includeHidden, respectGitignore, signal: abort.signal, strict: true,
    });
+   if (abort.signal.aborted) return undefined;
+   // Hit paths stay in the caller's path space: the UI matches results
+   // against the logical directory it asked for, as the other fs routes do.
+   return res.json(hits.map((hit) => ({ ...hit, path: path.join(requestedPath, hit.relativePath) })));
   } catch (error) {
    if (abort.signal.aborted) return undefined;
-   throw error;
+   if (isOsPermissionError(error)) return sendOsPermissionDenied(res, 'Access to directory denied');
+   if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+    return res.status(404).json({ error: 'Directory not found', reason: 'not-found' });
+   }
+   return res.status(500).json({ error: (error && error.message) || 'Failed to search files' });
   }
-
-  const mapped = results.map((file) => ({
-   name: file.name,
-   path: path.join(requestedPath, file.relativePath),
-   relativePath: file.relativePath,
-   extension: file.extension,
-  }));
-
-  return res.json({ files: mapped });
  });
 
  // Find in files: lines of workspace files containing a text or a regex,

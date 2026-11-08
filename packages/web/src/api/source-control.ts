@@ -203,6 +203,7 @@ type PostBody =
   | { token: string; username?: string }
   | { accountId: string }
   | { disabled: boolean }
+  | { sshUrl: string | null }
   | CreateBody
   | UpdateBody
   | (MutationBody<SourceControlExistingMutationTarget> & { method: MergeChangeRequestInput['method'] })
@@ -1322,6 +1323,12 @@ export const createWebSourceControlAPI = (options: WebSourceControlAPIOptions = 
       const normalized = normalizeIdentity(identity);
       const payload = await post<{ disabled?: boolean; error?: string }>(fetch, normalized, '/auth/cli', { disabled });
       return { disabled: Boolean(payload.disabled) };
+    },
+
+    authSetSshUrl: async (identity, sshUrl) => {
+      const normalized = normalizeIdentity(identity);
+      const payload = await post<{ sshUrl?: string | null; error?: string }>(fetch, normalized, '/auth/ssh-url', { sshUrl });
+      return { sshUrl: typeof payload.sshUrl === 'string' ? payload.sshUrl : null };
     },
 
     changeRequestStatus: async (context, branch, requestOptions): Promise<ChangeRequestStatus> => {

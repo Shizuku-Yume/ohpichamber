@@ -132,11 +132,9 @@ export class NativeAgents {
     const systemPromptOverride = profile ? profile.systemPromptOverride : definition.systemPrompt || undefined;
     if (systemPromptOverride !== undefined) candidate.systemPromptOverride = systemPromptOverride;
     if (profile?.permissionPresetId) candidate.permissionPresetId = profile.permissionPresetId;
-    // OMP's own definition may say "inherit" (take the parent's level); the
-    // canonical Agent carries a concrete level or none, so inherit drops out.
-    const declaredThinkingLevel = profile?.thinkingLevel !== undefined ? profile.thinkingLevel : definition.thinkingLevel;
-    const thinkingLevel = declaredThinkingLevel === 'inherit' ? undefined : declaredThinkingLevel;
-    if (thinkingLevel !== undefined) candidate.thinkingLevel = thinkingLevel;
+    // `inherit` means the session default; the contract expresses that by omitting the level.
+    const configured = profile?.thinkingLevel !== undefined ? profile.thinkingLevel : definition.thinkingLevel;
+    if (configured !== undefined && configured !== 'inherit') candidate.thinkingLevel = configured;
     const spawns = profile?.spawns !== undefined ? profile.spawns : definition.spawns;
     if (spawns !== undefined) candidate.spawns = spawns;
     const blocking = profile?.blocking !== undefined ? profile.blocking : definition.blocking;

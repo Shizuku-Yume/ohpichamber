@@ -151,7 +151,7 @@ network policy still applies.
 </details>
 
 <details>
-<summary>Docker & Docker Compose setup (OMP 18.16.0)</summary>
+<summary>Docker & Docker Compose setup (OMP 18.18.0)</summary>
 
 Run OpenChamber with the supervised OMP Agent Service inside Docker:
 

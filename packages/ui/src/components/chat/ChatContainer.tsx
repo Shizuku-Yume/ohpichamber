@@ -4,7 +4,7 @@ import { useAutoReadAloud } from "@/hooks/useAutoReadAloud";
 import { findLatestCompletedReply } from "@/lib/messages/latestReply";
 import React from 'react';
 import { createPortal } from 'react-dom';
-import type { Message as CanonicalMessage, Part } from '@openchamber/agent-contract';
+import type { Message as CanonicalMessage, Part, Turn } from '@openchamber/agent-contract';
 
 import { ChatInput } from './ChatInput';
 import { CHAT_INPUT_EDITOR_SELECTOR } from './composer/editor/dom';
@@ -112,7 +112,7 @@ import { createFirstVisibleSessionPerformanceTracker } from '@/sync/session-load
 import { isChatDirectoryPath } from '@/lib/chatDirectories';
 
 const EMPTY_MESSAGES: CanonicalMessage[] = [];
-const EMPTY_COMPLETED_REPLY_IDS: ReadonlySet<string> = new Set();
+const EMPTY_TURNS: readonly Turn[] = [];
 const IDLE_SESSION_STATUS = 'idle' as const;
 const CHAT_FORCE_SCROLL_BOTTOM_EVENT = 'openchamber:chat-force-scroll-bottom';
 const DRAFT_EXIT_DURATION_MS = 120;
@@ -895,6 +895,12 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   suspendPartUpdatesForMessageId: streamingMessageId,
  });
  const sessionMessages = currentSessionId ? sessionMessageRecords : EMPTY_MESSAGES;
+ // The session's turns are the authority for what has actually finished:
+ // a reply only exists once the newest prompt's turn says it completed.
+ const sessionTurns = useDirectorySync(
+  React.useCallback((state) => (currentSessionId ? state.snapshot[currentSessionId]?.turns ?? EMPTY_TURNS : EMPTY_TURNS), [currentSessionId]),
+  effectiveSessionDirectory,
+ );
  const authSessionExpired = useAuthSessionStore((store) => store.state !== 'ok');
  const wasAuthExpiredRef = React.useRef(false);
  const sessionMessageLoadState = useSessionMessageLoadState(
@@ -1105,8 +1111,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
  const autoReadAloudEnabled = useConfigStore((state) => state.autoReadAloudEnabled);
  const latestCompletedReply = React.useMemo(
-  () => findLatestCompletedReply(sessionMessages),
-  [sessionMessages],
+  () => findLatestCompletedReply(sessionTurns, sessionMessages),
+  [sessionMessages, sessionTurns],
  );
  // Use the reply's own messageId as the reading key so the message
  // button shows the auto-started reading as playing and can stop it.
@@ -1123,8 +1129,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   ready: hasRenderableSessionSnapshot && sessionMessageLoadState.status === "ready",
   sessionIsActive,
   reply: latestCompletedReply,
-  history: sessionMessages,
-  olderCompletedReplyIds: EMPTY_COMPLETED_REPLY_IDS,
+  turns: sessionTurns,
   enabled: autoReadAloudEnabled && !pinned && !readOnly,
   play: playAutoReadAloud,
  });

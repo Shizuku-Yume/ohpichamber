@@ -5,65 +5,40 @@ export interface LatestReply {
  text: string;
 }
 
-export const extractMessageText = (message: Message): string => {
- return message.parts
-  .filter((part): part is { type: 'text'; partId: string; content: string } => part.type === 'text' && typeof part.content === 'string')
-  .map((part) => part.content)
-  .join('')
-  .trim();
-};
-
-const toMessageMap = (
- messages: readonly Message[] | ReadonlyMap<string, Message>,
-): ReadonlyMap<string, Message> => {
- if ('get' in messages && typeof messages.get === 'function') {
-  return messages;
- }
- const map = new Map<string, Message>();
- for (const m of messages as readonly Message[]) map.set(m.messageId, m);
- return map;
-};
+export const extractMessageText = (message: Message): string => message.parts
+ .filter((part) => part.type === 'text')
+ .map((part) => part.content)
+ .join('')
+ .trim();
 
 /**
- * Returns the newest completed answer from authoritative Turn state.
- * Only turns whose status is 'completed' qualify; steps still running,
- * failed, or awaiting input are excluded.
+ * The answer of the session's newest prompt, when that turn has authoritatively
+ * finished and its final assistant message carries text.
+ *
+ * The newest prompt is the authority: while it is running, failed, cancelled,
+ * or its final message is missing or has no text, there is no reply to read.
+ * An earlier completed answer never stands in for it, so auto-read can only
+ * ever speak the answer to the prompt the user actually sent last.
  */
 export const findLatestCompletedReply = (
  turns: readonly Turn[],
- messages: readonly Message[] | ReadonlyMap<string, Message>,
+ messages: readonly Message[],
 ): LatestReply | null => {
- const messageMap = toMessageMap(messages);
- for (let i = turns.length - 1; i >= 0; i -= 1) {
-  const turn = turns[i];
-  if (!turn || turn.status !== 'completed') continue;
-  for (let j = turn.assistantMessageIds.length - 1; j >= 0; j -= 1) {
-   const messageId = turn.assistantMessageIds[j];
-   const message = messageMap.get(messageId);
-   if (!message || message.role !== 'assistant') continue;
-   const text = extractMessageText(message);
-   if (text) return { messageId, text };
-  }
- }
- return null;
+ const turn = turns.at(-1);
+ if (!turn || turn.status !== 'completed') return null;
+ const messageId = turn.assistantMessageIds.at(-1);
+ if (!messageId) return null;
+ const message = messages.find((candidate) => candidate.messageId === messageId);
+ if (!message || message.role !== 'assistant') return null;
+ const text = extractMessageText(message);
+ return text ? { messageId, text } : null;
 };
 
 /**
- * Returns all completed reply IDs across completed turns, for the auto-read history baseline.
+ * Every message id of the turn, so a caller can tell a reply it has already
+ * handled from one that just arrived without walking the transcript.
  */
-export const findCompletedReplyIds = (
- turns: readonly Turn[],
- messages: readonly Message[] | ReadonlyMap<string, Message>,
-): string[] => {
- const messageMap = toMessageMap(messages);
- const ids: string[] = [];
- for (const turn of turns) {
-  if (turn.status !== 'completed') continue;
-  for (const messageId of turn.assistantMessageIds) {
-   const message = messageMap.get(messageId);
-   if (!message || message.role !== 'assistant') continue;
-   if (extractMessageText(message)) ids.push(messageId);
-  }
- }
- return ids;
-};
+export const turnMessageIds = (turn: Turn): readonly string[] => [
+ turn.userMessageId,
+ ...turn.assistantMessageIds,
+];

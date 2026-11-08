@@ -1,109 +1,150 @@
 import { describe, expect, test } from 'bun:test';
 import type { Message, Turn } from '@openchamber/agent-contract';
 
-import { findCompletedReplyIds, findLatestCompletedReply } from './latestReply';
+import { findLatestCompletedReply, turnMessageIds } from './latestReply';
 
-const userMessage = (messageId: string): Message => ({
+const userMessage = (messageId: string, turnId: string): Message => ({
   messageId,
   sessionId: 'ses_1',
-  turnId: 'turn_0',
+  turnId,
   role: 'user',
   createdAt: 1,
   parts: [{ type: 'text', partId: `${messageId}_part`, content: 'user prompt' }],
 });
 
-const assistantMessage = (messageId: string, text: string): Message => ({
+const assistantMessage = (messageId: string, text: string, turnId: string): Message => ({
   messageId,
   sessionId: 'ses_1',
-  turnId: 'turn_1',
+  turnId,
   role: 'assistant',
   createdAt: 2,
   parts: text ? [{ type: 'text', partId: `${messageId}_part`, content: text }] : [],
 });
 
-const turn = (turnId: string, status: Turn['status'], assistantMessageIds: string[]): Turn => ({
+const toolStep = (messageId: string, turnId: string): Message => ({
+  messageId,
+  sessionId: 'ses_1',
+  turnId,
+  role: 'assistant',
+  createdAt: 3,
+  parts: [{ type: 'reasoning', partId: `${messageId}_part`, content: 'Thinking about the edit' }],
+});
+
+const turn = (
+  turnId: string,
+  status: Turn['status'],
+  assistantMessageIds: string[],
+  userMessageId = 'user_1',
+): Turn => ({
   turnId,
   sessionId: 'ses_1',
-  runId: 'run_1',
+  runId: `run_${turnId}`,
   status,
-  userMessageId: 'user_1',
+  userMessageId,
   assistantMessageIds,
   startedAt: 1,
   finishedAt: status === 'completed' ? 2 : undefined,
 });
 
 describe('findLatestCompletedReply', () => {
-  test('returns the last answer of the latest completed turn', () => {
+  test('returns the final answer of the newest completed turn', () => {
     const messages = [
-      userMessage('user_1'),
-      assistantMessage('assistant_1', 'First answer'),
-      userMessage('user_2'),
-      assistantMessage('assistant_2', 'Progress note'),
-      assistantMessage('assistant_3', 'Second answer'),
+      userMessage('user_1', 'turn_1'),
+      assistantMessage('assistant_1', 'First answer', 'turn_1'),
+      userMessage('user_2', 'turn_2'),
+      assistantMessage('assistant_2', 'Progress note', 'turn_2'),
+      assistantMessage('assistant_3', 'Second answer', 'turn_2'),
     ];
     const turns = [
-      turn('turn_1', 'completed', ['assistant_1']),
-      turn('turn_2', 'completed', ['assistant_2', 'assistant_3']),
+      turn('turn_1', 'completed', ['assistant_1'], 'user_1'),
+      turn('turn_2', 'completed', ['assistant_2', 'assistant_3'], 'user_2'),
     ];
 
-    const reply = findLatestCompletedReply(turns, messages);
-    expect(reply).toEqual({ messageId: 'assistant_3', text: 'Second answer' });
+    expect(findLatestCompletedReply(turns, messages)).toEqual({ messageId: 'assistant_3', text: 'Second answer' });
   });
 
-  test('ignores turns still running or awaiting approval', () => {
+  test('a running newest turn has no reply, and never falls back to an older answer', () => {
     const messages = [
-      userMessage('user_1'),
-      assistantMessage('assistant_1', 'Completed answer'),
-      userMessage('user_2'),
-      assistantMessage('assistant_2', 'Streaming answer'),
+      userMessage('user_1', 'turn_1'),
+      assistantMessage('assistant_1', 'Completed answer', 'turn_1'),
+      userMessage('user_2', 'turn_2'),
+      assistantMessage('assistant_2', 'Streaming answer', 'turn_2'),
     ];
     const turns = [
-      turn('turn_1', 'completed', ['assistant_1']),
-      turn('turn_2', 'running', ['assistant_2']),
+      turn('turn_1', 'completed', ['assistant_1'], 'user_1'),
+      turn('turn_2', 'running', ['assistant_2'], 'user_2'),
     ];
-
-    // Ignores turn_2 because status is 'running', falls back to turn_1
-    const reply = findLatestCompletedReply(turns, messages);
-    expect(reply).toEqual({ messageId: 'assistant_1', text: 'Completed answer' });
-  });
-
-  test('ignores failed or cancelled turns', () => {
-    const messages = [
-      userMessage('user_1'),
-      assistantMessage('assistant_1', 'Partial text'),
-    ];
-    const turns = [turn('turn_1', 'failed', ['assistant_1'])];
 
     expect(findLatestCompletedReply(turns, messages)).toBeNull();
   });
 
-  test('skips empty assistant messages within a completed turn', () => {
+  test('a failed newest turn has no reply, even with partial text', () => {
     const messages = [
-      assistantMessage('assistant_1', 'Real answer'),
-      assistantMessage('assistant_2', ''),
+      userMessage('user_1', 'turn_1'),
+      assistantMessage('assistant_1', 'Completed answer', 'turn_1'),
+      userMessage('user_2', 'turn_2'),
+      assistantMessage('assistant_2', 'Partial text before the failure', 'turn_2'),
     ];
-    const turns = [turn('turn_1', 'completed', ['assistant_1', 'assistant_2'])];
+    const turns = [
+      turn('turn_1', 'completed', ['assistant_1'], 'user_1'),
+      turn('turn_2', 'failed', ['assistant_2'], 'user_2'),
+    ];
 
-    expect(findLatestCompletedReply(turns, messages)).toEqual({ messageId: 'assistant_1', text: 'Real answer' });
+    expect(findLatestCompletedReply(turns, messages)).toBeNull();
+  });
+
+  test('a cancelled newest turn has no reply', () => {
+    const messages = [
+      userMessage('user_1', 'turn_1'),
+      assistantMessage('assistant_1', 'Completed answer', 'turn_1'),
+      userMessage('user_2', 'turn_2'),
+      assistantMessage('assistant_2', 'Cut off', 'turn_2'),
+    ];
+    const turns = [
+      turn('turn_1', 'completed', ['assistant_1'], 'user_1'),
+      turn('turn_2', 'cancelled', ['assistant_2'], 'user_2'),
+    ];
+
+    expect(findLatestCompletedReply(turns, messages)).toBeNull();
+  });
+
+  test('a completed turn whose final message has no text has no reply, not the progress step', () => {
+    const messages = [
+      userMessage('user_2', 'turn_2'),
+      assistantMessage('assistant_progress', 'I will edit the file now', 'turn_2'),
+      toolStep('assistant_step', 'turn_2'),
+    ];
+    const turns = [turn('turn_2', 'completed', ['assistant_progress', 'assistant_step'], 'user_2')];
+
+    expect(findLatestCompletedReply(turns, messages)).toBeNull();
+  });
+
+  test('a completed turn whose final message is missing from the transcript has no reply', () => {
+    const messages = [userMessage('user_2', 'turn_2')];
+    const turns = [turn('turn_2', 'completed', ['assistant_absent'], 'user_2')];
+
+    expect(findLatestCompletedReply(turns, messages)).toBeNull();
+  });
+
+  test('an awaiting-input turn has no answer yet', () => {
+    const messages = [
+      userMessage('user_2', 'turn_2'),
+      assistantMessage('assistant_2', 'What should I do?', 'turn_2'),
+    ];
+    const turns = [turn('turn_2', 'awaiting_input', ['assistant_2'], 'user_2')];
+
+    expect(findLatestCompletedReply(turns, messages)).toBeNull();
+  });
+
+  test('no turns at all means nothing to read', () => {
+    expect(findLatestCompletedReply([], [])).toBeNull();
   });
 });
 
-describe('findCompletedReplyIds', () => {
-  test('returns every finished answer across all completed turns', () => {
-    const messages = [
-      assistantMessage('assistant_1', 'First answer'),
-      assistantMessage('assistant_2', 'Second answer'),
-      assistantMessage('assistant_3', 'Third answer'),
-      assistantMessage('assistant_4', ''),
-    ];
-    const turns = [
-      turn('turn_1', 'completed', ['assistant_1']),
-      turn('turn_2', 'completed', ['assistant_2']),
-      turn('turn_3', 'running', ['assistant_3']),
-      turn('turn_4', 'completed', ['assistant_4']),
-    ];
+describe('turnMessageIds', () => {
+  test('names the prompt and every assistant message of one turn', () => {
+    const value = turn('turn_2', 'completed', ['assistant_1', 'assistant_2'], 'user_2');
 
-    const ids = findCompletedReplyIds(turns, messages);
-    expect(ids).toEqual(['assistant_1', 'assistant_2']);
+    expect(turnMessageIds(value)).toEqual(['user_2', 'assistant_1', 'assistant_2']);
   });
 });

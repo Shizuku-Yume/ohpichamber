@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import type { Message, Turn } from '@openchamber/agent-contract';
+import type { Turn } from '@openchamber/agent-contract';
 
 import { claimReplyForAutoRead } from '@/lib/messages/autoReadClaims';
-import { findCompletedReplyIds, type LatestReply } from '@/lib/messages/latestReply';
+import type { LatestReply } from '@/lib/messages/latestReply';
 import { isCapacitorApp } from '@/lib/platform';
 import type { PlayMessageTTSOptions } from './useMessageTTS';
 
@@ -13,14 +13,10 @@ export interface AutoReadAloudOptions {
  ready: boolean;
  /** The session is running a turn. */
  sessionIsActive: boolean;
- /** Newest completed answer in the session, or null when there is none. */
+ /** The answer to the session's newest prompt, or null when there is none. */
  reply: LatestReply | null;
- /** Loaded session turns for baseline recording. */
+ /** The session's turns: the newest one is the prompt whose answer may be read. */
  turns: readonly Turn[];
- /** Loaded session messages for baseline recording. */
- messages: readonly Message[];
- /** Completed answers fetched through older-history pagination. */
- olderCompletedReplyIds: ReadonlySet<string>;
  enabled: boolean;
  play: (text: string, options?: PlayMessageTTSOptions) => Promise<void>;
  /** Claims a reply across windows so only one of them reads it. */
@@ -28,10 +24,15 @@ export interface AutoReadAloudOptions {
 }
 
 /**
- * Reads the newest completed answer after a turn that this surface watched
- * run. Every finished answer present when a session opens is recorded as the
- * baseline, so opening a conversation never starts playback and trimming back
- * to an older answer does not read it for the first time.
+ * Reads the answer to the newest prompt after a turn this surface watched run.
+ *
+ * The guard is two turn ids, not a history set. `observedLiveTurnId` records the
+ * turn this ready, visible surface saw running or waiting on the user; only
+ * completing that same turn may start speech. Everything else is silent by
+ * construction: history that arrives already finished, a page of older turns
+ * fetched later, an answer that becomes newest again after a revert, and a
+ * second window showing the same session all fail the id comparison, so
+ * playback needs no per-message bookkeeping to stay quiet.
  */
 export const useAutoReadAloud = ({
  sessionKey,
@@ -39,25 +40,18 @@ export const useAutoReadAloud = ({
  sessionIsActive,
  reply,
  turns,
- messages,
- olderCompletedReplyIds,
  enabled,
  play,
  claim = claimReplyForAutoRead,
 }: AutoReadAloudOptions): void => {
  const activeSessionKeyRef = useRef<string | null>(null);
- const observedActiveRef = useRef(false);
- const initializedRef = useRef(false);
- const latestReplyIdRef = useRef<string | null>(null);
- // Every id this surface has already read, plus every answer present at
- // the baseline. Reverting or trimming a turn makes an older answer the
- // latest reply again, and it must not be read as if it just finished.
- const heardReplyIdsRef = useRef<Set<string>>(new Set());
+ const observedLiveTurnIdRef = useRef<string | null>(null);
+ const handledTurnIdRef = useRef<string | null>(null);
  const nativeMobile = isCapacitorApp();
  const foregroundRef = useRef(!nativeMobile);
  const backgroundEpochRef = useRef(0);
- const currentRef = useRef({ sessionKey, enabled, reply });
- currentRef.current = { sessionKey, enabled, reply };
+ const currentRef = useRef({ sessionKey, enabled, reply, turns });
+ currentRef.current = { sessionKey, enabled, reply, turns };
 
  useEffect(() => {
   if (!enabled) backgroundEpochRef.current += 1;
@@ -102,34 +96,33 @@ export const useAutoReadAloud = ({
   if (activeSessionKeyRef.current !== sessionKey) {
    backgroundEpochRef.current += 1;
    activeSessionKeyRef.current = sessionKey;
-   observedActiveRef.current = sessionIsActive;
-   initializedRef.current = false;
-   latestReplyIdRef.current = null;
-   heardReplyIdsRef.current = new Set();
-  } else if (sessionIsActive) {
-   observedActiveRef.current = true;
+   observedLiveTurnIdRef.current = null;
+   handledTurnIdRef.current = null;
   }
 
   if (!ready) return;
 
-  if (!initializedRef.current) {
-   initializedRef.current = true;
-   latestReplyIdRef.current = reply?.messageId ?? null;
-   heardReplyIdsRef.current = new Set(findCompletedReplyIds(turns, messages));
-   if (reply) heardReplyIdsRef.current.add(reply.messageId);
+  const liveTurnId = turns.at(-1)?.turnId ?? null;
+  // A turn counts as watched only while it is open on this surface.
+  if (sessionIsActive && liveTurnId) {
+   observedLiveTurnIdRef.current = liveTurnId;
    return;
   }
 
-  if (!reply || reply.messageId === latestReplyIdRef.current) return;
+  const newestTurn = turns.at(-1);
+  if (!newestTurn) return;
+  const replyTurnId = reply ? newestTurn.turnId : null;
+  if (!reply || !replyTurnId) return;
+  // The turn itself has the final word: a failed or cancelled run can hand a
+  // caller partial text, and that must never be spoken.
+  if (newestTurn.status !== 'completed') return;
+  if (observedLiveTurnIdRef.current !== replyTurnId) return;
+  if (handledTurnIdRef.current === replyTurnId) return;
+  if (!enabled) return;
 
-  latestReplyIdRef.current = reply.messageId;
-  if (!enabled || !observedActiveRef.current || heardReplyIdsRef.current.has(reply.messageId) || olderCompletedReplyIds.has(reply.messageId)) {
-   return;
-  }
-
-  heardReplyIdsRef.current.add(reply.messageId);
-  const { messageId, text } = reply;
+  handledTurnIdRef.current = replyTurnId;
   const epoch = backgroundEpochRef.current;
+  const { messageId, text } = reply;
   const canStart = () => (!nativeMobile || (foregroundRef.current && document.visibilityState !== 'hidden'))
    && backgroundEpochRef.current === epoch
    && currentRef.current.enabled
@@ -139,5 +132,5 @@ export const useAutoReadAloud = ({
   void claim(messageId).then((claimed) => {
    if (claimed && canStart()) void play(text, { canStart });
   }).catch((error) => console.warn('[useAutoReadAloud] Claim failed:', error));
- }, [claim, enabled, turns, messages, olderCompletedReplyIds, nativeMobile, play, ready, reply, sessionIsActive, sessionKey]);
+ }, [claim, enabled, nativeMobile, play, ready, reply, sessionIsActive, sessionKey, turns]);
 };

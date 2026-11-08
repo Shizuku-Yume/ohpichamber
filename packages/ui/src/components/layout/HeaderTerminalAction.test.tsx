@@ -8,6 +8,22 @@ import { useTerminalStore } from '@/stores/useTerminalStore';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
 import { shownContextModes } from '@/lib/workspace/zones';
 import { HeaderTerminalAction } from './HeaderTerminalAction';
+import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
+import type { RuntimeAPIs } from '@/lib/api/types';
+
+const runtimeApis = {
+  runtime: { platform: 'web' as const, isDesktop: false, isVSCode: false },
+  get terminal() {
+    return {
+      createSession: async () => { throw new Error('not used'); },
+      connect: () => ({ close: () => undefined }),
+      sendInput: async () => undefined,
+      resize: async () => undefined,
+      close: async () => undefined,
+      listShells: async () => [],
+    };
+  },
+} as unknown as RuntimeAPIs;
 
 describe('HeaderTerminalAction behavior with real stores', () => {
   let windowInstance: Window;
@@ -28,6 +44,10 @@ describe('HeaderTerminalAction behavior with real stores', () => {
       Event: windowInstance.Event,
       MouseEvent: windowInstance.MouseEvent,
       PointerEvent: windowInstance.MouseEvent,
+      requestAnimationFrame: windowInstance.requestAnimationFrame.bind(windowInstance),
+      cancelAnimationFrame: windowInstance.cancelAnimationFrame.bind(windowInstance),
+      getComputedStyle: windowInstance.getComputedStyle.bind(windowInstance),
+      ResizeObserver: windowInstance.ResizeObserver,
       IS_REACT_ACT_ENVIRONMENT: true,
     });
     host = document.createElement('div');
@@ -53,9 +73,11 @@ describe('HeaderTerminalAction behavior with real stores', () => {
   test('toggle button opens then closes terminal surface in real UI store', async () => {
     await act(async () => {
       root.render(
-        <I18nProvider>
-          <HeaderTerminalAction directory={dir} />
-        </I18nProvider>,
+        <RuntimeAPIContext.Provider value={runtimeApis}>
+          <I18nProvider>
+            <HeaderTerminalAction directory={dir} />
+          </I18nProvider>
+        </RuntimeAPIContext.Provider>,
       );
     });
 
@@ -88,9 +110,11 @@ describe('HeaderTerminalAction behavior with real stores', () => {
   test('reflects active terminal surface state via button aria-pressed and styling', async () => {
     await act(async () => {
       root.render(
-        <I18nProvider>
-          <HeaderTerminalAction directory={dir} />
-        </I18nProvider>,
+        <RuntimeAPIContext.Provider value={runtimeApis}>
+          <I18nProvider>
+            <HeaderTerminalAction directory={dir} />
+          </I18nProvider>
+        </RuntimeAPIContext.Provider>,
       );
     });
 
@@ -112,3 +136,4 @@ describe('HeaderTerminalAction behavior with real stores', () => {
     expect(toggleBtn?.getAttribute('aria-pressed')).toBe('false');
   });
 });
+

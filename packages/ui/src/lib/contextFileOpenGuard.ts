@@ -20,8 +20,6 @@ type ContextFileOpenFailure =
  | { reason: 'unreadable'; message: string | null }
  | { reason: 'binary' };
 
-type ContextFileOpenFailureReason = ContextFileOpenFailure['reason'];
-
 type ContextFileOpenValidationResult = { ok: true } | ({ ok: false } & ContextFileOpenFailure);
 
 type ContextFileOpenOptions = {
@@ -142,27 +140,6 @@ export const validateContextFileOpen = async (
  } catch (error) {
   return { ok: false, ...classifyReadError(error) };
  }
-};
-
-export const getContextFileOpenFailureMessage = (reason: ContextFileOpenFailureReason): string => {
- if (reason === 'too-large') {
-  const lines = MAX_OPEN_FILE_LINES.toLocaleString(getCurrentIntlLocale());
-  return t('contextFileOpen.failure.tooLarge', { count: lines });
- }
-
- if (reason === 'too-large-size') {
-  return t('contextFileOpen.failure.tooLargeSize', { size: formatFileSize(MAX_OPEN_FILE_BYTES) });
- }
-
- if (reason === 'missing') {
-  return t('contextFileOpen.failure.missing');
- }
-
- if (reason === 'binary') {
-  return t('filesView.editor.cannotPreviewBinary');
- }
-
- return t('contextFileOpen.failure.unreadable');
 };
 
 export const getContextFileSizeLimitMessage = (sizeBytes: number, translate: typeof t): string =>

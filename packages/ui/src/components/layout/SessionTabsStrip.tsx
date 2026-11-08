@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
-import { formatShortcutForDisplay, getEffectiveShortcutPrefix, UNASSIGNED_SHORTCUT } from '@/lib/shortcuts';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo, getEffectiveShortcutPrefix, UNASSIGNED_SHORTCUT } from '@/lib/shortcuts';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionTurnActivity } from '@/sync/global-session-status';
 import { SessionActivityIndicator } from '@/components/session/SessionActivityIndicator';
@@ -39,6 +39,7 @@ import { useSessionTabsStore } from '@/stores/useSessionTabsStore';
 import { closeSessionTabAndActivateNeighbour } from '@/lib/sessionTabs';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionUnread } from '@/sync/session-unread';
 import { useIsSessionAiRenamePending } from '@/sync/use-session-ai-rename';
 import { useMultiRunMemberIds } from '@/lib/multirun/useMultiRuns';
@@ -370,6 +371,17 @@ export const SessionTabsStrip: React.FC<{
   }
  }, [closeOtherTabs, currentSessionId, handleSelect, tabs]);
 
+ // The "+" after the tabs starts a session where these tabs are: the open
+ // session's folder, or the open draft's. TitlebarLeftControls leaves its own
+ // new-session button hidden while the strip is on screen, because this one
+ // starts in the right folder rather than in the project root.
+ const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+ const openNewSessionHere = React.useCallback(() => {
+  const { currentSessionId: openId, newSessionDraft, openNewSessionDraft } = useSessionUIStore.getState();
+  const directory = openId ? useDirectoryStore.getState().currentDirectory : newSessionDraft.directoryOverride;
+  openNewSessionDraft(directory ? { directoryOverride: directory } : undefined);
+ }, []);
+
  const sensors = useSensors(
   useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
   useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
@@ -467,6 +479,23 @@ export const SessionTabsStrip: React.FC<{
      </div>
     ) : null}
    </div>
+   {/* Right after the last tab, outside the scroller so it stays in view when
+       the tabs overflow. */}
+   <Tooltip>
+    <TooltipTrigger asChild>
+     <button
+      type="button"
+      onClick={openNewSessionHere}
+      aria-label={t('sessions.sidebar.header.actions.newSession')}
+      className="app-region-no-drag ms-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+     >
+      <Icon name="add" className="size-4" />
+     </button>
+    </TooltipTrigger>
+    <TooltipContent side="bottom" sideOffset={6}>
+     <TooltipLabelWithShortcut label={t('sessions.sidebar.header.actions.newSession')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('new_chat', shortcutOverrides), '')} />
+    </TooltipContent>
+   </Tooltip>
   </div>
  );
 };

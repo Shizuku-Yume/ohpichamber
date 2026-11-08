@@ -1,7 +1,7 @@
 import React from 'react';
 import type { ToolPopupContent } from '../message/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { getRuntimeUrlResolver } from '@/lib/runtime-url';
+import { getRuntimeUrlResolver, type RuntimeUrlQuery } from '@/lib/runtime-url';
 import { refreshRuntimeUrlAuthToken } from '@/lib/runtime-auth';
 import { getPreparedMarkdownImageUrl, isLocalMarkdownImageSource, loadMessageImageBlob, loadPreparedImageAsDataUrl, prepareLocalMarkdownImages, resolveMarkdownImageSource, type PreparedMarkdownImage } from './markdownImageAssets';
 import { runtimeAssetsNeedFetch } from '@/lib/runtime-asset';
@@ -15,6 +15,11 @@ export type MarkdownDocumentAssets = {
  onOpenFile: (absolutePath: string) => void;
  colorScheme: 'light' | 'dark';
 };
+
+// The picture route `projectUploads.ts` leaves in a body on the relay. It alone
+// is read with the client's credentials; any other path an author writes stays
+// a plain address.
+const PROJECT_UPLOAD_ROUTE_RE = /^\/api\/source-control\/[^/?#]+\/uploads\/[0-9a-f]{32}\/[^/?#]+\?/;
 
 type GalleryImage = { source: string; filename: string; element: HTMLElement; resolve: () => Promise<string>; load: () => Promise<Blob> };
 // Parts of one message share the existing popup gallery. Entries live only while
@@ -72,7 +77,13 @@ export class MarkdownMediaOwner {
   }
   if (/^data:/i.test(source)) return resolveMarkdownImageSource(source, signal);
   if (mode === 'document') {
-   if (!documentAssets) return source;
+   if (!documentAssets) {
+    if (video || !PROJECT_UPLOAD_ROUTE_RE.test(source)) return source;
+    const read = this.readDocumentImage(source, source, undefined, signal);
+    // A read the tunnel dropped is not kept, so opening the item again reads it again.
+    void read.catch(() => { if (this.documentUrls.get(source) === read) this.documentUrls.delete(source); });
+    return read;
+   }
    if (!isMarkdownDocumentReference(source)) throw new Error('Document source is unavailable');
    const path = resolveMarkdownDocumentReference(documentAssets.filePath, source);
    const workspace = documentAssets.workspaceRoot;
@@ -82,18 +93,7 @@ export class MarkdownMediaOwner {
     this.check(signal);
     return getRuntimeUrlResolver().authenticatedAsset('/api/fs/raw', query);
    }
-   const cached = this.documentUrls.get(path);
-   if (cached) return cached;
-   const pending = (async () => {
-    const response = await runtimeFetch('/api/fs/raw', { query, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) });
-    if (!response.ok) throw new Error(`Image read failed (${response.status})`);
-    const blob = await response.blob();
-    if (blob.size > 25 * 1024 * 1024) throw new Error('Image too large for preview');
-    this.check(signal);
-    return URL.createObjectURL(blob);
-   })();
-   this.documentUrls.set(path, pending);
-   return pending;
+   return this.readDocumentImage(path, '/api/fs/raw', query, signal);
   }
   // Tool/reasoning local mode retains its direct local-source behavior.
   // Only assistant media uses the message grant / workspace bridge policy.
@@ -130,6 +130,21 @@ export class MarkdownMediaOwner {
   await refreshRuntimeUrlAuthToken();
   this.check(signal);
   return getPreparedMarkdownImageUrl(prepared, directory);
+ }
+
+ private readDocumentImage(key: string, path: string, query: RuntimeUrlQuery | undefined, signal: AbortSignal): Promise<string> {
+  const cached = this.documentUrls.get(key);
+  if (cached) return cached;
+  const pending = (async () => {
+   const response = await runtimeFetch(path, { query, signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) });
+   if (!response.ok) throw new Error(`Image read failed (${response.status})`);
+   const blob = await response.blob();
+   if (blob.size > 25 * 1024 * 1024) throw new Error('Image too large for preview');
+   this.check(signal);
+   return URL.createObjectURL(blob);
+  })();
+  this.documentUrls.set(key, pending);
+  return pending;
  }
 
  /**

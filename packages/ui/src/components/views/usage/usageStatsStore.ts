@@ -1,10 +1,11 @@
+import React from 'react';
 import { create } from 'zustand';
 
 import type { UsageStats, UsageToolsResponse } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 
-import { rangeStart, type UsageRange } from './usageStatsModel';
+import { isSameLocalDay, rangeStart, type UsageRange } from './usageStatsModel';
 
 /**
  * In-memory cache of Stats page reports for the app session, one entry per
@@ -89,6 +90,9 @@ const fetchToolsFromCanonical: UsageToolsFetcher = async ({ projectDirectory }, 
     workspaceId: workspace?.workspaceId, projectId: workspace?.projectId }, { signal });
 };
 
+const isExpiredToday = (request: UsageStatsRequest, entry: UsageStatsEntry | undefined, at: number): boolean =>
+ request.range === '1d' && entry?.fetchedAt != null && !isSameLocalDay(entry.fetchedAt, at);
+
 export function createUsageStatsStore(
   fetcher: UsageStatsFetcher,
   runtimeKey: () => string,
@@ -98,6 +102,8 @@ export function createUsageStatsStore(
   // Aborted and replaced on reset, so reads from a previous runtime can
   // neither commit nor keep a key marked as loading.
   let controller = new AbortController();
+  /** The tool read each key still wants, so a superseded one cannot write. */
+  const currentToolReads = new Map<string, symbol>();
 
   return create<UsageStatsStore>()((set, get) => {
     const patch = (key: string, next: Partial<UsageStatsEntry>) =>
@@ -122,18 +128,33 @@ export function createUsageStatsStore(
         const key = usageStatsKey(runtime, request);
         const entry = get().entries[key];
         if (entry?.loading) return;
-        if (!options?.force && (entry?.stats || entry?.error)) return;
+        const startedAt = now();
+        // Today spans local midnight: a report read on the previous day is gone
+        // the moment the day turns, so its totals never stand for the new day.
+        const expired = isExpiredToday(request, entry, startedAt);
+        if (!options?.force && !expired && (entry?.stats || entry?.error)) return;
 
         const { signal } = controller;
-        patch(key, { loading: true });
+        if (expired) {
+          // Dropped before the read, so a failed read shows as an error and
+          // never as yesterday's totals under Today.
+          patch(key, { stats: null, fetchedAt: null, loading: true, error: null });
+          currentToolReads.delete(key);
+          set((state) => {
+            const { [key]: _expiredTools, ...toolEntries } = state.toolEntries;
+            return { toolEntries };
+          });
+        } else {
+          patch(key, { loading: true });
+        }
         try {
           const stats = await fetcher(request, signal);
           if (signal.aborted || runtimeKey() !== runtime) return;
           // Written under the key the read started for: switching filters
           // while it runs never lets it land on another filter.
-          patch(key, { stats, fetchedAt: now(), loading: false, error: null });
+          patch(key, { stats, fetchedAt: startedAt, loading: false, error: null });
           // A refreshed report moves the window, so tools already shown follow it.
-          if (get().toolsRequested) void get().loadTools(request, { force: true });
+          if (get().toolsRequested) void get().loadTools(request, { force: Boolean(get().toolEntries[key]?.tools) });
         } catch (error) {
           if (signal.aborted || runtimeKey() !== runtime) return;
           // A failed read keeps the last report; it never becomes zeros.
@@ -152,23 +173,18 @@ export function createUsageStatsStore(
         if (!options?.force && (entry?.tools || entry?.error)) return;
 
         const { signal } = controller;
+        // The tool read each key still wants: one left over from an expired
+        // Today report must not land on the new day's tools, whichever ends first.
+        const read = Symbol('usage tools read');
+        currentToolReads.set(key, read);
+        const isDropped = () => signal.aborted || runtimeKey() !== runtime || currentToolReads.get(key) !== read;
         patchTools(key, { loading: true });
         try {
           const tools = await toolsFetcher(request, window, signal);
-          if (signal.aborted || runtimeKey() !== runtime) return;
-          if (get().entries[key]?.stats?.range !== window) {
-            patchTools(key, { loading: false });
-            void get().loadTools(request, { force: true });
-            return;
-          }
+          if (isDropped()) return;
           patchTools(key, { tools, loading: false, error: null });
         } catch (error) {
-          if (signal.aborted || runtimeKey() !== runtime) return;
-          if (get().entries[key]?.stats?.range !== window) {
-            patchTools(key, { loading: false });
-            void get().loadTools(request, { force: true });
-            return;
-          }
+          if (isDropped()) return;
           patchTools(key, { loading: false, error: error instanceof Error ? error.message : String(error) });
         }
       },
@@ -193,5 +209,29 @@ export const selectUsageStatsEntry = (
   state: Pick<UsageStatsStore, 'entries'>,
   request: UsageStatsRequest,
 ): UsageStatsEntry | undefined => state.entries[usageStatsKey(getRuntimeKey(), request)];
+
+/** How often an open Today report checks whether the local day has changed. */
+const TODAY_CHECK_INTERVAL_MS = 60_000;
+
+/**
+ * Keeps Today current while the page stays open. `load` reads only once the
+ * day has changed, so the checks cost nothing the rest of the time. A clock
+ * check survives sleep and daylight saving, where a timer aimed at midnight
+ * would not.
+ */
+export function useTodayRollover(enabled: boolean, load: () => void): void {
+ React.useEffect(() => {
+  if (!enabled) return undefined;
+  const onVisibilityChange = () => {
+   if (document.visibilityState === 'visible') load();
+  };
+  const interval = window.setInterval(load, TODAY_CHECK_INTERVAL_MS);
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  return () => {
+   window.clearInterval(interval);
+   document.removeEventListener('visibilitychange', onVisibilityChange);
+  };
+ }, [enabled, load]);
+}
 
 subscribeRuntimeEndpointChanged(() => useUsageStatsStore.getState().reset());

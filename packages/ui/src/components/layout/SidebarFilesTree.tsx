@@ -54,7 +54,7 @@ import { cn, getRevealLabelKey } from '@/lib/utils';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
-import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
+import { toastContextFileOpenFailure, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
 import { isBrowserClientRuntime, isDesktopLocalOriginActive, openDesktopPath } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
@@ -1177,7 +1177,7 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean }> = ({ visible }) =>
 
   const openValidation = await validateContextFileOpen(files, node.path, { directory: root });
   if (!openValidation.ok) {
-   toast.error(getContextFileOpenFailureMessage(openValidation.reason));
+   toastContextFileOpenFailure(node.path, openValidation);
    return;
   }
 

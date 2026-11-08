@@ -32,7 +32,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
+import { toastContextFileOpenFailure, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
 import { toast } from '@/components/ui';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import type { Session } from '@openchamber/agent-contract';
@@ -800,7 +800,7 @@ export const CommandPalette: React.FC = () => {
       if (!currentRoot) return;
       const validation = await validateContextFileOpen(filesApi, filePath, { directory: currentRoot });
       if (!validation.ok) {
-        toast.error(getContextFileOpenFailureMessage(validation.reason));
+        toastContextFileOpenFailure(filePath, validation);
         return;
       }
       openContextFile(currentRoot, filePath);

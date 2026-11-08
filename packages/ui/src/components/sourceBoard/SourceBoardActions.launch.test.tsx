@@ -41,9 +41,14 @@ const closedSurfaces: number[] = [];
 
 const sessionState = {
   currentSessionId: 'session-7',
-  newSessionDraft: { open: false },
+  newSessionDraft: { open: false } as { open: boolean; workDraftId?: string },
   getDirectoryForSession: () => '/workspace/app',
-  openNewSessionDraft: (options?: DraftOptions) => { if (options) openedDrafts.push(options); },
+  // A real draft open replaces the draft and gives every project draft its own
+  // composer id; a chip is addressed to that id once the draft exists.
+  openNewSessionDraft: (options?: DraftOptions) => {
+    if (options) openedDrafts.push(options);
+    sessionState.newSessionDraft = { open: true, workDraftId: 'draft-1' };
+  },
 };
 const useSessionUIStore = Object.assign(
   <T,>(selector: (state: typeof sessionState) => T): T => selector(sessionState),
@@ -96,6 +101,8 @@ describe('SourceBoardActions launch behavior', () => {
   let host: HTMLDivElement;
 
   beforeEach(() => {
+    // Each case starts from a store with no draft open, as a fresh app does.
+    sessionState.newSessionDraft = { open: false };
     openedDrafts.length = 0;
     pushedReferences.length = 0;
     resolveCalls.length = 0;

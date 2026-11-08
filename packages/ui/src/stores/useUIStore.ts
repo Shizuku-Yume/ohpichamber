@@ -339,6 +339,10 @@ const normalizeContextPanelTabDedupeKey = (
   return mode;
  }
 
+ // A file tab's identity is the path itself, edge spaces included: trimming
+ // it would merge two files whose names differ by a space.
+ if (mode === 'file' && dedupeKey === targetPath && targetPath) return targetPath;
+
  if (typeof dedupeKey === 'string') {
   const trimmed = dedupeKey.trim();
   if (trimmed) {
@@ -3423,6 +3427,12 @@ export const useUIStore = create<UIStore>()(
     },
     setAgentWorkflowToolEnabled: (value) => {
      set({ agentWorkflowToolEnabled: value });
+     if (value) return;
+     // Off hides workflows (`selectWorkflowsShown`), so an open Workflows tab closes too.
+     for (const [directory, panel] of Object.entries(get().contextPanelByDirectory)) {
+      const workflowTabIds = panel.tabs.filter((tab) => tab.mode === 'workflows').map((tab) => tab.id);
+      if (workflowTabIds.length > 0) get().closeContextPanelTabs(directory, workflowTabIds);
+     }
     },
     setAgentMemoryFeatureAvailable: (value) => {
      set({ agentMemoryFeatureAvailable: value });
@@ -3580,7 +3590,7 @@ export const useUIStore = create<UIStore>()(
    {
     name: 'ui-store',
     storage: createDeferredSafeJSONStorage(),
-    version: 26,
+    version: 27,
     migrate: (persistedState, version) => {
      if (!persistedState || typeof persistedState !== 'object') {
       return persistedState;
@@ -3592,6 +3602,12 @@ export const useUIStore = create<UIStore>()(
      // the synced settings after hydration.
      if (version < 23) {
       state.tableCellWrap = true;
+     }
+
+     // v26 -> v27: Context sources moved up the default order; an order
+     // the user arranged stays.
+     if (version < 27 && Array.isArray(state.workStatusSectionOrder)) {
+      state.workStatusSectionOrder = sanitizeWorkStatusSectionOrder(state.workStatusSectionOrder, false);
      }
 
      // v20 -> v21: enable telemetry by default; preserve explicit choices.

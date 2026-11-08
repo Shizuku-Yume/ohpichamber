@@ -63,7 +63,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from "@/components/icon/Icon";
 import { WhitespaceToggleIcon } from './WhitespaceToggleIcon';
-import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
+import { toastContextFileOpenFailure, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
 import { toAbsoluteFilePath } from '@/lib/path-utils';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { findDiffScrollAnchor, getRestoredDiffScrollTop, type DiffScrollAnchor } from './diffScrollAnchor';
@@ -2777,7 +2777,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             const absolutePath = toAbsolutePath(effectiveDirectory, filePath);
             const openValidation = await validateContextFileOpen(files, absolutePath, { directory: effectiveDirectory });
             if (!openValidation.ok) {
-                toast.error(getContextFileOpenFailureMessage(openValidation.reason));
+                toastContextFileOpenFailure(absolutePath, openValidation);
                 return;
             }
 

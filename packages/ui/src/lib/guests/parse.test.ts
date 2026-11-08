@@ -417,15 +417,30 @@ describe('notification channels on a catalog row', () => {
   });
 });
 
-test('reads an OpenCode service role and its approval capability from the catalog', () => {
+test('reads a service role and its approval capability from the catalog', () => {
   const row = {
     id: 'api-provider', name: 'API provider', icon: 'plug',
-    service: { runtime: 'host', provides: ['opencode'], granted: false },
-    capabilities: { requested: ['service', 'opencode'], granted: ['service'] },
+    service: { runtime: 'host', provides: ['quota'], granted: false },
+    capabilities: { requested: ['service', 'transcript'], granted: ['service'] },
   };
   expect(parseGuestCatalogJson(JSON.stringify({ guests: [row] }))).toEqual({
     guests: [row],
     opencodePlugins: null,
     unreadable: [],
+  });
+});
+
+test('a row asking for the capability this build retired is listed, never half-read', () => {
+  // `opencode` was a capability of the OpenCode runtime; OMP has none, so the
+  // row cannot be granted what it asks for and stays out of the catalog.
+  const row = {
+    id: 'api-provider', name: 'API provider', icon: 'plug',
+    service: { runtime: 'host', provides: ['quota'], granted: false },
+    capabilities: { requested: ['service', 'opencode'], granted: ['service'] },
+  };
+  expect(parseGuestCatalogJson(JSON.stringify({ guests: [row] }))).toEqual({
+    guests: [],
+    opencodePlugins: null,
+    unreadable: [{ id: 'api-provider', name: 'API provider', builtIn: false }],
   });
 });

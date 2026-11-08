@@ -9,21 +9,21 @@ import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/fi
 import { useCommitSettings } from '@/lib/gitCommitSettings';
 import { useI18n } from '@/lib/i18n';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+ Select,
+ SelectContent,
+ SelectItem,
+ SelectTrigger,
+ SelectValue,
 } from '@/components/ui/select';
 import {
-  SettingsSection,
-  SettingsControlGroup,
-  SettingsRadioGroup,
-  SettingsRadioOption,
-  SettingsCheckboxRow,
-  SettingsFieldRow,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+ SettingsSection,
+ SettingsControlGroup,
+ SettingsRadioGroup,
+ SettingsRadioOption,
+ SettingsCheckboxRow,
+ SettingsFieldRow,
+ SETTINGS_OPTION_STACK_CLASS,
+ SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 /** The OMP model role commit messages and PR descriptions are generated with. */
@@ -38,317 +38,323 @@ const KNOWN_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto
  * while the chosen model still supports reasoning.
  */
 const splitRoleSelector = (selector: string): { model: string; effort: string } => {
-  const trimmed = selector.trim();
-  const colon = trimmed.lastIndexOf(':');
-  if (colon > 0) {
-    const suffix = trimmed.slice(colon + 1);
-    if ((KNOWN_EFFORTS as readonly string[]).includes(suffix.toLowerCase())) {
-      return { model: trimmed.slice(0, colon), effort: suffix };
-    }
+ const trimmed = selector.trim();
+ const colon = trimmed.lastIndexOf(':');
+ if (colon > 0) {
+  const suffix = trimmed.slice(colon + 1);
+  if ((KNOWN_EFFORTS as readonly string[]).includes(suffix.toLowerCase())) {
+   return { model: trimmed.slice(0, colon), effort: suffix };
   }
-  return { model: trimmed, effort: '' };
+ }
+ return { model: trimmed, effort: '' };
 };
 
 /** Only string roles survive; a malformed record must not erase the others. */
 const readRoleRecord = (value: unknown): Record<string, string> => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
-  );
+ if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+ return Object.fromEntries(
+  Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+ );
 };
 
 export const GitSettings: React.FC = () => {
-  const { t } = useI18n();
-  const settingsDirectory = useSettingsDirectory();
-  const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
-  const setSettingsGitmojiEnabled = useConfigStore((state) => state.setSettingsGitmojiEnabled);
-  const showGitignored = useFilesViewShowGitignored();
-  const { settings: commitSettings, setSetting: setCommitSetting } = useCommitSettings();
-  const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
-  const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
+ const { t } = useI18n();
+ const settingsDirectory = useSettingsDirectory();
+ const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
+ const setSettingsGitmojiEnabled = useConfigStore((state) => state.setSettingsGitmojiEnabled);
+ const showGitignored = useFilesViewShowGitignored();
+ const { settings: commitSettings, setSetting: setCommitSetting } = useCommitSettings();
+ const gitChangesViewMode = useUIStore((state) => state.gitChangesViewMode);
+ const setGitChangesViewMode = useUIStore((state) => state.setGitChangesViewMode);
 
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
-  const [models, setModels] = React.useState<Model[]>([]);
-  const [isSavingCommitModel, setIsSavingCommitModel] = React.useState(false);
-  const [commitModelError, setCommitModelError] = React.useState<string | null>(null);
-  const ompStateRef = React.useRef<OmpSettingsState | null>(null);
-  ompStateRef.current = ompState;
+ const [isLoading, setIsLoading] = React.useState(true);
+ const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
+ const [models, setModels] = React.useState<Model[]>([]);
+ const [isSavingCommitModel, setIsSavingCommitModel] = React.useState(false);
+ const [commitModelError, setCommitModelError] = React.useState<string | null>(null);
+ const ompStateRef = React.useRef<OmpSettingsState | null>(null);
+ ompStateRef.current = ompState;
 
-  const viewOptions = React.useMemo(
-    () => [
-      { id: 'flat' as const, label: t('settings.openchamber.git.option.flatList') },
-      { id: 'tree' as const, label: t('settings.openchamber.git.option.treeView') },
-    ],
-    [t]
-  );
+ const viewOptions = React.useMemo(
+  () => [
+   { id: 'flat' as const, label: t('settings.openchamber.git.option.flatList') },
+   { id: 'tree' as const, label: t('settings.openchamber.git.option.treeView') },
+  ],
+  [t]
+ );
 
-  // Load current settings
-  React.useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const data = await loadDesktopSettings();
-        if (data) {
-          if (data.gitmojiEnabled !== undefined) {
-            setSettingsGitmojiEnabled(data.gitmojiEnabled);
-          }
-          if (data.gitChangesViewMode !== undefined) {
-            setGitChangesViewMode(data.gitChangesViewMode);
-          }
-        }
-
-      } catch (error) {
-        console.warn('Failed to load git settings:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    loadSettings();
-  }, [setGitChangesViewMode, setSettingsGitmojiEnabled]);
-
-  // The commit role lives in OMP's `modelRoles`, so it is read for the
-  // directory Settings describes — not whichever chat happens to be open.
-  React.useEffect(() => {
-    if (!settingsDirectory) {
-      setOmpState(null);
-      setModels([]);
-      return;
-    }
-    const abort = new AbortController();
-    let active = true;
-    void (async () => {
-      try {
-        const workspace = await canonicalClient.resolveWorkspace(settingsDirectory, { signal: abort.signal });
-        const [snapshot, modelCatalog] = await Promise.all([
-          canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal),
-          canonicalClient.getModels(workspace.workspaceId).catch(() => null),
-        ]);
-        if (!active || abort.signal.aborted) return;
-        setOmpState(snapshot);
-        setModels(modelCatalog?.models ?? []);
-        setCommitModelError(null);
-      } catch (error) {
-        if (!active || abort.signal.aborted) return;
-        console.warn('Failed to load the commit message model:', error);
-        setOmpState(null);
-        setModels([]);
-      }
-    })();
-    return () => {
-      active = false;
-      abort.abort();
-    };
-  }, [settingsDirectory]);
-
-  const roleRecord = React.useMemo(
-    () => readRoleRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value),
-    [ompState],
-  );
-  const { model: commitModelId, effort: commitEffort } = React.useMemo(
-    () => splitRoleSelector(roleRecord[COMMIT_ROLE] ?? ''),
-    [roleRecord],
-  );
-
-  const handleGitmojiChange = React.useCallback(async (enabled: boolean) => {
-    setSettingsGitmojiEnabled(enabled);
-    try {
-      await updateDesktopSettings({
-        gitmojiEnabled: enabled,
-      });
-    } catch (error) {
-      console.warn('Failed to save gitmoji setting:', error);
-    }
-  }, [setSettingsGitmojiEnabled]);
-
-  const handleGitChangesViewModeChange = React.useCallback((mode: 'flat' | 'tree') => {
-    if (mode === gitChangesViewMode) {
-      return;
+ // Load current settings
+ React.useEffect(() => {
+  const loadSettings = async () => {
+   try {
+    const data = await loadDesktopSettings();
+    if (data) {
+     if (data.gitmojiEnabled !== undefined) {
+      setSettingsGitmojiEnabled(data.gitmojiEnabled);
+     }
+     if (data.gitChangesViewMode !== undefined) {
+      setGitChangesViewMode(data.gitChangesViewMode);
+     }
     }
 
-    setGitChangesViewMode(mode);
-    void updateDesktopSettings({ gitChangesViewMode: mode });
-  }, [gitChangesViewMode, setGitChangesViewMode]);
+   } catch (error) {
+    console.warn('Failed to load git settings:', error);
+   } finally {
+    setIsLoading(false);
+   }
+  };
+  loadSettings();
+ }, [setGitChangesViewMode, setSettingsGitmojiEnabled]);
 
-  // Saving one role writes the whole record, so every other role is carried
-  // over untouched. A concurrent config write is re-read and merged rather
-  // than overwritten, and the outcome reports through the shared save
-  // indicator so a refused write is never silent.
-  const writeCommitRole = React.useCallback(async (selector: string) => {
-    const current = ompStateRef.current;
-    if (!current) return;
-    setIsSavingCommitModel(true);
+ // The commit role lives in OMP's `modelRoles`, so it is read for the
+ // directory Settings describes — not whichever chat happens to be open.
+ React.useEffect(() => {
+  if (!settingsDirectory) {
+   setOmpState(null);
+   setModels([]);
+   return;
+  }
+  const abort = new AbortController();
+  let active = true;
+  void (async () => {
+   try {
+    const workspace = await canonicalClient.resolveWorkspace(settingsDirectory, { signal: abort.signal });
+    const [snapshot, modelCatalog] = await Promise.all([
+     canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal),
+     canonicalClient.getModels(workspace.workspaceId).catch(() => null),
+    ]);
+    if (!active || abort.signal.aborted) return;
+    setOmpState(snapshot);
+    setModels(modelCatalog?.models ?? []);
     setCommitModelError(null);
-    reportSettingsSaveState('saving');
-    const currentRoles = readRoleRecord(current.settings.find((setting) => setting.id === 'modelRoles')?.value);
-    const nextRoles = { ...currentRoles };
-    if (selector) nextRoles[COMMIT_ROLE] = selector;
-    else delete nextRoles[COMMIT_ROLE];
-    try {
-      let next: OmpSettingsState;
-      try {
-        next = await canonicalClient.updateOmpSettings(current.workspaceId, {
-          expectedRevision: current.revision,
-          changes: [{ id: 'modelRoles', value: nextRoles }],
-        });
-      } catch (error) {
-        if (!(error instanceof CanonicalApiError) || error.problem.status !== 409) throw error;
-        const latest = await canonicalClient.getOmpSettings(current.workspaceId);
-        const merged = readRoleRecord(latest.settings.find((setting) => setting.id === 'modelRoles')?.value);
-        if (selector) merged[COMMIT_ROLE] = selector;
-        else delete merged[COMMIT_ROLE];
-        next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
-          expectedRevision: latest.revision,
-          changes: [{ id: 'modelRoles', value: merged }],
-        });
-      }
-      setOmpState(next);
-      reportSettingsSaveState('saved');
-    } catch (error) {
-      console.warn('Failed to save the commit message model:', error);
-      reportSettingsSaveState('error');
-      setCommitModelError(t('settings.common.status.saveFailedReason', {
-        reason: error instanceof Error ? error.message : t('settings.common.status.saveFailed'),
-      }));
-    } finally {
-      setIsSavingCommitModel(false);
-    }
-  }, [t]);
+   } catch (error) {
+    if (!active || abort.signal.aborted) return;
+    console.warn('Failed to load the commit message model:', error);
+    setOmpState(null);
+    setModels([]);
+   }
+  })();
+  return () => {
+   active = false;
+   abort.abort();
+  };
+ }, [settingsDirectory]);
 
-  const handleCommitModelChange = React.useCallback((value: string) => {
-    if (value === INHERIT_VALUE) {
-      void writeCommitRole('');
-      return;
-    }
-    const nextModel = models.find((model) => `${model.provider}/${model.modelId}` === value);
-    const effortToKeep = nextModel
-      && (nextModel.reasoningEffortSupported || nextModel.reasoningOptions.length > 0)
-      ? commitEffort
-      : '';
-    void writeCommitRole(effortToKeep ? `${value}:${effortToKeep}` : value);
-  }, [commitEffort, models, writeCommitRole]);
+ const roleRecord = React.useMemo(
+  () => readRoleRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value),
+  [ompState],
+ );
+ const { model: commitModelId, effort: commitEffort } = React.useMemo(
+  () => splitRoleSelector(roleRecord[COMMIT_ROLE] ?? ''),
+  [roleRecord],
+ );
 
-  if (isLoading) {
-    return null;
+ const handleGitmojiChange = React.useCallback(async (enabled: boolean) => {
+  setSettingsGitmojiEnabled(enabled);
+  try {
+   await updateDesktopSettings({
+    gitmojiEnabled: enabled,
+   });
+  } catch (error) {
+   console.warn('Failed to save gitmoji setting:', error);
+  }
+ }, [setSettingsGitmojiEnabled]);
+
+ const handleGitChangesViewModeChange = React.useCallback((mode: 'flat' | 'tree') => {
+  if (mode === gitChangesViewMode) {
+   return;
   }
 
-  return (
-    <SettingsSection title={t('settings.openchamber.git.title')}>
-      <div className={SETTINGS_OPTION_STACK_CLASS}>
-        <SettingsFieldRow
-          settingsItem="git.commit-model"
-          label={t('settings.omp.modelRoles.role.commit.label')}
-          info={t('settings.omp.modelRoles.role.commit.desc')}
-        >
-          <Select
-            value={commitModelId || INHERIT_VALUE}
-            onValueChange={handleCommitModelChange}
-            disabled={isSavingCommitModel || !ompState}
-          >
-            <SelectTrigger
-              className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
-              aria-label={t('settings.omp.modelRoles.role.commit.label')}
-            >
-              <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INHERIT_VALUE}>
-                {t('settings.omp.modelRoles.inheritFallback')}
-              </SelectItem>
-              {models.map((model) => {
-                const id = `${model.provider}/${model.modelId}`;
-                return (
-                  <SelectItem key={id} value={id}>
-                    {model.name || model.modelId} ({model.provider})
-                  </SelectItem>
-                );
-              })}
-              {commitModelId && !models.some((model) => `${model.provider}/${model.modelId}` === commitModelId) ? (
-                <SelectItem value={commitModelId}>
-                  {commitModelId} ({t('settings.omp.modelRoles.customModel')})
-                </SelectItem>
-              ) : null}
-            </SelectContent>
-          </Select>
-        </SettingsFieldRow>
-        {commitModelError ? (
-          <p role="alert" className="typography-meta text-[var(--status-error)]">{commitModelError}</p>
-        ) : null}
+  setGitChangesViewMode(mode);
+  void updateDesktopSettings({ gitChangesViewMode: mode });
+ }, [gitChangesViewMode, setGitChangesViewMode]);
 
-        <SettingsControlGroup
-          settingsItem="git.changes-view"
-          title={t('settings.openchamber.git.changesViewTitle')}
-        >
-          <SettingsRadioGroup aria-label={t('settings.openchamber.git.changesViewAria')}>
-            {viewOptions.map((option) => (
-              <SettingsRadioOption
-                key={option.id}
-                selected={gitChangesViewMode === option.id}
-                onSelect={() => {
-                  handleGitChangesViewModeChange(option.id);
-                }}
-                label={option.label}
-                ariaLabel={t('settings.openchamber.git.optionAria', { option: option.label })}
-              />
-            ))}
-          </SettingsRadioGroup>
-        </SettingsControlGroup>
+ // Saving one role writes the whole record, so every other role is carried
+ // over untouched. A concurrent config write is re-read and merged rather
+ // than overwritten, and the outcome reports through the shared save
+ // indicator so a refused write is never silent.
+ const writeCommitRole = React.useCallback(async (selector: string) => {
+  const current = ompStateRef.current;
+  if (!current) return;
+  setIsSavingCommitModel(true);
+  setCommitModelError(null);
+  reportSettingsSaveState('saving');
+  const currentRoles = readRoleRecord(current.settings.find((setting) => setting.id === 'modelRoles')?.value);
+  const nextRoles = { ...currentRoles };
+  if (selector) nextRoles[COMMIT_ROLE] = selector;
+  else delete nextRoles[COMMIT_ROLE];
+  try {
+   let next: OmpSettingsState;
+   try {
+    next = await canonicalClient.updateOmpSettings(current.workspaceId, {
+     expectedRevision: current.revision,
+     changes: [{ id: 'modelRoles', value: nextRoles }],
+    });
+   } catch (error) {
+    if (!(error instanceof CanonicalApiError) || error.problem.status !== 409) throw error;
+    const latest = await canonicalClient.getOmpSettings(current.workspaceId);
+    const merged = readRoleRecord(latest.settings.find((setting) => setting.id === 'modelRoles')?.value);
+    if (selector) merged[COMMIT_ROLE] = selector;
+    else delete merged[COMMIT_ROLE];
+    next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
+     expectedRevision: latest.revision,
+     changes: [{ id: 'modelRoles', value: merged }],
+    });
+   }
+   setOmpState(next);
+   reportSettingsSaveState('saved');
+  } catch (error) {
+   console.warn('Failed to save the commit message model:', error);
+   reportSettingsSaveState('error');
+   setCommitModelError(t('settings.common.status.saveFailedReason', {
+    reason: error instanceof Error ? error.message : t('settings.common.status.saveFailed'),
+   }));
+  } finally {
+   setIsSavingCommitModel(false);
+  }
+ }, [t]);
 
-        <SettingsCheckboxRow
-          settingsItem="git.gitmoji"
-          checked={settingsGitmojiEnabled}
-          onChange={(checked) => {
-            void handleGitmojiChange(checked);
-          }}
-          label={t('settings.openchamber.git.enableGitmoji')}
-          ariaLabel={t('settings.openchamber.git.enableGitmojiAria')}
-        />
+ const handleCommitModelChange = React.useCallback((value: string) => {
+  if (value === INHERIT_VALUE) {
+   void writeCommitRole('');
+   return;
+  }
+  const nextModel = models.find((model) => `${model.provider}/${model.modelId}` === value);
+  const effortToKeep = nextModel
+   && (nextModel.reasoningEffortSupported || nextModel.reasoningOptions.length > 0)
+   ? commitEffort
+   : '';
+  void writeCommitRole(effortToKeep ? `${value}:${effortToKeep}` : value);
+ }, [commitEffort, models, writeCommitRole]);
 
-        <SettingsControlGroup
-          settingsItem="git.commit-generation"
-          title={t('settings.openchamber.git.commitGeneration.title')}
-        >
-          <SettingsCheckboxRow
-            settingsItem="git.commit-generation.generate"
-            checked={commitSettings.generateCommitMessages}
-            onChange={(checked) => setCommitSetting('generateCommitMessages', checked)}
-            label={t('settings.openchamber.git.commitGeneration.generateMessages.label')}
-            description={t('settings.openchamber.git.commitGeneration.generateMessages.desc')}
-            ariaLabel={t('settings.openchamber.git.commitGeneration.generateMessages.label')}
-          />
-          <SettingsCheckboxRow
-            settingsItem="git.commit-generation.reasoning"
-            checked={commitSettings.commitMessageReasoning}
-            onChange={(checked) => setCommitSetting('commitMessageReasoning', checked)}
-            label={t('settings.openchamber.git.commitGeneration.reasoning.label')}
-            description={t('settings.openchamber.git.commitGeneration.reasoning.desc')}
-            ariaLabel={t('settings.openchamber.git.commitGeneration.reasoning.label')}
-          />
-          <SettingsCheckboxRow
-            settingsItem="git.commit-generation.notes"
-            checked={commitSettings.commitMessageNotes}
-            onChange={(checked) => setCommitSetting('commitMessageNotes', checked)}
-            label={t('settings.openchamber.git.commitGeneration.notes.label')}
-            description={t('settings.openchamber.git.commitGeneration.notes.desc')}
-            ariaLabel={t('settings.openchamber.git.commitGeneration.notes.label')}
-          />
-          <SettingsCheckboxRow
-            settingsItem="git.commit-generation.change-id"
-            checked={commitSettings.commitMessageChangeId}
-            onChange={(checked) => setCommitSetting('commitMessageChangeId', checked)}
-            label={t('settings.openchamber.git.commitGeneration.changeId.label')}
-            description={t('settings.openchamber.git.commitGeneration.changeId.desc')}
-            ariaLabel={t('settings.openchamber.git.commitGeneration.changeId.label')}
-          />
-        </SettingsControlGroup>
+ if (isLoading) {
+  return null;
+ }
 
-        <SettingsCheckboxRow
-          settingsItem="git.gitignored-files"
-          checked={showGitignored}
-          onChange={setFilesViewShowGitignored}
-          label={t('settings.openchamber.git.showGitignored')}
-          ariaLabel={t('settings.openchamber.git.showGitignoredAria')}
-        />
-      </div>
-    </SettingsSection>
-  );
+ return (
+  <SettingsSection title={t('settings.openchamber.git.title')}>
+   <div className={SETTINGS_OPTION_STACK_CLASS}>
+    <SettingsFieldRow
+     settingsItem="git.commit-model"
+     label={t('settings.omp.modelRoles.role.commit.label')}
+     info={t('settings.omp.modelRoles.role.commit.desc')}
+    >
+     <Select
+      value={commitModelId || INHERIT_VALUE}
+      onValueChange={handleCommitModelChange}
+      disabled={isSavingCommitModel || !ompState}
+     >
+      <SelectTrigger
+       className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+       aria-label={t('settings.omp.modelRoles.role.commit.label')}
+      >
+       <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')}>
+        {commitModelId
+         ? (models.find((model) => `${model.provider}/${model.modelId}` === commitModelId)
+          ? `${models.find((model) => `${model.provider}/${model.modelId}` === commitModelId)?.name || commitModelId.split('/').pop()} (${commitModelId.split('/')[0]})`
+          : `${commitModelId} (${t('settings.omp.modelRoles.customModel')})`)
+         : t('settings.omp.modelRoles.inheritFallback')}
+       </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+       <SelectItem value={INHERIT_VALUE}>
+        {t('settings.omp.modelRoles.inheritFallback')}
+       </SelectItem>
+       {models.map((model) => {
+        const id = `${model.provider}/${model.modelId}`;
+        return (
+         <SelectItem key={id} value={id}>
+          {model.name || model.modelId} ({model.provider})
+         </SelectItem>
+        );
+       })}
+       {commitModelId && !models.some((model) => `${model.provider}/${model.modelId}` === commitModelId) ? (
+        <SelectItem value={commitModelId}>
+         {commitModelId} ({t('settings.omp.modelRoles.customModel')})
+        </SelectItem>
+       ) : null}
+      </SelectContent>
+     </Select>
+    </SettingsFieldRow>
+    {commitModelError ? (
+     <p role="alert" className="typography-meta text-[var(--status-error)]">{commitModelError}</p>
+    ) : null}
+
+    <SettingsControlGroup
+     settingsItem="git.changes-view"
+     title={t('settings.openchamber.git.changesViewTitle')}
+    >
+     <SettingsRadioGroup aria-label={t('settings.openchamber.git.changesViewAria')}>
+      {viewOptions.map((option) => (
+       <SettingsRadioOption
+        key={option.id}
+        selected={gitChangesViewMode === option.id}
+        onSelect={() => {
+         handleGitChangesViewModeChange(option.id);
+        }}
+        label={option.label}
+        ariaLabel={t('settings.openchamber.git.optionAria', { option: option.label })}
+       />
+      ))}
+     </SettingsRadioGroup>
+    </SettingsControlGroup>
+
+    <SettingsCheckboxRow
+     settingsItem="git.gitmoji"
+     checked={settingsGitmojiEnabled}
+     onChange={(checked) => {
+      void handleGitmojiChange(checked);
+     }}
+     label={t('settings.openchamber.git.enableGitmoji')}
+     ariaLabel={t('settings.openchamber.git.enableGitmojiAria')}
+    />
+
+    <SettingsControlGroup
+     settingsItem="git.commit-generation"
+     title={t('settings.openchamber.git.commitGeneration.title')}
+    >
+     <SettingsCheckboxRow
+      settingsItem="git.commit-generation.generate"
+      checked={commitSettings.generateCommitMessages}
+      onChange={(checked) => setCommitSetting('generateCommitMessages', checked)}
+      label={t('settings.openchamber.git.commitGeneration.generateMessages.label')}
+      description={t('settings.openchamber.git.commitGeneration.generateMessages.desc')}
+      ariaLabel={t('settings.openchamber.git.commitGeneration.generateMessages.label')}
+     />
+     <SettingsCheckboxRow
+      settingsItem="git.commit-generation.reasoning"
+      checked={commitSettings.commitMessageReasoning}
+      onChange={(checked) => setCommitSetting('commitMessageReasoning', checked)}
+      label={t('settings.openchamber.git.commitGeneration.reasoning.label')}
+      description={t('settings.openchamber.git.commitGeneration.reasoning.desc')}
+      ariaLabel={t('settings.openchamber.git.commitGeneration.reasoning.label')}
+     />
+     <SettingsCheckboxRow
+      settingsItem="git.commit-generation.notes"
+      checked={commitSettings.commitMessageNotes}
+      onChange={(checked) => setCommitSetting('commitMessageNotes', checked)}
+      label={t('settings.openchamber.git.commitGeneration.notes.label')}
+      description={t('settings.openchamber.git.commitGeneration.notes.desc')}
+      ariaLabel={t('settings.openchamber.git.commitGeneration.notes.label')}
+     />
+     <SettingsCheckboxRow
+      settingsItem="git.commit-generation.change-id"
+      checked={commitSettings.commitMessageChangeId}
+      onChange={(checked) => setCommitSetting('commitMessageChangeId', checked)}
+      label={t('settings.openchamber.git.commitGeneration.changeId.label')}
+      description={t('settings.openchamber.git.commitGeneration.changeId.desc')}
+      ariaLabel={t('settings.openchamber.git.commitGeneration.changeId.label')}
+     />
+    </SettingsControlGroup>
+
+    <SettingsCheckboxRow
+     settingsItem="git.gitignored-files"
+     checked={showGitignored}
+     onChange={setFilesViewShowGitignored}
+     label={t('settings.openchamber.git.showGitignored')}
+     ariaLabel={t('settings.openchamber.git.showGitignoredAria')}
+    />
+   </div>
+  </SettingsSection>
+ );
 };

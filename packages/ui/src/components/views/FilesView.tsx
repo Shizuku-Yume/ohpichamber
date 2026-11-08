@@ -62,7 +62,7 @@ import { cn, getRevealLabelKey } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isAudioFile, isBinaryFile, isDelimitedTableFile, isDrawioFile, isExcalidrawFile, isFontFile, isImageFile, isMermaidFile, isPdfFile, isSvgFile, isVideoFile, looksLikeBinaryText } from '@/lib/toolHelpers';
 import { shouldAllowFileDraftSave, shouldScheduleFileAutosave } from '@/lib/fileEditorAutosave';
 import { MAX_OPEN_FILE_BYTES } from '@/lib/fileOpenLimits';
-import { formatFileSize } from '@/lib/fileSize';
+import { getContextFileSizeLimitMessage } from '@/lib/contextFileOpenGuard';
 import { LARGE_FILE_CHAR_THRESHOLD, initialFileTextMode, makeFileContentCacheKey, prepareFileEditorContent, serializeEditorContent, type FileLineEnding } from './fileEditorContent';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { subscribeToFileContentInvalidation } from '@/lib/fileContentInvalidation';
@@ -2131,7 +2131,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
     if (sizeStat && sizeStat.size > MAX_OPEN_FILE_BYTES) {
       setFileContent('');
       setDraftContent('');
-      setFileError(t('contextFileOpen.failure.tooLargeSize', { size: formatFileSize(MAX_OPEN_FILE_BYTES) }));
+      setFileError(getContextFileSizeLimitMessage(sizeStat.size, t));
       setFailedFilePath(node.path);
       lastLoadedFileStatRef.current = null;
       setFileLoading(false);

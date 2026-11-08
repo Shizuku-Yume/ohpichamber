@@ -53,6 +53,40 @@ const toastErrors: Array<{ title: string; description?: string }> = [];
 const toastWarnings: string[] = [];
 const directoryStates = new Map<string, DirectoryState>();
 const storedMetadata = new Map<string, WorktreeMetadata | null>();
+// The shape `fetchProjectSetup` answers with: no shared commands, so nothing
+// asks for trust; an empty teardown, so the removal carries none.
+const EMPTY_PROJECT_SETUP = {
+  trust: { hash: null as string | null, trusted: true },
+  setupWorktree: [] as string[],
+  setupWorktreeWait: false,
+  teardownWorktree: [] as string[],
+  projectActions: [] as unknown[],
+  projectActionsPrimaryId: null as string | null,
+  draftStarters: [] as unknown[],
+  shared: {
+    status: 'missing' as const,
+    path: '.openchamber/project.json',
+    setupWorktree: [] as string[],
+    setupWorktreeWait: null as boolean | null,
+    teardownWorktree: [] as string[],
+    projectActions: [] as unknown[],
+    draftStarters: [] as unknown[],
+    plansDir: null as string | null,
+  },
+  personal: {
+    setupWorktree: [] as string[],
+    setupWorktreeWait: null as boolean | null,
+    setupWorktreeMode: 'append' as const,
+    worktreeDirectory: null as string | null,
+    teardownWorktree: [] as string[],
+    projectActions: [] as unknown[],
+    projectActionsPrimaryId: null as string | null,
+    draftStarters: [] as unknown[],
+    hiddenSharedActionIds: [] as string[],
+    sharedTrust: null as { hash: string; trustedAt: number } | null,
+  },
+};
+
 const originalConsoleWarn = console.warn;
 type SessionUIState = {
   availableWorktrees: WorktreeMetadata[];
@@ -131,6 +165,7 @@ mock.module('@/lib/gitApi', () => ({
       list: mock(() => Promise.resolve([])),
       create: mock(() => Promise.resolve(null)),
       validate: mock(() => Promise.resolve({ ok: true, errors: [] })),
+      teardown: mock(() => Promise.resolve({ success: true })),
       remove: mock((projectDirectory: string, options: { directory: string; deleteLocalBranch?: boolean }) => {
         removeWorktreeCalls.push({
           projectDirectory,
@@ -145,6 +180,11 @@ mock.module('@/lib/gitApi', () => ({
 
 mock.module('@/lib/openchamberConfig', () => ({
   substituteCommandVariables: (command: string) => command,
+  // A removal resolves the project's teardown first; nothing is configured
+  // here, so it carries none and never asks for trust.
+  fetchProjectSetup: async () => EMPTY_PROJECT_SETUP,
+  getProjectSetup: async () => EMPTY_PROJECT_SETUP,
+  updateProjectSetup: async () => true,
 }));
 
 mock.module('@/lib/worktreeSessionCreator', () => ({
@@ -161,6 +201,8 @@ mock.module('@/lib/worktrees/worktreeBootstrap', () => ({
   clearWorktreeBootstrapState: mock(),
   markWorktreeBootstrapPending: mock(),
   setWorktreeBootstrapState: mock(),
+  // Removal skips the teardown of a checkout whose bootstrap failed.
+  getWorktreeBootstrapState: () => null,
   startWorktreeBootstrapWatcher: mock(),
 }));
 
@@ -271,10 +313,13 @@ const setStatuses = (directory: string, statuses: Record<string, SessionRuntimeS
   directoryStates.set(directory, { session_status: statuses });
 };
 
+// Each step yields a macrotask: a removal resolves the project's teardown
+// over its own async chain before git is asked, so a microtask-only poll can
+// run out of attempts before the answer lands.
 const waitFor = async (predicate: () => boolean): Promise<void> => {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     if (predicate()) return;
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error('Timed out waiting for condition');
 };

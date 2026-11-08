@@ -43,6 +43,7 @@ import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { noteDraftSendWaiting, waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { getWorktreeSetupWaitEnabled } from "@/lib/openchamberConfig"
+import { createSessionDraftId } from "@/stores/useSessionDraftsStore"
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
 import {
   getSyncSessions,
@@ -1516,6 +1517,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
     const nextDraft: NewSessionDraftState = {
       draftId: nextDraftId++,
+      // Every project draft gets its own composer key, so two drafts in one
+      // folder never share text and a caller can address a chip to this one.
+      workDraftId: options?.workDraftId ?? createSessionDraftId(),
       open: true,
       target,
       preparedChatDirectory: null,

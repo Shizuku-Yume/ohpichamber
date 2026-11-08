@@ -144,8 +144,25 @@ export const DefaultsSettings: React.FC = () => {
 
   const supportsReasoning = Boolean(
     matchedModel?.reasoningEffortSupported ||
-      (matchedModel?.reasoningOptions && matchedModel.reasoningOptions.length > 0),
+    (matchedModel?.reasoningOptions && matchedModel.reasoningOptions.length > 0),
   );
+
+  // The trigger shows the option's label, as the list does, not the raw value.
+  const defaultModelLabel = React.useMemo(() => {
+    if (!selectedModelId) return t('settings.omp.modelRoles.inheritFallback');
+    if (!matchedModel) return `${selectedModelId} (${t('settings.omp.modelRoles.customModel')})`;
+    return `${matchedModel.name || matchedModel.modelId} (${matchedModel.provider})`;
+  }, [matchedModel, selectedModelId, t]);
+
+  const effortOptions = React.useMemo(() => (
+    matchedModel?.reasoningOptions && matchedModel.reasoningOptions.length > 0
+      ? matchedModel.reasoningOptions.map((opt) => ({ value: opt.reasoningEffort, label: opt.label }))
+      : DEFAULT_EFFORT_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))
+  ), [matchedModel, t]);
+
+  const defaultEffortLabel = selectedEffort
+    ? effortOptions.find((opt) => opt.value === selectedEffort)?.label ?? selectedEffort
+    : t('settings.omp.modelRoles.thinkingDefault');
 
   const updateRolesOnServer = React.useCallback(
     async (nextRoles: Record<string, string>) => {
@@ -191,7 +208,7 @@ export const DefaultsSettings: React.FC = () => {
         const nextModel = models.find((m) => `${m.provider}/${m.modelId}` === val);
         const nextSupportsReasoning = Boolean(
           nextModel?.reasoningEffortSupported ||
-            (nextModel?.reasoningOptions && nextModel.reasoningOptions.length > 0),
+          (nextModel?.reasoningOptions && nextModel.reasoningOptions.length > 0),
         );
         const effortToKeep = nextSupportsReasoning ? selectedEffort : '';
         nextRoles.default = formatRoleSelector(val, effortToKeep);
@@ -228,7 +245,9 @@ export const DefaultsSettings: React.FC = () => {
                 className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                 aria-label={t('settings.openchamber.defaults.field.defaultModel')}
               >
-                <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')} />
+                <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')}>
+                  {defaultModelLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__inherit__">
@@ -260,22 +279,15 @@ export const DefaultsSettings: React.FC = () => {
                   className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
                   aria-label={t('settings.openchamber.defaults.field.defaultThinking')}
                 >
-                  <SelectValue placeholder={t('settings.omp.modelRoles.thinkingDefault')} />
+                  <SelectValue placeholder={t('settings.omp.modelRoles.thinkingDefault')}>
+                    {defaultEffortLabel}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__default__">
                     {t('settings.omp.modelRoles.thinkingDefault')}
                   </SelectItem>
-                  {(matchedModel?.reasoningOptions && matchedModel.reasoningOptions.length > 0
-                    ? matchedModel.reasoningOptions.map((opt) => ({
-                        value: opt.reasoningEffort,
-                        label: opt.label,
-                      }))
-                    : DEFAULT_EFFORT_OPTIONS.map((opt) => ({
-                        value: opt.value,
-                        label: t(opt.labelKey),
-                      }))
-                  ).map((opt) => (
+                  {effortOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
@@ -295,7 +307,9 @@ export const DefaultsSettings: React.FC = () => {
               className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
               aria-label={t('chat.chatInput.mode.label')}
             >
-              <SelectValue />
+              <SelectValue>
+                {t(SESSION_MODE_OPTIONS.find((opt) => opt.value === defaultSessionMode)?.labelKey ?? 'chat.chatInput.mode.main')}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {SESSION_MODE_OPTIONS.map((opt) => (

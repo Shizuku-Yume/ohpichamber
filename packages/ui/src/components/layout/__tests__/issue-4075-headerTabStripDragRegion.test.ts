@@ -73,8 +73,12 @@ describe('issue #4075 header tab-strip whitespace stays draggable', () => {
   });
 
   test('the draft and pending pills and the new-session button are no-drag', () => {
+    // The fork draws one transient pill for both cases upstream splits in
+    // two: a new session with no tab yet, and a current session whose tab has
+    // not landed. Either way the pill sits in the drag region and must carve
+    // itself out.
     const pills = stripSource.split('\n').filter((line) => line.includes('bg-interactive-selection px-2'));
-    expect(pills.length).toBe(2);
+    expect(pills.length).toBe(1);
     for (const pill of pills) expect(pill).toContain(NO_DRAG);
     expect(lineWith(stripSource, 'new-session button', 'onClick={openNewSessionHere}')).toBeDefined();
     const plusButton = stripSource.slice(stripSource.indexOf('onClick={openNewSessionHere}'));

@@ -32,33 +32,8 @@ import {
  DialogTitle,
 } from '@/components/ui/dialog';
 import { useGuestSurfaces } from '@/hooks/useGuestSurfaces';
-import { sortContextSurfaces } from '@/lib/surfaces/registry';
+import { contextSurfaceGroup, sortContextSurfaces } from '@/lib/surfaces/registry';
 import { cn } from '@/lib/utils';
-
-type ContextSurfaceGroup = 'context' | 'changes' | 'tools' | 'workspace' | 'extensions';
-
-const BUILT_IN_SURFACE_GROUPS = {
- context: 'context',
- git: 'changes',
- pr: 'changes',
- diff: 'changes',
- walkthrough: 'changes',
- editor: 'tools',
- terminal: 'tools',
- browser: 'tools',
- notes: 'workspace',
- workflows: 'workspace',
- chat: 'workspace',
-} as const satisfies Record<string, ContextSurfaceGroup>;
-
-const isBuiltInSurfaceId = (id: string): id is keyof typeof BUILT_IN_SURFACE_GROUPS => (
- Object.hasOwn(BUILT_IN_SURFACE_GROUPS, id)
-);
-
-/** A guest surface is an extension's own; every built-in names its group here. */
-const contextSurfaceGroup = (surface: { id: string }): ContextSurfaceGroup => (
- isBuiltInSurfaceId(surface.id) ? BUILT_IN_SURFACE_GROUPS[surface.id] : 'extensions'
-);
 
 interface SortableSurfaceItem {
  id: string;

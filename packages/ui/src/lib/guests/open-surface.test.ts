@@ -1,12 +1,17 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { openGuestSurface } from './open-surface';
 
+// The store is shared per process: a panel another file left behind must not
+// answer for the directory this file asks about.
+const resetUiStore = () => {
+  useUIStore.setState({ agentWorkflowFeatureAvailable: false, agentWorkflowToolEnabled: false, contextPanelByDirectory: {} });
+};
+
 describe('openGuestSurface', () => {
-  afterEach(() => {
-    useUIStore.setState({ agentWorkflowFeatureAvailable: false, agentWorkflowToolEnabled: false, contextPanelByDirectory: {} });
-  });
+  beforeEach(resetUiStore);
+  afterEach(resetUiStore);
 
   for (const [label, flags] of [
     ['without workflows (VS Code)', { agentWorkflowFeatureAvailable: false, agentWorkflowToolEnabled: true }],

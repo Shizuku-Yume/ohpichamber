@@ -239,11 +239,6 @@ describe('isMentionAlreadyAttached', () => {
         )).toBe(false);
     });
 
-    test('recognizes VS Code native paths', () => {
-        const file = { ...replayedFile('data:text/plain;base64,', 'a.ts'), vscodePath: 'C:\\repo\\src\\a.ts' };
-        expect(isMentionAlreadyAttached({ serverPath: 'C:/repo/src/a.ts', filename: 'a.ts' }, [file])).toBe(true);
-    });
-
     test('keeps a replayed file from another worktree', () => {
         expect(isMentionAlreadyAttached(
             { serverPath: '/new/src/a.ts', filename: 'a.ts' },

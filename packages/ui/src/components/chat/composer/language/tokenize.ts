@@ -61,6 +61,13 @@ export interface ComposerLanguageContext {
     knownSkillNames?: ReadonlySet<string>;
     /** Theme variant for the file-type icons on citation chips; dark when absent. */
     fileIconVariant?: 'light' | 'dark';
+    /**
+     * The session or message each `[[…]]` link mention resolves to, keyed by
+     * `sessionLinkKey`; without it a resolved link stays plain text.
+     */
+    sessionLinkChips?: ReadonlyMap<string, { label: string; title: string; iconHref: string }>;
+    /** Link origins the mention syntax accepts; the app's own when absent. */
+    sessionLinkOrigins?: readonly string[];
 }
 
 /** Mention ranges alone — the composer also needs these to resolve references. */

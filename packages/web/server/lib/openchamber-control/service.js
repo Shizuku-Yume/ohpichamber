@@ -1028,6 +1028,28 @@ export const createOpenChamberControlService = (dependencies) => {
    if (action === 'session.create' || action === 'session.send' || action === 'session.fork') {
     return executeSessionAction(action, input, contextDirectory, options.signal, options.contextSessionId);
    }
+   if (action === 'session.moveToWorktree') {
+    // The action list decides exposure; the Host service decides authorization.
+    // `sessionId` defaults to the calling session, and only that session may
+    // move itself: a sibling or child cannot be relocated by this tool.
+    assertSingleScope(input);
+    if (typeof sessionService?.moveToWorktree !== 'function') {
+     throw new OpenChamberControlError('Moving a session into a worktree is unavailable on this server', 501);
+    }
+    const sessionID = asNonEmptyString(input.sessionId) || asNonEmptyString(options.contextSessionId);
+    if (!sessionID) throw new OpenChamberControlError('sessionId is required', 400);
+    const worktree = input.worktree && typeof input.worktree === 'object' && !Array.isArray(input.worktree) ? input.worktree : {};
+    const carry = input.carry ?? [];
+    return sessionService.moveToWorktree(sessionID, {
+     worktree: {
+      ...(asNonEmptyString(worktree.name) ? { name: asNonEmptyString(worktree.name) } : {}),
+      ...(asNonEmptyString(worktree.branchName) ? { branchName: asNonEmptyString(worktree.branchName) } : {}),
+      ...(asNonEmptyString(worktree.startRef) ? { startRef: asNonEmptyString(worktree.startRef) } : {}),
+      ...(asNonEmptyString(worktree.existingBranch) ? { existingBranch: asNonEmptyString(worktree.existingBranch) } : {}),
+     },
+     carry: Array.isArray(carry) ? carry : [],
+    }, { contextSessionId: options.contextSessionId });
+   }
    if (action === 'session.link') {
     if (!sessionLinks) throw new OpenChamberControlError('Linking is not available on this server', 503);
     assertSingleScope(input);

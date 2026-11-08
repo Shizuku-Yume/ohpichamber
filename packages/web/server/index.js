@@ -81,6 +81,7 @@ import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.j
 import { createMessageSearchRuntime } from './lib/message-search/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
 import { createUnregisteredScheduledWorktreeBridge } from './lib/scheduled-tasks/worktree-bridge.js';
+import { createUnregisteredSessionWorktreeMoveBridge } from './lib/openchamber-sessions/worktree-move-bridge.js';
 import { resolveScheduledTaskOptions, resolveSessionDefaults } from './lib/scheduled-tasks/session-defaults.js';
 import { createScheduledTaskContext } from './lib/scheduled-tasks/existing-session.js';
 import { createChatsScope } from './lib/scheduled-tasks/chats-scope.js';
@@ -105,6 +106,7 @@ import { extensionsPersistPath } from './lib/guests/persist.js';
 import { createGuestSurfaceRuntime } from './lib/guests/surface.js';
 import { BROWSER_PROVIDER_IDLE_MS } from '@openchamber/sdk';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
+import { worktreeSetupOf } from './lib/projects/worktree-setup.js';
 import { ensureChatsDir, migrateLegacyUserDirs } from './lib/data-dir-migration.js';
 import { createProjectContextRuntime } from './lib/project-context/runtime.js';
 import { createAgentMemoryRuntime } from './lib/agent-memory/runtime.js';
@@ -117,7 +119,7 @@ import { readIdleStopSetting, startIdleStop } from './lib/spaces/idle-stop.js';
 import { SPACE_IDLE_EXIT_CODE } from './lib/spaces/layout.js';
 import { createSwitchController, registerSpaceRoutes } from './lib/spaces/routes.js';
 import { spacesHostEnabled } from './lib/spaces/release.js';
-import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, getWorktrees } from './lib/git/service.js';
+import { configureGitEnvironment, configureProjectWorktreeDirectory, resolvePrimaryWorktreeRoot, resolveWorktreeTopLevel, validateWorktreeDirectory, getWorktrees } from './lib/git/service.js';
 import { createEnvironmentStore } from './lib/environment/store.js';
 import { createEnvironmentRuntime } from './lib/environment/runtime.js';
 import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-storage.js';
@@ -691,14 +693,45 @@ const updateSessionMetadataWith = async (sessionID, decide, { directory = '' } =
  }
  return result;
 };
+// The Git routes register later; until they do, a session move refuses
+// rather than pretending it created a checkout.
+const sessionWorktreeMoveBridge = createUnregisteredSessionWorktreeMoveBridge();
 const openChamberSessionService = createOpenChamberSessionService({
  service: hostAgentRuntime.service,
+ // One creation pipeline, one bootstrap and one stash owner for the move: the
+ // same Git operations the New worktree dialog and the scheduler use.
+ worktreeMove: {
+  get createWorktree() { return sessionWorktreeMoveBridge.createWorktree ?? undefined; },
+  get removeWorktree() { return sessionWorktreeMoveBridge.removeWorktree ?? undefined; },
+  get hydrateCheckout() { return sessionWorktreeMoveBridge.hydrateCheckout ?? undefined; },
+  get waitForWorktreeReady() { return sessionWorktreeMoveBridge.waitForWorktreeReady ?? undefined; },
+  get bootstrapStore() { return sessionWorktreeMoveBridge.bootstrapStore ?? undefined; },
+  get stashPush() { return sessionWorktreeMoveBridge.stashPush ?? undefined; },
+  get getPathsWithoutChanges() { return sessionWorktreeMoveBridge.getPathsWithoutChanges ?? undefined; },
+  get stashApply() { return sessionWorktreeMoveBridge.stashApply ?? undefined; },
+  get stashDrop() { return sessionWorktreeMoveBridge.stashDrop ?? undefined; },
+  get listStashes() { return sessionWorktreeMoveBridge.listStashes ?? undefined; },
+  get getBranches() { return sessionWorktreeMoveBridge.getBranches ?? undefined; },
+  get resolvePrimaryWorktreeRoot() { return sessionWorktreeMoveBridge.resolvePrimaryWorktreeRoot ?? undefined; },
+  get resolveWorktreeSetup() { return sessionWorktreeMoveBridge.resolveWorktreeSetup ?? undefined; },
+  warn: (message, error) => console.warn(message, error instanceof Error ? error.message : String(error)),
+ },
  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
  resolveWorkspaceDirectory: agentScopeRuntime.resolveWorkspaceDirectory,
  resolveHostWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
  resolveHostSessionScope: hostAgentRuntime.resolveHostSessionScope,
  resolveHostRelocationScope: hostAgentRuntime.resolveHostRelocationScope,
+ // The move resolves the worktree's start folder and the project's trusted
+ // setup commands through the same owners the dialog reads.
+ resolveWorktreeTopLevel,
+ // The move's start-folder check uses the Git module's own rule.
+ validateWorktreeDirectory: (directory, worktreeRoot) => validateWorktreeDirectory(directory, worktreeRoot),
+ resolveProjectDirectory: async (directory) => {
+  const resolved = await agentScopeRuntime.resolveWorkspaceDirectory(directory);
+  return resolved ? { projectId: resolved.projectId, projectDirectory: resolved.projectDirectory } : null;
+ },
+ worktreeSetupOf,
  agentScopeStore,
  listWorkspaceScopes,
  registerSessionScope: agentScopeRuntime.registerSessionScope,
@@ -2075,6 +2108,7 @@ async function main(options = {}) {
   managedChatsRoot: OPENCHAMBER_CHATS_DIR,
   normalizeDirectoryPath,
   resolveProjectDirectory,
+  readWorktreeSetup: (projectId) => projectConfigRuntime.readProjectSetup(projectId),
   resolveOptionalProjectDirectory,
   validateDirectoryPath,
   readCustomThemesFromDisk,
@@ -2104,6 +2138,7 @@ async function main(options = {}) {
   scheduledTasksRuntime,
   scheduledTaskService,
   scheduledWorktreeBridge,
+  sessionWorktreeMoveBridge,
   openChamberSessionService,
   openChamberControlService,
   getOpenChamberEventClients: () => uiOpenChamberEventClients,

@@ -888,3 +888,111 @@ describe('Host metadata conversion authorization', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'session-scope-')); const selected = path.join(root, 'selected'); fs.mkdirSync(selected); const dataDir = path.join(root, 'data'); fs.mkdirSync(dataDir); const db = new DatabaseSync(path.join(dataDir, 'host-metadata.sqlite')); const store = (await import('./session-metadata-store.js')).createSessionMetadataStore({ dataDir, database: db, closeDatabase: true }); const runtime = createProjectDirectoryRuntime({ fsPromises: fs.promises, path, normalizeDirectoryPath: value => value, refuseDirectory: () => null }); expect(runtime).toBeTruthy(); await store.close(); fs.rmSync(root, { recursive: true, force: true });
   });
 });
+
+describe('session.moveToWorktree', () => {
+  const scope = (sessionId, overrides = {}) => ({ ...validScope(sessionId), ...overrides });
+  const createMoveService = async (overrides = {}) => {
+    const { createOpenChamberSessionService } = await import('./routes.js');
+    const calls = [];
+    const scopes = new Map();
+    const service = createOpenChamberSessionService({
+      service: { request: async () => Response.json({}) },
+      resolveWorkspaceScope: async () => null,
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => validScope(id),
+      resolveHostRelocationScope: async id => scopes.get(id) ?? null,
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async () => { throw new Error('not used'); },
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      sessionMetadataStore: { getState: async () => null, get: async () => null },
+      archiveStore: { getState: async () => null },
+      directCommandAdmissionStore: { claim: async () => true, accept: async () => true },
+      ...overrides,
+      worktreeMove: {
+        getPathsWithoutChanges: async () => [],
+        createWorktree: async () => ({ name: 'fix-login', branch: 'fix-login', path: '/repo/app/worktrees/fix-login' }),
+        removeWorktree: async (...args) => { calls.push(['removeWorktree', ...args]); },
+        waitForWorktreeReady: async () => ({ setupStillRunning: false }),
+        hydrateCheckout: async () => null,
+        bootstrapStore: { read: async () => null, write: async () => null },
+        stashPush: async () => ({ created: false }),
+        stashApply: async () => {},
+        stashDrop: async () => {},
+        listStashes: async () => [],
+        getBranches: async () => ({ all: ['main'], defaultBranches: { origin: 'main' } }),
+        resolvePrimaryWorktreeRoot: async () => ({ root: '/repo/app' }),
+        moveSession: (id, directory) => { calls.push(['moveSession', id, directory]); return [{ sessionId: id }]; },
+        warn: () => {},
+        ...(overrides.worktreeMove ?? {}),
+      },
+    });
+    return { service, calls, scopes };
+  };
+
+  it('refuses a worktree name that is not one relative folder', async () => {
+    const { service, scopes } = await createMoveService();
+    scopes.set('ses_1', scope('ses_1'));
+    for (const name of ['../escape', '/abs', 'a/b', '..', '', 'x:y']) {
+      await expect(service.moveToWorktree('ses_1', { worktree: { name } })).rejects.toMatchObject({ statusCode: 400 });
+    }
+  });
+
+  it('refuses an unknown session and a caller from another session family', async () => {
+    const { service, scopes } = await createMoveService();
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'ok' } })).rejects.toMatchObject({ statusCode: 404 });
+    scopes.set('ses_1', scope('ses_1', { rootSessionId: 'ses_root' }));
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'ok' } }, { contextSessionId: 'ses_other' }))
+      .rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('refuses keep-it-all carry inputs before creating anything', async () => {
+    const { service, scopes, calls } = await createMoveService();
+    scopes.set('ses_1', scope('ses_1'));
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'ok' }, carry: ['../outside.txt'] })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'ok' }, carry: ['/etc/passwd'] })).rejects.toMatchObject({ statusCode: 400 });
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'ok' }, carry: 'src/a.ts' })).rejects.toMatchObject({ statusCode: 400 });
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses a destination that was not admitted as a Host workspace, and removes the checkout', async () => {
+    const removeCalls = [];
+    const { service, scopes } = await createMoveService({
+      resolveWorkspaceDirectory: async () => null,
+      worktreeMove: { removeWorktree: async (directory, input) => { removeCalls.push([directory, input]); } },
+    });
+    scopes.set('ses_1', scope('ses_1'));
+    // The move refuses because no destination scope exists, and the checkout
+    // it made does not survive the failure.
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'fix-login' } }))
+      .rejects.toMatchObject({ statusCode: 503 });
+    // The mover's own rollback removes the checkout it made.
+    expect(removeCalls).toHaveLength(1);
+    expect(removeCalls[0][0]).toBe('/repo/app');
+    expect(removeCalls[0][1]).toMatchObject({ directory: '/repo/app/worktrees/fix-login', deleteLocalBranch: true });
+  });
+
+  it('relocates only after the destination scope proves same-project ownership', async () => {
+    const { service, scopes } = await createMoveService({
+      // A checkout admitted under a different Host project cannot receive this
+      // session, whatever directory it names.
+      resolveWorkspaceDirectory: async () => ({ workspaceId: 'ws_foreign', projectId: 'proj_foreign', cwd: '/repo/app/worktrees/fix-login' }),
+      resolveHostRelocationScope: async id => scopes.get(id) ?? null,
+    });
+    scopes.set('ses_1', scope('ses_1'));
+    await expect(service.moveToWorktree('ses_1', { worktree: { name: 'fix-login' } }))
+      .rejects.toMatchObject({ statusCode: 403 });
+
+    const sameProject = await createMoveService({
+      resolveWorkspaceDirectory: async () => ({ workspaceId: 'ws_new', projectId: 'proj_1', cwd: '/repo/app/worktrees/fix-login' }),
+      // The scope the relocation would use answers another directory: the
+      // destination is not the checkout that was just made.
+      resolveHostWorkspaceScope: async () => ({ workspaceId: 'ws_relocated', projectId: 'proj_1', cwd: '/repo/elsewhere' }),
+    });
+    sameProject.scopes.set('ses_1', scope('ses_1'));
+    // The scope's cwd is a different directory than the checkout: refuse.
+    await expect(sameProject.service.moveToWorktree('ses_1', { worktree: { name: 'fix-login' } }))
+      .rejects.toMatchObject({ statusCode: 503 });
+  });
+});

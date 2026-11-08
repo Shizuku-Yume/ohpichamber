@@ -55,7 +55,17 @@ import { createManagedSshInventory } from '../git/credentials.js';
 import { createContributorProvenanceStore } from '../git/contributor-provenance-storage.js';
 import { createGitNetworkOperationStore } from '../git/network-operation-storage.js';
 import { readEffectiveGitTransportRevision } from '../git/transport-config.js';
-import { completeWorktreeCheckoutHydration, configureRepositoryTransport, deleteBranch as deleteBranchService, isGitRepository as isGitRepositoryService, removeWorktree as removeWorktreeService } from '../git/service.js';
+import {
+  completeWorktreeCheckoutHydration, configureRepositoryTransport,
+  deleteBranch as deleteBranchService, isGitRepository as isGitRepositoryService,
+  removeWorktree as removeWorktreeService, waitForActiveWorktreeBootstrap, getWorktreeBootstrapStatus,
+  stashPush as gitStashPushService, getPathsWithoutChanges as gitPathsWithoutChangesService,
+  stashApply as gitStashApplyService, stashDrop as gitStashDropService,
+  listStashes as gitListStashesService, getBranches as gitBranchesService,
+} from '../git/service.js';
+import { fillSessionWorktreeMoveBridge } from '../openchamber-sessions/worktree-move-bridge.js';
+import { OpenChamberControlError } from '../openchamber-control/error.js';
+import { worktreeSetupOf } from '../projects/worktree-setup.js';
 import { createPrivateRepositoryIdentityResolver } from '../source-control/repository-identity.js';
 import { createSourceControlAuditStore } from '../source-control/audit-storage.js';
 
@@ -195,6 +205,8 @@ export const createFeatureRoutesRuntime = () => {
       resolveCredential,
       resolvePrimaryWorktreeRoot,
       resolveWorktreeTopLevel,
+      sessionWorktreeMoveBridge,
+      readWorktreeSetup,
       openchamberVersion,
     } = routeDependencies;
 
@@ -635,6 +647,40 @@ export const createFeatureRoutesRuntime = () => {
     });
     registerLinearRoutes(app);
     registerTrackerRoutes(app, { registry: trackers });
+    // The session service was built before Git routes: fill the move bridge
+    // with the same creation pipeline and stash operations the dialog uses.
+    if (routeDependencies.sessionWorktreeMoveBridge) {
+      fillSessionWorktreeMoveBridge(routeDependencies.sessionWorktreeMoveBridge, {
+        createWorktree: gitWorktreeCreation?.createWorktree,
+        removeWorktree: removeWorktreeService,
+        hydrateCheckout: networkOperations.hydrateBoundCheckout,
+        // The move must not relocate into a checkout whose setup is still
+        // running: the rest of the pipeline (bootstrap status values) is the
+        // same one the worktree status route reads.
+        waitForWorktreeReady: async (directory) => {
+          await waitForActiveWorktreeBootstrap(directory);
+          const status = await getWorktreeBootstrapStatus(directory, { bootstrapStore: worktreeBootstrapStore });
+          if (status?.status === 'failed') throw new OpenChamberControlError(`Worktree bootstrap failed: ${status.error || 'unknown error'}`, 500);
+          if (status?.status !== 'ready' || status?.phase !== 'setup-ready') {
+            throw new OpenChamberControlError('Worktree bootstrap has not completed', 503);
+          }
+          return { setupStillRunning: false };
+        },
+        bootstrapStore: worktreeBootstrapStore,
+        stashPush: gitStashPushService,
+        getPathsWithoutChanges: gitPathsWithoutChangesService,
+        stashApply: gitStashApplyService,
+        stashDrop: gitStashDropService,
+        listStashes: gitListStashesService,
+        getBranches: gitBranchesService,
+        resolvePrimaryWorktreeRoot,
+        resolveWorktreeSetup: async (directory) => {
+          const scope = await routeDependencies.resolveWorkspaceDirectory?.(directory).catch(() => null);
+          if (!scope || typeof routeDependencies.readWorktreeSetup !== 'function') return { startCommand: '', untrustedSkipped: [] };
+          return worktreeSetupOf(await routeDependencies.readWorktreeSetup(scope.projectId), scope.projectDirectory ?? directory);
+        },
+      });
+    }
     if (routeDependencies.scheduledWorktreeBridge) {
       fillScheduledWorktreeBridge(routeDependencies.scheduledWorktreeBridge, {
         createWorktree: gitWorktreeCreation?.createWorktree,

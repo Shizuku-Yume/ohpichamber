@@ -16,7 +16,12 @@ import { oneLineApprovalText, publicApprovalDetails } from './approval-summary.t
 
 type RequestKind = 'approval' | 'question';
 type ApprovalRequestInput = z.input<typeof ApprovalRequestSchema>;
-type ApprovalRecordState = { kind: 'approval'; request: ApprovalRequest; target: ApprovalPolicyWrite['target']; sessionRuleKey?: string; timer?: NodeJS.Timeout };
+type ApprovalRecordState = {
+  kind: 'approval'; request: ApprovalRequest; target: ApprovalPolicyWrite['target']; sessionRuleKey?: string;
+  timer?: NodeJS.Timeout; permissionRequest?: boolean; unpublished?: boolean;
+  /** Publishes this record as a card; kept so a later mode switch can still show it. */
+  publish?: () => void;
+};
 type RecordState = ApprovalRecordState | { kind: 'question'; request: QuestionRequest; timer?: NodeJS.Timeout; timeoutMs: number };
 type SessionState = {
   epoch: string; generation: string; workspaceId: string;
@@ -41,6 +46,18 @@ export interface ApprovalPolicyRecord {
   target: ApprovalPolicyWrite['target'];
 }
 export type ApprovalPolicyLoadRequest = z.infer<typeof HostApprovalPolicyListRequestSchema>;
+
+/** A session's execution-permission mode, owned by the Host policy runtime. */
+export type SessionPermissionMode = 'ask' | 'safety' | 'auto';
+/**
+ * The Host policy runtime owns both the mode and the safety net; the service
+ * asks and never keeps a second copy. `unavailable` and a failed read both mean
+ * the request waits for the user.
+ */
+export interface PermissionAuthority {
+  resolveMode: (sessionId: string, approval: ApprovalRequest) => Promise<SessionPermissionMode>;
+  evaluate: (sessionId: string, approval: ApprovalRequest) => Promise<'accept' | 'hold' | 'unavailable'>;
+}
 export interface ApprovalPolicyLoad {
   (request: ApprovalPolicyLoadRequest): Promise<ApprovalPolicyRecord[]>;
 }
@@ -82,13 +99,110 @@ export class InteractionManager {
     target: ApprovalPolicyWrite['target']; expiresAt: number; timer: NodeJS.Timeout;
   }>();
   private readonly policies = new Map<string, ApprovalPolicyRecord>();
-
-  constructor(private readonly timeoutMs = 300_000, private readonly policyCommit?: ApprovalPolicyCommit) {}
+  constructor(
+    private readonly timeoutMs = 300_000,
+    private readonly policyCommit?: ApprovalPolicyCommit,
+    private readonly permission?: PermissionAuthority,
+  ) {}
 
   openSession(sessionId: string, epoch: string, generation: string, workspaceId: string, dispatch: SessionState['dispatch'], append: SessionState['append']): void {
     const prior = this.sessions.get(sessionId);
     if (prior && (prior.epoch !== epoch || prior.generation !== generation)) this.invalidate(sessionId, prior.generation);
     this.sessions.set(sessionId, { epoch, generation, workspaceId, dispatch, append });
+  }
+
+  /**
+   * Reconsider every execution approval still waiting in this session, after
+   * the Host says its mode changed. The mode is read from the Host again, so
+   * this holds no second copy of it.
+   */
+  reconsiderPending(sessionId: string): void {
+    for (const record of [...this.records.values()]) {
+      if (record.kind !== 'approval' || record.permissionRequest !== true || record.request.sessionId !== sessionId || record.request.status !== 'pending') continue;
+      this.scheduleReconsider(record.request, record.publish);
+    }
+  }
+
+  /**
+   * Start one attempt per mode change. Attempts may overlap, and that is the
+   * point: a slow `safety` verdict for an old mode must not delay the `auto`
+   * switch that supersedes it. CAS makes exactly one attempt win and the rest
+   * report `409/410/404`, which is expected coordination rather than failure.
+   */
+  private scheduleReconsider(request: ApprovalRequest, publish?: () => void): void {
+    void this.reconsider(request.sessionId, request.approvalId, request.epoch, request.workerGeneration, publish)
+      .catch(error => {
+        if (error instanceof ProjectionError && (error.status === 409 || error.status === 410 || error.status === 404)) return;
+        console.warn('[interaction] permission reconsideration failed:', error?.message ?? error);
+      });
+  }
+
+  /**
+   * Answer one pending execution approval through the same CAS path a user
+   * reply takes. `auto` accepts at once; `safety` asks the Host safety net
+   * first, and a hold or an unavailable verdict leaves the request on screen.
+   * Questions, plan review, native grants and capability prompts never reach
+   * here.
+   */
+  private async reconsider(sessionId: string, approvalId: string, epoch: string, generation: string, publishPending?: () => void): Promise<void> {
+    // Every path that leaves the request waiting for the user publishes it; an
+    // answer the policy gives itself never publishes, so no card is advertised
+    // for a request the user never has to see.
+    let publish = publishPending;
+    // Publishing is only meaningful while this exact record is still pending: a
+    // concurrent approval or revocation must not leave a card behind.
+    const ensurePublished = (): void => {
+      const live = this.pendingExecutionApproval(sessionId, approvalId, epoch, generation);
+      if (!live) return;
+      (publish ?? live.publish)?.();
+      publish = undefined;
+    };
+    const current = this.pendingExecutionApproval(sessionId, approvalId, epoch, generation);
+    publish ??= current?.publish;
+    // A request that was revoked while its answer was computed has no card to show.
+    if (!current) return;
+    if (!this.permission) { ensurePublished(); return; }
+    const mode = await this.permission.resolveMode(sessionId, current.request).catch(() => 'ask' as const);
+    if (mode === 'ask') { ensurePublished(); return; }
+    const pending = this.pendingExecutionApproval(sessionId, approvalId, epoch, generation);
+    if (!pending) return;
+    const state = this.sessions.get(sessionId);
+    if (!state) return;
+    // An explicit policy deny is the last word: no mode may approve its target.
+    if (this.matchingPolicy(sessionId, state.workspaceId, pending.record.target)?.decision === 'deny') { ensurePublished(); return; }
+    if (mode === 'safety') {
+      const verdict = await this.permission.evaluate(sessionId, pending.request).catch(() => 'unavailable' as const);
+      if (verdict !== 'accept') { ensurePublished(); return; }
+      // The mode, the record and the worker may all have changed while the
+      // safety net ran; only a still-pending, still-current record is approved.
+      const latest = this.pendingExecutionApproval(sessionId, approvalId, epoch, generation);
+      if (!latest) return;
+      const reread = await this.permission.resolveMode(sessionId, latest.request).catch(() => 'ask' as const);
+      if (reread !== mode) { ensurePublished(); return; }
+      if (this.matchingPolicy(sessionId, latest.state.workspaceId, latest.record.target)?.decision === 'deny') { ensurePublished(); return; }
+      // The policy answers the request it just accepted; there was never a card.
+      await this.resolveApproval(sessionId, approvalId, {
+        decision: 'approve', version: latest.request.version, epoch, workerGeneration: generation,
+      });
+      return;
+    }
+    // `auto` answers before publication: no card is ever advertised or resolved.
+    await this.resolveApproval(sessionId, approvalId, {
+      decision: 'approve', version: pending.request.version, epoch, workerGeneration: generation,
+    });
+  }
+
+  /** The record when it is still the pending execution gate of the current worker generation. */
+  private pendingExecutionApproval(sessionId: string, approvalId: string, epoch: string, generation: string):
+    { record: ApprovalRecordState; request: ApprovalRequest; state: SessionState; publish?: () => void } | undefined {
+    const state = this.sessions.get(sessionId);
+    if (!state || state.epoch !== epoch || state.generation !== generation) return undefined;
+    const record = this.records.get(approvalId);
+    if (!record || record.kind !== 'approval' || record.permissionRequest !== true) return undefined;
+    const request = record.request;
+    if (request.status !== 'pending' || request.sessionId !== sessionId
+      || request.epoch !== epoch || request.workerGeneration !== generation) return undefined;
+    return { record, request, state, publish: record.publish };
   }
   loadPolicies(sessionId: string, workspaceId: string, policies: ApprovalPolicyRecord[]): void {
     for (const policy of policies) this.policies.set(this.policyKey(sessionId, workspaceId, policy.scope, policy.target), policy);
@@ -163,18 +277,43 @@ export class InteractionManager {
       };
       if (sessionRuleKey) approvalDraft.policyTarget = { toolName: interaction.toolName, pattern: '*' };
       const request: ApprovalRequest = ApprovalRequestSchema.parse(approvalDraft);
-      const timer = setTimeout(() => { void this.expirePending(sessionId, request.approvalId); }, this.timeoutMs);
-      this.records.set(request.approvalId, { kind: 'approval', request, target: privateTarget, sessionRuleKey, timer });
-      state.append({ timestamp: now, event: { type: 'approval.requested', approval: request } });
+      const record: ApprovalRecordState = { kind: 'approval', request, target: privateTarget, sessionRuleKey, permissionRequest: interaction.permissionRequest === true, unpublished: interaction.permissionRequest === true };
+      this.records.set(request.approvalId, record);
+      // Publication is a decision, not a reflex: a request the policy answers
+      // itself is never shown as a waiting card. `publish` runs once, immediately
+      // before the card would stay (or before the answer that closes it), so the
+      // requested event never advertises a manual approval that no longer exists.
+      // Announcement happens at most once per record; an approval answered before
+      // it was announced keeps `unpublished` set and is never shown.
+      let announced = false;
+      const publish = (): void => {
+        if (announced) return;
+        announced = true;
+        record.unpublished = false;
+        record.publish = undefined;
+        record.timer = setTimeout(() => { void this.expirePending(sessionId, request.approvalId); }, this.timeoutMs);
+        state.append({ timestamp: now, event: { type: 'approval.requested', approval: request } });
+      };
+      record.publish = publish;
       const policy = this.matchingPolicy(sessionId, state.workspaceId, privateTarget);
       if (policy?.decision === 'deny') {
-        // The workspace deny already exists; a one-shot reject closes the card
+        // The workspace deny already exists; a one-shot reject closes the request
         // without requiring a public policyTarget that ordinary approvals omit.
+        // It is answered before any card exists, so nothing is published.
         void this.resolveApproval(sessionId, request.approvalId, {
           decision: 'reject', version: request.version,
           epoch: request.epoch, workerGeneration: generation,
         }).catch(() => {});
+        return;
       }
+      // Only the native ACP execution-permission gate is answered for the
+      // user. Extension dialogs, native-grant re-authorizations, questions and
+      // capability prompts always keep their card. An explicit deny above wins.
+      if (interaction.permissionRequest === true) {
+        this.scheduleReconsider(request, publish);
+        return;
+      }
+      publish();
       return;
     }
     const request: QuestionRequest = QuestionRequestSchema.parse({
@@ -187,8 +326,10 @@ export class InteractionManager {
     state.append({ timestamp: now, event: { type: 'question.requested', question: request } });
   }
 
+  /** The public approval list: a request the policy has not published is not a card. */
   approvals(sessionId: string): ApprovalRequest[] {
-    return [...this.records.values()].flatMap(record => record.request.sessionId === sessionId && record.kind === 'approval' && record.request.status === 'pending' ? [record.request] : []);
+    return [...this.records.values()].flatMap(record => record.request.sessionId === sessionId && record.kind === 'approval'
+      && record.request.status === 'pending' && record.unpublished !== true ? [record.request] : []);
   }
   questions(sessionId: string): QuestionRequest[] {
     return [...this.records.values()].flatMap(record => record.request.sessionId === sessionId && record.kind === 'question' && record.request.status === 'pending' ? [record.request] : []);
@@ -263,8 +404,10 @@ export class InteractionManager {
       };
       if (terminalPolicyTarget) terminalDraft.policyTarget = terminalPolicyTarget;
       const terminal = ApprovalRequestSchema.parse(terminalDraft);
-      this.records.set(approvalId, { kind: 'approval', request: terminal, target: record.target, sessionRuleKey: record.sessionRuleKey, timer: undefined });
-      state.append({ timestamp: resolvedAt, event: { type: 'approval.resolved', approval: terminal } });
+      this.records.set(approvalId, { kind: 'approval', request: terminal, target: record.target, sessionRuleKey: record.sessionRuleKey, timer: undefined, permissionRequest: record.permissionRequest, unpublished: record.unpublished, publish: record.publish });
+      // A request the policy answered before the user ever saw it emits no
+      // canonical events: there was no card to publish or to resolve.
+      if (!record.unpublished) state.append({ timestamp: resolvedAt, event: { type: 'approval.resolved', approval: terminal } });
       return terminal;
     } finally {
       this.reservations.delete(approvalId);
@@ -320,7 +463,7 @@ export class InteractionManager {
     clearTimeout(record.timer);
     const expired = this.expire(record);
     this.records.set(id, expired);
-    state.append(ProjectionInputSchema.parse({
+    if (record.kind === 'approval' ? !record.unpublished : true) state.append(ProjectionInputSchema.parse({
       timestamp: expired.request.resolvedAt,
       event: expired.kind === 'approval'
         ? { type: 'approval.resolved', approval: expired.request }
@@ -346,7 +489,7 @@ export class InteractionManager {
         resolvedBy: 'agent-service',
       });
       this.records.set(id, { ...record, request: terminal, timer: undefined });
-      state.append(ProjectionInputSchema.parse({
+      if (!record.unpublished) state.append(ProjectionInputSchema.parse({
         timestamp: resolvedAt,
         event: { type: 'approval.resolved', approval: terminal },
       }));
@@ -372,7 +515,7 @@ export class InteractionManager {
   private expire(record: RecordState): RecordState {
     const terminal = { ...record.request, status: 'expired' as const, version: increment(record.request.version), resolvedAt: Date.now(), resolvedBy: 'agent-service' };
     return record.kind === 'approval'
-      ? { kind: 'approval', request: ApprovalRequestSchema.parse(terminal), target: record.target, timer: undefined }
+      ? { kind: 'approval', request: ApprovalRequestSchema.parse(terminal), target: record.target, timer: undefined, permissionRequest: record.permissionRequest, unpublished: record.unpublished, publish: record.publish }
       : { kind: 'question', request: QuestionRequestSchema.parse(terminal), timer: undefined, timeoutMs: record.timeoutMs };
   }
 

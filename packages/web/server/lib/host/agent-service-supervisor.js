@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
+import { HostPermissionEvaluateRequestSchema, HostPermissionModeLoadRequestSchema, HostPermissionModeReplySchema, HostPermissionVerdictSchema } from '@openchamber/agent-service/private-protocol';
+import { evaluateHostPermission, resolveHostPermissionMode } from '../permission-auto-accept/host-channel.js';
 import { CapturedHostBootstrapScopeSchema, HostApprovalPolicyListRequestSchema, HostSessionBootstrapSchema, HostSessionForkAckSchema, HostSessionRelocationFinalizeSchema, HostSessionRelocationPrepareSchema, HostSkillSourceOperationSchema, HostSkillSourceRequestSchema, HostSkillSourceResultSchema, HostWorkspaceBootstrapSchema, HostWorkspaceRegisteredSchema, WorkerBootstrapSchema } from '@openchamber/agent-service/private-protocol';
 import { createHostWorkerAuthorizationChannel } from './worker-authorization-channel.js';
 
@@ -119,6 +121,7 @@ export const createAgentServiceSupervisor = ({
   maxDiagnostics = 100, logDiagnostic = null,
   approvalPolicyStore = null,
   authorizeWorkerOperation, invokeHostAction, handleSkillSource,
+  // Host-owned permission policy: the mode and the Jev safety net live here.
 } = {}) => {
   // One registry per Host data directory keeps test/instance records out of the
   // user's global config; OPENCHAMBER_MANAGED_PROCESS_REGISTRY still overrides.
@@ -200,7 +203,42 @@ export const createAgentServiceSupervisor = ({
   };
   const handlePolicyMessage = (launched, message) => {
     const send = (value) => { if (launched.connected) launched.send(value, () => { }); };
-    if (!['approval.policy.commit', 'approval.policy.list'].includes(message?.type)) return;
+    if (!['approval.policy.commit', 'approval.policy.list', 'permission.evaluate', 'permission.mode.load'].includes(message?.type)) return;
+    if (message.type === 'permission.evaluate' || message.type === 'permission.mode.load') {
+      const request = message.type === 'permission.evaluate' ? HostPermissionEvaluateRequestSchema : HostPermissionModeLoadRequestSchema;
+      const parsed = request.safeParse(message);
+      const sendVerdict = (verdict) => { if (launched.connected) launched.send(verdict, () => {}); };
+      if (!parsed.success) {
+        sendVerdict(message.type === 'permission.evaluate'
+          ? { type: 'permission.verdict', requestId: message?.requestId, verdict: 'unavailable' }
+          : { type: 'permission.mode', requestId: message?.requestId, mode: 'ask' });
+        return;
+      }
+      const sessionId = parsed.data.sessionId;
+      // Only a session this child was admitted for may ask about its own policy;
+      // anything else fails closed, so a worker cannot read another workspace's mode.
+      const captured = scopes.get(sessionId);
+      const failClosed = () => sendVerdict(message.type === 'permission.evaluate'
+        ? { type: 'permission.verdict', requestId: parsed.data.requestId, verdict: 'unavailable' }
+        : { type: 'permission.mode', requestId: parsed.data.requestId, mode: 'ask' });
+      if (!captured || captured.rootSessionId !== sessionId || child !== launched) { failClosed(); return; }
+      void Promise.resolve()
+        .then(() => (message.type === 'permission.evaluate'
+          // The classifier and its credentials stay on the Host; the service only asks.
+          ? evaluateHostPermission(parsed.data.approval)
+            .then(verdict => ({ type: 'permission.verdict', requestId: parsed.data.requestId, verdict: verdict?.action === 'accept' ? 'accept' : verdict?.unavailable ? 'unavailable' : 'hold' }))
+          : resolveHostPermissionMode(sessionId)
+            .then(mode => ({ type: 'permission.mode', requestId: parsed.data.requestId, mode }))))
+        .catch(() => (message.type === 'permission.evaluate'
+          ? { type: 'permission.verdict', requestId: parsed.data.requestId, verdict: 'unavailable' }
+          : { type: 'permission.mode', requestId: parsed.data.requestId, mode: 'ask' }))
+        .then((reply) => {
+          if (child !== launched) return;
+          const schema = reply.type === 'permission.verdict' ? HostPermissionVerdictSchema : HostPermissionModeReplySchema;
+          if (schema.safeParse(reply).success) sendVerdict(reply);
+        });
+      return;
+    }
     try {
       if (child !== launched || !policyStore) throw new Error('Approval policy store unavailable');
       let captured = scopes.get(message.request?.sessionId);

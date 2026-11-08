@@ -2,7 +2,7 @@
 
 **Effort:** omp-through-m3
 **Task type:** feature
-**Base commit:** 420faf4a76a3ebd6349dbdf0d679a12139f687ba
+**Provenance:** historical base commit 420faf4a76a3ebd6349dbdf0d679a12139f687ba, recorded at completion; it is no longer in this repository's history, so it stays a plain note instead of a validated field.
 
 **Delivers:** Real native child subagent projection, session indexing, Host listing route, Canonical Client methods, and child transcript history navigation end-to-end for Web and Electron, backed by the pinned OMP SDK TaskTool without OpenCode fallbacks or dummy child success.
 

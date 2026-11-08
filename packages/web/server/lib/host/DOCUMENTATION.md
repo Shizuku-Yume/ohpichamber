@@ -202,6 +202,17 @@ Native `goal` and `todo` operations are also session-local: they read or update 
 Native LSP operations require an action-specific descriptor. Read-only query methods (`hover`, `definition`, `type_definition`, `implementation`, `references`, `symbols`, `diagnostics`, `status`, `capabilities`, and `code_actions` without apply) require workspace-contained target paths and `read` permission in `policy.fileTools`. Mutations (`rename`, `rename_file`, `format`, and `code_actions` with `apply: true`) require `write` permission in `policy.fileTools`, exact destination file targets within the workspace, and an authoritative approval grant matching the root session, worker generation, approval ID, and tool call ID. Unsupported methods, escaped paths, malformed parameters, and ungranted mutations fail closed.
 
 
+### Permission mode IPC channel and the supervisor bridge
+
+`agent-service-supervisor.js` answers two permission families on the child's private IPC channel. Both are flat on the wire (`{ type, requestId, sessionId, ... }`), parsed with `HostPermissionModeLoadRequestSchema` / `HostPermissionEvaluateRequestSchema`; a nested envelope fails the parse and is treated as unauthorized.
+
+- `permission.mode.load`: requires `child === launched` and an admitted captured scope whose `rootSessionId` is the requested session (the service always asks about the worker's root session), then replies `HostPermissionModeReplySchema`. Unadmitted sessions, parse failures, timeouts and errors all reply `mode: 'ask'`.
+- `permission.evaluate`: same scope check, then the `ApprovalRequest` goes to the Host policy, which replies `HostPermissionVerdictSchema`. Missing classifier, timeout, malformed reply and thrown errors all reply `verdict: 'unavailable'`, so the card stays.
+
+The supervisor reaches the policy through `packages/web/server/lib/permission-auto-accept/host-channel.js` because it is constructed before the policy runtime exists. `index.js` registers the runtime there after construction; until that happens every query fails closed to `ask`/`unavailable`, never to an accept.
+
+The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/permission-mode` carrying `{ mode }`, which makes the service reconsider approvals already waiting in that session.
+
 ## Retained Host Infrastructure Contracts
 
 ### bootstrap-runtime.js

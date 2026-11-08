@@ -15,7 +15,7 @@ import { HostSessionBootstrapSchema, HostSessionRelocationFinalizeSchema, HostSe
 import { nativePrivateRootContext, rememberPrivateRoots, resolveCanonicalMessage, WorkerProjection } from '../worker/projection.ts';
 import type { ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError, SessionJournal } from '../projection/journal.ts';
-import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad, type ApprovalPolicyLoadRequest, type ApprovalPolicyRecord } from '../interaction/manager.ts';
+import { InteractionManager, type ApprovalPolicyCommit, type ApprovalPolicyLoad, type ApprovalPolicyLoadRequest, type ApprovalPolicyRecord, type PermissionAuthority } from '../interaction/manager.ts';
 import { WorkerOperationError, WorkerRegistry } from '../supervisor/workers.ts';
 import { assertArchiveActive, exportNativeArchive, importNativeArchive, type ArchiveImportRequest } from './archive.ts';
 import { SessionReferenceError, SessionReferences } from './references.ts';
@@ -76,9 +76,9 @@ export class SessionRegistry {
   private readonly coldSnapshotOpenings = new Map<string, Promise<SessionSnapshot>>();
   private closing = false;
 
-  constructor(stateDirectory: string, private readonly workers: WorkerRegistry, policyCommit?: ApprovalPolicyCommit, private readonly policyLoad?: ApprovalPolicyLoad) {
+  constructor(stateDirectory: string, private readonly workers: WorkerRegistry, policyCommit?: ApprovalPolicyCommit, private readonly policyLoad?: ApprovalPolicyLoad, permission?: PermissionAuthority) {
     this.references = new SessionReferences(stateDirectory);
-    this.interactions = new InteractionManager(undefined, policyCommit);
+    this.interactions = new InteractionManager(undefined, policyCommit, permission);
   }
 
 
@@ -1296,6 +1296,11 @@ export class SessionRegistry {
   approvals(sessionId: string) { this.get(sessionId); return this.interactions.approvals(sessionId); }
 
   questions(sessionId: string) { this.get(sessionId); return this.interactions.questions(sessionId); }
+
+  /** The Host says this session's mode changed; pending execution approvals are reconsidered. */
+  reconsiderPermissions(sessionId: string): void {
+    this.interactions.reconsiderPending(sessionId);
+  }
 
   async resolveApproval(sessionId: string, approvalId: string, input: ApprovalReply) {
     this.assertWritable(sessionId);

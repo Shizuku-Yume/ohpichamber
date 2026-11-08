@@ -196,6 +196,13 @@ tree and re-pointed at the fork's canonical data sources:
   `chatSettingsTabs.ts` so a search result or a deep link can select it. The desktop
   return-key and pasted-image preferences wait for their store and settings-registry
   keys (task 23/25), so they are not offered yet.
+- **Session goal.** The Assistance tab mounts `openchamber/SessionGoalCheckerField.tsx`:
+  the checker chip group selects OMP's native `judge` role (`classifier`) or the
+  native small-model resolution (`small-model`), and the max-autoturns field edits
+  `sessionGoalMaxAutoTurns` within 1–200 (default 20). A selected small checker
+  explains itself and links to the Sessions small-model row; the `classifier` option
+  keeps OMP's own `judge` role chain authoritative instead of claiming a Host
+  classification provider is missing.
 - **Session warming.** Only the workspace control remains:
   `openchamber/SessionWarmingCheckbox.tsx` reads and writes the workspace's cache
   warming through `CanonicalClient.readCacheWarming`/`updateCacheWarming`
@@ -259,3 +266,15 @@ Core ownership rules:
   Host authorization and native runtime execution policy (`respondApproval`).
   Agent profiles do not expose an ordered permission rules editor or preset
   catalog. Native profiles do not have hidden-agent flags.
+## Sessions (DefaultsSettings)
+
+`DefaultsSettings.tsx` configures what a new session starts with. Model roles are OMP's own `modelRoles` record, written through `canonicalClient.updateOmpSettings`; the app keeps no second copy.
+
+- **Default model and thinking:** writes `modelRoles.default`, with the chosen thinking level as the `:effort` suffix. `supportsReasoning` decides whether the effort picker is shown.
+- **Default agent and auto-apply:** writes `defaultAgent` (the shared settings registry). Picking an agent calls `setAgent(name, { keepModel: !autoApplyAgentModel })`, so auto-apply makes the agent's pinned model win; without it the open chat keeps the model it already had.
+- **Small and walkthrough models:** each has its own "use default" checkbox plus a picker. Unchecking enables the picker immediately, even before a value exists, and writes the native role (`smol`, `slow`). The walkthrough pick writes only the native `slow` role, which is exactly what `lib/walkthrough/index.js` resolves (`describeSmallModel(..., { role: 'slow' })`); there is no second Host copy of the choice.
+- **Fallback model:** reads and writes native `retry.fallbackChains` for the `default` selector, enables `retry.modelFallback` on a pick, and "None" deletes the whole default chain rather than leaving a hidden later link.
+- **Concurrent edits:** a 409 re-fetches the workspace settings and re-applies only the entries this write changed (`changedRoles`); every other role, including array-valued ones, survives. Role values are parsed with the canonical `JsonObjectSchema`, so an array-valued role is never dropped by an unrelated edit.
+- **Permissions and Plan mode:** `PermissionDefaultModeField` writes `permissionDefaultMode` (the Host applies it to new top-level sessions). The "allow subagents in Plan mode" row writes `planModeAllowAgents`, which the Host captures into the worker bootstrap and the worker enforces while Plan mode is active.
+
+All labels come from the shared dictionaries; none are hardcoded here.

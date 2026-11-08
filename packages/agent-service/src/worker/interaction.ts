@@ -161,6 +161,15 @@ export class WorkerInteraction {
     return this.requestApproval(turnId, observer.toolCallId, observer.toolName, input, observer.reason ?? '', choices, dialogOptions?.signal);
   }
 
+  /**
+   * The one path that asks the user to approve a *tool execution*: `approveBash`,
+   * `ui.approve` and an observed `ui.select` all land here, whether the request
+   * came from the ACP bridge (`requestPermission`) or the native approval
+   * extension. Every one of them is automatable; `ui.select` without an observed
+   * tool and `confirm`/`input`/`askDialog` stay questions, because they are
+   * dialogs rather than an execution gate. Provider and Host authorization do
+   * not pass through this method at all.
+   */
   private async requestApproval(turnId: string, toolCallId: string, toolName: string, input: JsonObject, reason: string, choices: [string, string], signal?: AbortSignal): Promise<string | undefined> {
     const approvalId = randomUUID();
     const [approve, reject] = choices;
@@ -169,7 +178,7 @@ export class WorkerInteraction {
     const interaction: WorkerInteractionMessage = {
       kind: 'approval', approvalId, toolCallId, toolName, actionType: action,
       commandSummary: summary, details: JsonObjectSchema.parse({ reason: oneLineApprovalText(reason), options: choices, input }),
-      policyTarget: { toolName, pattern: JSON.stringify(input) }, turnId,
+      policyTarget: { toolName, pattern: JSON.stringify(input) }, turnId, permissionRequest: true,
     };
     const { promise, resolve } = Promise.withResolvers<string | undefined>();
     this.approvalHandles.set(approvalId, { toolCallId, resolve, approve, reject });
@@ -206,6 +215,7 @@ export class WorkerInteraction {
       commandSummary: approvalInputSummary(action, input),
       details: JsonObjectSchema.parse({ options: names }),
       policyTarget: { toolName: toolCall.toolName, pattern: JSON.stringify(input) }, turnId, sessionRuleKey,
+      permissionRequest: true,
     });
     const { promise, resolve } = Promise.withResolvers<NativePermissionChoice | undefined>();
     this.permissionHandles.set(approvalId, { toolCallId: toolCall.toolCallId, resolve });

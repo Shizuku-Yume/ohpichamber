@@ -169,6 +169,34 @@ Native Settings flush precedes the existing service catalog-revision file commit
 
 The worker captures the exact native tool input for Host authorization and keeps it service-private. The public approval record carries the actual tool name and a redacted, truncated one-line input summary (the bash command or file path); the card never renders a raw input object. `always-allow` resolves OMP's native `allow_always` handle in the worker's per-session ACP decision cache (bash cache key): OMP suppresses later bash cards for that key, while each cached call still reaches the custom Bash tool and receives its own exact execution grant before authorization. The cache resets with the native logical session, stops with the worker, and is never persisted to the Host policy store or OMP config. Provider-safety and Host-only prompts never receive it. The native approval handle is resolved with OMP's Approve or allow_always choice. Schema version 2 revokes legacy session allowances.
 
+## Permission modes for tool execution approvals
+
+Tool execution approvals are the requests that may be approved for the user: the native ACP permission gate (`WorkerInteraction.requestPermission`) and the native approval extension's tool requests, which share `InteractionManager`'s single `requestApproval` path (`approveBash`, `ui.approve`, and an observed `ui.select`). Those records carry `permissionRequest: true`, and the worker sets it on the shared `requestApproval` path so every native tool whose approval wrapper uses `ui.approve` or an observed `ui.select` is covered too, not only the ACP gate. Unobserved `ui.select`, `confirm`, `input`, `askDialog`, plan review, native-grant re-authorization and provider/Host authorization never pass through that method and always stay on screen.
+
+Each session resolves a mode from the Host: `ask` shows the card, `auto` answers it, `safety` asks the Host safety net first. The mode is never cached in the service; it is read over private IPC (`permission.mode.load`) when a request arrives, so the Host stays the single authority. A workspace or session deny policy always wins and is rejected at request time and again immediately before any programmatic approval.
+
+An approval the policy answers itself publishes no canonical events: there was never a card to show or to resolve. A card that stays is published once as `approval.requested`, and a resolution publishes `approval.resolved`. For `safety`, the accept is only consumed after a second read confirms the record is still pending, the epoch and worker generation still match, the mode did not change while the classifier ran, and no deny appeared.
+
+The Host pushes a mode change to `POST /internal/sessions/:id/permission-mode`, and `SessionRegistry.reconsiderPermissions` re-evaluates every pending execution approval of that session, so a switch to `auto` answers a card that was already waiting.
+
+## Goal verification and the turn cap
+
+Each session worker owns a `GoalVerifyingController`, a subclass of OMP's native `RpcGoalController`. OMP keeps ownership of continuation, the tool set and the completion journal; the subclass only decides whether the next continuation is allowed:
+
+- A terminal `agent_end` with an active goal starts the check, and `continuationPending` is true while it runs, so the session is never reported settled mid-verification.
+- After the verdict the same terminal event is handed to the native controller. A `complete` verdict calls `completeGoalFromTool()` first, so OMP journals the completion from that event and no later event is needed; a `paused` verdict pauses the goal.
+- The judge is OMP's `resolveJudge` with purpose `goal-verification`, the session cost gate and `journalJudgmentUsage`, so billed attempts land on the session ledger. With `sessionGoalChecker: 'classifier'` (default) the `judge` role is used; `'small-model'` words the `smol`, `tiny` or `default` selector into the `judge` role.
+- The check sees the objective, the last eight message texts and tool calls, the todo phases and tokens used. A failed or unresolvable judge produces no verdict: native continuation stands, and the cap still applies.
+- The cap (`sessionGoalMaxAutoTurns`, 1–200) counts turns per goal id; reaching it pauses the goal. A new goal, and an explicit `create`/`resume` of a paused one, re-arm the counter and the abort signal, so resuming diverts to a fresh budget instead of instantly re-hitting the cap. The check itself reports settled as soon as it has decided, so a just-paused goal is resumable without waiting for the promise to unwind.
+- `stopForHostAbort` aborts the in-flight judge, and a verdict for a replaced, dropped or paused goal is discarded.
+- When the verdict ends the goal, the controller reports a dropped continuation so the Host's pending-continuation marker clears.
+
+The Host captures both preferences into the worker bootstrap environment (`OPENCHAMBER_SESSION_GOAL_CHECKER`, `OPENCHAMBER_SESSION_GOAL_MAX_AUTO_TURNS`); they are non-secret and take effect for workers admitted after the change.
+
+## Plan mode and subagent delegation
+
+Plan mode keeps its own tool set. When `OPENCHAMBER_PLAN_ALLOW_AGENTS` is set in the worker bootstrap environment (Settings → Sessions → "Allow subagents in Plan mode"), `enterPlan` and the plan restore keep the native `task` tool active alongside the plan tool set. Leaving Plan mode restores the previous tools, so the permission never outlives the mode. It grants no capability of its own: every child tool call still passes its own authorization.
+
 ## Native goal mode
 
 Session control accepts `goal` operations `create`, `pause`, `resume`, and `drop`. Creation requires a nonempty objective and accepts a positive integer token budget (or `null` for no budget). The Host authorizes the session scope and forwards the operation; it stores no native goal state. Create and resume refuse an active run; pause and drop remain available during execution.

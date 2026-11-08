@@ -5,6 +5,7 @@ import { isAgentMemoryFeatureAvailable } from '../agent-memory/feature-flag.js';
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
 import { isWorkflowFeatureAvailable } from '../workflows/feature-flag.js';
 import { idleStopSchema } from '../spaces/idle-stop.js';
+import { isPermissionMode } from '../permission-auto-accept/modes.js';
 
 // Generated from packages/ui/src/lib/settings/registry.ts by
 // `bun run settings-registry:generate`; `registry.test.ts` fails when stale.
@@ -320,6 +321,29 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.messageSearchEnabled === 'boolean') {
       result.messageSearchEnabled = candidate.messageSearchEnabled;
     }
+    // The per-session permission policy is written by its runtime; the only
+    // client-editable permission setting is the new-session default.
+    if (isPermissionMode(candidate.permissionDefaultMode)) {
+      result.permissionDefaultMode = candidate.permissionDefaultMode;
+    }
+    if (candidate.permissionAutoAccept && typeof candidate.permissionAutoAccept === 'object' && !Array.isArray(candidate.permissionAutoAccept)) {
+      const sessions = {};
+      const sourceSessions = candidate.permissionAutoAccept.sessions;
+      if (sourceSessions && typeof sourceSessions === 'object' && !Array.isArray(sourceSessions)) {
+        // A mode, or a boolean from a policy written before the modes existed;
+        // the permission runtime converts those on its first read.
+        for (const [sessionId, mode] of Object.entries(sourceSessions)) {
+          if (sessionId && (typeof mode === 'boolean' || isPermissionMode(mode))) sessions[sessionId] = mode;
+        }
+      }
+      result.permissionAutoAccept = {
+        sessions,
+        revision: Number.isSafeInteger(candidate.permissionAutoAccept.revision)
+          && candidate.permissionAutoAccept.revision >= 0
+          ? candidate.permissionAutoAccept.revision
+          : 0,
+      };
+    }
     if (typeof candidate.messageSearchReasoningEnabled === 'boolean') {
       result.messageSearchReasoningEnabled = candidate.messageSearchReasoningEnabled;
     }
@@ -516,6 +540,19 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.sessionGoalDefaultBudget === 'number' && Number.isFinite(candidate.sessionGoalDefaultBudget) && candidate.sessionGoalDefaultBudget > 0) {
       result.sessionGoalDefaultBudget = Math.floor(candidate.sessionGoalDefaultBudget);
+    }
+    if (candidate.sessionGoalChecker === 'classifier' || candidate.sessionGoalChecker === 'small-model') {
+      result.sessionGoalChecker = candidate.sessionGoalChecker;
+    }
+    if (typeof candidate.sessionGoalMaxAutoTurns === 'number' && Number.isSafeInteger(candidate.sessionGoalMaxAutoTurns)
+      && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
+      result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
+    }
+    if (typeof candidate.autoApplyAgentModel === 'boolean') {
+      result.autoApplyAgentModel = candidate.autoApplyAgentModel;
+    }
+    if (typeof candidate.planModeAllowAgents === 'boolean') {
+      result.planModeAllowAgents = candidate.planModeAllowAgents;
     }
     if (typeof candidate.collapsibleThinkingBlocks === 'boolean') {
       result.collapsibleThinkingBlocks = candidate.collapsibleThinkingBlocks;

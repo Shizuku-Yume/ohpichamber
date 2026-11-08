@@ -35,7 +35,6 @@ const SETTINGS_PAGE_TITLE_KEYS = {
   notifications: 'settings.page.notifications.title',
   voice: 'settings.page.voice.title',
   tunnel: 'settings.page.tunnel.title',
-  'isolated-spaces': 'settings.openchamber.spaces.title',
   about: 'settings.page.about.title',
 } satisfies Record<SettingsPageSlug, I18nKey>;
 

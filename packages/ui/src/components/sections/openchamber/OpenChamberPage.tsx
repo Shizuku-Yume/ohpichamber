@@ -13,8 +13,6 @@ import { NotificationSettings } from './NotificationSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { TunnelSettings } from './TunnelSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
-import { IsolatedSpacesSettings } from './IsolatedSpacesSettings';
-import { ISOLATED_SPACES_RELEASED } from '@/lib/spaces/release';
 import { OpenChamberToolsSettings } from './OpenChamberToolsSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { DesktopAppSettings } from './DesktopAppSettings';
@@ -92,8 +90,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <VoiceSectionContent />;
             case 'tunnel':
                 return <TunnelSectionContent />;
-            case 'spaces':
-                return <SpacesSectionContent />;
             default:
                 return null;
         }
@@ -110,7 +106,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         notifications: t('settings.page.notifications.title'),
         voice: t('settings.page.voice.title'),
         tunnel: t('settings.page.tunnel.title'),
-        spaces: t('settings.openchamber.spaces.title'),
     }[section];
 
     const pageDescription = {
@@ -124,7 +119,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         notifications: t('settings.page.notifications.description'),
         voice: t('settings.page.voice.description'),
         tunnel: t('settings.page.tunnel.description'),
-        spaces: undefined,
     }[section];
 
     return (
@@ -230,15 +224,6 @@ const NotificationSectionContent: React.FC = () => {
 // Voice section: Language selection and continuous mode
 const VoiceSectionContent: React.FC = () => {
     return <VoiceSettings />;
-};
-
-// Isolated spaces: the switch, the idle stop, the places with their disk, and the spaces without a
-// project. Available only when the feature is released.
-const SpacesSectionContent: React.FC = () => {
-    if (!ISOLATED_SPACES_RELEASED) {
-        return null;
-    }
-    return <IsolatedSpacesSettings />;
 };
 
 const TunnelSectionContent: React.FC = () => {

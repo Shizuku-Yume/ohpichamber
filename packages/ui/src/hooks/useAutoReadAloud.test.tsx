@@ -285,4 +285,62 @@ describe('useAutoReadAloud', () => {
 
     expect(calls).toEqual([]);
   });
+
+  test('a lagging session flag does not make a finished turn count as watched', async () => {
+    const { calls, play } = recorder();
+    const claim = async () => true;
+    const base = { sessionKey: 'ses_1', ready: true, enabled: true, play, claim } as const;
+    await mount({
+      ...base,
+      sessionIsActive: true,
+      reply: reply('assistant_old', 'An earlier answer'),
+      turns: [turn('turn_old', 'completed', ['assistant_old'])],
+    });
+
+    expect(calls).toEqual([]);
+  });
+
+  test('auto-read disabled across a completion never speaks that answer when re-enabled', async () => {
+    const { calls, play } = recorder();
+    const claim = async () => true;
+    const base = { sessionKey: 'ses_1', ready: true, play, claim } as const;
+    await mount({ ...base, enabled: false, sessionIsActive: true, reply: null, turns: [turn('turn_1', 'running')] });
+    await mount({
+      ...base,
+      enabled: false,
+      sessionIsActive: false,
+      reply: reply('assistant_1', 'Finished while off'),
+      turns: [turn('turn_1', 'completed', ['assistant_1'])],
+    });
+    await mount({
+      ...base,
+      enabled: true,
+      sessionIsActive: false,
+      reply: reply('assistant_1', 'Finished while off'),
+      turns: [turn('turn_1', 'completed', ['assistant_1'])],
+    });
+
+    expect(calls).toEqual([]);
+  });
+
+  test('final text arriving late for the watched turn is still read', async () => {
+    const { calls, play } = recorder();
+    const claim = async () => true;
+    const base = { sessionKey: 'ses_1', ready: true, enabled: true, play, claim } as const;
+    await mount({ ...base, sessionIsActive: true, reply: null, turns: [turn('turn_1', 'running')] });
+    await mount({
+      ...base,
+      sessionIsActive: false,
+      reply: null,
+      turns: [turn('turn_1', 'completed', ['assistant_1'])],
+    });
+    await mount({
+      ...base,
+      sessionIsActive: false,
+      reply: reply('assistant_1', 'The answer'),
+      turns: [turn('turn_1', 'completed', ['assistant_1'])],
+    });
+
+    expect(calls).toEqual(['The answer']);
+  });
 });

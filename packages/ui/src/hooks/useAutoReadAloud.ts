@@ -26,13 +26,10 @@ export interface AutoReadAloudOptions {
 /**
  * Reads the answer to the newest prompt after a turn this surface watched run.
  *
- * The guard is two turn ids, not a history set. `observedLiveTurnId` records the
- * turn this ready, visible surface saw running or waiting on the user; only
- * completing that same turn may start speech. Everything else is silent by
- * construction: history that arrives already finished, a page of older turns
- * fetched later, an answer that becomes newest again after a revert, and a
- * second window showing the same session all fail the id comparison, so
- * playback needs no per-message bookkeeping to stay quiet.
+ * The newest canonical turn decides. Only its own open status counts as
+ * watched, so a session flag that lags behind, history that arrives finished,
+ * a page of older turns, or an answer that becomes newest again after a revert
+ * never starts speech. One observed id plus one handled id is the whole state.
  */
 export const useAutoReadAloud = ({
  sessionKey,
@@ -100,16 +97,27 @@ export const useAutoReadAloud = ({
    handledTurnIdRef.current = null;
   }
 
-  if (!ready) return;
-
-  const liveTurnId = turns.at(-1)?.turnId ?? null;
-  // A turn counts as watched only while it is open on this surface.
-  if (sessionIsActive && liveTurnId) {
-   observedLiveTurnIdRef.current = liveTurnId;
+  const newestTurn = turns.at(-1);
+  const newestTurnId = newestTurn?.turnId ?? null;
+  // A guard that outlived the surface's readiness would let history this
+  // surface never watched count as watched, so it is dropped whenever watching
+  // stops for any reason other than the turn still being open.
+  const watching = enabled && ready;
+  if (!watching) {
+   observedLiveTurnIdRef.current = null;
    return;
   }
 
-  const newestTurn = turns.at(-1);
+  // The turn's own status, not the session's, says whether anything is still
+  // open: a session flag can lag behind the arrival of the newest turn.
+  const newestTurnIsOpen = newestTurn !== undefined
+   && (newestTurn.status === 'running' || newestTurn.status === 'pending'
+    || newestTurn.status === 'awaiting_approval' || newestTurn.status === 'awaiting_input');
+  if (newestTurnIsOpen && newestTurnId) {
+   observedLiveTurnIdRef.current = newestTurnId;
+   return;
+  }
+
   if (!newestTurn) return;
   const replyTurnId = reply ? newestTurn.turnId : null;
   if (!reply || !replyTurnId) return;
@@ -118,7 +126,6 @@ export const useAutoReadAloud = ({
   if (newestTurn.status !== 'completed') return;
   if (observedLiveTurnIdRef.current !== replyTurnId) return;
   if (handledTurnIdRef.current === replyTurnId) return;
-  if (!enabled) return;
 
   handledTurnIdRef.current = replyTurnId;
   const epoch = backgroundEpochRef.current;

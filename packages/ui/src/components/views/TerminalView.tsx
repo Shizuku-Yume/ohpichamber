@@ -149,6 +149,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
  const ensureDirectory = useTerminalStore((s) => s.ensureDirectory);
  const createTab = useTerminalStore((s) => s.createTab);
  const setActiveTab = useTerminalStore((s) => s.setActiveTab);
+ const closeTab = useTerminalStore((s) => s.closeTab);
  const setTabLabel = useTerminalStore((s) => s.setTabLabel);
  const moveTab = useTerminalStore((s) => s.moveTab);
  const setTabSessionId = useTerminalStore((s) => s.setTabSessionId);
@@ -824,20 +825,25 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
   (tabId: string) => {
    if (!terminalDirectory) return;
 
+   if (tabId === activeTabId) {
+    disconnectStream();
+   }
+
    setConnectionError(null);
    setIsFatalError(false);
    setIsReconnectPending(false);
-   void closeTerminalTab({
-    terminal,
-    directory: terminalDirectory,
-    tabId,
-    beforeClose: tabId === activeTabId ? disconnectStream : undefined,
+   const tabs = useTerminalStore.getState().getDirectoryState(terminalDirectory)?.tabs ?? [];
+   const sessionId = tabs.find((tab) => tab.id === tabId)?.terminalSessionId;
+   const isLastTab = tabs.length === 1 && tabs[0]?.id === tabId;
+   void (async () => {
+    if (sessionId) await terminal.close(sessionId, terminalDirectory);
     // Removing the surface in the same update unmounts this view
     // before the store's replacement tab could start a shell.
-    onLastTab: onLastTabClosed,
-   }).catch((error) => setConnectionError(error instanceof Error ? error.message : t('terminalView.error.sessionEnded')));
+    if (isLastTab) onLastTabClosed?.();
+    closeTab(terminalDirectory, tabId);
+   })().catch((error) => setConnectionError(error instanceof Error ? error.message : t('terminalView.error.sessionEnded')));
   },
-  [activeTabId, disconnectStream, onLastTabClosed, terminalDirectory, t, terminal]
+  [activeTabId, closeTab, disconnectStream, onLastTabClosed, terminalDirectory, t, terminal]
  );
 
  const handleReorderTab = React.useCallback(

@@ -7,6 +7,7 @@ import { registerSourceControlRoutes } from '../source-control/routes.js';
 import { registerLinearRoutes } from '../linear/routes.js';
 import { registerGuestRoutes, settleGuestDeactivationListeners } from '../guests/routes.js';
 import { listInstalledGuests, registerBuiltInGuests } from '../guests/catalog.js';
+import { proxyGuestServiceRequest } from '../guests/service.js';
 import { extensionsPersistPath } from '../guests/persist.js';
 import { registerGitRoutes } from '../git/routes.js';
 import { registerDevServerRoutes } from '../dev-servers/routes.js';
@@ -273,7 +274,35 @@ export const createFeatureRoutesRuntime = () => {
 
     const { getProfile, getGlobalIdentity, resolveRepositoryGitPaths } = await import('../git/index.js');
 
-    registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential });
+    // Extension usage providers read their own service; the catalog row is
+    // re-read per request, so pause, removal or a withdrawn grant drops the
+    // provider without a second registry to keep in step.
+    const extensionQuotaGuests = () => listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) });
+    registerQuotaRoutes(app, {
+      getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential,
+      listExtensionQuotaGuests: extensionQuotaGuests,
+      // The extension's approved provider list, never the whole credential store.
+      readExtensionCredential: async (req, guest, nativeProviderId) => {
+        const selections = await listQuotaSelections(req).catch(() => []);
+        const selection = selections.find((entry) => entry.providerId === nativeProviderId) ?? null;
+        if (!selection) return null;
+        // The resolver takes exactly its request fields; a selection also
+        // carries public catalog fields it would reject as unknown keys.
+        const { workspaceId, agentDirectoryId, providerId, credentialRef } = selection;
+        return resolveCredential({ workspaceId, agentDirectoryId, providerId, credentialRef, purpose: 'quota' }).catch(() => null);
+      },
+      requestExtensionService: (guest, params) => proxyGuestServiceRequest({
+        guestId: guest.id,
+        guestName: guest.name,
+        packageRoot: guest.packageRoot,
+        service: guest.service,
+        granted: guest.capabilityGrants,
+        persistPath: extensionsPersistPath(openchamberDataDir),
+        // One process per extension a panel ever touched otherwise stays for good.
+        idleStopMs: guest.service.keepRunning ? undefined : 10 * 60_000,
+        ...params,
+      }),
+    });
     const gitBinary = resolveGitBinaryForSpawn();
     // One server token store for every provider. OAuth tokens that expire
     // (GitLab's live two hours) are renewed before they lapse, through the

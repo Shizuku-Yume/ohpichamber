@@ -25,6 +25,7 @@ import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { createThemeFolderWatch } from './theme-watch.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
 import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
+import { fillScheduledWorktreeBridge } from '../scheduled-tasks/worktree-bridge.js';
 import { createTrackedItemsService } from '../tracked-items/service.js';
 import { createProviderReadCache } from '../provider-read-cache/index.js';
 import { createTrackedItemReaders } from '../tracked-items/readers.js';
@@ -53,7 +54,7 @@ import { createManagedSshInventory } from '../git/credentials.js';
 import { createContributorProvenanceStore } from '../git/contributor-provenance-storage.js';
 import { createGitNetworkOperationStore } from '../git/network-operation-storage.js';
 import { readEffectiveGitTransportRevision } from '../git/transport-config.js';
-import { completeWorktreeCheckoutHydration, configureRepositoryTransport } from '../git/service.js';
+import { completeWorktreeCheckoutHydration, configureRepositoryTransport, deleteBranch as deleteBranchService, isGitRepository as isGitRepositoryService, removeWorktree as removeWorktreeService } from '../git/service.js';
 import { createPrivateRepositoryIdentityResolver } from '../source-control/repository-identity.js';
 import { createSourceControlAuditStore } from '../source-control/audit-storage.js';
 
@@ -605,6 +606,15 @@ export const createFeatureRoutesRuntime = () => {
     });
     registerLinearRoutes(app);
     registerTrackerRoutes(app, { registry: trackers });
+    if (routeDependencies.scheduledWorktreeBridge) {
+      fillScheduledWorktreeBridge(routeDependencies.scheduledWorktreeBridge, {
+        createWorktree: gitWorktreeCreation?.createWorktree,
+        removeWorktree: removeWorktreeService,
+        deleteBranch: deleteBranchService,
+        isGitRepository: isGitRepositoryService,
+        bootstrapStore: worktreeBootstrapStore,
+      });
+    }
     registerDevServerRoutes(app, { scanner: devServerScanner, getOwnPorts });
     ({ overridesForDirectory: magicPromptOverridesForDirectory } = registerMagicPromptRoutes(app, {
       fsPromises,

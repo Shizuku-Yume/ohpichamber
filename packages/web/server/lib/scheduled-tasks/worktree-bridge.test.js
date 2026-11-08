@@ -77,11 +77,17 @@ describe('scheduled task worktree bridge', () => {
           execution: { prompt: 'Review', useDefaults: true },
           state: { createdAt: 1, updatedAt: 1 },
         };
-        const fetchMock = vi.fn(async (input) => {
-          const data = new URL(String(input)).pathname === '/api/session' ? { id: 'ses_probe' } : {};
-          return Response.json({ data });
+        const session = (sessionId, ws) => ({
+          sessionId, projectId: ws.projectId, workspaceId: ws.workspaceId,
+          rootSessionId: sessionId, displayPath: '.', createdAt: Date.now(), updatedAt: Date.now(),
+          epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
+          metadata: null, metadataRevision: '0', archiveRevision: '0',
         });
-        vi.stubGlobal('fetch', fetchMock);
+        const sessionService = {
+          create: vi.fn(async ({ projectId, workspaceId }) => ({ session: session('ses_1', { projectId, workspaceId }) })),
+          send: vi.fn(async (sessionId) => ({ run: { sessionId, runId: 'run-1', status: 'running', createdAt: Date.now() } })),
+          control: vi.fn(async (_sessionId, op) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: op.objective } })),
+        };
         const runtime = createScheduledTasksRuntime({
           projectConfigRuntime: {
             listScheduledTasks: async () => [task],
@@ -89,9 +95,17 @@ describe('scheduled task worktree bridge', () => {
             updateScheduledTaskState: async () => ({ task, updated: true }),
           },
           listProjects: async () => [{ id: 'proj', path: directory }],
-          buildOpenCodeUrl: () => 'http://localhost:1/',
-          getOpenCodeAuthHeaders: () => ({}),
-          waitForOpenCodeReady: async () => { },
+          listWorkspaceScopes: async () => ({
+            items: [{ workspaceId: 'ws-proj' }, { workspaceId: 'ws-worktree' }],
+            errors: {},
+          }),
+          resolveWorkspaceScope: async (workspaceId) => {
+            if (workspaceId === 'ws-proj') return { workspaceId: 'ws-proj', projectId: 'canonical-project', hostProjectId: 'proj', cwd: directory };
+            if (workspaceId === 'ws-worktree') return { workspaceId: 'ws-worktree', projectId: 'canonical-project', hostProjectId: 'proj', cwd: path.join(root, 'worktree') };
+            return null;
+          },
+          readSessionDefaults: async () => ({ providerId: 'provider', modelId: 'model', agentId: null, variant: null, reasoningEffort: null }),
+          sessionService,
           createTaskWorktree: bridge.create,
           removeTaskWorktree: bridge.remove,
           isGitRepository: bridge.isGitRepository,
@@ -103,12 +117,13 @@ describe('scheduled task worktree bridge', () => {
           if (kind === 'broken config' || kind === 'broken gitfile' || kind === 'missing directory' || kind === 'missing git executable' || kind === 'permission denied' || kind === 'terminated probe') {
             expect(result.ok).toBe(false);
             expect(result.error).toContain('failed to check whether the project is a git repository');
-            expect(fetchMock).not.toHaveBeenCalled();
+            expect(sessionService.create).not.toHaveBeenCalled();
             expect(createWorktree).not.toHaveBeenCalled();
           } else {
             expect(result.ok).toBe(true);
             expect(result.directory).toBe(kind === 'repository' ? path.join(root, 'worktree') : directory);
             expect(createWorktree).toHaveBeenCalledTimes(kind === 'repository' ? 1 : 0);
+            expect(sessionService.create).toHaveBeenCalledTimes(1);
           }
         } finally {
           runtime.stop();

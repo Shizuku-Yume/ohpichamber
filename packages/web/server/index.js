@@ -80,6 +80,7 @@ import { createLinearSessionStatusRuntime } from './lib/linear/status-runtime.js
 import { createSessionKnowledgeRuntime } from './lib/session-knowledge/runtime.js';
 import { createMessageSearchRuntime } from './lib/message-search/runtime.js';
 import { createScheduledTasksRuntime } from './lib/scheduled-tasks/runtime.js';
+import { createUnregisteredScheduledWorktreeBridge } from './lib/scheduled-tasks/worktree-bridge.js';
 import { resolveScheduledTaskOptions, resolveSessionDefaults } from './lib/scheduled-tasks/session-defaults.js';
 import { createScheduledTaskContext } from './lib/scheduled-tasks/existing-session.js';
 import { createChatsScope } from './lib/scheduled-tasks/chats-scope.js';
@@ -1129,7 +1130,7 @@ const startupPipelineRuntime = createStartupPipelineRuntime({
  createServerStartupRuntime,
 });
 
-
+const scheduledWorktreeBridge = createUnregisteredScheduledWorktreeBridge();
 const scheduledTasksRuntime = createScheduledTasksRuntime({
  projectConfigRuntime,
  chatsScope: scheduledChatsScope,
@@ -1141,6 +1142,15 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
  createChatWorkspace: agentScopeRuntime.createChatWorkspace,
  messageQueueRuntime,
  isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
+ createTaskWorktree: (input) => {
+  const create = scheduledWorktreeBridge.create;
+  if (!create) {
+   return Promise.reject(new Error('worktree creation is unavailable'));
+  }
+  return create(input);
+ },
+ removeTaskWorktree: (input) => scheduledWorktreeBridge.remove(input),
+ isGitRepository: (projectDirectory) => scheduledWorktreeBridge.isGitRepository(projectDirectory),
  readSessionDefaults: async (projectID) => {
   const settings = await readSettingsFromDiskMigrated();
   const project = sanitizeProjects(settings?.projects || []).find((entry) => entry.id === projectID) ?? null;
@@ -2093,6 +2103,7 @@ async function main(options = {}) {
   sessionKnowledgeRuntime,
   scheduledTasksRuntime,
   scheduledTaskService,
+  scheduledWorktreeBridge,
   openChamberSessionService,
   openChamberControlService,
   getOpenChamberEventClients: () => uiOpenChamberEventClients,

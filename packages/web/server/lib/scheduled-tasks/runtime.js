@@ -476,8 +476,9 @@ export const createScheduledTasksRuntime = (deps) => {
   const projectPath = await ensureProjectPath(projectID);
   if (!projectPath) throw new Error('Project path is unavailable');
 
+  const chatsRun = isChatsScope(projectID);
   let isolation = null;
-  if (!isChatsScope(projectID) && task.runInWorktree === true) {
+  if (!chatsRun && task.runInWorktree === true) {
    if (task.cleanupWorktree !== false && !projectConfigRuntime.saveScheduledWorktreeCleanup) {
     throw new Error('Durable worktree cleanup is unavailable');
    }
@@ -514,43 +515,36 @@ export const createScheduledTasksRuntime = (deps) => {
    }
   }
 
-  const runDirectory = isolation?.path || isolation?.directory || projectPath;
+  const runDirectory = isolation?.directory ?? isolation?.path ?? projectPath;
 
-  const effectiveSessionService = sessionService ?? {
-   create: async () => ({
-    session: {
-     sessionId: 'ses_probe', projectId: projectID, workspaceId: 'canonical-workspace',
-     displayPath: '.', rootSessionId: 'ses_probe', createdAt: Date.now(), updatedAt: Date.now(),
-     epoch: 'epoch-1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-     metadata: null, metadataRevision: '0', archiveRevision: '0',
-    }
-   }),
-   send: async (sessionId) => ({ run: { sessionId, runId: 'run', status: 'running', createdAt: Date.now() } }),
-   control: async (_sessionId, op) => ({ type: 'goal', mode: { kind: 'goal', status: 'active', objective: op.objective } }),
-  };
+  if (typeof sessionService?.create !== 'function' || (task.execution.goalEnabled
+   ? typeof sessionService?.control !== 'function'
+   : typeof sessionService?.send !== 'function')) {
+   throw new Error('Canonical session service is unavailable');
+  }
 
-  if (typeof effectiveSessionService?.create !== 'function' || (task.execution.goalEnabled
-   ? typeof effectiveSessionService?.control !== 'function'
-   : typeof effectiveSessionService?.send !== 'function')) throw new Error('Canonical session service is unavailable');
-  const options = await resolveRunSelection(projectID, task).catch(() => ({ providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }));
-  const workspace = isChatsScope(projectID)
+  const options = await resolveRunSelection(projectID, task);
+  const workspace = chatsRun
    ? await (typeof createChatWorkspace === 'function' ? createChatWorkspace() : Promise.reject(new Error('Managed chat workspace service is unavailable')))
-   : (sessionService && typeof resolveWorkspaceScope === 'function'
-    ? await resolveProjectWorkspace(projectID, runDirectory)
-    : { workspaceId: 'canonical-workspace', projectId: projectID, cwd: runDirectory, hostProjectId: projectID });
-  if (!workspace?.workspaceId || !workspace.projectId || !workspace.cwd || workspace.hostProjectId !== projectID) throw new Error('Scheduled workspace is not authorized');
+   : await resolveProjectWorkspace(projectID, runDirectory);
+  if (!workspace?.workspaceId || !workspace.projectId || !workspace.cwd || workspace.hostProjectId !== projectID) {
+   throw new Error('Scheduled workspace is not authorized');
+  }
+
   let sessionID;
   let prompt;
   try {
-   prompt = await expandPrompt(workspace, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [] }, options })).catch(() => ({ input: { text: task.execution.prompt, attachments: [], context: [] }, options }));
-   const created = SessionCreateAckSchema.parse(await effectiveSessionService.create({
+   prompt = await expandPrompt(workspace, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [] }, options }));
+   const created = SessionCreateAckSchema.parse(await sessionService.create({
     projectId: workspace.projectId, workspaceId: workspace.workspaceId, options: prompt.options,
     title: formatScheduledSessionTitle(task, startedAt),
    }));
    sessionID = created.session.sessionId;
-   if (created.session.projectId !== workspace.projectId || created.session.workspaceId !== workspace.workspaceId) throw new Error('Scheduled session scope mismatch');
+   if (created.session.projectId !== workspace.projectId || created.session.workspaceId !== workspace.workspaceId) {
+    throw new Error('Scheduled session scope mismatch');
+   }
   } catch (error) {
-   if (isChatsScope(projectID)) await chatsScope.discardChatDirectory(workspace.cwd);
+   if (chatsRun) await chatsScope.discardChatDirectory(workspace.cwd);
    throw error;
   }
   await onSessionCreated?.(sessionID);
@@ -562,15 +556,15 @@ export const createScheduledTasksRuntime = (deps) => {
   }
   if (task.execution.goalEnabled) {
    const tokenBudget = task.execution.goalTokenBudget ?? await readDefaultGoalTokenBudget(projectID);
-   const result = await effectiveSessionService.control(sessionID, { type: 'goal', op: 'create', objective: prompt.input.text, tokenBudget: tokenBudget ?? null });
+   const result = await sessionService.control(sessionID, { type: 'goal', op: 'create', objective: prompt.input.text, tokenBudget: tokenBudget ?? null });
    if (result?.type !== 'goal' || result.mode?.kind !== 'goal' || result.mode.status !== 'active') throw new Error('Scheduled goal acknowledgement is invalid');
   } else {
    const context = [createScheduledTaskContext({ projectId: projectID, taskId: task.id, sessionId: sessionID, workspaceId: workspace.workspaceId, mode: 'new', triggeredAt: startedAt })];
-   const result = await effectiveSessionService.send(sessionID, PromptRequestSchema.parse({ input: { ...prompt.input, context }, options: prompt.options }));
+   const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { ...prompt.input, context }, options: prompt.options }));
    if (!result?.run || result.run.sessionId !== sessionID) throw new Error('Scheduled prompt acknowledgement is invalid');
   }
   const finishedAt = Date.now();
-  return { sessionID, directory: runDirectory, durationMs: Math.max(0, finishedAt - startedAt), reason, startedAt, finishedAt };
+  return { sessionID, directory: workspace.cwd, durationMs: Math.max(0, finishedAt - startedAt), reason, startedAt, finishedAt };
  };
 
  const releaseRunningSlot = (projectID, taskKey) => {
@@ -821,7 +815,7 @@ export const createScheduledTasksRuntime = (deps) => {
     sessionID = result.sessionID;
     sessionDirectory = result.directory;
     durationMs = result.durationMs;
-    status = 'sent';
+    status = 'success';
     logger.info?.(
      '[ScheduledTasks] run completed',
      { projectID, taskID, status, reason, sessionID, durationMs }
@@ -935,7 +929,7 @@ export const createScheduledTasksRuntime = (deps) => {
     // The session already ran — surface persist failure without treating a
     // successful dispatch as a hard run failure (manual runNow would 500).
     return {
-     ok: status === 'sent',
+     ok: status === 'success',
      status,
      sessionID,
      directory: sessionDirectory,
@@ -958,7 +952,7 @@ export const createScheduledTasksRuntime = (deps) => {
    }
 
    return {
-    ok: status === 'sent',
+    ok: status === 'success',
     status,
     sessionID,
     directory: sessionDirectory,

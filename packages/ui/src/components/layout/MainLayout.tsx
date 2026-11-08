@@ -36,6 +36,9 @@ import { DiagnosticDialogAvailableContext } from '@/lib/diagnostics/dialog-avail
 
 const loadSettingsWindow = () => import('@/components/views/SettingsWindow').then(m => m.SettingsWindow);
 
+// Live motion knobs, development builds only: the import is dropped from
+// production bundles.
+const MotionTuningPanel = import.meta.env.DEV ? React.lazy(() => import('@/components/dev/MotionTuningPanel')) : null;
 // Surfaces that replace or cover the chat load the first time they open, so
 // the startup bundle carries only the chat. Each reads its own open state from
 // the store once mounted, and stays mounted after its first open.
@@ -58,13 +61,13 @@ const loadSpaceSetupOutputDialog = () => import('@/components/session/spaces/Spa
 const closeMainSurfaces = () => useUIStore.getState().closeMainSurfaces();
 
 const OnDemand: React.FC<{
-    needed: boolean;
-    load: () => Promise<React.ComponentType>;
-    /** Closes the surface when its chunk fails to load, so the next open tries again. */
-    onFailure: () => void;
+ needed: boolean;
+ load: () => Promise<React.ComponentType>;
+ /** Closes the surface when its chunk fails to load, so the next open tries again. */
+ onFailure: () => void;
 }> = ({ needed, load, onFailure }) => {
-    const Component = useOnDemandComponent(needed, load, onFailure);
-    return Component ? <Component /> : null;
+ const Component = useOnDemandComponent(needed, load, onFailure);
+ return Component ? <Component /> : null;
 };
 
 /**
@@ -73,17 +76,17 @@ const OnDemand: React.FC<{
  * context panel beside it.
  */
 const LeftSidebar = React.memo<{ isMobile: boolean }>(({ isMobile }) => {
-    const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
-    return (
-        <Sidebar
-            isOpen={isSidebarOpen}
-            isMobile={isMobile}
-            className="border-border"
-            topBar={<SidebarTopBar />}
-        >
-            <SessionSidebar isVisible={isSidebarOpen} />
-        </Sidebar>
-    );
+ const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+ return (
+  <Sidebar
+   isOpen={isSidebarOpen}
+   isMobile={isMobile}
+   className="border-border"
+   topBar={<SidebarTopBar />}
+  >
+   <SessionSidebar isVisible={isSidebarOpen} />
+  </Sidebar>
+ );
 });
 LeftSidebar.displayName = 'LeftSidebar';
 
@@ -94,172 +97,175 @@ LeftSidebar.displayName = 'LeftSidebar';
  * crossing the threshold reloads into it (see watchHostedSurfaceViewport).
  */
 export const MainLayout: React.FC = () => {
-    useSessionListSync();
-    useTerminalSessionKeepalive();
-    // The grant dialog of isolated spaces.
-    const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);
-    const setIsMobile = useUIStore((state) => state.setIsMobile);
-    const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
-    const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
-    // Load the windowed settings dialog on its first open: its chunk graph
-    // (CodeMirror editor, vim mode, theme tooling) stays off startup. Once
-    // loaded it stays mounted so the close animation and state behave as
-    // before. A failed load closes the dialog so the next click tries again.
-    const SettingsWindow = useOnDemandComponent(isSettingsDialogOpen, loadSettingsWindow, () => setSettingsDialogOpen(false));
-    const isRunOverviewOpen = useUIStore((state) => state.runOverviewKey !== null);
-    const isScheduledTasksPageOpen = useUIStore((state) => state.isScheduledTasksDialogOpen);
-    const isArchivePageOpen = useUIStore((state) => state.isArchivePageOpen);
-    const isIntegrationsCatalogOpen = useUIStore((state) => state.isIntegrationsCatalogOpen);
-    const isUsageStatsPageOpen = useUIStore((state) => state.isUsageStatsPageOpen);
-    const isSourceBoardOpen = useUIStore((state) => state.isSourceBoardOpen);
-    const worktreesPageProjectId = useUIStore((state) => state.worktreesPageProjectId);
-    // The spaces page exists only while the feature's switch is on.
-    const isSpacesPageOpen = useUIStore((state) => state.isolatedSpacesEnabled && state.spacesPageProjectId !== null);
-    const isCommandPaletteOpen = useUIStore((state) => state.isCommandPaletteOpen);
-    const isHelpDialogOpen = useUIStore((state) => state.isHelpDialogOpen);
-    const isRuntimeStatusDialogOpen = useUIStore((state) => state.isRuntimeStatusDialogOpen);
-    const isSpaceAccessDialogOpen = useSpacesStore((state) => state.accessDialog !== null);
-    const isSpaceApplyDialogOpen = useSpacesStore((state) => state.applyDialog !== null);
-    const isSpaceSetupOutputDialogOpen = useSpacesStore((state) => state.setupOutputDialog !== null);
-    const openGuestPageId = useUIStore((state) => state.openGuestPageId);
-    const guestPages = useGuestPages();
-    const guestPage = guestPages.find((guest) => guest.id === openGuestPageId);
-    React.useEffect(() => {
-        if (openGuestPageId && !guestPage) useUIStore.getState().setOpenGuestPage(null);
-    }, [openGuestPageId, guestPage]);
-    React.useEffect(() => subscribeRuntimeEndpointChanged(() => useUIStore.getState().setOpenGuestPage(null)), []);
-    // A move in another window (the desktop app and a browser on one host)
-    // puts the surface in the same zone here.
-    React.useEffect(() => followZonePlacementOfOtherWindows(), []);
-    // Any full-page surface replacing the chat area. While open, the chat is
-    // fully hidden (not just covered) so none of its floating chrome bleeds
-    // through, and selecting a session or draft anywhere closes the surface.
-    const isOverviewOpen = useUIStore((state) => state.isOverviewOpen);
-    const isSurfacePageOpen = isScheduledTasksPageOpen || isArchivePageOpen || isIntegrationsCatalogOpen || isUsageStatsPageOpen || isSourceBoardOpen || isOverviewOpen || Boolean(worktreesPageProjectId) || isSpacesPageOpen || isRunOverviewOpen || Boolean(guestPage);
-    // The work-status card sits in the right slot, outside the hidden chat,
-    // so the slot is told to hide it with the chat.
-    React.useLayoutEffect(() => {
-        setChatCovered(isSurfacePageOpen);
-    }, [isSurfacePageOpen]);
-    React.useEffect(() => () => setChatCovered(false), []);
+ useSessionListSync();
+ useTerminalSessionKeepalive();
+ // The grant dialog of isolated spaces.
+ const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);
+ const setIsMobile = useUIStore((state) => state.setIsMobile);
+ const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
+ const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+ // Load the windowed settings dialog on its first open: its chunk graph
+ // (CodeMirror editor, vim mode, theme tooling) stays off startup. Once
+ // loaded it stays mounted so the close animation and state behave as
+ // before. A failed load closes the dialog so the next click tries again.
+ const SettingsWindow = useOnDemandComponent(isSettingsDialogOpen, loadSettingsWindow, () => setSettingsDialogOpen(false));
+ const isRunOverviewOpen = useUIStore((state) => state.runOverviewKey !== null);
+ const isScheduledTasksPageOpen = useUIStore((state) => state.isScheduledTasksDialogOpen);
+ const isArchivePageOpen = useUIStore((state) => state.isArchivePageOpen);
+ const isIntegrationsCatalogOpen = useUIStore((state) => state.isIntegrationsCatalogOpen);
+ const isUsageStatsPageOpen = useUIStore((state) => state.isUsageStatsPageOpen);
+ const isSourceBoardOpen = useUIStore((state) => state.isSourceBoardOpen);
+ const worktreesPageProjectId = useUIStore((state) => state.worktreesPageProjectId);
+ // The spaces page exists only while the feature's switch is on.
+ const isSpacesPageOpen = useUIStore((state) => state.isolatedSpacesEnabled && state.spacesPageProjectId !== null);
+ const isCommandPaletteOpen = useUIStore((state) => state.isCommandPaletteOpen);
+ const isHelpDialogOpen = useUIStore((state) => state.isHelpDialogOpen);
+ const isRuntimeStatusDialogOpen = useUIStore((state) => state.isRuntimeStatusDialogOpen);
+ const isSpaceAccessDialogOpen = useSpacesStore((state) => state.accessDialog !== null);
+ const isSpaceApplyDialogOpen = useSpacesStore((state) => state.applyDialog !== null);
+ const isSpaceSetupOutputDialogOpen = useSpacesStore((state) => state.setupOutputDialog !== null);
+ const openGuestPageId = useUIStore((state) => state.openGuestPageId);
+ const guestPages = useGuestPages();
+ const guestPage = guestPages.find((guest) => guest.id === openGuestPageId);
+ React.useEffect(() => {
+  if (openGuestPageId && !guestPage) useUIStore.getState().setOpenGuestPage(null);
+ }, [openGuestPageId, guestPage]);
+ React.useEffect(() => subscribeRuntimeEndpointChanged(() => useUIStore.getState().setOpenGuestPage(null)), []);
+ // A move in another window (the desktop app and a browser on one host)
+ // puts the surface in the same zone here.
+ React.useEffect(() => followZonePlacementOfOtherWindows(), []);
+ // Any full-page surface replacing the chat area. While open, the chat is
+ // fully hidden (not just covered) so none of its floating chrome bleeds
+ // through, and selecting a session or draft anywhere closes the surface.
+ const isOverviewOpen = useUIStore((state) => state.isOverviewOpen);
+ const isSurfacePageOpen = isScheduledTasksPageOpen || isArchivePageOpen || isIntegrationsCatalogOpen || isUsageStatsPageOpen || isSourceBoardOpen || isOverviewOpen || Boolean(worktreesPageProjectId) || isSpacesPageOpen || isRunOverviewOpen || Boolean(guestPage);
+ // The work-status card sits in the right slot, outside the hidden chat,
+ // so the slot is told to hide it with the chat.
+ React.useLayoutEffect(() => {
+  setChatCovered(isSurfacePageOpen);
+ }, [isSurfacePageOpen]);
+ React.useEffect(() => () => setChatCovered(false), []);
 
-    React.useEffect(() => {
-        const closeSurfacePages = () => useUIStore.getState().closeMainSurfaces();
-        const unsubscribeSession = useSessionUIStore.subscribe((state, prev) => {
-            const sessionSelected = Boolean(state.currentSessionId) && state.currentSessionId !== prev.currentSessionId;
-            // Draft identity change covers re-opening a draft while one is
-            // already open (the boolean alone never transitions then).
-            const draftOpened = Boolean(state.newSessionDraft?.open) && state.newSessionDraft !== prev.newSessionDraft;
-            if (sessionSelected || draftOpened) closeSurfacePages();
-        });
-        return () => {
-            unsubscribeSession();
-        };
-    }, []);
-    const { isMobile } = useDeviceInfo();
+ React.useEffect(() => {
+  const closeSurfacePages = () => useUIStore.getState().closeMainSurfaces();
+  const unsubscribeSession = useSessionUIStore.subscribe((state, prev) => {
+   const sessionSelected = Boolean(state.currentSessionId) && state.currentSessionId !== prev.currentSessionId;
+   // Draft identity change covers re-opening a draft while one is
+   // already open (the boolean alone never transitions then).
+   const draftOpened = Boolean(state.newSessionDraft?.open) && state.newSessionDraft !== prev.newSessionDraft;
+   if (sessionSelected || draftOpened) closeSurfacePages();
+  });
+  return () => {
+   unsubscribeSession();
+  };
+ }, []);
+ const { isMobile } = useDeviceInfo();
 
-    useUpdatePolling();
+ useUpdatePolling();
 
 
-    React.useEffect(() => {
-        const previous = useUIStore.getState().isMobile;
-        if (previous !== isMobile) {
-            setIsMobile(isMobile);
-        }
-    }, [isMobile, setIsMobile]);
+ React.useEffect(() => {
+  const previous = useUIStore.getState().isMobile;
+  if (previous !== isMobile) {
+   setIsMobile(isMobile);
+  }
+ }, [isMobile, setIsMobile]);
 
-    return (
-        <DiagnosticDialogAvailableContext.Provider value>
-        <DiffWorkerProvider>
-            <div
-                data-page-scroll-lock="true"
-                className="main-content-safe-area relative flex h-[100dvh] bg-background"
-            >
-                <OnDemand needed={isCommandPaletteOpen} load={loadCommandPalette} onFailure={() => useUIStore.getState().setCommandPaletteOpen(false)} />
-                <OnDemand needed={isHelpDialogOpen} load={loadHelpDialog} onFailure={() => useUIStore.getState().setHelpDialogOpen(false)} />
-                <OnDemand needed={isRuntimeStatusDialogOpen} load={loadRuntimeStatusDialog} onFailure={() => useUIStore.getState().setRuntimeStatusDialogOpen(false)} />
-                <RunAutoFusion />
-                <SessionDialogs />
-                {isolatedSpacesEnabled ? (
-                    <>
-                        <OnDemand needed={isSpaceAccessDialogOpen} load={loadSpaceAccessDialog} onFailure={() => useSpacesStore.getState().closeAccessDialog()} />
-                        <SpaceActionsSheet />
-                        <OnDemand needed={isSpaceApplyDialogOpen} load={loadSpaceApplyDialog} onFailure={() => useSpacesStore.getState().closeApplyDialog()} />
-                        <SpaceDeleteDialog />
-                        <OnDemand needed={isSpaceSetupOutputDialogOpen} load={loadSpaceSetupOutputDialog} onFailure={() => useSpacesStore.getState().closeSetupOutputDialog()} />
-                    </>
-                ) : null}
+ return (
+  <DiagnosticDialogAvailableContext.Provider value>
+   <DiffWorkerProvider>
+    <div
+     data-page-scroll-lock="true"
+     className="main-content-safe-area relative flex h-[100dvh] bg-background"
+    >
+     <OnDemand needed={isCommandPaletteOpen} load={loadCommandPalette} onFailure={() => useUIStore.getState().setCommandPaletteOpen(false)} />
+     <OnDemand needed={isHelpDialogOpen} load={loadHelpDialog} onFailure={() => useUIStore.getState().setHelpDialogOpen(false)} />
+     <OnDemand needed={isRuntimeStatusDialogOpen} load={loadRuntimeStatusDialog} onFailure={() => useUIStore.getState().setRuntimeStatusDialogOpen(false)} />
+     <RunAutoFusion />
+     <SessionDialogs />
+     {isolatedSpacesEnabled ? (
+      <>
+       <OnDemand needed={isSpaceAccessDialogOpen} load={loadSpaceAccessDialog} onFailure={() => useSpacesStore.getState().closeAccessDialog()} />
+       <SpaceActionsSheet />
+       <OnDemand needed={isSpaceApplyDialogOpen} load={loadSpaceApplyDialog} onFailure={() => useSpacesStore.getState().closeApplyDialog()} />
+       <SpaceDeleteDialog />
+       <OnDemand needed={isSpaceSetupOutputDialogOpen} load={loadSpaceSetupOutputDialog} onFailure={() => useSpacesStore.getState().closeSetupOutputDialog()} />
+      </>
+     ) : null}
 
-                {/* Persistent top-left controls (toggle + project actions) that
+     {/* Persistent top-left controls (toggle + project actions) that
                     stay put while the sidebar/header animate beneath them. */}
-                <TitlebarLeftControls />
-                {/* Full-height Sidebar beside [Header above (chat | RightSidebar)] */}
-                <div className="flex flex-1 overflow-hidden" data-page-scroll-lock="true">
-                    <LeftSidebar isMobile={isMobile} />
-                    <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden bg-background" data-page-scroll-lock="true">
-                        <Header />
-                        <div className="relative flex flex-1 min-h-0 overflow-hidden bg-background" data-page-scroll-lock="true">
-                            <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden border-t border-border bg-background" data-page-scroll-lock="true">
-                                <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true" data-workspace-row="true">
-                                    {/* The left zone: surfaces the user moved beside the
+     <TitlebarLeftControls />
+     {/* Full-height Sidebar beside [Header above (chat | RightSidebar)] */}
+     <div className="flex flex-1 overflow-hidden" data-page-scroll-lock="true">
+      <LeftSidebar isMobile={isMobile} />
+      <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden bg-background" data-page-scroll-lock="true">
+       <Header />
+       <div className="relative flex flex-1 min-h-0 overflow-hidden bg-background" data-page-scroll-lock="true">
+        <div className="relative flex flex-1 min-w-0 flex-col overflow-hidden border-t border-border bg-background" data-page-scroll-lock="true">
+         <div className="flex flex-1 min-h-0 overflow-hidden" data-page-scroll-lock="true" data-workspace-row="true">
+          {/* The left zone: surfaces the user moved beside the
                                         sidebar. Empty and closed, it takes no width. */}
-                                    <ContextPanel zone="left" />
-                                    {/* Holds the chat and the right zone together, so its
+          <ContextPanel zone="left" />
+          {/* Holds the chat and the right zone together, so its
                                         width does not move when the right zone opens. The
                                         work-status panel measures this rather than the chat,
                                         which the right zone animates. */}
-                                    <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true" data-chat-area="true">
-                                        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-workspace-chat="true">
-                                        <main className="min-h-0 flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
-                                            <div className={cn('absolute inset-0', isSurfacePageOpen && 'invisible')}>
-                                                <ErrorBoundary><ChatView active={!isSettingsDialogOpen && !isSurfacePageOpen} /></ErrorBoundary>
-                                            </div>
-                                            <ErrorBoundary><OnDemand needed={isRunOverviewOpen} load={loadRunOverview} onFailure={closeMainSurfaces} /></ErrorBoundary>
-                                            <ErrorBoundary><OnDemand needed={isScheduledTasksPageOpen} load={loadScheduledTasksDialog} onFailure={closeMainSurfaces} /></ErrorBoundary>
-                                            <ErrorBoundary><OnDemand needed={isArchivePageOpen} load={loadArchiveView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-                                            <ErrorBoundary><OnDemand needed={isIntegrationsCatalogOpen} load={loadIntegrationsCatalogView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-                                            {isUsageStatsPageOpen && (
-                                                <div className="absolute inset-0 z-10 bg-background">
-                                                    <ErrorBoundary><OnDemand needed load={loadUsageStatsView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-                                                </div>
-                                            )}
-                                            <OnDemand needed={isSourceBoardOpen} load={loadSourceBoardView} onFailure={closeMainSurfaces} />
-                                            <ErrorBoundary><OnDemand needed={isOverviewOpen} load={loadOverviewView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-                                            <ErrorBoundary><OnDemand needed={Boolean(worktreesPageProjectId)} load={loadWorktreesView} onFailure={closeMainSurfaces} /></ErrorBoundary>
-                                            {isSpacesPageOpen ? <ErrorBoundary><OnDemand needed load={loadSpacesView} onFailure={closeMainSurfaces} /></ErrorBoundary> : null}
-                                            {guestPage && <div className="absolute inset-0 z-10 bg-background">
-                                                <ErrorBoundary><PluginPane mode={`plugin:${guestPage.id}`} surface="page" item={null}
-                                                    onDismiss={() => useUIStore.getState().setOpenGuestPage(null)} /></ErrorBoundary>
-                                            </div>}
-                                        </main>
-                                        <ContextPanel zone="bottom" />
-                                        </div>
-                                        <ContextPanel zone="right" />
-                                        {/* After every zone: the panes attach to the bodies the
+          <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden" data-page-scroll-lock="true" data-chat-area="true">
+           <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" data-workspace-chat="true">
+            <main className="min-h-0 flex-1 overflow-hidden bg-background relative" data-page-scroll-lock="true">
+             <div className={cn('absolute inset-0', isSurfacePageOpen && 'invisible')}>
+              <ErrorBoundary><ChatView active={!isSettingsDialogOpen && !isSurfacePageOpen} /></ErrorBoundary>
+             </div>
+             <ErrorBoundary><OnDemand needed={isRunOverviewOpen} load={loadRunOverview} onFailure={closeMainSurfaces} /></ErrorBoundary>
+             <ErrorBoundary><OnDemand needed={isScheduledTasksPageOpen} load={loadScheduledTasksDialog} onFailure={closeMainSurfaces} /></ErrorBoundary>
+             <ErrorBoundary><OnDemand needed={isArchivePageOpen} load={loadArchiveView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+             <ErrorBoundary><OnDemand needed={isIntegrationsCatalogOpen} load={loadIntegrationsCatalogView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+             {isUsageStatsPageOpen && (
+              <div className="absolute inset-0 z-10 bg-background">
+               <ErrorBoundary><OnDemand needed load={loadUsageStatsView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+              </div>
+             )}
+             <OnDemand needed={isSourceBoardOpen} load={loadSourceBoardView} onFailure={closeMainSurfaces} />
+             <ErrorBoundary><OnDemand needed={isOverviewOpen} load={loadOverviewView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+             <ErrorBoundary><OnDemand needed={Boolean(worktreesPageProjectId)} load={loadWorktreesView} onFailure={closeMainSurfaces} /></ErrorBoundary>
+             {isSpacesPageOpen ? <ErrorBoundary><OnDemand needed load={loadSpacesView} onFailure={closeMainSurfaces} /></ErrorBoundary> : null}
+             {guestPage && <div className="absolute inset-0 z-10 bg-background">
+              <ErrorBoundary><PluginPane mode={`plugin:${guestPage.id}`} surface="page" item={null}
+               onDismiss={() => useUIStore.getState().setOpenGuestPage(null)} /></ErrorBoundary>
+             </div>}
+            </main>
+            <ContextPanel zone="bottom" />
+           </div>
+           <ContextPanel zone="right" />
+           {/* After every zone: the panes attach to the bodies the
                                             zones register, behind their layout animation. */}
-                                        <ContextSurfacePanes />
-                                        <ZoneDropOverlay />
-                                        <ZoneFitArbiter />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="border-t border-border" data-page-scroll-lock="true">
-                                <ErrorBoundary><ContextPanelRail /></ErrorBoundary>
-                            </div>
-                            <ErrorBoundary><GuestHosts /></ErrorBoundary>
-                        </div>
-                    </div>
-                </div>
+           <ContextSurfacePanes />
+           <ZoneDropOverlay />
+           <ZoneFitArbiter />
+          </div>
+         </div>
+        </div>
+        <div className="border-t border-border" data-page-scroll-lock="true">
+         <ErrorBoundary><ContextPanelRail /></ErrorBoundary>
+        </div>
+        <ErrorBoundary><GuestHosts /></ErrorBoundary>
+       </div>
+      </div>
+     </div>
 
-                {/* Settings: windowed dialog with blur */}
-                {SettingsWindow ? (
-                    <SettingsWindow
-                        open={isSettingsDialogOpen}
-                        onOpenChange={setSettingsDialogOpen}
-                    />
-                ) : null}
-            </div>
-        </DiffWorkerProvider>
-        </DiagnosticDialogAvailableContext.Provider>
-    );
+     {/* Settings: windowed dialog with blur */}
+     {SettingsWindow ? (
+      <SettingsWindow
+       open={isSettingsDialogOpen}
+       onOpenChange={setSettingsDialogOpen}
+      />
+     ) : null}
+     {MotionTuningPanel ? (
+      <React.Suspense fallback={null}><MotionTuningPanel /></React.Suspense>
+     ) : null}
+    </div>
+   </DiffWorkerProvider>
+  </DiagnosticDialogAvailableContext.Provider>
+ );
 };

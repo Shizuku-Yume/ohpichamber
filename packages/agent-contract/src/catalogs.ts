@@ -231,7 +231,10 @@ export const ImageModelMutationResultSchema = z.strictObject({
   revision: CounterSchema,
   selection: ModelSelectionSchema,
   model: ImageModelSchema.nullable(),
-});
+}).refine(
+  (result) => result.model === null || (result.model.modelId === result.selection.modelId && result.model.provider === result.selection.providerId),
+  'Image model mutation result identifies the committed model selection',
+);
 export type ImageModelMutationResult = z.infer<typeof ImageModelMutationResultSchema>;
 
 export const ModelDeleteRequestSchema = z.strictObject({

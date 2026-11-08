@@ -121,7 +121,7 @@ export function credentialReference(providerId: string, id: number): string {
 function apiProtocol(api: NativeCatalogModel['api'] | undefined): Provider['protocol'] {
  switch (api) {
   case 'openai-completions': case 'openrouter': return 'chat-completions';
-  case 'openai-responses': case 'openai-codex-responses': case 'azure-openai-responses': return 'responses';
+  case 'openai-responses': case 'openai-codex-responses': case 'azure-openai-responses': case 'openai-images': case 'openrouter-images': return 'responses';
   case 'anthropic-messages': case 'bedrock-converse-stream': return 'messages';
   case 'google-generative-ai': case 'google-gemini-cli': case 'google-vertex': return 'generate-content';
   default: return null;
@@ -303,23 +303,25 @@ export class NativeModels {
   // cannot start with. Image generators are a separate native kind and are asked
   // for by kind instead of being filtered out of that pool by token limits.
   const chatModels = this.context.modelRegistry.getAvailable();
-  const allowed = new Set(filterAvailableModelsByEnabledPatterns(chatModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
+  const allowedChat = new Set(filterAvailableModelsByEnabledPatterns(chatModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
   const disabledProviders = new Set(cfgDisabledProviders.get(this.context.settings));
   const models = chatModels
    .map(model => {
     const key = modelKey({ providerId: model.provider, modelId: model.id });
-    return publicModel(model, this.metadata.models[key], !disabledProviders.has(model.provider) && allowed.has(key) && this.metadata.models[key]?.enabled !== false);
+    return publicModel(model, this.metadata.models[key], !disabledProviders.has(model.provider) && allowedChat.has(key) && this.metadata.models[key]?.enabled !== false);
    });
   // Image generators answer a prompt with pictures and publish no token
   // limits, so they travel beside the chat models instead of through
   // `publicModel`: a `contextWindow` there would be invented.
-  const imageModels = this.context.modelRegistry.getAvailable('all').filter(model => modelKind(model) === 'image')
+  const rawImageModels = this.context.modelRegistry.getAvailable('all').filter(model => modelKind(model) === 'image');
+  const allowedImage = new Set(filterAvailableModelsByEnabledPatterns(rawImageModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
+  const imageModels = rawImageModels
    .map(model => {
     const key = modelKey({ providerId: model.provider, modelId: model.id });
     const configured = this.metadata.imageModels[key];
     return ImageModelSchema.parse({
      modelId: model.id, provider: model.provider, name: configured?.name ?? model.name,
-     enabled: !disabledProviders.has(model.provider) && allowed.has(key) && configured?.enabled !== false,
+     enabled: !disabledProviders.has(model.provider) && allowedImage.has(key) && configured?.enabled !== false,
      ...(configured?.status ? { status: configured.status } : model.isBeta ? { status: 'beta' } : {}),
     });
    });
@@ -391,6 +393,17 @@ export class NativeModels {
    models: this.context.modelRegistry.getProviderModels(providerId)
     .filter(model => model.contextWindow !== null && model.contextWindow > 0 && model.maxTokens !== null && model.maxTokens > 0)
     .map(model => publicModel(model, state.metadata.models[modelKey({ providerId, modelId: model.id })])),
+   imageModels: this.context.modelRegistry.getProviderModels(providerId)
+    .filter(model => modelKind(model) === 'image')
+    .map(model => {
+     const key = modelKey({ providerId, modelId: model.id });
+     const configured = state.metadata.imageModels[key];
+     return ImageModelSchema.parse({
+      modelId: model.id, provider: providerId, name: configured?.name ?? model.name,
+      enabled: configured?.enabled !== false,
+      ...(configured?.status ? { status: configured.status } : model.isBeta ? { status: 'beta' } : {}),
+     });
+    }),
   });
  }
 
@@ -613,11 +626,20 @@ export class NativeModels {
   await this.context.modelRegistry.reapplyModelPolicies();
   await this.context.authStorage.credentials.reload();
   const { providerId, modelId } = request.selection;
+  const key = modelKey(request.selection);
+  const configured = this.metadata.imageModels[key];
+  if (configured?.enabled === false) {
+   throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected image model is disabled in configuration');
+  }
   if (cfgDisabledProviders.get(this.context.settings).includes(providerId)) {
    throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider is disabled');
   }
-  const nativeModel = this.context.modelRegistry.getAvailable('image')
-   .find(model => model.provider === providerId && model.id === modelId);
+  const rawImageModels = this.context.modelRegistry.getAvailable('all').filter(model => modelKind(model) === 'image');
+  const allowedImage = new Set(filterAvailableModelsByEnabledPatterns(rawImageModels, cfgEnabledModels.get(this.context.settings), this.context.settings).map(model => modelKey({ providerId: model.provider, modelId: model.id })));
+  if (!allowedImage.has(key)) {
+   throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected image model is disabled by policy or pattern');
+  }
+  const nativeModel = rawImageModels.find(model => model.provider === providerId && model.id === modelId);
   if (!nativeModel) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected image model is disabled or unavailable');
   const source = this.context.authStorage.keys.source(providerId);
   const reference = source && source.kind !== 'api_key' && source.kind !== 'oauth'
@@ -906,17 +928,21 @@ export class NativeModels {
   const model = request.model;
   const existing = this.context.modelRegistry.find(model.provider, model.modelId);
   const configuredProvider = state.config.providers?.[model.provider];
-  const api = configuredProvider?.api ?? existing?.api;
+  const modelApi = existing?.api ?? (configuredProvider?.api && (IMAGE_GENERATION_APIS as readonly string[]).includes(configuredProvider.api) ? configuredProvider.api : 'openai-images');
   const baseUrl = configuredProvider?.baseUrl ?? this.context.modelRegistry.getProviderBaseUrl(model.provider);
-  if (!api || !baseUrl) throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Configure the native provider before configuring this model');
-  if (!(IMAGE_GENERATION_APIS as readonly string[]).includes(api)) {
+  if (!baseUrl) throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Configure the native provider before configuring this model');
+  if (!(IMAGE_GENERATION_APIS as readonly string[]).includes(modelApi)) {
    throw new ProjectionError(422, 'INVALID_REQUEST', 'This provider api cannot run image generation');
   }
   const raw: NativeModelDefinitionInput = {
-   id: model.modelId, name: model.name, api, kind: 'image', input: ['text'],
+   id: model.modelId, name: model.name, api: modelApi, kind: 'image', input: ['text'],
   };
   state.config.providers ??= {};
-  const provider: NativeProviderConfigInput = { ...configuredProvider, api: nativeProviderApi(api), baseUrl };
+  const provider: NativeProviderConfigInput = {
+   ...configuredProvider,
+   ...(configuredProvider?.api ? { api: nativeProviderApi(configuredProvider.api) } : {}),
+   baseUrl,
+  };
   state.config = this.validate({
    ...state.config, providers: {
     ...state.config.providers,

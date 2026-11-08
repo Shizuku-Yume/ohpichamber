@@ -224,6 +224,12 @@ export class StatelessWorker {
       case 'catalog.model.configure':
         await providerEntry();
         result = { type: 'catalog.model.mutated', result: await this.models.configureModel(operation.request, revision) }; break;
+      case 'catalog.image.configure':
+        await providerEntry();
+        result = { type: 'catalog.image.mutated', result: await this.models.configureImageModel(operation.request, revision) }; break;
+      case 'catalog.image.generate':
+        await providerEntry();
+        result = { type: 'catalog.image.generated', result: await this.models.generate(operation.request) }; break;
       case 'catalog.model.delete': result = { type: 'catalog.model.mutated', result: await this.models.deleteModel(operation.request, revision) }; break;
       case 'catalog.credential.write':
         await providerEntry();

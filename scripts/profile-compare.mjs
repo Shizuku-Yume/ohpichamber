@@ -78,7 +78,7 @@ Locations:
                            runs whose summary exists are skipped
   --port <port>            Server port (default: 4799)
   --fixture-port <port>    Fixture provider port (default: 4798)
-  --opencode-binary <path> OpenCode CLI for the servers (see profile:serve)
+  --omp-binary <path>      Agent CLI for the servers (see profile:serve)
 
   --dry-run                Print the plan (sources, worktrees, builds,
                            commands) and change nothing
@@ -140,7 +140,7 @@ const parseArgs = (argv) => {
   const options = {
     before: "HEAD", after: null, scenarios: [], pairs: "auto", maxMinutes: 20, runs: 1, why: "auto", build: "prod",
     renderProbe: false, saveTrace: false, forceAccessibility: false, root: join(REPO_ROOT, "tmp/perf-compare"), output: null, port: 4799, fixturePort: 4798,
-    opencodeBinary: undefined, dryRun: false,
+    ompBinary: undefined, dryRun: false,
   }
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index]
@@ -160,7 +160,7 @@ const parseArgs = (argv) => {
     else if (value === "--output") options.output = resolve(argv[++index])
     else if (value === "--port") options.port = Number(argv[++index])
     else if (value === "--fixture-port") options.fixturePort = Number(argv[++index])
-    else if (value === "--opencode-binary") options.opencodeBinary = resolve(argv[++index])
+    else if (value === "--omp-binary") options.ompBinary = resolve(argv[++index])
     else if (value === "--dry-run") options.dryRun = true
     else throw new Error(`Unknown option: ${value}`)
   }
@@ -340,7 +340,7 @@ const ensureSeed = async ({ options, paths, before }) => {
   }
   console.log("Seeding server state (one long and three short sessions); this runs once per --root.")
   restoreState(paths.state, null)
-  const server = await startIsolatedServer({ repo: before.worktree, dist: before.dist, state: paths.state, project: paths.project, port: options.port, fixturePort: options.fixturePort, opencodeBinary: options.opencodeBinary, logFile: join(options.root, "logs", "seed-server.log") })
+  const server = await startIsolatedServer({ repo: before.worktree, dist: before.dist, state: paths.state, project: paths.project, port: options.port, fixturePort: options.fixturePort, ompBinary: options.ompBinary, logFile: join(options.root, "logs", "seed-server.log") })
   const seed = { project: paths.project, long: null, short: [] }
   try {
     const seedSession = async (turns, title) => {
@@ -450,7 +450,7 @@ const main = async () => {
       // Each block gets fresh Chrome profiles: the app keeps the sidebar and
       // the last session in storage per origin, and both sides share one.
       rmSync(paths.chrome, { recursive: true, force: true })
-      server = await log.time("server start", label, () => startIsolatedServer({ repo: sides[side].worktree, dist: sides[side].dist, state: paths.state, project: paths.project, port: options.port, fixturePort: options.fixturePort, opencodeBinary: options.opencodeBinary, logFile: join(options.root, "logs", `server-${side}-${label.replace(/\W+/g, "-")}.log`) }))
+      server = await log.time("server start", label, () => startIsolatedServer({ repo: sides[side].worktree, dist: sides[side].dist, state: paths.state, project: paths.project, port: options.port, fixturePort: options.fixturePort, ompBinary: options.ompBinary, logFile: join(options.root, "logs", `server-${side}-${label.replace(/\W+/g, "-")}.log`) }))
       const sideOutput = dirname(pending[0].output)
       mkdirSync(sideOutput, { recursive: true })
       writeFileSync(join(sideOutput, "bundle-check.json"), JSON.stringify(server.bundle, null, 2))

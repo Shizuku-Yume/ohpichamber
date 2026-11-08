@@ -3,7 +3,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useUIStore, type ContextPanelMode } from '@/stores/useUIStore';
 import { parseRoute, updateBrowserURL, hasRouteParams } from '@/lib/router';
 import { pushRouteEntry } from '@/lib/router/backGuard';
-import { isSessionOpenRedirect, openSessionLink } from '@/lib/router/openSessionFromRoute';
+import { openSessionLink } from '@/lib/router/openSessionFromRoute';
 import { listenForNotificationNavigation } from '@/lib/router/notificationNavigation';
 import type { RouteState, AppRouteState } from '@/lib/router';
 import { resolveSettingsSlug } from '@/lib/settings/metadata';
@@ -182,7 +182,7 @@ export function useRouter(): void {
    }
 
    prevSessionId = sessionId;
-   syncURLFromState({ replace: isSessionOpenRedirect() });
+   syncURLFromState();
   });
 
   return unsubscribe;

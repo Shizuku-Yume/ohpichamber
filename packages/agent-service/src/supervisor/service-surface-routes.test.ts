@@ -119,6 +119,16 @@ test('recaps and Agent Hub routes answer over the real service HTTP surface', as
   const snapshot = await request(`${sessionPath}/snapshot`);
   expect(snapshot.status).toBe(200);
   expect(SessionControlAckSchema).toBeDefined();
+
+  // Image routes answer over the real workspace HTTP surface
+  const imageConfig = await request(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/images/config`, {
+   method: 'POST',
+   body: JSON.stringify({
+    expectedRevision: '0',
+    model: { modelId: 'probe-model', provider: 'probe-provider', name: 'Probe Image Model', enabled: true },
+   }),
+  });
+  expect(imageConfig.status).toBe(422);
  } finally {
   await service.stop();
   if (previousHome === undefined) delete process.env.HOME; else process.env.HOME = previousHome;

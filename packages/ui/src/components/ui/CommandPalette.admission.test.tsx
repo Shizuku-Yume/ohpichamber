@@ -4,21 +4,24 @@ import { Window } from 'happy-dom';
 import type { Session } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost' });
-const descriptors = new Map<string, PropertyDescriptor | undefined>();
-for (const [key, value] of Object.entries({
+const domGlobals = {
   window: browser, document: browser.document, navigator: browser.navigator,
   localStorage: browser.localStorage, Element: browser.Element, HTMLElement: browser.HTMLElement,
+  HTMLInputElement: browser.HTMLInputElement,
   Node: browser.Node, Text: browser.Text, Document: browser.Document, DocumentFragment: browser.DocumentFragment,
   ShadowRoot: browser.ShadowRoot, MutationObserver: browser.MutationObserver, SVGElement: browser.SVGElement,
   ResizeObserver: browser.ResizeObserver, getComputedStyle: browser.getComputedStyle.bind(browser),
   requestAnimationFrame: browser.requestAnimationFrame.bind(browser), cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
+  Event: browser.Event, CustomEvent: browser.CustomEvent,
   IS_REACT_ACT_ENVIRONMENT: true,
-})) {
+};
+const descriptors = new Map<string, PropertyDescriptor | undefined>();
+for (const [key, value] of Object.entries(domGlobals)) {
   descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
   Object.defineProperty(globalThis, key, { value, configurable: true });
 }
 const originalFetch = globalThis.fetch;
-globalThis.fetch = (async (input) => {
+const mockFetch = (async (input: RequestInfo | URL) => {
   const url = new URL(String(input), 'http://localhost');
   if (url.pathname === '/api/config/settings') return Response.json({ projects: [{ id: 'allowed', path: '/allowed' }] });
   return Response.json({
@@ -27,6 +30,7 @@ globalThis.fetch = (async (input) => {
     trusted: false, fingerprint: 'untrusted', items: [],
   });
 }) as typeof fetch;
+globalThis.fetch = mockFetch;
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { RuntimeAPIProvider } = await import('@/contexts/RuntimeAPIProvider');
@@ -39,11 +43,12 @@ const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const { useGlobalSessionsStore } = await import('@/stores/useGlobalSessionsStore');
 const { ensureHomeDirectoryResolved } = await import('@/stores/useDirectoryStore');
 const { updateDesktopSettings } = await import('@/lib/persistence');
+const { resetSessionOrdering } = await import('@/sync/session-ordering');
 const originalUI = useUIStore.getState();
 const originalProjects = useProjectsStore.getState();
 const originalSessions = useGlobalSessionsStore.getState();
 const originalSessionUI = useSessionUIStore.getState();
-const apis = createWebAPIs();
+let apis: ReturnType<typeof createWebAPIs>;
 let root: ReturnType<typeof createRoot>;
 const session = (id: string, directory: string, title: string): Session => ({
   sessionId: id, projectId: id, workspaceId: directory, displayPath: directory, rootSessionId: id,
@@ -51,20 +56,24 @@ const session = (id: string, directory: string, title: string): Session => ({
   runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
   metadata: null, metadataRevision: '0', archiveRevision: '0',
 });
-
 beforeEach(() => {
+  for (const [key, value] of Object.entries(domGlobals)) {
+    Object.defineProperty(globalThis, key, { value, configurable: true });
+  }
+  globalThis.fetch = mockFetch;
+  apis = createWebAPIs();
+  resetSessionOrdering();
   const host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
   useUIStore.setState({ isCommandPaletteOpen: true });
   useProjectsStore.setState({ projects: [{ id: 'allowed', path: '/allowed' }] });
   useSessionUIStore.setState({ availableWorktreesByProject: new Map() });
-  useGlobalSessionsStore.setState({
-    activeSessions: [
-      session('allowed', '/allowed', 'Allowed conversation'),
-      session('declined', '/declined', 'Declined conversation'),
-    ]
-  });
+  useGlobalSessionsStore.getState().resetForRuntimeSwitch();
+  useGlobalSessionsStore.getState().applySnapshot([
+    session('allowed', '/allowed', 'Allowed conversation'),
+    session('declined', '/declined', 'Declined conversation'),
+  ], []);
 });
 afterEach(async () => {
   await act(async () => root.unmount());

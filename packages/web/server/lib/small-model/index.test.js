@@ -16,7 +16,7 @@ let settingsModelRoles = {};
 const install = (request) => configureAgentService({ request }, { resolveWorkspaceScope: async workspaceId => ({ workspaceId, cwd: '/authorized' }) });
 const transport = async (pathname, init = {}) => {
   calls.push({ pathname, body: init.body ? JSON.parse(init.body) : null });
-  if (pathname.endsWith('/models')) return Response.json({ workspaceId: 'workspace-a', revision: '0', models, defaults: { model: null, thinkingLevel: null }, planRoleAvailable: true });
+  if (pathname.endsWith('/models')) return Response.json({ workspaceId: 'workspace-a', revision: '0', models, imageModels: [], defaults: { model: null, thinkingLevel: null }, planRoleAvailable: true });
   if (pathname.endsWith('/providers')) return Response.json({ workspaceId: 'workspace-a', revision: '0', providers: [] });
   if (pathname.endsWith('/completions')) {
     const input = JSON.parse(init.body);

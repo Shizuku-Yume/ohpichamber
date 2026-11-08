@@ -79,7 +79,7 @@ const createSpawn = ({ stdoutByCommand = {}, exitCode = 0 } = {}) => {
     const child = new EventEmitter();
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
-    child.kill = () => {};
+    child.kill = () => { };
     queueMicrotask(() => {
       const out = stdoutByCommand[command];
       if (out) child.stdout.emit('data', Buffer.from(out));
@@ -99,7 +99,7 @@ const createDeferredSpawn = ({ stdoutByCommand = {}, exitCode = 0 } = {}) => {
     const child = new EventEmitter();
     child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
-    child.kill = () => {};
+    child.kill = () => { };
     pending.push({ child, command });
     return child;
   });
@@ -418,21 +418,21 @@ describe('fs clone', () => {
   });
 
   it('infers the repository name for a trailing separator', async () => {
-      const cloneRepository = vi.fn(async () => ({ state: 'succeeded' }));
-      const { handler } = registerClone({ cloneRepository });
+    const cloneRepository = vi.fn(async () => ({ state: 'succeeded' }));
+    const { handler } = registerClone({ cloneRepository });
 
-      const res = await callClone(handler, {
-        remoteUrl: 'git@example.com:team/repository.git',
-        destinationPath: '/workspace/clones/',
-      });
+    const res = await callClone(handler, {
+      remoteUrl: 'git@example.com:team/repository.git',
+      destinationPath: '/workspace/clones/',
+    });
 
-      expect(cloneRepository).toHaveBeenCalledWith({
+    expect(cloneRepository).toHaveBeenCalledWith({
       unverifiedConfirmed: true,
       remoteUrl: 'git@example.com:team/repository.git',
       destinationPath: '/workspace/clones/repository',
       gitIdentityId: undefined,
-      });
-      expect(res.body).toEqual({ success: true, path: '/workspace/clones/repository', output: '' });
+    });
+    expect(res.body).toEqual({ success: true, path: '/workspace/clones/repository', output: '' });
   });
 
   it('infers the repository name when destinationPath names an existing directory', async () => {
@@ -492,7 +492,7 @@ describe('fs clone', () => {
   });
 
   it('redacts clone failures and does not log or spawn from the route', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => { });
     const remoteUrl = 'https://user:secret@example.com/team/repository.git';
     const destinationPath = '/private/work/repository';
     const cloneRepository = vi.fn(async () => ({
@@ -779,7 +779,7 @@ describe('fs upload', () => {
     const res = await callUpload(handler, { path: '/repo/link/file.bin' });
 
     expect(res.statusCode).toBe(403);
-    expect(res.body).toEqual({ error: 'Access denied' });
+    expect(res.body).toEqual({ error: 'Access denied', reason: 'outside-workspace' });
     expect(fsPromises.open).not.toHaveBeenCalled();
   });
 
@@ -801,7 +801,11 @@ describe('fs upload', () => {
       });
 
       expect(res.statusCode).toBe(413);
-      expect(res.body).toEqual({ error: 'File exceeds maximum size of 5 bytes' });
+      expect(res.body).toEqual({
+        error: 'File exceeds maximum size of 5 bytes',
+        reason: 'too-large',
+        maxBytes: 5,
+      });
       expect(write).toHaveBeenCalledWith(Buffer.from('123'), 0, 3, null);
       expect(fsPromises.link).not.toHaveBeenCalled();
       expect(fsPromises.unlink).toHaveBeenCalledWith(expect.stringMatching(/^\/repo\/file\.bin\.upload-/));
@@ -822,7 +826,11 @@ describe('fs upload', () => {
       const res = await callUpload(handler, { body: Buffer.from('123456') });
 
       expect(res.statusCode).toBe(413);
-      expect(res.body).toEqual({ error: 'File exceeds maximum size of 5 bytes' });
+      expect(res.body).toEqual({
+        error: 'File exceeds maximum size of 5 bytes',
+        reason: 'too-large',
+        maxBytes: 5,
+      });
       expect(fsPromises.open).not.toHaveBeenCalled();
     } finally {
       if (previous === undefined) delete process.env.OPENCHAMBER_FS_UPLOAD_MAX_BYTES;
@@ -1061,7 +1069,7 @@ describe('fs read', () => {
   });
 
   it('logs when empty-read retries are exhausted after non-empty stat', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
     const fsPromises = {
       stat: vi.fn(async () => ({ isFile: () => true, size: 3 })),
       readFile: vi.fn(async () => ''),
@@ -1098,7 +1106,7 @@ describe('fs read', () => {
   });
 
   it('rejects reads of canonical paths outside the workspace that no workspace symlink reaches', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
     const fsPromises = {
       stat: vi.fn(async () => ({ isFile: () => true, size: 6 })),
       readFile: vi.fn(async () => 'secret'),
@@ -1116,7 +1124,7 @@ describe('fs read', () => {
   it('reads files under a symlinked project root addressed via the client-sent lexical directory', async () => {
     // /home/user/proj -> /real/proj: the validated base is canonical but the
     // client (and the file tree) address files under the lexical root.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
     const fsPromises = {
       realpath: vi.fn(async (targetPath) => {
         if (targetPath === '/home/user/proj') return '/real/proj';
@@ -1144,7 +1152,7 @@ describe('fs read', () => {
   });
 
   it('rejects path traversal that escapes the workspace even when it passes through a symlinked directory', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
     const fsPromises = {
       realpath: vi.fn(async (targetPath) => {
         if (targetPath === '/repo/link') return '/outside/shared';
@@ -1168,7 +1176,7 @@ describe('fs reveal', () => {
     ['linux', 'xdg-open', ['/repo']],
     ['darwin', 'open', ['-R', '/repo/file.txt']],
   ])('returns a controlled error when the %s launcher is unavailable', async (platform, command, args) => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => { });
     const child = new EventEmitter();
     child.unref = vi.fn();
     const spawn = vi.fn(() => {
@@ -1215,7 +1223,7 @@ describe('fs reveal', () => {
   });
 
   it('returns a controlled error when the launcher throws synchronously', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const error = vi.spyOn(console, 'error').mockImplementation(() => { });
     const spawnError = Object.assign(new Error('not found'), { code: 'ENOENT' });
     const handler = registerReveal({
       fsPromises: {
@@ -1255,7 +1263,7 @@ describe('fs exec git-read cache', () => {
   });
 
   it('rejects command execution outside the workspace', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
     const { spawn } = createSpawn();
     const handler = registerExec({ spawn });
 
@@ -1479,7 +1487,7 @@ describe('fs raw byte ranges', () => {
     Object.assign(res, {
       status() { return res; },
       type() { return res; },
-      setHeader() {},
+      setHeader() { },
     });
     const handler = registerRaw({
       realpath: async () => file,
@@ -1520,7 +1528,7 @@ describe('fs raw byte ranges', () => {
   }, 2000);
 
   it('closes the file handle when stream creation throws', async () => {
-    const close = vi.fn(async () => {});
+    const close = vi.fn(async () => { });
     const handler = registerRaw({
       stat: async () => ({ isFile: () => true, size: 10 }),
       open: async () => ({
@@ -1529,7 +1537,7 @@ describe('fs raw byte ranges', () => {
       }),
     });
     const res = createMockResponse();
-    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const log = vi.spyOn(console, 'error').mockImplementation(() => { });
     try {
       await handler({ query: { path: '/repo/clip.mp4' }, headers: { range: 'bytes=0-' } }, res);
       expect(close).toHaveBeenCalledOnce();
@@ -2166,9 +2174,11 @@ describe('fs managed chats root', () => {
   it('fails home lookup on permission errors and retries the next request', async () => {
     const failure = Object.assign(new Error('permission denied'), { code: 'EACCES' });
     let inaccessible = true;
-    const { home } = registerWithChatsRoot({ fsPromises: {
-      realpath: async directory => { if (inaccessible) throw failure; return directory; },
-    } });
+    const { home } = registerWithChatsRoot({
+      fsPromises: {
+        realpath: async directory => { if (inaccessible) throw failure; return directory; },
+      }
+    });
     const failed = createMockResponse();
     await home(undefined, failed);
     expect(failed.statusCode).toBe(500);
@@ -2518,88 +2528,153 @@ describe('GET /api/fs/find-by-name', () => {
 });
 describe('GET /api/fs/search', () => {
   let repo;
-  let outside;
   beforeEach(async () => {
-    repo = await mkdtemp(path.join(tmpdir(), 'oc-fs-search-'));
-    outside = await mkdtemp(path.join(tmpdir(), 'oc-fs-search-outside-'));
-    await mkdir(path.join(repo, 'src', 'nested'), { recursive: true });
-    await nativeFs.writeFile(path.join(repo, 'src', 'match.ts'), 'file');
-    await nativeFs.writeFile(path.join(repo, 'src', 'nested', 'match.ts'), 'nested');
-    await nativeFs.writeFile(path.join(outside, 'secret.ts'), 'outside');
-    await nativeFs.symlink(outside, path.join(repo, 'linked-outside'), 'dir');
+    repo = await mkdtemp(path.join(tmpdir(), 'oc-file-search-route-'));
+    execFileSync('git', ['init', '-q'], { cwd: repo });
+    await mkdir(path.join(repo, 'build'));
+    await nativeFs.writeFile(path.join(repo, 'build/needle.ts'), '');
+    await nativeFs.writeFile(path.join(repo, '.needle.ts'), '');
+    await nativeFs.writeFile(path.join(repo, 'needle.ts'), '');
+    await nativeFs.writeFile(path.join(repo, '.gitignore'), 'build/\n');
   });
   afterEach(async () => {
     await rm(repo, { recursive: true, force: true });
-    await rm(outside, { recursive: true, force: true });
   });
 
-  it('filters runtime file hits versus directories and returns only workspace-contained results', async () => {
+  const register = async (overrides = {}) => {
+    const { spawn } = await import('node:child_process');
     const { app, getRoute } = createRouteRegistry();
     registerFsRoutes(app, {
       os: { homedir: () => '/home/user' }, path, fsPromises: nativeFs, spawn,
-      crypto: { randomUUID: () => 'search-0' }, normalizeDirectoryPath: (value) => value,
-      resolveProjectDirectory: async () => ({ directory: repo }), buildAugmentedPath: () => '/usr/bin',
-      resolveGitBinaryForSpawn: () => 'git', openchamberUserConfigRoot: '/home/user/.config',
+      crypto: { randomUUID: () => 'job-0' }, normalizeDirectoryPath: (p) => p,
+      resolveProjectDirectory: async () => ({ directory: repo }),
+      buildAugmentedPath: () => '/usr/bin', resolveGitBinaryForSpawn: () => 'git',
+      openchamberUserConfigRoot: '/home/user/.config',
+      ...overrides,
     });
-    const route = getRoute('GET', '/api/fs/search');
-    const ask = async (query) => {
-      const res = createMockResponse();
-      await route({ query, headers: {} }, res);
-      return res;
+    return async (query) => {
+      const response = createMockResponse();
+      await getRoute('GET', '/api/fs/search')({ query, headers: {} }, response);
+      return response;
     };
-    const files = await ask({ directory: repo, query: 'match', type: 'file', respectGitignore: 'false' });
-    expect(files.statusCode).toBe(200);
-    expect(files.body).toEqual([
-      { name: 'match.ts', path: path.join(repo, 'src', 'match.ts'), relativePath: 'src/match.ts', extension: 'ts' },
-      { name: 'match.ts', path: path.join(repo, 'src', 'nested', 'match.ts'), relativePath: 'src/nested/match.ts', extension: 'ts' },
-    ]);
-    const directories = await ask({ directory: repo, query: 'nested', type: 'directory' });
-    expect(directories.statusCode).toBe(200);
-    expect(directories.body).toEqual([
-      { name: 'nested', path: path.join(repo, 'src', 'nested'), relativePath: 'src/nested', extension: undefined },
-    ]);
+  };
+
+  it('honors both toggles including gitignored build directories', async () => {
+    const ask = await register();
+    expect((await ask({ query: 'needle' })).body.files.map((file) => file.relativePath)).toEqual(['needle.ts']);
+    expect((await ask({ query: 'needle', includeHidden: 'true' })).body.files.map((file) => file.relativePath).sort())
+      .toEqual(['.needle.ts', 'needle.ts']);
+    const expanded = await ask({ query: 'needle', respectGitignore: 'false' });
+    expect(expanded.body.files.map((file) => file.relativePath).sort()).toEqual(['build/needle.ts', 'needle.ts']);
+    expect(expanded.getHeader('cache-control')).toBe('no-store');
+    expect((await ask({ query: 'needle', includeHidden: 'true', respectGitignore: 'false', limit: '1' })).body.files).toHaveLength(1);
   });
 
-  it('does not turn a missing search directory or an out-of-root path into an empty success', async () => {
-    const { app, getRoute } = createRouteRegistry();
-    registerFsRoutes(app, {
-      os: { homedir: () => '/home/user' }, path, fsPromises: nativeFs, spawn,
-      crypto: { randomUUID: () => 'search-1' }, normalizeDirectoryPath: (value) => value,
-      resolveProjectDirectory: async () => ({ directory: repo }), buildAugmentedPath: () => '/usr/bin',
-      resolveGitBinaryForSpawn: () => 'git', openchamberUserConfigRoot: '/home/user/.config',
-    });
-    const route = getRoute('GET', '/api/fs/search');
-    const ask = async (directory) => {
-      const res = createMockResponse();
-      await route({ query: { directory, query: 'secret', type: 'file' }, headers: {} }, res);
-      return res;
+  it('stops the walk and sends nothing once the client closes the response', async () => {
+    let reads = 0;
+    let closeResponse;
+    const fsPromises = {
+      ...nativeFs,
+      stat: nativeFs.stat,
+      realpath: nativeFs.realpath,
+      readdir: async (...args) => {
+        reads += 1;
+        closeResponse();
+        return nativeFs.readdir(...args);
+      },
     };
-    expect((await ask(path.join(repo, 'missing'))).statusCode).not.toBe(200);
-    expect((await ask(outside)).statusCode).not.toBe(200);
-    expect((await ask(path.join(repo, 'linked-outside'))).statusCode).not.toBe(200);
-  });
-
-  it('rejects a root readdir failure instead of returning an empty successful search', async () => {
-    const fsPromises = { ...nativeFs, readdir: vi.fn(async (target, options) => {
-      if (target === repo) {
-        const error = new Error('root unavailable');
-        error.code = 'EACCES';
-        throw error;
-      }
-      return nativeFs.readdir(target, options);
-    }) };
+    await nativeFs.mkdir(path.join(repo, 'src/deep'), { recursive: true });
     const { app, getRoute } = createRouteRegistry();
+    const { spawn } = await import('node:child_process');
     registerFsRoutes(app, {
       os: { homedir: () => '/home/user' }, path, fsPromises, spawn,
-      crypto: { randomUUID: () => 'search-2' }, normalizeDirectoryPath: (value) => value,
-      resolveProjectDirectory: async () => ({ directory: repo }), buildAugmentedPath: () => '/usr/bin',
-      resolveGitBinaryForSpawn: () => 'git', openchamberUserConfigRoot: '/home/user/.config',
+      crypto: { randomUUID: () => 'job-0' }, normalizeDirectoryPath: (p) => p,
+      resolveProjectDirectory: async () => ({ directory: repo }),
+      buildAugmentedPath: () => '/usr/bin', resolveGitBinaryForSpawn: () => 'git',
+      openchamberUserConfigRoot: '/home/user/.config',
     });
-    const res = createMockResponse();
-    await getRoute('GET', '/api/fs/search')({ query: { directory: repo, query: '', type: 'file' }, headers: {} }, res);
-    expect(res.statusCode).toBe(403);
-    expect(res.body).toMatchObject({ reason: 'os-permission' });
-    expect(fsPromises.readdir).toHaveBeenCalledOnce();
+    const response = createMockResponse();
+    response.on = (event, listener) => {
+      if (event === 'close') closeResponse = listener;
+      return response;
+    };
+    await getRoute('GET', '/api/fs/search')({ query: { query: 'needle', respectGitignore: 'false' }, headers: {} }, response);
+    expect(reads).toBe(1);
+    expect(response.body).toBeNull();
+
+    // Already gone before the route got this far: no walk at all.
+    reads = 0;
+    const gone = createMockResponse();
+    gone.destroyed = true;
+    await getRoute('GET', '/api/fs/search')({ query: { query: 'needle', respectGitignore: 'false' }, headers: {} }, gone);
+    expect(reads).toBe(0);
+    expect(gone.body).toBeNull();
+  });
+
+  it('returns paths under the requested symlink and reports missing directories', async () => {
+    const link = `${repo}-link`;
+    await nativeFs.symlink(repo, link);
+    try {
+      const ask = await register();
+      const response = await ask({ directory: link, query: 'needle', respectGitignore: 'false' });
+      expect(response.body.files.every((file) => file.path.startsWith(`${link}${path.sep}`))).toBe(true);
+      expect((await ask({ directory: path.join(repo, 'absent') })).statusCode).toBe(404);
+    } finally {
+      await rm(link, { force: true });
+    }
+  });
+
+  it('reads Git ignores once per repository and preserves nested rules and tracked files', async () => {
+    const { spawn } = await import('node:child_process');
+    const gitReads = [];
+    const ask = await register({ spawn: (...args) => { gitReads.push(args[2].cwd); return spawn(...args); } });
+    for (let index = 0; index < 12; index++) {
+      const directory = path.join(repo, `dir-${index}`);
+      await mkdir(directory);
+      await nativeFs.writeFile(path.join(directory, 'ordinary.txt'), '');
+    }
+    await mkdir(path.join(repo, 'src'));
+    await nativeFs.writeFile(path.join(repo, 'src/.gitignore'), '*.ts\n!keep-needle.ts\n');
+    await nativeFs.writeFile(path.join(repo, 'src/keep-needle.ts'), '');
+    await nativeFs.writeFile(path.join(repo, 'src/drop-needle.ts'), '');
+    await nativeFs.writeFile(path.join(repo, 'build/tracked-needle.ts'), '');
+    execFileSync('git', ['add', '-f', 'build/tracked-needle.ts'], { cwd: repo });
+    const nested = path.join(repo, 'nested');
+    await mkdir(nested);
+    execFileSync('git', ['init', '-q'], { cwd: nested });
+    await nativeFs.writeFile(path.join(nested, '.gitignore'), '*.ts\n!keep-needle.ts\n');
+    await nativeFs.writeFile(path.join(nested, 'keep-needle.ts'), '');
+    await nativeFs.writeFile(path.join(nested, 'drop-needle.ts'), '');
+
+    const files = (await ask({ query: 'needle', includeHidden: 'true' })).body.files;
+    expect(files.map((file) => file.relativePath)).toEqual([
+      'needle.ts', '.needle.ts', 'src/keep-needle.ts', 'nested/keep-needle.ts', 'build/tracked-needle.ts',
+    ]);
+    expect(gitReads.sort()).toEqual((await Promise.all([repo, nested].map((directory) => nativeFs.realpath(directory)))).sort());
+  });
+
+  it('refreshes ignore rules on the next query and isolates requested directories', async () => {
+    const other = await mkdtemp(path.join(tmpdir(), 'oc-file-search-other-'));
+    try {
+      execFileSync('git', ['init', '-q'], { cwd: other });
+      await nativeFs.writeFile(path.join(other, 'needle.ts'), '');
+      const ask = await register();
+      expect((await ask({ query: 'needle' })).body.files.map((file) => file.relativePath)).toEqual(['needle.ts']);
+      await nativeFs.writeFile(path.join(repo, '.gitignore'), 'build/\nneedle.ts\n');
+      expect((await ask({ query: 'needle' })).body.files).toEqual([]);
+      expect((await ask({ directory: other, query: 'needle' })).body.files.map((file) => file.relativePath)).toEqual(['needle.ts']);
+    } finally {
+      await rm(other, { recursive: true, force: true });
+    }
+  });
+
+  it('respects an ignored search root while retaining tracked exceptions', async () => {
+    const ask = await register();
+    const query = { directory: path.join(repo, 'build'), query: 'needle' };
+    expect((await ask(query)).body.files).toEqual([]);
+    await nativeFs.writeFile(path.join(repo, 'build/other-needle.ts'), '');
+    execFileSync('git', ['add', '-f', 'build/needle.ts'], { cwd: repo });
+    expect((await ask(query)).body.files.map((file) => file.relativePath)).toEqual(['needle.ts']);
   });
 });
 

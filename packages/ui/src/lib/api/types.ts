@@ -767,6 +767,8 @@ export type GitNetworkOperationErrorCode =
   | 'RUNTIME_UNSUPPORTED'
   | 'GIT_LFS_CLIENT_MISSING'
   | 'CHECKOUT_TOO_LARGE'
+  // The server refuses a remote whose URL embeds a user name before `@`.
+  | 'REMOTE_URL_USERINFO'
   | 'UNKNOWN';
 
 export interface GitNetworkOperationError<Code extends GitNetworkOperationErrorCode = GitNetworkOperationErrorCode> {

@@ -20,7 +20,6 @@ export const useSessionListSync = () => {
     () => buildKnownSessionDirectories(projects, availableWorktreesByProject),
     [availableWorktreesByProject, projects],
   );
-  const authoritativeSessions = useGlobalSessionsStore((state: { authoritativeSessions?: readonly Session[] }) => state.authoritativeSessions);
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
   const hasAuthoritativeGlobalSessions = useGlobalSessionsStore((state) => state.status === 'ready');
@@ -76,9 +75,11 @@ export const useSessionListSync = () => {
     };
   }, []);
 
+  // The fork's global list is authoritative as a whole once its status is
+  // ready; there is no separate snapshot to prefer.
   const cleanupSessions = React.useMemo(
-    () => authoritativeSessions ?? [...globalActiveSessions, ...archivedSessions],
-    [authoritativeSessions, archivedSessions, globalActiveSessions],
+    () => [...globalActiveSessions, ...archivedSessions],
+    [archivedSessions, globalActiveSessions],
   );
   useAuthoritativeSessionCleanup({
     enabled: true,

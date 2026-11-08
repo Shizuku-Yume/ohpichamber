@@ -686,11 +686,12 @@ export async function getCommitFileDiff(
   directory: string,
   hash: string,
   filePath: string,
-  isBinary: boolean
+  isBinary: boolean,
+  previousPath?: string
 ): Promise<import('./api/types').CommitFileDiffResponse> {
   const runtime = getRuntimeGit();
   if (runtime?.getCommitFileDiff) return runtime.getCommitFileDiff(directory, hash, filePath, isBinary);
-  return gitHttp.getCommitFileDiff(directory, hash, filePath, isBinary);
+  return gitHttp.getCommitFileDiff(directory, hash, filePath, isBinary, previousPath);
 }
 
 export async function getGitIdentities(): Promise<import('./api/types').GitIdentityProfile[]> {

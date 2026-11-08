@@ -2097,13 +2097,16 @@ export async function getCommitFileDiff(
   directory: string,
   hash: string,
   filePath: string,
-  isBinary: boolean
+  isBinary: boolean,
+  previousPath?: string
 ): Promise<CommitFileDiffResponse> {
   const response = await runtimeFetch(
     buildUrl(`${API_BASE}/commit-file-diff`, directory, {
       hash,
       path: filePath,
       binary: isBinary ? 'true' : undefined,
+      // A rename's diff is read against the path it had before.
+      previousPath,
     })
   );
   if (!response.ok) {

@@ -333,7 +333,7 @@ describe('buildSessionSidebarRowModel', () => {
     const model = buildSessionSidebarRowModel(args([project([group(sessions)])]));
 
     expect(model.rows.filter((row) => row.kind === 'session')).toHaveLength(7);
-    expect(model.rows.some((row) => row.kind === 'show-control' && row.control === 'more')).toBe(true);
+    expect(model.rows.some((row) => row.kind === 'show-control' && row.more)).toBe(true);
   });
 
   test('single-project flat mode reveals twenty at a time and resets without changing Chats', () => {
@@ -350,8 +350,8 @@ describe('buildSessionSidebarRowModel', () => {
       const control = model.rows.find((row) => row.kind === 'show-control' && row.containerKey === 'project-a:main');
       if (!control || control.kind !== 'show-control') throw new Error('Missing reveal control');
       expect(control.increment).toBe(20);
-      expect(control.control).toBe(count === 45 ? 'fewer' : 'more');
-      if (control.control === 'more') input.visibleCountByContainer = new Map([[control.containerKey, control.currentCount + control.increment]]);
+      expect({ more: control.more, fewer: control.fewer }).toEqual({ more: count < 45, fewer: count > 20 });
+      if (control.more) input.visibleCountByContainer = new Map([[control.containerKey, control.currentCount + control.increment]]);
       else input.visibleCountByContainer = new Map();
     }
     expect(buildSessionSidebarRowModel(input).rows.filter((row) => row.kind === 'session' && row.projectId === 'project-a')).toHaveLength(20);
@@ -381,10 +381,12 @@ describe('buildSessionSidebarRowModel', () => {
     child.session.parentSessionId = 'parent';
     const parent = node('parent', [child]);
     const input = args([project([group([parent])])]);
-    input.foldersMap = { '/repo': [
-      { id: 'outer', name: 'Outer', createdAt: 1, sessionIds: [] },
-      { id: 'inner', name: 'Inner', parentId: 'outer', createdAt: 1, sessionIds: ['parent', 'child'] },
-    ] };
+    input.foldersMap = {
+      '/repo': [
+        { id: 'outer', name: 'Outer', createdAt: 1, sessionIds: [] },
+        { id: 'inner', name: 'Inner', parentId: 'outer', createdAt: 1, sessionIds: ['parent', 'child'] },
+      ]
+    };
     input.collapsedFolders = new Set(['outer']);
     const model = buildSessionSidebarRowModel(input);
     const folder = model.rows.find((row) => row.kind === 'folder-header');
@@ -400,10 +402,12 @@ describe('buildSessionSidebarRowModel', () => {
     const child = node('child');
     child.session.parentSessionId = 'in-folder';
     const input = args([project([group([node('in-folder', [child]), node('top-level')])])]);
-    input.foldersMap = { '/repo': [
-      { id: 'outer', name: 'Outer', createdAt: 1, sessionIds: [] },
-      { id: 'inner', name: 'Inner', parentId: 'outer', createdAt: 1, sessionIds: ['in-folder'] },
-    ] };
+    input.foldersMap = {
+      '/repo': [
+        { id: 'outer', name: 'Outer', createdAt: 1, sessionIds: [] },
+        { id: 'inner', name: 'Inner', parentId: 'outer', createdAt: 1, sessionIds: ['in-folder'] },
+      ]
+    };
     input.expandedParents = new Set(['project:active:in-folder']);
     const rows = buildSessionSidebarRowModel(input).rows.filter((row) => row.kind === 'folder-header' || row.kind === 'session');
 
@@ -483,7 +487,7 @@ describe('buildSessionSidebarRowModel', () => {
       expect(shown).toContain('pinned-2');
       expect(shown.filter((id) => id.startsWith('chat-'))).toHaveLength(3);
       const control = model.rows.find((row) => row.kind === 'show-control');
-      expect(control).toMatchObject({ control: 'more', currentCount: 3, increment: 7 });
+      expect(control).toMatchObject({ more: true, fewer: false, currentCount: 3, increment: 7 });
     });
   }
 

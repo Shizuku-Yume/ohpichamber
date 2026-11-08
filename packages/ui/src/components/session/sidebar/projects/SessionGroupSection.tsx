@@ -4,6 +4,7 @@ import { repositoryThread, workItem } from '@/lib/trackedItems/fromLinks';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Session } from '@openchamber/agent-contract';
+import { useSpaceTakesNoNewSession } from '@/lib/spaces/spaces-store';
 
 // Archived buckets routinely grow into the hundreds/thousands; virtualize
 // when we cross this row count so the DOM stays bounded.
@@ -930,6 +931,8 @@ function SessionGroupSectionBase(props: SessionGroupSectionProps): React.ReactNo
  const groupPrLinks: SidebarRefLink[] = groupPrSummary && groupPrStatusLabel ? [{
   key: `pr:${groupPrSummary.number}`,
   icon: 'git-pull-request',
+  label: groupPrReference,
+  status: groupPrStatusLabel,
   text: `${groupPrReference} · ${groupPrStatusLabel}`,
   title: groupPrSummary.title,
   color: groupPrColor,

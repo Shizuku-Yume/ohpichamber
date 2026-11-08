@@ -104,6 +104,8 @@ type SecondaryMeta = {
 export type SessionNodeItemProps = {
  node: SessionNode;
  depth?: number;
+ ownsWork?: boolean;
+ ownerProjectId?: string | null;
  groupDirectory?: string | null;
  projectId?: string | null;
  folderOwnerKey?: string | null;

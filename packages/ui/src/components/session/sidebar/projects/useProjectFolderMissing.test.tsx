@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import { opencodeClient } from '@/lib/opencode/client';
+import { hostFilesystem } from '@/lib/host-filesystem';
 import { useFolderMissing } from './useProjectFolderMissing';
 
 type Availability = 'available' | 'missing' | 'unknown';
@@ -14,7 +14,7 @@ describe('useFolderMissing', () => {
   let root: Root;
   const answers = new Map<string, Availability>();
   let result: ReturnType<typeof useFolderMissing>;
-  const probe = spyOn(opencodeClient, 'getDirectoryAvailability');
+  const probe = spyOn(hostFilesystem, 'getDirectoryAvailability');
 
   const Probe = ({ directory }: { directory: string | undefined }) => {
     result = useFolderMissing(directory);
@@ -97,7 +97,7 @@ describe('useFolderMissing', () => {
   });
 
   test('a late answer for the previous folder changes nothing', async () => {
-    let answerFirst = (_value: Availability) => {};
+    let answerFirst = (_value: Availability) => { };
     probe.mockImplementation((directory) => (directory === '/first'
       ? new Promise<Availability>((resolve) => { answerFirst = resolve; })
       : Promise.resolve('missing')));

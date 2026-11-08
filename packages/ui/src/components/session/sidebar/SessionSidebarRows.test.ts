@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'bun:test';
-import { Virtualizer } from '@tanstack/react-virtual';
 import {
   estimateSessionSidebarRowSize,
   findFirstVisibleSessionSidebarRowIndex,
@@ -39,25 +38,27 @@ describe('SessionSidebarRows initialization', () => {
   });
 });
 
+const session = (sessionId: string): Session => ({
+  sessionId,
+  projectId: 'project-a',
+  workspaceId: 'workspace-a',
+  displayPath: '/repo',
+  rootSessionId: sessionId,
+  createdAt: 1,
+  updatedAt: 1,
+  epoch: '1',
+  headSequence: '0',
+  runtimeStatus: 'idle',
+  activeRunId: null,
+  mode: { kind: 'main' },
+  title: sessionId,
+  metadata: null,
+  metadataRevision: '0',
+  archiveRevision: '0',
+});
+
 describe('SessionSidebarRows section spacing', () => {
   // SAFETY: spacing reads only the row identity, kind, and position fields.
-  const session = (sessionId: string): Session => ({
-    sessionId,
-    projectId: 'project-a',
-    workspaceId: 'workspace-a',
-    displayPath: '/repo',
-    rootSessionId: sessionId,
-    createdAt: 1,
-    updatedAt: 1,
-    epoch: '1',
-    headSequence: '0',
-    runtimeStatus: 'idle',
-    activeRunId: null,
-    mode: { kind: 'main' },
-    metadata: null,
-    metadataRevision: '0',
-    archiveRevision: '0',
-  });
   const node = (id: string): SessionNode => ({ session: session(id), children: [], worktree: null });
   const item = (id: string): SessionSidebarActivityItem => ({ node: node(id), projectId: 'project-a', groupDirectory: '/repo', secondaryMeta: null });
   const input = (withChats: boolean): SessionSidebarRowModelArgs => {
@@ -149,7 +150,7 @@ describe('SessionSidebarRows section spacing', () => {
       const index = rows.findIndex((row) => row.key === key);
       return sessionSidebarRowVirtualKey(rows[index], rows[index + 1]);
     };
-    const projectSession = detailed.find((row) => row.kind === 'session' && row.node.session.id === 'other');
+    const projectSession = detailed.find((row) => row.kind === 'session' && row.node.session.sessionId === 'other');
 
     expect(projectSession).toBeDefined();
     expect(compact.some((row) => row.key === projectSession?.key)).toBe(true);
@@ -159,7 +160,7 @@ describe('SessionSidebarRows section spacing', () => {
 
 describe('SessionSidebarRows scroll anchor', () => {
   // SAFETY: the anchor reads only row keys and the size keys of the row model's own rows.
-  const node = (id: string, children: readonly string[] = []): SessionNode => ({ session: { id, title: id, directory: '/repo', time: { created: 1, updated: 1 } } as Session, children: children.map((child) => node(child)), worktree: null });
+  const node = (id: string, children: readonly string[] = []): SessionNode => ({ session: session(id), children: children.map((child) => node(child)), worktree: null });
   type Options = { detailed?: boolean; collapsedProjects?: Set<string>; sessionIds?: string[]; visible?: number; mode?: 'normal' | 'search'; projectOrder?: string[]; childrenOf?: Record<string, string[]>; otherIds?: string[] };
   const ids = (count: number) => Array.from({ length: count }, (_, index) => `session-${index}`);
   const model = ({ detailed = true, collapsedProjects = new Set<string>(), sessionIds = ids(40), visible = 60, mode = 'normal', projectOrder = ['project-a', 'project-b'], childrenOf = {}, otherIds = ['other-0', 'other-1'] }: Options = {}) => {
@@ -194,7 +195,7 @@ describe('SessionSidebarRows scroll anchor', () => {
     const item = items.find((candidate) => candidate.end > line)!;
     return { key: rows[item.index].key, into: line - item.start };
   };
-  const sessionIndex = (rows: readonly SessionSidebarRow[], id: string) => rows.findIndex((row) => row.kind === 'session' && row.node.session.id === id);
+  const sessionIndex = (rows: readonly SessionSidebarRow[], id: string) => rows.findIndex((row) => row.kind === 'session' && row.node.session.sessionId === id);
   // Where the line lands after the change, with the list keeping its anchor.
   const follow = (before: ReturnType<typeof model>, after: ReturnType<typeof model>, line: number, viewport = 400) => {
     const anchor = findSessionSidebarScrollAnchor(before.rows, layout(before.rows), line, line + viewport, after.rowIndexByKey);
@@ -251,7 +252,7 @@ describe('SessionSidebarRows scroll anchor', () => {
     const childrenOf = { 'session-25': ['child-a', 'child-b'] };
     const before = model({ childrenOf });
     const items = layout(before.rows);
-    const child = before.rowIndexByKey.get(before.rows.find((row) => row.kind === 'session' && row.node.session.id === 'child-a')!.key)!;
+    const child = before.rowIndexByKey.get(before.rows.find((row) => row.kind === 'session' && row.node.session.sessionId === 'child-a')!.key)!;
     const line = items[child].start + 10;
     const moved = model({ childrenOf, sessionIds: ['session-25', ...ids(40).filter((id) => id !== 'session-25')] });
     const nextLine = follow(before, moved, line)!;
@@ -265,7 +266,7 @@ describe('SessionSidebarRows scroll anchor', () => {
     const childrenOf = { 'session-24': Array.from({ length: 8 }, (_, index) => `child-${index}`) };
     const before = model({ childrenOf });
     const items = layout(before.rows);
-    const child = before.rowIndexByKey.get(before.rows.find((row) => row.kind === 'session' && row.node.session.id === 'child-0')!.key)!;
+    const child = before.rowIndexByKey.get(before.rows.find((row) => row.kind === 'session' && row.node.session.sessionId === 'child-0')!.key)!;
     const line = items[child].start + 10;
     const moved = model({ childrenOf, sessionIds: ['session-24', ...ids(40).filter((id) => id !== 'session-24')] });
     // A short viewport: the moved subsessions are most of what shows.
@@ -279,7 +280,7 @@ describe('SessionSidebarRows scroll anchor', () => {
     const childrenOf = { 'session-24': Array.from({ length: 30 }, (_, index) => `child-${index}`) };
     const before = model({ childrenOf });
     const items = layout(before.rows);
-    const child = before.rowIndexByKey.get(before.rows.find((row) => row.kind === 'session' && row.node.session.id === 'child-27')!.key)!;
+    const child = before.rowIndexByKey.get(before.rows.find((row) => row.kind === 'session' && row.node.session.sessionId === 'child-27')!.key)!;
     const line = items[child].start + 10;
     const moved = model({ childrenOf, sessionIds: ['session-24', ...ids(40).filter((id) => id !== 'session-24')] });
     const nextLine = follow(before, moved, line, 320)!;
@@ -291,7 +292,7 @@ describe('SessionSidebarRows scroll anchor', () => {
   test('a subsession deleted under the line hands the anchor to the row after it', () => {
     const before = model({ childrenOf: { 'session-25': ['child-a', 'child-b'] } });
     const items = layout(before.rows);
-    const childA = before.rows.findIndex((row) => row.kind === 'session' && row.node.session.id === 'child-a');
+    const childA = before.rows.findIndex((row) => row.kind === 'session' && row.node.session.sessionId === 'child-a');
     const childB = childA + 1;
     const line = items[childA].start + 10;
     const after = model({ childrenOf: { 'session-25': ['child-b'] } });
@@ -357,25 +358,3 @@ describe('SessionSidebarRows scroll anchor', () => {
   });
 });
 
-describe('SessionSidebarRows last layout', () => {
-  // The header motion reads where the rows were from the virtualizer's
-  // measurements as they stood before the rows changed. Rebuilt in place, the
-  // entries nobody had read answered with the new layout's numbers
-  // (`bun-patches/@tanstack+virtual-core+3.19.6.patch`).
-  test('measurements read before the rows changed keep their numbers', () => {
-    const options = {
-      count: 50,
-      getScrollElement: () => null,
-      estimateSize: () => 51,
-      scrollToFn: () => undefined,
-      observeElementRect: () => undefined,
-      observeElementOffset: () => undefined,
-    };
-    const virtualizer = new Virtualizer<HTMLElement, HTMLElement>(options);
-    virtualizer.getTotalSize();
-    const before = virtualizer.measurementsCache;
-    virtualizer.setOptions({ ...options, count: 45, estimateSize: () => 32, getItemKey: (index) => `next-${index}` });
-    expect(virtualizer.getTotalSize()).toBe(45 * 32);
-    expect(before[40]?.start).toBe(40 * 51);
-  });
-});

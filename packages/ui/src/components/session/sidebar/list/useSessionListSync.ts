@@ -20,6 +20,7 @@ export const useSessionListSync = () => {
     () => buildKnownSessionDirectories(projects, availableWorktreesByProject),
     [availableWorktreesByProject, projects],
   );
+  const authoritativeSessions = useGlobalSessionsStore((state: { authoritativeSessions?: readonly Session[] }) => state.authoritativeSessions);
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
   const hasAuthoritativeGlobalSessions = useGlobalSessionsStore((state) => state.status === 'ready');
@@ -76,8 +77,8 @@ export const useSessionListSync = () => {
   }, []);
 
   const cleanupSessions = React.useMemo(
-    () => [...globalActiveSessions, ...archivedSessions],
-    [archivedSessions, globalActiveSessions],
+    () => authoritativeSessions ?? [...globalActiveSessions, ...archivedSessions],
+    [authoritativeSessions, archivedSessions, globalActiveSessions],
   );
   useAuthoritativeSessionCleanup({
     enabled: true,

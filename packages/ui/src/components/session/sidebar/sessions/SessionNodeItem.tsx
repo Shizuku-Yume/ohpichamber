@@ -297,6 +297,7 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
   depth = 0,
   groupDirectory,
   projectId,
+  ownerProjectId,
   folderOwnerKey,
   selectionScopeKey: explicitSelectionScopeKey,
   archivedBucket = false,
@@ -443,8 +444,9 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
  // Ref chips open their item in the Tracker through the row's project. The
  // project's root path resolves without the live worktree map, which a
  // session in a worktree outside the root does not until that map arrives.
+ const sessionProjectId = ownerProjectId === undefined ? projectId : ownerProjectId;
  const projectRootDirectory = useProjectsStore((state) =>
-  projectId ? state.projects.find((entry) => entry.id === projectId)?.path ?? null : null,
+  sessionProjectId ? state.projects.find((entry) => entry.id === sessionProjectId)?.path ?? null : null,
  );
  const trackerDirectory = projectRootDirectory ?? sessionDirectory;
  // Multi-select scope: sessions are flat per project, so selection groups by
@@ -2096,6 +2098,9 @@ const sessionNodeItemPropsChange = (prev: SessionNodeItemProps, next: SessionNod
  if (prev.depth !== next.depth) return 'depth';
  if (prev.groupDirectory !== next.groupDirectory) return 'groupDirectory';
  if (prev.projectId !== next.projectId) return 'projectId';
+ if (prev.ownerProjectId !== next.ownerProjectId) return 'ownerProjectId';
+ if (prev.folderOwnerKey !== next.folderOwnerKey) return 'folderOwnerKey';
+ if (prev.selectionScopeKey !== next.selectionScopeKey) return 'selectionScopeKey';
  if (prev.archivedBucket !== next.archivedBucket) return 'archivedBucket';
  if ((prev.renderContext ?? 'project') !== (next.renderContext ?? 'project')) return 'renderContext';
  if ((prev.detailed ?? false) !== (next.detailed ?? false)) return 'detailed';

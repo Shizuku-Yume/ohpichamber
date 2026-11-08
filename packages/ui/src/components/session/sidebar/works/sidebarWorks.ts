@@ -1,4 +1,5 @@
 import type { Session } from '@openchamber/agent-contract';
+import { isSessionInWork } from '@/lib/sessionWorkMetadata';
 import { normalizePath } from '@/lib/pathNormalization';
 import type { SessionGroup, SessionNode } from '../types';
 import type { ProjectSection } from '../projects/sessionProjectRender';
@@ -71,7 +72,7 @@ export const buildSidebarWorkIndex = (sections: readonly ProjectSection[]): Side
   const projectId = section.project.id;
   for (const group of section.groups) {
    if (group.isArchivedBucket) continue;
-   if (isWorktreeWorkGroup(group)) {
+   if (isGroupWork(group)) {
     const ref: SidebarWorktreeWorkRef = { kind: 'worktree', key: worktreeWorkGroupKey(projectId, group), projectId, group };
     worktreeWorks.push(ref);
     group.sessions.forEach((node) => claim(node, ref));
@@ -85,24 +86,103 @@ export const buildSidebarWorkIndex = (sections: readonly ProjectSection[]): Side
  return { bySessionId, worktreeWorks };
 };
 
+const EMPTY_ANCHORS: ReadonlyMap<string, number> = new Map();
+
+export const buildSessionRootIndex = (
+ rootSessions: readonly Session[],
+ childrenMap: ReadonlyMap<string, readonly Session[]>,
+): ReadonlyMap<string, string> => {
+ const rootOf = new Map<string, string>();
+ for (const root of rootSessions) {
+  const stack: Session[] = [root];
+  while (stack.length > 0) {
+   const current = stack.pop();
+   if (!current || rootOf.has(current.sessionId)) continue;
+   rootOf.set(current.sessionId, root.sessionId);
+   stack.push(...(childrenMap.get(current.sessionId) ?? []));
+  }
+ }
+ return rootOf;
+};
+
+/**
+ * The works In work lists, before Pinned takes its own: a work is in work when
+ * its root or a session nested under it, past subagents, is.
+ */
+export const orderInWorkWorks = (
+ orderedSessions: readonly Session[],
+ index: SidebarWorkIndex,
+ rootOf: ReadonlyMap<string, string>,
+ isChatDirectory: (directory: string | null | undefined) => boolean,
+): SidebarWorkRef[] => orderSidebarWorks(orderedSessions, index, (session) => (
+ !session.parentSessionId && session.archivedAt === undefined && !isChatDirectory(session.displayPath) && isSessionInWork(session)
+), EMPTY_ANCHORS, rootOf);
+
+export const buildWorktreeArchiveAnchors = ({
+ groupWorks,
+ archivedSessions,
+ orderedSessions,
+ orderValueOf,
+ isPinned,
+}: {
+ groupWorks: readonly SidebarWorktreeWorkRef[];
+ archivedSessions: readonly Session[];
+ orderedSessions: readonly Session[];
+ orderValueOf: (session: Session) => number;
+ isPinned: (session: Session) => boolean;
+}): ReadonlyMap<string, number> => {
+ if (groupWorks.length === 0 || archivedSessions.length === 0) return EMPTY_ANCHORS;
+ const keyByDirectory = new Map(groupWorks.flatMap((ref) => {
+  const directory = normalizePath(ref.group.directory ?? null);
+  return directory ? [[directory, ref.key] as const] : [];
+ }));
+ const newestByKey = new Map<string, number>();
+ for (const session of archivedSessions) {
+  if (session.parentSessionId) continue;
+  const key = keyByDirectory.get(normalizePath(session.displayPath ?? null) ?? '');
+  if (!key) continue;
+  newestByKey.set(key, Math.max(newestByKey.get(key) ?? Number.NEGATIVE_INFINITY, orderValueOf(session)));
+ }
+ if (newestByKey.size === 0) return EMPTY_ANCHORS;
+ const tops = orderedSessions.flatMap((session, index) => (
+  session.parentSessionId || isPinned(session) ? [] : [{ index, value: orderValueOf(session) }]
+ ));
+ const anchors = new Map<string, number>();
+ for (const [key, newest] of newestByKey) {
+  const next = tops.find((entry) => entry.value < newest);
+  anchors.set(key, (next?.index ?? orderedSessions.length) - 0.5);
+ }
+ return anchors;
+};
+
 /**
  * The works of the sessions `include` accepts, each once, in the order of the
  * first of their sessions in `orderedSessions` (the sidebar's lifecycle order,
- * so a work moves up when any of its sessions does).
+ * so a work moves up when any of its sessions does). With `archiveAnchors`
+ * a worktree work also stands where its archived sessions hold it.
  */
 export const orderSidebarWorks = (
  orderedSessions: readonly Session[],
  index: SidebarWorkIndex,
  include: (session: Session) => boolean,
+ archiveAnchors: ReadonlyMap<string, number> = EMPTY_ANCHORS,
+ rootOf?: ReadonlyMap<string, string>,
 ): SidebarWorkRef[] => {
- const works: SidebarWorkRef[] = [];
- const seen = new Set<string>();
- for (const session of orderedSessions) {
-  if (!include(session)) continue;
-  const ref = index.bySessionId.get(session.sessionId);
-  if (!ref || seen.has(ref.key)) continue;
-  seen.add(ref.key);
-  works.push(ref);
+ const rankByKey = new Map<string, { ref: SidebarWorkRef; rank: number }>();
+ orderedSessions.forEach((session, position) => {
+  if (!include(session)) return;
+  const rootSessionId = rootOf?.get(session.sessionId);
+  const ref = index.bySessionId.get(session.sessionId) ?? (rootSessionId ? index.bySessionId.get(rootSessionId) : undefined);
+  if (ref && !rankByKey.has(ref.key)) rankByKey.set(ref.key, { ref, rank: position });
+ });
+ if (archiveAnchors.size === 0) return [...rankByKey.values()].map((entry) => entry.ref);
+ for (const ref of index.worktreeWorks) {
+  const anchor = archiveAnchors.get(ref.key);
+  if (anchor === undefined) continue;
+  const listed = rankByKey.get(ref.key);
+  rankByKey.set(ref.key, { ref, rank: Math.min(listed?.rank ?? anchor, anchor) });
  }
- return works;
+ return [...rankByKey.values()]
+  .sort((a, b) => a.rank - b.rank)
+  .map((entry) => entry.ref);
 };

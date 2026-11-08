@@ -56,7 +56,6 @@ const renderHeader = async () => {
           searchMatchCount={0}
           collapseAll={() => undefined}
           expandAll={() => undefined}
-          showStats
         />
       </TooltipProvider>
     </I18nProvider>,

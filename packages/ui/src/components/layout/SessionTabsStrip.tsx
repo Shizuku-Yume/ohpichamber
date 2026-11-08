@@ -438,7 +438,7 @@ export const SessionTabsStrip: React.FC<{
      onDragEnd={handleDragEnd}
     >
      <SortableContext items={tabIdsInOrder} strategy={horizontalListSortingStrategy}>
-      {tabs.map((tab) => (
+      {tabs.map((tab, index) => (
        <SessionTabItem
         key={tab.id}
         tab={tab}

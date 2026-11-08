@@ -334,9 +334,10 @@ export const ContextPanelRail: React.FC = () => {
       return;
     }
 
+    // dnd-kit hands back its own id type; the registry ids are the strings it was given.
     const orderedIds = sortContextSurfaces(useUIStore.getState().contextRailOrder, guestSurfaces).map((surface) => surface.id);
-    const fromIndex = orderedIds.indexOf(String(active.id));
-    const toIndex = orderedIds.indexOf(String(over.id));
+    const fromIndex = orderedIds.findIndex((id) => id === String(active.id));
+    const toIndex = orderedIds.findIndex((id) => id === String(over.id));
     if (fromIndex === -1 || toIndex === -1) {
       return;
     }

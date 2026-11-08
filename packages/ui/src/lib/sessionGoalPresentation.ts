@@ -16,3 +16,14 @@ export const sessionGoalStatusLabelKey: Record<SessionGoalStatus, string> = {
   budgetLimited: 'chat.goal.status.budgetLimited',
   complete: 'chat.goal.status.complete',
 };
+
+/**
+ * The sidebar mark's wording, for the lane card that draws the same glyph.
+ * A goal the canonical mode cannot report (blocked) has no entry here.
+ */
+export const sessionGoalMarkLabelKey = {
+  active: 'chat.goal.mark.active',
+  paused: 'chat.goal.mark.paused',
+  budgetLimited: 'chat.goal.mark.budgetLimited',
+  complete: 'chat.goal.mark.complete',
+} as const satisfies Record<SessionGoalStatus, string>;

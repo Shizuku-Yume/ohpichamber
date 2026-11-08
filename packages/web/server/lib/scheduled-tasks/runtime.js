@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { stat } from 'node:fs/promises';
 import { DateTime } from 'luxon';
 import { CronExpressionParser } from 'cron-parser';
 import { CapturedSendOptionsSchema, PromptRequestSchema, SessionCreateAckSchema } from '@openchamber/agent-contract';
@@ -6,6 +7,7 @@ import { CapturedSendOptionsSchema, PromptRequestSchema, SessionCreateAckSchema 
 import { discoverLoops } from './loops.js';
 import { createExistingSessionTasks, createScheduledTaskContext } from './existing-session.js';
 import { createScheduledPromptExpander } from './file-resource-prompt.js';
+import { readProcessInstance } from './process-instance.js';
 
 const DEFAULT_GLOBAL_CONCURRENCY = 4;
 const DEFAULT_PROJECT_CONCURRENCY = 2;
@@ -14,6 +16,18 @@ const JITTER_MAX_MS = 2_000;
 const TASK_TITLE_MAX_LENGTH = 120;
 const TASK_DUE_SLACK_MS = 5_000;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+// A worktree the journal points at is identified by its directory, not its
+// path: a reused path after a removal is not the run's worktree.
+const readDirectoryIdentity = async (directory) => {
+ try {
+  const info = await stat(directory, { bigint: true });
+  return info.isDirectory() ? `${info.dev}:${info.ino}` : null;
+ } catch (error) {
+  if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return null;
+  throw error;
+ }
+};
 
 const buildTaskKey = (projectID, taskID) => `${projectID}:${taskID}`;
 
@@ -218,6 +232,8 @@ export const createScheduledTasksRuntime = (deps) => {
   createTaskWorktree = null,
   removeTaskWorktree = null,
   isGitRepository = null,
+  readWorktreeIdentity = readDirectoryIdentity,
+  readProcessIdentity = readProcessInstance,
   logger = console,
   maxGlobalConcurrency = DEFAULT_GLOBAL_CONCURRENCY,
   maxProjectConcurrency = DEFAULT_PROJECT_CONCURRENCY,
@@ -458,6 +474,106 @@ export const createScheduledTasksRuntime = (deps) => {
   return projectRunning < maxProjectConcurrency;
  };
 
+ const PENDING_CLEANUP_POLL_MS = 1_000;
+
+ // A run's worktree is removed only after its session settles: a still
+ // running agent would keep writing into a deleted directory. A session that
+ // can no longer be opened no longer uses its files, so the removal proceeds.
+ const waitForRunSettled = async (sessionID, signal) => {
+  if (typeof sessionService?.open !== 'function') return false;
+  for (; ;) {
+   signal.throwIfAborted();
+   try {
+    const snapshot = await sessionService.open(sessionID);
+    const runtimeStatus = snapshot?.session?.runtimeStatus;
+    if (runtimeStatus === 'idle') return true;
+    if (runtimeStatus === 'unavailable') return false;
+   } catch (error) {
+    if (error?.statusCode === 404 || error?.status === 404) return true;
+    throw error;
+   }
+   await new Promise((resolve) => setTimeout(resolve, PENDING_CLEANUP_POLL_MS));
+  }
+ };
+
+ const pendingCleanups = new Map();
+ const launchWorktreeCleanup = (record) => {
+  if (typeof removeTaskWorktree !== 'function' || typeof projectConfigRuntime.finishScheduledWorktreeCleanup !== 'function') return;
+  if (pendingCleanups.has(record.sessionID)) return;
+  const controller = new AbortController();
+  const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(maxRunDurationMs)]);
+  pendingCleanups.set(record.sessionID, controller);
+  void (async () => {
+   try {
+    let remove = record.phase === 'removing';
+    if (!remove && await readWorktreeIdentity(record.worktreeDirectory) === record.directoryIdentity) {
+     remove = await waitForRunSettled(record.sessionID, signal);
+    }
+    signal.throwIfAborted();
+    await projectConfigRuntime.finishScheduledWorktreeCleanup(record.projectID, record.sessionID,
+     remove ? async (current, resumingRemoval) => {
+      const matching = await readWorktreeIdentity(current.worktreeDirectory) === current.directoryIdentity;
+      signal.throwIfAborted();
+      // A path reused by something else is not this run's worktree;
+      // its branch is still ours to delete.
+      if (!matching && !resumingRemoval) return;
+      const input = {
+       projectDirectory: current.projectDirectory,
+       worktreeDirectory: current.worktreeDirectory,
+       branch: current.branch,
+       deleteLocalBranch: true,
+      };
+      if (!matching) input.removeDirectory = false;
+      return removeTaskWorktree(input);
+     } : null, { signal });
+   } catch (error) {
+    if (controller.signal.aborted) return;
+    try {
+     // The worktree is already gone: discard the journal instead of
+     // retrying a removal that has nothing left to remove.
+     if (await readWorktreeIdentity(record.worktreeDirectory) !== record.directoryIdentity) {
+      const discarded = await projectConfigRuntime.finishScheduledWorktreeCleanup(record.projectID, record.sessionID, null, { signal });
+      if (discarded) return;
+     }
+    } catch { /* Keep the journal when absence cannot be confirmed. */ }
+    logger.warn?.('[ScheduledTasks] failed to clean up the isolated worktree', {
+     projectID: record.projectID,
+     sessionID: record.sessionID,
+     worktree: record.worktreeDirectory,
+     reason: signal.aborted ? 'cleanup-wait-budget-exceeded' : 'cleanup-failed',
+     error: safeErrorMessage(error),
+    });
+   } finally {
+    if (pendingCleanups.get(record.sessionID) === controller) pendingCleanups.delete(record.sessionID);
+   }
+  })();
+ };
+
+ // The journal is written once a session exists, so a crash between the
+ // worktree and its cleanup leaves a record the next start reconciles.
+ const recordWorktreeCleanup = async (projectID, task, projectPath, isolation, sessionID, startedAt) => {
+  if (!isolation || task.cleanupWorktree === false) return null;
+  if (typeof projectConfigRuntime.saveScheduledWorktreeCleanup !== 'function') return null;
+  const worktreeDirectory = isolation.directory ?? isolation.path;
+  const directoryIdentity = await readWorktreeIdentity(worktreeDirectory);
+  if (!directoryIdentity) throw new Error('Run worktree no longer exists');
+  const ownerInstance = await readProcessIdentity(process.pid);
+  if (!ownerInstance) throw new Error('Cannot identify the worktree cleanup owner');
+  const record = await projectConfigRuntime.saveScheduledWorktreeCleanup(projectID, {
+   projectDirectory: projectPath,
+   worktreeDirectory,
+   sessionID,
+   branch: isolation.branch ?? null,
+   startedAt,
+   directoryIdentity,
+   ownerPID: process.pid,
+   ownerInstance,
+   phase: 'waiting',
+  });
+  launchWorktreeCleanup(record);
+  return record;
+ };
+
  const resolveProjectWorkspace = async (projectID, projectPath) => {
   if (typeof listWorkspaceScopes !== 'function' || typeof resolveWorkspaceScope !== 'function') throw new Error('Workspace scope service is unavailable');
   const page = await listWorkspaceScopes();
@@ -516,55 +632,98 @@ export const createScheduledTasksRuntime = (deps) => {
   }
 
   const runDirectory = isolation?.directory ?? isolation?.path ?? projectPath;
-
-  if (typeof sessionService?.create !== 'function' || (task.execution.goalEnabled
-   ? typeof sessionService?.control !== 'function'
-   : typeof sessionService?.send !== 'function')) {
-   throw new Error('Canonical session service is unavailable');
-  }
-
-  const options = await resolveRunSelection(projectID, task);
-  const workspace = chatsRun
-   ? await (typeof createChatWorkspace === 'function' ? createChatWorkspace() : Promise.reject(new Error('Managed chat workspace service is unavailable')))
-   : await resolveProjectWorkspace(projectID, runDirectory);
-  if (!workspace?.workspaceId || !workspace.projectId || !workspace.cwd || workspace.hostProjectId !== projectID) {
-   throw new Error('Scheduled workspace is not authorized');
-  }
+  // A failed dispatch leaves no usable run. The worktree it created is then
+  // cleaned up here, including its branch, instead of being stranded: only a
+  // session that exists can own a worktree worth keeping.
+  const discardIsolation = async () => {
+   if (!isolation) return;
+   try {
+    await removeTaskWorktree?.({
+     projectDirectory: projectPath,
+     worktreeDirectory: isolation.directory ?? isolation.path,
+     branch: isolation.branch ?? null,
+     deleteLocalBranch: true,
+    });
+   } catch (error) {
+    logger.warn?.("[ScheduledTasks] failed to clean up the failed run's worktree", {
+     projectID,
+     taskID: task.id,
+     worktree: isolation.directory ?? isolation.path,
+     error: safeErrorMessage(error),
+    });
+   }
+  };
 
   let sessionID;
+  let cleanupRecord = null;
   let prompt;
   try {
-   prompt = await expandPrompt(workspace, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [] }, options }));
-   const created = SessionCreateAckSchema.parse(await sessionService.create({
-    projectId: workspace.projectId, workspaceId: workspace.workspaceId, options: prompt.options,
-    title: formatScheduledSessionTitle(task, startedAt),
-   }));
-   sessionID = created.session.sessionId;
-   if (created.session.projectId !== workspace.projectId || created.session.workspaceId !== workspace.workspaceId) {
-    throw new Error('Scheduled session scope mismatch');
+   if (typeof sessionService?.create !== 'function' || (task.execution.goalEnabled
+    ? typeof sessionService?.control !== 'function'
+    : typeof sessionService?.send !== 'function')) {
+    throw new Error('Canonical session service is unavailable');
    }
+
+   const options = await resolveRunSelection(projectID, task);
+   const workspace = chatsRun
+    ? await (typeof createChatWorkspace === 'function' ? createChatWorkspace() : Promise.reject(new Error('Managed chat workspace service is unavailable')))
+    : await resolveProjectWorkspace(projectID, runDirectory);
+   if (!workspace?.workspaceId || !workspace.projectId || !workspace.cwd || workspace.hostProjectId !== projectID) {
+    throw new Error('Scheduled workspace is not authorized');
+   }
+
+   try {
+    prompt = await expandPrompt(workspace, PromptRequestSchema.parse({ input: { text: task.execution.prompt, attachments: [], context: [] }, options }));
+    const created = SessionCreateAckSchema.parse(await sessionService.create({
+     projectId: workspace.projectId, workspaceId: workspace.workspaceId, options: prompt.options,
+     title: formatScheduledSessionTitle(task, startedAt),
+    }));
+    sessionID = created.session.sessionId;
+    if (created.session.projectId !== workspace.projectId || created.session.workspaceId !== workspace.workspaceId) {
+     throw new Error('Scheduled session scope mismatch');
+    }
+   } catch (error) {
+    if (chatsRun) await chatsScope.discardChatDirectory(workspace.cwd);
+    throw error;
+   }
+   await onSessionCreated?.(sessionID, isolation);
+   emitTaskRunEvent?.({ projectID, taskID: task.id, ranAt: startedAt, status: 'running', sessionID });
+   cleanupRecord = await recordWorktreeCleanup(projectID, task, projectPath, isolation, sessionID, startedAt);
+   if (task.execution.permissionAutoAccept) {
+    if (typeof setSessionAutoAccept !== 'function') throw new Error('Permission policy service is unavailable');
+    try { await setSessionAutoAccept(sessionID, true, workspace.cwd); }
+    catch (error) { logger.warn?.('[scheduled-tasks] permission auto-accept enrollment failed; approvals remain manual', sessionID, error?.message ?? error); }
+   }
+   if (task.execution.goalEnabled) {
+    const tokenBudget = task.execution.goalTokenBudget ?? await readDefaultGoalTokenBudget(projectID);
+    const result = await sessionService.control(sessionID, { type: 'goal', op: 'create', objective: prompt.input.text, tokenBudget: tokenBudget ?? null });
+    if (result?.type !== 'goal' || result.mode?.kind !== 'goal' || result.mode.status !== 'active') throw new Error('Scheduled goal acknowledgement is invalid');
+   } else {
+    const context = [createScheduledTaskContext({ projectId: projectID, taskId: task.id, sessionId: sessionID, workspaceId: workspace.workspaceId, mode: 'new', triggeredAt: startedAt })];
+    const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { ...prompt.input, context }, options: prompt.options }));
+    if (!result?.run || result.run.sessionId !== sessionID) throw new Error('Scheduled prompt acknowledgement is invalid');
+   }
+   const finishedAt = Date.now();
+   return { sessionID, directory: workspace.cwd, durationMs: Math.max(0, finishedAt - startedAt), reason, startedAt, finishedAt };
   } catch (error) {
-   if (chatsRun) await chatsScope.discardChatDirectory(workspace.cwd);
+   // A failed dispatch leaves no usable run, so its worktree and journal
+   // record go with it instead of outliving the session that never ran.
+   if (cleanupRecord) {
+    pendingCleanups.get(cleanupRecord.sessionID)?.abort();
+    pendingCleanups.delete(cleanupRecord.sessionID);
+    try {
+     await projectConfigRuntime.finishScheduledWorktreeCleanup?.(projectID, cleanupRecord.sessionID, null);
+    } catch (discardError) {
+     logger.warn?.('[ScheduledTasks] failed to discard the failed run cleanup record', {
+      projectID,
+      sessionID: cleanupRecord.sessionID,
+      error: safeErrorMessage(discardError),
+     });
+    }
+   }
+   await discardIsolation();
    throw error;
   }
-  await onSessionCreated?.(sessionID);
-  emitTaskRunEvent?.({ projectID, taskID: task.id, ranAt: startedAt, status: 'running', sessionID });
-  if (task.execution.permissionAutoAccept) {
-   if (typeof setSessionAutoAccept !== 'function') throw new Error('Permission policy service is unavailable');
-   try { await setSessionAutoAccept(sessionID, true, workspace.cwd); }
-   catch (error) { logger.warn?.('[scheduled-tasks] permission auto-accept enrollment failed; approvals remain manual', sessionID, error?.message ?? error); }
-  }
-  if (task.execution.goalEnabled) {
-   const tokenBudget = task.execution.goalTokenBudget ?? await readDefaultGoalTokenBudget(projectID);
-   const result = await sessionService.control(sessionID, { type: 'goal', op: 'create', objective: prompt.input.text, tokenBudget: tokenBudget ?? null });
-   if (result?.type !== 'goal' || result.mode?.kind !== 'goal' || result.mode.status !== 'active') throw new Error('Scheduled goal acknowledgement is invalid');
-  } else {
-   const context = [createScheduledTaskContext({ projectId: projectID, taskId: task.id, sessionId: sessionID, workspaceId: workspace.workspaceId, mode: 'new', triggeredAt: startedAt })];
-   const result = await sessionService.send(sessionID, PromptRequestSchema.parse({ input: { ...prompt.input, context }, options: prompt.options }));
-   if (!result?.run || result.run.sessionId !== sessionID) throw new Error('Scheduled prompt acknowledgement is invalid');
-  }
-  const finishedAt = Date.now();
-  return { sessionID, directory: workspace.cwd, durationMs: Math.max(0, finishedAt - startedAt), reason, startedAt, finishedAt };
  };
 
  const releaseRunningSlot = (projectID, taskKey) => {
@@ -782,10 +941,22 @@ export const createScheduledTasksRuntime = (deps) => {
    // Known as soon as the run creates its session, so a run that fails or
    // times out afterwards still points at the session it left behind.
    let createdSessionID;
-   const recordCreatedSession = async (id) => {
+   // Known from session creation on, so a run that fails or times out
+   // afterwards still records how it ran.
+   let runIsolation = null;
+   const recordCreatedSession = async (id, isolation) => {
     createdSessionID = id;
+    runIsolation = isolation ?? null;
     try {
-     const recorded = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, { lastSessionId: id });
+     const recorded = await projectConfigRuntime.updateScheduledTaskState(projectID, taskID, {
+      lastSessionId: id,
+      lastRunIsolated: isolation ? true : undefined,
+      // Only a task that keeps its worktree has a branch worth naming; a
+      // cleaned-up run's branch is gone.
+      lastRunBranch: isolation && task.cleanupWorktree === false && isolation.branch
+       ? String(isolation.branch)
+       : undefined,
+     });
      if (recorded.task) {
       updateInMemoryTask(projectID, recorded.task);
      }
@@ -862,6 +1033,12 @@ export const createScheduledTasksRuntime = (deps) => {
     lastDurationMs: durationMs,
     lastError: status === 'error' ? errorMessage : undefined,
     lastSessionId: sessionID ?? createdSessionID,
+    lastRunIsolated: runIsolation ? true : undefined,
+    // Only a run that kept its worktree has a branch worth naming: a
+    // cleaned-up run's branch is gone, so the card says just "own worktree".
+    lastRunBranch: runIsolation && task.cleanupWorktree === false && runIsolation.branch
+     ? String(runIsolation.branch)
+     : undefined,
     nextRunAt: Number.isFinite(nextRunAt) ? nextRunAt : undefined,
     updatedAt: finishedAt,
    };
@@ -1022,6 +1199,37 @@ export const createScheduledTasksRuntime = (deps) => {
   return runTask(projectID, taskID, 'manual');
  };
 
+ // A record left by a previous process (crash, restart, failed removal) is
+ // resumed here: the run's own record reconciles on its own, and anything
+ // still on disk belongs to a run this process no longer follows.
+ const reconcileWorktreeCleanups = async () => {
+  if (typeof projectConfigRuntime.listScheduledWorktreeCleanups !== 'function') return;
+  let records;
+  try {
+   records = await projectConfigRuntime.listScheduledWorktreeCleanups();
+  } catch (error) {
+   logger.warn?.('[ScheduledTasks] failed to read worktree cleanup records', { error: safeErrorMessage(error) });
+   return;
+  }
+  for (const record of records) {
+   if (pendingCleanups.has(record.sessionID)) continue;
+   // A record this process just wrote is already being finalized.
+   if (record.phase === 'removing' && await ownsCleanup(record)) continue;
+   launchWorktreeCleanup(record);
+  }
+ };
+
+ // The cleanup owner guards concurrent finalizers: a live owner means another
+ // process is removing the same worktree right now.
+ const ownsCleanup = async (record) => {
+  if (record.ownerPID === 0 || !record.ownerInstance) return false;
+  try {
+   return await readProcessIdentity(record.ownerPID) === record.ownerInstance;
+  } catch {
+   return false;
+  }
+ };
+
  const start = async () => {
   if (started) {
    return;
@@ -1035,6 +1243,7 @@ export const createScheduledTasksRuntime = (deps) => {
   }
   logger.info?.(`[scheduled-tasks] root agent migration changed=${changed}`);
   started = true;
+  await reconcileWorktreeCleanups();
   await syncAllProjects();
  };
 
@@ -1049,6 +1258,8 @@ export const createScheduledTasksRuntime = (deps) => {
   timersByTaskKey.clear();
   queuedTaskKeys.clear();
   queue.length = 0;
+  for (const controller of pendingCleanups.values()) controller.abort();
+  pendingCleanups.clear();
  };
 
  const getStatus = () => {

@@ -63,6 +63,9 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   if (path.endsWith('/location')) return Response.json({ directory: '/workspace', project: { id: 'project', directory: '/workspace', canonical: '/workspace' } });
   if (path.endsWith('/session')) return Response.json({ data: [] });
   if (path.endsWith('/config')) return Response.json([]);
+  // The settings document owns the project list; an answer without it would
+  // empty the list the column's admission check reads.
+  if (path.endsWith('/config/settings')) return Response.json({ projects: [{ path: DIRECTORY }] });
   return Response.json({});
 });
 
@@ -93,12 +96,16 @@ const { SyncProvider, useDirectoryStore } = await import('@/sync/sync-context');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { nativeClient, nativeHistory, nativeSnapshot } = await import('@/sync/session-message-loader-test-fixtures');
+// The store derives a project's id from its path; a seeded list or a settings
+// sync that names the same folder must agree on that id.
+const { createProjectIdFromPath } = await import('@/lib/projectId');
 
 // Mounting the column reads only the runtime descriptor and theme/i18n; no
 // runtime API method is invoked.
 const runtimeAPIs = { runtime: { platform: 'web', isDesktop: false }, sourceControl: {} } as RuntimeAPIs;
 const DIRECTORY = '/workspace';
 const SESSION_ID = 'session-accepted-run';
+const PROJECT_ID = createProjectIdFromPath(DIRECTORY);
 
 const hostSession = (): Session => ({
   ...nativeSnapshot(SESSION_ID, []).session,
@@ -117,8 +124,14 @@ const client = nativeClient({
   getHistory: async (sessionId: string) => nativeHistory([], null, acceptedRunSnapshot(sessionId)),
   listSessions: async () => ({ items: [hostSession()], errors: {} }),
 });
-client.listProjects = async () => ({ items: [], errors: {} });
-client.listWorkspaces = async () => ({ items: [], errors: {} });
+client.listProjects = async () => ({
+  items: [{ projectId: PROJECT_ID, name: 'Workspace', workspaceIds: ['workspace-a'] }],
+  errors: {},
+});
+client.listWorkspaces = async () => ({
+  items: [{ workspaceId: 'workspace-a', projectId: PROJECT_ID, name: 'Workspace', displayPath: '.' }],
+  errors: {},
+});
 client.subscribeSessionEvents = () => () => {};
 
 let container: HTMLDivElement;
@@ -133,7 +146,7 @@ const Seed = () => {
 describe('chat status live region on an accepted new-session run', () => {
   beforeEach(() => {
     // The column is shown for a session whose folder is an admitted project.
-    useProjectsStore.setState({ projects: [{ id: 'project-a', path: DIRECTORY, label: 'Workspace' }], activeProjectId: 'project-a' });
+    useProjectsStore.setState({ projects: [{ id: PROJECT_ID, path: DIRECTORY, label: 'Workspace' }], activeProjectId: PROJECT_ID });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);

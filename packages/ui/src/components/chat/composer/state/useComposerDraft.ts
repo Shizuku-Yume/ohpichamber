@@ -1,3 +1,5 @@
+import { isBtwPendingComposerKey } from "@/lib/btw";
+import { isMentionEntryInText } from "../../language/mentions";
 /**
  * Per-session draft persistence for the composer.
  *
@@ -138,7 +140,11 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         // user deleted must not resurrect as a file reference on restore.
         const activeMentions = new Set<string>();
         for (const mention of confirmedMentionsRef.current) {
-            if (draft.includes(`@${mention}`)) activeMentions.add(mention);
+            if (isMentionEntryInText(mention, draft)) activeMentions.add(mention);
+        }
+        if (isBtwPendingComposerKey(target.sessionId)) {
+            draftMemoryRef.current.set(key, { text: draft, confirmedMentions: activeMentions });
+            return;
         }
         confirmedMentionsRef.current = activeMentions;
 
@@ -296,7 +302,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         const isCurrent = target && current && getChatDraftIdentityKey(target) === getChatDraftIdentityKey(current);
         const existing = isCurrent
             ? { text: messageRef.current, confirmedMentions: confirmedMentionsRef.current }
-            : (targetKey && draftMemoryRef.current.get(targetKey)) || (persistEnabled ? readChatDraft(target) : null);
+            : (targetKey && draftMemoryRef.current.get(targetKey)) || (isBtwPendingComposerKey(target?.sessionId) ? null : persistEnabled ? readChatDraft(target) : null);
         const text = existing?.text && existing.text !== draft ? `${existing.text}\n\n${draft}` : draft;
         const mentions = new Set([...(existing?.confirmedMentions ?? []), ...confirmedMentions]);
         if (targetKey) draftMemoryRef.current.set(targetKey, { text, confirmedMentions: mentions });
@@ -305,7 +311,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             confirmedMentionsRef.current = new Set(mentions);
             setMessage(text);
         }
-        if (persistEnabled && target) {
+        if (persistEnabled && target && !isBtwPendingComposerKey(target.sessionId)) {
             writeChatDraft(target, text, mentions);
             lastPersistedRef.current.set(getChatDraftIdentityKey(target), draftSignature(text, mentions));
         }

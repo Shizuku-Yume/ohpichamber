@@ -1,3 +1,5 @@
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
 import type { ApprovalRequest } from '@openchamber/agent-contract';
@@ -99,13 +101,15 @@ const PermissionDockRequest: React.FC<{
             ariaLabel={title}
             compact={collapsed}
             header={<>
-                <button
-                    type="button"
-                    onClick={onToggleCollapsed}
-                    aria-expanded={!collapsed}
-                    aria-label={collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground transition-colors hover:text-foreground"
-                >
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <button
+                            type="button"
+                            onClick={onToggleCollapsed}
+                            aria-expanded={!collapsed}
+                            aria-label={collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground transition-colors hover:text-foreground"
+                        >
                     <Icon name="question" className="size-3.5 shrink-0 text-[var(--status-warning)]" />
                     <Icon name={collapsed ? 'arrow-up-s' : 'arrow-down-s'} className="size-4 shrink-0" />
                     <span className="typography-ui-label min-w-0 truncate text-foreground">{title}</span>
@@ -119,25 +123,31 @@ const PermissionDockRequest: React.FC<{
                             {t('chat.formDock.progress', { current: String(currentIndex + 1), total: String(permissions.length) })}
                         </span>
                     ) : null}
-                </button>
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6}>{collapsed ? t('chat.permissionDock.expandAria') : t('chat.permissionDock.collapseAria')}</TooltipContent>
+                </Tooltip>
                 {/* One dot per pending request, the current one solid. */}
                 {!collapsed && permissions.length > 1 ? (
                     <div className="flex shrink-0 items-center gap-1" role="tablist">
                         {permissions.map((entry, index) => {
                             const label = t('chat.permissionDock.stepAria', { index: String(index + 1), tool: entry.toolName });
                             return (
-                                <button
-                                    key={entry.approvalId}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={index === currentIndex}
-                                    aria-label={label}
-                                    title={label}
-                                    onClick={() => onSelect(entry.approvalId)}
-                                    className="flex size-4 items-center justify-center"
-                                >
-                                    <span className={cn('block size-1.5 rounded-full transition-colors', index === currentIndex ? 'bg-primary' : 'bg-foreground/15')} />
-                                </button>
+                                <Tooltip key={entry.approvalId}>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={index === currentIndex}
+                                            aria-label={label}
+                                            onClick={() => onSelect(entry.approvalId)}
+                                            className="flex size-4 items-center justify-center"
+                                        >
+                                            <span className={cn('block size-1.5 rounded-full transition-colors', index === currentIndex ? 'bg-primary' : 'bg-foreground/15')} />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" sideOffset={6}>{label}</TooltipContent>
+                                </Tooltip>
                             );
                         })}
                     </div>
@@ -150,13 +160,15 @@ const PermissionDockRequest: React.FC<{
         >
             {!collapsed ? (
                 <div>
-                    <div
+                    <ScrollableOverlay
                         ref={bodyRef}
-                        className="max-h-[50vh] overflow-y-auto overscroll-contain px-1.5"
-                        style={availableMaxHeight === undefined ? undefined : { maxHeight: Math.max(120, availableMaxHeight - 96) }}
+                        outerClassName="max-h-[50vh]"
+                        outerStyle={availableMaxHeight === undefined ? undefined : { maxHeight: Math.max(120, availableMaxHeight - 96) }}
+                        className="overscroll-contain px-1.5"
+                        disableHorizontal
                     >
                         <PermissionRequestContent permission={permission} />
-                    </div>
+                    </ScrollableOverlay>
                     <PermissionActions
                         permission={permission}
                         isResponding={isResponding}

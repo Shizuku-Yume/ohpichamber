@@ -1,10 +1,11 @@
+import { useUIStore } from '@/stores/useUIStore';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo, type ShortcutActionId } from '@/lib/shortcuts';
 import React from 'react';
 import type { ApprovalRequest } from '@openchamber/agent-contract';
 import { cn } from '@/lib/utils';
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
-import { formatShortcutForDisplay } from '@/lib/shortcuts';
 import type { PermissionResponse } from './usePermissionResponse';
 import { getApprovalPolicyTitle } from './permissionPresentation';
 
@@ -26,26 +27,32 @@ export const PermissionActions: React.FC<{
     const alwaysAllowLabel = t('chat.permissionCard.alwaysAllow', { tool: permission.toolName });
     const alwaysTitle = permission.policyTarget && permission.policyTarget.pattern !== '*' ? ruleTitle : alwaysAllowLabel;
 
+    const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+    const shortcutHint = (actionId: ShortcutActionId) => {
+        const shortcut = formatShortcutForDisplay(getEffectiveShortcutCombo(actionId, shortcutOverrides), "");
+        return shortcut ? <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{shortcut}</kbd> : null;
+    };
+
     if (variant === 'dock') {
         return (
             <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2 pt-1">
                 <Button variant="ghost" size="xs" disabled={isResponding} onClick={() => onRespond('reject')} className="text-[var(--status-error)]">
                     <Icon name="close" className="size-3.5" />
                     {t('chat.permissionCard.deny')}
-                    <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+backspace')}</kbd>
+                    {shortcutHint('permission_deny')}
                 </Button>
                 <div className="min-w-0 flex-1" />
                 {hasSessionAllow ? (
                     <Button variant="outline" size="xs" disabled={isResponding} onClick={() => onRespond('always')} title={alwaysTitle}>
                         <Icon name="time" className="size-3.5" />
                         <span className="max-w-[180px] truncate">{alwaysAllowLabel}</span>
-                        <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+shift+enter')}</kbd>
+                        {shortcutHint('permission_allow_always')}
                     </Button>
                 ) : null}
                 <Button size="xs" disabled={isResponding} onClick={() => onRespond('once')}>
                     {isResponding ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : <Icon name="check" className="size-3.5" />}
                     {t('chat.permissionCard.allowOnce')}
-                    <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+enter')}</kbd>
+                    {shortcutHint('permission_allow_once')}
                 </Button>
             </div>
         );
@@ -54,7 +61,7 @@ export const PermissionActions: React.FC<{
     const rowClass = 'min-h-[32px] sm:min-h-0 w-full sm:w-auto justify-start sm:justify-center px-3 sm:px-2';
 
     return (
-        <div className="px-2 pb-2 sm:pb-1.5 pt-1.5 sm:pt-1 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1.5 border-t border-border/20">
+        <div className="px-2 pb-2 sm:pb-1.5 pt-1.5 sm:pt-1 flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-1.5 border-t border-edge-muted">
             <Button
                 variant="ghost"
                 size="xs"
@@ -64,7 +71,7 @@ export const PermissionActions: React.FC<{
             >
                 <Icon name="check" className="size-3.5 flex-shrink-0" />
                 {t('chat.permissionCard.allowOnce')}
-                <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+enter')}</kbd>
+                {shortcutHint('permission_allow_once')}
             </Button>
 
             {hasSessionAllow ? (
@@ -78,7 +85,7 @@ export const PermissionActions: React.FC<{
                 >
                     <Icon name="time" className="size-3.5 flex-shrink-0" />
                     <span className="truncate max-w-[180px]">{alwaysAllowLabel}</span>
-                    <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+shift+enter')}</kbd>
+                    {shortcutHint('permission_allow_always')}
                 </Button>
             ) : null}
 
@@ -91,7 +98,7 @@ export const PermissionActions: React.FC<{
             >
                 <Icon name="close" className="size-3.5 flex-shrink-0" />
                 {t('chat.permissionCard.deny')}
-                <kbd className="ms-1 hidden sm:inline typography-micro opacity-60">{formatShortcutForDisplay('alt+backspace')}</kbd>
+                {shortcutHint('permission_deny')}
             </Button>
 
             {isResponding ? (

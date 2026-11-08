@@ -1,3 +1,4 @@
+import { useSessionGoalArmStore } from '@/stores/useSessionGoalArmStore';
 import { canonicalClient } from '@/api/canonicalClient';
 import React from 'react';
 import { toast } from '@/components/ui';
@@ -221,6 +222,9 @@ export function useParallelComposer(input: {
       autoFusion: current.fuse
         ? { providerId: current.fuse.providerId, modelId: current.fuse.modelId, variant: current.fuse.variant }
         : undefined,
+      goal: useSessionGoalArmStore.getState().armed
+        ? { tokenBudget: useUIStore.getState().sessionGoalDefaultBudgetEnabled ? useUIStore.getState().sessionGoalDefaultBudget : null }
+        : undefined,
     };
 
     setIsLaunching(true);
@@ -234,6 +238,7 @@ export function useParallelComposer(input: {
       setMessage('');
       useInputStore.getState().clearAttachedFiles();
       setState(null);
+      if (params.goal) useSessionGoalArmStore.getState().setArmed(false);
       useUIStore.getState().setRunOverviewKey(result.groupKey);
     } finally {
       setIsLaunching(false);

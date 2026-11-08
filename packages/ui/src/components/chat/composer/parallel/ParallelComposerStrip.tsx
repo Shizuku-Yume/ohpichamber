@@ -8,6 +8,7 @@ import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Textarea } from '@/components/ui/textarea';
 import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSelector';
 import { ModelMultiSelect, type ModelSelectionWithId } from '@/components/multirun/ModelMultiSelect';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { resolveWorktreeSetupCommands } from '@/lib/sharedTrustConfirmation';
@@ -138,7 +139,7 @@ function LaunchSettingsDialog({
                   showChips={false}
                   dropdownSide="bottom"
                   addButtonLabel={judge ? judge.displayName || judge.modelId : t('multirun.fusion.model.placeholder')}
-                  triggerIcon={judge ? <ProviderLogo providerId={judge.providerId} className="mr-1 size-3.5" /> : undefined}
+                  triggerIcon={judge ? <ProviderLogo providerId={judge.providerId} className="me-1 size-3.5" /> : undefined}
                 />
                 {judge ? (
                   <ModelEffortMenu
@@ -234,36 +235,51 @@ export function ParallelComposerStrip({
               <span
                 key={variant.id}
                 className={cn(
-                  'group/tab inline-flex h-6 items-center gap-1 rounded-md border pl-2 pr-1 typography-micro',
+                  'group/tab inline-flex h-6 items-center gap-1 rounded-md border ps-2 pe-1 typography-micro',
                   selected ? 'border-[var(--interactive-border-hover)] bg-interactive-selection/40 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => parallel.switchVariant(index)}
-                  className="inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <span className="font-semibold">{variant.id}</span>
-                  <span className="text-muted-foreground">
-                    {runs === 1 ? t('chat.parallel.variant.runsSingle', { count: runs }) : t('chat.parallel.variant.runsPlural', { count: runs })}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => parallel.removeVariant(index)}
-                  className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                  aria-label={t('chat.parallel.variant.removeAria', { variant: variant.id })}
-                >
-                  <Icon name="close" className="size-3" />
-                </button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={selected}
+                      onClick={() => parallel.switchVariant(index)}
+                      className="inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="font-semibold">{variant.id}</span>
+                      <span className="text-muted-foreground">
+                        {runs === 1 ? t('chat.parallel.variant.runsSingle', { count: runs }) : t('chat.parallel.variant.runsPlural', { count: runs })}
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6}>{t('contextTooltips.chat.parallelVariant')}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => parallel.removeVariant(index)}
+                      className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                      aria-label={t('chat.parallel.variant.removeAria', { variant: variant.id })}
+                    >
+                      <Icon name="close" className="size-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.variant.removeAria', { variant: variant.id })}</TooltipContent>
+                </Tooltip>
               </span>
             );
           })}
-          <Button type="button" variant="ghost" size="icon" className="size-6" onClick={parallel.addVariant} aria-label={t('chat.parallel.settings.addVariant')}>
-            <Icon name="add" className="size-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" className="size-6" onClick={parallel.addVariant} aria-label={t('chat.parallel.settings.addVariant')}>
+                <Icon name="add" className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.settings.addVariant')}</TooltipContent>
+          </Tooltip>
         </div>
       ) : null}
 
@@ -271,7 +287,7 @@ export function ParallelComposerStrip({
         {active.models.map((model, index) => (
           <span
             key={`${model.providerId}:${model.modelId}:${model.variant ?? ''}`}
-            className="group/chip inline-flex h-6 items-center gap-1 rounded-md border border-border bg-[var(--surface-elevated)] pl-1.5 pr-0.5 typography-micro text-foreground"
+            className="group/chip inline-flex h-6 items-center gap-1 rounded-md border border-border bg-[var(--surface-elevated)] ps-1.5 pe-0.5 typography-micro text-foreground"
           >
             <ProviderLogo providerId={model.providerId} className="size-3.5" />
             <span className="max-w-[10rem] truncate">{model.displayName || model.modelId}</span>
@@ -280,24 +296,35 @@ export function ParallelComposerStrip({
               modelId={model.modelId}
               variant={model.variant}
               onChange={(variant) => parallel.setModelVariant(index, variant)}
+              tooltip={t('contextTooltips.panel.chooseEffort')}
             />
             {model.count > 1 ? <span className="font-semibold text-[var(--primary-base)]">×{model.count}</span> : null}
-            <button
-              type="button"
-              onClick={() => parallel.incrementModel(index)}
-              className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-              aria-label={t('chat.parallel.models.increment', { model: model.displayName || model.modelId })}
-            >
-              <Icon name="add" className="size-3" />
-            </button>
-            <button
-              type="button"
-              onClick={() => parallel.decrementModel(index)}
-              className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
-              aria-label={t('chat.parallel.models.decrement', { model: model.displayName || model.modelId })}
-            >
-              <Icon name="close" className="size-3" />
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => parallel.incrementModel(index)}
+                  className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                  aria-label={t('chat.parallel.models.increment', { model: model.displayName || model.modelId })}
+                >
+                  <Icon name="add" className="size-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.models.increment', { model: model.displayName || model.modelId })}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => parallel.decrementModel(index)}
+                  className="inline-flex size-4 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                  aria-label={t('chat.parallel.models.decrement', { model: model.displayName || model.modelId })}
+                >
+                  <Icon name="close" className="size-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.models.decrement', { model: model.displayName || model.modelId })}</TooltipContent>
+            </Tooltip>
           </span>
         ))}
         <ModelMultiSelect
@@ -311,29 +338,39 @@ export function ParallelComposerStrip({
           addButtonClassName="h-6 min-h-6 w-6 justify-center px-0"
           addButtonLabel=""
           addButtonAriaLabel={t('chat.parallel.models.add')}
+          addButtonTooltip={t('chat.parallel.models.add')}
           triggerIcon={<Icon name="add" className="size-3.5" />}
         />
         <span className="flex-1" />
-        <button
-          type="button"
-          className={cn(dropdownTriggerVariants(), 'max-w-[18rem] gap-1.5')}
-          onClick={() => setSettingsOpen(true)}
-          aria-label={t('chat.parallel.settings.openAria', { summary })}
-        >
-          {state.fuse ? <FusionIcon className="size-3.5 text-[var(--primary-base)]" /> : <Icon name="settings-3" />}
-          <span className="truncate">{summary}</span>
-        </button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-6"
-          onClick={parallel.exit}
-          aria-label={t('chat.parallel.exit')}
-          title={t('chat.parallel.exit')}
-        >
-          <Icon name="close" className="size-3.5" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className={cn(dropdownTriggerVariants(), 'max-w-[18rem] gap-1.5')}
+              onClick={() => setSettingsOpen(true)}
+              aria-label={t('chat.parallel.settings.openAria', { summary })}
+            >
+              {state.fuse ? <FusionIcon className="size-3.5 text-[var(--primary-base)]" /> : <Icon name="settings-3" />}
+              <span className="truncate">{summary}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>{t('contextTooltips.chat.parallelSettings')}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              onClick={parallel.exit}
+              aria-label={t('chat.parallel.exit')}
+            >
+              <Icon name="close" className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>{t('chat.parallel.exit')}</TooltipContent>
+        </Tooltip>
       </div>
 
       <LaunchSettingsDialog

@@ -1,3 +1,4 @@
+import { HoverTooltip } from '@/components/ui/row-tooltip';
 import React from 'react';
 import type { ExtraProps } from 'streamdown';
 import { Icon } from '@/components/icon/Icon';
@@ -228,17 +229,18 @@ function ScreenMarkdownHref({ href, children: originalChildren, node, ...props }
         {skill ? <span className={REFERENCE_CHIP_LABEL_CLASS}>{skill}</span> : children}
       </a>
       {showPreview && (
-        <Button
-          variant="ghost"
-          size="xs"
-          className="ms-1 align-middle"
-          data-export-ignore
-          title={t('terminalView.preview.openTitle')}
-          aria-label={t('terminalView.preview.open')}
-          onClick={() => useUIStore.getState().openContextPreview(directory, href)}
-        >
-          <Icon name="global" className="size-3.5" />
-        </Button>
+        <HoverTooltip label={t('terminalView.preview.openTitle')}>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="ms-1 align-middle"
+            data-export-ignore
+            aria-label={t('terminalView.preview.open')}
+            onClick={() => useUIStore.getState().openContextPreview(directory, href)}
+          >
+            <Icon name="global" className="size-3.5" />
+          </Button>
+        </HoverTooltip>
       )}
     </>
   );

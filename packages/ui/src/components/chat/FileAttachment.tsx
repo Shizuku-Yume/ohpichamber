@@ -1,3 +1,4 @@
+import { INLINE_SERVER_ATTACHMENT_ID_PREFIX } from './composer/attachments/inlineMentionAttachments';
 import React, { useRef, memo } from 'react';
 import type { AttachmentPart, Part } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
@@ -168,7 +169,7 @@ const ImagePreview = memo(({ file, onRemove, onShowPopup, gallery, index = 0 }: 
           handleOpenPreview();
         }
       }}
-      className="relative h-16 w-16 rounded-lg border border-border/80 bg-background overflow-hidden flex-shrink-0 cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="relative h-16 w-16 rounded-lg border border-edge bg-background overflow-hidden flex-shrink-0 cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label={displayName}
     >
       <img
@@ -229,7 +230,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   return (
     <button
       type="button"
-      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/80 bg-background pl-2 pr-1 text-xs text-foreground text-left hover:opacity-90 transition-opacity"
+      className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-edge bg-background pl-2 pr-1 text-xs text-foreground text-left hover:opacity-90 transition-opacity"
       title={displayName}
     >
       <FileTypeIcon filePath={file.filename} extension={extension} className="h-4 w-4 flex-shrink-0" />
@@ -263,7 +264,7 @@ export const AttachedFilesList = memo(({ onShowPopup, className, draftIdentity }
   const attachedFiles = useDraftAttachedFiles(draftIdentity);
   const removeAttachedFile = useInputStore((state) => state.removeAttachedFile);
 
-  const localFiles = attachedFiles.filter((file) => file.source !== 'server');
+  const localFiles = attachedFiles.filter((file) => file.source !== 'server' && !file.id.startsWith(INLINE_SERVER_ATTACHMENT_ID_PREFIX));
 
   if (localFiles.length === 0) return null;
 

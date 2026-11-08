@@ -1,3 +1,7 @@
+import { useUIStore } from '@/stores/useUIStore';
+import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
+import { TooltipLabelWithShortcut } from '@/components/ui/action-toolbar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 /**
  * The composer's footer row.
  *
@@ -89,6 +93,10 @@ interface ComposerFooterProps {
     onDictationActiveChange?: (active: boolean) => void;
     isBtw?: boolean;
     pinnedSelection?: ComposerModelSelection | null;
+    /** The composer's double Escape stops the run (not in the mini chat). */
+    escapeStops?: boolean;
+    /** The composer's double Escape stops the run (not in the mini chat). */
+    escapeStops?: boolean;
     /** Offers "Run on several models" in the model picker (desktop). */
     onRunInParallel?: () => void;
     /** Set while the composer is in "Run in parallel" mode: the primary action launches the run. */
@@ -103,7 +111,7 @@ function AgentStartupNote({ className }: { className?: string }) {
     return (
         <span
             role="status"
-            className={cn('min-w-0 truncate self-center typography-micro text-muted-foreground/70', className)}
+            className={cn('min-w-0 truncate self-center typography-micro text-muted-foreground', className)}
             title={t('chat.chatInput.waitingForAgentHint')}
         >
             {t('chat.chatInput.waitingForAgent')}
@@ -113,6 +121,7 @@ function AgentStartupNote({ className }: { className?: string }) {
 
 function ComposerFooterView(props: ComposerFooterProps) {
     const { t } = useI18n();
+    const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
     const {
         isMobile,
         sessionId: currentSessionId,
@@ -216,26 +225,33 @@ function ComposerFooterView(props: ComposerFooterProps) {
                         <div className="flex items-center min-w-0 gap-x-1 justify-end">
                             {waitingForAgent ? <AgentStartupNote /> : null}
                             <div className="flex items-center gap-x-1 flex-shrink-0">
-                                {!isBtw && showDictation ? <button
-                                    type="button"
-                                    className={footerIconButtonClass}
-                                    // Keep the soft keyboard open (same guard as
-                                    // PermissionAutoAcceptButton); the recording
-                                    // engine lives in the wrapper-level
-                                    // ComposerDictation instance.
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onPointerDownCapture={(event) => {
-                                        if (event.pointerType === 'touch') {
-                                            event.preventDefault();
-                                        }
-                                    }}
-                                    onClick={onStartDictation}
-                                    disabled={dictationActive}
-                                    title={t('chat.dictation.start')}
-                                    aria-label={t('chat.dictation.start')}
-                                >
-                                    <Icon name="mic" className={cn(iconSizeClass, 'text-current')} />
-                                </button> : null}
+                                {!isBtw && showDictation ? (
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className={footerIconButtonClass}
+                                                onMouseDown={(event) => event.preventDefault()}
+                                                onPointerDownCapture={(event) => {
+                                                    if (event.pointerType === "touch") {
+                                                        event.preventDefault();
+                                                    }
+                                                }}
+                                                onClick={onStartDictation}
+                                                disabled={dictationActive}
+                                                aria-label={t("chat.dictation.start")}
+                                            >
+                                                <Icon name="mic" className={cn(iconSizeClass, "text-current")} />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top">
+                                            <TooltipLabelWithShortcut
+                                                label={t("chat.dictation.start")}
+                                                shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo("toggle_dictation", shortcutOverrides), "")}
+                                            />
+                                        </TooltipContent>
+                                    </Tooltip>
+                                ) : null}
                                 <ComposerActionButtons
                                     isMobile={isMobile}
                                     footerIconButtonClass={footerIconButtonClass}

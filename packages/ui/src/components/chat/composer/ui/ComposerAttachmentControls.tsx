@@ -29,7 +29,7 @@ import { cn } from '@/lib/utils';
 export type ComposerTrackerPicker = { provider: string; icon: IconName; label: string; open: () => void };
 
 type ComposerAttachmentControlsProps = {
-    isVSCode?: boolean;
+    isVSCode: boolean;
     footerIconButtonClass: string;
     iconSizeClass: string;
     handlePickLocalFiles: () => void;
@@ -39,9 +39,6 @@ type ComposerAttachmentControlsProps = {
     repositoryProvider?: string | null;
     /** One entry per signed-in tracker, in the server's order. */
     trackerPickers?: readonly ComposerTrackerPicker[];
-    showLinearPicker?: boolean;
-    onOpenLinearPicker?: () => void;
-    openLinearPicker?: () => void;
     onOpenSettings?: () => void;
     onMenuOpenChange?: (open: boolean) => void;
     /** Mobile: open the attachment bottom sheet instead of the dropdown menu. */

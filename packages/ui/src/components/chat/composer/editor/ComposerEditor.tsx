@@ -32,7 +32,7 @@ import {
 } from '@codemirror/view';
 
 import { createPortal } from 'react-dom';
-import { PopupOverlayScrollbar } from '@/components/ui/AttachedOverlayScrollbar';
+import { PopupOverlayScrollbar } from './composerScrollbar';
 import { cn } from '@/lib/utils';
 import type { ComposerLanguageContext } from '../language/tokenize';
 import type { ComposerAutoCorrect } from './autocorrect';

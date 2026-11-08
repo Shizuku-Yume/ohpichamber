@@ -14,9 +14,12 @@ interface SessionSuggestionChipProps {
   onApply: (text: string) => void;
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
 // A suggested follow-up rendered as the composer's own top row (inside the
 // box, and inside the mobile pill). Tapping it fills the composer (no
-// auto-send); the X clears the suggestion in the session metadata so
+// auto-send); the X patches the suggestion out of the session metadata so
 // it stays dismissed everywhere.
 export const SessionSuggestionChip: React.FC<SessionSuggestionChipProps> = React.memo(({ sessionId, directory, hidden, onApply }) => {
   const { suggestion } = useSessionAssistState(sessionId ?? '', directory);
@@ -29,10 +32,11 @@ export const SessionSuggestionChip: React.FC<SessionSuggestionChipProps> = React
     setDismissing(true);
     try {
       await patchSessionMetadata(sessionId, undefined, (metadata) => {
-        const namespace = metadata.openchamber;
-        const assist = namespace?.assist;
-        if (!assist) return metadata;
-        return { ...metadata, openchamber: { ...namespace, assist: { ...assist, suggestion: '' } } };
+        const namespace = isRecord(metadata.openchamber) ? metadata.openchamber : {};
+        const assist = isRecord(namespace.assist) ? namespace.assist : {};
+        const nextAssist = { ...assist };
+        delete nextAssist.suggestion;
+        return { ...metadata, openchamber: { ...namespace, assist: nextAssist } };
       });
     } catch (error) {
       console.warn('Failed to dismiss suggestion:', error);
@@ -66,23 +70,27 @@ export const SessionSuggestionChip: React.FC<SessionSuggestionChipProps> = React
             {suggestion}
           </TooltipContent>
         </Tooltip>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={(event) => void handleDismiss(event)}
-          onMouseDown={(event) => event.preventDefault()}
-          aria-label={t('chat.suggestion.dismissAria')}
-          title={t('chat.suggestion.dismissAria')}
-          className="size-7 shrink-0 rounded-lg text-muted-foreground hover:!bg-transparent hover:text-foreground active:!bg-transparent"
-        >
-          <Icon name="close" className="size-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={(event) => void handleDismiss(event)}
+              onMouseDown={(event) => event.preventDefault()}
+              aria-label={t('chat.suggestion.dismissAria')}
+              className="size-7 shrink-0 rounded-lg text-muted-foreground hover:!bg-transparent hover:text-foreground active:!bg-transparent"
+            >
+              <Icon name="close" className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={6}>{t('chat.suggestion.dismissAria')}</TooltipContent>
+        </Tooltip>
     </>
   );
 
   return (
-    <div className="flex h-10 items-center gap-1 border-b border-border/60 pl-3 pr-1.5">
+    <div className="flex oc-composer-row items-center gap-1 border-b border-edge ps-3 pe-1.5">
       {content}
     </div>
   );

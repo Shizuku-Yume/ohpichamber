@@ -1,3 +1,4 @@
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -84,7 +85,7 @@ function SessionGoalDialogBody({ mobile, onOpenChange, sessionId, directory }: S
   const body = (
     <div className="space-y-3">
       {goal ? <p className="typography-meta">{t(goal.status === 'budget-limited' ? 'chat.goal.status.budgetLimited' : `chat.goal.status.${goal.status}` as never)} · {goal.tokenBudget === null ? t('chat.goal.usage.tokens', { used: goal.tokensUsed }) : t('chat.goal.usage.tokensWithBudget', { used: goal.tokensUsed, budget: goal.tokenBudget })}</p> : null}
-      {isCompleted ? <p className="whitespace-pre-wrap break-words typography-meta">{goal.objective}</p> : (
+      {isCompleted ? <ScrollableOverlay as="p" outerClassName="max-h-48" className="whitespace-pre-wrap break-words typography-meta text-muted-foreground" disableHorizontal>{goal.objective}</ScrollableOverlay> : (
         <>
           <div className="space-y-1">
             <span className="typography-ui-label">{t('chat.goal.dialog.objectiveLabel')}</span>

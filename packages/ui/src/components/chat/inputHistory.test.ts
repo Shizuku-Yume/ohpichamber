@@ -55,6 +55,30 @@ describe('buildChatInputHistorySubmissions', () => {
 });
 
 describe('mapInputHistoryEntriesToValues', () => {
+  test('preserves desktop attachment.path on materialized history attachments', () => {
+    const entries: InputHistoryEntry[] = [
+      {
+        text: 'desktop prompt',
+        attachmentKeys: ['desk-1'],
+        restorableAttachments: [{
+          key: 'desk-1',
+          source: 'file-url',
+          filename: 'main.rs',
+          mimeType: 'text/x-rust',
+          size: 100,
+          reference: 'data:text/plain;base64,...',
+          path: '/home/user/project/src/main.rs',
+        }],
+        submittedAt: 1,
+      },
+    ];
+
+    const values = mapInputHistoryEntriesToValues(entries);
+    expect(values[0]?.attachments[0]?.filename).toBe('main.rs');
+    expect((values[0]?.attachments[0] as { path?: string })?.path).toBe('/home/user/project/src/main.rs');
+    expect(values[0]?.attachments[0]?.serverPath).toBe('/home/user/project/src/main.rs');
+  });
+
   test('keeps chronological order and materializes supported attachments', () => {
     const entries: InputHistoryEntry[] = [
       {

@@ -1185,6 +1185,15 @@ const flattenWorktreeMap = (map: Map<string, WorktreeMetadata[]>): WorktreeMetad
 
 const PERSISTED_WORKTREE_MAP = readPersistedWorktreeTopology(runtimeMemoryKey())
 
+/**
+ * Counts deliberate navigation (a session pick, a user-opened draft). A session
+ * parked because its directory is not admitted yet is dropped when the count
+ * moves: the user went somewhere else.
+ */
+let admissionNavigationRevision = 0;
+
+export const getAdmissionNavigationRevision = (): number => admissionNavigationRevision;
+
 export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create<SessionUIState>()((set, get) => ({
   currentSessionId: null,
   currentSessionDirectory: null,
@@ -1208,6 +1217,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
   // setCurrentSession
   // ---------------------------------------------------------------------------
   setCurrentSession: (id, directoryHint?: string | null, transition?: "submitted-draft") => {
+    admissionNavigationRevision += 1
     const runtimeKey = getRuntimeKey()
     const materializedDraftSessionId = id && transition === "submitted-draft" ? id : null
     // Publish the transition identity before closing the draft. Those are two
@@ -1389,6 +1399,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
 
   openNewSessionDraft: (options) => {
+    if (!options?.automatic) admissionNavigationRevision += 1
     // A USER-initiated draft open is a navigation choice: the next cold launch
     // should land on the draft, not re-open the session left behind — drop the
     // persisted last-session pointer for this runtime. `automatic: true` marks

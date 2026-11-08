@@ -28,7 +28,8 @@ export const usePinnedSessionDirectory = (selection: PinnedSelection | null): st
     const worktrees = useSessionUIStore((state) => state.availableWorktreesByProject);
     // Managed roots can arrive after a pinned selection was restored.
     React.useSyncExternalStore(subscribeChatsRoot, getChatsRoot, getChatsRoot);
-    useSpaceArchivesStore((state) => state.byDirectory);
+    // A managed root's chats may be an archived space's read-only ones.
+    useSpaceArchivesStore((state) => state.byWorkspaceId);
     // A column only hides an unknown destination. Pins persist across
     // launches, so admitting from here would register folders nobody opened;
     // a live move is admitted by `subscribeSessionAdmission`.

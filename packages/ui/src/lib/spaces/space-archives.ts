@@ -7,6 +7,8 @@
 
 import { create } from 'zustand';
 
+import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
+import { normalizePath } from '@/lib/pathNormalization';
 import { listSpaceArchives, type SpaceArchive } from './spaces-api';
 
 type SpaceArchivesState = {
@@ -52,6 +54,24 @@ export const refreshSpaceArchives = (): Promise<void> => {
 export const ensureSpaceArchives = (): void => {
   if (useSpaceArchivesStore.getState().byWorkspaceId !== null) return;
   void refreshSpaceArchives().catch(() => {});
+};
+
+/**
+ * Whether a directory holds an archived space's chats. An archive names its
+ * workspace, never a path (the host's public workspace DTO carries none), so
+ * this answers through the directories callers have already bound to those
+ * workspaces.
+ */
+export const isSpaceArchiveDirectory = (directory: string | null | undefined): boolean => {
+  const key = normalizePath(directory);
+  if (!key) return false;
+  const archives = useSpaceArchivesStore.getState().byWorkspaceId;
+  if (!archives) return false;
+  for (const workspaceId of archives.keys()) {
+    const archived = resolveWorkspaceDirectory(workspaceId);
+    if (archived && normalizePath(archived) === key) return true;
+  }
+  return false;
 };
 
 /** The deleted space that owns this workspace's chats, or null. */

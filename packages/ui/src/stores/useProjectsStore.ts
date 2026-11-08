@@ -48,6 +48,12 @@ interface ProjectsStore {
   activeProjectId: string | null;
   manualProjectOrder: string[];
 
+  /**
+   * A discovered session's directory joins the project list without a trust
+   * prompt and without becoming active: the session's transcript needs its
+   * project in the sidebar, and the user never opened it.
+   */
+  adoptSessionProject: (sessionId: string, directory: string, isCurrent: () => boolean) => Promise<boolean>;
   addProject: (path: string, options?: { label?: string; id?: string }) => Promise<ProjectEntry | null>;
   addProjects: (paths: string[]) => Promise<ProjectEntry[]>;
   removeProject: (id: string) => void;
@@ -420,6 +426,30 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       return { ok: true, normalizedPath: normalized };
+    },
+
+    adoptSessionProject: async (_sessionId, directory, isCurrent) => {
+      if (!isCurrent()) return false;
+      const { validateProjectPath } = get();
+      const validation = validateProjectPath(directory);
+      if (!validation.ok || !validation.normalizedPath) return false;
+      const normalizedPath = validation.normalizedPath;
+      if (get().projects.some((project) => project.path === normalizedPath)) return true;
+      const now = Date.now();
+      const entry: ProjectEntry = {
+        id: createProjectIdFromPath(normalizedPath),
+        path: normalizedPath,
+        label: deriveProjectLabel(normalizedPath),
+        color: pickAutoColor(get().projects),
+        addedAt: now,
+        lastOpenedAt: now,
+      };
+      if (!isCurrent()) return false;
+      const projects = [...get().projects, entry];
+      set({ projects });
+      persistProjects(projects, get().activeProjectId);
+      void import('@/stores/useGlobalSessionsStore').then(({ useGlobalSessionsStore }) => useGlobalSessionsStore.getState().refreshSessionsForDirectories([normalizedPath]));
+      return true;
     },
 
     addProject: async (path: string, options?: { label?: string; id?: string }) => {

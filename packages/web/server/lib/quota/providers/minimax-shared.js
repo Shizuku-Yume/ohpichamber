@@ -1,3 +1,4 @@
+import { miniMaxStatusError } from './minimax-status.js';
 import { credentialAccessToken } from './selected-credential.js';
 import { buildResult,
 toUsageWindow,
@@ -30,28 +31,28 @@ const pickChatModel = (modelRemains) => {
   return modelRemains[0];
 };
 
-const isUsablePayload = (payload) => {
-  const baseResp = payload?.base_resp;
-  if (baseResp && baseResp.status_code !== 0) return false;
+const hasModelRemains = (payload) => {
   const rems = payload?.model_remains;
   return Array.isArray(rems) && rems.length > 0;
 };
 
-const fetchEndpoint = async (url, apiKey) => {
+const fetchEndpoint = async (url, apiKey, fetchImpl = fetch) => {
   try {
-    const response = await fetch(url, {
+    const response = await fetchImpl(url, {
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: 'Bearer ' + apiKey,
         'Content-Type': 'application/json',
       },
     });
-    if (!response.ok) return null;
+    if (!response.ok) return {};
     const payload = await response.json();
-    if (!isUsablePayload(payload)) return null;
-    return payload;
+    const statusError = miniMaxStatusError(payload?.base_resp);
+    if (statusError) return { statusError };
+    if (!hasModelRemains(payload)) return {};
+    return { payload };
   } catch {
-    return null;
+    return {};
   }
 };
 
@@ -136,8 +137,13 @@ const calculateUsage = (model, isTokenPlan) => {
 export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, tokenPlanUrl, codingPlanUrl }) => {
   const isConfigured = (credential) => Boolean(credentialAccessToken(credential));
 
-  const fetchQuota = async ({ credential } = {}) => {
-    const apiKey = credentialAccessToken(credential);
+  const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {}) => {
+    let apiKey = credentialAccessToken(credential);
+    if (!apiKey && typeof readAuth === "function") {
+      const auth = await Promise.resolve(readAuth()).catch(() => null);
+      const entry = auth?.[providerId] || auth?.["minimax"] || (auth && typeof auth === "object" ? Object.values(auth)[0] : null);
+      apiKey = entry?.key || entry?.token || (typeof entry === "string" ? entry : null);
+    }
 
     if (!apiKey) {
       return buildResult({
@@ -150,11 +156,15 @@ export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, toke
     }
 
     try {
-      let payload = await fetchEndpoint(tokenPlanUrl, apiKey);
+      let { payload, statusError } = await fetchEndpoint(tokenPlanUrl, apiKey, fetchImpl);
       let isTokenPlan = true;
 
       if (!payload) {
-        payload = await fetchEndpoint(codingPlanUrl, apiKey);
+        const next = await fetchEndpoint(codingPlanUrl, apiKey, fetchImpl);
+        payload = next.payload;
+        if (next.statusError) {
+          statusError = next.statusError;
+        }
         isTokenPlan = false;
       }
 
@@ -164,7 +174,7 @@ export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, toke
           providerName,
           ok: false,
           configured: true,
-          error: 'API returned no usable quota data',
+          error: statusError || "API returned no usable quota data",
         });
       }
 
@@ -225,7 +235,7 @@ export const createMiniMaxCodingPlanProvider = ({ providerId, providerName, toke
         providerName,
         ok: false,
         configured: true,
-        error: 'Request failed',
+        error: error.message || 'Request failed',
       });
     }
   };

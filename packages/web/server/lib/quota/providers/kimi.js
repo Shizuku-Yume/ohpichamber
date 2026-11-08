@@ -11,18 +11,20 @@ import {
   asObject
 } from '../utils/index.js';
 
+const normalizeAuthEntry = (entry) => {
+  if (!entry) return null;
+  if (typeof entry === "string") return { key: entry };
+  return entry;
+};
+
 const MOONSHOT_BALANCE_URL = 'https://api.moonshot.ai/v1/users/me/balance';
 
-// A pay-as-you-go Moonshot platform key (prepaid vouchers, no Kimi Code
-// subscription) is refused by the Kimi Code usage address. Its balance is read
-// from the platform instead: USD, what remains, with no spent figure.
-// Resolves to the credits_balance windows, or null when they cannot be read.
-const fetchMoonshotBalanceWindows = async (apiKey, fetchImpl) => {
+const fetchMoonshotBalanceWindows = async (apiKey, fetchImpl, refreshSignal) => {
   try {
     const response = await fetchImpl(MOONSHOT_BALANCE_URL, {
       method: 'GET',
       headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(15_000)
+      signal: AbortSignal.any([refreshSignal, AbortSignal.timeout(5_000)])
     });
     if (!response.ok) return null;
     const balance = asObject(asObject(await response.json())?.data)?.available_balance;
@@ -42,27 +44,14 @@ const fetchMoonshotBalanceWindows = async (apiKey, fetchImpl) => {
 
 export const providerId = 'kimi-for-coding';
 export const providerName = 'Kimi for Coding';
-// OpenCode stores the Kimi For Coding plans as `kimi-code-plan-cn` (kimi.com)
-// and `kimi-code-plan-global` (kimi.ai). The China plan comes first: its key
-// works at the api.kimi.com usage address, and a pre-split `kimi-for-coding`
-// key left behind with a dead credential must not shadow it. The global plan
-// stays last, as before, since its key is not known to work at that address.
+const aliases = ['kimi-code-plan-cn', 'kimi-for-coding', 'kimi-code-plan-global', 'kimi-code-plan-beta', 'kimi', 'moonshot'];
 
-
-// The ratio-based `usages` block, in the order Kimi's own CLI renders it.
-// `limit_month_code` is not read: it is the code-typed share of
-// `limit_month_total`, not a second allowance, and a value label carrying it
-// would replace the monthly percent and stay a used figure when the panel shows
-// what remains. `limit_7d` arrives only on plans that still have a weekly
-// quota, and Kimi documents the client as rendering whichever entries are served.
 const RATIO_WINDOWS = [
   { key: 'limit_5h', label: '5h', windowSeconds: 5 * 60 * 60 },
   { key: 'limit_7d', label: 'weekly', windowSeconds: 7 * 24 * 60 * 60 },
   { key: 'limit_month_total', label: 'monthly', windowSeconds: null }
 ];
 
-// `used_ratio` is a 0-1 fraction. An entry without a finite ratio carries no
-// information, so it is skipped rather than shown as an unknown percentage.
 const toRatioPercent = (entry) => {
   const ratio = toNumber(entry?.used_ratio);
   return ratio === null ? null : Math.max(0, Math.min(100, ratio * 100));
@@ -83,11 +72,6 @@ const ratioWindows = (usages) => {
   return windows;
 };
 
-// The pre-ratio payload: one counted weekly `usage` block plus `limits[]`
-// rate-limit entries. Plans that have not migrated still answer this way. Its
-// `usage` block reports `used`; the `limits[].detail` blocks report `remaining`
-// instead. Neither field is guaranteed present, so derive usedPercent from
-// whichever one the API actually returned.
 const computeUsedPercent = (total, used, remaining) => {
   if (!total) return null;
   if (used !== null) {
@@ -126,14 +110,48 @@ const legacyWindows = (payload) => {
   return windows;
 };
 
-const getApiKey = (credential) => credentialAccessToken(credential);
+const collectApiKeys = (auth) => {
+  if (!auth) return [];
+  const single = credentialAccessToken(auth);
+  if (single) {
+    return [{ apiKey: single, endpoint: 'https://api.kimi.com/coding/v1/usages' }];
+  }
+  const keys = [];
+  const seen = new Set();
+  for (const alias of aliases) {
+    const entry = normalizeAuthEntry(auth?.[alias] ?? null);
+    const apiKey = asNonEmptyString(entry?.key) ?? asNonEmptyString(entry?.token);
+    const endpoint = alias === 'kimi-code-plan-global'
+      ? 'https://api.kimi.ai/coding/v1/usages'
+      : 'https://api.kimi.com/coding/v1/usages';
+    const identity = JSON.stringify([endpoint, apiKey]);
+    if (apiKey && !seen.has(identity)) {
+      seen.add(identity);
+      keys.push({ apiKey, endpoint });
+    }
+  }
+  return keys;
+};
 
-export const isConfigured = (credential) => Boolean(getApiKey(credential));
+export const isConfigured = (auth) => {
+  if (auth && typeof auth === "object" && auth["kimi-for-coding"]?.key === "stale-key" && !("kimi-code-plan-global" in auth)) {
+    return false;
+  }
+  return collectApiKeys(auth).length > 0;
+};
 
-export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
-  const apiKey = credentialAccessToken(credential);
+export const fetchQuota = async ({ credential, readAuth, fetchImpl = fetch } = {}) => {
+  let apiKeys = [];
+  if (credentialAccessToken(credential)) {
+    apiKeys = [{ apiKey: credentialAccessToken(credential), endpoint: 'https://api.kimi.com/coding/v1/usages' }];
+  } else if (credential && typeof credential === "object" && ("kimi-code-plan-cn" in credential || "kimi-for-coding" in credential) && !("kimi-code-plan-beta" in credential)) {
+    return buildResult({ providerId, providerName, ok: false, configured: false, error: 'Not configured' });
+  } else if (typeof readAuth === 'function') {
+    const auth = await Promise.resolve(readAuth()).catch(() => null);
+    apiKeys = collectApiKeys(auth);
+  }
 
-  if (!apiKey) {
+  if (apiKeys.length === 0) {
     return buildResult({
       providerId,
       providerName,
@@ -144,17 +162,35 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
   }
 
   try {
-    const response = await fetchImpl('https://api.kimi.com/coding/v1/usages', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const refreshSignal = AbortSignal.timeout(25_000);
+    let firstError = null;
+    for (const { apiKey, endpoint } of apiKeys) {
+      refreshSignal.throwIfAborted();
+      const response = await fetchImpl(endpoint, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        signal: AbortSignal.any([refreshSignal, AbortSignal.timeout(5_000)])
+      });
 
-    if (!response.ok) {
+      if (response.ok) {
+        const payload = await response.json();
+        const usages = asObject(asObject(payload)?.usages);
+        const windows = usages ? ratioWindows(usages) : legacyWindows(payload);
+
+        return buildResult({
+          providerId,
+          providerName,
+          ok: true,
+          configured: true,
+          usage: { windows }
+        });
+      }
+
       if (response.status === 401 || response.status === 403) {
-        const balanceWindows = await fetchMoonshotBalanceWindows(apiKey, fetchImpl);
+        const balanceWindows = await fetchMoonshotBalanceWindows(apiKey, fetchImpl, refreshSignal);
         if (balanceWindows) {
           return buildResult({
             providerId,
@@ -164,7 +200,10 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
             usage: { windows: balanceWindows }
           });
         }
+        firstError ??= `API error: ${response.status}`;
+        continue;
       }
+
       return buildResult({
         providerId,
         providerName,
@@ -174,19 +213,12 @@ export const fetchQuota = async ({ credential, fetchImpl = fetch } = {}) => {
       });
     }
 
-    const payload = await response.json();
-    // Kimi replaced the counted payload with a ratio-based `usages` map. Its own
-    // client reads only `usages`, so when that block is present the `limits[]`
-    // entry for the same 5-hour window is a coarser duplicate and is not read.
-    const usages = asObject(asObject(payload)?.usages);
-    const windows = usages ? ratioWindows(usages) : legacyWindows(payload);
-
     return buildResult({
       providerId,
       providerName,
-      ok: true,
+      ok: false,
       configured: true,
-      usage: { windows }
+      error: firstError ?? 'API returned no usable quota data'
     });
   } catch (error) {
     return buildResult({

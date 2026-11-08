@@ -10,7 +10,7 @@ import { rotateLogFile } from './cli-log-files.js';
 import { discoverOpenChamberInstanceOnPort, isDesktopRuntimeForPort } from './cli-lifecycle.js';
 import { getPidFilePath, getInstanceFilePath, writePidFile, writeInstanceOptions, removePidFile, removeInstanceFile, isProcessRunning, terminateProcessTree } from './cli-process.js';
 import { isNetworkExposedBindHost } from '../../server/lib/security/bind-host.js';
-import { assignInjectedEnv } from '../../server/lib/injected-env.js';
+import { assignInjectedEnv, injectedEnvKeys, withoutInjectedEnv } from '../../server/lib/injected-env.js';
 import {
   intro as clackIntro,
   outro as clackOutro,
@@ -26,8 +26,7 @@ const DAEMON_READY_TIMEOUT_MS = 30000;
 
 function createServeCommand({
   serverPath,
-  bunBin,
-  getPreferredServerRuntime,
+  getServerRuntimeBinary,
   setForegroundServerActive,
   setForegroundShutdown,
 }) {
@@ -100,8 +99,7 @@ async function serveCommand(options) {
       }
     }
 
-    const preferredRuntime = getPreferredServerRuntime();
-    const runtimeBin = preferredRuntime === 'bun' ? bunBin : process.execPath;
+    const runtimeBin = getServerRuntimeBinary();
 
     ensureLogsDir();
     const initialLogPort = targetPort === 0 ? 'auto' : String(targetPort);
@@ -153,7 +151,9 @@ async function serveCommand(options) {
         );
       }
 
-      // Propagate Host-owned settings before importing the in-process server.
+      // Started from a shell OpenChamber opened, this is a server of its own:
+      // the other instance's web assets and runtime go.
+      for (const key of injectedEnvKeys(process.env)) delete process.env[key];
       assignInjectedEnv(process.env, {
         OPENCHAMBER_UI_PASSWORD: effectiveUiPassword || undefined,
         OPENCHAMBER_HOST: effectiveHost,
@@ -276,8 +276,8 @@ async function serveCommand(options) {
       detached: true,
       windowsHide: true,
       stdio: ['ignore', logFd, logFd, 'ipc'],
-      // Record injected Host settings while preserving the user's environment.
-      env: assignInjectedEnv({ ...process.env }, {
+      // Record injected Host settings while dropping previous instance injections.
+      env: assignInjectedEnv({ ...withoutInjectedEnv(process.env) }, {
         OPENCHAMBER_PORT: String(targetPort),
         OPENCHAMBER_RUNTIME: 'web',
         OPENCHAMBER_HOST: effectiveHost,

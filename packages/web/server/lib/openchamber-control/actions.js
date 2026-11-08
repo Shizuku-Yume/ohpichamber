@@ -236,7 +236,17 @@ export const resolveAgentToolAction = (requested, toolName) => {
 };
 
 /** Everything the callback route will dispatch, whichever tool asked. */
+
+export const OPENCHAMBER_IMAGE_ACTION_DEFINITIONS = Object.freeze([
+  { action: "image.generate", title: "Generate an image", description: "Requires prompt" },
+]);
+
+export const OPENCHAMBER_IMAGE_ACTIONS = Object.freeze(
+  OPENCHAMBER_IMAGE_ACTION_DEFINITIONS.map(({ action }) => action),
+);
+
 export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
+  ...OPENCHAMBER_IMAGE_ACTIONS,
   ...OPENCHAMBER_CONTROL_ACTIONS,
   ...OPENCHAMBER_WEB_ACTIONS,
   ...OPENCHAMBER_MEMORY_ACTIONS,

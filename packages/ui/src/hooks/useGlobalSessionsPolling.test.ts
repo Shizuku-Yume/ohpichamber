@@ -293,7 +293,9 @@ test('the mounted poller recovers real store failure and starts a fresh load on 
     const oldPage = new Promise<SessionList>((resolve) => { resolveOldPage = resolve; });
     list.mockImplementation(() => getRuntimeKey() === 'startup-a' ? oldPage : Promise.resolve(session('new-runtime')));
     await act(async () => clock.fire());
-    expect(useGlobalSessionsStore.getState().status).toBe('loading');
+    // The pass between full loads is a head check: it applies what it reads as
+    // mutations and never flashes the list into a loading state.
+    expect(useGlobalSessionsStore.getState().status).toBe('ready');
     expect(useGlobalSessionsStore.getState().hasLoaded).toBe(true);
     expect(clock.pending.size).toBe(0);
     const switched = subscribeToNextReady();

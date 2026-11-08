@@ -19,47 +19,70 @@
  * three persistent SSE connections, despite each limiter looking bounded.
  */
 
+import { captureRuntimeInstance, subscribeRuntimeEndpointWillChange } from './runtime-switch'
+
 type NetworkLane = {
-  active: number
-  waiters: Array<() => void>
-  activeSessionWaiters: Array<() => void>
+ active: number
+ waiters: Array<(admitted: boolean) => void>
+ activeSessionWaiters: Array<(admitted: boolean) => void>
 }
-const background: NetworkLane = { active: 0, waiters: [], activeSessionWaiters: [] }
-const sessionLists: NetworkLane = { active: 0, waiters: [], activeSessionWaiters: [] }
+const createLane = (): NetworkLane => ({ active: 0, waiters: [], activeSessionWaiters: [] })
+let background = createLane()
+let sessionLists = createLane()
 const TOTAL_LIMIT = 3
 const LANE_LIMIT = 2
 
+// Retire before changed listeners can enqueue the replacement instance's reads.
+subscribeRuntimeEndpointWillChange(({ runtimeKey, previousRuntimeKey }) => {
+ if (runtimeKey === previousRuntimeKey) return
+ const retired = [background, sessionLists]
+ background = createLane()
+ sessionLists = createLane()
+ for (const lane of retired) {
+  for (const waiter of [...lane.activeSessionWaiters, ...lane.waiters]) waiter(false)
+  lane.activeSessionWaiters.length = 0
+  lane.waiters.length = 0
+ }
+})
+
 const pump = () => {
-  while (background.active + sessionLists.active < TOTAL_LIMIT) {
-    // Background reads never occupy the reserved list slot. Either lane may
-    // use a second slot, without serializing independent background queries.
-    const lane = sessionLists.active < LANE_LIMIT && sessionLists.waiters.length > 0
-      ? sessionLists
-      : background.active < LANE_LIMIT && (background.activeSessionWaiters.length > 0 || background.waiters.length > 0)
-        ? background
-        : null
-    if (!lane) return
-    const next = lane.activeSessionWaiters.shift() ?? lane.waiters.shift()
-    if (!next) return
-    lane.active += 1
-    next()
-  }
+ while (background.active + sessionLists.active < TOTAL_LIMIT) {
+  // Background reads never occupy the reserved list slot. Either lane may
+  // use a second slot, without serializing independent background queries.
+  const lane = sessionLists.active < LANE_LIMIT && sessionLists.waiters.length > 0
+   ? sessionLists
+   : background.active < LANE_LIMIT && (background.activeSessionWaiters.length > 0 || background.waiters.length > 0)
+    ? background
+    : null
+  if (!lane) return
+  const next = lane.activeSessionWaiters.shift() ?? lane.waiters.shift()
+  if (!next) return
+  lane.active += 1
+  next(true)
+ }
 }
 
-async function run<T>(lane: NetworkLane, task: () => Promise<T>, priority: "normal" | "active-session"): Promise<T> {
-  await new Promise<void>((resolve) => {
-    if (priority === "active-session") lane.activeSessionWaiters.push(resolve)
-    else lane.waiters.push(resolve)
-    pump()
-  })
-  try {
-    return await task()
-  } finally {
-    lane.active -= 1
-    pump()
-  }
+async function run<T>(lane: NetworkLane, task: () => Promise<T>, priority: "normal" | "active-session"): Promise<T | undefined> {
+ const isCurrent = captureRuntimeInstance()
+ // Explicit construction: the UI's lib target is ES2022, which predates
+ // `Promise.withResolvers`.
+ let admit: (admitted: boolean) => void = () => undefined
+ const admission = new Promise<boolean>((resolve) => { admit = resolve })
+ const queue = priority === "active-session" ? lane.activeSessionWaiters : lane.waiters
+ queue.push(admit)
+ pump()
+ if (!await admission) return undefined
+ try {
+  if (!isCurrent()) return undefined
+  const result = await task()
+  return isCurrent() ? result : undefined
+ } finally {
+  lane.active -= 1
+  pump()
+ }
 }
 
+/** Undefined means retired work, never a successful empty response. */
 export const runBackgroundNetworkTask = <T>(task: () => Promise<T>, priority: "normal" | "active-session" = "normal") => run(background, task, priority)
 export const runSessionListNetworkTask = <T>(task: () => Promise<T>) => run(sessionLists, task, "normal")
 
@@ -67,6 +90,6 @@ const snapshot = (lane: NetworkLane) => ({ active: lane.active, waiting: lane.wa
 
 /** Test-only visibility into both lanes. */
 export const getBackgroundNetworkState = () => ({
-  ...snapshot(background),
-  sessionLists: snapshot(sessionLists),
+ ...snapshot(background),
+ sessionLists: snapshot(sessionLists),
 })

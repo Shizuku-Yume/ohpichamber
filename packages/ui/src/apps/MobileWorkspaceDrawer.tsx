@@ -298,7 +298,12 @@ export const MobileWorkspaceDrawer: React.FC<{
     {visitedTabs.has('terminal') ? (
      <div className={cn('h-full', tab !== 'terminal' && 'hidden')}>
       <ErrorBoundary>
-       <TerminalView visible={open && tab === 'terminal'} />
+       <TerminalView
+        visible={open && tab === 'terminal'}
+        // Closing the last tab tears this surface down before the store could
+        // open a replacement shell in a modal the user asked to leave.
+        onLastTabClosed={onClose}
+       />
       </ErrorBoundary>
      </div>
     ) : null}

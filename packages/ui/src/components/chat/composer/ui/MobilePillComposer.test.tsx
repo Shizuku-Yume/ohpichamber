@@ -18,7 +18,17 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
     // @ts-expect-error test mock
     win.AudioContext = class {} as unknown as typeof AudioContext;
     useConfigStore.setState({ dictationEnabled: options.dictationEnabled ?? true });
-    const values = { window: win, document: win.document, navigator: win.navigator, localStorage: win.localStorage, IS_REACT_ACT_ENVIRONMENT: true };
+    // The pill's tooltip trigger and icon read the browser's element classes,
+    // so the DOM globals have to come from this window, not bun's.
+    const values = {
+        window: win, document: win.document, navigator: win.navigator, localStorage: win.localStorage,
+        Node: win.Node, Element: win.Element, HTMLElement: win.HTMLElement, SVGElement: win.SVGElement,
+        Event: win.Event, MouseEvent: win.MouseEvent, KeyboardEvent: win.KeyboardEvent,
+        requestAnimationFrame: win.requestAnimationFrame.bind(win),
+        cancelAnimationFrame: win.cancelAnimationFrame.bind(win),
+        getComputedStyle: win.getComputedStyle.bind(win),
+        IS_REACT_ACT_ENVIRONMENT: true,
+    };
     const previous = new Map(Object.keys(values).map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
     for (const [key, value] of Object.entries(values)) Object.defineProperty(globalThis, key, { configurable: true, value });
     const container = document.createElement('div');
@@ -52,12 +62,14 @@ const renderPill = async (options: { hasContent: boolean; newSessionDraftOpen: b
         </ThemeSystemProvider>
         ));
         if (options.hasContent && options.canAbort) {
-            // While a turn runs the draft can only be queued, never sent past it.
+            // While a turn runs the pill's follow-up action goes through the
+            // composer's primary action, which routes the draft to the queue
+            // under the follow-up setting instead of sending it past the turn.
             const queue = container.querySelector<HTMLButtonElement>('[aria-label="Queue message"]');
             expect(queue).not.toBeNull();
             await act(async () => { queue?.click(); });
-            expect(queued).toBe(1);
-            expect(primaryActions).toBe(0);
+            expect(primaryActions).toBe(1);
+            expect(queued).toBe(0);
         } else if (options.hasContent) {
             const send = container.querySelector<HTMLButtonElement>('[aria-label="Send message"]');
             expect(send).not.toBeNull();

@@ -123,6 +123,9 @@ spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   }
   if (path.endsWith('/session')) return Response.json({ data: [] });
   if (path.endsWith('/config')) return Response.json([]);
+  // The project registry is instance settings: without it the session is
+  // not admitted, so the composer has no session and shows no builtins.
+  if (path === '/api/config/settings') return Response.json({ projects: [{ path: '/workspace', label: 'Workspace' }], activeProjectId: 'path_L3dvcmtzcGFjZQ' });
   return Response.json({});
 });
 
@@ -171,6 +174,9 @@ type TypingCost = {
 
 /** Mounts a fresh composer, types KEYSTROKES characters, and reports the per-keystroke cost. */
 const measureTyping = async (scenario: 'session' | 'draft'): Promise<TypingCost> => {
+  // Both scenarios share one process: text persisted by the previous one
+  // would be restored into this composer and measured as typing.
+  localStorage.removeItem('openchamber.chatDrafts.v2');
   useDirectoryStore.setState({ currentDirectory: '/workspace' });
   useSessionUIStore.setState(scenario === 'session'
     ? { currentSessionId: 'ses_typing', currentSessionDirectory: '/workspace' }
@@ -201,6 +207,13 @@ const measureTyping = async (scenario: 'session' | 'draft'): Promise<TypingCost>
       );
     });
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    // The project registry arrives with the settings sync, and a session is
+    // only shown once its folder is admitted: let it install before typing so
+    // the run measures keystrokes, not bootstrap.
+    const { useProjectsStore } = await import('@/stores/useProjectsStore');
+    for (let index = 0; index < 50 && useProjectsStore.getState().projects.length === 0; index += 1) {
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    }
 
     const content = container.querySelector<HTMLElement>('.cm-content');
     const view = content ? EditorView.findFromDOM(content) : null;
@@ -317,7 +330,9 @@ test('worker catalog builtins appear without disk templates and context output i
   const wrap = (content: ReactNode) => <RuntimeAPIContext.Provider value={runtimeAPIs}><ThemeSystemProvider><I18nProvider><SyncProvider directory="/workspace">{content}</SyncProvider></I18nProvider></ThemeSystemProvider></RuntimeAPIContext.Provider>;
   try {
     await act(async () => root.render(wrap(<CommandAutocomplete searchQuery="" onCommandSelect={() => {}} onClose={() => {}} />)));
-    const names = [...container.querySelectorAll('.typography-ui-label .font-medium')].map(item => item.textContent?.slice(1));
+    // The row's name span is its `font-medium` child, inside the scroll list.
+    const names = [...container.querySelectorAll('[data-slot="scrollable-overlay"] .font-medium, .overlay-scrollbar-target .font-medium')]
+      .map(item => item.textContent?.replace(/^\//, ''));
     expect(names.filter(name => builtinCommands.includes(name ?? ''))).toEqual([...builtinCommands].sort());
     expect(names).not.toContain('ssh');
     expect(names).toContain('deploy');

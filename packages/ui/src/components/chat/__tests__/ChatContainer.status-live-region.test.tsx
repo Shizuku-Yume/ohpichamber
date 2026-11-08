@@ -91,6 +91,7 @@ const { RuntimeAPIContext } = await import('@/contexts/runtimeAPIContext');
 const { ChatContainer } = await import('../ChatContainer');
 const { SyncProvider, useDirectoryStore } = await import('@/sync/sync-context');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
+const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { nativeClient, nativeHistory, nativeSnapshot } = await import('@/sync/session-message-loader-test-fixtures');
 
 // Mounting the column reads only the runtime descriptor and theme/i18n; no
@@ -131,6 +132,8 @@ const Seed = () => {
 
 describe('chat status live region on an accepted new-session run', () => {
   beforeEach(() => {
+    // The column is shown for a session whose folder is an admitted project.
+    useProjectsStore.setState({ projects: [{ id: 'project-a', path: DIRECTORY, label: 'Workspace' }], activeProjectId: 'project-a' });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);

@@ -232,6 +232,8 @@ export type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
  /** An extension was installed, updated, approved, paused or removed: the catalog changed. */
  | { type: 'guests-changed' }
+ /** A terminal session was created, exited, restarted or removed. */
+ | { type: 'terminal-sessions-changed' }
  /** A workflow run's state as the server last wrote it; the card and panel follow it. */
  | { type: 'workflow-run'; run: WorkflowRun }
  /** A workflow run the user deleted. */
@@ -459,6 +461,10 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   for (const listener of listeners) listener({ type: 'guests-changed' });
   return;
 }
+ if (envelope.type === 'openchamber:terminal-sessions-changed') {
+  for (const listener of listeners) listener({ type: 'terminal-sessions-changed' });
+  return;
+ }
  if (envelope.type === 'openchamber:workflow-run') {
   const parsed = workflowRunSchema.safeParse(getEventProperties(envelope.properties)?.run);
   if (parsed.success) for (const listener of listeners) listener({ type: 'workflow-run', run: parsed.data });

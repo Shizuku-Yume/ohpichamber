@@ -13,6 +13,7 @@ import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT } from '@/lib/fontOptions';
 import { convertThemeToXterm } from '@/lib/terminalTheme';
 import { usePageColors } from '@/hooks/usePageColors';
 import { TerminalViewport, type TerminalController } from '@/components/terminal/TerminalViewport';
+import type { RuntimeAPIs } from '@/lib/api/types';
 import { focusChatInput } from '@/components/chat/composer/editor/dom';
 import type { MonoFontOption } from '@/lib/fontOptions';
 import type { TerminalTheme } from '@/lib/terminalTheme';
@@ -68,6 +69,8 @@ type TerminalTabViewportProps = {
  fontFamily: string;
  fontSize: number;
  enableTouchScroll: boolean;
+ /** Linux's native PRIMARY buffer, absent in browsers and remote pages. */
+ clipboard: RuntimeAPIs['clipboard'];
 };
 
 /**
@@ -78,7 +81,7 @@ type TerminalTabViewportProps = {
  */
 const TerminalTabViewport: React.FC<TerminalTabViewportProps> = ({
  directory, tabId, isActive, isTerminalVisible, registerController,
- onInput, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, enableTouchScroll,
+ onInput, onResize, onProvisionalSize, theme, monoFont, fontFamily, fontSize, enableTouchScroll, clipboard,
 }) => {
  // Scrollback is a leaf subscription: streaming output must not rerender the tab strip.
  const chunks = useTerminalStore((s) => s.getBuffer(directory, tabId).chunks);
@@ -99,6 +102,7 @@ const TerminalTabViewport: React.FC<TerminalTabViewportProps> = ({
     enableTouchScroll={enableTouchScroll}
     autoFocus={isTerminalVisible && isActive}
     isVisible={isTerminalVisible && isActive}
+    clipboard={clipboard}
    />
   </div>
  );
@@ -116,7 +120,7 @@ const TerminalTabIcon: React.FC<{ iconName: IconName; active: boolean }> = ({ ic
 
 export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, onLastTabClosed }) => {
  const { t } = useI18n();
- const { terminal, runtime } = useRuntimeAPIs();
+ const { terminal, runtime, clipboard } = useRuntimeAPIs();
  const { currentTheme } = useThemeSystem();
  const pageBackground = usePageColors().background;
  const terminalAppearanceRef = React.useRef<{ themeMode: 'light' | 'dark'; terminalBackground: string; terminalForeground: string }>({ themeMode: 'dark', terminalBackground: '', terminalForeground: '' });
@@ -1381,6 +1385,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
        fontFamily={resolvedFontStack}
        fontSize={terminalFontSize}
        enableTouchScroll={useTouchTerminalInput}
+       clipboard={clipboard}
       />
      )) : null}
     </div>

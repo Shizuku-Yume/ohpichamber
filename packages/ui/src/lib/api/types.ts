@@ -2711,7 +2711,17 @@ export interface LinearAPI {
   preferencesSet(preferences: LinearPreferences): Promise<LinearPreferences>;
 }
 
+/** Linux's PRIMARY buffer; only a local desktop page reaches it. */
+export interface ClipboardAPI {
+  selection: {
+    readText(): Promise<string>;
+    writeText(text: string): Promise<void>;
+  };
+}
+
 export interface RuntimeAPIs {
+  /** Linux desktop's native PRIMARY buffer; absent in browsers and remote pages. */
+  clipboard?: ClipboardAPI;
   /** Native local picker. Web/mobile fall back to their browser file input. */
   themeFiles?: {
     pick(): Promise<{ status: 'unsupported' } | { status: 'picked'; file: { name: string; size: number; text: string } | null }>;

@@ -7,7 +7,7 @@ import { DockedPanelSurfaceContext } from '@/hooks/usePageColors';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/useUIStore';
 import { WORK_STATUS_PANEL_WIDTH } from './useWorkStatusVisibility';
-import { setWorkStatusReserved } from '@/components/layout/rightSlot';
+import { setWorkStatusColumn } from '@/components/layout/rightSlot';
 import { LAYOUT_ANIMATION_EASING } from '@/lib/layoutAnimation';
 import { useLayoutAnimationMs } from '@/hooks/useLayoutAnimationMs';
 import { WorkStatusSectionsDialog } from './WorkStatusSectionsDialog';
@@ -31,6 +31,11 @@ type Props = {
   * the card too, so closing the panel goes straight back to the card.
   */
  reserved?: boolean;
+ /**
+  * Inline only: with `reserved`, the card keeps its column beside the open
+  * context panel instead of the panel replacing it.
+  */
+ besidePanel?: boolean;
  /**
   * Floats over the transcript instead of sitting beside it, for when the chat
   * is too narrow to give it a column of its own.
@@ -60,7 +65,7 @@ const PANEL_TRANSITION_EASING = LAYOUT_ANIMATION_EASING;
  * eat a visible slice of every row's trailing value, and the shadows already
  * say there is more to see.
  */
-export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible, reserved = false, _besidePanel = false, repositoryEnabled = true, overlay = false }) => {
+export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible, reserved = false, besidePanel = false, repositoryEnabled = true, overlay = false }) => {
  const { t } = useI18n();
  // The card's fade and lift follow the side columns' animation setting.
  const panelTransitionMs = useLayoutAnimationMs();
@@ -111,11 +116,12 @@ export const WorkStatusPanel: React.FC<Props> = ({ sessionId, directory, visible
  // sections all reported nothing gives it back, as its collapse did before.
  const empty = contentMounted && renderedSections === 0 && !allSectionsHidden;
  const wantsColumn = !overlay && reserved && !empty;
+ const wantsColumnBesidePanel = wantsColumn && besidePanel;
  React.useLayoutEffect(() => {
   if (overlay) return undefined;
-  setWorkStatusReserved(wantsColumn);
-  return () => setWorkStatusReserved(false);
- }, [overlay, wantsColumn]);
+  setWorkStatusColumn(wantsColumn, wantsColumnBesidePanel);
+  return () => setWorkStatusColumn(false, false);
+ }, [overlay, wantsColumn, wantsColumnBesidePanel]);
 
  const restore = React.useCallback((node: HTMLElement | null) => {
   if (!node) return;

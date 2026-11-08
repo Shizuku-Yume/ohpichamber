@@ -56,8 +56,8 @@ type LastReplyTokens = {
  */
 export const computeLastReplyTokens = (messages: readonly ContextFillMessage[]): LastReplyTokens | null => {
   const fill = findLatestContextFill(messages);
-  const tokens = fill ? messages[fill.index]?.tokens : undefined;
-  if (!tokens) return null;
-  const hitRate = computeCacheHitRate(tokens);
-  return { output: tokens.output ?? 0, cacheHitPercent: hitRate.hasInput ? hitRate.percent : null };
+  const usage = fill ? messages[fill.index]?.usage : undefined;
+  if (!usage) return null;
+  const hitRate = computeCacheHitRate(usage);
+  return { output: usage.output ?? 0, cacheHitPercent: hitRate.hasInput ? hitRate.percent : null };
 };

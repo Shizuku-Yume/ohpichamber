@@ -340,8 +340,14 @@ export const useQuotaStore = create<QuotaStore>()(
   )
 );
 
-export const useQuotaAutoRefresh = () => {
+/**
+ * Keeps the usage readouts current while one is on screen. `visible` lets a
+ * surface that is mounted but hidden (a collapsed panel, a closed sheet) hold
+ * no refresh demand; the interval runs only while someone needs it.
+ */
+export const useQuotaAutoRefresh = (visible = true) => {
   React.useEffect(() => {
+    if (!visible) return undefined;
     quotaAutoRefreshConsumers += 1;
     if (quotaAutoRefreshInterval === null) {
       quotaAutoRefreshInterval = window.setInterval(() => {
@@ -359,7 +365,7 @@ export const useQuotaAutoRefresh = () => {
         quotaAutoRefreshInterval = null;
       }
     };
-  }, []);
+  }, [visible]);
 };
 
 

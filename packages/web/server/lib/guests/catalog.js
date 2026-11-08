@@ -1,23 +1,8 @@
-const toPublicNotifications = (contribution) => {
-  if (!contribution || typeof contribution !== "object") return contribution;
-  const token = contribution.token ? {
-    scheme: contribution.token.scheme ?? "raw",
-    ...(contribution.token.scopes ? { scopes: [...contribution.token.scopes] } : {}),
-    username: contribution.token.scheme === "basic",
-  } : undefined;
-  return {
-    label: contribution.label,
-    instances: contribution.instances,
-    ...(token ? { token } : {}),
-  };
-};
-const toPublicQuota = (val) => (val && typeof val === "object" ? { ...val } : val);
-const toPublicTracker = (val) => (val && typeof val === "object" ? { ...val } : val);
-const toPublicSessionEvents = (val) => (val && typeof val === "object" ? { ...val } : val);
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicService, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
+import { hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
+  toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
 import { parseManifestJson } from '@openchamber/sdk/schemas';
 
 import { listRelativeGuestScriptHrefs, resolveGuestHtmlRelativePath } from './html-tokens.js';
@@ -52,18 +37,6 @@ const MIME_BY_EXT = {
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
   '.png': 'image/png',
-};
-
-const toPublicIntegrationWithSecrets = (integration) => {
-  const pub = toPublicIntegration(integration);
-  if (pub && Array.isArray(integration?.settings)) {
-    pub.settings = integration.settings.map((field) => ({
-      id: field.id,
-      label: field.label,
-      ...(field.secret ? { secret: true } : {}),
-    }));
-  }
-  return pub;
 };
 
 export const isGuestPanelId = (value) => typeof value === 'string' && PANEL_ID.test(value);
@@ -195,28 +168,9 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   } catch {
     return { ok: false, code: 'invalid-manifest' };
   }
-  let rawJson = null;
-  try {
-    rawJson = JSON.parse(raw);
-  } catch {
-    return { ok: false, code: 'invalid-manifest' };
-  }
-  let parsed = parseManifestJson(raw);
+  const parsed = parseManifestJson(raw);
   if (!parsed.ok) {
-    const rawC = rawJson?.openchamber?.contributes ?? rawJson?.contributes;
-    if (rawC && (rawC.sessionEvents || rawC.quota || rawC.notifications || rawC.tracker || rawC.blocks) && rawC.panel?.id && rawC.panel?.name && rawC.panel?.icon) {
-      parsed = {
-        ok: true,
-        version: rawJson.version,
-        manifest: {
-          apiVersion: rawJson.openchamber?.apiVersion ?? rawJson.apiVersion ?? 1,
-          engines: rawJson.openchamber?.engines ?? rawJson.engines,
-          contributes: rawC,
-        },
-      };
-    } else {
-      return { ok: false, code: parsed.code === 'invalid-opencode-plugin' ? 'invalid-opencode-plugin' : 'invalid-manifest' };
-    }
+    return { ok: false, code: 'invalid-manifest' };
   }
   if (!skipEngineCheck && !parsed.version) {
     return { ok: false, code: 'invalid-manifest' };
@@ -360,32 +314,6 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   }
   if (parsed.manifest.contributes.integration) {
     guest.integration = parsed.manifest.contributes.integration;
-    const rawSettings = rawJson?.openchamber?.contributes?.integration?.settings ?? rawJson?.contributes?.integration?.settings;
-    if (Array.isArray(rawSettings) && Array.isArray(guest.integration.settings)) {
-      guest.integration.settings = guest.integration.settings.map((s, idx) => ({
-        ...s,
-        ...(rawSettings[idx]?.secret === true ? { secret: true } : {}),
-      }));
-    }
-  }
-  const rawContributes = rawJson?.openchamber?.contributes ?? rawJson?.contributes ?? {};
-  if (rawContributes.sessionEvents && !guest.sessionEvents) {
-    guest.sessionEvents = rawContributes.sessionEvents;
-  }
-  if (rawContributes.notifications && !guest.notifications) {
-    guest.notifications = rawContributes.notifications;
-  }
-  if (rawContributes.tracker && !guest.tracker) {
-    guest.tracker = rawContributes.tracker;
-  }
-  if (rawContributes.quota && !guest.quota) {
-    guest.quota = rawContributes.quota;
-  }
-  if (rawContributes.opencodePlugin && !guest.opencodePlugin) {
-    if (!await resolveOpenCodePluginFolder(fs, packageRoot, rawContributes.opencodePlugin)) {
-      return { ok: false, code: 'invalid-opencode-plugin' };
-    }
-    guest.opencodePlugin = rawContributes.opencodePlugin;
   }
   if (parsed.manifest.contributes.filesystem?.length) {
     guest.filesystem = [...parsed.manifest.contributes.filesystem];
@@ -447,11 +375,15 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
     guest.skills = parsed.manifest.contributes.skills;
   }
   // The package's OpenCode plugin folder: a directory with a package.json naming an entry that exists, or the install fails.
-  if (parsed.manifest.contributes.opencodePlugin) {
-    if (!await resolveOpenCodePluginFolder(fs, packageRoot, parsed.manifest.contributes.opencodePlugin)) {
+  let rawParsed;
+  try { rawParsed = JSON.parse(raw); } catch {}
+  const rawPlugin = parsed.manifest.contributes.opencodePlugin
+    ?? (rawParsed?.openchamber?.contributes?.opencodePlugin ?? rawParsed?.contributes?.opencodePlugin);
+  if (rawPlugin) {
+    if (!await resolveOpenCodePluginFolder(fs, packageRoot, rawPlugin)) {
       return { ok: false, code: 'invalid-opencode-plugin' };
     }
-    guest.opencodePlugin = parsed.manifest.contributes.opencodePlugin;
+    guest.opencodePlugin = rawPlugin;
   }
   return { ok: true, guest };
 };
@@ -547,7 +479,7 @@ export const toPublicGuest = (guest) => {
     row.attachEntry = guest.attachEntry;
   }
   if (guest.integration) {
-    row.integration = toPublicIntegrationWithSecrets(guest.integration);
+    row.integration = toPublicIntegration(guest.integration);
   }
   if (Array.isArray(guest.filesystem) && guest.filesystem.length > 0) {
     row.filesystem = [...guest.filesystem];
@@ -573,15 +505,9 @@ export const toPublicGuest = (guest) => {
   if (Array.isArray(guest.tools) && guest.tools.length > 0) {
     row.tools = guest.tools.map((tool) => ({ ...tool }));
   }
-  const requested = new Set(requestedGuestCapabilities(guest));
-  if (guest.opencodePlugin) requested.add("opencodePlugin");
-  if (guest.sessionEvents?.content === true) requested.add("transcript");
-  if (guest.sessionControl) requested.add("sessionControl");
-  if (guest.instructions) requested.add("instructions");
-  if (guest.skills) requested.add("skills");
   const granted = Array.isArray(guest.capabilityGrants) ? guest.capabilityGrants : [];
   row.capabilities = {
-    requested: [...requested],
+    requested: requestedGuestCapabilities(guest),
     granted,
   };
   if (guest.storageId && requestedGuestCapabilities(guest).every((capability) => granted.includes(capability))) {
@@ -627,6 +553,9 @@ export const toPublicGuest = (guest) => {
   }
   if (guest.opencodePlugin) {
     row.opencodePlugin = true;
+    if (!row.capabilities.requested.includes("opencodePlugin")) {
+      row.capabilities.requested.push("opencodePlugin");
+    }
   }
   if (guest.mentions) {
     row.mentions = { label: guest.mentions.label };

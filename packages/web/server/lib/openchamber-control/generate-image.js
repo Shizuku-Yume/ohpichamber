@@ -1,16 +1,14 @@
 /**
  * `image.generate`: an image model the user chose in Settings makes or edits
- * pictures for any agent, through OpenCode's `POST
- * /api/experimental/generate/image` (OpenCode 2.2) or the canonical OMP
- * `POST /api/agent/v1/workspaces/:id/images/generate` route (commit 5469bb0).
+ * pictures for any agent, through the canonical OMP Bun Agent Service endpoint
+ * `POST /api/agent/v1/workspaces/:id/images/generate` (commit 5469bb0).
  *
- * The bytes go to a file, never back into the conversation: a picture inline
- * would be stored with the session and synced to every client, a few
- * megabytes per call. The agent gets the path and reads the file when it
- * wants to look. Without a path of its own the file lands in OpenCode's
- * temporary folder, which OpenCode tells agents they may read and write
- * without asking. The chat draws the files from the call's result
- * (`../markdown-image-grants/routes.js`).
+ * The bytes go to a host-owned file, never back into the conversation: an
+ * inline picture would be stored with the session and synced to every client,
+ * several megabytes per call. The agent receives the saved file path and reads
+ * it on demand. Without a requested path of its own, the file lands in
+ * OpenChamber's host-owned generated images directory. The chat draws the files
+ * from the call's result envelope (`../markdown-image-grants/routes.js`).
  */
 
 import { constants as fsConstants } from 'node:fs';
@@ -18,18 +16,22 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { z } from 'zod';
+import {
+  ImageGenerateRequestSchema,
+  ImageGenerateResultSchema,
+  ProblemDetailsSchema,
+} from '@openchamber/agent-contract';
 
 import { asNonEmptyString } from '../shared/guards.js';
 import { OpenChamberControlError } from './error.js';
 
-/** OpenCode's temporary folder (`paths.tmp` of `/api/info`), the default home of a generated file. */
-export const GENERATED_IMAGE_DIRECTORY = path.join(os.tmpdir(), 'opencode', 'generated-images');
+/** Host-owned generated images folder. */
+export const GENERATED_IMAGE_DIRECTORY = path.join(os.tmpdir(), 'openchamber', 'generated-images');
 
 const MAX_PROMPT_LENGTH = 8_000;
 const MAX_SOURCE_IMAGES = 8;
 const MAX_COUNT = 4;
 const SOURCE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
-// Image generation over remote providers routinely takes 30-90s.
 const GENERATION_TIMEOUT_MS = 5 * 60 * 1000;
 
 const EXTENSION_BY_MIME = {
@@ -50,6 +52,8 @@ const countSchema = z.coerce.number().int().min(1).max(MAX_COUNT);
 const sourcesSchema = z.array(z.string().min(1)).max(MAX_SOURCE_IMAGES);
 
 const pad = (value, length = 2) => String(value).padStart(length, '0');
+
+/** File-safe local timestamp matching the user's clock that sorts chronologically. */
 const stamp = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}-${pad(date.getMilliseconds(), 3)}`;
 
 const detectMime = (bytes) => {
@@ -93,21 +97,7 @@ const targetPath = ({ requested, directory, index, count, mime, now }) => {
   return path.join(parsed.dir, `${parsed.name}${suffix}${ext}`);
 };
 
-const toControlError = (error, model) => {
-  const tag = error?._tag;
-  const message = asNonEmptyString(error?.message) || 'Image generation failed';
-  if (tag === 'ModelNotFoundError') {
-    return new OpenChamberControlError(`The image model ${model} is no longer available. Ask the user to choose another in Settings > General > OpenChamber Tools`, 409);
-  }
-  if (tag === 'UnsupportedModelError') {
-    return new OpenChamberControlError(`${model} cannot generate images. Ask the user to choose an image model in Settings > General > OpenChamber Tools`, 409);
-  }
-  if (tag === 'ProviderRequestError') return new OpenChamberControlError(`The provider refused: ${message}`, 502);
-  if (tag === 'InvalidRequestError') return new OpenChamberControlError(message, 400);
-  if (tag === 'ServiceUnavailableError') return new OpenChamberControlError(message, 503);
-  return new OpenChamberControlError(message, 502);
-};
-
+/** `provider/model`; the model id may hold slashes of its own. */
 const parseModel = (value) => {
   const text = asNonEmptyString(value);
   const separator = text ? text.indexOf('/') : -1;
@@ -115,8 +105,22 @@ const parseModel = (value) => {
   return { providerID: text.slice(0, separator), id: text.slice(separator + 1) };
 };
 
-export const createImageGenerationAction = ({ service, getClient, resolveWorkspaceId, readSettings, fsPromises, now = () => new Date() }) => (
-  async (input, { directory, workspaceId, signal } = {}) => {
+/**
+ * Creates the Host `image.generate` action backed exclusively by the canonical
+ * OMP Bun Agent Service endpoint.
+ */
+export const createImageGenerationAction = ({
+  service,
+  resolveWorkspaceScope,
+  readSettings,
+  fsPromises,
+  now = () => new Date(),
+}) => {
+  if (!service || typeof service.request !== 'function') {
+    throw new TypeError('Agent Service is required for image generation action');
+  }
+
+  return async (input, { directory, workspaceId, sessionId, signal } = {}) => {
     const settings = await readSettings().catch(() => null);
     if (settings?.agentImageToolEnabled !== true) {
       throw new OpenChamberControlError('The image tool is turned off in OpenChamber settings', 403);
@@ -153,81 +157,84 @@ export const createImageGenerationAction = ({ service, getClient, resolveWorkspa
     if (requestedPath) resolvePath(requestedPath, workDirectory);
     const images = await Promise.all(sources.map((source) => readSourceImage(fsPromises, source, workDirectory)));
 
+    // Resolve authoritative workspace from Host session or directory context
+    let effectiveWorkspaceId = asNonEmptyString(workspaceId);
+    if (!effectiveWorkspaceId && typeof resolveWorkspaceScope === 'function') {
+      const scope = await resolveWorkspaceScope({ directory: workDirectory, sessionId });
+      effectiveWorkspaceId = asNonEmptyString(scope?.workspaceId) || (typeof scope === 'string' ? asNonEmptyString(scope) : null);
+    }
+    if (!effectiveWorkspaceId) {
+      throw new OpenChamberControlError('Cannot determine authoritative workspace scope for image generation', 400);
+    }
+
+    const canonicalPayload = ImageGenerateRequestSchema.parse({
+      workspaceId: effectiveWorkspaceId,
+      selection: { providerId: model.providerID, modelId: model.id },
+      prompt,
+      ...(images.length > 0 ? { inputImages: images.map((img) => ({ data: img.data, mimeType: img.mime })) } : {}),
+      ...(aspect ? { aspectRatio: aspect } : {}),
+      ...(resolution ? { imageSize: resolution } : {}),
+      ...(count > 1 ? { count } : {}),
+    });
+
     const deadline = AbortSignal.timeout(GENERATION_TIMEOUT_MS);
     const combinedSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
-    let result;
+    let res;
     try {
-      if (service) {
-        const effectiveWorkspaceId = workspaceId
-          || (typeof resolveWorkspaceId === "function" ? await resolveWorkspaceId(workDirectory) : null)
-          || "default";
-        const res = await service.request("/api/agent/v1/workspaces/" + encodeURIComponent(effectiveWorkspaceId) + "/images/generate", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            workspaceId: effectiveWorkspaceId,
-            selection: { providerId: model.providerID, modelId: model.id },
-            prompt,
-            ...(images.length > 0 ? { inputImages: images.map((img) => ({ data: img.data, mimeType: img.mime })) } : {}),
-            ...(aspect ? { aspectRatio: aspect } : {}),
-            ...(resolution ? { imageSize: resolution } : {}),
-            ...(count > 1 ? { count } : {}),
-          }),
-          signal: combinedSignal,
-        });
-        const body = await res.json().catch(() => null);
-        if (!res.ok) {
-          const msg = body?.error?.message || body?.message || body?.error || "Image generation failed";
-          const code = body?.error?.code || body?.code;
-          if (code === "MODEL_UNAVAILABLE") {
-            throw new OpenChamberControlError(`The image model ${modelName} is disabled or unavailable. Ask the user to choose another in Settings > General > OpenChamber Tools`, 409);
-          }
-          if (code === "PROVIDER_UNAVAILABLE") {
-            throw new OpenChamberControlError(`The provider for ${modelName} is disabled or has no usable credentials`, 409);
-          }
-          throw new OpenChamberControlError(msg, res.status >= 400 && res.status < 500 ? res.status : 502);
-        }
-        result = {
-          images: (body?.images || []).map((img) => ({
-            data: img.data,
-            mime: img.mimeType || img.mime || "image/png",
-          })),
-          cost: body?.cost,
-        };
-      } else if (typeof getClient === "function") {
-        const client = await getClient();
-        const request = { model, prompt };
-        if (images.length > 0) request.images = images;
-        if (count > 1) request.n = count;
-        if (aspect) request.aspect = aspect;
-        if (resolution) request.resolution = resolution;
-        result = await client.experimental.generate.image(request, { signal: combinedSignal });
-      } else {
-        throw new OpenChamberControlError("Image generation service is not available", 503);
-      }
+      res = await service.request(`/api/agent/v1/workspaces/${encodeURIComponent(effectiveWorkspaceId)}/images/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(canonicalPayload),
+        signal: combinedSignal,
+      });
     } catch (error) {
       if (deadline.aborted) throw new OpenChamberControlError(`${modelName} did not finish within 5 minutes`, 504);
       if (signal?.aborted) throw error;
-      if (error instanceof OpenChamberControlError) throw error;
-      throw toControlError(error, modelName);
+      throw new OpenChamberControlError(error?.message || 'Image generation request failed', 502);
     }
 
-    const generated = Array.isArray(result?.images) ? result.images : [];
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      const parsedProblem = ProblemDetailsSchema.safeParse(body);
+      if (parsedProblem.success) {
+        const problem = parsedProblem.data;
+        if (problem.code === 'MODEL_UNAVAILABLE') {
+          throw new OpenChamberControlError(`The image model ${modelName} is disabled or unavailable. Ask the user to choose another in Settings > General > OpenChamber Tools`, 409);
+        }
+        if (problem.code === 'PROVIDER_UNAVAILABLE') {
+          throw new OpenChamberControlError(`The provider for ${modelName} is disabled or has no usable credentials`, 409);
+        }
+        throw new OpenChamberControlError(problem.detail || problem.title || 'Image generation failed', problem.status || res.status);
+      }
+      const message = body?.error?.message || body?.message || body?.detail || 'Image generation failed';
+      throw new OpenChamberControlError(message, res.status >= 400 && res.status < 500 ? res.status : 502);
+    }
+
+    const parsedResult = ImageGenerateResultSchema.parse(body);
+    if (parsedResult.model.providerId !== model.providerID || parsedResult.model.modelId !== model.id) {
+      throw new OpenChamberControlError(`Generated image response model does not match requested model ${modelName}`, 502);
+    }
+
+    const generated = parsedResult.images;
     if (generated.length === 0) throw new OpenChamberControlError(`${modelName} returned no image`, 502);
     const moment = now();
     const saved = [];
     for (const [index, image] of generated.entries()) {
-      const file = targetPath({ requested: requestedPath, directory: workDirectory, index, count: generated.length, mime: image.mime, now: moment });
+      const file = targetPath({ requested: requestedPath, directory: workDirectory, index, count: generated.length, mime: image.mimeType, now: moment });
       await fsPromises.mkdir(path.dirname(file), { recursive: true });
-      await fsPromises.writeFile(file, Buffer.from(image.data, "base64"));
-      saved.push({ path: file, mime: image.mime });
+      await fsPromises.writeFile(file, Buffer.from(image.data, 'base64'));
+      saved.push({ path: file, mime: image.mimeType });
     }
     const output = { model: modelName, images: saved };
-    if (Number.isFinite(result.cost)) output.cost = result.cost;
+    if (parsedResult.text) output.text = parsedResult.text;
     return output;
-  }
-);
+  };
+};
 
+/**
+ * The files an `image.generate` result names, from the text the tool stored:
+ * the plugin's JSON envelope. Anything else names none.
+ */
 export const generatedImagePaths = (text) => {
   let envelope;
   try {

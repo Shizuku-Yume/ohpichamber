@@ -1,11 +1,6 @@
 import { OpenChamberControlError } from '../openchamber-control/error.js';
-import { SERVICE_EVENT_DATA_MAX as sdkEventDataMax, SERVICE_EVENT_RATE_MAX as sdkEventRateMax, SERVICE_HOST_PATH as sdkHostPath, isGuestApproved, requestedGuestCapabilities } from '@openchamber/sdk';
-const SERVICE_EVENT_DATA_MAX = sdkEventDataMax ?? 65_536;
-const SERVICE_EVENT_RATE_MAX = sdkEventRateMax ?? 30;
-const SERVICE_HOST_PATH = sdkHostPath ?? '/api/guests/service-host';
-import { serviceHostCallSchema as sdkServiceHostCallSchema } from '@openchamber/sdk/schemas';
-import { serviceHostCallSchema as fallbackServiceHostCallSchema } from './service-host-schemas.js';
-const serviceHostCallSchema = sdkServiceHostCallSchema ?? fallbackServiceHostCallSchema;
+import { SERVICE_EVENT_DATA_MAX, SERVICE_EVENT_RATE_MAX, SERVICE_HOST_PATH, isGuestApproved, requestedGuestCapabilities } from '@openchamber/sdk';
+import { serviceHostCallSchema } from '@openchamber/sdk/schemas';
 
 import { setHostCallbackRoute } from './host-callback.js';
 import { guestIdOfServiceToken } from './service.js';
@@ -165,12 +160,7 @@ export const createServiceHostApi = ({ listGuests, control, instructions, readSe
     if (!guestId) return fail(401, 'HANDLE_UNKNOWN', 'This service is no longer running.');
     const guests = await listGuests();
     const guest = guests.find((row) => row.id === guestId);
-    if (!guest || guest.enabled === false || (() => {
-      const requested = new Set(requestedGuestCapabilities(guest) ?? []);
-      if (guest.sessionControl) requested.add("sessionControl");
-      if (guest.instructions) requested.add("instructions");
-      return !isGuestApproved({ requested: [...requested], granted: guest.capabilityGrants ?? [] });
-    })()) {
+    if (!guest || guest.enabled === false || !isGuestApproved({ requested: requestedGuestCapabilities(guest), granted: guest.capabilityGrants ?? [] })) {
       return fail(403, 'DISABLED', 'The extension is paused or not approved.');
     }
     try {

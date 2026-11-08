@@ -2,37 +2,22 @@ import crypto from 'node:crypto';
 
 import {
   SOURCE_CONTROL_OUTBOUND_METHODS,
-  TRACKER_PROVIDER_IDLE_MS as sdkTrackerProviderIdleMs,
-  TRACKER_PROVIDER_LIVE_SUMMARIES_MAX as sdkTrackerProviderLiveSummariesMax,
-  TRACKER_PROVIDER_PATH as sdkTrackerProviderPath,
-  TRACKER_PROVIDER_RESPONSE_MAX as sdkTrackerProviderResponseMax,
-  TRACKER_PROVIDER_WIRE_VERSION as sdkTrackerProviderWireVersion,
+  TRACKER_PROVIDER_IDLE_MS,
+  TRACKER_PROVIDER_LIVE_SUMMARIES_MAX,
+  TRACKER_PROVIDER_PATH,
+  TRACKER_PROVIDER_RESPONSE_MAX,
+  TRACKER_PROVIDER_WIRE_VERSION,
   isGuestApproved,
-  isTrackerProviderWriteMethod as sdkIsTrackerProviderWriteMethod,
+  isTrackerProviderWriteMethod,
   requestedGuestCapabilities,
   serviceProvides,
   trackerProviderIdOf,
-  trackerProviderTimeoutMs as sdkTrackerProviderTimeoutMs,
+  trackerProviderTimeoutMs,
 } from '@openchamber/sdk';
-import { trackerProviderSchemasV1 as sdkSchemas } from '@openchamber/sdk/schemas';
-import { trackerProviderSchemasV1 as fallbackSchemas } from './tracker-provider-schemas.js';
-const schemas = sdkSchemas ?? fallbackSchemas;
+import { trackerProviderSchemasV1 as schemas } from '@openchamber/sdk/schemas';
 
 import { GuestOAuthError } from '../guests/oauth.js';
 import { proxyGuestServiceRequest } from '../guests/service.js';
-const fallbackIsTrackerProviderWriteMethod = (method) => method === "items.updateState" || method === "comments.create";
-const isTrackerProviderWriteMethod = typeof sdkIsTrackerProviderWriteMethod === "function" ? sdkIsTrackerProviderWriteMethod : fallbackIsTrackerProviderWriteMethod;
-
-const fallbackTrackerProviderTimeoutMs = (method) => {
-  if (method === "auth.probe" || method === "auth.verify") return 15_000;
-  return (typeof isTrackerProviderWriteMethod === "function" && isTrackerProviderWriteMethod(method)) ? 30_000 : 15_000;
-};
-const trackerProviderTimeoutMs = typeof sdkTrackerProviderTimeoutMs === "function" ? sdkTrackerProviderTimeoutMs : fallbackTrackerProviderTimeoutMs;
-const TRACKER_PROVIDER_WIRE_VERSION = sdkTrackerProviderWireVersion ?? 1;
-const TRACKER_PROVIDER_PATH = sdkTrackerProviderPath ?? "/tracker";
-const TRACKER_PROVIDER_RESPONSE_MAX = sdkTrackerProviderResponseMax ?? 2_000_000;
-const TRACKER_PROVIDER_IDLE_MS = sdkTrackerProviderIdleMs ?? 10 * 60_000;
-const TRACKER_PROVIDER_LIVE_SUMMARIES_MAX = sdkTrackerProviderLiveSummariesMax ?? 50;
 import { extensionProviderId, isProviderUsername } from '../source-control/provider-id.js';
 import { TRACKER_ACCOUNTS_MAX } from './extension-accounts.js';
 import { createDescriptorUrlMatcher } from './extension-descriptor.js';

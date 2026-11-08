@@ -94,6 +94,7 @@ import {
  useParentSession,
  useSessionDirectory,
  useSession,
+ useDirectorySync,
 } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
@@ -208,7 +209,7 @@ type ChatViewportProps = {
  messageListRef: React.RefObject<MessageListHandle | null>;
  registerList: (list: TimelineListHandle | null) => void;
  onIsAtEndChange: (isAtEnd: boolean) => void;
- onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
+ onListMetricsChange: (metrics: { readonly headerSize: number; readonly footerSize: number }) => void;
  onTimelineDataChange: () => void;
  renderedMessages: CanonicalMessage[];
  isLoadingOlder: boolean;
@@ -1201,7 +1202,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   isFollowingProgrammatically,
   showScrollButton,
   userOwnsScroll,
-  viewportAtEnd,
   nearContentStart,
  } = useChatTimelineScroll({
   currentSessionId,
@@ -1872,7 +1872,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               ref={registerFloatingPanelClearanceReader}
               className={cn(
                'oc-recap-hint pointer-events-none absolute bottom-full inset-x-0 mb-2 transition-opacity duration-300 ease-out',
-               !viewportAtEnd && 'opacity-0',
+               !isPinned && 'opacity-0',
               )}
               style={{ transform: 'translateY(calc(-1 * var(--chat-floating-panel-clearance, 0px)))' }}
              >

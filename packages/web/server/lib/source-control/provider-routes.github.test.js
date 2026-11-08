@@ -472,6 +472,11 @@ describe('GET /api/source-control/github/references', () => {
         checks: expect.objectContaining({ state: 'failure', failure: 1, total: 1 }),
         mergeable: false,
         mergeableState: 'dirty',
+        // The sidebar summary always carries the merge-queue and auto-merge
+        // slots, so a card can show them without a second read.
+        isInMergeQueue: false,
+        mergeQueueEntry: null,
+        autoMergeRequest: null,
       }],
     });
 
@@ -517,6 +522,9 @@ describe('GET /api/source-control/github/references', () => {
       checks: expect.objectContaining({ state: 'failure', failure: 1, total: 1 }),
       mergeable: false,
       mergeableState: 'dirty',
+      isInMergeQueue: false,
+      mergeQueueEntry: null,
+      autoMergeRequest: null,
     }]);
   });
 

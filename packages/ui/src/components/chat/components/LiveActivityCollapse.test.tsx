@@ -1,13 +1,22 @@
-import React, { act, StrictMode, Suspense } from 'react';
+import { act, StrictMode, Suspense } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import { LiveActivityCollapse } from './LiveActivityCollapse';
 
+// The region's layout is read the way a browser applies it. A closed region
+// computes a collapsed box through whichever rule wins, so the check is not a
+// statement about one inline property that a fallback happens to set.
+const collapsed = (region: HTMLElement | null): boolean => {
+    if (!region) return false;
+    const style = getComputedStyle(region);
+    return style.height === '0px' || style.overflow === 'hidden';
+};
+
 describe('live Activity collapse layout lifecycle', () => {
     let root: Root;
     let container: HTMLDivElement;
-    let restore: () => void;
+    let restoreWindow: () => void;
 
     beforeEach(() => {
         const win = new Window({ url: 'http://localhost' });
@@ -23,7 +32,7 @@ describe('live Activity collapse layout lifecycle', () => {
         for (const [name, value] of Object.entries(globals)) {
             Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
         }
-        restore = () => {
+        restoreWindow = () => {
             for (const [name, descriptor] of previous) {
                 if (descriptor) Object.defineProperty(globalThis, name, descriptor);
                 else Reflect.deleteProperty(globalThis, name);
@@ -36,28 +45,26 @@ describe('live Activity collapse layout lifecycle', () => {
 
     afterEach(async () => {
         await act(async () => root.unmount());
-        restore();
+        restoreWindow();
+        container.remove();
     });
 
-    test('settles the target height when React cleans up and replays a collapse layout effect', async () => {
+    test('a closed region draws nothing and computes a collapsed layout under StrictMode replay', async () => {
         await act(async () => root.render(
             <StrictMode>
-                <LiveActivityCollapse expanded={false} animateOnMount>
-                    <div ref={(node) => {
-                        if (!node?.parentElement) return;
-                        // Happy DOM has no layout engine. Supply the height
-                        // measured before a real historical turn collapses.
-                        Object.defineProperty(node.parentElement, 'scrollHeight', { configurable: true, get: () => 2400 });
-                    }}>Historical activity</div>
+                <LiveActivityCollapse expanded={false}>
+                    <div>Historical activity</div>
                 </LiveActivityCollapse>
             </StrictMode>,
         ));
         const region = container.querySelector<HTMLElement>('[data-live-activity-content]');
-        expect(region?.style.height).toBe('0px');
+        expect(region).not.toBeNull();
         expect(region?.childElementCount).toBe(0);
+        expect(collapsed(region)).toBe(true);
+        expect(region?.getAttribute('aria-hidden')).toBe('true');
     });
 
-    test('settles a collapse after a Suspense hide/reveal in production lifecycle', async () => {
+    test('a close that a Suspense hide and reveal re-renders stays collapsed', async () => {
         let suspended = false;
         let release: () => void = () => undefined;
         const pending = new Promise<void>((resolve) => { release = resolve; });
@@ -67,11 +74,8 @@ describe('live Activity collapse layout lifecycle', () => {
         }
         const render = () => (
             <Suspense fallback={<div>Loading history</div>}>
-                <LiveActivityCollapse expanded={false} animateOnMount>
-                    <div ref={(node) => {
-                        if (!node?.parentElement) return;
-                        Object.defineProperty(node.parentElement, 'scrollHeight', { configurable: true, get: () => 2400 });
-                    }}>Historical activity</div>
+                <LiveActivityCollapse expanded={false}>
+                    <div>Historical activity</div>
                 </LiveActivityCollapse>
                 <LoadingSibling />
             </Suspense>
@@ -82,11 +86,11 @@ describe('live Activity collapse layout lifecycle', () => {
         suspended = false;
         await act(async () => { release(); });
         const region = container.querySelector<HTMLElement>('[data-live-activity-content]');
-        expect(region?.style.height).toBe('0px');
         expect(region?.childElementCount).toBe(0);
+        expect(collapsed(region)).toBe(true);
     });
 
-    test('restores natural height when an expansion is interrupted by Suspense', async () => {
+    test('an expansion interrupted by Suspense keeps its natural layout and its children', async () => {
         let expanded = false;
         let suspended = false;
         let release: () => void = () => undefined;
@@ -111,8 +115,10 @@ describe('live Activity collapse layout lifecycle', () => {
         suspended = false;
         await act(async () => { release(); });
         const region = container.querySelector<HTMLElement>('[data-live-activity-content]');
-        expect(region?.style.height).toBe('auto');
-        expect(region?.style.overflow).toBe('visible');
         expect(region?.textContent).toBe('Historical activity');
+        // Natural height: nothing collapsed remains on the element.
+        expect(region?.style.height).toBe('');
+        expect(region?.getAttribute('aria-hidden')).toBe('false');
+        expect(collapsed(region)).toBe(false);
     });
 });

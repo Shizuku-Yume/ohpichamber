@@ -62,18 +62,30 @@ describe('shortcut schema', () => {
     expect(getShortcutAction('focus_input')?.category).toBe('session');
   });
 
+  test('palette commands are bindable and every one starts unassigned', () => {
+    const palette = SHORTCUT_SCHEMA.filter((action) => action.settingsLabelKey?.includes('open_new_worktree_dialog') || PALETTE_ROWS.has(action.id));
+    expect(palette.map((action) => action.id).sort()).toEqual([...PALETTE_ROWS].sort());
+    for (const action of palette) {
+      expect(action.defaultBinding).toBe(UNASSIGNED_SHORTCUT);
+      expect(action.customizable).toBe(true);
+    }
+  });
+
   test('splits the held digit prefixes between session tabs and surfaces', () => {
     expect(getShortcutAction('switch_session_tab')?.defaultBinding).toBe('mod');
     expect(getShortcutAction('switch_context_surface')?.defaultBinding).toBe('mod+alt');
   });
 
-  test('every action ships with a default binding', () => {
-    // Palette-only commands live outside this schema entirely; an action in
-    // the schema without a binding would be dead weight in Settings.
-    // Desktop-category actions are the exception: they register as OS-level
-    // global shortcuts, not in-app bindings, so their default is unassigned.
+  test('every action ships with a default binding, except the ones nobody chose', () => {
+    // A command with no default of its own still belongs in the schema so it
+    // can be bound at all: the palette's commands, and the desktop-category
+    // actions that register as OS-level global shortcuts. Everything else
+    // without a binding would be dead weight in Settings.
+    const unassignedOnPurpose = new Set(['UNASSIGNED_SHORTCUT']);
+    void unassignedOnPurpose;
     for (const action of SHORTCUT_SCHEMA) {
       if (action.category === 'desktop') continue;
+      if (isPaletteCommandWithoutDefault(action.id)) continue;
       expect(getEffectiveShortcutCombo(action.id)).not.toBe('');
     }
   });

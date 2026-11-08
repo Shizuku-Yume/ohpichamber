@@ -11,6 +11,7 @@ import { ChildStoreManager } from "./child-store"
 import { installHookTestDom } from "../components/session/sidebar/test-utils/testDom"
 import { useSessionUIStore } from "./session-ui-store"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useProjectsStore } from "@/stores/useProjectsStore"
 import { deferred, nativeClient as createCanonicalClient, nativeSnapshot } from './session-message-loader-test-fixtures'
 import { fileTreeChanges, subscribeFileTreeChanges } from "@/lib/fileTreeChanges"
 
@@ -42,6 +43,14 @@ describe("SyncProvider native scope and selection boundaries", () => {
     const Probe = () => { manager = useChildStoreManager(); return null }
     const directory = "/workspace/actual"
     const sessionId = "selected-native"
+    // The selected session's folder is a registered project, and the session
+    // is in the global index: admission reads that record's directory, so a
+    // selection made with a guessed hint survives the real one arriving.
+    useProjectsStore.setState({
+      projects: [{ id: 'project-1', path: directory, label: 'Workspace' }],
+      activeProjectId: 'project-1',
+    })
+    useGlobalSessionsStore.getState().upsertSession(session(sessionId, 'workspace-actual'))
     try {
       await act(async () => root.render(<SyncProvider client={createNativeClient()} directory="/workspace/guess"><Probe /></SyncProvider>))
       if (!manager) throw new Error("Directory manager was not mounted")
@@ -54,6 +63,7 @@ describe("SyncProvider native scope and selection boundaries", () => {
       await act(async () => { useSessionUIStore.getState().setCurrentSession(null); await Promise.resolve() })
       expect(store.getState().message[sessionId]).toHaveLength(10)
     } finally {
+      useProjectsStore.setState({ projects: [], activeProjectId: null })
       useSessionUIStore.getState().setCurrentSession(null)
       await act(async () => root.unmount())
       dom.restore()

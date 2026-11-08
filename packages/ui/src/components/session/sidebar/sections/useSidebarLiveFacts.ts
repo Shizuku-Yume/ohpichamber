@@ -22,7 +22,7 @@ const EMPTY_PR_WATCHES: PrWatchMap = new Map();
 const selectTurnOutcomeKey = (state: ReturnType<typeof useGlobalSessionsStore.getState>): string => {
  const unread: string[] = [];
  const failed: string[] = [];
- for (const session of state.entityById.values()) {
+ for (const session of state.entityById?.values() ?? []) {
   if (session.parentSessionId || session.archivedAt !== undefined) continue;
   if (isSessionUnread(session)) unread.push(session.sessionId);
   if (session.runtimeStatus === 'unavailable') failed.push(session.sessionId);

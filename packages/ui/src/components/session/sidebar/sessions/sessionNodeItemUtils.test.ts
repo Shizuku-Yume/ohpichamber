@@ -79,7 +79,7 @@ describe('selectBlockingBadgeSessionScopes', () => {
   test('an expanded row still counts the workflow agents under it, which have no rows', () => {
     const agentChild = withDirectory({ session: session('agent-child', 'Agent child'), children: [], worktree: null }, '/repo');
     const agent = withDirectory({
-      session: { ...session('agent', 'Agent'), metadata: { openchamber: { kind: 'workflow-agent' } } },
+      session: { ...session('agent', 'Agent'), metadata: { openchamber: { kind: 'workflow-agent' } } as unknown as Session['metadata'] },
       children: [agentChild],
       worktree: null,
     }, '/repo');

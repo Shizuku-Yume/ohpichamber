@@ -16,13 +16,13 @@ type Translate = (key: I18nKey, params?: I18nParams) => string;
 export type SessionSubtreeAction = 'archive' | 'delete';
 
 export type SessionSubtreeStore = Pick<
-  SessionUIState,
-  'archiveSession' | 'archiveSessions' | 'deleteSession' | 'deleteSessions'
+ SessionUIState,
+ 'archiveSession' | 'archiveSessions' | 'deleteSession' | 'deleteSessions'
 >;
 
 type SessionSubtreeOutcome = {
-  succeededIds: string[];
-  failedIds: string[];
+ succeededIds: string[];
+ failedIds: string[];
 };
 
 /**
@@ -38,29 +38,29 @@ type SessionSubtreeOutcome = {
  * kept for delete, which removes the whole subtree.
  */
 export const collectSessionSubtreeIds = (
-  rootId: string,
-  knownDescendantIds: readonly string[],
-  includeArchived: boolean,
+ rootId: string,
+ knownDescendantIds: readonly string[],
+ includeArchived: boolean,
 ): string[] => {
-  const ids = new Set(knownDescendantIds);
-  const descendants = readGlobalSessionLineage().descendantsOf(rootId, includeArchived ? 'all' : 'activeThroughArchived');
-  for (const descendant of descendants) ids.add(descendant.sessionId);
-  ids.delete(rootId);
-  return [...ids];
+ const ids = new Set(knownDescendantIds);
+ const descendants = readGlobalSessionLineage().descendantsOf(rootId, includeArchived ? 'all' : 'activeThroughArchived');
+ for (const descendant of descendants) ids.add(descendant.sessionId);
+ ids.delete(rootId);
+ return [...ids];
 };
 
 /** Rendered subsessions only; the global action lineage adds linked reviews. */
 export const collectParentIdDescendantIds = (root: SessionNode): string[] => {
-  const ids: string[] = [];
-  const visit = (node: SessionNode): void => {
-    for (const child of node.children) {
-      if (child.session.parentID !== node.session.id) continue;
-      ids.push(child.session.id);
-      visit(child);
-    }
-  };
-  visit(root);
-  return ids;
+ const ids: string[] = [];
+ const visit = (node: SessionNode): void => {
+  for (const child of node.children) {
+   if (child.session.parentSessionId !== node.session.sessionId) continue;
+   ids.push(child.session.sessionId);
+   visit(child);
+  }
+ };
+ visit(root);
+ return ids;
 };
 
 /**
@@ -71,15 +71,15 @@ export const collectParentIdDescendantIds = (root: SessionNode): string[] => {
  * user acts.
  */
 export const buildActiveSessionTreeFromCache = (root: Session): SessionNode => {
-  const childrenByParentId = new Map<string, Session[]>();
-  for (const session of readGlobalSessionLineage().descendantsOf(root.sessionId, 'active')) {
-    const parentId = session.parentSessionId;
-    if (!parentId) continue;
-    const siblings = childrenByParentId.get(parentId) ?? [];
-    siblings.push(session);
-    childrenByParentId.set(parentId, siblings);
-  }
-  return buildActiveSessionNode(childrenByParentId, root);
+ const childrenByParentId = new Map<string, Session[]>();
+ for (const session of readGlobalSessionLineage().descendantsOf(root.sessionId, 'active')) {
+  const parentId = session.parentSessionId;
+  if (!parentId) continue;
+  const siblings = childrenByParentId.get(parentId) ?? [];
+  siblings.push(session);
+  childrenByParentId.set(parentId, siblings);
+ }
+ return buildActiveSessionNode(childrenByParentId, root);
 };
 
 /**
@@ -89,18 +89,18 @@ export const buildActiveSessionTreeFromCache = (root: Session): SessionNode => {
  * subagents along.
  */
 export const collectSessionMoveDescendants = (root: Session, knownDescendants: readonly Session[]): Session[] => {
-  const descendants = new Map(knownDescendants.map((session) => [session.sessionId, session]));
-  for (const descendant of readGlobalSessionLineage().descendantsOf(root.sessionId, 'active')) {
-    if (!descendants.has(descendant.sessionId)) descendants.set(descendant.sessionId, descendant);
-  }
-  descendants.delete(root.sessionId);
-  return [...descendants.values()];
+ const descendants = new Map(knownDescendants.map((session) => [session.sessionId, session]));
+ for (const descendant of readGlobalSessionLineage().descendantsOf(root.sessionId, 'active')) {
+  if (!descendants.has(descendant.sessionId)) descendants.set(descendant.sessionId, descendant);
+ }
+ descendants.delete(root.sessionId);
+ return [...descendants.values()];
 };
 
 // The first recorded server answer for the failed ids, as a toast description.
 const failureDescription = (ids: readonly string[], t: Translate): { description: string } | undefined => {
-  const error = takeSessionActionFailure(ids);
-  return error ? { description: describeSessionActionError(error, t) } : undefined;
+ const error = takeSessionActionFailure(ids);
+ return error ? { description: describeSessionActionError(error, t) } : undefined;
 };
 
 /**
@@ -113,36 +113,36 @@ const failureDescription = (ids: readonly string[], t: Translate): { description
  * deleted btw fork, are not undone.
  */
 export const undoArchive = async (
-  archivedIds: readonly string[],
-  reopenId: string | null,
-  runtimeKey: string,
-  t: Translate,
+ archivedIds: readonly string[],
+ reopenId: string | null,
+ runtimeKey: string,
+ t: Translate,
 ): Promise<void> => {
-  const { restoredIds, failedIds } = await useSessionUIStore.getState()
-    .unarchiveSessions([...archivedIds], { expectedRuntimeKey: runtimeKey, undo: true });
-  if (failedIds.length > 0) {
-    toast.error(t('sessions.sidebar.session.restore.error'), failureDescription(failedIds, t));
-  }
-  if (!reopenId || !restoredIds.includes(reopenId)) return;
-  const ui = useSessionUIStore.getState();
-  if (ui.currentSessionId !== null || getRuntimeKey() !== runtimeKey) return;
-  const session = useGlobalSessionsStore.getState().entityById.get(reopenId);
-  if (session) ui.setCurrentSession(reopenId, resolveGlobalSessionDirectory(session));
+ const { restoredIds, failedIds } = await useSessionUIStore.getState()
+  .unarchiveSessions([...archivedIds], { expectedRuntimeKey: runtimeKey, undo: true });
+ if (failedIds.length > 0) {
+  toast.error(t('sessions.sidebar.session.restore.error'), failureDescription(failedIds, t));
+ }
+ if (!reopenId || !restoredIds.includes(reopenId)) return;
+ const ui = useSessionUIStore.getState();
+ if (ui.currentSessionId !== null || getRuntimeKey() !== runtimeKey) return;
+ const session = useGlobalSessionsStore.getState().entityById.get(reopenId);
+ if (session) ui.setCurrentSession(reopenId, resolveGlobalSessionDirectory(session));
 };
 
 /** Toast options offering Undo for an archive that just succeeded. */
 export const archiveUndoToastOptions = (
-  archivedIds: readonly string[],
-  reopenId: string | null,
-  t: Translate,
+ archivedIds: readonly string[],
+ reopenId: string | null,
+ t: Translate,
 ): ExternalToast => {
-  const runtimeKey = getRuntimeKey();
-  return {
-    action: {
-      label: t('sessions.sidebar.session.archive.undo'),
-      onClick: () => { void undoArchive(archivedIds, reopenId, runtimeKey, t); },
-    },
-  };
+ const runtimeKey = getRuntimeKey();
+ return {
+  action: {
+   label: t('sessions.sidebar.session.archive.undo'),
+   onClick: () => { void undoArchive(archivedIds, reopenId, runtimeKey, t); },
+  },
+ };
 };
 
 /**
@@ -156,57 +156,57 @@ export const archiveUndoToastOptions = (
  * and a partial failure says how many sessions were left behind.
  */
 export const runSessionSubtreeAction = async (
-  action: SessionSubtreeAction,
-  session: Session,
-  descendantIds: readonly string[],
-  store: SessionSubtreeStore,
-  t: Translate,
+ action: SessionSubtreeAction,
+ session: Session,
+ descendantIds: readonly string[],
+ store: SessionSubtreeStore,
+ t: Translate,
 ): Promise<SessionSubtreeOutcome> => {
-  const hardDelete = action === 'delete';
-  const reopenId = useSessionUIStore.getState().currentSessionId === session.sessionId ? session.sessionId : null;
-  if (descendantIds.length === 0) {
-    const success = hardDelete
-      ? await store.deleteSession(session.sessionId)
-      : await store.archiveSession(session.sessionId);
-    if (success) {
-      if (hardDelete) toast.success(t('sessions.sidebar.session.delete.success'));
-      else toast.success(t('sessions.sidebar.session.archive.success'), archiveUndoToastOptions([session.sessionId], reopenId, t));
-      return { succeededIds: [session.sessionId], failedIds: [] };
-    }
-    toast.error(hardDelete
-      ? t('sessions.sidebar.session.delete.error')
-      : t('sessions.sidebar.session.archive.error'), failureDescription([session.sessionId], t));
-    return { succeededIds: [], failedIds: [session.sessionId] };
+ const hardDelete = action === 'delete';
+ const reopenId = useSessionUIStore.getState().currentSessionId === session.sessionId ? session.sessionId : null;
+ if (descendantIds.length === 0) {
+  const success = hardDelete
+   ? await store.deleteSession(session.sessionId)
+   : await store.archiveSession(session.sessionId);
+  if (success) {
+   if (hardDelete) toast.success(t('sessions.sidebar.session.delete.success'));
+   else toast.success(t('sessions.sidebar.session.archive.success'), archiveUndoToastOptions([session.sessionId], reopenId, t));
+   return { succeededIds: [session.sessionId], failedIds: [] };
   }
+  toast.error(hardDelete
+   ? t('sessions.sidebar.session.delete.error')
+   : t('sessions.sidebar.session.archive.error'), failureDescription([session.sessionId], t));
+  return { succeededIds: [], failedIds: [session.sessionId] };
+ }
 
-  const ids = [session.sessionId, ...descendantIds];
-  if (hardDelete) {
-    // Delete root + all descendants individually. If the server
-    // cascade-deletes some children before we get to them, 404 is
-    // treated as success by deleteSession and no rollback occurs.
-    const { deletedIds, failedIds } = await store.deleteSessions(ids);
-    if (failedIds.length === 0) {
-      const totalDeleted = deletedIds.length;
-      toast.success(totalDeleted === 1
-        ? t('sessions.sidebar.bulkActions.deletedSingle', { count: totalDeleted })
-        : t('sessions.sidebar.bulkActions.deletedPlural', { count: totalDeleted }));
-    } else {
-      toast.error(t('sessions.sidebar.session.delete.error'), failureDescription(failedIds, t));
-    }
-    return { succeededIds: deletedIds, failedIds };
+ const ids = [session.sessionId, ...descendantIds];
+ if (hardDelete) {
+  // Delete root + all descendants individually. If the server
+  // cascade-deletes some children before we get to them, 404 is
+  // treated as success by deleteSession and no rollback occurs.
+  const { deletedIds, failedIds } = await store.deleteSessions(ids);
+  if (failedIds.length === 0) {
+   const totalDeleted = deletedIds.length;
+   toast.success(totalDeleted === 1
+    ? t('sessions.sidebar.bulkActions.deletedSingle', { count: totalDeleted })
+    : t('sessions.sidebar.bulkActions.deletedPlural', { count: totalDeleted }));
+  } else {
+   toast.error(t('sessions.sidebar.session.delete.error'), failureDescription(failedIds, t));
   }
+  return { succeededIds: deletedIds, failedIds };
+ }
 
-  const { archivedIds, failedIds } = await store.archiveSessions(ids);
-  if (archivedIds.length > 0) {
-    toast.success(archivedIds.length === 1
-      ? t('sessions.sidebar.bulkActions.archivedSingle', { count: archivedIds.length })
-      : t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }),
-    archiveUndoToastOptions(archivedIds, reopenId, t));
-  }
-  if (failedIds.length > 0) {
-    toast.error(failedIds.length === 1
-      ? t('sessions.sidebar.bulkActions.failedArchiveSingle', { count: failedIds.length })
-      : t('sessions.sidebar.bulkActions.failedArchivePlural', { count: failedIds.length }), failureDescription(failedIds, t));
-  }
-  return { succeededIds: archivedIds, failedIds };
+ const { archivedIds, failedIds } = await store.archiveSessions(ids);
+ if (archivedIds.length > 0) {
+  toast.success(archivedIds.length === 1
+   ? t('sessions.sidebar.bulkActions.archivedSingle', { count: archivedIds.length })
+   : t('sessions.sidebar.bulkActions.archivedPlural', { count: archivedIds.length }),
+   archiveUndoToastOptions(archivedIds, reopenId, t));
+ }
+ if (failedIds.length > 0) {
+  toast.error(failedIds.length === 1
+   ? t('sessions.sidebar.bulkActions.failedArchiveSingle', { count: failedIds.length })
+   : t('sessions.sidebar.bulkActions.failedArchivePlural', { count: failedIds.length }), failureDescription(failedIds, t));
+ }
+ return { succeededIds: archivedIds, failedIds };
 };

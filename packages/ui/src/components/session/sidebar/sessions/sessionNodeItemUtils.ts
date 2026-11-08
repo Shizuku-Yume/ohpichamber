@@ -133,7 +133,7 @@ export const selectBlockingBadgeSessionScopes = (
    sessionIDsByDirectory.set(directory, sessionIDs);
   }
   for (const child of current.children) {
-   if (current === node && isExpanded && child.session.metadata?.openchamber?.kind !== 'workflow-agent') continue;
+   if (current === node && isExpanded && (child.session.metadata?.openchamber as { kind?: string } | undefined)?.kind !== 'workflow-agent') continue;
    visit(child);
   }
  };

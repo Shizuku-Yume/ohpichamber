@@ -2,7 +2,7 @@ import type { Session } from '@openchamber/agent-contract';
 import type { SessionNode } from './types';
 
 const isWorkflowAgent = (session: Session): boolean => (
- session.metadata?.openchamber?.kind === 'workflow-agent'
+ ((session.metadata?.openchamber as { kind?: string } | undefined)?.kind === 'workflow-agent')
 );
 
 /**

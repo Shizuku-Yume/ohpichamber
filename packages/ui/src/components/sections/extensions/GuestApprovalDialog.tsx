@@ -13,6 +13,7 @@ import {
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { useI18n, type I18nKey } from '@/lib/i18n';
+import { SESSION_EVENT_LABEL_KEYS } from '@/lib/guests/session-event-labels';
 import type { InstalledGuest } from '@/lib/guests/types';
 
 const CAPABILITY_ROWS = {
@@ -37,6 +38,8 @@ type GuestApprovalDialogProps = {
   busy: boolean;
   onApprove: (guest: InstalledGuest) => void;
   onDecline: (guest: InstalledGuest) => void;
+  /** Leaves an installed package waiting; a package just added has only Remove. */
+  onLater?: () => void;
   onDismiss: () => void;
 };
 
@@ -45,7 +48,7 @@ type GuestApprovalDialogProps = {
  * install that requests any capability, and again from the card whenever a
  * newer package asks for more than the user approved.
  */
-export const GuestApprovalDialog: React.FC<GuestApprovalDialogProps> = ({ guest, busy, onApprove, onDecline, onDismiss }) => {
+export const GuestApprovalDialog: React.FC<GuestApprovalDialogProps> = ({ guest, busy, onApprove, onDecline, onLater, onDismiss }) => {
   const { t } = useI18n();
   const requested = guest?.capabilities.requested ?? [];
   const filesystemPatterns = guest?.filesystem ?? [];
@@ -58,6 +61,7 @@ export const GuestApprovalDialog: React.FC<GuestApprovalDialogProps> = ({ guest,
   const providesTracker = serviceProvides(guest?.service, 'tracker');
   const providesQuota = serviceProvides(guest?.service, 'quota');
   const quotaProviders = guest?.quota?.providers ?? [];
+  const sessionEvents = guest?.sessionEvents?.events ?? [];
   const apiOrigin = guest?.integration?.apiOrigin ?? null;
 
   return (
@@ -170,6 +174,32 @@ export const GuestApprovalDialog: React.FC<GuestApprovalDialogProps> = ({ guest,
                       )}
                     </div>
                   ) : null}
+                  {capability === 'service' && guest?.service?.keepRunning ? (
+                    <p className="typography-meta mt-0.5 text-foreground">{t('settings.extensions.capability.service.keepRunning')}</p>
+                  ) : null}
+                  {capability === 'service' && guest?.service?.schedule && guest.service.schedule.length > 0 ? (
+                    <div className="typography-meta mt-0.5 text-foreground">
+                      <p>{t('settings.extensions.capability.service.schedule')}</p>
+                      <ul className="mt-0.5 list-disc space-y-0.5 ps-4">
+                        {guest.service.schedule.map((entry) => (
+                          <li key={entry.id} className="break-all font-mono">{entry.timezone ? `${entry.cron} (${entry.timezone})` : entry.cron}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {capability === 'service' && guest?.mentions ? (
+                    <p className="typography-meta mt-0.5 text-foreground">{t('settings.extensions.capability.service.mentions')}</p>
+                  ) : null}
+                  {capability === 'service' && sessionEvents.length > 0 ? (
+                    <div className="typography-meta mt-0.5 text-foreground">
+                      <p>{t('settings.extensions.capability.service.sessionEvents')}</p>
+                      <ul className="mt-0.5 list-disc space-y-0.5 ps-4">
+                        {sessionEvents.map((type) => (
+                          <li key={type}>{t(SESSION_EVENT_LABEL_KEYS[type])}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
               </li>
             );
@@ -184,6 +214,11 @@ export const GuestApprovalDialog: React.FC<GuestApprovalDialogProps> = ({ guest,
           >
             {t('settings.extensions.dialog.decline')}
           </Button>
+          {onLater ? (
+            <Button size="sm" variant="outline" disabled={busy} onClick={onLater}>
+              {t('settings.extensions.dialog.later')}
+            </Button>
+          ) : null}
           <Button
             size="sm"
             disabled={busy}

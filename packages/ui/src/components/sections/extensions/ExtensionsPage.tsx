@@ -35,6 +35,7 @@ import { loadGuestServiceFailure, setGuestServiceSocketPath } from '@/lib/guests
 import { guestNeedsApproval } from '@/lib/guests/capabilities';
 import { SESSION_EVENT_LABEL_KEYS } from '@/lib/guests/session-event-labels';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
+import type { IconName } from '@/components/icon/icons';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { getGuestSourceUrl } from '@/lib/guests/source-url';
 import { approveGuestCapabilities, installGuest, setGuestEnabled, uninstallGuest, uploadGuestZip } from '@/lib/guests/install';
@@ -257,6 +258,14 @@ type ExtensionHandlers = {
   onUpdate: (guest: InstalledGuest) => Promise<void>;
 };
 
+/** The enable/disable action's mark: a running extension pauses, a stopped one runs. */
+const ENABLED_TOGGLE_ICON: Record<'enabled' | 'disabled', IconName> = {
+  enabled: 'pause',
+  disabled: 'play',
+};
+
+const enabledToggleIcon = (enabled: boolean): IconName => (enabled ? ENABLED_TOGGLE_ICON.enabled : ENABLED_TOGGLE_ICON.disabled);
+
 /** One extension in the grid: name, state, source; opens its detail screen. */
 const ExtensionCard: React.FC<ExtensionHandlers & { guest: InstalledGuest; onOpen: () => void }> = ({
   guest,
@@ -283,7 +292,7 @@ const ExtensionCard: React.FC<ExtensionHandlers & { guest: InstalledGuest; onOpe
     }] : []),
     ...(state.enterpriseBlocked ? [] : [{
       label: state.enabled ? t('settings.extensions.actions.disable') : t('settings.extensions.actions.enable'),
-      icon: state.enabled ? 'pause' as const : 'play' as const,
+      icon: enabledToggleIcon(state.enabled),
       onSelect: () => void onSetEnabled(guest.id, guest.name, !state.enabled),
     }]),
     ...(state.sourceUrl ? [{

@@ -286,7 +286,10 @@ export const createFeatureRoutesRuntime = () => {
         const selections = await listQuotaSelections(req).catch(() => []);
         const selection = selections.find((entry) => entry.providerId === nativeProviderId) ?? null;
         if (!selection) return null;
-        return resolveCredential({ ...selection, purpose: 'quota' }).catch(() => null);
+        // The resolver takes exactly its request fields; a selection also
+        // carries public catalog fields it would reject as unknown keys.
+        const { workspaceId, agentDirectoryId, providerId, credentialRef } = selection;
+        return resolveCredential({ workspaceId, agentDirectoryId, providerId, credentialRef, purpose: 'quota' }).catch(() => null);
       },
       requestExtensionService: (guest, params) => proxyGuestServiceRequest({
         guestId: guest.id,

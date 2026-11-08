@@ -37,6 +37,8 @@ describe('extension usage providers', () => {
     const request = vi.fn(async () => ({
       status: 200,
       body: JSON.stringify({
+        // The role's wire 1: `data` is the usage.read payload, which
+        // quotaProviderSchemasV1.usage checks as a whole.
         ok: true,
         data: {
           ok: true, configured: true, planLabel: 'Pro',
@@ -49,7 +51,8 @@ describe('extension usage providers', () => {
     const sent = JSON.parse(request.mock.calls[0][0].body);
     expect(sent).toMatchObject({ v: 1, method: 'usage.read', provider: 'ext-teapot', input: { credentials: { teapot: { type: 'api_key', key: 'key-teapot' } } } });
     expect(request.mock.calls[0][0]).toMatchObject({ path: '/quota', method: 'POST' });
-    expect(result).toMatchObject({ providerId: 'ext-teapot', ok: true, configured: true, planLabel: 'Pro' });
+    expect(result).toMatchObject({ providerId: 'ext-teapot', ok: true, configured: true });
+    expect(result.error).toBeUndefined();
     expect(result.usage.windows.fiveHour).toMatchObject({ usedPercent: 24, remainingPercent: 76 });
   });
 

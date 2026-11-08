@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import {
  QUOTA_PROVIDER_PATH,
  QUOTA_PROVIDER_RESPONSE_MAX,
@@ -21,13 +20,9 @@ import { buildResult, toUsageWindow } from './utils/formatters.js';
  * not parse is a failed read, never an empty result.
  */
 
-const usageDataSchema = z.object({
- ok: z.boolean(),
- configured: z.boolean(),
- error: z.string().min(1).max(2_000).optional(),
- planLabel: z.string().max(128).nullable().optional(),
- usage: schemas.usage.nullable(),
-}).strict();
+// `quotaProviderSchemasV1.usage` is the `usage.read` data itself: the SDK
+// asserts both sides of that type, so the host does not restate it.
+const usageDataSchema = schemas.data['usage.read'];
 
 const readEnvelope = (body) => {
  const envelope = schemas.envelope.safeParse(body);

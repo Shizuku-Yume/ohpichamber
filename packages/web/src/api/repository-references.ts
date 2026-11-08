@@ -192,6 +192,9 @@ const pullStatusesResultSchema = z.discriminatedUnion('connected', [
       checks: checksSummarySchema.nullable(),
       mergeable: z.boolean().nullable(),
       mergeableState: z.string().nullable(),
+      isInMergeQueue: z.boolean().optional(),
+      mergeQueueEntry: z.object({ state: z.string(), position: z.number().int() }).nullish(),
+      autoMergeRequest: z.object({ enabledAt: z.string(), mergeMethod: z.string() }).nullish(),
     })),
   }),
 ]);

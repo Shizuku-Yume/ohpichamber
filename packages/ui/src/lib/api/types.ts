@@ -2011,6 +2011,10 @@ export type ProviderReadsRefreshScope = { item: RepositoryItemRef } | { lists: t
 
 /** Live fields of a known PR, refreshed in batches for list surfaces. */
 export type ChangeRequestLiveSummary = RepositoryItemRef & {
+  /** Queued for merge on the host, or waiting on a merge method's conditions. */
+  isInMergeQueue?: boolean;
+  mergeQueueEntry?: { state: string; position: number } | null;
+  autoMergeRequest?: { enabledAt: string; mergeMethod: string } | null;
   state: GitHubPullRequest['state'];
   draft: boolean;
   title: string;

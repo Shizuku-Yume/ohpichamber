@@ -13,6 +13,7 @@ import type { SourceControlProvider } from '@/lib/source-control/types';
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { chatQuoteAnchorSchema, type ChatQuoteAnchor } from '@/lib/chatQuoteAnchor';
+import { diffCommentOriginSchema, type DiffCommentOrigin } from '@/lib/diffCommentOrigin';
 import { appendTerminalContexts } from './terminalContext';
 
 const sourceControlProviderIdSchema = z.enum(['github', 'gitlab']);
@@ -30,6 +31,8 @@ export type CodeCommentContext = {
     language: string;
     code: string;
     text: string;
+    /** The diff a `diff` comment was written on; absent for uncommitted changes and older messages. */
+    origin?: DiffCommentOrigin;
 };
 
 type TerminalContextPayload = {
@@ -356,6 +359,7 @@ export function contextPayloadFromDraft(draft: InlineCommentDraft): ContextPartP
                 text: draft.text,
             };
             if (draft.source === 'diff' && draft.side) payload.side = draft.side;
+            if (draft.source === 'diff' && draft.origin) payload.origin = draft.origin;
             return payload;
         }
     }
@@ -376,6 +380,7 @@ const canonicalContextPayloadSchema = z.discriminatedUnion('kind', [
         language: z.string(),
         code: z.string(),
         text: z.string(),
+        origin: diffCommentOriginSchema.optional(),
     }),
     z.object({
         kind: z.literal('terminal'),

@@ -10,7 +10,7 @@ import {
     planActivityTrim,
 } from '../lib/turns/activityRows';
 import type { ChatMessageEntry, TurnRecord } from '../lib/turns/types';
-import { getLiveFinalMessage } from '../lib/turns/liveActivity';
+import { getLiveFinalMessage, getShownPages } from '../lib/turns/liveActivity';
 import { summarizeLiveActivity } from '../lib/turns/liveActivitySummary';
 import { LiveActivityCollapse } from './LiveActivityCollapse';
 import { LiveFinalActivityContext, LiveTurnHoistedPagesContext } from './liveActivityContext';
@@ -20,7 +20,6 @@ import { TurnMessageWindowContext, openedFoldMessageWindow } from '../lib/turns/
 import { dispatchRowExpand } from '../lib/scroll/timelineScrollIntent';
 
 const NO_MESSAGES: ChatMessageEntry[] = [];
-const EMPTY_PAGES: readonly unknown[] = [];
 
 interface LiveTurnActivityProps {
     turn: TurnRecord;
@@ -66,17 +65,19 @@ export function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, 
     const hiddenRows = trim?.hiddenRows ?? 0;
     const rowsRef = React.useRef<HTMLDivElement>(null);
     useActivityRowGlide(rowsRef, hiddenRows, !settled && !expanded);
-    const previouslySettled = React.useRef(settled);
-    const animateFinalCollapse = settled && !previouslySettled.current;
-    React.useLayoutEffect(() => { previouslySettled.current = settled; }, [settled]);
     // A page the agent showed is never folded away: it sits below the fold,
     // above the answer once one arrives, and stays there in a turn that ended
     // without one. The fold no longer holds it, so it moves at most from the
     // bottom of the fold to the top of the answer.
-    const hoistedPages = null;
+    const shownPages = React.useMemo(() => getShownPages(turn.assistantMessages, finalMessage), [finalMessage, turn.assistantMessages]);
+    // A page the agent showed is never folded away: it sits below the fold,
+    // above the answer once one arrives, and stays there in a turn that ended
+    // without one. The fold no longer holds it, so it moves at most from the
+    // bottom of the fold to the top of the answer.
+    const hoistedPages = React.useMemo(() => new Set(shownPages.map((part) => part.partId)), [shownPages]);
     const finalContext = React.useMemo(() => finalMessage ? {
-        messageId: finalMessage.messageId, expanded: isExpanded, contentId: finalContentId, animateCollapse: animateFinalCollapse, pages: EMPTY_PAGES as readonly never[],
-    } : null, [finalMessage, isExpanded, finalContentId, animateFinalCollapse]);
+        messageId: finalMessage.messageId, expanded: isExpanded, contentId: finalContentId, pages: shownPages,
+    } : null, [finalMessage, isExpanded, finalContentId, shownPages]);
     const messagesAbovePages = shownMessages;
     const messagesBelowPages = NO_MESSAGES;
     // No diff parsing at token frequency. The report is only shown once the
@@ -184,7 +185,7 @@ export function TurnPagesRow({ turn }: { turn: TurnRecord }) {
     const pages = React.useMemo(() => getShownPages(turn.assistantMessages), [turn.assistantMessages]);
     return pages.length > 0 ? (
         <div className="chat-message-column">
-            {pages.map((part) => <div key={part.partId ?? part.id}>{part.type}</div>)}
+            {pages.map((part) => <div key={part.partId}>{part.type}</div>)}
         </div>
     ) : null;
 }

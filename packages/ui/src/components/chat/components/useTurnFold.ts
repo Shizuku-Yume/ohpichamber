@@ -34,7 +34,7 @@ export const useTurnFold = (turn: TurnRecord, hasLaterAssistant: boolean, expand
 /** What the rows of a turn under a fold read: the pages it hoists, and the final answer's fold state. */
 export const useTurnFoldContexts = (turn: TurnRecord, hasLaterAssistant: boolean, expanded: boolean, finalMessageId: string | undefined) => {
  const { finalMessage, isExpanded, pages } = useTurnFold(turn, hasLaterAssistant, expanded, finalMessageId);
- const hoistedPages = React.useMemo(() => new Set(pages.map((part) => ('partId' in part && typeof part.partId === 'string' ? part.partId : part.id))), [pages]);
+ const hoistedPages = React.useMemo(() => new Set(pages.map((part) => part.partId)), [pages]);
  const shownFinalMessageId = finalMessage?.messageId;
  const finalContext = React.useMemo(() => shownFinalMessageId ? {
   messageId: shownFinalMessageId, expanded: isExpanded, contentId: finalActivityContentId(turn.turnId), pages,

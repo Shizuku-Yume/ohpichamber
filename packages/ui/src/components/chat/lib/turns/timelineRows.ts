@@ -140,7 +140,10 @@ const turnRows = (entry: TurnEntry, options: TimelineRowsOptions): TimelineRow[]
   if (options.expandedTurns.get(turn.turnId) === true) {
    const pages = finalMessage ? [] : getShownPages(turn.assistantMessages);
    // A working turn draws what came after its last page below it.
-   const lastPageMessageId = pages[pages.length - 1]?.messageID;
+   const lastPagePartId = pages[pages.length - 1]?.partId;
+   const lastPageMessageId = lastPagePartId
+    ? activityMessages.find((message) => message.parts.some((part) => part.partId === lastPagePartId))?.messageId
+    : undefined;
    const split = lastPageMessageId ? activityMessages.findIndex((message) => message.messageId === lastPageMessageId) + 1 : 0;
    activityMessages.slice(0, split > 0 ? split : activityMessages.length).forEach((message) => addMessage(message));
    if (pages.length > 0) rows.push({ kind: 'turn-pages', key: `pages:${turn.turnId}`, ...fields });

@@ -142,6 +142,15 @@ export const MobileWorkspaceDrawer: React.FC<{
 
  // Tabs the user has actually opened — their panes stay mounted afterwards.
  const [visitedTabs, setVisitedTabs] = React.useState<ReadonlySet<MobileWorkspaceTab>>(() => new Set());
+ /** Unmounts a pane that has nothing left to show, so it cannot start work again. */
+ const stopVisitingTab = React.useCallback((stopped: MobileWorkspaceTab) => {
+  setVisitedTabs((current) => {
+   if (!current.has(stopped)) return current;
+   const next = new Set(current);
+   next.delete(stopped);
+   return next;
+  });
+ }, []);
  React.useEffect(() => {
   if (!open) return;
   setVisitedTabs((current) => {
@@ -300,9 +309,14 @@ export const MobileWorkspaceDrawer: React.FC<{
       <ErrorBoundary>
        <TerminalView
         visible={open && tab === 'terminal'}
-        // Closing the last tab tears this surface down before the store could
-        // open a replacement shell in a modal the user asked to leave.
-        onLastTabClosed={onClose}
+        // Closing the last tab ends the modal AND unmounts this pane: the
+        // store opens an empty tab at once, and a pane left mounted on a hidden
+        // tab would spawn a shell in it after the user asked to leave. Reopening
+        // mounts fresh and starts that empty tab's terminal then.
+        onLastTabClosed={() => {
+         stopVisitingTab('terminal');
+         onClose();
+        }}
        />
       </ErrorBoundary>
      </div>

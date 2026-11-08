@@ -29,7 +29,7 @@ let generation = 0;
 subscribeRuntimeEndpointWillChange(() => { generation += 1; pending.clear(); });
 
 /** A discovered directory is admitted through the project it belongs to, without a trust prompt. */
-const tryAdmitSession = (sessionId: string, directory: string, deliberate = false): Promise<boolean> => {
+const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean> => {
   const normalized = normalizePath(directory);
   if (!normalized) return Promise.resolve(false);
   if (isSessionAdmitted(normalized)) return Promise.resolve(true);
@@ -69,8 +69,8 @@ const tryAdmitSession = (sessionId: string, directory: string, deliberate = fals
   return request;
 };
 
-export const admitSession = (sessionId: string, directory: string, deliberate = false): Promise<boolean> => (
-  tryAdmitSession(sessionId, directory, deliberate).catch((error) => {
+export const admitSession = (sessionId: string, directory: string): Promise<boolean> => (
+  tryAdmitSession(sessionId, directory).catch((error) => {
     console.warn('[session-admission] Could not register the session project:', error);
     return false;
   })

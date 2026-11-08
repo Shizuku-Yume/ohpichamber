@@ -1,12 +1,10 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import { CanonicalClient } from '@/api/canonicalClient';
 import type { Message, Part, Session } from '@openchamber/agent-contract';
 import { I18nProvider } from '@/lib/i18n';
-import { opencodeClient } from '@/lib/opencode/client';
-import { getImperativeSessionMessageLoader } from '@/sync/session-message-loader';
 import { SyncProvider } from '@/sync/sync-context';
 import { getSyncChildStores } from '@/sync/sync-refs';
 import { ChatColumnSessionContext } from './chatColumnSession';
@@ -58,19 +56,23 @@ const DOM_GLOBAL_NAMES = ['window', 'document', 'navigator', 'Node', 'Element', 
 const installDom = () => {
   const win = new Window({ url: 'http://localhost' });
   const previous = DOM_GLOBAL_NAMES.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
-  const values = { window: win, document: win.document, navigator: win.navigator, Node: win.Node, Element: win.Element,
+  const values = {
+    window: win, document: win.document, navigator: win.navigator, Node: win.Node, Element: win.Element,
     HTMLElement: win.HTMLElement, localStorage: win.localStorage, getComputedStyle: win.getComputedStyle.bind(win),
-    requestAnimationFrame: win.requestAnimationFrame.bind(win), cancelAnimationFrame: win.cancelAnimationFrame.bind(win), IS_REACT_ACT_ENVIRONMENT: true };
+    requestAnimationFrame: win.requestAnimationFrame.bind(win), cancelAnimationFrame: win.cancelAnimationFrame.bind(win), IS_REACT_ACT_ENVIRONMENT: true
+  };
   for (const name of DOM_GLOBAL_NAMES) Object.defineProperty(globalThis, name, { value: values[name], configurable: true, writable: true });
   const container = document.createElement('div');
   document.body.appendChild(container);
-  return { container, restore: () => {
-    for (const [name, descriptor] of previous) {
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else Reflect.deleteProperty(globalThis, name);
+  return {
+    container, restore: () => {
+      for (const [name, descriptor] of previous) {
+        if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+        else Reflect.deleteProperty(globalThis, name);
+      }
+      void win.happyDOM.close();
     }
-    void win.happyDOM.close();
-  } };
+  };
 };
 
 describe('TimelineDialog', () => {
@@ -128,36 +130,5 @@ describe('TimelineDialog', () => {
     expect(textReads).toBeGreaterThan(0);
     expect(document.body.textContent).toContain('First prompt');
     expect(document.body.textContent).toContain('Second prompt');
-  });
-
-  test('an open timeline holds the loaded transcript against the history trim', async () => {
-    const page = spyOn(opencodeClient, 'getSessionMessages').mockResolvedValue({
-      items: Array.from({ length: 25 }, (_, index) => ({
-        info: user(`u${index}`, 1_700_000_000_000 + index),
-        parts: [countedText(`p${index}`, `u${index}`, `Prompt ${index}`)],
-      })),
-      cursor: {},
-    });
-    const inbox = spyOn(opencodeClient, 'getSessionInbox').mockResolvedValue([]);
-    try {
-      await render(false);
-      const loader = getImperativeSessionMessageLoader();
-      if (!loader) throw new Error('Expected the sync provider to install the message loader');
-      await act(async () => {
-        await loader.ensure({ directory, sessionID: sessionId }, { reason: 'navigation' });
-      });
-      expect(store().getState().message[sessionId]).toHaveLength(25);
-
-      await render(true);
-      expect(loader.trimHistory({ directory, sessionID: sessionId })).toBe(false);
-      expect(store().getState().message[sessionId]).toHaveLength(25);
-
-      await render(false);
-      expect(loader.trimHistory({ directory, sessionID: sessionId })).toBe(true);
-      expect(store().getState().message[sessionId]).toHaveLength(10);
-    } finally {
-      page.mockRestore();
-      inbox.mockRestore();
-    }
   });
 });

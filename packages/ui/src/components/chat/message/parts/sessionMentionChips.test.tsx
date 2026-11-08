@@ -19,10 +19,12 @@ describe('canonical session mention rendering', () => {
         Object.defineProperty(globalThis, 'window', { configurable: true, value: browser });
         try {
             const text = 'Read openchamber://session/session-a and openchamber://session/session-b?message=message-b';
-            const part = PartSchema.parse(JSON.parse(JSON.stringify({ type: 'text', partId: 'part-a', content: text, sessionMentions: [
-                { kind: 'session', sessionId: 'session-a', title: 'First session' },
-                { kind: 'session-message', sessionId: 'session-b', messageId: 'message-b', sessionTitle: 'Second session', excerpt: 'Message excerpt' },
-            ] })));
+            const part = PartSchema.parse(JSON.parse(JSON.stringify({
+                type: 'text', partId: 'part-a', content: text, sessionMentions: [
+                    { kind: 'session', sessionId: 'session-a', title: 'First session' },
+                    { kind: 'session-message', sessionId: 'session-b', messageId: 'message-b', sessionTitle: 'Second session', excerpt: 'Message excerpt' },
+                ]
+            })));
             const chips = sessionMentionChipsOf([part]);
             const plain = renderToStaticMarkup(<>{withSessionMentionChips(text, chips, 'plain')}</>);
             expect(plain).toContain('title="First session"');
@@ -53,7 +55,7 @@ describe('canonical session mention rendering', () => {
             await loadMarkdownRendererModule();
             useUIStore.setState({ userMessageRenderingMode: 'markdown' });
             const part = PartSchema.parse({ type: 'text', partId: 'part', content: 'Read <openchamber://session/session-a> and `<openchamber://session/session-a>` <img src=x onerror=alert(1)>', sessionMentions: [{ kind: 'session', sessionId: 'session-a', title: 'Session <unsafe>' }] });
-            const rendered = renderToStaticMarkup(<I18nProvider><SyncProvider directory="/repo"><UserTextPart part={part} messageId="message" isMobile={false} messageExpanded onExpandMessage={() => {}} partIndex={0} onTruncationChange={() => {}} attachmentFilenames={[]} sessionMentionChips={sessionMentionChipsOf([part])} /></SyncProvider></I18nProvider>);
+            const rendered = renderToStaticMarkup(<I18nProvider><SyncProvider directory="/repo"><UserTextPart part={part} isMobile={false} messageExpanded onExpandMessage={() => { }} partIndex={0} onTruncationChange={() => { }} attachmentFilenames={[]} sessionMentionChips={sessionMentionChipsOf([part])} /></SyncProvider></I18nProvider>);
             expect(rendered.match(/<button/g)).toHaveLength(1);
             expect(rendered).toContain('title="Session &lt;unsafe&gt;"');
             expect(rendered).toContain('&lt;openchamber://session/session-a&gt;');
@@ -71,9 +73,11 @@ describe('canonical session mention rendering', () => {
         Object.defineProperty(globalThis, 'window', { configurable: true, value: browser });
         try {
             const text = 'Read <openchamber://session/session-a> and `<openchamber://session/session-a>` <img src=x onerror=alert(1)>';
-            const part = PartSchema.parse({ type: 'text', partId: 'part', content: text, sessionMentions: [
-                { kind: 'session', sessionId: 'session-a', title: 'Session <unsafe>' },
-            ] });
+            const part = PartSchema.parse({
+                type: 'text', partId: 'part', content: text, sessionMentions: [
+                    { kind: 'session', sessionId: 'session-a', title: 'Session <unsafe>' },
+                ]
+            });
             const chips = sessionMentionChipsOf([part]);
             const markdown = prepareUserMarkdownContent({ textContent: text, skillNames: new Set(), sessionMentions: { chips, origins: ['http://localhost'] } });
             const rendered = renderToStaticMarkup(<I18nProvider><SessionMentionChipsContext.Provider value={chips}>

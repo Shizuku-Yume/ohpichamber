@@ -41,13 +41,17 @@ test('editing provider connection settings preserves reviewed canonical model ca
     reasoningOptions: [{ reasoningEffort: 'high', label: 'High', budgetTokens: 2048 }],
     variants: [{ variant: 'deep', label: 'Deep', reasoningEffort: 'high' }],
     toolsSupported: false, enabled: true, status: 'beta',
-    pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 3,
-      cacheReadPerMillionTokens: 0.1, cacheWritePerMillionTokens: null },
+    pricing: {
+      inputPerMillionTokens: 1, outputPerMillionTokens: 3,
+      cacheReadPerMillionTokens: 0.1, cacheWritePerMillionTokens: null
+    },
   };
   const initial: ProviderConfigurationRead = {
-    revision: '4', configuration: { providerId: 'campus', name: 'Campus',
-      endpoint: 'https://models.example.edu/v1', protocol: 'responses', credentialRef: null },
-    headerNames: ['X-Tenant'], models: [model],
+    revision: '4', configuration: {
+      providerId: 'campus', name: 'Campus',
+      endpoint: 'https://models.example.edu/v1', protocol: 'responses', credentialRef: null
+    },
+    headerNames: ['X-Tenant'], models: [model], imageModels: [],
   };
   const form = createEmptyCustomProviderForm(initial);
   form.endpoint = 'https://models.example.edu/v2';
@@ -63,13 +67,17 @@ test('model controls update only the edited native fields', () => {
     contextWindow: 32768, maxOutputTokens: 4096, reasoningEffortSupported: true,
     reasoningOptions: [{ reasoningEffort: 'high', label: 'High', budgetTokens: 2048 }],
     variants: [], toolsSupported: false,
-    pricing: { inputPerMillionTokens: 1, outputPerMillionTokens: 3,
-      cacheReadPerMillionTokens: 0.1, cacheWritePerMillionTokens: null },
+    pricing: {
+      inputPerMillionTokens: 1, outputPerMillionTokens: 3,
+      cacheReadPerMillionTokens: 0.1, cacheWritePerMillionTokens: null
+    },
   };
   const form = createEmptyCustomProviderForm({
-    revision: '4', configuration: { providerId: 'campus', name: 'Campus',
-      endpoint: 'https://models.example.edu/v1', protocol: 'chat-completions', credentialRef: null },
-    headerNames: [], models: [model],
+    revision: '4', configuration: {
+      providerId: 'campus', name: 'Campus',
+      endpoint: 'https://models.example.edu/v1', protocol: 'chat-completions', credentialRef: null
+    },
+    headerNames: [], models: [model], imageModels: [],
   });
   form.models[0]!.modalities = ['text', 'image'];
   form.models[0]!.toolsSupported = true;

@@ -37,7 +37,7 @@ export const BackgroundWorkButton: React.FC<{ onClick: () => void; className?: s
                         className,
                     )}
                 >
-                    <Icon name="arrow-up-double" className="h-4 w-4" />
+                    <Icon name="arrow-up" className="h-4 w-4" />
                 </button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6}>

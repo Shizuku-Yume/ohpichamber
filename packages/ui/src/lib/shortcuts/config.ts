@@ -39,6 +39,13 @@ const SHORTCUT_GROUPS = {
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.focus_input.label',
     },
     {
+      id: 'search_prompt_history',
+      defaultBinding: 'mod+arrowup',
+      customizable: true,
+      settingsLabelKey:
+        'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label',
+    },
+    {
       id: 'open_timeline_dialog',
       defaultBinding: 'mod+k t',
       customizable: true,
@@ -152,6 +159,36 @@ const SHORTCUT_GROUPS = {
       defaultBinding: 'mod+alt+v',
       customizable: true,
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.toggle_dictation.label',
+    },
+    {
+      id: 'sessions_bulk_delete',
+      defaultBinding: 'mod+backspace',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.sessions_bulk_delete.label',
+    },
+    {
+      id: 'sessions_select_all',
+      defaultBinding: 'mod+a',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.sessions_select_all.label',
+    },
+    {
+      id: 'permission_allow_once',
+      defaultBinding: 'alt+enter',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_allow_once.label',
+    },
+    {
+      id: 'permission_allow_always',
+      defaultBinding: 'alt+shift+enter',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_allow_always.label',
+    },
+    {
+      id: 'permission_deny',
+      defaultBinding: 'alt+backspace',
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.permission_deny.label',
     },
     { id: 'abort_run', defaultBinding: 'escape', customizable: false },
   ],

@@ -187,12 +187,31 @@ type InputState = {
  setPendingSyntheticParts: (parts: SyntheticContextPart[] | null, target?: string | null) => void
  consumePendingSyntheticParts: (target?: string | null) => SyntheticContextPart[] | null
  getPendingSyntheticParts: (target?: string | null) => SyntheticContextPart[] | null
- addAttachedFile: (file: File) => Promise<boolean>
+ addAttachedFile: (file: File, target?: ChatDraftIdentity | null) => Promise<boolean>
  removeAttachedFile: (id: string) => void
  setAttachedFiles: (files: AttachedFile[], target?: ChatDraftIdentity | null) => void
  clearAttachedFiles: (target?: ChatDraftIdentity | null) => void
  /** Add attachments restored from a reverted message (file already on server) */
- addRestoredAttachment: (file: RestoredAttachment) => void
+ addRestoredAttachment: (file: RestoredAttachment, target?: ChatDraftIdentity | null) => void
+ getAttachedFiles: (target?: ChatDraftIdentity | null) => AttachedFile[]
+}
+
+/** Attachments filed under `target`, or the current slot when none is named. */
+const attachedFilesFor = (state: InputState, target?: ChatDraftIdentity | null): AttachedFile[] => {
+ if (!target) return state.attachedFiles
+ const key = getChatDraftIdentityKey(target)
+ return key === state.attachmentDraftKey ? state.attachedFiles : state.attachmentDrafts.get(key) ?? []
+}
+
+/** Writes `files` into the slot `target` names, or the current one when none is named. */
+const appendAttachedFiles = (state: InputState, files: AttachedFile[], target?: ChatDraftIdentity | null): Partial<InputState> => {
+ const appended = [...attachedFilesFor(state, target), ...files]
+ if (!target) return { attachedFiles: appended }
+ const key = getChatDraftIdentityKey(target)
+ if (key === state.attachmentDraftKey) return { attachedFiles: appended }
+ const drafts = new Map(state.attachmentDrafts)
+ drafts.set(key, appended)
+ return { attachmentDrafts: drafts }
 }
 
 export const useInputStore = create<InputState>()((set, get) => ({
@@ -315,13 +334,13 @@ export const useInputStore = create<InputState>()((set, get) => ({
   target === null ? get().pendingSyntheticParts : get().pinnedSyntheticParts.get(target) ?? null
  ),
 
- addAttachedFile: async (file: File) => {
+ addAttachedFile: async (file: File, target?: ChatDraftIdentity | null) => {
   const generation = attachmentReadGeneration
   const referencePath = INTAKE_REDACTED_FILENAME.test(file.name) ? null : pathForDroppedFile(file)
   const attachReference = async (path: string): Promise<boolean> => {
    const reference = await prepareFileReference(file, path)
    if (generation !== attachmentReadGeneration) return false
-   set((state) => ({ attachedFiles: [...state.attachedFiles, reference] }))
+   set((state) => appendAttachedFiles(state, [reference], target))
    return true
   }
 
@@ -337,7 +356,7 @@ export const useInputStore = create<InputState>()((set, get) => ({
   }
 
   for (let attempt = 0; attempt < MAX_ATTACHMENT_PREPARATION_ATTEMPTS; attempt += 1) {
-   const reservedFilenames = get().attachedFiles.map((attachment) => attachment.filename)
+   const reservedFilenames = attachedFilesFor(get(), target).map((attachment) => attachment.filename)
    let attachedFiles: AttachedFile[] | undefined
    try {
     attachedFiles = await prepareLocalAttachments(file, reservedFilenames)
@@ -348,9 +367,9 @@ export const useInputStore = create<InputState>()((set, get) => ({
    if (!attachedFiles) return referencePath ? attachReference(referencePath) : false
 
    const generatedFilenames = attachedFiles.slice(1).map((attachment) => attachment.filename)
-   if (hasGeneratedFilenameCollision(generatedFilenames, get().attachedFiles)) continue
+   if (hasGeneratedFilenameCollision(generatedFilenames, attachedFilesFor(get(), target))) continue
 
-   set((state) => ({ attachedFiles: [...state.attachedFiles, ...attachedFiles] }))
+   set((state) => appendAttachedFiles(state, attachedFiles, target))
    return true
   }
   return false
@@ -382,7 +401,8 @@ export const useInputStore = create<InputState>()((set, get) => ({
 
  clearAttachedFiles: (target) => get().setAttachedFiles([], target),
 
- addRestoredAttachment: (restored) => {
+ getAttachedFiles: (target) => attachedFilesFor(get(), target),
+ addRestoredAttachment: (restored, target) => {
   const { url, mimeType, filename, size } = restored
   const attachmentId = /^attachment:\/\/([^/?#]+)$/.exec(url)?.[1]
   const file = restoredAttachmentFile(restored)
@@ -398,7 +418,7 @@ export const useInputStore = create<InputState>()((set, get) => ({
    source: url.startsWith('data:') ? "local" : "server",
    serverPath: url.startsWith('data:') ? undefined : url,
   }
-  set((s) => ({ attachedFiles: [...s.attachedFiles, attached] }))
+  set((s) => appendAttachedFiles(s, [attached], target))
  },
 }))
 

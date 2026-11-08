@@ -26,6 +26,11 @@ import { useChatColumnActions, useChatColumnSession } from '../../chatColumnSess
 import { appendInlineText, appendWithLineBreaks } from '../text';
 
 export interface PendingComposerTextOptions {
+ /**
+  * False while another surface owns this composer's text: an expanded `/btw`
+  * answer keeps the pending text for the composer the user returns to.
+  */
+ enabled?: boolean;
  /** Column role: null for the main chat's composer, a session id for a pinned one. */
  target: string | null;
  /** The session this composer is showing, which a session-scoped restore addresses. */
@@ -34,7 +39,7 @@ export interface PendingComposerTextOptions {
  focus: () => void;
 }
 
-export function usePendingComposerText({ target, sessionId = null, setMessage, focus }: PendingComposerTextOptions): void {
+export function usePendingComposerText({ enabled = true, target, sessionId = null, setMessage, focus }: PendingComposerTextOptions): void {
  const column = useChatColumnSession();
  const { pinned } = useChatColumnActions();
  // A pinned column keeps its own session and takes only text addressed to it.
@@ -48,7 +53,7 @@ export function usePendingComposerText({ target, sessionId = null, setMessage, f
  focusRef.current = focus;
 
  React.useEffect(() => {
-  if (columnBehindSelection) return;
+  if (!enabled || columnBehindSelection) return;
   const store = useInputStore.getState();
   const restored = sessionId ? store.consumePendingSessionRestore(sessionId) : null;
   if (restored !== null) setMessage(restored);
@@ -67,5 +72,5 @@ export function usePendingComposerText({ target, sessionId = null, setMessage, f
    setMessage(pending.text);
   }
   setTimeout(() => focusRef.current(), 0);
- }, [columnBehindSelection, pendingRestore, pendingInputTarget, pendingInputText, sessionId, setMessage, target]);
+ }, [columnBehindSelection, enabled, pendingRestore, pendingInputTarget, pendingInputText, sessionId, setMessage, target]);
 }

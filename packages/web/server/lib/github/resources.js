@@ -889,6 +889,7 @@ export function createGitHubResources({
             statuses.push({
               owner: summary.owner, repo: summary.repo, number: summary.number,
               checks: summary.checks, mergeable: summary.mergeable, mergeableState: summary.mergeableState,
+              isInMergeQueue: summary.isInMergeQueue, mergeQueueEntry: summary.mergeQueueEntry, autoMergeRequest: summary.autoMergeRequest,
             });
           }
         } catch (error) {

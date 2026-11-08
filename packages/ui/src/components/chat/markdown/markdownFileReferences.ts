@@ -77,7 +77,7 @@ export function useOpenTappedMarkdownFile() {
 // A `file:` link the click rules do not take as a file is usually a folder.
 // It opens in the system file manager, as "Reveal in Finder" in the Files
 // tree does, and only where that tree offers it: not in a browser, which
-// hides the item, and not in VS Code, which mounts no Files tree (#5521).
+// hides the item.
 export function useRevealMarkdownPath(): ((path: string) => void) | null {
   const apis = React.useContext(RuntimeAPIContext);
   const { t } = useI18n();
@@ -85,7 +85,7 @@ export function useRevealMarkdownPath(): ((path: string) => void) | null {
   const platform = apis?.runtime.platform;
   return React.useMemo(() => {
     const reveal = files?.revealPath?.bind(files);
-    if (!reveal || !platform || platform === 'vscode' || isBrowserClientRuntime(platform)) return null;
+    if (!reveal || !platform || isBrowserClientRuntime(platform)) return null;
     return (path: string) => {
       void reveal(path).catch(() => {
         toast.error(t('sidebarFilesTree.toast.revealFailed'));

@@ -41,6 +41,7 @@ import { loadMagicPrompts } from '@/lib/magicPrompts';
 import { waitForPendingDraftWorktreeRequest } from '@/lib/worktrees/pendingDraftWorktree';
 import { startReviewFlow } from '@/lib/reviewFlow';
 import { getRuntimeKey, getRuntimeSwitchRevision, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
+import { cycleThinkingVariant } from '@/lib/cycleThinkingVariant';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import {
     createChatDraftIdentity,
@@ -105,7 +106,7 @@ import {
 import { findSessionLinks, sessionLinkKey, type SessionLinkTarget } from '@/lib/sessionLinks';
 import { sessionMentionChip } from '@/lib/messages/sessionMentionChip';
 import { appOwnOrigins } from '@/lib/router/appOrigins';
-import { usePendingComposerReferences } from './composer/pendingComposerReferences';
+import { resolveComposerReferenceHandoffTarget, usePendingComposerReferences } from './composer/pendingComposerReferences';
 import { postLinearSessionStarted } from '@/lib/linearSessionStatus';
 import { Icon } from "@/components/icon/Icon";
 import { DraftPresetChips } from './DraftPresetChips';
@@ -118,6 +119,10 @@ import { runGuestCommand } from '@/lib/guests/run-command';
 import { useGuestsStore } from '@/lib/guests/store';
 import { isGuestActive } from '@/lib/guests/capabilities';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { trackerPresentation } from '@/lib/trackers/presentation';
+import { useTrackerSources } from '@/lib/trackers/sources';
+import type { ComposerTrackerPicker } from './composer/ui/ComposerAttachmentControls';
+import { shortcutRegistry } from '@/lib/shortcuts';
 import { routeGuestSlashCommand } from './composer/submit/guestCommands';
 import { pluginModeFromId } from '@/lib/surfaces/modes';
 import { expandCanonicalSkills } from '@/sync/session-ui-store';
@@ -199,7 +204,9 @@ import {
 } from './composer/submit/slashCommands';
 import { runForkCommand } from './composer/submit/forkCommand';
 import { useAutocompletePosition } from './composer/state/useAutocompletePosition';
-import { useMessageHistory } from './composer/state/useMessageHistory';
+import { useMessageHistory, type MessageHistoryValue } from './composer/state/useMessageHistory';
+import type { PromptHistoryCandidate } from './composer/state/promptHistorySearch';
+import { registerPromptHistorySearchRoute } from './composer/state/promptHistorySearchRoute';
 import { useComposerDraft } from './composer/state/useComposerDraft';
 import { useDictationOrigin } from './composer/state/useDictationOrigin';
 import { useDraftTarget } from './composer/state/useDraftTarget';
@@ -222,6 +229,7 @@ import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { isDraftSendWaiting, subscribeDraftSendWaiting } from '@/lib/worktrees/pendingDraftWorktree';
 import { ComposerAutocompletePopups } from './composer/ui/ComposerAutocompletePopups';
 import { ComposerFooter } from './composer/ui/ComposerFooter';
+import { PromptHistorySearchPanel } from './composer/ui/PromptHistorySearchPanel';
 import { ComposerModeSelector, type ComposerModeValue } from './composer/ui/ComposerModeSelector';
 import { MobilePillComposer } from './composer/ui/MobilePillComposer';
 import { ComposerContextChips } from './composer/ui/ComposerContextChips';
@@ -542,7 +550,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const pendingPresetSubmit = useInputStore((s) => s.pendingPresetSubmit);
     const pendingGuestIssue = useInputStore((s) => s.pendingGuestIssue);
     const consumePendingGuestIssue = useInputStore((s) => s.consumePendingGuestIssue);
-    const pendingComposerReferenceCount = usePendingComposerReferences((s) => s.references.length);
+    const pendingComposerReferenceCount = usePendingComposerReferences((s) => s.pending.length);
 
     React.useEffect(() => {
         if (!newSessionDraftOpen || newSessionDraft.target !== 'chat' || message.trim().length === 0) return;
@@ -1063,6 +1071,15 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     }, [resolveInlineFileMention]);
     const prevWasAbortedRef = React.useRef(false);
 
+    // The composer's prompt history search, and the deferred focus it may hold.
+    const [promptHistorySearch, setPromptHistorySearch] = React.useState<{
+        identity: string;
+        initialQuery: string;
+        olderRequest: number;
+    } | null>(null);
+    const [promptHistorySearchOwner, setPromptHistorySearchOwner] = React.useState<HTMLFormElement | null>(null);
+    const [historyFocusPending, setHistoryFocusPending] = React.useState(false);
+
     // Issue linking state
     const [referencePicker, setReferencePicker] = React.useState<ReferencePickerState>(null);
     // The paste-toast tap may need to reopen the collapsed mobile composer.
@@ -1078,6 +1095,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             attachMenuOpen: mobileAttachMenuOpen,
             draftPickerOpen: mobileDraftPicker !== null,
             referencePickerOpen: referencePicker !== null,
+            // Keep the editor mounted until the closing search hands focus back.
+            promptHistorySearchOpen: promptHistorySearch !== null || historyFocusPending,
             isDragging,
         },
     });
@@ -1169,6 +1188,54 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         [inputHistoryIdentity, inputHistoryScope],
     );
     const messageHistory = useMessageHistory<AttachedFile>(historyValues, messageHistoryIdentity);
+
+    // Prompt history search: one open search per composer identity. Its key
+    // ties the search to the draft, scope, mode and BTW panel it was opened
+    // from, so a context switch closes it rather than recalls the wrong text.
+    const promptHistorySearchIdentity = `${chatDraftIdentity ? getChatDraftIdentityKey(chatDraftIdentity) : 'none'}:${messageHistoryIdentity}:${inputMode}:${isBtwActive}:${isBtwPanelVisible}`;
+    const promptHistorySearchIdentityRef = React.useRef(promptHistorySearchIdentity);
+    promptHistorySearchIdentityRef.current = promptHistorySearchIdentity;
+    const isPromptHistorySearchOpen = promptHistorySearch?.identity === promptHistorySearchIdentity;
+
+    React.useEffect(() => {
+        if (!isPromptHistorySearchOpen && promptHistorySearch) setPromptHistorySearch(null);
+    }, [isPromptHistorySearchOpen, promptHistorySearch]);
+
+    // The one deferred composer focus that history work may have pending. A
+    // newer schedule replaces it; opening the search or unmounting cancels it,
+    // so a stale frame cannot pull focus out of a search that opened since.
+    const historyFocusFrameRef = React.useRef<number | null>(null);
+    const cancelHistoryFocusFrame = React.useCallback(() => {
+        if (historyFocusFrameRef.current === null) return;
+        window.cancelAnimationFrame(historyFocusFrameRef.current);
+        historyFocusFrameRef.current = null;
+        setHistoryFocusPending(false);
+    }, []);
+    const scheduleHistoryFocusFrame = React.useCallback((run: () => void) => {
+        cancelHistoryFocusFrame();
+        setHistoryFocusPending(true);
+        historyFocusFrameRef.current = window.requestAnimationFrame(() => {
+            historyFocusFrameRef.current = null;
+            run();
+            setHistoryFocusPending(false);
+        });
+    }, [cancelHistoryFocusFrame]);
+    React.useEffect(() => cancelHistoryFocusFrame, [cancelHistoryFocusFrame]);
+
+    const applyHistoryValue = React.useCallback((value: MessageHistoryValue<AttachedFile>, selection: 'start' | 'end') => {
+        const identity = promptHistorySearchIdentityRef.current;
+        setMessage(value.text);
+        messageRef.current = value.text;
+        useInputStore.getState().setAttachedFiles([...value.attachments], chatDraftIdentity);
+        scheduleHistoryFocusFrame(() => {
+            if (promptHistorySearchIdentityRef.current !== identity) return;
+            const editor = composerRef.current;
+            if (!editor) return;
+            const position = selection === 'start' ? 0 : editor.getValue().length;
+            editor.focus();
+            editor.setSelection(position, position);
+        });
+    }, [chatDraftIdentity, scheduleHistoryFocusFrame]);
 
     // Keep messageRef in sync with message state
     React.useEffect(() => {
@@ -1275,11 +1342,16 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         composerRef.current?.blur();
     }, [isMobile]);
 
+    const handleCycleThinking = React.useCallback(() => {
+        cycleThinkingVariant(currentSessionId);
+    }, [currentSessionId]);
+    const handleOpenThinkingPanel = React.useCallback(() => handleOpenMobilePanel('variant'), [handleOpenMobilePanel]);
+
     // Consume pending input text (e.g., from revert action). Must stay after
     // useComposerDraft: on a draft switch the incoming draft loads first and
     // the pending text lands on top of it.
     const focusComposer = React.useCallback(() => composerRef.current?.focus(), []);
-    usePendingComposerText({ enabled: !isBtwActive, target: mailboxTarget, setMessage, focus: focusComposer });
+    usePendingComposerText({ enabled: !isBtwActive, target: mailboxTarget, sessionId: currentSessionId, setMessage, focus: focusComposer });
 
     const parallel = useParallelComposer({
         enabled: !isMobile && !isBtwActive,
@@ -1652,10 +1724,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         setLinkedReferences((current) => withComposerReferences(current, references));
     }, []);
     const attachReferences = useAttachReferences(referencePickerDirectory, addLinkedReferences);
-
-    const openLinearPicker = React.useCallback(() => {
-        setReferencePicker({ source: trackerReferenceSource('linear') });
-    }, []);
 
     const handleSubmit = async (options?: SubmitOptions) => {
         // Comment mode's only submit is attach; every other send path must be
@@ -2575,6 +2643,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             shiftKey: e.shiftKey,
             ctrlKey: e.ctrlKey,
             metaKey: e.metaKey,
+            altKey: e.altKey,
         })) {
             e.preventDefault();
 
@@ -3478,14 +3547,39 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             handleGuestAttach(issue);
         }
     }, [columnPinned, consumePendingGuestIssue, handleGuestAttach, pendingGuestIssue]);
+    // A chip handed to this composer arrives in the slot it was addressed to;
+    // only a chip aimed at this identity is taken.
+    const composerReferenceHandoffTarget = React.useMemo(() => resolveComposerReferenceHandoffTarget({
+        columnPinned,
+        btwActive: isBtwActive,
+        currentSessionId,
+        draftOpen: newSessionDraftOpen,
+        workDraftId: newSessionDraft?.workDraftId ?? null,
+        runtimeKey: activeRuntimeKey,
+    }), [activeRuntimeKey, columnPinned, currentSessionId, isBtwActive, newSessionDraft?.workDraftId, newSessionDraftOpen]);
     React.useEffect(() => {
-        if (pendingComposerReferenceCount === 0 || columnPinned) return;
-        const references = usePendingComposerReferences.getState().consume();
+        if (pendingComposerReferenceCount === 0 || !composerReferenceHandoffTarget) return;
+        const references = usePendingComposerReferences.getState().consume(composerReferenceHandoffTarget);
         if (references.length > 0) {
             setLinkedReferences((current) => withComposerReferences(current, references));
         }
-    }, [columnPinned, pendingComposerReferenceCount]);
-    const showLinearPicker = Boolean(runtimeLinear);
+    }, [composerReferenceHandoffTarget, pendingComposerReferenceCount]);
+    // Only signed-in trackers are offered; connecting one happens in Settings.
+    const isVSCode = isVSCodeRuntime();
+    const trackerSources = useTrackerSources();
+    const trackerPickers = React.useMemo<readonly ComposerTrackerPicker[]>(() => (
+        !isVSCode
+            ? trackerSources.map((descriptor) => {
+                const presentation = trackerPresentation(descriptor.id);
+                return {
+                    provider: descriptor.id,
+                    icon: presentation.icon,
+                    label: t('chat.chatInput.actions.linkTrackerItem', { provider: descriptor.name }),
+                    open: () => setReferencePicker({ source: trackerReferenceSource(descriptor.id) }),
+                };
+            })
+            : []
+    ), [isVSCode, t, trackerSources]);
     const showDraftTargetSelectors = newSessionDraftOpen;
 
     // Which project and directory a new session will target.
@@ -3618,6 +3712,66 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const mobileCommentActive = mobileComment.active;
     attachMobileCommentRef.current = mobileComment.submit;
 
+    // The composer's own form is the route the search shortcut resolves
+    // through; a search inside it stays inside it, and the parent composer
+    // takes the shortcut once the BTW panel is collapsed.
+    const setPromptHistorySearchForm = React.useCallback((node: HTMLFormElement | null) => {
+        composerFormRef.current = node;
+        setPromptHistorySearchOwner(node);
+    }, []);
+    const handlePromptHistoryShortcut = React.useCallback((event: KeyboardEvent) => {
+        if (
+            shortcutRegistry.isSuspended()
+            || event.defaultPrevented
+            || inputMode !== 'normal'
+            || isBtwActive
+            || isBtwPanelVisible
+            || openAutocomplete !== null
+            || mobileCommentActive
+            || largeTextPasteOffer !== null
+        ) return false;
+
+        if (isPromptHistorySearchOpen) {
+            setPromptHistorySearch((current) => current && current.identity === promptHistorySearchIdentity
+                ? { ...current, olderRequest: current.olderRequest + 1 }
+                : current);
+            return true;
+        }
+
+        const target = event.target;
+        if (!(target instanceof Element) || !target.closest('[data-chat-input="true"], [data-prompt-history-search-input]')) return false;
+        const editor = composerRef.current;
+        const selection = editor?.getSelection();
+        const initialQuery = editor && selection && selection.start !== selection.end
+            ? editor.getValue().slice(selection.start, selection.end)
+            : '';
+        cancelHistoryFocusFrame();
+        setPromptHistorySearch({ identity: promptHistorySearchIdentity, initialQuery, olderRequest: 0 });
+        return true;
+    }, [cancelHistoryFocusFrame, inputMode, isBtwActive, isBtwPanelVisible, isPromptHistorySearchOpen, largeTextPasteOffer, mobileCommentActive, openAutocomplete, promptHistorySearchIdentity]);
+
+    React.useEffect(() => {
+        if (!promptHistorySearchOwner) return;
+        return registerPromptHistorySearchRoute(promptHistorySearchOwner, handlePromptHistoryShortcut);
+    }, [handlePromptHistoryShortcut, promptHistorySearchOwner]);
+
+    const closePromptHistorySearch = React.useCallback((reason: 'dismiss' | 'blur') => {
+        const identity = promptHistorySearchIdentityRef.current;
+        setPromptHistorySearch(null);
+        if (reason !== 'dismiss') return;
+        scheduleHistoryFocusFrame(() => {
+            if (promptHistorySearchIdentityRef.current === identity) composerRef.current?.focus();
+        });
+    }, [scheduleHistoryFocusFrame]);
+
+    const pickPromptHistoryCandidate = React.useCallback((candidate: PromptHistoryCandidate<AttachedFile>) => {
+        if (!isPromptHistorySearchOpen || promptHistorySearchIdentityRef.current !== promptHistorySearchIdentity) return;
+        const recalled = messageHistory.jumpTo(candidate.index, { text: messageRef.current, attachments: attachedFiles }, candidate.value);
+        if (!recalled) return;
+        setPromptHistorySearch(null);
+        applyHistoryValue(recalled, 'end');
+    }, [applyHistoryValue, attachedFiles, isPromptHistorySearchOpen, messageHistory, promptHistorySearchIdentity]);
+
 
     const applyAssistSuggestion = React.useCallback((text: string) => {
         setMessage(text);
@@ -3712,6 +3866,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             draftTarget={inlineDraftTarget}
             colors={currentTheme.colors}
             previewHost={contextPreviewHost}
+            isMobile={isMobile}
         />
     ) : null;
     // The suggested follow-up is the composer's own top row on every surface
@@ -4099,8 +4254,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onPickLocalFiles={handlePickLocalFiles}
                         onOpenGitHubPicker={openGitHubPicker}
                         repositoryProvider={repositoryProvider ?? undefined}
-                        showLinearPicker={Boolean(showLinearPicker)}
-                        onOpenLinearPicker={openLinearPicker}
+                        isVSCode={isVSCode}
+                        trackerPickers={trackerPickers}
                         onOpenAttachSheet={openMobileAttachSheet}
                         onStartDictation={toggleDictation}
                         onAbort={handleAbort}
@@ -4308,8 +4463,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         onPickLocalFiles={handlePickLocalFiles}
                         onOpenGitHubPicker={openGitHubPicker}
                         repositoryProvider={repositoryProvider ?? undefined}
-                        showLinearPicker={Boolean(showLinearPicker)}
-                        onOpenLinearPicker={openLinearPicker}
+                        isVSCode={isVSCode}
+                        trackerPickers={trackerPickers}
                         attachGuests={isMobile ? NO_ATTACH_GUESTS : guestAttachItems}
                         onOpenGuestAttach={openGuestAttach}
                         onOpenAttachSheet={openMobileAttachSheet}
@@ -4486,20 +4641,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                         <Icon name={repositoryProvider === 'gitlab' ? 'gitlab' : 'github'} className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
                         {t(repositoryProvider === 'gitlab' ? 'chat.chatInput.actions.linkGitlab' : 'chat.chatInput.actions.linkGithub')}
                     </button>
-                    {showLinearPicker ? (
+                    {trackerPickers.map((picker) => (
                         <button
+                            key={picker.provider}
                             type="button"
                             className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
                             onClick={() => {
                                 mobileShell.skipNextOverlayCloseRestore();
                                 setMobileAttachMenuOpen(false);
-                                requestAnimationFrame(openLinearPicker);
+                                requestAnimationFrame(picker.open);
                             }}
                         >
-                            <Icon name="linear" className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
-                            {t('chat.chatInput.actions.linkLinearIssue')}
+                            <Icon name={picker.icon} className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
+                            {picker.label}
                         </button>
-                    ) : null}
+                    ))}
                 </div>
             </MobileOverlayPanel>
         ) : null}

@@ -220,6 +220,8 @@ const normalizeDirectoryPath = (value: string): string => {
  return normalized;
 };
 
+export const DEFAULT_SELECTION_APPROVAL_TEXT = 'Sounds good';
+
 const clampContextPanelWidth = (width: number): number => {
  if (!Number.isFinite(width)) {
   return CONTEXT_ZONE_DEFAULT_WIDTH;
@@ -1158,6 +1160,12 @@ interface UIStore {
  agentKnowledgeToolEnabled: boolean;
  agentNotifyToolEnabled: boolean;
  agentRenderToolEnabled: boolean;
+ agentImageToolEnabled: boolean;
+ /** `provider/model` the image tool draws with; empty until the user picks one. */
+ agentImageModel: string;
+ agentSecretToolEnabled: boolean;
+ /** Whether OpenChamber's agent tools sit behind a code mode instead of being direct tools. */
+ agentToolsCodeMode: boolean;
  agentWorkflowToolEnabled: boolean;
  /** The isolated-spaces switch as saved; the server applies it at its next start. */
  isolatedSpacesEnabled: boolean;
@@ -1192,6 +1200,8 @@ interface UIStore {
  projectKnowledgePlanRequest: { projectContextId: string; planId: string } | null;
  inputSpellcheckEnabled: boolean;
  largeTextPasteBehavior: LargeTextPasteBehavior;
+ /** Feedback text the selection-approval button sends; empty uses the view's default wording. */
+ selectionApprovalText: string;
  enterToSend: boolean;
  enterToSendConfigured: boolean;
  mobileReturnKeySends: boolean;
@@ -1456,6 +1466,10 @@ interface UIStore {
  setAgentKnowledgeToolEnabled: (value: boolean) => void;
  setAgentNotifyToolEnabled: (value: boolean) => void;
  setAgentRenderToolEnabled: (value: boolean) => void;
+ setAgentImageToolEnabled: (value: boolean) => void;
+ setAgentImageModel: (value: string) => void;
+ setAgentSecretToolEnabled: (value: boolean) => void;
+ setAgentToolsCodeMode: (value: boolean) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
  setAgentMemoryFeatureAvailable: (value: boolean) => void;
@@ -1468,6 +1482,7 @@ interface UIStore {
  clearProjectKnowledgePlanRequest: () => void;
  setInputSpellcheckEnabled: (value: boolean) => void;
  setLargeTextPasteBehavior: (value: LargeTextPasteBehavior) => void;
+ setSelectionApprovalText: (value: string) => void;
  setEnterToSend: (value: boolean) => void;
  setMobileReturnKeySends: (value: boolean) => void;
  setEnterToSendConfigured: (value: boolean) => void;
@@ -1707,6 +1722,10 @@ export const useUIStore = create<UIStore>()(
     agentKnowledgeToolEnabled: true,
     agentNotifyToolEnabled: false,
     agentRenderToolEnabled: true,
+    agentImageToolEnabled: false,
+    agentImageModel: '',
+    agentSecretToolEnabled: true,
+    agentToolsCodeMode: false,
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
     agentMemoryFeatureAvailable: false,
@@ -1718,6 +1737,7 @@ export const useUIStore = create<UIStore>()(
     projectKnowledgePlanRequest: null,
     inputSpellcheckEnabled: false,
     largeTextPasteBehavior: DEFAULT_LARGE_TEXT_PASTE_BEHAVIOR,
+    selectionApprovalText: '',
     enterToSend: false,
     enterToSendConfigured: false,
     mobileReturnKeySends: false,
@@ -3379,6 +3399,18 @@ export const useUIStore = create<UIStore>()(
     setAgentRenderToolEnabled: (value) => {
      set({ agentRenderToolEnabled: value });
     },
+    setAgentImageToolEnabled: (value) => {
+     set({ agentImageToolEnabled: value });
+    },
+    setAgentImageModel: (value) => {
+     set({ agentImageModel: value });
+    },
+    setAgentSecretToolEnabled: (value) => {
+     set({ agentSecretToolEnabled: value });
+    },
+    setAgentToolsCodeMode: (value) => {
+     set({ agentToolsCodeMode: value });
+    },
     setAgentWorkflowToolEnabled: (value) => {
      set({ agentWorkflowToolEnabled: value });
     },
@@ -3419,6 +3451,9 @@ export const useUIStore = create<UIStore>()(
     },
     setLargeTextPasteBehavior: (value) => {
      set({ largeTextPasteBehavior: normalizeLargeTextPasteBehavior(value) });
+    },
+    setSelectionApprovalText: (value) => {
+     set({ selectionApprovalText: value });
     },
     setEnterToSend: (value) => {
      set({ enterToSend: value });
@@ -3944,11 +3979,16 @@ export const useUIStore = create<UIStore>()(
      agentKnowledgeToolEnabled: state.agentKnowledgeToolEnabled,
      agentNotifyToolEnabled: state.agentNotifyToolEnabled,
      agentRenderToolEnabled: state.agentRenderToolEnabled,
+     agentImageToolEnabled: state.agentImageToolEnabled,
+     agentImageModel: state.agentImageModel,
+     agentSecretToolEnabled: state.agentSecretToolEnabled,
+     agentToolsCodeMode: state.agentToolsCodeMode,
      agentWorkflowToolEnabled: state.agentWorkflowToolEnabled,
      isolatedSpacesEnabled: state.isolatedSpacesEnabled,
      agentMemoryViewedAt: state.agentMemoryViewedAt,
      inputSpellcheckEnabled: state.inputSpellcheckEnabled,
      largeTextPasteBehavior: state.largeTextPasteBehavior,
+     selectionApprovalText: state.selectionApprovalText,
      enterToSend: state.enterToSend,
      enterToSendConfigured: state.enterToSendConfigured,
      mobileReturnKeySends: state.mobileReturnKeySends,

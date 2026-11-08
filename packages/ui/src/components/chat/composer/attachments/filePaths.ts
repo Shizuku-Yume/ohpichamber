@@ -8,6 +8,13 @@
 
 const FILE_URI_PREFIX = 'file://';
 
+/** POSIX root, UNC share, or Windows drive letter. */
+export function isLikelyAbsolutePath(value: string): boolean {
+    return value.startsWith('/')
+        || value.startsWith('\\\\')
+        || /^[A-Za-z]:[\\/]/.test(value);
+}
+
 /** Turn a dropped `file://` URI back into a plain path. */
 export function normalizeDroppedPath(rawPath: string): string {
  const input = rawPath.trim();

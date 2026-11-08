@@ -84,7 +84,7 @@ interface MessageListProps {
     endPinningReleased?: boolean;
     composerOverlayHeight?: number;
     onIsAtEndChange?: (isAtEnd: boolean) => void;
-    onListMetricsChange?: (metrics: { readonly footerSize: number }) => void;
+    onListMetricsChange?: (metrics: { readonly headerSize: number; readonly footerSize: number }) => void;
     onTimelineDataChange?: () => void;
     listHeader?: React.ReactNode;
     listFooter?: React.ReactNode;
@@ -702,7 +702,7 @@ type TimelineListProps = {
     endPinningReleased: boolean;
     composerOverlayHeight: number;
     onIsAtEndChange: (isAtEnd: boolean) => void;
-    onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
+    onListMetricsChange: (metrics: { readonly headerSize: number; readonly footerSize: number }) => void;
     onTimelineDataChange: () => void;
     listHeader?: React.ReactNode;
     listFooter?: React.ReactNode;
@@ -1037,7 +1037,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         onTimelineDataChange?.();
     });
 
-    const stableListMetricsChange = useStableEvent((metrics: { readonly footerSize: number }) => {
+    const stableListMetricsChange = useStableEvent((metrics: { readonly headerSize: number; readonly footerSize: number }) => {
         onListMetricsChange?.(metrics);
     });
 

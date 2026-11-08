@@ -50,13 +50,12 @@ export interface MobilePillComposerProps {
     onExpand: () => void;
     onPrimaryAction: () => void;
     onQueueMessage?: () => void;
-    showLinearPicker?: boolean;
-    onOpenLinearPicker?: () => void;
+    /** One entry per signed-in tracker, in the server's order. */
+    trackerPickers?: readonly ComposerTrackerPicker[];
     onPickLocalFiles: () => void;
     onOpenGitHubPicker: () => void;
     /** The host the project's issues and change requests come from. */
     repositoryProvider?: SourceControlProvider | null;
-    trackerPickers?: readonly ComposerTrackerPicker[];
     onOpenAttachSheet: () => void;
     onStartDictation: () => void;
     onAbort: () => void;
@@ -85,8 +84,6 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
         onOpenGitHubPicker,
         repositoryProvider,
         trackerPickers,
-        showLinearPicker,
-        onOpenLinearPicker,
         onOpenAttachSheet,
         onStartDictation,
         onAbort,
@@ -132,8 +129,6 @@ export function MobilePillComposer(props: MobilePillComposerProps) {
                     handlePickLocalFiles={onPickLocalFiles}
                     openGitHubPicker={onOpenGitHubPicker}
                     repositoryProvider={repositoryProvider}
-                    showLinearPicker={showLinearPicker}
-                    openLinearPicker={onOpenLinearPicker}
                     trackerPickers={trackerPickers}
                     onOpenMobileSheet={onOpenAttachSheet}
                 />

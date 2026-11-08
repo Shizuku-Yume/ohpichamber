@@ -20,6 +20,8 @@ type ContextFileOpenFailure =
  | { reason: 'unreadable'; message: string | null }
  | { reason: 'binary' };
 
+type ContextFileOpenFailureReason = ContextFileOpenFailure['reason'];
+
 type ContextFileOpenValidationResult = { ok: true } | ({ ok: false } & ContextFileOpenFailure);
 
 type ContextFileOpenOptions = {

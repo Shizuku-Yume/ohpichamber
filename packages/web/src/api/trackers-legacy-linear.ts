@@ -220,6 +220,11 @@ export const createLegacyLinearTrackerAPI = (fetch: TrackerFetch): Omit<TrackerA
       'Failed to start Linear auth',
     ),
 
+    // The legacy routes predate token and OAuth-client entry; the dialog asks
+    // a newer server for those, and this one answers that it cannot.
+    authConnectToken: async () => ({ ok: false, code: 'UNSUPPORTED', message: null }),
+    authSaveOAuthClient: async () => ({ ok: false, code: 'UNSUPPORTED', message: null }),
+
     authDisconnect: (provider) => call(provider, '/auth', { method: 'DELETE' }, z.object({ removed: z.boolean().catch(false) }), 'Failed to disconnect Linear')
       .then(({ removed }) => ({ removed })),
 

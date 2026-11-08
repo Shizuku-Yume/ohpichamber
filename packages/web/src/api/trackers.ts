@@ -15,6 +15,7 @@ import type {
   TrackerAuthOrigin,
   TrackerAuthStart,
   TrackerAuthStatus,
+  TrackerConnectResult,
   TrackerDescriptor,
   TrackerItemResult,
   TrackerListOptions,
@@ -34,6 +35,7 @@ import { getRuntimeKey, getRuntimeSwitchRevision } from '@openchamber/ui/lib/run
 import { BUILT_IN_LINEAR_TRACKER, createLegacyLinearTrackerAPI } from './trackers-legacy-linear';
 import {
   authStartSchema,
+  connectResultOf,
   authStatusSchema,
   itemResultSchema,
   listResultSchema,
@@ -154,6 +156,32 @@ export const createWebTrackerAPI = ({
     authStart: (provider, origin?: TrackerAuthOrigin): Promise<TrackerAuthStart> => onWire((legacyWire) => (
       legacyWire ? legacy.authStart(provider, origin) : call(provider, '/auth/start', { method: 'POST', body: JSON.stringify({ origin }) }, authStartSchema, 'Failed to start tracker sign-in')
     )),
+
+    authConnectToken: (provider, input): Promise<TrackerConnectResult> => onWire(async (legacyWire) => {
+      if (legacyWire) return legacy.authConnectToken(provider, input);
+      // A refusal is its own answer, not a thrown failure: the card shows the
+      // server's code and message.
+      try {
+        const response = await fetch(trackerPath(provider, '/auth/token'), {
+          method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+        });
+        return await connectResultOf(response);
+      } catch {
+        return { ok: false as const, code: 'failed' as const, message: null };
+      }
+    }),
+
+    authSaveOAuthClient: (provider, input): Promise<TrackerConnectResult> => onWire(async (legacyWire) => {
+      if (legacyWire) return legacy.authSaveOAuthClient(provider, input);
+      try {
+        const response = await fetch(trackerPath(provider, '/auth/oauth-client'), {
+          method: 'PUT', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify(input),
+        });
+        return await connectResultOf(response);
+      } catch {
+        return { ok: false as const, code: 'failed' as const, message: null };
+      }
+    }),
 
     authDisconnect: (provider): Promise<{ removed: boolean }> => onWire((legacyWire) => (
       legacyWire ? legacy.authDisconnect(provider) : call(provider, '/auth', { method: 'DELETE' }, z.object({ removed: z.boolean().catch(false) }), 'Failed to disconnect tracker')

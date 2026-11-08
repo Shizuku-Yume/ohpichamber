@@ -121,7 +121,7 @@ function useMemo<Value>(factory: () => Value, deps: unknown[]): Value {
 function useSyncExternalStore<Value>(subscribe: (listener: () => void) => () => void, snapshot: () => Value): Value {
   // This harness renders explicitly in renderSettled; subscription-driven
   // rendering is covered by the React probes in repository-binding tests.
-  useEffect(() => subscribe(() => {}), [subscribe]);
+  useEffect(() => subscribe(() => { }), [subscribe]);
   return snapshot();
 }
 
@@ -361,7 +361,10 @@ mock.module('@/stores/useSourceControlAuthStore', () => ({
 mock.module('@/lib/device', () => ({ useDeviceInfo: () => ({ isMobile: false }) }));
 mock.module('@/lib/i18n', () => ({ useI18n: () => ({ t: translate }) }));
 mock.module('@/lib/url', () => ({ openExternalUrl: async () => undefined }));
-mock.module('@/lib/worktrees/worktreeBootstrap', () => ({ waitForWorktreeGitReady: async () => undefined }));
+mock.module('@/lib/worktrees/worktreeBootstrap', () => ({
+  getWorktreeBootstrapState: () => null,
+  waitForWorktreeGitReady: async () => undefined,
+}));
 mock.module('@/lib/utils', () => ({
   cn: (...values: Array<string | false | null | undefined>) => values.filter(Boolean).join(' '),
 }));

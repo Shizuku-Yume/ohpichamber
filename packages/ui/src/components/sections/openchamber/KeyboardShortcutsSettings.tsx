@@ -8,38 +8,17 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import {
   formatShortcutForDisplay,
   getCustomizableShortcutActions,
-  getEffectiveShortcutCombo,
-  getEffectiveShortcutPrefix,
+  getEffectiveShortcutBinding,
+  isShortcutAvailable,
+  isSingleChordShortcut,
   normalizeCombo,
+  shortcutMatchesRecordedCombo,
   shortcutRegistry,
   UNASSIGNED_SHORTCUT,
   type ShortcutActionId,
   type ShortcutCombo,
   type CustomizableShortcutAction,
 } from '@/lib/shortcuts';
-
-function getEffectiveShortcutBinding(action: CustomizableShortcutAction, overrides?: Record<string, ShortcutCombo>): ShortcutCombo {
-  return 'prefixStyle' in action && action.prefixStyle
-    ? getEffectiveShortcutPrefix(action.id, overrides)
-    : getEffectiveShortcutCombo(action.id, overrides);
-}
-
-function isShortcutAvailable(_action: CustomizableShortcutAction): boolean {
-  return true;
-}
-
-function isSingleChordShortcut(action: CustomizableShortcutAction): boolean {
-  return 'singleChord' in action || 'nativeMenu' in action;
-}
-
-function shortcutMatchesRecordedCombo(
-  action: CustomizableShortcutAction,
-  recorded: ShortcutCombo,
-  overrides?: Record<string, ShortcutCombo>,
-): boolean {
-  const binding = normalizeCombo(getEffectiveShortcutBinding(action, overrides));
-  return binding === recorded;
-}
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { shortcutSearchItemId } from '@/lib/settings/search';
@@ -77,7 +56,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
   const refreshGlobalMiniChatCombo = React.useCallback(() => {
     void getDesktopMiniChatGlobalShortcut()
       .then((status) => setGlobalMiniChatCombo(status?.combo ?? null))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
   React.useEffect(() => {
     refreshGlobalMiniChatCombo();
@@ -88,7 +67,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
   const refreshGlobalQuakeCombo = React.useCallback(() => {
     void getDesktopQuakeMode()
       .then((status) => setGlobalQuakeCombo(status?.combo ?? null))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
   React.useEffect(() => {
     refreshGlobalQuakeCombo();

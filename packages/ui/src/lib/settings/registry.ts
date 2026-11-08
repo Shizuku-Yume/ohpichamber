@@ -50,6 +50,7 @@ import {
  parseGuarded,
  parseIntegerAtLeast,
  parseIntegerInRange,
+ parseLastUsedEfforts,
  parseManagedRemoteTunnelPresetTokens,
  parseManagedRemoteTunnelPresets,
  parseModelRefs,
@@ -295,6 +296,17 @@ export const SETTINGS_REGISTRY = {
  browserProvider: field({ scope: 'instance', parse: parseNonEmptyString, ui: uiStore('browserProvider', (v) => useUIStore.getState().setBrowserProvider(v)) }),
  agentNotifyToolEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentNotifyToolEnabled', (v) => useUIStore.getState().setAgentNotifyToolEnabled(v)) }),
  agentMemoryToolEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('agentMemoryToolEnabled', (v) => useUIStore.getState().setAgentMemoryToolEnabled(v)) }),
+ // The isolated-spaces switch the server reads once at start. It has no Settings
+ // row: the feature is unreleased, and `lib/spaces/release.ts` gates the UI on
+ // its own. Declared here because the Host persists it and the wire snapshot
+ // must agree with what a client is allowed to write.
+ isolatedSpacesEnabled: field({ scope: 'instance', parse: parseBoolean, ui: uiStore('isolatedSpacesEnabled', (v) => useUIStore.getState().setIsolatedSpacesEnabled(v)) }),
+ // The idle stop of isolated spaces. Written and read through the spaces route,
+ // which also tells the running spaces, so no store keeps a copy.
+ isolatedSpacesIdleStop: field({
+  scope: 'instance',
+  parse: fromSchema(z.object({ enabled: z.boolean(), hours: z.number().int().min(1).max(168) }).strict()),
+ }),
  // Server-owned: it says whether this build has the feature at all.
  agentMemoryFeatureAvailable: field({
   scope: 'instance',
@@ -472,6 +484,7 @@ export const SETTINGS_REGISTRY = {
  enterToSendConfigured: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('enterToSendConfigured', (v) => useUIStore.getState().setEnterToSendConfigured(v)) }),
  persistChatDraft: field({ scope: 'profile', parse: parseBoolean, ui: uiStore('persistChatDraft', (v) => useUIStore.getState().setPersistChatDraft(v)) }),
  largeTextPasteBehavior: field({ scope: 'profile', parse: parseLargeTextPasteBehavior, ui: uiStore('largeTextPasteBehavior', (v) => useUIStore.getState().setLargeTextPasteBehavior(v)) }),
+ selectionApprovalText: field({ scope: 'profile', parse: parseTextUpTo(1000), ui: uiStore('selectionApprovalText', (v) => useUIStore.getState().setSelectionApprovalText(v)) }),
  followUpBehavior: field({
   scope: 'profile',
   parse: parseFollowUpBehavior,
@@ -540,6 +553,7 @@ export const SETTINGS_REGISTRY = {
  recentAgents: field({ scope: 'profile', parse: parseStringSet, ui: uiStore('recentAgents', setUi('recentAgents'), { autoSave: false }) }),
  favoriteAgents: field({ scope: 'profile', parse: parseStringSet, ui: uiStore('favoriteAgents', setUi('favoriteAgents'), { autoSave: false }) }),
  recentEfforts: field({ scope: 'profile', parse: parseRecentEfforts, ui: uiStore('recentEfforts', setUi('recentEfforts'), { autoSave: false }) }),
+ lastUsedEfforts: field({ scope: 'profile', parse: parseLastUsedEfforts, ui: uiStore('lastUsedEfforts', setUi('lastUsedEfforts'), { autoSave: false }) }),
  providerOrder: field({ scope: 'profile', parse: parseStringSet, ui: uiStore('providerOrder', (v) => useUIStore.getState().setProviderOrder(v)) }),
 
  // ── Sessions and summaries (profile) ──

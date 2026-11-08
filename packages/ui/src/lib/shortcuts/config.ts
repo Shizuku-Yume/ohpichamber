@@ -8,13 +8,15 @@ type ShortcutConfig = {
   /** The binding is a bare-modifier chord prefix (completed by another key);
       conflict resolution compares its prefix rather than a full combo. */
   prefixStyle?: true;
+  /** The handler matches single key presses, so Settings records one chord. */
+  singleChord?: true;
 } & (
-  | { customizable: false }
-  | {
+    | { customizable: false }
+    | {
       customizable: true;
       settingsLabelKey: `settings.openchamber.keyboardShortcuts.action.${string}.label`;
     }
-);
+  );
 
 // Default layout, unified around three modes:
 // - Single chords for everyday actions.
@@ -301,7 +303,13 @@ const SHORTCUT_GROUPS = {
   ],
   navigation: [
     { id: 'save_file', defaultBinding: 'mod+s', customizable: false },
-    { id: 'find_in_file', defaultBinding: 'mod+f', customizable: false },
+    {
+      id: 'find_in_file',
+      defaultBinding: 'mod+f',
+      singleChord: true,
+      customizable: true,
+      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.find_in_file.label',
+    },
     {
       id: 'open_go_to_line',
       defaultBinding: 'alt+g',

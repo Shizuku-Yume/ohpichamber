@@ -1,9 +1,13 @@
 import express from 'express';
 import { giftResetTypes, useZaiGiftReset } from './providers/zai.js';
 import { requireSelectedCredential, SELECTED_CREDENTIAL_UNAVAILABLE } from './providers/selected-credential.js';
+import { listExtensionQuotaProviders } from './extension-registry.js';
 
 export function registerQuotaRoutes(app, { getQuotaProviders, resolveQuotaSelection, listQuotaSelections, resolveCredential }) {
   if (typeof getQuotaProviders !== 'function' || typeof resolveQuotaSelection !== 'function' || typeof listQuotaSelections !== 'function' || typeof resolveCredential !== 'function') throw new TypeError('Quota routes require selected workspace catalogs and credential resolver');
+  app.get('/api/quota/extensions', (_req, res) => {
+    res.json({ extensions: listExtensionQuotaProviders() });
+  });
   app.get('/api/quota/providers', async (req, res) => {
     try {
       const selections = await listQuotaSelections(req);

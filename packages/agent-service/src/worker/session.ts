@@ -59,7 +59,7 @@ import { WorkerCompletion } from './completion.ts';
 import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import type { WorkerAuthorize } from './policy.ts';
-import { createHostToolExtension } from './host-tool.ts';
+import { createHostToolExtension, HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
 import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
@@ -424,7 +424,10 @@ export class WorkerSession {
       api.on('tool_call', async event => {
         interaction.observeToolCall(event);
         if (admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
-        if (['bash', 'openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify'].includes(event.toolName)) return;
+        // Host tools route through their domain capability owner; `bash` keeps
+        // its own approval path. The set comes from the registered inventory so
+        // a newly registered host tool cannot fall to the generic refusal below.
+        if ((Object.keys(HOST_TOOL_DESCRIPTIONS) as string[]).concat('bash').includes(event.toolName)) return;
         // The native search tool is the SDK's egress entry point, not a generic
         // tool grant. Host authorization already owns web-search policy (including
         // enterprise refusal), so route exactly this SDK name to that capability.

@@ -73,6 +73,15 @@ function instructionMessages(request: ProviderRequest): Array<{ role: string; co
   .map(message => ({ role: message.role, content: message.content }));
 }
 const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify', 'openchamber_image'] as const;
+// The worker bypasses generic tool authorization for every registered Host
+// tool: their capability owners authorize the inner call. The list is derived
+// from the registry so a newly registered Host tool cannot silently fall to the
+// generic refusal and become uncallable.
+const HOST_TOOL_BYPASS_NAMES = [...Object.keys(HOST_TOOL_DESCRIPTIONS), 'bash'];
+
+test('every registered Host tool is bypassed by the worker tool_call guard', () => {
+  expect(HOST_TOOL_BYPASS_NAMES).toEqual(expect.arrayContaining([...HOST_TOOL_NAMES, 'bash']));
+});
 const HOST_TOOL_INVENTORY_LINE = new RegExp(`^- (?:${HOST_TOOL_NAMES.join('|')})(?:: \`[^\`]+\`)?$`);
 /**
  * Callable Host tools necessarily appear in OMP's tool inventory. That listing

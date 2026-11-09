@@ -154,6 +154,7 @@ describe('Host-owned public catalog credential selections', () => {
     ['nano-gpt', 'nanogpt', 'api-key'], ['minimax-coding-plan', 'minimax-code', 'api-key'],
     ['minimax-cn-coding-plan', 'minimax-code-cn', 'api-key'], ['wafer', 'wafer-serverless', 'api-key'],
     ['xai', 'xai-oauth', 'oauth'], ['opencode-go', 'opencode-go', 'api-key'],
+    ['opencode', 'opencode-zen', 'api-key'], ['opencode', 'opencode-zen', 'oauth'],
   ])('resolves logical %s to established stored native provider %s', async (logicalId, nativeId, method) => {
     const owner = catalogFixture([publicProvider(nativeId, { method })]);
     expect(await owner.resolveQuotaSelection(catalogRequest(), logicalId)).toEqual({ workspaceId: 'workspace_1',

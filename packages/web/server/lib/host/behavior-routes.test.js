@@ -43,7 +43,14 @@ const setup = async (workspaces = {}) => {
   registerBehaviorRoutes(app, {
     fsPromises: { readFile, writeFile, mkdir, rename, unlink },
     os: { homedir: () => root },
-    resolveWorkspaceDirectory: async (directory) => (directory === projectDirectory ? { cwd: projectDirectory } : null),
+    // The directory resolver answers with the canonical public projection,
+    // which omits filesystem roots; the authorized cwd comes from the scope.
+    resolveWorkspaceDirectory: async (directory) => (directory === projectDirectory
+      ? { workspaceId: 'workspace_1', projectId: 'project_1', name: 'project', displayPath: '.' }
+      : null),
+    resolveWorkspaceScope: async (workspaceId) => (workspaceId === 'workspace_1'
+      ? { workspaceId: 'workspace_1', projectId: 'project_1', cwd: projectDirectory, projectDirectory, agentDirectory }
+      : null),
   });
   return {
     root,

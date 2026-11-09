@@ -10,6 +10,8 @@ resources/web-dist/
 resources/agent-runtime/
 resources/agent-runtime.staging/
 resources/web-dist-staging-*/
+resources/ripgrep/*
+!resources/ripgrep/.gitkeep
 .cache/
 
 # OS-specific

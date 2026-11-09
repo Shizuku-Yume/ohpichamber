@@ -715,7 +715,7 @@ export const createFeatureRoutesRuntime = () => {
     registerProjectSetupRoutes(app, { projectConfigRuntime });
     registerAgentMemoryRoutes(app, { agentMemoryRuntime, isAgentMemoryEnabled });
     registerSessionKnowledgeRoutes(app, { sessionKnowledgeRuntime });
-    registerBehaviorRoutes(app, { fsPromises, os, resolveWorkspaceDirectory });
+    registerBehaviorRoutes(app, { fsPromises, os, resolveWorkspaceDirectory, resolveWorkspaceScope });
     registerMessageSearchRoutes(app, { messageSearchRuntime });
 
     if (!routeDependencies.sessionFoldersStore) throw new Error('Feature routes require the Host session folder store');

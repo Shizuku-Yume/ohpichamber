@@ -344,7 +344,7 @@ export const createTunnelRoutesRuntime = (dependencies) => {
           hostname: entry.hostname,
         }));
         const hasStoredManagedRemoteToken = typeof settings?.managedRemoteTunnelToken === 'string' && settings.managedRemoteTunnelToken.trim().length > 0;
-        const hasManagedRemoteTunnelToken = getRuntimeManagedRemoteTunnelToken().length > 0 || managedRemoteTunnelConfig.tunnels.length > 0 || hasStoredManagedRemoteToken;
+        const hasManagedRemoteTunnelToken = Boolean(getRuntimeManagedRemoteTunnelToken()?.length) || managedRemoteTunnelConfig.tunnels.length > 0 || hasStoredManagedRemoteToken;
         const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
           ? null
           : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);

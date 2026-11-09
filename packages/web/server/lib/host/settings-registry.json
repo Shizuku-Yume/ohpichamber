@@ -696,6 +696,9 @@
     "notifyOnQuestion": {
       "scope": "profile"
     },
+    "notifyOnPullRequests": {
+      "scope": "profile"
+    },
     "notificationTemplates": {
       "scope": "profile"
     },

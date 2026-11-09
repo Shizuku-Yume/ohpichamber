@@ -137,6 +137,7 @@ const QUOTA_PROVIDER_RELATIONS = {
   'minimax-cn-coding-plan': { providers: ['minimax-code-cn'] },
   wafer: { providers: ['wafer-serverless'] },
   xai: { providers: ['xai-oauth'], methods: ['oauth'] },
+  opencode: { providers: ['opencode-zen'], methods: ['api-key', 'oauth'] },
 };
 const QUOTA_IDS_BY_NATIVE_PROVIDER = new Map();
 for (const [logicalId, relation] of Object.entries(QUOTA_PROVIDER_RELATIONS)) {

@@ -588,6 +588,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.notifyOnQuestion === 'boolean') {
       result.notifyOnQuestion = candidate.notifyOnQuestion;
     }
+    if (typeof candidate.notifyOnPullRequests === 'boolean') {
+      result.notifyOnPullRequests = candidate.notifyOnPullRequests;
+    }
     if (candidate.notificationTemplates && typeof candidate.notificationTemplates === 'object') {
       result.notificationTemplates = candidate.notificationTemplates;
     }

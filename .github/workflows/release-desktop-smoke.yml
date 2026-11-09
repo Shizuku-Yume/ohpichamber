@@ -112,6 +112,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.APPLE_CERTIFICATE != '' && 'true' || 'false' }}
         run: |
           bun run build:web-assets
+          bun run prepare:ripgrep
           bun run prepare:agent-runtime
           bun run verify:agent-runtime
           bun run bundle:main
@@ -233,6 +234,7 @@ jobs:
           ELECTRON_BUILDER_ARCH: ${{ matrix.arch }}
         shell: bash
         run: |
+          bun run prepare:ripgrep
           bun run prepare:agent-runtime
           bun run verify:agent-runtime
 
@@ -339,6 +341,7 @@ jobs:
         run: |
           set -euo pipefail
           bun run build:web-assets
+          bun run prepare:ripgrep
           bun run prepare:agent-runtime
           bun run verify:agent-runtime
           bun run bundle:main

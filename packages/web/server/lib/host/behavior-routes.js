@@ -22,7 +22,7 @@ const resolveGlobalAgentsPath = ({ os, pathModule = path, env = process.env }) =
   return pathModule.join(agentDirectory, AGENTS_FILE_NAME);
 };
 
-const resolveRequest = async ({ req, resolveWorkspaceDirectory, os }) => {
+const resolveRequest = async ({ req, resolveWorkspaceDirectory, resolveWorkspaceScope, os }) => {
   const source = req.query?.scope ?? req.body?.scope;
   if (source === 'global') {
     return { scope: 'global', filePath: resolveGlobalAgentsPath({ os }) };
@@ -31,8 +31,13 @@ const resolveRequest = async ({ req, resolveWorkspaceDirectory, os }) => {
   const directory = req.query?.directory ?? req.body?.directory;
   if (typeof directory !== 'string' || !directory.trim()) throw asError('A project directory is required');
   const workspace = await resolveWorkspaceDirectory(directory);
-  if (!workspace?.cwd) throw asError('The project directory is not an authorized workspace', 403);
-  return { scope: 'project', filePath: path.join(workspace.cwd, AGENTS_FILE_NAME), directory: workspace.cwd };
+  if (!workspace) throw asError('The project directory is not an authorized workspace', 403);
+  // The directory resolver answers with the canonical public projection, which
+  // deliberately omits filesystem roots. The authorized cwd comes from the Host
+  // scope behind the workspace id.
+  const scope = await resolveWorkspaceScope(workspace.workspaceId);
+  if (!scope?.cwd) throw asError('The project directory is not an authorized workspace', 403);
+  return { scope: 'project', filePath: path.join(scope.cwd, AGENTS_FILE_NAME), directory: scope.cwd };
 };
 
 const readCurrent = async (fsPromises, filePath) => {
@@ -57,8 +62,8 @@ const writeAtomic = async (fsPromises, filePath, content) => {
 };
 
 export const registerBehaviorRoutes = (app, dependencies) => {
-  const { fsPromises, os, resolveWorkspaceDirectory } = dependencies;
-  if (!resolveWorkspaceDirectory) throw new TypeError('behavior routes require workspace resolution');
+  const { fsPromises, os, resolveWorkspaceDirectory, resolveWorkspaceScope } = dependencies;
+  if (!resolveWorkspaceDirectory || !resolveWorkspaceScope) throw new TypeError('behavior routes require workspace resolution');
 
   const sendFailure = (res, error) => {
     const status = Number.isInteger(error?.status) ? error.status : 500;
@@ -68,7 +73,7 @@ export const registerBehaviorRoutes = (app, dependencies) => {
 
   app.get('/api/behavior/agents-md', async (req, res) => {
     try {
-      const { filePath } = await resolveRequest({ req, resolveWorkspaceDirectory, os });
+      const { filePath } = await resolveRequest({ req, resolveWorkspaceDirectory, resolveWorkspaceScope, os });
       const current = await readCurrent(fsPromises, filePath);
       res.setHeader('Cache-Control', 'no-store');
       return res.json({ content: current.content, exists: current.exists });
@@ -79,7 +84,7 @@ export const registerBehaviorRoutes = (app, dependencies) => {
 
   app.put('/api/behavior/agents-md', async (req, res) => {
     try {
-      const { filePath } = await resolveRequest({ req, resolveWorkspaceDirectory, os });
+      const { filePath } = await resolveRequest({ req, resolveWorkspaceDirectory, resolveWorkspaceScope, os });
       const content = req.body?.content;
       if (typeof content !== 'string') throw asError('Behavior content must be a string');
       if (Buffer.byteLength(content, 'utf8') > MAX_BEHAVIOR_FILE_BYTES) throw asError('Behavior content is too large', 413);

@@ -63,10 +63,8 @@ export const NotificationSettings: React.FC = () => {
   const setNotifyOnSubtasks = useUIStore(state => state.setNotifyOnSubtasks);
   const notifyOnCompletion = useUIStore(state => state.notifyOnCompletion);
   const setNotifyOnCompletion = useUIStore(state => state.setNotifyOnCompletion);
-  const notifyOnPullRequests = useUIStore(state => (state as unknown as { notifyOnPullRequests?: boolean }).notifyOnPullRequests ?? false);
-  const setNotifyOnPullRequests = useUIStore(state => (state as unknown as { setNotifyOnPullRequests?: (v: boolean) => void }).setNotifyOnPullRequests ?? ((val: boolean) => {
-    useUIStore.setState({ notifyOnPullRequests: val } as unknown as Partial<ReturnType<typeof useUIStore.getState>>);
-  }));
+  const notifyOnPullRequests = useUIStore(state => state.notifyOnPullRequests);
+  const setNotifyOnPullRequests = useUIStore(state => state.setNotifyOnPullRequests);
   const notifyOnError = useUIStore(state => state.notifyOnError);
   const setNotifyOnError = useUIStore(state => state.setNotifyOnError);
   const notifyOnQuestion = useUIStore(state => state.notifyOnQuestion);

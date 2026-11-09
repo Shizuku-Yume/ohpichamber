@@ -72,7 +72,7 @@ function instructionMessages(request: ProviderRequest): Array<{ role: string; co
  return request.messages.filter(message => message.role === 'system' || message.role === 'developer')
   .map(message => ({ role: message.role, content: message.content }));
 }
-const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify'] as const;
+const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify', 'openchamber_image'] as const;
 const HOST_TOOL_INVENTORY_LINE = new RegExp(`^- (?:${HOST_TOOL_NAMES.join('|')})(?:: \`[^\`]+\`)?$`);
 /**
  * Callable Host tools necessarily appear in OMP's tool inventory. That listing
@@ -121,7 +121,7 @@ function completion(tool?: { name: string; input: JsonObject; id: string } | str
 function waitForGoal(worker: WorkerSession, predicate: () => boolean, timeoutMs?: number): Promise<void> {
  if (predicate()) return Promise.resolve();
  const pending = Promise.withResolvers<void>();
- let unsubscribe: () => void = () => {};
+ let unsubscribe: () => void = () => { };
  const timer = timeoutMs === undefined ? undefined : setTimeout(() => {
   unsubscribe();
   pending.reject(new Error('Timed out waiting for the worker predicate'));

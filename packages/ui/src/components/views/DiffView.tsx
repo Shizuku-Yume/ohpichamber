@@ -1356,7 +1356,7 @@ export const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                                 variant="ghost"
                                 size="sm"
                                 className="h-5 w-5 p-0 opacity-70 hover:opacity-100"
-                                title={t('diffView.actions.openFileInEditorAtChange')}
+                                aria-label={t('diffView.actions.openFileInEditorAtChange')}
                                 onClick={(event) => {
                                     event.stopPropagation();
                                     onOpenInEditor(file.path, diffData);

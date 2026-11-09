@@ -35,6 +35,7 @@
     "build": "bun -e \"process.exit(0)\"",
     "ensure:electron": "node ./scripts/ensure-electron.mjs",
     "prepare:agent-runtime": "bun ./scripts/prepare-agent-runtime.mjs",
+    "prepare:ripgrep": "node ./scripts/prepare-ripgrep.mjs",
     "verify:agent-runtime": "node ./scripts/verify-agent-runtime.mjs",
     "verify:linux-appimage": "node ./scripts/verify-linux-appimage.mjs",
     "bundle:main": "bun ./scripts/bundle-main.mjs",
@@ -46,7 +47,7 @@
     "test:linux-desktop": "node --test ./linux-autostart.test.mjs && node ./scripts/smoke-linux-app-discovery.mjs && node ./scripts/smoke-path-open-utils.mjs",
     "updater:e2e:fixture": "node ./scripts/updater-e2e-fixture.mjs",
     "verify:update-manifest": "node ./scripts/verify-update-manifest.mjs",
-    "package": "bun run build:web-assets && bun run prepare:agent-runtime && bun run verify:agent-runtime && bun run bundle:main && bun run rebuild:native && node ./scripts/package.mjs",
+    "package": "bun run build:web-assets && bun run prepare:ripgrep && bun run prepare:agent-runtime && bun run verify:agent-runtime && bun run bundle:main && bun run rebuild:native && node ./scripts/package.mjs",
     "finalize:latest-yml": "node ./scripts/finalize-latest-yml.mjs",
     "type-check": "node --check ./entry.mjs && node --check ./early-startup.mjs && node --check ./main.mjs && node --check ./preload.mjs",
     "lint": "node -e \"process.exit(0)\""
@@ -67,6 +68,11 @@
       "dist-bundle/early-startup.mjs",
       "preload.mjs",
       "browser-panel-preload.cjs",
+      "!node_modules/@openchamber/web/{dist,src,public,test}{,/**}",
+      "!node_modules/@openchamber/web/scripts/{dev-server-watch.mjs,dev-server-watch.test.mjs,pack-standalone.mjs,postpack.mjs,prepack.mjs,prepare-agent-runtime.mjs}",
+      "!node_modules/@openchamber/web/*.{html,tgz}",
+      "!node_modules/@openchamber/web/{tsconfig.json,tsconfig.tsbuildinfo}",
+      "!node_modules/@openchamber/web/server/**/*.test.js",
       "!**/node_modules/7zip-bin/{linux,mac}{,/**}",
       "!**/node_modules/7zip-bin/!(${os})/**/*",
       "!**/node_modules/7zip-bin/win/!(${arch}){,/**}"
@@ -91,6 +97,10 @@
       {
         "from": "resources/agent-runtime",
         "to": "agent-runtime"
+      },
+      {
+        "from": "resources/ripgrep",
+        "to": "ripgrep"
       }
     ],
     "afterPack": "scripts/after-pack.cjs",

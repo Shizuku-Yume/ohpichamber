@@ -18,7 +18,7 @@
 
 **Acceptance:** technical work complete; maintainer acceptance pending. `bun run dead-code` still exits 1 and the packaged ripgrep source is the host binary — both recorded below rather than claimed as passes.
 
-**Check after:** `bun run type-check` exit 0 (3,743 files, 5 projects); `bun run lint` exit 0 (7 pre-existing UI `react-hooks/exhaustive-deps` warnings); `bun run docs:validate` exit 0 (696 pages, 58 sidebar links); `VITEST_MAX_WORKERS=2 bun run test` exit 0 (7/7 suites, Web 518 files / 8,451 tests); `.workflow/bin/workflow validate` exit 0 (238 task files); `bun run dead-code` exit 1 (61 unused files / 214 unused exports / 2 unused types / 6 hints) — net-new over the main baseline (18 / 65 / 3), not a claimed pass.
+**Check after:** `bun run type-check` exit 0 (3,743 files, 5 projects); `bun run lint` exit 0 (7 pre-existing UI `react-hooks/exhaustive-deps` warnings); `bun run docs:validate` exit 0 (696 pages, 58 sidebar links); `VITEST_MAX_WORKERS=2 bun run test` exit 0 (7/7 suites, Web 518 files / 8,451 tests); `.workflow/bin/workflow validate` exit 0 (238 task files); `bun run dead-code` exit 1 (61 unused files / 214 unused exports / 2 namespace exports / 103 unused exported types / 6 hints) — net-new over the main baseline (18 unused files / 65 unused exports / 69 unused exported types / 3 hints), not a claimed pass.
 
 Real path: built Web on `127.0.0.1:3970` and the packaged `OpenChamber-3.0.0-linux-x86_64.AppImage` under Xvfb both exercised W1–W25 with the real provider (`gate-real-provider/gemini-3.5-flash-lite`) and system `omp/18.18.1`; evidence and screenshots in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-dispatch-2026-11-07/gate-evidence/`, receipt in `.workflow/development.md`.
 

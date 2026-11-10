@@ -771,3 +771,23 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** user
 - **Revisit when:** External Linear OAuth credentials are provisioned, worktree session isolation is designed and implemented in a subsequent milestone, or Electron Linux headless compositor capture is resolved.
 - **Effort:** m4-orchestration
+
+## 2026-11-10 - Merge upstream OpenChamber with a real git merge
+
+- **Decided:** Bring upstream v2.7.0 (`bc50ba56a`) into the fork with a real three-way `git merge`, resolved by area on the `ux-v270-omp-alignment` integration branch. Resolution rule: upstream wins unless the fork's delta is required by the OMP boundary (Canonical Client, agent contract, Host gateway) or by a recorded decision; standing exclusions (`packages/vscode`, OpenCode-engine paths, folder trust, isolated-spaces code, `.github` collaboration/CI, `changelog/`, `nix/`, upstream agent guidance) resolve to the fork side. The disposition ledger is generated from git blobs instead of maintained by hand. Future syncs are ordinary merges.
+- **Instead of:** continuing file-level ports with a git-derived drift report, or the `-s ours` history link used for `0056bf6a9`.
+- **Because:** the `ours` link and two file-level refreshes left git believing upstream was absorbed while 53/53 v2.7.0 UI commits are absent, 404 baseline files were silently deleted and 44 ledger rows claim adoption of files that do not exist (`research/ux-v270-systemic-review.md` R1). A dry-run `git merge-tree main bc50ba56a` conflicts in 1,298 files (about 1,082 outside standing exclusions); that one-time cost is accepted so later syncs stay incremental.
+- **Decided by:** user
+- **Supersedes:** 2026-10-27 - Link upstream history with an ours merge
+- **Revisit when:** upstream changes license or repository, or the fork stops tracking upstream.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-10 - OMP TUI parity means function and display parity, not a mirror of OMP's settings and commands
+
+- **Decided:** "OMP TUI parity" covers what the user can do and see in the agent experience (status, tool intent, live streaming, tool summaries, todo, modes, goals, subagents), presented in OpenChamber's UI idioms. GUI Settings expose only settings a GUI user acts on; terminal-presentation settings, internal tuning knobs and duplicates of an existing OpenChamber control are not shown, and the OMP Settings page offers "open config.yml" for the rest. When OpenChamber already has a control for a concept, it is the single surface. The Commands page manages prompt templates; built-in OMP commands stay in chat autocomplete.
+- **Instead of:** exposing every OMP setting, role editor and CLI command in the GUI.
+- **Because:** the literal reading produced a 157-row settings page (22 GUI-meaningful), four `modelRoles` editors, 30 CLI commands on the Commands page and a 21-pill plugin wall; the maintainer's original direction asked for the TUI's functions and displays (`tui里的各项功能与显示`).
+- **Decided by:** user
+- **Supersedes:** the "visual selectors for all 16 `modelRoles` + `modelPresets`" and settings/command exposure parts of 2026-11-05 - Scope M4 to full OMP 18.16.0 TUI feature/display parity; refines part (1) of 2026-11-06 - Preserve OpenChamber frontend capabilities alongside full OMP engine parity.
+- **Revisit when:** a concrete GUI user need appears for a hidden OMP setting.
+- **Effort:** ux-v270-omp-alignment

@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Zen-modellen',
   'quota.value.requests': 'Verzoeken: {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "Afwijzen",
   ...workerRunsI18n.nl,
 
+  'chat.backgroundWork.aria': 'Werk op de achtergrond',
+  'chat.backgroundWork.count': 'Op de achtergrond: {count}',
+  'chat.backgroundImages.generating': 'Afbeelding wordt gemaakt',
+  'sessions.sidebar.session.status.backgroundImage': 'Afbeelding wordt op de achtergrond gemaakt',
+  'gitView.empty.repositoryUnreadable': 'Git kon deze map niet lezen',
+  'gitView.empty.repositoryUnreadableDescription': 'Dit is wat Git meldde. Los het op en probeer het opnieuw.',
+  'gitView.empty.repositoryUnreadableRetry': 'Opnieuw proberen',
+  'contextSidebar.section.sessionTotals': 'Sessietotalen',
+  'directoryExplorerDialog.browse.linkTarget': 'Koppeling naar {path}',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} heeft OpenCode {required} nodig. Deze server heeft {current}. Werk eerst OpenCode bij.',
+  'chat.workStatus.breakdown.planCountSingle': '{count} plan',
+  'chat.workStatus.breakdown.planCountPlural': '{count} plannen',
+  'chat.workStatus.linkedPlans.open': 'Plan {title} openen',
+  ...aboutReleaseNotesI18n.nl,
+  ...updateCheckErrorsI18n.nl,
+  ...sessionWarmingI18n.nl,
+  ...usageToolI18n.nl,
+  ...openchamberToolsLayoutI18n.nl,
+  ...openchamberToolOutputI18n.nl,
+  ...tooltipsDiffI18n['nl'],
+  ...tooltipsFilesI18n['nl'],
+  ...tooltipsGitI18n['nl'],
+  ...tooltipsTrackerI18n['nl'],
+  ...tooltipsWalkthroughI18n['nl'],
+  ...tooltipsTerminalBrowserI18n['nl'],
+  ...tooltipsWorkspaceI18n['nl'],
+  ...tooltipsPanelI18n['nl'],
+  ...tooltipsChatI18n['nl'],
   ...m4LaneDI18n.nl,
 };

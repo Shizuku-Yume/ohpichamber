@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Zen 模型',
   'quota.value.requests': '请求数：{count}',
@@ -9372,5 +9378,24 @@ export const dict = {
   'chat.planReview.reject': "拒绝",
   ...workerRunsI18n['zh-CN'],
 
+  'chat.backgroundWork.aria': '后台工作',
+  'chat.backgroundWork.count': '后台：{count}',
+  'chat.backgroundImages.generating': '正在生成图片',
+  'sessions.sidebar.session.status.backgroundImage': '图片正在后台生成',
+  'gitView.empty.repositoryUnreadable': 'Git 无法读取此文件夹',
+  'gitView.empty.repositoryUnreadableDescription': '以下是 Git 的输出。解决问题后重试。',
+  'gitView.empty.repositoryUnreadableRetry': '重试',
+  'contextSidebar.section.sessionTotals': '会话总计',
+  'directoryExplorerDialog.browse.linkTarget': '链接到 {path}',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} 需要 OpenCode {required}。此服务器为 {current}。请先更新 OpenCode。',
+  'chat.workStatus.breakdown.planCountSingle': '{count} 个计划',
+  'chat.workStatus.breakdown.planCountPlural': '{count} 个计划',
+  'chat.workStatus.linkedPlans.open': '打开计划 {title}',
+  ...aboutReleaseNotesI18n['zh-CN'],
+  ...updateCheckErrorsI18n['zh-CN'],
+  ...sessionWarmingI18n['zh-CN'],
+  ...usageToolI18n['zh-CN'],
+  ...openchamberToolsLayoutI18n['zh-CN'],
+  ...openchamberToolOutputI18n['zh-CN'],
   ...m4LaneDI18n['zh-CN'],
 };

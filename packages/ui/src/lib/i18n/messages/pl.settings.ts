@@ -2780,4 +2780,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'Nie udało się włączyć agenta: nie można zapisać jego pliku konfiguracji',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "Przeszukaj historię poleceń",
 
+  'settings.themeImport.noReadableThemes': 'Nie udało się odczytać żadnego motywu kolorów z tego pakietu.',
+  'settings.openchamber.visual.section.themes': 'Motywy',
+  'settings.openchamber.visual.field.noThemesMatch': 'Brak motywów pasujących do „{query}”.',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': 'Jeśli przeglądarka zatrzyma się na stronie, która się nie otwiera, skopiuj jej adres i wklej go tutaj.',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': 'Wklej adres z przeglądarki',
+  'settings.providers.page.logo.title': 'Logo',
+  'settings.providers.page.logo.info': 'Wyświetlane zamiast logo lub ikony dostawcy na listach, w selektorach i w wiadomościach. PNG, JPEG, WebP lub SVG, do 1 MB.',
+  'settings.providers.page.logo.upload': 'Prześlij obraz',
+  'settings.providers.page.logo.remove': 'Usuń obraz',
+  'settings.providers.page.logo.error.type': 'Wybierz obraz PNG, JPEG, WebP lub SVG.',
+  'settings.providers.page.logo.error.size': 'Wybierz obraz o rozmiarze do 1 MB.',
+  'settings.providers.page.logo.toast.uploadFailed': 'Nie udało się przesłać logo: {reason}',
+  'settings.providers.page.logo.toast.removeFailed': 'Nie udało się usunąć logo: {reason}',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra (25 języków europejskich)',
 };

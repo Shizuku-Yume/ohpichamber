@@ -215,7 +215,7 @@ and the open chat stay; a crash they cause still stops at the fourth crash.
 | `compile-cache.mjs` | Node's V8 code cache for the packaged main process: enabling it under userData, keeping it out of child environments, flushing and pruning after startup |
 | `packaged-runtime-config.mjs` | Runtime values for packaged application documents: inline injection, and the blocking script and gate used while the first navigation runs ahead of the local server |
 | `desktop-local-auth.mjs` | Whether a window may receive the embedded Host's local credential, and the stored-or-minted `desktop-local` client token before the runtime config script is released |
-| `early-startup.mjs` | Settings and window-state reading, splash markup, main-window options, the early window handoff and buffered app events; shared by both bundles |
+| `early-startup.mjs` | Settings and window-state reading, splash markup, main-window options, the early window handoff and buffered app events; shared by both bundles. Its window icon in an unpackaged Windows run is `dev-icon.ico` (source `resources/icons/dev-icon-win.svg`), so the taskbar tells a dev copy apart; Linux keeps the usual icon, because GNOME takes the dock icon from the installed app's `.desktop` entry |
 | `main.mjs` | Electron main process, app lifecycle, windows, menus, deep links, native IPC handlers, updates, local server startup |
 | `electron-host-probe.mjs` | Chromium direct-host probes, identity checks, attempt deadlines, and response cleanup |
 | `host-probe-policy.mjs` | Selector fast attempt and unreachable-only retry policy |
@@ -445,6 +445,17 @@ launch arguments before deduplication, so re-adding one cannot drop the category
 Development skips jump lists because Electron's
 executable needs a separate app-path argument to relaunch this checkout.
 
+Packaged Windows exposes the same unread set in a custom taskbar jump-list
+category and a Mark all as read task. Session items launch the executable with
+the existing session deep link, strictly validating its ID and checking global
+session membership before selection. Mark-all launches with `--mark-all-read`;
+main queues it until the renderer has registered its action listener, and the
+renderer waits for the global list. Unchanged lists are not rewritten. Empty
+lists clear the custom jump list. Windows-removed items are excluded by their
+launch arguments before deduplication, so re-adding one cannot drop the category.
+Development skips jump lists because Electron's
+executable needs a separate app-path argument to relaunch this checkout.
+
 An enabled tray loads the dropdown providers' quota once after renderer runtime
 initialization when no sample has loaded. The native Menu `menu-will-show` event
 requests a quota refresh through `openchamber:tray-action` before or as the menu
@@ -596,8 +607,8 @@ Add new native capabilities in this order:
 
 The desktop app updates from one of two channels, chosen under Settings → About → Updates and stored as `desktopUpdateChannel` in `settings.json`:
 
-- **Stable**: the latest full release on GitHub (the `github` provider of electron-updater).
-- **Canary**: the nightly build of `main`. `.github/workflows/canary.yml` builds it when `main` moved and replaces the files of one pre-release tagged `canary`; the app reads that pre-release's manifests directly (the `generic` provider on `releases/download/canary/`). Stable never sees them, because the GitHub provider reads only the latest full release.
+- **Stable**: the latest full release on GitHub (the `github` provider of electron-updater), read from the R2 mirror first (`https://downloads.openchamber.dev/desktop/stable/`, the `generic` provider) and falling back to GitHub for an hour after the mirror fails.
+- **Canary**: the nightly build of `main`. `.github/workflows/canary.yml` builds it when `main` moved and replaces the files of one pre-release tagged `canary`; the app reads the mirror first and that pre-release's manifests as the fallback (the `generic` provider on `releases/download/canary/`). Stable never sees them, because the GitHub provider reads only the latest full release.
 
 Picking Canary checks at once and offers the Canary build as an ordinary update; after it installs, the app is Canary and keeps updating from Canary. Picking Stable from a Canary build offers the latest release, which is older: `applyUpdaterChannel` (`main.mjs`) sets `allowDowngrade` for exactly that case, and `updater-check.mjs` takes electron-updater's verdict instead of comparing versions itself. A release build never downgrades. Without a stored pick the app follows its own build, so a Canary build downloaded from the canary pre-release stays on Canary and is not offered the older release on its first check. On a Linux .deb or .rpm install the downgrade tells the package manager the older package is wanted (`linux-package-install.mjs`), or it would keep the newer one. Every check re-reads the stored channel, so a switch needs no restart; a switch during a running check waits for that check first, because electron-updater answers a running check for the feed it started on.
 
@@ -611,6 +622,9 @@ A separate app (own name, id, profile) was built first. It meant two installs, t
 
 Waiting for the next release would leave the person on a build they asked to leave for up to a few days. The downgrade is offered right away, knowing that a Canary build may have written settings or data in a form the older release does not read yet.
 
+### Why Stable reads a mirror on R2 and not GitHub alone
+
+GitHub's release downloads fail now and then, answering 504 from `releases/download` for hours while its API serves the same files, and they download at a few MB/s. R2 is served by Cloudflare's network with free egress and downloaded about twice as fast in a measurement on 2.7.0. GitHub stays the fallback, so a broken mirror costs one failed request an hour, never an update.
 ### Why one rolling pre-release and not a release per night
 
 The download link stays the same, the releases page does not fill up with nightly entries, and the update feed is one fixed address.

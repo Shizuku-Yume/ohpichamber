@@ -2769,4 +2769,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'Couldn\'t enable the agent: its config file could not be written',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "Search prompt history",
 
+  'settings.themeImport.noReadableThemes': 'None of the color themes in this package could be read.',
+  'settings.providers.page.logo.title': 'Logo',
+  'settings.providers.page.logo.info': 'Shown instead of the provider\'s logo or icon in lists, pickers and messages. PNG, JPEG, WebP or SVG, up to 1 MB.',
+  'settings.providers.page.logo.upload': 'Upload image',
+  'settings.providers.page.logo.remove': 'Remove image',
+  'settings.providers.page.logo.error.type': 'Choose a PNG, JPEG, WebP or SVG image.',
+  'settings.providers.page.logo.error.size': 'Choose an image of 1 MB or less.',
+  'settings.providers.page.logo.toast.uploadFailed': 'Could not upload the logo: {reason}',
+  'settings.providers.page.logo.toast.removeFailed': 'Could not remove the logo: {reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': 'If the browser ends up on a page that won\'t open, copy that page\'s address and paste it here.',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': 'Paste the address from the browser',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra (25 European languages)',
+  'settings.openchamber.visual.section.themes': 'Themes',
+  'settings.openchamber.visual.field.noThemesMatch': 'No themes match "{query}".',
 } as const;

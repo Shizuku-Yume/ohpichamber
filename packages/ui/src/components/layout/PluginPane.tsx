@@ -91,6 +91,7 @@ import { openExternalUrl } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { closeGuestTabsEverywhere } from '@/lib/guests/tabs';
 import { pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
+import { DockedPanelSurfaceContext, usePageColors } from '@/hooks/usePageColors';
 import { useInputStore } from '@/sync/input-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
@@ -278,6 +279,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   [actionTitle, currentSessionId, sessionAgent, sessionBusy, sessionModel, sessionTitle],
  );
 
+ const pageColors = usePageColors();
  const readableColors = React.useMemo(() => getReadableThemeColors(currentTheme), [currentTheme]);
  const ready = React.useMemo<HostReadyContext>(() => {
   const features: NonNullable<HostReadyContext['features']> = {};
@@ -291,7 +293,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    theme: {
     mode: currentTheme.metadata.variant === 'dark' ? 'dark' : 'light',
     tokens: {
-     background: currentTheme.colors.surface.background,
+     background: pageColors.background,
      elevated: currentTheme.colors.surface.elevated,
      foreground: currentTheme.colors.surface.foreground,
      muted: currentTheme.colors.surface.mutedForeground,
@@ -301,7 +303,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
      selection: currentTheme.colors.interactive.selection,
      focus: currentTheme.colors.interactive.focusRing,
      primary: currentTheme.colors.primary.base,
-     mutedSurface: currentTheme.colors.surface.muted,
+     mutedSurface: pageColors.mutedSurface,
      elevatedForeground: currentTheme.colors.surface.elevatedForeground,
      active: currentTheme.colors.interactive.active,
      selectionForeground: readableColors.selectionForeground,
@@ -343,7 +345,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
    payload.block = block.call;
   }
   return payload;
- }, [block, connection, currentTheme, readableColors, directory, guest?.backgroundEntry, guest?.storageId, headless, item, locale, oauthStatus, onStatusControls, popover, popoverHost, sessionSnapshot, surface]);
+ }, [block, connection, currentTheme, pageColors, readableColors, directory, guest?.backgroundEntry, guest?.storageId, headless, item, locale, oauthStatus, onStatusControls, popover, popoverHost, sessionSnapshot, surface]);
 
  const fileEditorEntry = surface === 'file' && fileEditor
   ? guest?.fileEditors?.find((editor) => editor.id === fileEditor.editorId)?.entry ?? null
@@ -1244,6 +1246,8 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
       schedulePopoverClose(activePopover.activation, 'outside');
      }}
     >
+     {/* Floats over the app, so never on a docked panel's page. */}
+     <DockedPanelSurfaceContext.Provider value={false}>
      <PluginPane
       mode={mode}
       surface="popover"
@@ -1289,6 +1293,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
        else schedulePopoverClose(activePopover.activation, 'outside');
       }}
      />
+     </DockedPanelSurfaceContext.Provider>
     </GuestPopover>
    ) : null}
   </>

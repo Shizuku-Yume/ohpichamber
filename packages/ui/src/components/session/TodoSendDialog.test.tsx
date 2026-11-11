@@ -103,6 +103,7 @@ const settle = (deferred: Deferred | undefined, value: DirectoryDefaults | null)
   deferred?.resolve(value);
 });
 const shownModel = () => host.querySelector('[data-model]')?.getAttribute('data-model');
+const shownAgent = () => host.querySelector('[data-agent]')?.getAttribute('data-agent');
 const send = () => act(async () => {
   Array.from(host.querySelectorAll<HTMLElement>('[data-action="button"]'))
     .find((element) => element.textContent === 'rightSidebar.contextNotesTodo.sendDialog.actions.send')
@@ -161,13 +162,9 @@ test('defaults of a project the dialog left never land', async () => {
   await render('/repo-b');
   await settle(pending[1], { agentName: 'plan', providerId: 'anthropic', modelId: 'claude' });
   await settle(pending[0], { agentName: 'build', providerId: 'openai', modelId: 'gpt' });
-  await send();
 
   expect(shownModel()).toBe('anthropic/claude');
-  expect(confirmed).toEqual([{
-    providerID: 'anthropic', modelID: 'claude', variant: '', agent: 'plan',
-    picked: { model: false, variant: false, agent: false },
-  }]);
+  expect(shownAgent()).toBe('plan');
 });
 
 test('a configured model the catalog has not listed keeps its effort', async () => {

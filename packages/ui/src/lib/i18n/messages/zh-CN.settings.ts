@@ -2779,4 +2779,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': '无法启用代理：无法写入其配置文件',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "搜索提示历史记录",
 
+  'settings.themeImport.noReadableThemes': '无法读取此扩展包中的任何颜色主题。',
+  'settings.providers.page.logo.title': '徽标',
+  'settings.providers.page.logo.info': '在列表、选择器和消息中代替提供商的徽标或图标显示。支持 PNG、JPEG、WebP 或 SVG，最大 1 MB。',
+  'settings.providers.page.logo.upload': '上传图片',
+  'settings.providers.page.logo.remove': '移除图片',
+  'settings.providers.page.logo.error.type': '请选择 PNG、JPEG、WebP 或 SVG 图片。',
+  'settings.providers.page.logo.error.size': '请选择不超过 1 MB 的图片。',
+  'settings.providers.page.logo.toast.uploadFailed': '无法上传徽标：{reason}',
+  'settings.providers.page.logo.toast.removeFailed': '无法移除徽标：{reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': '如果浏览器停在一个打不开的页面上，请复制该页面的地址并粘贴到这里。',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': '粘贴浏览器中的地址',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra（25 种欧洲语言）',
+  'settings.openchamber.visual.section.themes': '主题',
+  'settings.openchamber.visual.field.noThemesMatch': '没有与“{query}”匹配的主题。',
 } as const;

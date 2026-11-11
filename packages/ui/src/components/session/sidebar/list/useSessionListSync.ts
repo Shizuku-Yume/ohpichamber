@@ -10,15 +10,23 @@ import { buildSessionBootstrapDemands } from './sessionBootstrapDemands';
 import { buildKnownSessionDirectories } from './sessionListDirectories';
 import { useAuthoritativeSessionCleanup } from './useAuthoritativeSessionCleanup';
 
-export const useSessionListSync = () => {
+const EMPTY_WORKTREES_BY_PROJECT = new Map();
+
+type UseSessionListSyncOptions = {
+  isVSCode: boolean;
+};
+
+export const useSessionListSync = ({
+  isVSCode,
+}: UseSessionListSyncOptions) => {
   const childStores = useChildStoreManager();
   const projects = useProjectsStore((state) => state.projects);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const currentSessionDirectory = useSessionUIStore((state) => state.currentSessionDirectory);
-  const availableWorktreesByProject = useSessionUIStore((state) => state.availableWorktreesByProject);
+  const availableWorktreesByProject = useSessionUIStore((state) => isVSCode ? EMPTY_WORKTREES_BY_PROJECT : state.availableWorktreesByProject);
   const knownDirectories = React.useMemo(
-    () => buildKnownSessionDirectories(projects, availableWorktreesByProject),
-    [availableWorktreesByProject, projects],
+    () => buildKnownSessionDirectories(projects, availableWorktreesByProject, { includeWorktrees: !isVSCode }),
+    [availableWorktreesByProject, isVSCode, projects],
   );
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
   const archivedSessions = useGlobalSessionsStore((state) => state.archivedSessions);
@@ -43,9 +51,9 @@ export const useSessionListSync = () => {
     const directories = new Set(knownDirectories);
     const previous = knownProjectSessionDirectoriesRef.current;
     knownProjectSessionDirectoriesRef.current = directories;
-    const added = previous ? [...directories].filter((directory) => !previous.has(directory)) : [];
+    const added = previous ? [...directories].filter((directory) => !previous.has(directory)) : isVSCode ? [...directories] : [];
     if (added.length) void refreshGlobalSessionsForDirectories(added, getAllSyncSessions());
-  }, [knownDirectories]);
+  }, [isVSCode, knownDirectories]);
 
   React.useEffect(() => {
     let timeout: ReturnType<typeof setTimeout> | null = null;

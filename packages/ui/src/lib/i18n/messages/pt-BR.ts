@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Modelos Zen',
   'quota.value.requests': 'Solicitações: {count}',
@@ -9372,5 +9378,24 @@ export const dict = {
   'chat.planReview.reject': "Rejeitar",
   ...workerRunsI18n['pt-BR'],
 
+  "chat.backgroundWork.aria": "Trabalho em segundo plano",
+  "chat.backgroundWork.count": "Em segundo plano: {count}",
+  "chat.backgroundImages.generating": "Gerando uma imagem",
+  "sessions.sidebar.session.status.backgroundImage": "Imagem sendo gerada em segundo plano",
+  "gitView.empty.repositoryUnreadable": "O Git não conseguiu ler esta pasta",
+  "gitView.empty.repositoryUnreadableDescription": "Isto é o que o Git informou. Corrija e tente novamente.",
+  "gitView.empty.repositoryUnreadableRetry": "Tentar novamente",
+  "contextSidebar.section.sessionTotals": "Totais da sessão",
+  "directoryExplorerDialog.browse.linkTarget": "Link para {path}",
+  "updateDialog.openCodeTooOld": "O OpenChamber {version} precisa do OpenCode {required}. Este servidor tem a {current}. Atualize o OpenCode primeiro.",
+  'chat.workStatus.breakdown.planCountSingle': '{count} plano',
+  'chat.workStatus.breakdown.planCountPlural': '{count} planos',
+  'chat.workStatus.linkedPlans.open': 'Abrir o plano {title}',
+  ...aboutReleaseNotesI18n['pt-BR'],
+  ...updateCheckErrorsI18n['pt-BR'],
+  ...sessionWarmingI18n['pt-BR'],
+  ...usageToolI18n['pt-BR'],
+  ...openchamberToolsLayoutI18n['pt-BR'],
+  ...openchamberToolOutputI18n['pt-BR'],
   ...m4LaneDI18n['pt-BR'],
 };

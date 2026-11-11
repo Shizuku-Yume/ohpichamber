@@ -60,9 +60,9 @@ describe('useProjectRepoStatus', () => {
     dom.restore();
   });
 
-  const render = (projects: Project[], enabled = true) => act(async () => {
+  const render = (projects: Project[], enabled = true, apis: RuntimeAPIs = runtimeAPIs) => act(async () => {
     root.render(
-      <RuntimeAPIContext.Provider value={runtimeAPIs}>
+      <RuntimeAPIContext.Provider value={apis}>
         <Probe projects={projects} enabled={enabled} />
       </RuntimeAPIContext.Provider>,
     );
@@ -95,6 +95,7 @@ describe('useProjectRepoStatus', () => {
     await render([project('a'), project('b')]);
     expect(reads).toEqual(['/a', '/b', '/a', '/b']);
   });
+
 
   test('a failed read is retried on the next list change; a removed and re-added project is read again', async () => {
     failing.add('/b');

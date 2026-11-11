@@ -2,6 +2,9 @@ import React from 'react';
 import type { Session } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getSyncSessionMaterializationStatus } from '@/sync/sync-refs';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { getSettingsSurface } from '@/lib/settings/surface';
+import { isSpaceDirectoryStopped } from '@/lib/spaces/spaces-store';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 
 const SESSION_PREFETCH_HOVER_DELAY_MS = 180;
@@ -35,7 +38,8 @@ const getPrefetchRequestKey = (request: Pick<PrefetchRequest, 'directory' | 'ses
 type PrefetchTarget = Session;
 
 const sessionDirectory = (session: PrefetchTarget | null | undefined): string | null => {
-  return session ? resolveGlobalSessionDirectory(session) : null;
+  const directory = session ? resolveGlobalSessionDirectory(session)?.trim() : undefined;
+  return directory || null;
 };
 
 /**
@@ -61,6 +65,9 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
   const sessionPrefetchQueueRef = React.useRef<PrefetchRequest[]>([]);
   const sessionPrefetchInFlightRef = React.useRef<Set<string>>(new Set());
   const generationRef = React.useRef(0);
+  // VS Code has no OpenChamber server to read ahead from; a phone pays for
+  // every speculative history read in mobile data, and its list never did.
+  const prefetchDisabled = React.useMemo(() => isVSCodeRuntime() || getSettingsSurface() === 'mobile', []);
 
   const clearPendingPrefetches = React.useCallback(() => {
     generationRef.current += 1;
@@ -71,7 +78,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
   }, []);
 
   const pumpSessionPrefetchQueue = React.useCallback(() => {
-    if (!enabled) {
+    if (!enabled || prefetchDisabled) {
       return;
     }
 
@@ -87,8 +94,9 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
         continue;
       }
 
-      // Check if the session is already renderable in the sync child store.
-      if (getSyncSessionMaterializationStatus(request.sessionId, request.directory).renderable) {
+      // Check if the session is already renderable in the sync child store. A stopped space
+      // cannot answer: its read would only wait for a timeout.
+      if (getSyncSessionMaterializationStatus(request.sessionId, request.directory).renderable || isSpaceDirectoryStopped(request.directory)) {
         continue;
       }
 
@@ -101,12 +109,12 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
           pumpSessionPrefetchQueue();
         });
     }
-  }, [enabled, prefetchSession]);
+  }, [enabled, prefetchDisabled, prefetchSession]);
 
   const scheduleSessionPrefetch = React.useCallback((session: PrefetchTarget | null | undefined, origin: 'hover' | 'neighbor' = 'neighbor') => {
     const sessionId = session?.sessionId;
     const directory = sessionDirectory(session);
-    if (!enabled || !sessionId || !directory || sessionId === currentSessionId) {
+    if (!enabled || prefetchDisabled || !sessionId || !directory || sessionId === currentSessionId || isSpaceDirectoryStopped(directory)) {
       return;
     }
     const request = { sessionId, directory, generation: generationRef.current };
@@ -146,7 +154,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
       pumpSessionPrefetchQueue();
     }, SESSION_PREFETCH_HOVER_DELAY_MS);
     sessionPrefetchTimersRef.current.set(key, timer);
-  }, [currentSessionId, enabled, pumpSessionPrefetchQueue]);
+  }, [currentSessionId, enabled, prefetchDisabled, pumpSessionPrefetchQueue]);
 
   // A hover that ends before the delay is not interest in the session. A
   // request already queued or in flight is left alone.
@@ -172,12 +180,12 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
 
   React.useEffect(() => {
     clearPendingPrefetches();
-  }, [clearPendingPrefetches, currentSessionId, enabled]);
+  }, [clearPendingPrefetches, currentSessionId, enabled, prefetchDisabled]);
 
   // Wait for the active session to finish loading before prefetching neighbors.
   // On rapid session switches the timer resets, so only the final session triggers prefetch.
   React.useEffect(() => {
-    if (!enabled || !currentSessionId || sortedSessions.length === 0) {
+    if (!enabled || prefetchDisabled || !currentSessionId || sortedSessions.length === 0) {
       return;
     }
     const timer = window.setTimeout(() => {
@@ -186,10 +194,10 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
       for (const offset of NEIGHBOR_PREFETCH_OFFSETS) scheduleSessionPrefetch(sortedSessions[currentIndex + offset]);
     }, SESSION_PREFETCH_SETTLE_MS);
     return () => window.clearTimeout(timer);
-  }, [currentSessionId, enabled, scheduleSessionPrefetch, sortedSessions]);
+  }, [currentSessionId, enabled, prefetchDisabled, scheduleSessionPrefetch, sortedSessions]);
 
   React.useEffect(() => {
-    if (!enabled || !currentSessionId || workSessions.length === 0) {
+    if (!enabled || prefetchDisabled || !currentSessionId || workSessions.length === 0) {
       return;
     }
     const timer = window.setTimeout(() => {
@@ -198,7 +206,7 @@ export const useSessionPrefetch = ({ enabled = true, currentSessionId, sortedSes
       for (const offset of NEIGHBOR_PREFETCH_OFFSETS) scheduleSessionPrefetch(workSessions[currentIndex + offset]);
     }, SESSION_PREFETCH_SETTLE_MS);
     return () => window.clearTimeout(timer);
-  }, [currentSessionId, enabled, scheduleSessionPrefetch, workSessions]);
+  }, [currentSessionId, enabled, prefetchDisabled, workSessions, scheduleSessionPrefetch]);
 
   React.useEffect(() => clearPendingPrefetches, [clearPendingPrefetches]);
 

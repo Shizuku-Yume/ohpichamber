@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Modele Zen',
   'quota.value.requests': 'Żądania: {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "Odrzuć",
   ...workerRunsI18n.pl,
 
+  'chat.backgroundWork.aria': 'Praca w tle',
+  'chat.backgroundWork.count': 'W tle: {count}',
+  'chat.backgroundImages.generating': 'Generowanie obrazu',
+  'sessions.sidebar.session.status.backgroundImage': 'Obraz generuje się w tle',
+  'contextSidebar.section.sessionTotals': 'Sumy sesji',
+  'directoryExplorerDialog.browse.linkTarget': 'Dowiązanie do {path}',
+  'gitView.empty.repositoryUnreadable': 'Git nie mógł odczytać tego folderu',
+  'gitView.empty.repositoryUnreadableDescription': 'Oto, co zgłosił Git. Napraw problem i spróbuj ponownie.',
+  'gitView.empty.repositoryUnreadableRetry': 'Spróbuj ponownie',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} wymaga OpenCode {required}. Ten serwer ma {current}. Najpierw zaktualizuj OpenCode.',
+  'chat.workStatus.breakdown.planCountSingle': '{count} plan',
+  'chat.workStatus.breakdown.planCountPlural': '{count} plany',
+  'chat.workStatus.linkedPlans.open': 'Otwórz plan {title}',
+  ...aboutReleaseNotesI18n.pl,
+  ...updateCheckErrorsI18n.pl,
+  ...sessionWarmingI18n.pl,
+  ...usageToolI18n.pl,
+  ...openchamberToolsLayoutI18n.pl,
+  ...openchamberToolOutputI18n.pl,
+  ...tooltipsDiffI18n['pl'],
+  ...tooltipsFilesI18n['pl'],
+  ...tooltipsGitI18n['pl'],
+  ...tooltipsTrackerI18n['pl'],
+  ...tooltipsWalkthroughI18n['pl'],
+  ...tooltipsTerminalBrowserI18n['pl'],
+  ...tooltipsWorkspaceI18n['pl'],
+  ...tooltipsPanelI18n['pl'],
+  ...tooltipsChatI18n['pl'],
   ...m4LaneDI18n.pl,
 };

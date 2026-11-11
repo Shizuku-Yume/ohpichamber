@@ -39,6 +39,7 @@ type WebFileMutationResponse = {
   path?: string;
   error?: string;
   reason?: FilesystemErrorReason;
+  maxBytes?: number;
 };
 
 const toDirectoryListResult = (fallbackDirectory: string, payload: WebDirectoryListResponse): DirectoryListResult => {
@@ -236,6 +237,7 @@ export const createWebFilesAPI = ({ getDirectory }: WebFilesAPIOptions): FilesAP
       throw new FilesystemError(error.error || 'Failed to upload file', {
         reason: parseFilesystemErrorReason(error.reason),
         status: response.status,
+        maxBytes: error.maxBytes,
       });
     }
 

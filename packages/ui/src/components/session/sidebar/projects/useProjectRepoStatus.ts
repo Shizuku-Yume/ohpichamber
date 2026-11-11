@@ -1,9 +1,9 @@
 import React from 'react';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
-import { mapWithConcurrency } from '@/lib/concurrency';
 import { useGitStore } from '@/stores/useGitStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
+import { captureRuntimeInstance } from '@/lib/runtime-switch';
 import type { RuntimeAPIs } from '@/lib/api/types';
 
 type Project = { id: string; path: string; normalizedPath: string };
@@ -70,16 +70,25 @@ export const useProjectRepoStatus = (args: Args): void => {
     for (const path of paths) {
       if (!currentPaths.has(path)) paths.delete(path);
     }
-    for (const path of currentPaths) {
-      if (paths.has(path)) continue;
-      paths.add(path);
-      // A failed read leaves the path unknown; the next list change retries it.
-      const forgetIfUnknown = () => {
-        const state = useGitStore.getState().directories.get(path);
-        if (state?.isGitRepo !== false && !state?.status) paths.delete(path);
-      };
-      void runBackgroundNetworkTask(() => ensureStatus(path, git)).then(forgetIfUnknown, forgetIfUnknown);
-    }
+    const newPaths = [...currentPaths].filter((path) => !paths.has(path));
+    if (newPaths.length === 0) return;
+    for (const path of newPaths) paths.add(path);
+    // A failed read leaves the path unknown; the next list change retries it.
+    const forgetIfUnknown = (path: string) => {
+      const state = useGitStore.getState().directories.get(path);
+      if (state?.isGitRepo !== false && !state?.status) paths.delete(path);
+    };
+    // Read the paths this sidebar has not populated yet in one scheduled pass.
+    // The fork's Git runtime contract has no batched status prefetch, so each
+    // project reads through the store's own cache and connection path.
+    const isCurrent = captureRuntimeInstance();
+    void runBackgroundNetworkTask(async () => {
+      if (!isCurrent()) return;
+      await Promise.all(newPaths.map((path) => ensureStatus(path, git).then(
+        () => forgetIfUnknown(path),
+        () => forgetIfUnknown(path),
+      )));
+    });
   }, [enabled, normalizedProjects, git, gitRuntimeKey, ensureStatus, setProjectRepoStatus]);
 
   // Read isGitRepo from the store-populated state
@@ -168,18 +177,18 @@ export const useProjectRepoStatus = (args: Args): void => {
           return;
         }
 
-        const entries = await mapWithConcurrency(pending, 2, async (project) => {
-          const inputBranch = gitRepoStatus.get(project.normalizedPath)?.branch?.trim() ?? '';
-          const inputKey = `${project.normalizedPath}\0${inputBranch}`;
-          const branch = await runBackgroundNetworkTask(() =>
-            getRootBranch(
+        const entries = await runBackgroundNetworkTask(() =>
+          Promise.all(pending.map(async (project) => {
+            const inputBranch = gitRepoStatus.get(project.normalizedPath)?.branch?.trim() ?? '';
+            const inputKey = `${project.normalizedPath}\0${inputBranch}`;
+            const branch = await getRootBranch(
               project.normalizedPath,
               inputBranch ? { knownBranch: inputBranch } : undefined,
-            )
-          ).catch(() => null);
-          return { id: project.id, inputKey, branch };
-        });
-        if (cancelled) {
+            ).catch(() => null);
+            return { id: project.id, inputKey, branch };
+          })),
+        );
+        if (!entries || cancelled) {
           return;
         }
 

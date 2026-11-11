@@ -1,27 +1,32 @@
 import type { Session } from '@openchamber/agent-contract';
 import { isReviewSession } from '@/lib/sessionReviewMetadata';
 import { isSessionInWork } from '@/lib/sessionWorkMetadata';
-import { markOverviewSessionsDone, readWorktreeUse, sessionsInWorktree } from '@/components/overview/overviewActions';
+import { markOverviewSessionsDone } from '@/components/overview/overviewActions';
+import { readWorktreeUse, sessionsInWorktree } from '@/components/overview/overviewActions';
 import { archiveWorktreeWork } from '@/lib/worktrees/worktreeArchive';
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { setSessionWorkState } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
+import { isAgentWorkingInSpace } from '@/lib/spaces/space-apply';
+import { runSpaceAction } from '@/lib/spaces/space-repair';
+import { useSpacesStore } from '@/lib/spaces/spaces-store';
+import { useGlobalSessionStatusStore } from '@/sync/global-session-status';
 import { isPathWithinProject } from '../utils';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SessionNode } from '../types';
 
 /**
- * Leave a worktree's work: close its sessions' tabs, and move off it when it
- * is on screen, as a session or as a draft in its folder.
+ * Leave a worktree's or a space's work: close its sessions' tabs, and move
+ * off it when it is on screen, as a session or as a draft in its folder.
  */
-const leaveWorktree = (sessions: readonly Session[], worktreePath: string, projectId: string): void => {
+const leaveWorkFolder = (sessions: readonly Session[], folder: string, projectId: string): void => {
   leaveFinishedSessions(sessions.map((session) => session.sessionId), { projectId });
   const state = useSessionUIStore.getState();
   if (state.currentSessionId) return;
   const directory = state.newSessionDraft.open ? state.newSessionDraft.directoryOverride : useDirectoryStore.getState().currentDirectory;
-  if (isPathWithinProject(directory, worktreePath)) state.openNewSessionDraft({ selectedProjectId: projectId });
+  if (isPathWithinProject(directory, folder)) state.openNewSessionDraft({ selectedProjectId: projectId });
 };
 
 /** Every session of a work's trees, parents before their children. */
@@ -41,7 +46,7 @@ export const collectWorkSessions = (nodes: readonly SessionNode[]): Session[] =>
 };
 
 /** A session that grew out of another one (a review, a fork, a promoted `/btw`), not the work itself. */
-const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.parentSessionId);
+const isOffshoot = (session: Session): boolean => isReviewSession(session) || Boolean(session.metadata?.openchamber?.originalSessionID);
 
 /**
  * The session a click on a worktree work opens: the one the user last worked
@@ -58,7 +63,7 @@ export const isWorkInWork = (sessions: readonly Session[]): boolean => sessions.
 
 /** Puts a work back into In work through the session the user last worked in. */
 export const trackWork = async (session: Session): Promise<void> => {
-  await setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session) ?? null, 'open');
+  await setSessionWorkState(session.sessionId, resolveGlobalSessionDirectory(session), 'open');
 };
 
 export type FinishWorktreeWorkOutcome =
@@ -96,16 +101,44 @@ export async function finishWorktreeWork(input: {
   // Done work leaves the working set, as Mark done in the composer does: its
   // tabs close and the app moves off it, which also frees the worktree for
   // the clean-up below (it never removes one that is on screen).
-  leaveWorktree(input.sessions, input.worktree.path, input.project.id);
+  leaveWorkFolder(input.sessions, input.worktree.path, input.project.id);
   if (!input.archive) return { kind: 'done' };
   const use = await readWorktreeUse(input.worktree.path);
   if (use === 'unknown') return { kind: 'unknown' };
   if (use !== 'free') return { kind: 'busy' };
   try {
     const sessions = sessionsInWorktree(useGlobalSessionsStore.getState().activeSessions, input.worktree.path);
-    await archiveWorktreeWork({ project: input.project, worktree: input.worktree, sessions });
+    await archiveWorktreeWork({ project: input.project, worktree: input.worktree, sessions, title: input.title });
     return { kind: 'archived' };
   } catch (error) {
     return { kind: 'failed', error: error instanceof Error ? error : new Error(String(error)), doneFailed: 0 };
   }
+}
+
+/**
+ * Done on a space's work: its sessions in work are marked done and the work
+ * is left, as a worktree's is, and the space is stopped. Stopping keeps every
+ * file and gives back its memory and processor; it starts again with the next
+ * message. A space an agent is still working in keeps running, so Done never
+ * cuts a turn short. The space itself stays: what happens to its changes is
+ * the apply dialog's question, never a side effect of Done (maintainer
+ * decision 2026-10-26).
+ */
+export async function finishSpaceWork(input: {
+  sessions: readonly Session[];
+  spaceId: string;
+  directory: string;
+  projectId: string;
+}): Promise<Extract<FinishWorktreeWorkOutcome, { kind: 'done' | 'failed' }>> {
+  const failed = await markOverviewSessionsDone(input.sessions.filter(isSessionInWork));
+  if (failed.length > 0) {
+    return { kind: 'failed', error: new Error(`Could not mark ${failed.length} session(s) done`), doneFailed: failed.length };
+  }
+  leaveWorkFolder(input.sessions, input.directory, input.projectId);
+  const running = useSpacesStore.getState().journey?.get(input.spaceId)?.state === 'running';
+  if (running && !isAgentWorkingInSpace(useGlobalSessionStatusStore.getState(), input.spaceId)) {
+    // Its progress and a failure show on the space's row, as from its menu.
+    void runSpaceAction(input.spaceId, 'stop');
+  }
+  return { kind: 'done' };
 }

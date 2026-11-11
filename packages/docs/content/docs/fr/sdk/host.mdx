@@ -153,22 +153,6 @@ Sans `send`, `prompt` remplace le texte de la zone de chat. Avec `send: true`, i
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)` et `keys()` conservent votre JSON sans permission supplémentaire. Une clé absente donne `undefined`, null enregistré reste null. Clés de 1 à 128 caractères, valeur de 64 KiB UTF-8 maximum, ensemble de 2 MiB et 2 000 clés maximum. Incluez l'ID du projet dans la clé pour des données propres à un projet. Les écritures sont sérialisées et atomiques ; les erreurs préservent les données. La désinstallation supprime ce stockage sur le serveur connecté.
 
-## Shells en arrière-plan
-
-Avec la capacité `shells`, surveillez les commandes shell exécutées en arrière-plan, associées à une session et ses sous-agents, à un projet enregistré ou à l'ensemble des sessions. OpenChamber répond depuis son stockage local ; aucune lecture réseau n'est effectuée.
-
-| Appel | Ce qu'il fait |
-| --- | --- |
-| `onRunningShells(scope, listener)` | s'abonner aux commandes shell dans le périmètre : `{ kind: 'session', sessionId }` couvre la session et ses sous-agents, `{ kind: 'project', projectId }` couvre un projet enregistré et `{ kind: 'global' }` couvre toutes les sessions. Vous recevez les commandes en cours de la plus ancienne à la plus récente, chacune avec son indicateur `background`, ainsi que celles qui sont terminées. Renvoie une fonction de désabonnement. |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | une page de la sortie d'une commande en cours ou terminée. Sans `cursor`, commence `tailBytes` (jusqu'à 65536) avant la fin. Renvoie `{ output, cursor, skipped }`. |
-| `stopShell(shellId)` | envoyer d'abord la note d'arrêt à l'agent, puis supprimer la commande. |
-
-L'instantané est `{ kind: "shells", scope, shells, ended }`, avec `scope` reprenant le périmètre de la souscription. Chaque shell en cours d'exécution est `{ id, sessionID, command, startedAt, background }`, 200 au maximum, du plus ancien au plus récent. `background` vaut `true` pour une tâche que le tour n'attend pas.
-
-`ended` liste les commandes qu'OpenChamber a vues se terminer, de la fin la plus ancienne à la plus récente, 200 au maximum avec les plus récentes conservées. Chacune ajoute `status`, `endedAt` et `exit` lorsque la commande s'est terminée avec un code. Le statut est `exited`, `timeout`, `killed` par un signal, `stopped` par un utilisateur, ou `unknown` quand la fin est survenue lors d'une reconnexion. OpenChamber ne conserve cette liste qu'en mémoire. Elle est vide après rechargement de l'application ; enregistrez donc ce que votre panneau affiche dans le stockage d'extension.
-
-L'hôte conserve la sortie d'une commande terminée pour ses 25 dernières commandes terminées par dossier. Une commande arrêtée perd immédiatement sa sortie. Lire un shell qu'OpenChamber n'a jamais vu, ou une sortie que l'hôte n'a plus, renvoie `NOT_FOUND`. Arrêter un shell qui n'est pas en cours d'exécution renvoie également `NOT_FOUND`. Une capacité `shells` non approuvée renvoie `NOT_GRANTED`.
-
 ## request
 
 ```ts
@@ -247,7 +231,11 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
-`sessions.start`, `sessions.send`, `sessions.retry` et `sessions.status` nécessitent `contributes.sessionControl`, que l'utilisateur approuve sur une ligne à part. `sessions.lastReply` nécessite `sessionControl: { content: true }`. `setInstructions` nécessite `contributes.instructions` et complète ce que lisent les agents, dans un dossier ou, avec `null`, partout.
+`sessions.start`, `sessions.send`, `sessions.retry`, `sessions.status` et `sessions.stop` nécessitent `contributes.sessionControl`, que l'utilisateur approuve sur une ligne à part. `sessions.lastReply` nécessite `sessionControl: { content: true }`. Un message envoyé par `sessions.send` ferme un formulaire ou une page que l'agent attend dans cette session, comme un message tapé dans le chat.
+
+Pour porter les demandes de l'agent ailleurs, par exemple dans une app de messagerie, ajoutez `answers: true`. L'utilisateur l'approuve sur une ligne de plus, et le service peut alors répondre à sa place dans n'importe quelle session : `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })` (ou `'deny'` avec un `message` que l'agent lit) pour un événement `permission-asked`, et `sessions.answerForm(sessionId, formId, values)` pour un événement `question-asked` dont `event.question.kind` vaut `form`. Le contenu de l'événement liste les champs du formulaire avec leur `key` et leurs choix. `null` à la place des valeurs ferme le formulaire sans réponse. Une autorisation ne couvre que cette demande.
+
+`setInstructions` nécessite `contributes.instructions` et complète ce que lisent les agents, dans un dossier ou, avec `null`, partout.
 
 `emit` atteint vos frames ouvertes via `host.onServiceEvent`, ce qui évite à un panneau d'interroger le service en boucle. Rien n'est rejoué, donc une frame ouverte plus tard lit d'abord l'état actuel. `readSettings` donne au service les réglages de l'intégration, champs `secret` compris, et `needsConfiguration` affiche un message sur la carte de l'extension.
 
@@ -382,14 +370,14 @@ Quand l'utilisateur active les commentaires de session, OpenChamber appelle `com
 
 ## Fournisseurs de consommation
 
-Un service peut rapporter la consommation à côté des fournisseurs intégrés : déclarez `provides: ["quota"]` et listez dans `contributes.quota.providers` les fournisseurs Host dont il a besoin des identifiants. OpenChamber nomme le fournisseur `ext-<panel.id>`, dessine sa carte avec le nom et l'icône de l'extension, et l'interroge comme il interroge un fournisseur intégré.
+Un service peut rapporter la consommation à côté des fournisseurs intégrés : déclarez `provides: ["quota"]` et listez dans `contributes.quota.providers` les fournisseurs OpenCode dont il a besoin des identifiants. OpenChamber nomme le fournisseur `ext-<panel.id>`, dessine sa carte avec le nom et l'icône de l'extension, et l'interroge comme il interroge un fournisseur intégré.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-Le dialogue d'approbation liste ces fournisseurs, et une version qui change la liste redemande. À chaque actualisation, OpenChamber envoie un appel, `usage.read`, à `POST /quota`, avec dans `input.credentials` l'identifiant qu'Host conserve pour chaque fournisseur listé pour lequel il en a un (une clé d'API, ou les jetons d'une connexion navigateur) et rien d'autre du magasin. Un fournisseur listé pour lequel Host n'a pas d'identifiant est affiché comme non configuré et le service n'est pas appelé ; une liste vide est permise, pour un fournisseur dont la clé vit dans les réglages propres de l'extension.
+Le dialogue d'approbation liste ces fournisseurs, et une version qui change la liste redemande. À chaque actualisation, OpenChamber envoie un appel, `usage.read`, à `POST /quota`, avec dans `input.credentials` l'identifiant qu'OpenCode conserve pour chaque fournisseur listé pour lequel il en a un (une clé d'API, ou les jetons d'une connexion navigateur) et rien d'autre du magasin. Un fournisseur listé pour lequel OpenCode n'a pas d'identifiant est affiché comme non configuré et le service n'est pas appelé ; une liste vide est permise, pour un fournisseur dont la clé vit dans les réglages propres de l'extension.
 
 Lisez le corps avec `readQuotaProviderRequest` et répondez `{ ok: true, data }` avec le résultat qu'un fournisseur intégré calcule : `ok`, `configured`, `error`, `planLabel`, et `usage.windows` par nom de fenêtre, chacune avec `usedPercent`, `windowSeconds`, `resetAt` (époque en millisecondes) et un `valueLabel` ou `value` facultatif, plus `usage.models` pour les fenêtres par modèle. OpenChamber dérive la part restante, le décompte jusqu'à la réinitialisation et les chaînes formatées, pour que la carte corresponde à celle d'un fournisseur intégré.
 

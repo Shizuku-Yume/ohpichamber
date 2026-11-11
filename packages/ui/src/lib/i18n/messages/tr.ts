@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Zen Modelleri',
   'quota.value.requests': 'İstekler: {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "Reddet",
   ...workerRunsI18n.tr,
 
+  'chat.backgroundWork.aria': 'Arka plandaki iş',
+  'chat.backgroundWork.count': 'Arka planda: {count}',
+  'chat.backgroundImages.generating': 'Görsel oluşturuluyor',
+  'sessions.sidebar.session.status.backgroundImage': 'Görsel arka planda oluşturuluyor',
+  'gitView.empty.repositoryUnreadable': 'Git bu klasörü okuyamadı',
+  'gitView.empty.repositoryUnreadableDescription': 'Git\'in bildirdiği bu. Sorunu giderip yeniden deneyin.',
+  'gitView.empty.repositoryUnreadableRetry': 'Yeniden dene',
+  'contextSidebar.section.sessionTotals': 'Session Toplamları',
+  'directoryExplorerDialog.browse.linkTarget': '{path} konumuna bağlantı',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version}, OpenCode {required} gerektirir. Bu sunucuda {current} var. Önce OpenCode’u güncelleyin.',
+  'chat.workStatus.breakdown.planCountSingle': '{count} plan',
+  'chat.workStatus.breakdown.planCountPlural': '{count} plan',
+  'chat.workStatus.linkedPlans.open': '{title} planını aç',
+  ...aboutReleaseNotesI18n.tr,
+  ...updateCheckErrorsI18n.tr,
+  ...sessionWarmingI18n.tr,
+  ...usageToolI18n.tr,
+  ...openchamberToolsLayoutI18n.tr,
+  ...openchamberToolOutputI18n.tr,
+  ...tooltipsDiffI18n['tr'],
+  ...tooltipsFilesI18n['tr'],
+  ...tooltipsGitI18n['tr'],
+  ...tooltipsTrackerI18n['tr'],
+  ...tooltipsWalkthroughI18n['tr'],
+  ...tooltipsTerminalBrowserI18n['tr'],
+  ...tooltipsWorkspaceI18n['tr'],
+  ...tooltipsPanelI18n['tr'],
+  ...tooltipsChatI18n['tr'],
   ...m4LaneDI18n.tr,
 };

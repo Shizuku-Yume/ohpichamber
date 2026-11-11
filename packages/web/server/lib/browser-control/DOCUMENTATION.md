@@ -15,7 +15,9 @@ itself; it can only ask and wait.
 - `routes.js` is the result callback (`POST /api/browser-control/result`). It
   validates the envelope and hands the outcome to the broker.
 - `../../index.js` supplies `emitRequest`, which writes the request to the
-  OpenChamber SSE clients and returns how many were reached.
+  OpenChamber SSE clients and returns how many were reached. The event carries
+  the same `context` (`directory`, `sessionId`, each `null` when unknown) the
+  extension provider receives, so the in-app browser knows which session asked.
 - `provider.js` sits between the control service and the broker. It reads
   the `browserProvider` setting on every action: `builtin` goes to the broker;
   an extension id goes to that extension's service (`contributes.service.provides`
@@ -46,8 +48,52 @@ itself; it can only ask and wait.
   `browser.*` actions of the `openchamber_web` tool onto the router's
   `request()` (same signature as the broker) and owns their parameter
   validation.
-- The client half is `packages/ui/src/lib/browser/controlClient.ts`, which
-  registers the mounted browser pane as the one responder.
+- The client half is `packages/ui/src/lib/browser/controlClient.ts`. Every
+  mounted browser tab registers its pane under its context-panel tab id, with
+  its project and the session whose agent opened it (`ownerSessionId` on the
+  tab, null for the user's own). An action with `tabId` runs in that tab,
+  whoever opened it. Without one it runs in the calling session's tab: the
+  shown tab if it is the session's, else the one the session last opened or
+  worked in, else its newest. A session with no tab of its own gets the browser
+  tab the user last had in front of them (`setShownBrowserTab`, set by
+  `ContextPanel` with the project on screen) only when that tab is the user's
+  and in the session's project, and claims it only after a short delay, so a
+  client that holds the session's own tab wins the claim; otherwise the agent
+  is told so, with the tabs it could name. A request with no session keeps the
+  earlier rule within the project on screen: the shown tab, else that
+  project's newest tab. An action never switches the user to the tab it acts in.
+  `browser.open` without `tabId` never navigates an existing tab: the
+  registered opener (`ContextPanel`, `useUIStore.openAgentBrowserTab`) makes a
+  new background tab in the calling session's project, owned by that session,
+  and the answer carries its `tabId`. `browser.close` removes a tab the calling
+  session opened. Closing is panel state rather than a page action, so the
+  panel registers a closer the way it registers the opener; without `tabId`
+  the session closes its own most recent tab, and a tab the user or another
+  session opened is refused, never closed, even when an action without `tabId`
+  would otherwise have used it. A close with no calling session, which the
+  `POST /api/openchamber/control` route can produce, owns no tab and is
+  refused outright: a null session must not match an unowned (the user's) tab.
+  When the named tab is gone, a client with the panel mounted answers
+  "no such tab" after the claim delay rather than leaving the agent to time out.
+
+## Running the panel's code
+
+The agent tool reaches the panel of the app the agent works from, so a change
+to `BrowserPane`, `controlClient` or `pageActions` shows there only after that
+app is rebuilt. Run it in `electron:dev` instead and send the actions to that
+instance's API port, the one its log prints after `OpenChamber server
+listening on`; the route has no session, so name the tab after the open:
+
+```sh
+curl -s -X POST http://127.0.0.1:<api-port>/api/openchamber/control \
+  -H 'content-type: application/json' \
+  -d '{"action":"browser.open","input":{"url":"http://localhost:<ui-port>/mobile.html","viewport":"mobile"},"contextDirectory":"<repo>"}'
+```
+
+`browser.capture`, `browser.snapshot` and the rest take `{"tabId": "<tabId from the open>"}`
+in `input`. The tab stays in the background, as an agent's does, and the page
+inside it is a `webview` target on the instance's debugging port for reading
+what the actions alone do not show (frame rate, animations).
 
 ## Invariants
 

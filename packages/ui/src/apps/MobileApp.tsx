@@ -28,6 +28,7 @@ import { useTerminalSessionKeepalive } from '@/hooks/useTerminalSessionKeepalive
 import { useUpdatePolling } from '@/hooks/useUpdatePolling';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
+import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import type { RuntimeAPIs } from '@/lib/api/types';
@@ -44,11 +45,13 @@ import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { toast } from '@/components/ui';
+import { canonicalClient } from '@/api/canonicalClient';
+import { fileNameOf, sessionLineage } from './mobileFileRequest';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { useSourceControlProviderRegistry } from '@/lib/source-control/providers/registry';
 import { refreshTrackers } from '@/stores/useTrackerAuthStore';
 import { useGitStore } from '@/stores/useGitStore';
-import { useMcpConfigStore, type McpDraft } from '@/stores/useMcpConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import {
   listProjectWorktrees,
@@ -73,12 +76,14 @@ import { UsageStatsView } from '@/components/views/usage/UsageStatsView';
 import { ArchiveSessionsView } from '@/components/views/ArchiveView';
 import { MobileSourceBoard } from '@/components/sourceBoard/SourceBoardView';
 import { ScheduledTasksView, type ScheduledTasksLeaveReason } from '@/components/session/ScheduledTasksDialog';
-import { MobileWorkspaceDrawer, type MobileWorkspaceTab } from './MobileWorkspaceDrawer';
+import { MobileWorkspaceDrawer } from './MobileWorkspaceDrawer';
+import { shownMobileWorkspaceTabs, type MobileWorkspaceTab } from '@/lib/mobileWorkspaceTabs';
 import { DedicatedMobileAppProvider, useMobileSettingsSurfaceOpener, type MobileAppActions } from './mobileAppContext';
+import { connectMobileSettingsNavigation } from './mobileSettingsNavigation';
 import { autoConnectLastInstance, getAutoConnectTargetLabel, logMobileConnectEvent, reprobeActiveConnection, suppressAutoConnectUntilManualConnect, type AutoConnectOutcome } from './mobileConnections';
 import { subscribeActiveRelayTunnelStatus } from '@/lib/relay/runtime-tunnel';
 import { isRelayLimitReached } from '@/lib/relay/tunnel-client';
-import { isCapacitorMobileApp, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
+import { isCapacitorMobileApp, useMobileWebBackButton, useNativeAndroidBackButton, useNativeMobileChrome, useNativeMobileLifecycle } from './mobileNativeChrome';
 import { reconnectAppForTransportSwitch, resetAppForRuntimeEndpointChange } from './runtimeEndpointReset';
 import { useAppFontEffects } from './useAppFontEffects';
 import { useFontsReady } from './useFontsReady';
@@ -151,7 +156,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   // Phone right drawer with the workspace tabs; the tab persists across
   // open/close so the right-edge swipe reopens where the user left off.
   const [workspaceOpen, setWorkspaceOpen] = React.useState(false);
-  const [workspaceTab, setWorkspaceTab] = React.useState<MobileWorkspaceTab>('changes');
+  const [workspaceTab, setWorkspaceTab] = React.useState<MobileWorkspaceTab>(() => {
+    const { mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs } = useUIStore.getState();
+    return shownMobileWorkspaceTabs(mobileWorkspaceTabOrder, mobileWorkspaceHiddenTabs)[0];
+  });
   // A plan opened from the workspace drawer's Notes tab, shown as a fullscreen
   // layer on top of it (back returns to the notes).
   const [openPlan, setOpenPlan] = React.useState<{ id: string; title: string; projectRef: ProjectRef } | null>(null);
@@ -163,9 +171,6 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   const updateAvailable = useUpdateStore((state) => state.available);
   const updateRuntimeType = useUpdateStore((state) => state.runtimeType);
   const showCapacitorOnlyFeatures = React.useMemo(() => isCapacitorMobileApp(), []);
-  const mcpServers = useMcpConfigStore((state) => state.mcpServers);
-  const setMcpDraft = useMcpConfigStore((state) => state.setMcpDraft);
-  const setSelectedMcp = useMcpConfigStore((state) => state.setSelectedMcp);
 
   // NOTE: pendingChangesDiff is intentionally NOT cleared on close — it keys
   // the persistent Changes pane in the workspace drawer, and clearing it would
@@ -184,6 +189,12 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   }, []);
 
   const openSettingsSurface = useMobileSettingsSurfaceOpener(setSettingsInitialMobileStage, openSurface);
+
+  // Shared entry points still ask for the Settings dialog; the phone opens its surface instead.
+  React.useEffect(
+    () => connectMobileSettingsNavigation(MOBILE_SETTINGS_PAGES, openSettingsSurface),
+    [openSettingsSurface],
+  );
 
   // Tablet: sessions live in a persistent full-height left sidebar instead of
   // the phone's drawer. Everything else — the workspace drawer, the header, the
@@ -214,14 +225,58 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
   }, []);
 
   // The agent asked for a file to be shown: open the files drawer and stage
-  // the path the way a chat file link does, so the surface routes to it.
+  // the path the way a chat file link does, so the surface routes to it. A
+  // session the user is not looking at only announces the file, and staging
+  // waits for the tap: a stored path would send the files drawer of the session
+  // on screen to that file the next time it opens.
   React.useEffect(() => subscribeOpenchamberEvents((event) => {
     if (event.type !== 'file-open-request') return;
     const directory = event.directory ?? useDirectoryStore.getState().currentDirectory;
     if (!directory) return;
-    useUIStore.getState().openContextFile(directory, event.path);
-    openFilesSurface();
-  }), [openFilesSurface]);
+    const showFile = () => {
+      useUIStore.getState().openContextFile(directory, event.path);
+      openFilesSurface();
+    };
+    const sessionId = event.sessionId;
+    if (!sessionId) {
+      showFile();
+      return;
+    }
+    // A subagent can ask before its session reaches the global list, so a
+    // session the list does not know is read from the Host.
+    const readSession = async (id: string) => useGlobalSessionsStore.getState().entityById.get(id)
+      ?? (await canonicalClient.getSession(id).catch(() => null))?.session ?? null;
+    void sessionLineage(sessionId, readSession).then((lineage) => {
+      const isViewed = () => {
+        const { currentSessionId } = useSessionUIStore.getState();
+        return currentSessionId === sessionId || lineage.some((session) => session.sessionId === currentSessionId);
+      };
+      if (isViewed()) {
+        showFile();
+        return;
+      }
+      const title = lineage[0]?.title;
+      toast.info(fileNameOf(event.path), {
+        id: `file-open-${sessionId}:${event.path}`,
+        description: title
+          ? t('chat.fileOpenRequest.toast.description', { session: title })
+          : t('chat.fileOpenRequest.toast.descriptionUntitled'),
+        action: {
+          label: t('chat.fileOpenRequest.toast.openSession'),
+          onClick: () => {
+            useUIStore.getState().closeMainSurfaces();
+            if (isTabletLayout) setSidebarOpen(true);
+            else setSessionsSheetOpen(true);
+            void useSessionUIStore.getState().setCurrentSession(sessionId, directory);
+            closeSurface();
+            // A folder waiting for the user's trust switches later or never, and
+            // the drawer of the session still on screen must not get the file.
+            if (isViewed()) showFile();
+          },
+        },
+      });
+    });
+  }), [closeSurface, isTabletLayout, openFilesSurface, t]);
 
   const openChangesSurface = React.useCallback((diff: { path: string; staged: boolean } | null = null) => {
     setPendingChangesDiff(diff);
@@ -289,6 +344,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
         openChangesSurface(diffPath ? { path: diffPath, staged: staged === true } : null);
       },
       openFiles: () => openFilesSurface(),
+      openPlan: (plan) => setOpenPlan(plan),
       openSettings: () => openSettingsSurface('nav'),
       openSourceBoard: () => openSurface('board'),
     }),
@@ -309,8 +365,9 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
           openFilesSurface();
           return;
         }
+        // MCP lives in the Status tab now; old links to it land there.
         if (target === 'mcp') {
-          setWorkspaceTab('mcp');
+          setWorkspaceTab('status');
           setWorkspaceOpen(true);
           return;
         }
@@ -379,6 +436,10 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
 
   useNativeAndroidBackButton(handleNativeBack);
 
+  // Mobile web has no back button event: the same ladder runs from the
+  // browser's Back, off a history guard held while a layer is open.
+  useMobileWebBackButton(handleNativeBack, Boolean(openPlan || activeSurface || workspaceOpen || sessionsSheetOpen));
+
   // The footer update item follows the shared update store, which in the
   // Capacitor shell tracks the app build (store updates), not the server. The
   // native app reaches server updates through Settings → About instead.
@@ -427,26 +488,6 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
     setSessionsSheetOpen(false);
     if (isTabletLayout && !roomyForPanels) setSidebarOpen(false);
   }, [closeSurface, isTabletLayout, roomyForPanels]);
-
-  const openMcpCreateSettings = React.useCallback(() => {
-    const baseName = 'new-mcp-server';
-    let newName = baseName;
-    let counter = 1;
-    while (mcpServers.some((server) => server.serverId === newName)) {
-      newName = `${baseName}-${counter}`;
-      counter += 1;
-    }
-
-    const draft: McpDraft = {
-      serverId: newName, label: newName, enabled: true,
-      transport: { type: 'stdio', command: '', args: [] },
-    };
-
-    setMcpDraft(draft);
-    setSelectedMcp(newName);
-    setSettingsPage('mcp');
-    openSettingsSurface('page-content');
-  }, [mcpServers, openSettingsSurface, setMcpDraft, setSelectedMcp, setSettingsPage]);
 
   return (
     <DedicatedMobileAppProvider actions={mobileActions}>
@@ -587,7 +628,6 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
                 onTabChange={setWorkspaceTab}
                 pendingChangesDiff={pendingChangesDiff}
                 onOpenPlan={setOpenPlan}
-                onOpenMcpSettings={openMcpCreateSettings}
                 variant={workspaceAsPanel ? 'panel' : 'drawer'}
               />
             </ErrorBoundary>
@@ -703,7 +743,7 @@ const MobileShell: React.FC<{ onActiveConnectionDeleted: () => void }> = ({ onAc
             title={t('sourceBoard.title')}
           >
             <ErrorBoundary>
-              <MobileSourceBoard onLeave={leaveSourceBoard} />
+              <MobileSourceBoard onLeave={leaveSourceBoard} onClose={closeSurface} />
             </ErrorBoundary>
           </MobileFullscreenSurface>
         ) : null}
@@ -1280,6 +1320,9 @@ function MobileAppContent({ apis }: MobileAppProps) {
   useWindowTitle();
   useRoutingSync();
   useEnterprisePolicySync();
+  // Same as App.tsx: the session's memory index and the Memory tab both read
+  // this snapshot, and without it the phone showed no memory at all.
+  useAgentMemorySync(currentDirectory || null);
   useRouter();
   // APNs is the only notification channel on the native app (background-capable,
   // focus-suppressed server-side via the visibility beacon). Local notifications are

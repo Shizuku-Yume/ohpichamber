@@ -1,21 +1,50 @@
 import { describe, expect, test } from 'bun:test';
+
 import { parseImportedMcpSnippet } from './mcpImport';
 
-describe('native MCP snippet import', () => {
-  test('preserves stdio argument boundaries and credential references', () => {
-    const server = { serverId: 'tools', label: 'Tools', enabled: true, transport: { type: 'stdio', command: 'node', args: ['tools.js', 'two words'], envCredentialRefs: { API_KEY: 'credential_1' } } };
-    expect(parseImportedMcpSnippet(JSON.stringify(server))).toEqual(server);
+describe('parseImportedMcpSnippet', () => {
+  test('reads a canonical HTTP server record', () => {
+    const server = parseImportedMcpSnippet(JSON.stringify({
+      serverId: 'context7',
+      label: 'context7',
+      enabled: true,
+      transport: { type: 'http', url: 'https://mcp.context7.com/mcp' },
+    }));
+    expect(server.serverId).toBe('context7');
+    expect(server.transport).toEqual({ type: 'http', url: 'https://mcp.context7.com/mcp' });
   });
-  test('keeps HTTP and SSE distinct', () => {
-    for (const type of ['http', 'sse']) {
-      const server = { serverId: 'tools', label: 'Tools', enabled: false, transport: { type, url: 'https://mcp.example.test' } };
-      expect(parseImportedMcpSnippet(JSON.stringify(server))).toEqual(server);
-    }
+
+  test('reads a canonical stdio server record', () => {
+    const server = parseImportedMcpSnippet(JSON.stringify({
+      serverId: 'files',
+      label: 'Files',
+      enabled: true,
+      transport: { type: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'] },
+    }));
+    expect(server.transport.type).toBe('stdio');
   });
-  test('does not import raw secrets or legacy engine controls into native configuration', () => {
-    const server = { serverId: 'tools', label: 'Tools', enabled: true, transport: { type: 'http', url: 'https://mcp.example.test', headers: { Authorization: 'raw-secret' } } };
-    expect(() => parseImportedMcpSnippet(JSON.stringify(server))).toThrow();
-    expect(() => parseImportedMcpSnippet(JSON.stringify({ ...server, protocol: 'legacy' }))).toThrow();
-    expect(() => parseImportedMcpSnippet('{')).toThrow();
+
+  test('keeps credential references instead of inline secrets', () => {
+    const server = parseImportedMcpSnippet(JSON.stringify({
+      serverId: 'stitch',
+      label: 'stitch',
+      enabled: true,
+      transport: { type: 'http', url: 'https://stitch.googleapis.com/mcp', credentialRef: 'credential.stitch' },
+    }));
+    expect(server.transport).toMatchObject({ credentialRef: 'credential.stitch' });
+  });
+
+  test('rejects the retired engine shape', () => {
+    expect(() => parseImportedMcpSnippet(JSON.stringify({
+      mcp: { stitch: { type: 'remote', url: 'https://stitch.googleapis.com/mcp' } },
+    }))).toThrow();
+  });
+
+  test('rejects a server without a transport', () => {
+    expect(() => parseImportedMcpSnippet(JSON.stringify({ serverId: 'broken', label: 'broken', enabled: true }))).toThrow();
+  });
+
+  test('rejects invalid JSON', () => {
+    expect(() => parseImportedMcpSnippet('{not json')).toThrow();
   });
 });

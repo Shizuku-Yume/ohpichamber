@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Modèles Zen',
   'quota.value.requests': 'Requêtes : {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "Rejeter",
   ...workerRunsI18n.fr,
 
+  'chat.backgroundWork.aria': 'Travail en arrière-plan',
+  'chat.backgroundWork.count': 'En arrière-plan : {count}',
+  'chat.backgroundImages.generating': 'Génération d\'une image',
+  'sessions.sidebar.session.status.backgroundImage': 'Image en cours de génération en arrière-plan',
+  'gitView.empty.repositoryUnreadable': 'Git n\'a pas pu lire ce dossier',
+  'gitView.empty.repositoryUnreadableDescription': 'Voici ce que Git a répondu. Corrigez le problème, puis réessayez.',
+  'gitView.empty.repositoryUnreadableRetry': 'Réessayer',
+  'contextSidebar.section.sessionTotals': 'Totaux de la session',
+  'directoryExplorerDialog.browse.linkTarget': 'Lien vers {path}',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} nécessite OpenCode {required}. Ce serveur a la version {current}. Mettez d’abord OpenCode à jour.',
+  'chat.workStatus.breakdown.planCountSingle': '{count} plan',
+  'chat.workStatus.breakdown.planCountPlural': '{count} plans',
+  'chat.workStatus.linkedPlans.open': 'Ouvrir le plan {title}',
+  ...aboutReleaseNotesI18n.fr,
+  ...updateCheckErrorsI18n.fr,
+  ...sessionWarmingI18n.fr,
+  ...usageToolI18n.fr,
+  ...openchamberToolsLayoutI18n.fr,
+  ...openchamberToolOutputI18n.fr,
+  ...tooltipsDiffI18n['fr'],
+  ...tooltipsFilesI18n['fr'],
+  ...tooltipsGitI18n['fr'],
+  ...tooltipsTrackerI18n['fr'],
+  ...tooltipsWalkthroughI18n['fr'],
+  ...tooltipsTerminalBrowserI18n['fr'],
+  ...tooltipsWorkspaceI18n['fr'],
+  ...tooltipsPanelI18n['fr'],
+  ...tooltipsChatI18n['fr'],
   ...m4LaneDI18n.fr,
 };

@@ -2779,4 +2779,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'No se pudo activar el agente: no se pudo escribir su archivo de configuración',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "Buscar en el historial de indicaciones",
 
+  'settings.themeImport.noReadableThemes': 'No se pudo leer ningún tema de color de este paquete.',
+  "settings.providers.page.logo.title": "Logo",
+  "settings.providers.page.logo.info": "Se muestra en lugar del logo o el icono del proveedor en listas, selectores y mensajes. PNG, JPEG, WebP o SVG, hasta 1 MB.",
+  "settings.providers.page.logo.upload": "Subir imagen",
+  "settings.providers.page.logo.remove": "Quitar imagen",
+  "settings.providers.page.logo.error.type": "Elige una imagen PNG, JPEG, WebP o SVG.",
+  "settings.providers.page.logo.error.size": "Elige una imagen de 1 MB o menos.",
+  "settings.providers.page.logo.toast.uploadFailed": "No se pudo subir el logo: {reason}",
+  "settings.providers.page.logo.toast.removeFailed": "No se pudo quitar el logo: {reason}",
+  "settings.providers.page.auth.oauth.pasteRedirectHint": "Si el navegador termina en una página que no se abre, copia su dirección y pégala aquí.",
+  "settings.providers.page.auth.oauth.pasteRedirectPlaceholder": "Pega la dirección del navegador",
+  "settings.voice.page.stt.model.parakeetUltra": "Parakeet Ultra (25 idiomas europeos)",
+  "settings.openchamber.visual.section.themes": "Temas",
+  "settings.openchamber.visual.field.noThemesMatch": "Ningún tema coincide con «{query}».",
 } as const;

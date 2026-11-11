@@ -63,6 +63,12 @@ import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { subagentHudI18n } from './subagent-hud.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Zen Models',
   'quota.value.requests': 'Requests: {count}',
@@ -9409,6 +9415,34 @@ export const dict = {
   'chat.planReview.feedbackPlaceholder': "Describe the changes you want to the plan…",
   'chat.planReview.sendFeedback': "Send feedback",
   'chat.planReview.reject': "Reject",
+  'chat.backgroundWork.aria': 'Background work',
+  'chat.backgroundWork.count': 'In the background: {count}',
+  'chat.backgroundImages.generating': 'Generating an image',
+  'sessions.sidebar.session.status.backgroundImage': 'Image generating in the background',
+  'gitView.empty.repositoryUnreadable': 'Git couldn\'t read this folder',
+  'gitView.empty.repositoryUnreadableDescription': 'Here is what Git said. Fix it, then try again.',
+  'gitView.empty.repositoryUnreadableRetry': 'Try again',
+  'contextSidebar.section.sessionTotals': 'Session Totals',
+  'directoryExplorerDialog.browse.linkTarget': 'Link to {path}',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} needs OpenCode {required}. This server has {current}. Update OpenCode first.',
+  'chat.workStatus.breakdown.planCountSingle': '{count} plan',
+  'chat.workStatus.breakdown.planCountPlural': '{count} plans',
+  'chat.workStatus.linkedPlans.open': 'Open plan {title}',
+  ...aboutReleaseNotesI18n.en,
+  ...updateCheckErrorsI18n.en,
+  ...sessionWarmingI18n.en,
+  ...usageToolI18n.en,
+  ...openchamberToolsLayoutI18n.en,
+  ...openchamberToolOutputI18n.en,
+  ...tooltipsDiffI18n['en'],
+  ...tooltipsFilesI18n['en'],
+  ...tooltipsGitI18n['en'],
+  ...tooltipsTrackerI18n['en'],
+  ...tooltipsWalkthroughI18n['en'],
+  ...tooltipsTerminalBrowserI18n['en'],
+  ...tooltipsWorkspaceI18n['en'],
+  ...tooltipsPanelI18n['en'],
+  ...tooltipsChatI18n['en'],
   ...workerRunsI18n.en,
 };
 

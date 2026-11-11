@@ -7,6 +7,8 @@
  * so the Host delivery owner can read it without a second copy of this text.
  * Only a non-default preset with a non-empty instruction produces any string.
  */
+import { loadDesktopSettings } from './persistence';
+
 export const RESPONSE_STYLE_PRESETS = [
   'default',
   'concise',
@@ -59,4 +61,17 @@ export const resolveResponseStyleInstruction = ({
     return typeof customInstructions === 'string' ? customInstructions.trim() : '';
   }
   return PRESET_INSTRUCTIONS[preset];
+};
+
+/**
+ * The instruction the next send carries, read from the settings document:
+ * `undefined` when there is nothing to read, `null` when the style is off.
+ */
+export const fetchResponseStyleInstruction = async (): Promise<string | null | undefined> => {
+  const settings = await loadDesktopSettings();
+  if (!settings) return undefined;
+  return resolveResponseStyleInstruction({
+    preset: settings.responseStyleEnabled === true ? settings.responseStylePreset : undefined,
+    customInstructions: settings.responseStyleCustomInstructions,
+  }) || null;
 };

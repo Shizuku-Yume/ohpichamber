@@ -153,8 +153,14 @@ export const createWebTrackerAPI = ({
       legacyWire ? legacy.authStatus(provider) : call(provider, '/auth/status', GET, authStatusSchema, 'Failed to load tracker status')
     )),
 
-    authStart: (provider, origin?: TrackerAuthOrigin): Promise<TrackerAuthStart> => onWire((legacyWire) => (
-      legacyWire ? legacy.authStart(provider, origin) : call(provider, '/auth/start', { method: 'POST', body: JSON.stringify({ origin }) }, authStartSchema, 'Failed to start tracker sign-in')
+    authStart: (provider, origin?: TrackerAuthOrigin, options?: { instance?: string }): Promise<TrackerAuthStart> => onWire((legacyWire) => (
+      legacyWire ? legacy.authStart(provider, origin) : call(
+        provider,
+        '/auth/start',
+        { method: 'POST', body: JSON.stringify(options?.instance ? { origin, instance: options.instance } : { origin }) },
+        authStartSchema,
+        'Failed to start tracker sign-in',
+      )
     )),
 
     authConnectToken: (provider, input): Promise<TrackerConnectResult> => onWire(async (legacyWire) => {

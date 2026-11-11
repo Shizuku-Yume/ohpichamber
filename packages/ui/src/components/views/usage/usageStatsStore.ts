@@ -16,6 +16,9 @@ import { isSameLocalDay, rangeStart, type UsageRange } from './usageStatsModel';
  *
  * `7d`/`30d` are relative to now: an entry reports the range it was fetched
  * for (`stats.range`) and when (`fetchedAt`), which the page shows.
+ *
+ * `1d` is the one range that expires: its name says today, so a report read on
+ * an earlier local day is dropped and read again, whether or not it was forced.
  */
 
 export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null };
@@ -23,6 +26,7 @@ export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | 
 export type UsageStatsEntry = {
   /** Last successful report; kept on screen through refreshes and failed refreshes. */
   stats: UsageStats | null;
+  /** When the read of `stats` started, so a read that crosses midnight counts as the old day's. */
   fetchedAt: number | null;
   loading: boolean;
   /** Message of the last failed read; cleared by the next success. */
@@ -55,7 +59,8 @@ type UsageStatsStore = {
   entries: Record<string, UsageStatsEntry>;
   /**
    * Loads a report for the request under the current runtime. Without `force`
-   * this only reads a key that has no report, no error and no read running.
+   * this only reads a key that has no report, no error and no read running,
+   * or whose `1d` report is from an earlier local day.
    */
   load: (request: UsageStatsRequest, options?: { force?: boolean }) => Promise<void>;
   toolEntries: Record<string, UsageToolsEntry>;
@@ -91,7 +96,7 @@ const fetchToolsFromCanonical: UsageToolsFetcher = async ({ projectDirectory }, 
 };
 
 const isExpiredToday = (request: UsageStatsRequest, entry: UsageStatsEntry | undefined, at: number): boolean =>
- request.range === '1d' && entry?.fetchedAt != null && !isSameLocalDay(entry.fetchedAt, at);
+  request.range === '1d' && entry?.fetchedAt != null && !isSameLocalDay(entry.fetchedAt, at);
 
 export function createUsageStatsStore(
   fetcher: UsageStatsFetcher,
@@ -102,7 +107,8 @@ export function createUsageStatsStore(
   // Aborted and replaced on reset, so reads from a previous runtime can
   // neither commit nor keep a key marked as loading.
   let controller = new AbortController();
-  /** The tool read each key still wants, so a superseded one cannot write. */
+  // The tool read each key still wants: a read left over from an expired
+  // Today report must not land on the new day's tools, whichever finishes last.
   const currentToolReads = new Map<string, symbol>();
 
   return create<UsageStatsStore>()((set, get) => {
@@ -129,8 +135,6 @@ export function createUsageStatsStore(
         const entry = get().entries[key];
         if (entry?.loading) return;
         const startedAt = now();
-        // Today spans local midnight: a report read on the previous day is gone
-        // the moment the day turns, so its totals never stand for the new day.
         const expired = isExpiredToday(request, entry, startedAt);
         if (!options?.force && !expired && (entry?.stats || entry?.error)) return;
 
@@ -179,31 +183,16 @@ export function createUsageStatsStore(
         if (!options?.force && (entry?.tools || entry?.error)) return;
 
         const { signal } = controller;
-        // The tool read each key still wants: one left over from an expired
-        // Today report must not land on the new day's tools, whichever ends first.
         const read = Symbol('usage tools read');
         currentToolReads.set(key, read);
-        const isDropped = () => signal.aborted || runtimeKey() !== runtime || currentToolReads.get(key) !== read;
-        // The report may have moved window without superseding this read (a
-        // refresh that started after it): its answer names the old bounds.
-        const windowMoved = () => get().entries[key]?.stats?.range !== window;
+        const isDropped = () => signal.aborted || currentToolReads.get(key) !== read;
         patchTools(key, { loading: true });
         try {
           const tools = await toolsFetcher(request, window, signal);
           if (isDropped()) return;
-          if (windowMoved()) {
-            patchTools(key, { loading: false });
-            void get().loadTools(request, { force: true });
-            return;
-          }
           patchTools(key, { tools, loading: false, error: null });
         } catch (error) {
           if (isDropped()) return;
-          if (windowMoved()) {
-            patchTools(key, { loading: false });
-            void get().loadTools(request, { force: true });
-            return;
-          }
           patchTools(key, { loading: false, error: error instanceof Error ? error.message : String(error) });
         }
       },
@@ -219,16 +208,6 @@ export function createUsageStatsStore(
 
 export const useUsageStatsStore = createUsageStatsStore(fetchFromCanonical, getRuntimeKey);
 
-export const selectUsageToolsEntry = (
-  state: Pick<UsageStatsStore, 'toolEntries'>,
-  request: UsageStatsRequest,
-): UsageToolsEntry | undefined => state.toolEntries[usageStatsKey(getRuntimeKey(), request)];
-
-export const selectUsageStatsEntry = (
-  state: Pick<UsageStatsStore, 'entries'>,
-  request: UsageStatsRequest,
-): UsageStatsEntry | undefined => state.entries[usageStatsKey(getRuntimeKey(), request)];
-
 /** How often an open Today report checks whether the local day has changed. */
 const TODAY_CHECK_INTERVAL_MS = 60_000;
 
@@ -239,18 +218,28 @@ const TODAY_CHECK_INTERVAL_MS = 60_000;
  * would not.
  */
 export function useTodayRollover(enabled: boolean, load: () => void): void {
- React.useEffect(() => {
-  if (!enabled) return undefined;
-  const onVisibilityChange = () => {
-   if (document.visibilityState === 'visible') load();
-  };
-  const interval = window.setInterval(load, TODAY_CHECK_INTERVAL_MS);
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  return () => {
-   window.clearInterval(interval);
-   document.removeEventListener('visibilitychange', onVisibilityChange);
-  };
- }, [enabled, load]);
+  React.useEffect(() => {
+    if (!enabled) return undefined;
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    const interval = window.setInterval(load, TODAY_CHECK_INTERVAL_MS);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [enabled, load]);
 }
+
+export const selectUsageToolsEntry = (
+  state: Pick<UsageStatsStore, 'toolEntries'>,
+  request: UsageStatsRequest,
+): UsageToolsEntry | undefined => state.toolEntries[usageStatsKey(getRuntimeKey(), request)];
+
+export const selectUsageStatsEntry = (
+  state: Pick<UsageStatsStore, 'entries'>,
+  request: UsageStatsRequest,
+): UsageStatsEntry | undefined => state.entries[usageStatsKey(getRuntimeKey(), request)];
 
 subscribeRuntimeEndpointChanged(() => useUsageStatsStore.getState().reset());

@@ -11,7 +11,7 @@ Sus propios datos se guardan en el servidor conectado y se borran al eliminar la
 
 Usa **Configuración → Extensiones** para añadir a OpenChamber paneles hechos por otras personas. Una extensión es una página pequeña que se coloca en la barra derecha, junto a los paneles integrados. Puede mostrarte datos de otro servicio, adjuntar una tarea al chat y, si se lo permites, iniciar sesiones, enviar prompts o leer archivos.
 
-Las extensiones funcionan en OpenChamber web y de escritorio. No son lo mismo que los plugins de the Host.
+Las extensiones funcionan en OpenChamber web y de escritorio. No son lo mismo que los plugins de Host.
 
 ## Instalar una
 
@@ -54,6 +54,7 @@ Mostrar un panel y leer qué proyecto y sesión están abiertos no necesita perm
 - **Leer lo que dice el agente en segundo plano**: la respuesta final de cada turno, las preguntas que hace el agente y para qué pide permiso, en todos los proyectos, enviados al servicio local de la extensión. Permítelo solo si confías en adónde lo envía la extensión.
 - **Iniciar sesiones y enviar mensajes por sí sola**: su servicio local lo hace sin ninguna ventana abierta, lo que gasta tokens y puede ejecutar herramientas.
 - **Añadir a lo que leen los agentes**: texto en las instrucciones de tus sesiones y skills que se ofrecen a todos los agentes mientras la extensión esté activa.
+- **Reconocer sus enlaces en los chats**: identificadores como `DEMO-12` y enlaces al sitio de la extensión se vuelven clicables en tus mensajes del chat. El diálogo indica cuáles y dice si un clic los abre en la extensión o los adjunta a tu mensaje. Los enlaces que OpenChamber ya conoce, como los pull requests de GitHub y las incidencias de Linear, mantienen su comportamiento habitual.
 
 Un servicio local también puede seguir funcionando mientras OpenChamber esté en marcha, o activarse según un horario. El diálogo lo dice bajo **Ejecutar un servicio local**, e indica cuándo lo que escribes después de `@` va al servicio. Una extensión puede añadir sus propias filas al menú `@` y sus propios bloques a las respuestas del agente. Pausar la extensión quita todo esto.
 
@@ -94,9 +95,9 @@ El SDK de OpenChamber tiene un ejemplo funcional, `examples/tracker-provider`, c
 
 ## Una extensión como proveedor de uso
 
-Una extensión puede añadir un proveedor de uso junto a los integrados: un proveedor que OpenChamber no lee por sí mismo, o uno propio. Su diálogo de permisos tiene entonces una línea que empieza por **Informa del uso como un proveedor integrado** y enumera los proveedores de the Host cuyas credenciales lee, como `openrouter`; una extensión que no enumera ninguno lo dice.
+Una extensión puede añadir un proveedor de uso junto a los integrados: un proveedor que OpenChamber no lee por sí mismo, o uno propio. Su diálogo de permisos tiene entonces una línea que empieza por **Informa del uso como un proveedor integrado** y enumera los proveedores de OpenCode cuyas credenciales lee, como `openrouter`; una extensión que no enumera ninguno lo dice.
 
-Cuando la permites, su tarjeta aparece después de los proveedores integrados en **Ajustes → Uso**, con el nombre y el icono de la extensión, y se suma a los límites de la cabecera, al estado de trabajo, al popover del teléfono y a la bandeja del escritorio cuando marcas **Mostrar en el estado de trabajo**, como cualquier proveedor integrado. En cada actualización OpenChamber entrega a la extensión la credencial que the Host guarda para cada proveedor enumerado, y nada más; una versión que enumere otro proveedor vuelve a pedir tu aprobación. La extensión lee el uso por sí misma y OpenChamber lo dibuja como dibuja el de un proveedor integrado.
+Cuando la permites, su tarjeta aparece después de los proveedores integrados en **Ajustes → Uso**, con el nombre y el icono de la extensión, y se suma a los límites de la cabecera, al estado de trabajo, al popover del teléfono y a la bandeja del escritorio cuando marcas **Mostrar en el estado de trabajo**, como cualquier proveedor integrado. En cada actualización OpenChamber entrega a la extensión la credencial que OpenCode guarda para cada proveedor enumerado, y nada más; una versión que enumere otro proveedor vuelve a pedir tu aprobación. La extensión lee el uso por sí misma y OpenChamber lo dibuja como dibuja el de un proveedor integrado.
 
 Pausar la extensión quita la tarjeta hasta que vuelvas a activarla, y tus ajustes de uso para ella se conservan. Quitar la extensión quita la tarjeta para siempre.
 

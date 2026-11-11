@@ -12,7 +12,7 @@ renders a projection.
 
 - `runtime.js` — `createMessageQueueRuntime(...)` (state, persistence,
   dispatch loop, event handling) and `registerMessageQueueRoutes(app, runtime)`.
-- `runtime.test.js` — delivery, idleness gates, retries, holds, persistence,
+- `runtime.test.js` — delivery, idleness gates, retries, held delivery, persistence,
   concurrency with in-flight sends, slash commands, and project knowledge.
 
 Wiring: created in `server/index.js` after the global event hub and the
@@ -79,7 +79,7 @@ send never re-resolves mutable UI state:
   contextPreview?, // bounded display-only summary captured by the UI
   text,           // text to deliver (agent mention stripped, file mentions resolved); defaults to content
   agentMention?,  // delivered as an `agent` part
-  attachments: [{ id, filename, mimeType, size, source, serverPath?, dataUrl }],
+  attachments: [{ id, filename, mimeType, size, source, serverPath?, agentPath?, dataUrl }],
   context: [      // what the composer had attached, in send order
     { kind: 'context', text, metadata, instructions? },  // a draft chip or linked issue/PR; metadata is the UI's structured payload
     { kind: 'instruction', text },                       // derived from the text (skill instruction)
@@ -96,11 +96,19 @@ before it and its `metadata` riding the part verbatim so the timeline renders
 the context block back. The payload inside `metadata` is the UI's contract
 (`lib/messages/contextParts.ts`), parsed by the UI on the way back.
 
+An attachment's `agentPath` — the file's on-disk location the desktop client
+resolved at intake — travels to OpenCode as the prompt file's `name`, the
+field the model reads as the file identity, falling back to `filename` when
+absent. `filename` itself still rides the attachment unchanged for the UI's
+own display.
+
 `parseQueuedItemInput` rejects anything the server could not deliver later
 (no text, attachments, or context; missing model; malformed attachment or
 context entry). Public snapshots and broadcasts strip the payloads —
 attachment `dataUrl` (megabytes of base64) and `context` (a PR diff, say) —
 so they do not ride every update; the only way to get them back is a `take`.
+`syntheticIds` comes only from the queue file: `parseQueuedItemInput` drops it
+from client input, and snapshots leave it out.
 
 Snapshots retain `contextPreview`, capped at 100 characters plus an ellipsis.
 It carries the attached comment or context label when `content` is empty and
@@ -121,7 +129,7 @@ disabled until a later load succeeds. `revision` is a global monotonic counter
 bumped on every mutation; clients use it to reject stale snapshots.
 
 In-memory only, deliberately: the in-flight item (`sendingId`), retry
-backoff, abort timestamps, and holds. A restart has no in-flight sends; a
+backoff, and abort timestamps. A restart has no in-flight sends; a
 persisted "sending" flag would strand a message forever.
 
 ## Delivery loop
@@ -166,16 +174,23 @@ persisted "sending" flag would strand a message forever.
    Success removes the item, persists, broadcasts, and marks the user
    message sent for notifications. Failure keeps the item, backs off
    2 s → 60 s (doubling per consecutive failure of that item), and re-arms.
+   A retry, also after a restart, reuses the `syntheticIds`: OpenCode answers a
+   second admission of an id with the first one, so a failure between the
+   context and the message leaves each synthetic record in the session once.
+   The ids end at the mint time, one millisecond apart, so they sort in
+   admission order and ahead of the message, whose id OpenCode assigns.
 6. The next item goes out after the next busy → idle cycle.
 
 ## Holds
 
-Auto-review is driven from the UI and bounces the original session through
-idle between iterations; the UI tells the server to hold that session's queue
-(`PUT .../hold { held: true, ttlMs? }`) while a run is going and releases it
-when the run ends. A hold expires on its own (default 5 min, cap 10 min)
-because the UI that asserted it may be gone; the UI re-asserts it every two
-minutes while the run continues. Releasing arms a dispatch.
+An auto-review run (`../auto-review`) bounces the reviewed session through
+idle between its steps, and a queued follow-up must not land in the middle.
+The runtime takes `isDeliveryHeld(sessionId)`, the auto-review runtime's
+`holdsDelivery`, and the tick delivers nothing while it is true. The run calls
+`release(sessionId)` when it ends, which arms a dispatch. `deliveryHoldReady`
+(the auto-review's `startupLoad`) gates the first `reconcileAll` after start:
+until the auto-review has loaded its runs every session is held, and a tick
+that bailed then has nothing to re-arm it.
 
 ## Routes (`/api/message-queue`)
 
@@ -191,7 +206,6 @@ allowlists.
 | `POST .../sessions/:id/take` | Remove and return every item not in flight, in order |
 | `PUT .../sessions/:id/order` | `{ itemIds }` must be a complete permutation |
 | `DELETE .../sessions/:id` | Clear; the in-flight item stays |
-| `PUT .../sessions/:id/hold` | `{ held, ttlMs? }` |
 
 Every mutation broadcasts `openchamber:message-queue.updated` with
 `{ revision, session }` to all connected clients (SSE and WS), so several

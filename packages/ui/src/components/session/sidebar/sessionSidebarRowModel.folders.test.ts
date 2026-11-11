@@ -1,17 +1,34 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
-import { buildSessionSidebarRowModel, type SessionSidebarRowModelArgs, type SessionSidebarWorkEntry } from './sessionSidebarRowModel';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { buildSessionSidebarRowModel, type SessionSidebarBlock, type SessionSidebarRowModelArgs, type SessionSidebarWorkEntry } from './sessionSidebarRowModel';
 import type { ProjectSection } from './projects/sessionProjectRender';
 import type { DirectoryOwner } from './sessions/sessionOwnership';
 import { getWorkFolderOwnerKey } from './sessions/sessionFolderIdentity';
 import type { SessionGroup, SessionNode } from './types';
 
-const session = (id: string, directory: string): Session => ({
-  sessionId: id, projectId: 'p', workspaceId: directory, displayPath: directory, rootSessionId: id,
-  title: id, createdAt: 1, updatedAt: 1, epoch: 'epoch-1', headSequence: '0',
-  runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  metadata: null, metadataRevision: '0', archiveRevision: '0',
-});
+const session = (sessionId: string, directory: string): Session => {
+  const workspaceId = `ws_${sessionId}`;
+  registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId,
+    projectId: 'p',
+    workspaceId,
+    displayPath: directory,
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    title: sessionId,
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+  };
+};
 const node = (id: string, directory = '/repo'): SessionNode => ({ session: session(id, directory), children: [], worktree: null });
 const rootGroup = (sessions: SessionNode[]): SessionGroup => ({
   id: 'main', label: 'main', branch: null, description: null, isMain: true, worktree: null,
@@ -89,6 +106,10 @@ describe('sidebar folders in the list by time', () => {
     expect(summary(build({ timeEntries: [], collapsedActivities: new Set(['timeline']) }))).toEqual(['timeline']);
   });
 
+  test('a project a group of projects took keeps its folders there', () => {
+    const blocks: SessionSidebarBlock[] = [{ kind: 'projects', excludedProjectIds: new Set(['p']) }];
+    expect(summary(build({ timeEntries: [entry('other')], blocks }))).toEqual(['timeline', 'other']);
+  });
 
   test('a collapsed zone with only folders hides the load statuses too', () => {
     const groupStatusByKey = new Map([['p:main', { state: 'loading' as const, directory: null, canGrantAccess: false }]]);

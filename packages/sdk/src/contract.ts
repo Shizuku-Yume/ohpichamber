@@ -328,7 +328,23 @@ export type GuestDiffItem = {
   side?: 'additions' | 'deletions';
 };
 
-export type GuestItem = AttachIssueRequest | GuestMessageItem | GuestSessionItem | GuestSelectionItem | GuestFileItem | GuestDiffItem;
+/**
+ * The user clicked an identifier or a link in a chat message that the
+ * extension's `contributes.links` claims, with `action: "open"`. Built by the
+ * host from the match: `identifier` is what `{id}` or the key matched. `url`
+ * is the clicked link without its fragment and without query parameters
+ * other than the template's own; for an identifier in text, the link the first
+ * template without `{segment}` builds from it, absent when there is none or
+ * the identifier does not have `urls.identifier`'s shape (`PROJ-12` and
+ * `number`).
+ */
+export type GuestLinkItem = {
+  kind: 'link';
+  identifier: string;
+  url?: string;
+};
+
+export type GuestItem = AttachIssueRequest | GuestMessageItem | GuestSessionItem | GuestSelectionItem | GuestFileItem | GuestDiffItem | GuestLinkItem;
 
 /** The captured target of a background action. Delivered once through `onAction`, not `onItem`. */
 export type GuestActionItem = GuestMessageItem | GuestSessionItem | GuestSelectionItem | GuestFileItem | GuestDiffItem;
@@ -341,6 +357,10 @@ export const isGuestMessageItem = (item: GuestItem | null): item is GuestMessage
 
 export const isGuestSessionItem = (item: GuestItem | null): item is GuestSessionItem => (
   item !== null && item.kind === 'session'
+);
+
+export const isGuestLinkItem = (item: GuestItem | null): item is GuestLinkItem => (
+  item !== null && item.kind === 'link'
 );
 
 /** The composer chip: what the guest handed to `attach`, with `text` filled from the chip. */
@@ -466,8 +486,19 @@ export const GUEST_GENERATE_SYSTEM_MAX = 8_000;
 export const GUEST_GENERATE_OUTPUT_TOKENS_MAX = 4_000;
 /** Characters in a `generate` answer. */
 export const GUEST_GENERATE_TEXT_MAX = 256_000;
-/** How long `generate` waits for the model before `HOST_TIMEOUT`. */
-export const GUEST_GENERATE_TIMEOUT_MS = 90_000;
+/**
+ * How long `generate` waits for the model before `HOST_TIMEOUT`.
+ *
+ * Must exceed the largest deadline the Small Model server can derive for a
+ * guest-shaped request, plus margin for the iframe → host bridge → HTTP chain.
+ * The server no longer cuts at a flat 60 s: it budgets 60 s base plus 40 ms per
+ * estimated token (~4 chars/token), capped at 900 s
+ * (`generationBudgetMs` in `packages/web/server/lib/small-model/index.js`,
+ * issue #5017). At the guest limits (`GUEST_GENERATE_PROMPT_MAX` +
+ * `GUEST_GENERATE_SYSTEM_MAX` = 72 000 chars ≈ 18 000 tokens) that is 780 s,
+ * so 960 s leaves the chain ~3 minutes.
+ */
+export const GUEST_GENERATE_TIMEOUT_MS = 960_000;
 /** How long the host keeps a `LateGenerateResult` nobody has taken. */
 export const GUEST_GENERATE_LATE_KEEP_MS = 60 * 60_000;
 /** `LateGenerateResult`s the host keeps per extension; a newer one drops the oldest. */

@@ -2,7 +2,13 @@
 
 Messages explicitly pinned by the user are stored under
 `session.metadata.openchamber.context_obligatory_messages` as `{ id, createdAt,
-role }`. The UI uses a fresh-read metadata merge when pinning or unpinning.
+role, sessionID }`. The UI uses a fresh-read metadata merge when pinning or
+unpinning and requires an owner for every new pin. The runtime only re-injects
+into root sessions. A session with a `parentID` is skipped before its metadata
+is read, so child and subagent sessions cannot restore parent pins. Root
+sessions, including user forks, retain the existing handling of inherited pins
+and the compaction cursor, whether pins have an explicit owner or are legacy
+ownerless entries.
 
 The server runtime reads the newest completed `compaction` message through the
 canonical Agent Service (`sessionService.history`), fetches every pinned message
@@ -22,3 +28,7 @@ After a successful send, the runtime merge-writes
 `context_obligatory_last_compaction_message_id`. This cursor prevents a
 replayed compaction event from reinjecting the same summary. The runtime is
 owned by the OpenChamber web backend and therefore is not available to clients without the server.
+
+### Why a fork starts without inherited pins
+
+The Canonical API creates a fork with its own session id and its own metadata record, and the copied messages receive new ids. Remapping inherited pins would need the source's message ids on the fork, which the contract does not carry, so the fork starts with no obligatory pins and restores only what the user marks in it.

@@ -1,35 +1,33 @@
 import React from 'react';
 
-import { DialogDescription } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
+import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { ThinkingPill } from '@/components/session/ThinkingPill';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
+import { isAutoReviewAvailable } from '@/stores/useAutoReviewStore';
+import { listModelVariantIds, type ModelVariantSource } from '@/lib/modelVariants';
 
 export type ReviewFlowExecution = {
-  providerId: string;
-  modelId: string;
+  providerID: string;
+  modelID: string;
   variant: string;
+  agent: string;
   generateHandoff: boolean;
   autoReview: boolean;
 };
 
-const getInitialExecution = (params: { providerId: string; modelId: string; variant: string }): ReviewFlowExecution => ({
-  providerId: params.providerId,
-  modelId: params.modelId,
-  variant: params.variant,
-  generateHandoff: true,
-  autoReview: false,
-});
 type ReviewFlowDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -38,6 +36,19 @@ type ReviewFlowDialogProps = {
   onConfirm: (execution: ReviewFlowExecution) => Promise<void> | void;
 };
 
+const getInitialExecution = (params: {
+  providerID: string;
+  modelID: string;
+  variant: string;
+  agent: string;
+}): ReviewFlowExecution => ({
+  providerID: params.providerID,
+  modelID: params.modelID,
+  variant: params.variant,
+  agent: params.agent,
+  generateHandoff: true,
+  autoReview: false,
+});
 
 function ReviewFlowDialogView({
   open,
@@ -48,44 +59,60 @@ function ReviewFlowDialogView({
 }: ReviewFlowDialogProps) {
   const { t } = useI18n();
   const loadProviders = useConfigStore((state) => state.loadProviders);
+
+  const loadAgents = useAgentsStore((state) => state.loadAgents);
   const providers = useConfigStore((state) => state.providers);
   const currentProviderID = useConfigStore((state) => state.currentProviderId);
   const currentModelID = useConfigStore((state) => state.currentModelId);
   const currentVariant = useConfigStore((state) => state.currentVariant || '');
+  const currentAgentName = useConfigStore((state) => state.currentAgentName || '');
 
   const [execution, setExecution] = React.useState<ReviewFlowExecution>(() => getInitialExecution({
-    providerId: currentProviderID,
-    modelId: currentModelID,
+    providerID: currentProviderID,
+    modelID: currentModelID,
     variant: currentVariant,
+    agent: currentAgentName,
   }));
 
   React.useEffect(() => {
     if (!open) return;
     void loadProviders({ directory: projectDirectory, source: 'reviewFlowDialog' });
-  }, [open, loadProviders, projectDirectory]);
+    void loadAgents(projectDirectory);
+  }, [open, loadProviders, loadAgents, projectDirectory]);
 
   React.useEffect(() => {
     if (!open) return;
-    setExecution(getInitialExecution({ providerId: currentProviderID, modelId: currentModelID, variant: currentVariant }));
-  }, [open, currentProviderID, currentModelID, currentVariant]);
+    setExecution(getInitialExecution({
+      providerID: currentProviderID,
+      modelID: currentModelID,
+      variant: currentVariant,
+      agent: currentAgentName,
+    }));
+  }, [open, currentProviderID, currentModelID, currentVariant, currentAgentName]);
 
   React.useEffect(() => {
     if (!open || providers.length === 0) return;
 
-    const provider = providers.find((item) => item.providerId === execution.providerId) ?? providers[0];
+    const provider = providers.find((item) => item.providerId === execution.providerID) ?? providers[0];
     const models = Array.isArray(provider?.models) ? provider.models : [];
-    const hasModel = models.some((item) => item.modelId === execution.modelId);
-    const fallbackModelId = models[0]?.modelId ?? '';
-    if (provider?.providerId === execution.providerId && hasModel) return;
-    setExecution((prev) => ({ ...prev, providerId: provider?.providerId ?? '', modelId: hasModel ? prev.modelId : fallbackModelId, variant: '' }));
-  }, [open, providers, execution.providerId, execution.modelId]);
+    const hasModel = models.some((item) => item.modelId === execution.modelID);
+    const fallbackModelID = models[0]?.modelId ?? '';
 
+    if (provider?.providerId === execution.providerID && hasModel) return;
+
+    setExecution((prev) => ({
+      ...prev,
+      providerID: provider?.providerId ?? '',
+      modelID: hasModel ? prev.modelID : fallbackModelID,
+      variant: '',
+    }));
+  }, [open, providers, execution.providerID, execution.modelID]);
 
   const variantOptions = React.useMemo(() => {
-    const provider = providers.find((item) => item.providerId === execution.providerId);
-    const model = provider?.models?.find((item) => item.modelId === execution.modelId);
-    return model?.variants.map((entry) => entry.variant) ?? [];
-  }, [providers, execution.providerId, execution.modelId]);
+    const provider = providers.find((item) => item.providerId === execution.providerID);
+    const model = provider?.models?.find((item) => item.modelId === execution.modelID) as { variants?: ModelVariantSource } | undefined;
+    return listModelVariantIds(model?.variants);
+  }, [providers, execution.providerID, execution.modelID]);
 
   const hasVariantOptions = variantOptions.length > 0;
 
@@ -94,7 +121,7 @@ function ReviewFlowDialogView({
     setExecution((prev) => ({ ...prev, variant: '' }));
   }, [hasVariantOptions, execution.variant]);
 
-  const canConfirm = execution.providerId.trim().length > 0 && execution.modelId.trim().length > 0;
+  const canConfirm = execution.providerID.trim().length > 0 && execution.modelID.trim().length > 0;
 
   const handleSubmit = React.useCallback(() => {
     if (!canConfirm || submitting) return;
@@ -138,25 +165,28 @@ function ReviewFlowDialogView({
             <span>{t('diffView.reviewDialog.generateHandoff')}</span>
           </label>
 
-          <label className="flex items-center gap-2 typography-ui-label text-foreground">
-            <Checkbox
-              checked={execution.autoReview}
-              onChange={(autoReview) => setExecution((prev) => ({ ...prev, autoReview }))}
-              disabled={submitting}
-              ariaLabel={t('diffView.reviewDialog.autoReview')}
-            />
-            <span>{t('diffView.reviewDialog.autoReview')}</span>
-          </label>
+          {/* The loop runs on the OpenChamber server, which VS Code does not have. */}
+          {isAutoReviewAvailable() ? (
+            <label className="flex items-center gap-2 typography-ui-label text-foreground">
+              <Checkbox
+                checked={execution.autoReview}
+                onChange={(autoReview) => setExecution((prev) => ({ ...prev, autoReview }))}
+                disabled={submitting}
+                ariaLabel={t('diffView.reviewDialog.autoReview')}
+              />
+              <span>{t('diffView.reviewDialog.autoReview')}</span>
+            </label>
+          ) : null}
 
           <div className="flex min-w-0 flex-col gap-1.5">
             <span className="typography-meta font-medium text-muted-foreground">{t('chat.modelControls.model')}</span>
             <ModelSelector
-              providerId={execution.providerId}
-              modelId={execution.modelId}
+              providerId={execution.providerID}
+              modelId={execution.modelID}
               className="max-w-[320px] justify-between"
               dropdownPortalToBody
-              onChange={(providerId, modelId) => {
-                setExecution((prev) => ({ ...prev, providerId, modelId, variant: '' }));
+              onChange={(providerID, modelID) => {
+                setExecution((prev) => ({ ...prev, providerID, modelID, variant: '' }));
               }}
             />
           </div>
@@ -171,7 +201,16 @@ function ReviewFlowDialogView({
             />
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <span className="typography-meta font-medium text-muted-foreground">{t('sessions.scheduledTasks.editor.agent.label')}</span>
+            <AgentSelector
+              agentName={execution.agent}
+              dropdownPortalToBody
+              onChange={(agent) => setExecution((prev) => ({ ...prev, agent }))}
+            />
+          </div>
         </div>
+
         <DialogFooter>
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
             {t('diffView.reviewDialog.actions.cancel')}

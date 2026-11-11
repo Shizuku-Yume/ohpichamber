@@ -151,22 +151,6 @@ host.onSessionLifecycle((event) => {
 
 `activity`, `unknown`, `idle`, `running`, `retrying`, `waiting-permission` veya `waiting-question` olur. `outcome`, gözlemlenen `completed`, `failed` veya `null` değeridir; yalnızca bellekte en fazla 2.000 oturum için tutulur. Hata sonrası idle, sonraki çalışmaya kadar hatayı korur. Bu, görevin tamamlandığı anlamına gelmez. `openSession(sessionId)` sohbeti açıkça açar.
 
-## Arka plan kabukları
-
-`shells` yeteneğiyle, bir oturum ve alt ajanları, kayıtlı bir proje veya her oturum kapsamında arka planda çalışan kabuk komutlarını izleyin. OpenChamber yerel deposundan yanıt verir; ağ üzerinden okuma yapılmaz.
-
-| Çağrı | Ne yapar |
-| --- | --- |
-| `onRunningShells(scope, listener)` | kapsamdaki kabuk komutlarına abone olur: `{ kind: 'session', sessionId }` oturumu ve alt ajanlarını, `{ kind: 'project', projectId }` kayıtlı bir projeyi, `{ kind: 'global' }` ise tüm oturumları kapsar. En eskiden başlayarak çalışan komutları (her biri `background` bayrağıyla birlikte) ve sonlananları alırsınız. Bir abonelikten çıkma fonksiyonu döndürür. |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | çalışan veya sonlanan bir komutun çıktısının bir sayfasıdır. `cursor` olmadan, sondan `tailBytes` (en fazla 65536) kadar önce başlar. `{ output, cursor, skipped }` döndürür. |
-| `stopShell(shellId)` | ajana önce durdurma bildirimini gönderir, ardından komutu kaldırır. |
-
-Anlık görüntü `{ kind: "shells", scope, shells, ended }` şeklindedir ve `scope` aboneliğin kapsamını yansıtır. Çalışan her kabuk en fazla 200 adet olmak üzere en eskiden yeniye doğru `{ id, sessionID, command, startedAt, background }` şeklindedir. Turun beklemediği bir iş için `background` değeri `true` olur.
-
-`ended`, OpenChamber'ın bittiğini gördüğü komutları, en eski bitenden yeniye doğru, en yeniler tutularak en fazla 200 adet listeler. Komut bir çıkış koduyla bittiğinde her biri `status`, `endedAt` ve `exit` ekler. Durum `exited`, `timeout`, bir sinyal tarafından `killed`, bir kullanıcı tarafından `stopped` veya yeniden bağlanma sırasında bitiş gerçekleştiğinde `unknown` olur. OpenChamber bu listeyi yalnızca bellekte tutar. Uygulama yeniden yüklendikten sonra boşalır, bu nedenle panelinizin gösterdiği verileri eklenti depolamasına kaydedin.
-
-Host, biten bir komutun çıktısını dizin başına en son biten 25 komut için tutar. Durdurulan bir komut çıktısını hemen kaybeder. OpenChamber'ın hiç görmediği bir kabuğu veya host'un artık tutmadığı bir çıktıyı okumak `NOT_FOUND` hatası verir. Çalışmayan bir kabuğu durdurmak da aynı şekildedir. Onaylanmamış bir `shells` yeteneği `NOT_GRANTED` ile sonuçlanır.
-
 ## Kalıcı uzantı verisi
 
 ```ts
@@ -256,7 +240,11 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
-`sessions.start`, `sessions.send`, `sessions.retry` ve `sessions.status` için `contributes.sessionControl` gerekir; kullanıcı bunu ayrı bir satır olarak onaylar. `sessions.lastReply` için `sessionControl: { content: true }` gerekir. `setInstructions` için `contributes.instructions` gerekir; bu çağrı ajanların okuduklarına tek bir klasörde ya da `null` ile her yerde ekleme yapar.
+`sessions.start`, `sessions.send`, `sessions.retry`, `sessions.status` ve `sessions.stop` için `contributes.sessionControl` gerekir; kullanıcı bunu ayrı bir satır olarak onaylar. `sessions.lastReply` için `sessionControl: { content: true }` gerekir. `sessions.send` ile gönderilen bir mesaj, sohbete yazılan bir mesaj gibi, ajanın o oturumda beklediği formu ya da sayfayı kapatır.
+
+Ajanın isteklerini başka bir yere, örneğin bir sohbet uygulamasına taşımak için `answers: true` ekleyin. Kullanıcı bunu bir satır daha olarak onaylar ve servis artık herhangi bir oturumda kullanıcı adına yanıt verebilir: bir `permission-asked` olayı için `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })` (ya da ajanın okuyacağı bir `message` ile `'deny'`), `event.question.kind` değeri `form` olan bir `question-asked` olayı için `sessions.answerForm(sessionId, formId, values)`. Olayın içeriği formun alanlarını `key` değerleri ve seçenekleriyle listeler. Değerler yerine `null` göndermek formu yanıtsız kapatır. Bir izin yalnızca o tek isteği kapsar.
+
+`setInstructions` için `contributes.instructions` gerekir; bu çağrı ajanların okuduklarına tek bir klasörde ya da `null` ile her yerde ekleme yapar.
 
 `emit`, `host.onServiceEvent` üzerinden açık frame'lerinize ulaşır, böylece panelin yoklama yapması gerekmez. Hiçbir şey yeniden gönderilmez, bu yüzden sonradan açılan bir frame önce güncel durumu okur. `readSettings`, servise `secret` alanları dahil entegrasyonun ayarlarını verir; `needsConfiguration` ise eklentinin kartında bir mesaj gösterir.
 
@@ -391,14 +379,14 @@ Kullanıcı oturum yorumlarını açtığında OpenChamber, `comments.create` ç
 
 ## Kullanım sağlayıcıları
 
-Bir servis, yerleşik sağlayıcıların yanında kullanımı bildirebilir: `provides: ["quota"]` tanımlayın ve kimlik bilgilerine ihtiyaç duyduğu model providers `contributes.quota.providers` içinde listeleyin. OpenChamber sağlayıcıya `ext-<panel.id>` adını verir, kartını uzantının adı ve simgesiyle çizer ve yerleşik bir sağlayıcıya sorduğu gibi sorar.
+Bir servis, yerleşik sağlayıcıların yanında kullanımı bildirebilir: `provides: ["quota"]` tanımlayın ve kimlik bilgilerine ihtiyaç duyduğu OpenCode sağlayıcılarını `contributes.quota.providers` içinde listeleyin. OpenChamber sağlayıcıya `ext-<panel.id>` adını verir, kartını uzantının adı ve simgesiyle çizer ve yerleşik bir sağlayıcıya sorduğu gibi sorar.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-Onay iletişim kutusu bu sağlayıcıları listeler; listeyi değiştiren bir sürüm yeniden sorar. Her yenilemede OpenChamber `POST /quota` adresine tek bir çağrı, `usage.read`, gönderir; `input.credentials` içinde, listelenen sağlayıcılardan Host'un kimlik bilgisi sakladığı her biri için o kimlik bilgisi (bir API anahtarı ya da bir tarayıcı girişinin token'ları) bulunur ve depodan başka hiçbir şey bulunmaz. Host'un kimlik bilgisi saklamadığı listelenmiş bir sağlayıcı yapılandırılmamış olarak gösterilir ve servis çağrılmaz; anahtarı uzantının kendi ayarlarında duran bir sağlayıcı için boş listeye izin verilir.
+Onay iletişim kutusu bu sağlayıcıları listeler; listeyi değiştiren bir sürüm yeniden sorar. Her yenilemede OpenChamber `POST /quota` adresine tek bir çağrı, `usage.read`, gönderir; `input.credentials` içinde, listelenen sağlayıcılardan OpenCode'un kimlik bilgisi sakladığı her biri için o kimlik bilgisi (bir API anahtarı ya da bir tarayıcı girişinin token'ları) bulunur ve depodan başka hiçbir şey bulunmaz. OpenCode'un kimlik bilgisi saklamadığı listelenmiş bir sağlayıcı yapılandırılmamış olarak gösterilir ve servis çağrılmaz; anahtarı uzantının kendi ayarlarında duran bir sağlayıcı için boş listeye izin verilir.
 
 Gövdeyi `readQuotaProviderRequest` ile okuyun ve yerleşik bir sağlayıcının hesapladığı sonucu `{ ok: true, data }` ile yanıtlayın: `ok`, `configured`, `error`, `planLabel` ve pencere adına göre `usage.windows`, her biri `usedPercent`, `windowSeconds`, `resetAt` (epoch milisaniye) ve isteğe bağlı `valueLabel` ya da `value` ile; ayrıca model başına pencereler için `usage.models`. Kalan payı, sıfırlamaya geri sayımı ve biçimlendirilmiş metinleri OpenChamber türetir, böylece kart yerleşik bir sağlayıcınınkiyle eşleşir.
 

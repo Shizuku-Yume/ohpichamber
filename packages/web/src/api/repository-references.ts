@@ -13,7 +13,6 @@
  */
 import type {
   ChangeRequestListStatusesResult,
-  ChangeRequestReviewStateResult,
   RepositoryItemRef,
   RepositoryReferenceDetailResult,
   RepositoryReferencePage,
@@ -21,6 +20,7 @@ import type {
   RepositoryReferencesAcrossResult,
   SourceControlReadContext,
 } from '@openchamber/ui/lib/api/types';
+import type { ChangeRequestReviewStateResult } from '@openchamber/ui/lib/source-control/types';
 import type { RuntimeFetchOptions } from '@openchamber/ui/lib/runtime-fetch';
 import { z } from 'zod';
 import { providerPath } from './source-control-providers';
@@ -174,8 +174,9 @@ const referencesAcrossResultSchema = z.strictObject({
   hasMore: z.boolean(),
   total: z.number().int().nonnegative(),
   repositories: z.array(z.union([
-    z.strictObject({ directory: z.string().min(1), status: z.literal('included'),
-      repo: z.strictObject({ owner: z.string(), repo: z.string(), url: z.string() }),
+    z.strictObject({
+      directory: z.string().min(1), status: z.literal('included'),
+      repo: z.strictObject({ owner: z.string(), repo: z.string(), url: z.string(), host: z.string().optional() }),
     }),
     z.strictObject({ directory: z.string().min(1), status: z.enum(['no-repo', 'disconnected', 'invalid-context', 'error']) }),
   ])),
@@ -201,14 +202,18 @@ const pullStatusesResultSchema = z.discriminatedUnion('connected', [
 
 const errorSchema = z.object({ error: z.string() });
 
-const readContextQuery = (context: SourceControlReadContext): URLSearchParams => new URLSearchParams({
-  directory: context.directory,
-  instance: context.instance,
-  repositoryId: context.repositoryId,
-  accountId: context.accountId,
-  bindingRevision: String(context.bindingRevision),
-  primaryRemote: context.primaryRemote,
-});
+const readContextQuery = (context: SourceControlReadContext): URLSearchParams => {
+  const query = new URLSearchParams({
+    directory: context.directory,
+    instance: context.instance,
+    repositoryId: context.repositoryId,
+    accountId: context.accountId,
+    bindingRevision: String(context.bindingRevision),
+    primaryRemote: context.primaryRemote,
+  });
+  if (context.linked) query.set('linked', '1');
+  return query;
+};
 
 /** The parsed answer, or the server's own reason when the request failed. */
 const readPayload = async <TSchema extends z.ZodType>(

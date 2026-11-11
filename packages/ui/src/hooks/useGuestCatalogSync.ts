@@ -12,22 +12,11 @@
 import React from 'react';
 
 import { loadGuestCatalog, reloadGuestCatalog } from '@/lib/guests/load-catalog';
-import { subscribeOpenchamberEvents, type OpenChamberEvent } from '@/lib/openchamberEvents';
-
-/**
- * What one control-stream event asks of the catalog: a change is read from a
- * request that starts after it, a reconnection from a plain read, since a
- * change made during the gap was never announced to this client. Anything
- * else is another surface's business.
- */
-export const handleGuestCatalogEvent = (
-  event: OpenChamberEvent,
-  actions: { reload: () => void; load: () => void } = { reload: () => void reloadGuestCatalog(), load: () => void loadGuestCatalog() },
-): void => {
-  if (event.type === 'guests-changed') actions.reload();
-  else if (event.type === 'event-stream-ready') actions.load();
-};
+import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 
 export const useGuestCatalogSync = (): void => {
-  React.useEffect(() => subscribeOpenchamberEvents((event) => handleGuestCatalogEvent(event)), []);
+  React.useEffect(() => subscribeOpenchamberEvents((event) => {
+    if (event.type === 'guests-changed') void reloadGuestCatalog();
+    else if (event.type === 'event-stream-ready') void loadGuestCatalog();
+  }), []);
 };

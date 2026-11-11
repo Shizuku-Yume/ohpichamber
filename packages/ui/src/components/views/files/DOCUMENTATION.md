@@ -49,12 +49,12 @@ unsaved-changes prompt that may come first) goes through `onCloseFile` to
 including the panel's open state, its active tab, and the editor toggle, to each file surface.
 Hidden surfaces retain drafts, loaded content and scroll state. They stop
 directory and file metadata polling; reopening checks freshness once before
-normal polling resumes. The visible open file is watched by OpenCode
-(`lib/watchedFiles.ts`, OpenCode 2.2): its `filesystem.changed` event starts
-the same freshness check at once, and the check otherwise runs every 30
-seconds instead of every 2, only to cover a watch OpenCode lost. A file
-outside the project folder, or an OpenCode that refuses the watch, keeps the
-2-second poll. An open plan in the repository is watched the same way. Autosave is independent of visibility.
+normal polling resumes. Expanded directories poll every 8 seconds while the
+tree is active, and a hidden document pauses them. The visible open file
+polls every 2 seconds and skips a tick while the document is hidden. Agent file writes do not wait for the poll: `lib/fileTreeChanges.ts`
+notifies the tree from the run's tool parts and `useFileTreeChanges` batches
+a re-list 2 seconds after the first change. Autosave is independent of
+visibility.
 
 Background polling never supersedes an in-flight directory read. Explicit
 refresh after file mutations does. Each directory failure remains local and
@@ -187,8 +187,8 @@ has no file events (`filesystem.changed` covers the repository HEAD only), so
 carries, fed from `sync-context` and the revert actions:
 
 - a finished `write` or `patch` names its files, so only their parent folders
-  change (`toolListingChanges` in `lib/opencode/tools.ts`; `edit` never
-  creates a file and counts as no change);
+  change (`fileTreeChanges.toolTransition` in `lib/fileTreeChanges.ts`; `edit`
+  never creates a file and counts as no change);
 - a finished `shell`, `execute`, MCP or plugin call could touch anything, so
   its session waits for the step's end: the step's snapshot `files` decide.
   An empty list costs nothing (read-only commands); a non-empty or missing
@@ -345,6 +345,25 @@ It reads the file in one GET, because a Range request needs a CORS header the
 server does not allow to the Android app. There is no pinch zoom, and PDFs that
 need pdf.js's CMap, standard font or wasm data (CJK text without embedded
 fonts, JPEG 2000 images) may lose that text or image.
+
+### Why table, data and office previews load on first use
+
+`TableArtifact`, `DataFileArtifact` and `OfficeArtifact` are `React.lazy` in
+`FilesView`, each under its own error boundary keyed by the file, and the
+export reads `delimitedText.ts` with a dynamic import. Imported statically,
+their modules sat in a chunk `FilesView` loaded with itself, so a single
+missing file (Windows Defender quarantined that chunk in 2.7.0, #6630) failed
+the whole `FilesView` import and the app-wide boundary replaced the window
+with "Something went wrong". Now such a failure shows "Preview unavailable" in
+that file's pane, and the tree, the text editor and other previews keep
+working. `FilesView` uses plain `React.lazy` here, not `lazyWithChunkRecovery`:
+that helper reloads the window, which drops the user's place and cannot bring
+back a quarantined file. `React.lazy` keeps a failed import, so these previews
+stay unavailable until the window reloads; on the web that includes a tab left
+open across a server update, which needs the reload anyway. Swapping in a
+fresh `React.lazy` when the import fails made React retry at once and spin in
+the loading state while the file was missing. The VS Code webview inlines
+dynamic imports, so there nothing changes.
 
 ### Office documents
 

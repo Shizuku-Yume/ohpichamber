@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'מודלי Zen',
   'quota.value.requests': 'בקשות: {count}',
@@ -9030,5 +9036,33 @@ export const dict = {
   'chat.planReview.reject': "דחייה",
   ...workerRunsI18n.he,
 
+  'chat.backgroundWork.aria': 'עבודה ברקע',
+  'chat.backgroundWork.count': 'ברקע: {count}',
+  'chat.backgroundImages.generating': 'יוצר תמונה',
+  'sessions.sidebar.session.status.backgroundImage': 'תמונה נוצרת ברקע',
+  'gitView.empty.repositoryUnreadable': 'Git לא הצליח לקרוא את התיקייה הזו',
+  'gitView.empty.repositoryUnreadableDescription': 'זה מה ש-Git אמר. אפשר לתקן ולנסות שוב.',
+  'gitView.empty.repositoryUnreadableRetry': 'לנסות שוב',
+  'contextSidebar.section.sessionTotals': 'סיכום ההפעלה',
+  'directoryExplorerDialog.browse.linkTarget': 'קישור אל {path}',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} דורש OpenCode {required}. בשרת הזה מותקנת גרסה {current}. יש לעדכן קודם את OpenCode.',
+  'chat.workStatus.breakdown.planCountSingle': 'תוכנית {count}',
+  'chat.workStatus.breakdown.planCountPlural': '{count} תוכניות',
+  'chat.workStatus.linkedPlans.open': 'פתיחת התוכנית {title}',
+  ...aboutReleaseNotesI18n.he,
+  ...updateCheckErrorsI18n.he,
+  ...sessionWarmingI18n.he,
+  ...usageToolI18n.he,
+  ...openchamberToolsLayoutI18n.he,
+  ...openchamberToolOutputI18n.he,
+  ...tooltipsDiffI18n['he'],
+  ...tooltipsFilesI18n['he'],
+  ...tooltipsGitI18n['he'],
+  ...tooltipsTrackerI18n['he'],
+  ...tooltipsWalkthroughI18n['he'],
+  ...tooltipsTerminalBrowserI18n['he'],
+  ...tooltipsWorkspaceI18n['he'],
+  ...tooltipsPanelI18n['he'],
+  ...tooltipsChatI18n['he'],
   ...m4LaneDI18n['he'],
 };

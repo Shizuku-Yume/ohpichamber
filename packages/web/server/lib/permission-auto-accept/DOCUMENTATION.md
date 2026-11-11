@@ -24,6 +24,10 @@ The policy lives under the `permissionAutoAccept` settings key:
 
 Pre-modes `true`/`false` entries are converted on first read; `true` becomes `safety` when the old global safety net was on, otherwise `auto`. Writes are serialized and each one increments `revision`.
 
+## Fork inheritance
+
+A fork created through the Canonical API carries its source session as `parentSessionId`, so the runtime's lineage walk resolves it to the source's nearest explicit mode; a fork with no explicit ancestor resolves to `ask`. An explicit policy set on the fork wins over the inherited one. Inverse of that: the Settings default enrolls only a new top-level session, never a fork or a subagent.
+
 A new top-level session enrolls once, at creation, in the `permissionDefaultMode` setting (default `ask`); a mode the creating flow already set wins. Subagents inherit the nearest explicit ancestor mode through `parentSessionId` lineage. A failed lineage lookup is unknown lineage: it writes nothing and does not cache a root, so a transient error cannot stop inheritance.
 
 `GET /api/permission-auto-accept` returns `{ sessions, modes, revision }`, where `sessions` is the boolean compatibility map (`isAutoAnsweringMode`) and `modes` the typed modes.
@@ -44,3 +48,18 @@ The supervisor is constructed before this runtime and is built elsewhere, so it 
 - `evaluateHostPermission(approval)` — the safety verdict for one request.
 
 Before registration and on any thrown error every answer fails closed: `mode: 'ask'`, `verdict: 'unavailable'` / no verdict. Nothing is ever accepted without a live policy runtime.
+
+## Routes
+
+- `GET /api/permission-auto-accept` answers `{ sessions, modes, revision }`. `modes` is the policy; `sessions` is its on/off view (`ask` is off) for clients from before the modes.
+- `PUT /api/permission-auto-accept/sessions/:sessionId` takes `{ mode, directory }`; a body with only `enabled` (older clients) means `auto` or `ask`.
+
+These are normal authenticated OpenChamber runtime routes. They must not be added to browser URL-token allowlists.
+
+## UI ownership
+
+`packages/ui/src/stores/permissionStore.ts` is a projection of server policy and does not persist an independent policy. The host runtime sees Canonical Agent Service events; the server is the sole responder and the UI renders pending requests until the authoritative event arrives. The composer's shield button cycles ask → safety → auto, skipping `safety` while no classification provider can run it (a `safety` session then behaves as `ask`).
+
+## Tests
+
+`runtime.test.js` covers restart persistence, on/off requests, the one-time conversion of pre-modes policies, the default mode on new sessions, explicit modes, nearest explicit ancestor inheritance, and which outcomes notifications may skip.

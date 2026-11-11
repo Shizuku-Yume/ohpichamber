@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GitDiffResponse } from '@/lib/api/types';
-import { getCommitFiles, getGitCommitDiff, getGitRangeDiff, getGitRangeFiles } from '@/lib/gitApi';
+import { getCommitFileDiff, getCommitFiles, getGitCommitDiff, getGitRangeDiff, getGitRangeFiles } from '@/lib/gitApi';
+import { getGitRangeFileVersions } from '@/lib/gitApiHttp';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
 import { useI18n } from '@/lib/i18n';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { SourceControlProvider, SourceControlReadContext } from '@/lib/source-control/types';
+import { useChangeRequestTerm } from '@/lib/source-control/providers/registry';
 import { sourceControlReadContextParts } from '@/lib/source-control/identity';
 import type { WalkthroughSource } from '@/lib/walkthrough/types';
 import { useGitStore } from '@/stores/useGitStore';
@@ -40,7 +42,7 @@ export function useGitComparison(
 ) {
   const { t } = useI18n();
   const runtimeKey = useGitStore((state) => state.runtimeKey);
-  const provider = readContext?.provider ?? changeRequestProvider;
+  const changeRequestTerm = useChangeRequestTerm(readContext?.provider ?? changeRequestProvider);
   // A pull request is read through the bound context, so that context is part
   // of what is being compared: a rebind is a different comparison.
   const authority = source?.kind === 'pr' && readContext ? JSON.stringify(sourceControlReadContextParts(readContext)) : '';
@@ -68,7 +70,7 @@ export function useGitComparison(
     try {
       let files: GitComparisonFile[];
       if (target.kind === 'pr') {
-        if (!context) throw new Error(t(changeRequestCopy('session.githubPrPicker.empty.notConnected', provider)));
+        if (!context) throw new Error(t(changeRequestCopy('session.githubPrPicker.empty.notConnected', changeRequestTerm)));
         files = await prCache.load(pushScope, target, () => fetchPullRequestDiff(context.directory, target, context), force, targetAuthority);
       } else if (target.kind === 'branch') {
         files = (await getGitRangeFiles(directory, { base: target.baseRef, head: target.headRef, includeWorkingTree: true }))
@@ -85,7 +87,7 @@ export function useGitComparison(
       if (generation.current !== request || getRuntimeKey() !== runtime) return;
       setResult({ key, status: 'error', message: error instanceof Error ? error.message : t('diffView.state.failedToLoadDiff') });
     }
-  }, [directory, enabled, key, prCache, provider, pushScope, t]);
+  }, [changeRequestTerm, directory, enabled, key, prCache, pushScope, t]);
   const refresh = useCallback(() => read(true), [read]);
 
   useEffect(() => {
@@ -117,6 +119,17 @@ export function useGitComparison(
     return fetchPullRequestFile(context.directory, target, context, { path: file.path, previousPath: file.previousPath, status: file.status });
   }, [directory, enabled, filesByPath, key, t]);
 
+  // A document is compared in the viewer, so it needs both whole versions.
+  const fetchVersions = useCallback(async (filePath: string): Promise<{ original: string; modified: string }> => {
+    const { key: targetKey, source: target, enabled: active, readContext: context } = sourceRef.current;
+    const file = filesByPath.get(filePath);
+    if (!directory || targetKey !== key || !target || !file || !enabled || !active) throw new Error(t('diffView.state.failedToLoadDiff'));
+    if (target.kind === 'commit') return getCommitFileDiff(directory, target.hash, filePath, true, file.previousPath);
+    if (target.kind === 'branch') return getGitRangeFileVersions(directory, { base: target.baseRef, head: target.headRef, path: filePath, previousPath: file.previousPath, includeWorkingTree: true });
+    if (!context) throw new Error(t('diffView.state.failedToLoadDiff'));
+    return fetchPullRequestFile(directory, target, context, { path: file.path, previousPath: file.previousPath, status: file.status, binary: true });
+  }, [directory, enabled, filesByPath, key, t]);
+
   return {
     key,
     revision: current?.status === 'ready' ? current.revision : 0,
@@ -126,5 +139,6 @@ export function useGitComparison(
     refresh,
     fetchDiff,
     fetchFullFile,
+    fetchVersions,
   };
 }

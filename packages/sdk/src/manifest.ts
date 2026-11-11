@@ -131,6 +131,11 @@ export type GuestCommandContribution = {
   description?: string;
 };
 
+/** How many `contributes.providerLogos` entries a package may declare: room for an icon pack, with aliases as more entries. */
+export const GUEST_PROVIDER_LOGOS_MAX = 256;
+/** Bytes of one `contributes.providerLogos` file; a larger one fails the install. */
+export const GUEST_PROVIDER_LOGO_BYTES_MAX = 1024 * 1024;
+
 /** How many `contributes.tools` entries a package may declare. */
 export const GUEST_TOOLS_MAX = 16;
 /** Characters in a `contributes.tools` `match`. */
@@ -340,8 +345,7 @@ export type PublicSocketBinding = {
  * to Linear, described by `contributes.tracker`; an extension is a Git host
  * or a tracker, never both. `quota` makes it a usage provider next to the
  * built-in ones on the Usage page, described by `contributes.quota`. The
- * contracts are in `service-providers.ts`. `opencode` lets the service read
- * from the OpenCode the host uses, requiring its own capability approval. A
+ * contracts are in `service-providers.ts`. A
  * service that provides a role needs no panel or background entry: the host
  * starts it on the first call.
  */
@@ -700,8 +704,10 @@ export type SourceControlContribution = {
     placeholder: string;
   };
   capabilities: SourceControlCapabilities;
+  /** The service owns sign-in. Settings shows `hint` when this instance has no login. At least login or token is required. */
+  login?: { kind: 'service'; hint: string };
   /** How OpenChamber sends the token: which header, with which prefix. */
-  token: {
+  token?: {
     header: 'authorization' | 'private-token';
     /**
      * `bearer` → `Bearer <token>`, `token` → `token <token>`, `basic` →
@@ -819,15 +825,16 @@ export const serviceProvides = (
  * `contributes.sessionControl.content`: the service receives what the agent
  * said or asked, not only that it did. `sessionControl` follows from
  * `contributes.sessionControl`: the service starts sessions and sends to them
- * with no window open. `instructions` follows from `contributes.instructions`:
+ * with no window open. `sessionAnswers` follows from
+ * `contributes.sessionControl.answers`: the service answers the agent's
+ * permission requests and forms in any session, for the user.
+ * `instructions` follows from `contributes.instructions`:
  * the service adds to what agents read. `skills` follows from
- * `contributes.skills`: the package's skills reach every agent.
- * `opencodePlugin` follows from `contributes.opencodePlugin`: the package's
- * plugin runs inside the user's OpenCode. `opencode` follows from the service
- * role of the same name: the service reads sessions, messages, projects and
- * live events from the OpenCode the host uses, and nothing else.
+ * `contributes.skills`: the package's skills reach every agent. `links`
+ * follows from `contributes.links`: identifiers and links in chat messages
+ * become the extension's, and a click hands the one clicked to it.
  */
-export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'instructions', 'skills'] as const;
+export const GUEST_CAPABILITIES = ['prompt', 'sessions', 'files', 'model', 'shells', 'conversation', 'service', 'network', 'filesystem', 'origins', 'transcript', 'sessionControl', 'sessionAnswers', 'instructions', 'skills', 'links'] as const;
 
 export type GuestCapability = (typeof GUEST_CAPABILITIES)[number];
 
@@ -866,9 +873,12 @@ export const isGuestFilesystemPattern = (value: string): boolean => {
 /**
  * The service acts on sessions by itself (`service-host.ts`). `content: true`
  * also lets it read the agent's answers, which asks for `transcript`.
+ * `answers: true` lets it answer the agent's permission requests and forms,
+ * which asks for `sessionAnswers`.
  */
 export type SessionControlContribution = {
   content?: true;
+  answers?: true;
 };
 
 /** `contributes.mentions`: the extension's rows in the composer's `@` menu, answered by its service. */
@@ -879,6 +889,46 @@ export type MentionsContribution = {
 
 /** Characters of a mention section's label. */
 export const GUEST_MENTIONS_LABEL_MAX = 40;
+
+/** Identifier keys one extension may claim in chat text (`contributes.links.identifier.keys`). */
+export const GUEST_LINK_KEYS_MAX = 8;
+/** A literal identifier key: `PROJ` claims `PROJ-123`. Upper case, so prose and code words stay text. */
+export const GUEST_LINK_KEY = /^[A-Z][A-Z0-9_]{0,31}$/;
+/** What a click on a recognised identifier or link does. */
+export const GUEST_LINK_ACTIONS = ['open', 'attach'] as const;
+export type GuestLinkAction = (typeof GUEST_LINK_ACTIONS)[number];
+
+/**
+ * `contributes.links`: identifiers and links in chat messages the host
+ * recognises for the extension. A click on one does the `action`: `open`
+ * opens the extension with a `link` item (its rail panel, or its dialog when
+ * `attach` is `"dialog"`), `attach` puts a chip on the composer. Patterns are
+ * declared, never written as regular expressions: literal identifier keys,
+ * and link templates in the tracker's grammar (`isTrackerUrlTemplate`) under
+ * one fixed https origin. Grants `links`, approved for exactly these keys,
+ * origin, templates and action.
+ */
+export type LinksContribution = {
+  action: GuestLinkAction;
+  /** `PROJ-123` in text, for each listed key. */
+  identifier?: { keys: string[] };
+  /**
+   * Links to one item on `origin`. `identifier` is the shape of `{id}`; with
+   * `action: "attach"`, at least one template uses no `{segment}` placeholder,
+   * so the chip of a recognised identifier can name its link.
+   */
+  urls?: { origin: string; identifier: TrackerIdentifierKind; item: string[] };
+};
+
+/** A link template the host can fill from an identifier alone: no `{segment}` or `{segments+}`. */
+export const isBuildableLinkTemplate = (template: string): boolean => (
+  isTrackerUrlTemplate(template) && !template.includes('{segment}') && !template.includes('{segments+}')
+);
+
+/** The link a buildable template names for one identifier on `origin`. */
+export const buildLinkUrl = (origin: string, template: string, identifier: string): string => (
+  `${origin}${template.replace('{id}', encodeURIComponent(identifier))}`
+);
 
 /** A component name an agent writes in a UI block. */
 export const GUEST_BLOCK_NAME = /^[A-Z][A-Za-z0-9]{1,31}$/;
@@ -939,6 +989,8 @@ export type OpenChamberContributes = {
   commands?: GuestCommandContribution[];
   /** How the extension's tool calls look in the chat. */
   tools?: GuestToolContribution[];
+  /** OpenCode provider id to a package `.svg` or `.png`, drawn as that provider's logo, in place of one the app ships. */
+  providerLogos?: Record<string, string>;
   /** Editors the Files view opens matching files in. */
   fileEditors?: FileEditorContribution[];
   /** The Git host a `source-control` service provides; present exactly when it does. */
@@ -957,11 +1009,12 @@ export type OpenChamberContributes = {
   instructions?: true;
   /** A folder of `<name>/SKILL.md` skills inside the package. Grants `skills`. */
   skills?: string;
-  /**
   /** Rows in the composer's `@` menu. Needs `service`. */
   mentions?: MentionsContribution;
   /** Components agents write in UI blocks, each drawn by its own frame. */
   blocks?: GuestBlockContribution[];
+  /** Identifiers and links in chat messages a click hands to the extension. Grants `links`. */
+  links?: LinksContribution;
 };
 
 /** Whether any declared action asks for a session's messages, which needs `conversation`. */
@@ -976,7 +1029,7 @@ export type PublicGuestCapabilities = {
 };
 
 export const requestedGuestCapabilities = (
-  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills'>,
+  contributes: Pick<OpenChamberContributes, 'capabilities' | 'integration' | 'service' | 'filesystem' | 'actions' | 'origins' | 'sessionEvents' | 'sessionControl' | 'instructions' | 'skills' | 'links'>,
 ): GuestCapability[] => {
   const declared = new Set<GuestCapability>(contributes.capabilities ?? []);
   if (guestActionsNeedConversation(contributes.actions)) declared.add('conversation');
@@ -986,8 +1039,10 @@ export const requestedGuestCapabilities = (
   if (contributes.origins && contributes.origins.length > 0) declared.add('origins');
   if (contributes.sessionEvents?.content || contributes.sessionControl?.content) declared.add('transcript');
   if (contributes.sessionControl) declared.add('sessionControl');
+  if (contributes.sessionControl?.answers) declared.add('sessionAnswers');
   if (contributes.instructions) declared.add('instructions');
   if (contributes.skills) declared.add('skills');
+  if (contributes.links) declared.add('links');
   return GUEST_CAPABILITIES.filter((capability) => declared.has(capability));
 };
 
@@ -1109,6 +1164,7 @@ export type ParseManifestErrorCode =
   | 'invalid-skills'
   | 'invalid-mentions'
   | 'invalid-blocks'
+  | 'invalid-links'
   | 'invalid-capabilities'
   | 'invalid-integration'
   | 'invalid-service'
@@ -1117,6 +1173,7 @@ export type ParseManifestErrorCode =
   | 'invalid-actions'
   | 'invalid-commands'
   | 'invalid-tools'
+  | 'invalid-provider-logos'
   | 'invalid-file-editors';
 
 export type ParseManifestFailure = {
@@ -1148,6 +1205,11 @@ export const isSafeAssetPath = (value: string): boolean => {
 /** Package SVG path for the rail, e.g. `icon.svg`. Remixicon names use `PANEL_ID`. */
 export const isGuestPackageSvgIcon = (value: string): boolean => (
   isSafeAssetPath(value) && value.toLowerCase().endsWith('.svg')
+);
+
+/** A `contributes.providerLogos` file: the two image types the host serves from a package. */
+export const isGuestProviderLogoPath = (value: string): boolean => (
+  isSafeAssetPath(value) && /\.(?:svg|png)$/i.test(value)
 );
 
 export const toPublicIntegration = (integration: IntegrationContribution): PublicIntegration => {

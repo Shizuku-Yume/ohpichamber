@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Zen 模型',
   'quota.value.requests': '請求數：{count}',
@@ -9372,5 +9378,24 @@ export const dict = {
   'chat.planReview.reject': "拒絕",
   ...workerRunsI18n['zh-TW'],
 
+  'chat.backgroundWork.aria': '背景工作',
+  'chat.backgroundWork.count': '背景：{count}',
+  'chat.backgroundImages.generating': '正在產生圖片',
+  'sessions.sidebar.session.status.backgroundImage': '圖片正在背景產生',
+  'gitView.empty.repositoryUnreadable': 'Git 無法讀取此資料夾',
+  'gitView.empty.repositoryUnreadableDescription': '以下是 Git 的輸出。解決問題後重試。',
+  'gitView.empty.repositoryUnreadableRetry': '重試',
+  'contextSidebar.section.sessionTotals': '會話總計',
+  'directoryExplorerDialog.browse.linkTarget': '連結至 {path}',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} 需要 OpenCode {required}。此伺服器為 {current}。請先更新 OpenCode。',
+  'chat.workStatus.breakdown.planCountSingle': '{count} 個計畫',
+  'chat.workStatus.breakdown.planCountPlural': '{count} 個計畫',
+  'chat.workStatus.linkedPlans.open': '開啟計畫 {title}',
+  ...aboutReleaseNotesI18n['zh-TW'],
+  ...updateCheckErrorsI18n['zh-TW'],
+  ...sessionWarmingI18n['zh-TW'],
+  ...usageToolI18n['zh-TW'],
+  ...openchamberToolsLayoutI18n['zh-TW'],
+  ...openchamberToolOutputI18n['zh-TW'],
   ...m4LaneDI18n['zh-TW'],
 };

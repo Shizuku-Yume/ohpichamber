@@ -2,10 +2,10 @@ import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { getPinnedSessionKey } from '@/stores/useSessionPinnedStore';
-import { registerWorkspaceDirectory } from '@/stores/globalSessions';
+import { getPinnedSessionKey } from '@/lib/sessionPins';
 import {
   computeNodeStructureKey,
   canShowSessionWorktreeMenu,
@@ -15,15 +15,37 @@ import {
   resolveTooltipBranchLabel,
   selectFolderRootNodes,
   selectBlockingBadgeSessionScopes,
-  selectRowBadgeVisibilityClass,
 } from './sessionNodeItemUtils';
 import type { SessionNode } from '../types';
 
-const session = (sessionId: string, title: string): Session => ({
-  sessionId, rootSessionId: sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/repo',
-  title: title, metadata: {}, createdAt: 1, updatedAt: 1, epoch: '1', headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' },
-  metadataRevision: '1', archiveRevision: '0',
-});
+/**
+ * The session lives in `directory`, which the sidebar resolves through its
+ * workspace. A `null` directory leaves the workspace unmapped, as a session
+ * whose project the client has not loaded yet.
+ */
+const session = (sessionId: string, title: string, overrides: Partial<Session> = {}, directory: string | null = '/repo'): Session => {
+  const workspaceId = `workspace_${directory ?? sessionId}`;
+  if (directory) registerWorkspaceDirectory(workspaceId, directory);
+  return {
+    sessionId,
+    projectId: 'project',
+    workspaceId,
+    displayPath: directory ?? '.',
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+    title,
+    ...overrides,
+  };
+};
 
 const rootWithChild = (childSession: Session): SessionNode => ({
   session: session('root', 'Root'),
@@ -40,21 +62,17 @@ describe('computeNodeStructureKey', () => {
 
   test('changes when a descendant session object changes', () => {
     const previous = session('child', 'Before');
-    const next = session('child', 'After');
+    const next = { ...previous, title: 'After' };
 
     expect(computeNodeStructureKey(rootWithChild(previous))).not.toBe(computeNodeStructureKey(rootWithChild(next)));
   });
 });
 
 describe('selectBlockingBadgeSessionScopes', () => {
-  const withDirectory = (node: SessionNode, directory: string): SessionNode => {
-    const workspaceId = `wsp_${directory}`;
-    registerWorkspaceDirectory(workspaceId, directory);
-    return {
-      ...node,
-      session: { ...node.session, workspaceId, displayPath: directory },
-    };
-  };
+  const withDirectory = (node: SessionNode, directory: string): SessionNode => ({
+    ...node,
+    session: session(node.session.sessionId, node.session.title ?? node.session.sessionId, { metadata: node.session.metadata }, directory),
+  });
 
   test('rolls up the hidden subtree by owning directory when a parent is collapsed', () => {
     const grandchild = withDirectory({ session: session('grandchild', 'Grandchild'), children: [], worktree: null }, '/worktrees/feature');
@@ -79,7 +97,12 @@ describe('selectBlockingBadgeSessionScopes', () => {
   test('an expanded row still counts the workflow agents under it, which have no rows', () => {
     const agentChild = withDirectory({ session: session('agent-child', 'Agent child'), children: [], worktree: null }, '/repo');
     const agent = withDirectory({
-      session: { ...session('agent', 'Agent'), metadata: { openchamber: { kind: 'workflow-agent' } } as unknown as Session['metadata'] },
+      session: {
+        ...session('agent', 'Agent'),
+        // SAFETY: the fixture stands in for a server record the sidebar's own parser reads.
+        metadata: { openchamber: { kind: 'workflow-agent' } } as unknown as Session['metadata'],
+        metadataRevision: '1',
+      },
       children: [agentChild],
       worktree: null,
     }, '/repo');
@@ -92,7 +115,7 @@ describe('selectBlockingBadgeSessionScopes', () => {
   });
 
   test('falls back to the group directory when the session has none', () => {
-    const root: SessionNode = { session: session('root', 'Root'), children: [], worktree: null };
+    const root: SessionNode = { session: session('root', 'Root', {}, null), children: [], worktree: null };
 
     expect(selectBlockingBadgeSessionScopes(root, false, '/fallback')).toEqual([
       { directory: '/fallback', sessionIDs: ['root'] },
@@ -143,12 +166,12 @@ describe('nodeHasPinnedMembershipChange', () => {
 describe('selectFolderRootNodes', () => {
   test('does not render assigned descendants again beside their assigned parent tree', () => {
     const grandchild: SessionNode = {
-      session: { ...session('grandchild', 'Grandchild'), parentSessionId: 'child' },
+      session: session('grandchild', 'Grandchild', { parentSessionId: 'child' }),
       children: [],
       worktree: null,
     };
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentSessionId: 'root' },
+      session: session('child', 'Child', { parentSessionId: 'root' }),
       children: [grandchild],
       worktree: null,
     };
@@ -168,7 +191,7 @@ describe('selectFolderRootNodes', () => {
 
   test('keeps a child as a folder root when none of its ancestors are assigned', () => {
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentSessionId: 'root' },
+      session: session('child', 'Child', { parentSessionId: 'root' }),
       children: [],
       worktree: null,
     };
@@ -183,50 +206,12 @@ describe('selectFolderRootNodes', () => {
 
   test('keeps a child when an assigned ancestor is not available in the group', () => {
     const child: SessionNode = {
-      session: { ...session('child', 'Child'), parentSessionId: 'missing-root' },
+      session: session('child', 'Child', { parentSessionId: 'missing-root' }),
       children: [],
       worktree: null,
     };
 
     expect(selectFolderRootNodes(['missing-root', 'child'], new Map([['child', child]]))).toEqual([child]);
-  });
-});
-
-describe('selectRowBadgeVisibilityClass', () => {
-  const hideOnHoverClass = 'group-hover:opacity-0 group-focus-within:opacity-0';
-
-  test('defers to the caller hover rule so the badge fades with the date label (#2284)', () => {
-    const className = selectRowBadgeVisibilityClass({
-      actionsAlwaysVisible: false,
-      menuOpen: false,
-      hideOnHoverClass,
-    });
-
-    expect(className).toContain(hideOnHoverClass);
-  });
-
-  test('hides the badge unconditionally while the row menu keeps the actions visible without hover', () => {
-    const className = selectRowBadgeVisibilityClass({
-      actionsAlwaysVisible: false,
-      menuOpen: true,
-      hideOnHoverClass,
-    });
-
-    expect(className).not.toBe('');
-    expect(className).not.toContain(hideOnHoverClass);
-  });
-
-  test('keeps the badge always visible when actions have reserved permanent padding', () => {
-    expect(selectRowBadgeVisibilityClass({
-      actionsAlwaysVisible: true,
-      menuOpen: false,
-      hideOnHoverClass,
-    })).toBe('');
-    expect(selectRowBadgeVisibilityClass({
-      actionsAlwaysVisible: true,
-      menuOpen: true,
-      hideOnHoverClass,
-    })).toBe('');
   });
 });
 
@@ -263,12 +248,14 @@ describe('canShowSessionWorktreeMenu', () => {
     expect(canShowSessionWorktreeMenu({
       isSubtaskSession: false,
       archivedBucket: false,
+      isVSCode: false,
       sessionDirectory: '/home/test/.config/openchamber/chats/2026-08-25/session-1',
     })).toBe(false);
 
     expect(canShowSessionWorktreeMenu({
       isSubtaskSession: false,
       archivedBucket: false,
+      isVSCode: false,
       sessionDirectory: '/repo',
     })).toBe(true);
   });
@@ -298,13 +285,14 @@ describe('resolveSessionPrLookup', () => {
   });
 
   test('takes the row worktree directory and branch', () => {
-    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1')))
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1'), false))
       .toEqual({ directory: '/worktrees/feature', branch: 'feature-1' });
   });
 
-  test('rejects rows with no worktree or branch', () => {
-    expect(resolveSessionPrLookup(null)).toBeNull();
-    expect(resolveSessionPrLookup(worktree('/worktrees/feature', '   '))).toBeNull();
+  test('rejects rows with no worktree, no branch, or a VS Code runtime', () => {
+    expect(resolveSessionPrLookup(null, false)).toBeNull();
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', '   '), false)).toBeNull();
+    expect(resolveSessionPrLookup(worktree('/worktrees/feature', 'feature-1'), true)).toBeNull();
   });
 });
 

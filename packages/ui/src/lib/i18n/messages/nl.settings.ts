@@ -2769,4 +2769,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'De agent kon niet worden ingeschakeld: het configuratiebestand kon niet worden geschreven',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "Promptgeschiedenis doorzoeken",
 
+  'settings.themeImport.noReadableThemes': 'Geen van de kleurthema\'s in dit pakket kon worden gelezen.',
+  'settings.providers.page.logo.title': 'Logo',
+  'settings.providers.page.logo.info': 'Wordt in lijsten, kiezers en berichten getoond in plaats van het logo of pictogram van de provider. PNG, JPEG, WebP of SVG, tot 1 MB.',
+  'settings.providers.page.logo.upload': 'Afbeelding uploaden',
+  'settings.providers.page.logo.remove': 'Afbeelding verwijderen',
+  'settings.providers.page.logo.error.type': 'Kies een PNG-, JPEG-, WebP- of SVG-afbeelding.',
+  'settings.providers.page.logo.error.size': 'Kies een afbeelding van maximaal 1 MB.',
+  'settings.providers.page.logo.toast.uploadFailed': 'Kan het logo niet uploaden: {reason}',
+  'settings.providers.page.logo.toast.removeFailed': 'Kan het logo niet verwijderen: {reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': 'Komt de browser uit op een pagina die niet opent, kopieer dan het adres van die pagina en plak het hier.',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': 'Plak het adres uit de browser',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra (25 Europese talen)',
+  'settings.openchamber.visual.section.themes': 'Thema\'s',
+  'settings.openchamber.visual.field.noThemesMatch': 'Geen thema\'s komen overeen met "{query}".',
 } as const;

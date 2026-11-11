@@ -2779,4 +2779,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': '에이전트를 활성화하지 못했습니다. 설정 파일에 쓸 수 없습니다',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "프롬프트 기록 검색",
 
+  'settings.themeImport.noReadableThemes': '이 패키지의 색상 테마를 하나도 읽을 수 없습니다.',
+  'settings.providers.page.logo.title': '로고',
+  'settings.providers.page.logo.info': '목록, 선택기, 메시지에서 제공자의 로고나 아이콘 대신 표시됩니다. PNG, JPEG, WebP 또는 SVG, 최대 1MB.',
+  'settings.providers.page.logo.upload': '이미지 업로드',
+  'settings.providers.page.logo.remove': '이미지 제거',
+  'settings.providers.page.logo.error.type': 'PNG, JPEG, WebP 또는 SVG 이미지를 선택하세요.',
+  'settings.providers.page.logo.error.size': '1MB 이하의 이미지를 선택하세요.',
+  'settings.providers.page.logo.toast.uploadFailed': '로고를 업로드하지 못했습니다: {reason}',
+  'settings.providers.page.logo.toast.removeFailed': '로고를 제거하지 못했습니다: {reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': '브라우저가 열리지 않는 페이지에서 멈추면 그 페이지의 주소를 복사해 여기에 붙여 넣으세요.',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': '브라우저의 주소 붙여 넣기',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra (유럽 25개 언어)',
+  'settings.openchamber.visual.section.themes': '테마',
+  'settings.openchamber.visual.field.noThemesMatch': '"{query}"와 일치하는 테마가 없습니다.',
 } as const;

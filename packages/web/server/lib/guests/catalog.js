@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
+import { GUEST_PROVIDER_LOGO_BYTES_MAX, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
   toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum } from '@openchamber/sdk';
 import { parseManifestJson } from '@openchamber/sdk/schemas';
 
@@ -13,6 +13,7 @@ import { ensureGuestStorageIds, onExtensionStoreWrite, readExtensionStore } from
 import { buildPublicSocketBindings } from './sockets.js';
 import { isReservedBuiltInId, readBuiltInRegistry } from './builtins.js';
 import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
+import { toPublicLinks } from './links.js';
 
 const builtInsByStore = new Map();
 
@@ -159,6 +160,14 @@ const guestBuiltScriptsReady = async (packageRoot, entry) => {
     }
   }
   return true;
+};
+
+// Every list in the app reads a provider's logo, so its size counts against each of them.
+const isDrawableProviderLogo = async (packageRoot, relativePath) => {
+  const resolved = await resolveGuestAssetPath(packageRoot, relativePath);
+  if (!resolved) return false;
+  const { size } = await fs.stat(resolved);
+  return size > 0 && size <= GUEST_PROVIDER_LOGO_BYTES_MAX;
 };
 
 export const inspectGuestPackage = async (packageRoot, { openchamberVersion, skipEngineCheck } = {}) => {
@@ -330,6 +339,15 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   if (parsed.manifest.contributes.tools?.length) {
     guest.tools = parsed.manifest.contributes.tools.map((tool) => ({ ...tool }));
   }
+  const providerLogos = parsed.manifest.contributes.providerLogos;
+  if (providerLogos) {
+    for (const logo of new Set(Object.values(providerLogos))) {
+      if (!await isDrawableProviderLogo(packageRoot, logo)) {
+        return { ok: false, code: 'invalid-manifest' };
+      }
+    }
+    guest.providerLogos = { ...providerLogos };
+  }
   if (parsed.manifest.contributes.service) {
     const serviceEntry = await resolveGuestAssetPath(packageRoot, parsed.manifest.contributes.service.entry);
     if (!serviceEntry) {
@@ -367,6 +385,9 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
   if (parsed.manifest.contributes.mentions) {
     guest.mentions = parsed.manifest.contributes.mentions;
   }
+  if (parsed.manifest.contributes.links) {
+    guest.links = parsed.manifest.contributes.links;
+  }
   // The package's skills folder; a declared folder that is not there fails the install.
   if (parsed.manifest.contributes.skills) {
     if (!await isGuestPackageFolder(packageRoot, parsed.manifest.contributes.skills)) {
@@ -375,6 +396,7 @@ export const inspectGuestPackage = async (packageRoot, { openchamberVersion, ski
     guest.skills = parsed.manifest.contributes.skills;
   }
   // The package's OpenCode plugin folder: a directory with a package.json naming an entry that exists, or the install fails.
+  // The SDK's manifest schema no longer carries this role, so the raw manifest is read too; a package that declares it still has to ship the folder.
   let rawParsed;
   try { rawParsed = JSON.parse(raw); } catch {}
   const rawPlugin = parsed.manifest.contributes.opencodePlugin
@@ -505,6 +527,9 @@ export const toPublicGuest = (guest) => {
   if (Array.isArray(guest.tools) && guest.tools.length > 0) {
     row.tools = guest.tools.map((tool) => ({ ...tool }));
   }
+  if (guest.providerLogos) {
+    row.providerLogos = { ...guest.providerLogos };
+  }
   const granted = Array.isArray(guest.capabilityGrants) ? guest.capabilityGrants : [];
   row.capabilities = {
     requested: requestedGuestCapabilities(guest),
@@ -553,12 +578,21 @@ export const toPublicGuest = (guest) => {
   }
   if (guest.opencodePlugin) {
     row.opencodePlugin = true;
-    if (!row.capabilities.requested.includes("opencodePlugin")) {
-      row.capabilities.requested.push("opencodePlugin");
+    // The SDK's declared capability list no longer names this retired role, so the row asks for it itself.
+    if (!row.capabilities.requested.includes('opencodePlugin')) {
+      row.capabilities.requested.push('opencodePlugin');
     }
   }
   if (guest.mentions) {
     row.mentions = { label: guest.mentions.label };
+  }
+  if (guest.links) {
+    // A template the compiler refuses drops this row's links, never the catalog.
+    try {
+      row.links = toPublicLinks(guest.links);
+    } catch (error) {
+      console.warn(`[guests] links of ${guest.id} left out: ${error?.message ?? error}`);
+    }
   }
   const configurationNote = configurationNotes.get(guest.id);
   if (configurationNote) {

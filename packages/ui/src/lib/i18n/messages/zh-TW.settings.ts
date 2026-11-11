@@ -2779,4 +2779,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': '無法啟用代理：無法寫入其設定檔',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "搜尋提示歷史記錄",
 
+  'settings.themeImport.noReadableThemes': '無法讀取此擴充套件中的任何色彩主題。',
+  'settings.providers.page.logo.title': '標誌',
+  'settings.providers.page.logo.info': '在清單、選擇器和訊息中取代供應商的標誌或圖示顯示。支援 PNG、JPEG、WebP 或 SVG，最大 1 MB。',
+  'settings.providers.page.logo.upload': '上傳圖片',
+  'settings.providers.page.logo.remove': '移除圖片',
+  'settings.providers.page.logo.error.type': '請選擇 PNG、JPEG、WebP 或 SVG 圖片。',
+  'settings.providers.page.logo.error.size': '請選擇不超過 1 MB 的圖片。',
+  'settings.providers.page.logo.toast.uploadFailed': '無法上傳標誌：{reason}',
+  'settings.providers.page.logo.toast.removeFailed': '無法移除標誌：{reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': '如果瀏覽器停在一個打不開的頁面上，請複製該頁面的網址並貼到這裡。',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': '貼上瀏覽器中的網址',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra（25 種歐洲語言）',
+  'settings.openchamber.visual.section.themes': '主題',
+  'settings.openchamber.visual.field.noThemesMatch': '沒有符合「{query}」的主題。',
 } as const;

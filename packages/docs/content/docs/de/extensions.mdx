@@ -11,7 +11,7 @@ Eigene Erweiterungsdaten bleiben auf dem verbundenen Server gespeichert und werd
 
 Unter **Einstellungen → Erweiterungen** fügst du OpenChamber Panels hinzu, die andere Leute gebaut haben. Eine Erweiterung ist eine kleine Seite in der rechten Leiste, neben den eingebauten Panels. Sie kann dir Daten aus einem anderen Dienst zeigen, eine Aufgabe an den Chat anhängen und, wenn du es erlaubst, Sitzungen starten, Prompts senden oder Dateien lesen.
 
-Erweiterungen laufen in OpenChamber Web und Desktop. Sie sind nicht dasselbe wie the Host-Plugins.
+Erweiterungen laufen in OpenChamber Web und Desktop. Sie sind nicht dasselbe wie Host-Plugins.
 
 ## Eine Erweiterung installieren
 
@@ -54,6 +54,7 @@ Ein Panel anzeigen und lesen, welches Projekt und welche Sitzung offen sind, bra
 - **Lesen, was der Agent im Hintergrund sagt**: die endgültige Antwort jedes Zugs, die Fragen, die der Agent stellt, und wofür er um Erlaubnis bittet, in jedem Projekt, gesendet an den lokalen Dienst der Erweiterung. Erlaube das nur, wenn du vertraust, wohin die Erweiterung es schickt.
 - **Selbstständig Sitzungen starten und Nachrichten senden**: ihr lokaler Dienst tut das ohne geöffnetes Fenster, was Tokens kostet und Tools ausführen kann.
 - **Ergänzen, was Agenten lesen**: Text in den Anweisungen deiner Sitzungen und Skills, die jedem Agenten angeboten werden, solange die Erweiterung aktiv ist.
+- **Seine Links in Chats erkennen**: Kennungen wie `DEMO-12` und Links auf die Website der Erweiterung werden in deinen Chat-Nachrichten anklickbar. Der Dialog listet auf, welche das sind, und sagt, ob ein Klick sie in der Erweiterung öffnet oder an deine Nachricht anhängt. Links, die OpenChamber schon kennt, etwa Pull Requests auf GitHub und Issues in Linear, verhalten sich wie gewohnt.
 
 Ein lokaler Dienst kann auch weiterlaufen, solange OpenChamber läuft, oder nach Zeitplan aufwachen. Der Dialog sagt das unter **Lokalen Dienst ausführen**, und er sagt auch, wann das, was du nach `@` tippst, an den Dienst geht. Eine Erweiterung kann dem `@`-Menü eigene Zeilen und Agentenantworten eigene Blöcke hinzufügen. Das Pausieren der Erweiterung nimmt all das wieder weg.
 
@@ -94,10 +95,11 @@ Das OpenChamber SDK hat ein funktionierendes Beispiel, `examples/tracker-provide
 
 ## Eine Erweiterung als Nutzungsanbieter
 
-Eine Erweiterung kann neben den eingebauten Anbietern einen Nutzungsanbieter hinzufügen: einen Anbieter, den OpenChamber nicht selbst ausliest, oder einen eigenen. Ihr Berechtigungsdialog hat dann eine Zeile, die mit **Meldet die Nutzung wie ein eingebauter Anbieter** beginnt und die the Host-Anbieter aufzählt, deren Zugangsdaten sie liest, etwa `openrouter`; eine Erweiterung, die keine aufzählt, sagt das.
+Eine Erweiterung kann neben den eingebauten Anbietern einen Nutzungsanbieter hinzufügen: einen Anbieter, den OpenChamber nicht selbst ausliest, oder einen eigenen. Ihr Berechtigungsdialog hat dann eine Zeile, die mit **Meldet die Nutzung wie ein eingebauter Anbieter** beginnt und die OpenCode-Anbieter aufzählt, deren Zugangsdaten sie liest, etwa `openrouter`; eine Erweiterung, die keine aufzählt, sagt das.
 
-Sobald du sie erlaubst, steht ihre Karte unter **Einstellungen → Nutzung** hinter den eingebauten Anbietern, mit Name und Symbol der Erweiterung, und sie erscheint wie jeder eingebaute Anbieter in den Rate-Limits der Kopfzeile, im Arbeitsstatus, im Popover des Telefons und im Desktop-Tray, wenn du **Im Arbeitsstatus anzeigen** ankreuzt. Bei jeder Aktualisierung übergibt OpenChamber der Erweiterung die Zugangsdaten, die the Host für jeden aufgezählten Anbieter hält, und sonst nichts; eine Version, die einen weiteren Anbieter aufzählt, fragt erneut nach deiner Zustimmung. Die Erweiterung liest die Nutzung selbst, und OpenChamber zeichnet sie so wie bei einem eingebauten Anbieter.
+Sobald du sie erlaubst, steht ihre Karte unter **Einstellungen → Nutzung** hinter den eingebauten Anbietern, mit Name und Symbol der Erweiterung, und sie erscheint wie jeder eingebaute Anbieter in den Rate-Limits der Kopfzeile, im Arbeitsstatus, im Popover des Telefons und im Desktop-Tray, wenn du **Im Arbeitsstatus anzeigen** ankreuzt. Bei jeder Aktualisierung übergibt OpenChamber der Erweiterung die Zugangsdaten, die OpenCode für jeden aufgezählten Anbieter hält, und sonst nichts; eine Version, die einen weiteren Anbieter aufzählt, fragt erneut nach deiner Zustimmung. Die Erweiterung liest die Nutzung selbst, und OpenChamber zeichnet sie so wie bei einem eingebauten Anbieter.
 
+Pausierst du die Erweiterung, verschwindet die Karte, bis du sie wieder einschaltest, und deine Nutzungseinstellungen dafür bleiben. Entfernst du die Erweiterung, verschwindet die Karte endgültig. 
 
 Das OpenChamber SDK hat ein funktionierendes Beispiel, `examples/quota-provider`, mit einer Fake-Nutzungs-API, die du daneben laufen lassen kannst. Siehe [Eine Erweiterung bauen](/sdk/).
 

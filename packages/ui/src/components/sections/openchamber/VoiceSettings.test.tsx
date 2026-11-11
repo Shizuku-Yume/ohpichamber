@@ -6,8 +6,14 @@ import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useI18nStore } from '@/lib/i18n/store';
+import { dict as enDict } from '@/lib/i18n/messages/en';
+import { dict as ukLocaleDict } from '@/lib/i18n/messages/uk';
 
 import { VoiceSettings } from './VoiceSettings';
+
+// Locale modules carry the translated entries; `formatMessage` falls back to
+// English for the rest, so this is the dictionary the runtime actually shows.
+const ukDict = { ...enDict, ...ukLocaleDict };
 
 describe('VoiceSettings endpoint paths', () => {
   let windowInstance: Window;
@@ -17,7 +23,7 @@ describe('VoiceSettings endpoint paths', () => {
   let initialConfig: ReturnType<typeof useConfigStore.getState>;
   let initialI18n: ReturnType<typeof useI18nStore.getState>;
 
-  const globalNames = ['window', 'document', 'HTMLElement', 'Element', 'Node', 'ResizeObserver', 'localStorage', 'sessionStorage', 'IS_REACT_ACT_ENVIRONMENT', 'fetch', 'requestAnimationFrame', 'cancelAnimationFrame'];
+  const globalNames = ['window', 'document', 'HTMLElement', 'Element', 'Node', 'ResizeObserver', 'localStorage', 'sessionStorage', 'IS_REACT_ACT_ENVIRONMENT', 'fetch'];
 
   beforeEach(() => {
     windowInstance = new Window();
@@ -35,8 +41,6 @@ describe('VoiceSettings endpoint paths', () => {
       sessionStorage: windowInstance.sessionStorage,
       IS_REACT_ACT_ENVIRONMENT: true,
       fetch: async () => ({ ok: false, status: 503, json: async () => ({}), text: async () => '' }),
-      requestAnimationFrame: windowInstance.requestAnimationFrame.bind(windowInstance),
-      cancelAnimationFrame: windowInstance.cancelAnimationFrame.bind(windowInstance),
     });
     host = document.createElement('div');
     document.body.append(host);
@@ -85,5 +89,24 @@ describe('VoiceSettings endpoint paths', () => {
     ));
 
     expect(inputWithPlaceholder('/audio/transcriptions')?.value).toBe('/speech_to_text');
+  });
+
+  test('the localized endpoint fields render and disappear with their switches', async () => {
+    useI18nStore.setState({ locale: 'uk', dictionary: ukDict });
+    useConfigStore.setState({
+      voiceProvider: 'openai-compatible', sttProvider: 'openai-compatible',
+      showMessageTTSButtons: true, autoReadAloudEnabled: false, dictationEnabled: true,
+    });
+    await act(async () => root.render(<I18nProvider><VoiceSettings /></I18nProvider>));
+    for (const id of ['voice.tts-endpoint-path', 'voice.stt-endpoint-path']) {
+      const target = host.querySelector(`[data-settings-item="${id}"]`);
+      // The field's accessible name is the localized label, not the English default.
+      expect(target?.querySelector('input')?.getAttribute('aria-label')).toBe(ukDict['settings.voice.page.field.endpointPath']);
+      expect(target?.textContent).toContain(ukDict['settings.voice.page.field.endpointPath']);
+      expect(target?.textContent).not.toContain(enDict['settings.voice.page.field.endpointPath']);
+    }
+    await act(async () => { useConfigStore.setState({ showMessageTTSButtons: false, dictationEnabled: false }); });
+    expect(host.querySelector('[data-settings-item="voice.tts-endpoint-path"]')).toBeNull();
+    expect(host.querySelector('[data-settings-item="voice.stt-endpoint-path"]')).toBeNull();
   });
 });

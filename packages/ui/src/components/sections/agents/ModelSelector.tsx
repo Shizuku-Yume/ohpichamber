@@ -1,4 +1,3 @@
-import { HoverTooltip } from '@/components/ui/row-tooltip';
 import React from 'react';
 import {
     DropdownMenu,
@@ -9,8 +8,9 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Icon } from '@/components/icon/Icon';
 import { Spinner } from '@/components/ui/spinner';
-import { useModelLists } from '@/hooks/useModelLists';
+import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { useCatalogReadiness } from '@/hooks/useCatalogReadiness';
+import { useModelLists } from '@/hooks/useModelLists';
 import { useDeviceInfo } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -45,6 +45,10 @@ interface ModelSelectorProps {
      * Defaults); a routing category or fallback must name a real model.
      */
     offerAuto?: boolean;
+    /**
+     * Tooltip on the desktop trigger alone, so it never catches focus or the
+     * mouse from the list.
+     */
     triggerTooltip?: string;
 }
 
@@ -70,8 +74,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         : null), [autoReady, offerAuto, t]);
     const isAutoSelected = isAutoModel(providerId, modelId);
     const { isReady, isUnavailable } = useCatalogReadiness('models', directory);
-    const providers: ModelPickerProvider[] = useConfigStore((state) => directory === undefined
+    const catalogProviders = useConfigStore((state) => directory === undefined
         ? state.providers : selectProvidersForDirectory(state, directory));
+    const providers: ModelPickerProvider[] = catalogProviders;
     const loadProviders = useConfigStore((state) => state.loadProviders);
     React.useEffect(() => {
         if (directory !== undefined) void loadProviders({ directory });

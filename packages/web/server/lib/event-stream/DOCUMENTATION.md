@@ -46,6 +46,7 @@ The Host's canonical session stream connects to the private Agent Service. `tran
 - The shared Host hub multiplexes canonical Agent Service events and explicitly opted-in space-scoped injected events. Canonical session subscribers and space-event subscribers remain separately scoped.
 - Browser transport concerns live in the WS bridge modules; server-side global stream ownership lives in `global-hub.js`.
 - Per-session event streams follow an explicit lease-counted lifecycle: active prompt runs, browser WebSocket/SSE connections, and transient session-creation snapshots acquire named leases. Leases are ref-counted per key to safely support concurrent dispatches and repeat subscriptions without underflow. When the last lease is released (`leases.size === 0`), the hub immediately aborts the stream and cancels the reader, preventing background reader leaks.
+
 ## Notes for contributors
 - Keep protocol helpers pure and small so they can be unit tested without spinning up a server.
 - Keep `runtime.js` focused on WebSocket upgrade and endpoint dispatch. Put global browser-client lifecycle in `global-ws-bridge.js`, directory stream lifecycle in `directory-ws-bridge.js`, and stream sharing in `global-hub.js`.

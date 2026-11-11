@@ -4,11 +4,15 @@ import { normalizePath } from '../utils';
 export const buildKnownSessionDirectories = (
   projects: Array<{ path: string }>,
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
+  options?: { includeWorktrees?: boolean },
 ): Set<string> => {
   const directories = new Set<string>();
   for (const project of projects) {
     const normalized = normalizePath(project.path);
     if (normalized) directories.add(normalized);
+  }
+  if (options?.includeWorktrees === false) {
+    return directories;
   }
   const projectDirectories = new Set(directories);
   for (const [projectPath, worktrees] of availableWorktreesByProject) {

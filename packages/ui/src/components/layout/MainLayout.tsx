@@ -18,12 +18,14 @@ import { SessionSidebar } from '@/components/session/SessionSidebar';
 import { SessionDialogs } from '@/components/session/SessionDialogs';
 import { SpaceActionsSheet, SpaceDeleteDialog } from '@/components/session/spaces/SpaceActions';
 import { DiffWorkerProvider } from '@/contexts/DiffWorkerProvider';
+import { ProjectActionsProvider } from './ProjectActionsProvider';
 import { RunAutoFusion } from '@/lib/multirun/autoFusion';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { useUpdatePolling } from '@/hooks/useUpdatePolling';
+import { useGuestUpdateNotice } from '@/hooks/useGuestUpdateNotice';
 import { useTerminalSessionKeepalive } from '@/hooks/useTerminalSessionKeepalive';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
@@ -45,6 +47,7 @@ const MotionTuningPanel = import.meta.env.DEV ? React.lazy(() => import('@/compo
 const loadCommandPalette = () => import('../ui/CommandPalette').then((m) => m.CommandPalette);
 const loadHelpDialog = () => import('../ui/HelpDialog').then((m) => m.HelpDialog);
 const loadRuntimeStatusDialog = () => import('../ui/RuntimeStatusDialog').then((m) => m.RuntimeStatusDialog);
+const loadProjectActionsDialog = () => import('./ProjectActionsDialog').then((m) => m.ProjectActionsDialog);
 const loadRunOverview = () => import('@/components/multirun/RunOverview').then((m) => m.RunOverview);
 const loadScheduledTasksDialog = () => import('@/components/session/ScheduledTasksDialog').then((m) => m.ScheduledTasksDialog);
 const loadArchiveView = () => import('@/components/views/ArchiveView').then((m) => m.ArchiveView);
@@ -97,7 +100,7 @@ LeftSidebar.displayName = 'LeftSidebar';
  * crossing the threshold reloads into it (see watchHostedSurfaceViewport).
  */
 export const MainLayout: React.FC = () => {
- useSessionListSync();
+ useSessionListSync({ isVSCode: false });
  useTerminalSessionKeepalive();
  // The grant dialog of isolated spaces.
  const isolatedSpacesEnabled = useUIStore((state) => state.isolatedSpacesEnabled);
@@ -121,6 +124,7 @@ export const MainLayout: React.FC = () => {
  const isCommandPaletteOpen = useUIStore((state) => state.isCommandPaletteOpen);
  const isHelpDialogOpen = useUIStore((state) => state.isHelpDialogOpen);
  const isRuntimeStatusDialogOpen = useUIStore((state) => state.isRuntimeStatusDialogOpen);
+ const isProjectActionsDialogOpen = useUIStore((state) => state.isProjectActionsDialogOpen);
  const isSpaceAccessDialogOpen = useSpacesStore((state) => state.accessDialog !== null);
  const isSpaceApplyDialogOpen = useSpacesStore((state) => state.applyDialog !== null);
  const isSpaceSetupOutputDialogOpen = useSpacesStore((state) => state.setupOutputDialog !== null);
@@ -161,8 +165,8 @@ export const MainLayout: React.FC = () => {
  }, []);
  const { isMobile } = useDeviceInfo();
 
- useUpdatePolling();
-
+    useUpdatePolling();
+    useGuestUpdateNotice();
 
  React.useEffect(() => {
   const previous = useUIStore.getState().isMobile;
@@ -174,6 +178,7 @@ export const MainLayout: React.FC = () => {
  return (
   <DiagnosticDialogAvailableContext.Provider value>
    <DiffWorkerProvider>
+    <ProjectActionsProvider>
     <div
      data-page-scroll-lock="true"
      className="main-content-safe-area relative flex h-[100dvh] bg-background"
@@ -181,6 +186,7 @@ export const MainLayout: React.FC = () => {
      <OnDemand needed={isCommandPaletteOpen} load={loadCommandPalette} onFailure={() => useUIStore.getState().setCommandPaletteOpen(false)} />
      <OnDemand needed={isHelpDialogOpen} load={loadHelpDialog} onFailure={() => useUIStore.getState().setHelpDialogOpen(false)} />
      <OnDemand needed={isRuntimeStatusDialogOpen} load={loadRuntimeStatusDialog} onFailure={() => useUIStore.getState().setRuntimeStatusDialogOpen(false)} />
+     <OnDemand needed={isProjectActionsDialogOpen} load={loadProjectActionsDialog} onFailure={() => useUIStore.getState().setProjectActionsDialogOpen(false)} />
      <RunAutoFusion />
      <SessionDialogs />
      {isolatedSpacesEnabled ? (
@@ -265,6 +271,7 @@ export const MainLayout: React.FC = () => {
       <React.Suspense fallback={null}><MotionTuningPanel /></React.Suspense>
      ) : null}
     </div>
+    </ProjectActionsProvider>
    </DiffWorkerProvider>
   </DiagnosticDialogAvailableContext.Provider>
  );

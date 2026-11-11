@@ -97,7 +97,7 @@ describe('useFolderMissing', () => {
   });
 
   test('a late answer for the previous folder changes nothing', async () => {
-    let answerFirst = (_value: Availability) => { };
+    let answerFirst = (_value: Availability) => {};
     probe.mockImplementation((directory) => (directory === '/first'
       ? new Promise<Availability>((resolve) => { answerFirst = resolve; })
       : Promise.resolve('missing')));

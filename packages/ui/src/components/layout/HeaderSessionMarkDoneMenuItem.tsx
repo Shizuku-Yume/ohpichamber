@@ -15,30 +15,30 @@ import type { SessionTabMenuComponents } from './SessionTabsStrip';
  * this session alone leaves In work, and its tab closes.
  */
 export function HeaderSessionMarkDoneMenuItem({ session, Item }: {
- session: Session;
- Item: SessionTabMenuComponents['Item'];
+  session: Session;
+  Item: SessionTabMenuComponents['Item'];
 }) {
- const { t } = useI18n();
- const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
+  const { t } = useI18n();
+  const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
 
- if (!sessionWorkEnabled || session.parentSessionId || !isSessionInWork(session)) return null;
+  if (!sessionWorkEnabled || session.parentSessionId || !isSessionInWork(session)) return null;
 
- const markDone = async () => {
-  try {
-   const sessionId = session.sessionId;
-   await setSessionWorkState(sessionId, resolveGlobalSessionDirectory(session), 'done');
-   leaveFinishedSessions([sessionId]);
-  } catch {
-   toast.error(t('sessions.sidebar.session.work.updateFailed'));
-  }
- };
+  const markDone = async () => {
+    try {
+      const sessionId = session.sessionId;
+      await setSessionWorkState(sessionId, resolveGlobalSessionDirectory(session), 'done');
+      leaveFinishedSessions([sessionId]);
+    } catch {
+      toast.error(t('sessions.sidebar.session.work.updateFailed'));
+    }
+  };
 
- return (
-  <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.markDone')}>
-   <Item onClick={() => void markDone()}>
-    <Icon name="check" className="me-1 size-4" />
-    {t('sessions.sidebar.session.work.markDone')}
-   </Item>
-  </SessionMenuItemHint>
- );
+  return (
+    <SessionMenuItemHint hint={t('sessions.sidebar.session.menuHint.markDone')}>
+      <Item onClick={() => void markDone()}>
+        <Icon name="check" className="me-1 size-4" />
+        {t('sessions.sidebar.session.work.markDone')}
+      </Item>
+    </SessionMenuItemHint>
+  );
 }

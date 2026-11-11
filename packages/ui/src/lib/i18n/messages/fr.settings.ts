@@ -2779,4 +2779,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'Impossible d’activer l’agent : son fichier de configuration n’a pas pu être écrit',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "Rechercher dans l’historique des prompts",
 
+  'settings.themeImport.noReadableThemes': 'Aucun thème de couleurs de ce paquet n\'a pu être lu.',
+  'settings.providers.page.logo.title': 'Logo',
+  'settings.providers.page.logo.info': 'Affiché à la place du logo ou de l\'icône du fournisseur dans les listes, les sélecteurs et les messages. PNG, JPEG, WebP ou SVG, 1 Mo maximum.',
+  'settings.providers.page.logo.upload': 'Importer une image',
+  'settings.providers.page.logo.remove': 'Retirer l\'image',
+  'settings.providers.page.logo.error.type': 'Choisissez une image PNG, JPEG, WebP ou SVG.',
+  'settings.providers.page.logo.error.size': 'Choisissez une image de 1 Mo maximum.',
+  'settings.providers.page.logo.toast.uploadFailed': 'Impossible d\'importer le logo : {reason}',
+  'settings.providers.page.logo.toast.removeFailed': 'Impossible de retirer le logo : {reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': 'Si le navigateur aboutit sur une page qui ne s\'ouvre pas, copiez son adresse et collez-la ici.',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': 'Collez l\'adresse depuis le navigateur',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra (25 langues européennes)',
+  'settings.openchamber.visual.section.themes': 'Thèmes',
+  'settings.openchamber.visual.field.noThemesMatch': 'Aucun thème ne correspond à « {query} ».',
 } as const;

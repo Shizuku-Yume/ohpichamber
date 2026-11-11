@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
@@ -7,6 +7,7 @@ import { useTraySync } from './useTraySync';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useNotificationStore } from '@/sync/notification-store';
+import { markSessionViewed } from '@/sync/notification-store';
 
 const session = (sessionId: string, parentSessionId?: string): Session => ({
   sessionId, parentSessionId, rootSessionId: parentSessionId ?? sessionId, projectId: 'project', workspaceId: 'workspace', displayPath: '/project',
@@ -25,6 +26,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
   const counts: number[] = [];
   let listenerCount = 0;
   let intervalCount = 0;
+  let fetchSpy: ReturnType<typeof spyOn<typeof globalThis, 'fetch'>>;
   const invoke = async (command: string, args?: { dockBadgeCount?: number }) => {
     expect(command).toBe('desktop_tray_update');
     if (args?.dockBadgeCount !== undefined) counts.push(args.dockBadgeCount);
@@ -32,9 +34,15 @@ describe('Dock badge with the macOS menu bar disabled', () => {
   };
   const listen = async () => { listenerCount += 1; return () => {}; };
   const intervals = () => { intervalCount += 1; return 1; };
-  const append = (id: string) => useNotificationStore.getState().append({
-    type: 'turn-complete', session: id, time: Date.now(), viewed: false,
-  });
+  // Unread state lives on the session's metadata now: an idle turn whose
+  // viewed watermark never caught up is what raises the badge.
+  // Upserting through the store keeps its record map and its ordered view in
+  // agreement, so the badge reads the same unread state the row does.
+  const append = (id: string) => {
+    const unread = { openchamber: { workbench: { lastIdleAt: Date.now(), viewedAt: undefined } } };
+    const existing = useGlobalSessionsStore.getState().entityById.get(id) ?? session(id);
+    useGlobalSessionsStore.getState().upsertSession({ ...existing, metadata: unread });
+  };
   const flush = async () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 550)); });
   };
@@ -51,8 +59,32 @@ describe('Dock badge with the macOS menu bar disabled', () => {
       window: dom, document: dom.document, navigator: dom.navigator,
       IS_REACT_ACT_ENVIRONMENT: true,
     });
+    // The unread watermark is written to the host; answer exactly the metadata
+    // read/write and the view POST, so a mark clears instead of rolling back.
+    // Any other request fails, so an unexpected endpoint surfaces here.
+    fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = (init?.method ?? 'GET').toUpperCase();
+      const metadata = /\/api\/agent\/v1\/sessions\/[^/]+\/metadata$/.test(url);
+      if (metadata && method === 'GET') {
+        return Response.json({ sessionId: 'root', revision: '1', metadata: { openchamber: { workbench: { lastIdleAt: 1, viewedAt: 1 } } } });
+      }
+      if (metadata && method === 'PATCH') {
+        return Response.json({ sessionId: 'root', revision: '2', metadata: { openchamber: { workbench: { lastIdleAt: 1, viewedAt: 1 } } } });
+      }
+      if (method === 'POST' && /\/api\/sessions\/[^/]+\/view$/.test(url)) {
+        return new Response(null, { status: 204 });
+      }
+      return new Response('unexpected request', { status: 500 });
+    });
     useNotificationStore.setState(useNotificationStore.getInitialState());
-    useGlobalSessionsStore.setState({ activeSessions: [session('root'), session('child', 'root')] });
+    const seeded = [session('root'), session('child', 'root')];
+    // The global store keeps `entityById` as the record and `activeSessions` as
+    // its ordered view, so a fixture that writes one has to write both.
+    useGlobalSessionsStore.setState({
+      activeSessions: seeded,
+      entityById: new Map(seeded.map((entry) => [entry.sessionId, entry])),
+    });
     useUIStore.setState({ dockBadgeEnabled: true, notifyOnSubtasks: false });
     counts.length = 0;
     listenerCount = 0;
@@ -62,6 +94,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
 
   afterEach(async () => {
     await act(async () => root.unmount());
+    fetchSpy.mockRestore();
     await dom.happyDOM.close();
   });
 
@@ -77,7 +110,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
     useUIStore.setState({ dockBadgeEnabled: true });
     await flush();
     expect(counts).toEqual([0, 1, 0, 1]);
-    useNotificationStore.getState().markSessionViewed('root');
+    markSessionViewed('root');
     await flush();
     expect(counts).toEqual([0, 1, 0, 1, 0]);
     expect(intervalCount).toBe(0);
@@ -105,7 +138,7 @@ describe('Dock badge with the macOS menu bar disabled', () => {
     append('root');
     await flush();
     expect(counts).toEqual([0, 1]);
-    useNotificationStore.getState().markSessionViewed('root');
+    markSessionViewed('root');
     await act(async () => root.unmount());
     await flush();
     expect(counts).toEqual([0, 1]);

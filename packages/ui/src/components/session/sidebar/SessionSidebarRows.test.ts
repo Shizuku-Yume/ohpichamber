@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { Virtualizer } from '@tanstack/react-virtual';
 import {
   estimateSessionSidebarRowSize,
   findFirstVisibleSessionSidebarRowIndex,
@@ -12,6 +13,7 @@ import {
   sessionSidebarRowSizeKey,
 } from './sessionSidebarVirtualization';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import type { SessionNode } from './types';
 import type { ProjectSection } from './projects/sessionProjectRender';
 import { buildSessionSidebarRowModel, type SessionSidebarActivityItem, type SessionSidebarRow, type SessionSidebarRowModelArgs } from './sessionSidebarRowModel';
@@ -38,28 +40,31 @@ describe('SessionSidebarRows initialization', () => {
   });
 });
 
-const session = (sessionId: string): Session => ({
-  sessionId,
-  projectId: 'project-a',
-  workspaceId: 'workspace-a',
-  displayPath: '/repo',
-  rootSessionId: sessionId,
-  createdAt: 1,
-  updatedAt: 1,
-  epoch: '1',
-  headSequence: '0',
-  runtimeStatus: 'idle',
-  activeRunId: null,
-  mode: { kind: 'main' },
-  title: sessionId,
-  metadata: null,
-  metadataRevision: '0',
-  archiveRevision: '0',
-});
+/** A contract session in `/repo`, registered the way bootstrap registers a workspace. */
+const sessionFixture = (sessionId: string, title = sessionId): Session => {
+  registerWorkspaceDirectory('workspace-repo', '/repo');
+  return {
+    sessionId,
+    projectId: 'project',
+    workspaceId: 'workspace-repo',
+    displayPath: '/repo',
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+    title,
+  };
+};
 
 describe('SessionSidebarRows section spacing', () => {
-  // SAFETY: spacing reads only the row identity, kind, and position fields.
-  const node = (id: string): SessionNode => ({ session: session(id), children: [], worktree: null });
+  const node = (id: string): SessionNode => ({ session: sessionFixture(id), children: [], worktree: null });
   const item = (id: string): SessionSidebarActivityItem => ({ node: node(id), projectId: 'project-a', groupDirectory: '/repo', secondaryMeta: null });
   const input = (withChats: boolean): SessionSidebarRowModelArgs => {
     const sections: ProjectSection[] = [{
@@ -159,8 +164,7 @@ describe('SessionSidebarRows section spacing', () => {
 });
 
 describe('SessionSidebarRows scroll anchor', () => {
-  // SAFETY: the anchor reads only row keys and the size keys of the row model's own rows.
-  const node = (id: string, children: readonly string[] = []): SessionNode => ({ session: session(id), children: children.map((child) => node(child)), worktree: null });
+  const node = (id: string, children: readonly string[] = []): SessionNode => ({ session: sessionFixture(id), children: children.map((child) => node(child)), worktree: null });
   type Options = { detailed?: boolean; collapsedProjects?: Set<string>; sessionIds?: string[]; visible?: number; mode?: 'normal' | 'search'; projectOrder?: string[]; childrenOf?: Record<string, string[]>; otherIds?: string[] };
   const ids = (count: number) => Array.from({ length: count }, (_, index) => `session-${index}`);
   const model = ({ detailed = true, collapsedProjects = new Set<string>(), sessionIds = ids(40), visible = 60, mode = 'normal', projectOrder = ['project-a', 'project-b'], childrenOf = {}, otherIds = ['other-0', 'other-1'] }: Options = {}) => {
@@ -358,3 +362,25 @@ describe('SessionSidebarRows scroll anchor', () => {
   });
 });
 
+describe('SessionSidebarRows last layout', () => {
+  // The header motion reads where the rows were from the virtualizer's
+  // measurements as they stood before the rows changed. Rebuilt in place, the
+  // entries nobody had read answered with the new layout's numbers
+  // (`bun-patches/@tanstack+virtual-core+3.19.6.patch`).
+  test('measurements read before the rows changed keep their numbers', () => {
+    const options = {
+      count: 50,
+      getScrollElement: () => null,
+      estimateSize: () => 51,
+      scrollToFn: () => undefined,
+      observeElementRect: () => undefined,
+      observeElementOffset: () => undefined,
+    };
+    const virtualizer = new Virtualizer<HTMLElement, HTMLElement>(options);
+    virtualizer.getTotalSize();
+    const before = virtualizer.measurementsCache;
+    virtualizer.setOptions({ ...options, count: 45, estimateSize: () => 32, getItemKey: (index) => `next-${index}` });
+    expect(virtualizer.getTotalSize()).toBe(45 * 32);
+    expect(before[40]?.start).toBe(40 * 51);
+  });
+});

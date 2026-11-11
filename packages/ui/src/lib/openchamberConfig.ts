@@ -1,6 +1,6 @@
 /**
- * Client for the project setup routes: worktree setup commands, the worktree
- * directory, project actions, and pinned draft starters.
+ * Client for the project setup routes: worktree setup commands, project
+ * actions, and pinned draft starters.
  *
  * A project's setup is the merge of two files the server (or the VS Code
  * extension host) owns: the personal one in `~/.config/openchamber/projects/`

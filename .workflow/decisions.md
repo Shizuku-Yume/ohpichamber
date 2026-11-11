@@ -782,6 +782,15 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** upstream changes license or repository, or the fork stops tracking upstream.
 - **Effort:** ux-v270-omp-alignment
 
+### Within the same merge: workbench shell resolutions
+
+- **Header project action:** the upstream `HeaderProjectControls` (and its test) is the header's one project-action surface; the fork's `ProjectActionsButton` and its test are deleted rather than kept beside it. `ProjectActionsProvider`, `ProjectActionsScope`, `projectActionsRunnerContext` and `ProjectActionRunIndicator` come from upstream and the main layout mounts the provider and the on-demand dialog.
+- **Isolated spaces in the workbench:** the merge drops upstream's draft-space branches (`useDraftSpaceTarget`, `panelContentDirectory`, `SpacePreparing`, `isSpaceDirectory`) from `Header`, `ContextSurfacePanes` and `SidebarFilesTree` instead of restoring `components/session/spaces/SpacePreparing`; isolated spaces stay unreleased behind `ISOLATED_SPACES_RELEASED = false`, so no surface can reach a draft-space state.
+- **Guest panes:** `PluginPane` keeps the fork's private `MessagePort` bootstrap transport (decision `2026-10-24 - Break the Guest SDK version for the private bootstrap transport`) and takes upstream's value from `usePageColors` plus the `DockedPanelSurfaceContext` provider around the floating popover, and upstream's `/btw` shell stop is left as the fork's `createGuestShellRequests`.
+- **RTL:** the upstream conversion to logical CSS and `getInlineStartSide` in `Sidebar`, `TitlebarLeftControls` and `Header` is not taken here; these files keep the fork's `--oc-titlebar-left-inset` and physical props until the separate RTL conversion lands, so one tree does not mix two conventions.
+- **Header terminal control:** `HeaderTerminalAction` is the fork's addition and has no upstream counterpart; it is kept and mounted in the header's right cluster.
+- **Files tree rows:** `fileTreeRows.ts` (+test) is restored because the adopted `SidebarFilesTree` imports it; the upstream `SidebarFilesTree.test.tsx` is retired with the draft-space behavior it tests.
+
 ## 2026-11-10 - OMP TUI parity means function and display parity, not a mirror of OMP's settings and commands
 
 - **Decided:** "OMP TUI parity" covers what the user can do and see in the agent experience (status, tool intent, live streaming, tool summaries, todo, modes, goals, subagents), presented in OpenChamber's UI idioms. GUI Settings expose only settings a GUI user acts on; terminal-presentation settings, internal tuning knobs and duplicates of an existing OpenChamber control are not shown, and the OMP Settings page offers "open config.yml" for the rest. When OpenChamber already has a control for a concept, it is the single surface. The Commands page manages prompt templates; built-in OMP commands stay in chat autocomplete.
@@ -790,4 +799,135 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** user
 - **Supersedes:** the "visual selectors for all 16 `modelRoles` + `modelPresets`" and settings/command exposure parts of 2026-11-05 - Scope M4 to full OMP 18.16.0 TUI feature/display parity; refines part (1) of 2026-11-06 - Preserve OpenChamber frontend capabilities alongside full OMP engine parity.
 - **Revisit when:** a concrete GUI user need appears for a hidden OMP setting.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge
+
+- **Decided:** the lane 12 work modules (`openchamber-sessions`, `openchamber-control`, `quota`, `small-model`, `routing`, `session-assist`, `session-work`, `scheduled-tasks`, `workflows`, `tts`, `package-manager.js`) keep the fork's Host/Canonical API shape; upstream v2.7.0 engine code is not adopted there.
+- **Instead of:** taking upstream's `@opencode/client` and `server/lib/opencode/*` implementations for those modules.
+- **Because:** every one of those modules now dispatches on `/api/agent/v1` through the Host (`sessionService`, `resolveSessionScope`, `credentialAccessToken`, `selected-credential`); upstream's side reintroduces the retired OpenCode runtime, duplicate declarations, and reads of `opencode/auth.js`.
+- **Also retired here:** `session-goal/` (the fork removed the goal runtime), and upstream-only helpers with no fork consumer (`quota/console-budgets`, `quota/extension-quota[s]`, `quota/utils/auth.js`, `scheduled-tasks/model-catalog.js`, `openchamber-control/{form-answer,usage-read,secret-run,tool-envelope}.js`, `openchamber-sessions/session-archive.js`).
+- **Consequence:** the cluster's five remaining failing test files are `main`-identical and fail on tree-wide dependency bumps, not on this resolution: installed `zod@4.6.7` makes `.omit()` throw on the refined canonical event schemas (`agent-service/dist/supervisor/host-authorization-protocol.js`), and `supertest@7.3.2`/`superagent@10.4.2` break `packages/web/test/loopback-supertest.js` (its own self-test fails). Fixing them belongs to the lockfile lane, not this cluster.
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** the zod/supertest pins return to `4.3.6`/`7.2.2`, or the canonical event schemas drop their refinements and the loopback harness is repaired.
+
+## 2026-11-11 - Keep the lane 12 host-adjacent modules on the fork's Host owners in the v2.7.0 merge
+
+- **Decided:** the lane 12 modules that are not under `server/lib/host/` keep their fork shape where upstream v2.7.0 adds an OpenCode-engine path: the permission policy and its routes, the browser-control docs, the agent-tool doc, the context-obligatory runtime and its test, the event-stream docs, the ui-auth doc, the route export list, the update-check tests, and `lib/git/**`.
+- **Instead of:** taking upstream's `@opencode/client`, `server/lib/opencode/*` readers, `session.forked`-driven permission inheritance, `vcsInitRefusal` route guard, and stored project start command into those modules.
+- **Because:** the fork answers permissions from Canonical `parentSessionId` lineage with no OpenCode wire events (`agent-contract/src/session.ts`), resolves sessions through `sessionService`/`resolveSessionScope`, owns repository init through the Host route, and reads no stored project start command; upstream's side reintroduces the retired engine and a second authority for the same state. In `lib/git/` the fork keeps its own `initializeRepository`/`POST /api/git/init`, the Host lease and archive path, `OPENCHAMBER_DATA_DIR` with the personal `worktreeDirectory` rule, local-only remote-branch worktree validation, and the fork's neutral transport credential (`secret` plus the fork's own resolver callbacks) — upstream's `@opencode/client` worktree disposer and OpenCode worktree directory cannot run without the removed engine.
+- **Also recorded:** `test` files here use `vitest` where upstream moved them to `bun:test`, and the fork's own tests cover project-id `..` rejection, relay close-reason bounds and identity reset races, extension tracker attach/detach, and the split-view hunk cases it still supports.
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** the Agent Service exposes fork semantics as Canonical events, or a Host-owned repository-init contract replaces the fork route.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge
+
+- **Decided:** the web modules outside lane 12's work clusters keep the fork implementation where upstream v2.7.0 changes an OpenCode-engine path, an OpenCode-only helper, or text that named `server/lib/opencode/`.
+- **Instead of:** adopting upstream's OpenCode client reads, `opencodeBinary` policy field, provider/credential enterprise hooks, OpenCode diagnostic scrubber, OpenCode message-search cursors and `XDG_DATA_HOME`, or upstream's `bun:test` imports in the fork's vitest suite.
+- **Because:** those paths either read the retired OpenCode runtime or duplicate an owner the fork already has on the Host (`core-routes.js`, `sessionService`, `resolveSessionScope`, `OPENCHAMBER_DATA_DIR`). The fork also carries correctness and security work upstream lacks: project-id `..` rejection in `agent-memory` and `project-context`, bounded relay close reasons and an identity reset race, extension tracker attach/detach, the guest asset token scope, the space-prefixed dev tunnel, and the desktop runtime-key report that replaced the SDK reconnect.
+- **Also recorded:** docs and tests in the same files follow those owners, so a re-sync takes the fork side for them until the Agent Service exposes the same behavior as Canonical events.
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** the Agent Service exposes those behaviors as Canonical events, or a Host-owned contract replaces each fork route.
+## 2026-11-11 - Chat presentation is ported onto the canonical contract, not kept on the OpenCode engine
+
+- **Decided:** The chat UI keeps the OMP-boundary data access (canonical `ToolCallPart`/`ToolResultPart` from `/api/agent/v1`) and takes upstream v2.7.0's presentation for the components that render what an agent showed: `ShownToolCard`, `HtmlRenderFrame`, `UiPageFrame`, `OpenChamberToolOutput`, `ToolResultParts`, `GeneratedImages`, `SecretRequestCard`, `PageAskStatus`, plus the page/quote/selection stack (`pageQuoteBridge`, `frameSelection`, `TextSelectionMenu`, `ChatQuoteHighlightLayer`) and the composer/file-mention/markdown/work-status surface. Where a component's only engine dependency was its shape, a thin adapter (`message/parts/toolView.ts`) joins a canonical call with its glued result and `message/parts/pageRenderView.ts` carries the ported pure helpers (`renderedPage`, `generatedImagePaths`, `requestedSecret`, `requestedSecretRun`, `proposedWorkflowRunId`, `isShownInPlace`, `isSettledAsk`). `lib/opencode` is not restored; upstream-only chat files whose closure needs it stay excluded.
+- **Instead of:** keeping the fork's wholesale chat rewrites, or restoring the OpenCode UI engine so upstream's chat compiles verbatim (the engine is a standing merge exclusion and the migration target is OMP-only).
+- **Because:** upstream's chat is one version-coupled component rooted in `@/lib/opencode/*` (180 of 675 files import it directly; 244 of the 274 fork-vs-upstream disagreements share one dependency component), so neither wholesale side gives both the boundary and the presentation. The adapter is the smallest join that does, and it keeps the R3 cutover (tasks 23-24) free to change semantics without re-porting presentation.
+- **Decided by:** agent (conservative option within the 2026-11-10 OMP TUI parity decision; the maintainer confirmed on 2026-11-11 that no instruction was given on the lane 13 ticket)
+- **Revisit when:** R3 lands the OMP-keyed tool presentation registry, or an upstream sync changes the shape of a ported component.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces
+
+- **Decided:** every `packages/docs` page keeps upstream v2.7.0's text and structure, and a fork difference survives only where it removes a retired surface (the VS Code extension, the OpenCode engine, isolated spaces) or states the fork's actual runtime (`OPENCODE_JWT_SECRET` still signs the Host session, Jev/OpenCode Zen are provider names, VS Code theme import is retained). Pages whose only fork change was a retired-term removal now read as upstream reads.
+- **Instead of:** merging upstream docs through a lane-level rule that keeps the fork wholesale, or restoring the 24 upstream-only pages (`opencode-server.mdx`, `troubleshooting/opencode-connection.mdx` in every locale) that document a retired engine.
+- **Because:** the fork's doc drift was mostly stale, not intentional: upstream v2.7.0 added Tailscale Serve/Funnel, the five-host Git board (GitHub, GitLab, Gitea, Forgejo, Gerrit), the worktree and work/session model, walkthrough observations, and project-knowledge pins that the fork already implements (`server/lib/tunnels/providers/tailscale.js`, `server/lib/{github,gitlab,gitea,forgejo,gerrit}/`, `session/sidebar/works/sidebarWorks.ts`, `lib/walkthrough/prompt.js`, `ProjectNotesTodoPanel.tsx`). Taking the fork's deletions and rewrites wholesale would have deleted documented, shipped behavior.
+- **Mine:** yes (evidence in the source tree listed above; no maintainer question)
+- **Revisit when:** the retired-surface wording is purged from all 12 locales, or a docs page starts describing an OMP-only capability that upstream cannot express.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the fork Guest SDK bootstrap transport and regenerated example bundles
+
+- **Decided:** `packages/sdk` keeps its v2 Guest envelope: `OPENCHAMBER_SDK_API_VERSION = 2` in `src/api-version.ts`, the MessagePort bootstrap in `src/host.ts` and its `GUEST_BOOTSTRAP_*` exports in `src/index.ts`, the `3.0.0` `engines.openchamber` floor in `src/host-version.ts`, the fork's `examples/**/main.js` bundles compiled from that transport, `scripts/examples.test.ts`, the fork test files, and `src/ui/DOCUMENTATION.md`.
+- **Instead of:** taking upstream's v1 envelope and its `examples/**/main.js` bundles, which hand the guest the pre-M3 `window` handshake the fork removed.
+- **Because:** the Host and the Guest loader both speak the v2 envelope (`packages/sdk/src/host.ts`), so upstream's v1 bundles cannot load here, and the example bundles are build output: they are regenerated from source, never merged by hand. The `README.md`/`GUEST_SERVICES.md` differences state the same v2 contract and the removed VS Code extension form.
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** upstream ships a v2 envelope of its own, or the example bundles are regenerated after a source merge.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the Electron shell on the in-process Host and the staged Agent Runtime
+
+- **Decided:** the desktop main process keeps its OMP lifecycle: `main.mjs` supervises the Bun Agent Service through `agent-runtime.mjs` and `server/lib/host/agent-service-supervisor.js` instead of spawning `opencode serve`; `after-pack.cjs` and `electron-dev.mjs` stage and verify `resources/agent-runtime/`; `ssh-manager.mjs` resolves the agent runtime on the remote; `server-shutdown.mjs` stops the Host and its supervised service; `remote-page-policy.mjs`, `guest-frame-navigation.mjs`, `packaged-ui-routing.mjs`, `prepare-ripgrep.mjs`, `verify-linux-appimage.mjs`, and their tests carry the fork's navigation guards, ripgrep staging, and AppImage verification.
+- **Instead of:** upstream's `opencode-readiness.mjs`, `opencode-cwd.mjs`, `opencode-cli` staging and `diagnostics/local-files.js`, which start and probe a retired engine, and upstream's `main.mjs` imports for them.
+- **Because:** the packaged app runs the Agent Service as a separate Bun process and the Host in-process (architecture ADR; `process-lifecycle.md` records the map), so an upstream `opencode serve` supervisor has no place to run. The fork's guards and packaging scripts are additions upstream does not have, and taking upstream would silently re-open guest navigation and drop the Agent Runtime payload check.
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** upstream's Electron shell ships the same Agent Service boundary, making `main.mjs` a plain adoption.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the fork perf, bench, changelog, dev and icon scripts
+
+- **Decided:** `scripts/` keeps the fork's own tooling: `perf/**` measurement and soak scripts, `model-bench/**`, `changelog/{build,lib,lib.test}.mjs`, `bump-version.mjs`, `oc-dev.mjs`, `generate-icon-sprite.mjs`, `profile-compare.mjs`, `profile-soak.mjs`, `run-isolated-tests.mjs`, and `port-opencode-theme.ts` with its integration test.
+- **Instead of:** upstream's versions, which drop the Agent Service soak parameters, the worktree/`OPENCHAMBER_DATA_DIR` harness, the isolated-test runner, and the theme porter's fork target paths.
+- **Because:** these scripts measure and drive the fork's own runtime; upstream's copies predate the Agent Service and would exercise a process the fork no longer runs. `port-opencode-theme.ts` is retained on purpose: it imports a VS Code theme into OpenChamber tokens, and retiring the extension does not retire theme import.
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** upstream's perf harness gains an Agent Service mode, or the theme porter is replaced by an in-app importer.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Keep the fork toolchain, lint and container configuration
+
+- **Decided:** the root configuration keeps its OMP shape: `tsconfig.json`/`packages/electron/tsconfig.json`/`packages/ui/tsconfig.test.json` path and extension settings, `knip.json` without the retired `renderVSCodeApp.tsx` and vendor aliases, `oxlint.config.ts` with `no-physical-sides` wired off until the RTL conversion lands, `.gitignore` and `packages/electron/.gitignore` for `agent-runtime` staging, `docker-compose.yml` and `scripts/docker-entrypoint.sh` mounting `./data/omp` and creating `~/.omp` instead of the OpenCode share/state/config trees, `docs/CUSTOM_THEMES.md` without the VS Code runtime-adapter wording, `packages/extensions/{README,DOCUMENTATION}.md`, and `packages/mobile/HANDOFF.md`.
+- **Instead of:** upstream's copies, which reference the retired engine's directories, the VS Code renderer entry, and the OpenCode container mounts.
+- **Because:** the fork runs OMP, so its container and ignore rules point at `.omp` and the staged Agent Runtime; adopting upstream would ignore the staged payload and create empty OpenCode directories. `renovate.json` is the exception: it now takes upstream, because its only fork difference was a missing dependency-policy rule rather than OMP work.
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** task 20 flips the physical-sides rule on, or the container image is rebuilt for the Agent Service.
+## 2026-11-11 - Keep the slice 33 chat, layout, view and app-shell surfaces on the fork's contracts in the v2.7.0 merge
+
+- **Decided:** the repair slice 33 files outside lane 13's presentation port keep the fork implementation where upstream v2.7.0's copy reads the retired OpenCode engine or an upstream-only contract: the app shells (`apps/**`), `components/{comments,layout,onboarding,projects,references,sourceBoard,ui}`, the views outside the chat port, and their tests. Upstream wins only where its change is a pure presentation or type alignment the fork's contracts already accept, and there the fork's blob is replaced.
+- **Instead of:** taking upstream's `@opencode/client` sync bootstrap in the app-shell and view tests, upstream's page/forms pending-request aggregator, the VS Code branches and RTL pair in the layout shells, upstream's `opencodeBinary` setup and project-config-error onboarding surfaces, or upstream's `OpenCode.make(...)` test doubles.
+- **Because:** those upstream paths import the retired OpenCode runtime or name a surface the fork removed, and the remaining differences are the fork's own fixes: runtime-switch ownership in the git dialogs, the archive's optional `deleteBranch`, the tolerant `changeRequestCopy` signature, canonical session fields in the mobile shell and memory panel, and the physical-side layout the RTL conversion (task 20) has not reached.
+- **Also recorded:** the deleted upstream-only surfaces and the ported presentation the slice adopted (the walkthrough trio, the partial usage notice, the guest-frame `incompatible` state) are named in the task's `## Progress`.
+- **Mine:** yes (conservative option within the 2026-11-10 merge decision and the 2026-11-11 chat port decision)
+- **Revisit when:** the RTL conversion lands, or the Agent Service exposes those behaviors as Canonical events.
+## 2026-11-11 - Settings sections keep the fork contract surface, not the upstream OpenCode callers
+
+- **Decided:** The merged Settings sections that upstream v2.7.0 wrote against the retired OpenCode engine take the fork's own content: `providers/CustomProviderForm.tsx`, `providers/CustomProviderModelRow.tsx`, `plugins/AddPluginDialog.tsx`, `commands/CommandsSidebar.tsx`, `snippets/SnippetsPage.tsx`, `snippets/SnippetsSidebar.tsx`, `components/snippets/SnippetQuickCreateDialog.tsx`, `routing/RoutingPage.tsx` and `projects/useProjectIdentityForm.ts` are restored from `main`. Upstream-only modules that had no fork contract and no remaining consumer are deleted: `agents/AgentPermissionsEditor.tsx`, `agents/agentPermissionModel.ts`, `mcp/useMcpOAuthIntegration.ts`, `openchamber/CompactionSettings.tsx`, `snippets/SnippetAliasesField.tsx`. The merged sections whose shape is canonical already stay on upstream's content and are ported field by field (`agents/ModelSelector.tsx`, `skills/catalog/SkillsCatalogPage.tsx`).
+- **Instead of:** restoring the retired OpenCode client modules, the `useAgentsStore` permissions API, the plugin entry/file draft store, the snippet alias/preview/file-path model, or the `/api/config/compaction` route so upstream's sections compile verbatim.
+- **Because:** the migration target is OMP-only and the OpenCode engine is a standing merge exclusion, so none of those contracts exist or should come back; the pluggable pieces upstream adds on top of a canonical base (`mcpImport` on `MCPServerConfig`, the catalog's installed scope, the model picker's `providerID`/`modelID` rows) are kept. Where the fork genuinely lacks a store key — `terminalCloseOnExit`, `sessionTabsPerWorkspace`, `serverUpdateChannel`, `settingsDefaultVariant`, `previewSnippet`/`setHasUnsavedChanges` — the control is dropped or read through the nearest existing call rather than adding a key to a store another lane owns.
+- **Mine:** yes (within the 2026-11-10 merge and OMP TUI parity decisions)
+- **Revisit when:** tasks 25-26 rebuild the Plugins, Agents, Commands and OMP Settings pages, or the fork adds a persisted key for one of the dropped controls.
+## 2026-11-11 - Repair the merged session sidebar on the fork's session model
+
+- **Decided:** the upstream v2.7.0 `packages/ui/src/components/session` surface keeps its layout, menus, sections manager, mark-all-read, worktree naming and row context menus, ported onto the fork's contract `Session` (`sessionId`/`parentSessionId`/`archivedAt`/`createdAt`/`updatedAt`, directory through `resolveGlobalSessionDirectory`), its Canonical Client errors and its Host-owned unread/catalog stores.
+- **Instead of:** adopting upstream's `session.id`/`time.*`/`directory`/`session.fork` reads, `@/lib/opencode/*` imports, `OpencodeApiError`, `isVSCodeRuntime` branches, named pin lists (`openchamber.pinned` carries only `at` on the contract), the `/btw`-session marker and the `SpaceMark.taskTitle` field; upstream's `.vitest.tsx`-mixed app shell is not imported either.
+- **Because:** the fork has one agent runtime on `/api/agent/v1` and one unread authority (`openchamber.workbench.lastIdleAt`/`viewedAt`), one error type (`CanonicalApiError`), and no VS Code runtime target. Where upstream had a genuine capability the fork lacks (named pin lists, space task titles, worktree pin writes, batched project-status prefetch, `checkIsGitRepository` gating) the dependent branch is removed and the loss recorded in the task, rather than shaping `sync`, `stores` or `api` exports to carry it.
+- **Also recorded:** the identifier and error ports are mechanical by construction (`id` → `sessionId`, `time.archived` → `archivedAt`, `OpencodeApiError` → `CanonicalApiError`, `getUnreadSessionIds`/`markSessionsUnreadSeen` → `isSessionUnread`/`markSessionUnreadSeen`), so each row cites this decision rather than repeating the mapping.
+- **Mine:** yes (maintainer confirmed the pin-list, dialog-catalog and space-affordance removals for task 32)
+- **Revisit when:** the contract carries named pin lists or space task titles, or the Agent Service exposes those behaviors as Canonical events.
+## 2026-11-11 - Session pins keep one Host stamp; a pin list collapses onto Pinned until the metadata contract carries it
+
+- **Decided:** `sync/session-pins.ts` keeps `setSessionPinList(target, pinned, list)` for its sidebar consumers, but the Host metadata contract stays `openchamber.pinned = { at }`, so a list other than `pinned` files the session under Pinned. Unpin writes the same stamp removal as before.
+- **Instead of:** adding `openchamber.pinned.list` to `packages/agent-contract`, which would change the metadata contract, the patch schema and the Host's validation surface for one sidebar affordance, or editing slice 32's `SessionNodeItem.tsx`/`workFacts.ts`/`SessionProjectCollection.tsx` to drop the list.
+- **Because:** one pin authority already exists (`setSessionPinned` over Host metadata plus the device-local legacy migration), and the pin-list affordance is a sidebar filing choice, not an agent fact. Keeping the exported shape identical to the scaffold leaves every caller compiling unchanged, and the choice can be revisited as a contract change on its own ticket.
+- **Mine:** yes (conservative option; the alternative touched another package's contract)
+- **Revisit when:** a later milestone extends `SessionMetadataSchema.openchamber.pinned` with a list, or the sidebar drops user-created pin lists.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities
+
+- **Decided:** the last six `fork-differs` files keep the fork's behavior where upstream's copy depended on something the fork no longer has: `components/desktop/OpenInAppButton.tsx` carries `data-work-status-popup` so the chat work panel does not close when the app picker is used; `components/sections/behavior/BehaviorPage.test.tsx` asserts AGENTS.md as the sole prompt authority (no settings mirror) and seeds `localStorage`; `components/sections/classification/ClassificationProvidersPage.tsx` opens the Host's canonical provider ids (`opencode-zen`, `vercel-ai-gateway`) instead of upstream's `opencode`/`vercel`; `hooks/useGlobalSessionsPolling.ts` keeps `missedWhileHidden` so a refresh that came due while hidden runs once on return; `useNestedGitDirectory.test.tsx` treats `/api/session-folders` as bootstrap, like `/api/fs/home`; `useSshConfirmation.test.tsx` clicks the dictionary's effective `Save Changes`. Alongside it, `sync/session-unread.ts` gains `isUnreadTurn` (the turn's own watermark, without the top-level-only rule) so the dock badge can roll a subtask's unread turn up to its parent, `sync/global-session-status.ts` regains `subscribeSessionStatusTransitions` for `multirun/autoFusion.ts`, and `multirun/laneStatus.ts` regains `hasRunningGoal`.
+- **Instead of:** adopting upstream's provider ids, its settings-mirrored Behavior prompt, its visibility-blind polling, upstream's `id`/`time.*` session fields in the autoFusion and unread paths, or dropping the subtask badge rollup because the top-level rule cannot express it.
+- **Because:** the Host's routing table (`server/lib/routing/runtime.js`) and private-credential module name the canonical ids; the fork has one unread authority in Host metadata and one settings authority for AGENTS.md; and a hidden app owes the refresh its cadence promised rather than silently skipping it.
+- **Mine:** yes (conservative options inside the 2026-11-10 merge and 2026-11-11 sidebar decisions)
+- **Revisit when:** the unread contract gains a subtask-aware field, or the fork adds a settings-mirror for the Behavior prompt.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - Move the integration branch to the final merge tree instead of preserving a superseded attempt
+
+- **Decided:** `ux-v270-omp-alignment/integration` is moved with a non-fast-forward update (`git reset --hard` under `/tmp/v270-integration.lock`, from a clean worktree) to the merge commit built from the final scaffold tip. The commit it replaces, `700b8449a`, was built by this window alone and is referenced by no other branch, done file, ref or worktree.
+- **Instead of:** keeping `700b8449a` and stacking the final tree on top, or leaving integration short of the scaffold tip. Both would break the task's requirement that the integration tree equal the resolved and tested scaffold tip byte for byte.
+- **Because:** `700b8449a` predated four commits that fixed a test-only race in the workflow runtime probes and the archived records; a fast-forward is impossible once integration holds a commit that is not an ancestor of the new one, and nothing depends on that superseded attempt.
+- **Also recorded:** no other branch was touched; the new commit keeps `main`'s tip (`e04b3dfb7`) and `bc50ba56a` as its parents, and the previous move to `700b8449a` was the same kind of replaceable attempt.
+- **Mine:** yes (conservative option within the 2026-11-10 merge decision)
+- **Revisit when:** integration carries commits that other branches or releases depend on, which then requires history-preserving updates instead.
 - **Effort:** ux-v270-omp-alignment

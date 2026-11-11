@@ -40,9 +40,9 @@ export const createWebAPIs = (options: WebAPIsOptions = {}): RuntimeAPIs => {
   const activeUrls = createActiveRuntimeUrlResolver();
 
   return {
-   clipboard: createDesktopClipboardAPI(),
-   themeFiles: createDesktopThemeFileAPI(),
-  runtime: { platform: 'web', isDesktop: false, label: 'web' },
+  clipboard: createDesktopClipboardAPI(),
+  themeFiles: createDesktopThemeFileAPI(),
+  runtime: { platform: 'web', isDesktop: false, isVSCode: false, label: 'web' },
   terminal: createWebTerminalAPI(),
   git: createWebGitAPI(),
   files: createWebFilesAPI({ urls: activeUrls, getDirectory: () => useDirectoryStore.getState().currentDirectory }),
@@ -51,7 +51,7 @@ export const createWebAPIs = (options: WebAPIsOptions = {}): RuntimeAPIs => {
   notifications: createWebNotificationsAPI(),
   sourceControl: createWebSourceControlAPI(),
   linear: createWebLinearAPI(),
-    trackers: createWebTrackerAPI(),
+  trackers: createWebTrackerAPI(),
   push: createWebPushAPI(),
   clientAuth: createWebClientAuthAPI(),
   };

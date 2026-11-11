@@ -2770,4 +2770,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'Ajan etkinleştirilemedi: yapılandırma dosyası yazılamadı',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "İstem geçmişinde ara",
 
+  'settings.themeImport.noReadableThemes': 'Bu paketteki renk temalarının hiçbiri okunamadı.',
+  'settings.providers.page.logo.title': 'Logo',
+  'settings.providers.page.logo.info': 'Listelerde, seçicilerde ve mesajlarda sağlayıcının logosu veya simgesi yerine gösterilir. PNG, JPEG, WebP veya SVG, en fazla 1 MB.',
+  'settings.providers.page.logo.upload': 'Görsel yükle',
+  'settings.providers.page.logo.remove': 'Görseli kaldır',
+  'settings.providers.page.logo.error.type': 'PNG, JPEG, WebP veya SVG görseli seçin.',
+  'settings.providers.page.logo.error.size': 'En fazla 1 MB boyutunda bir görsel seçin.',
+  'settings.providers.page.logo.toast.uploadFailed': 'Logo yüklenemedi: {reason}',
+  'settings.providers.page.logo.toast.removeFailed': 'Logo kaldırılamadı: {reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': 'Tarayıcı açılmayan bir sayfada kalırsa o sayfanın adresini kopyalayıp buraya yapıştırın.',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': 'Tarayıcıdaki adresi yapıştırın',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra (25 Avrupa dili)',
+  'settings.openchamber.visual.section.themes': 'Temalar',
+  'settings.openchamber.visual.field.noThemesMatch': '"{query}" ile eşleşen tema yok.',
 };

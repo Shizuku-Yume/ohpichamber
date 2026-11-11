@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Modelos Zen',
   'quota.value.requests': 'Solicitudes: {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "Rechazar",
   ...workerRunsI18n.es,
 
+  "chat.backgroundWork.aria": "Trabajo en segundo plano",
+  "chat.backgroundWork.count": "En segundo plano: {count}",
+  "chat.backgroundImages.generating": "Generando una imagen",
+  "sessions.sidebar.session.status.backgroundImage": "Imagen generándose en segundo plano",
+  "gitView.empty.repositoryUnreadable": "Git no pudo leer esta carpeta",
+  "gitView.empty.repositoryUnreadableDescription": "Esto es lo que dijo Git. Corrígelo y vuelve a intentarlo.",
+  "gitView.empty.repositoryUnreadableRetry": "Reintentar",
+  "contextSidebar.section.sessionTotals": "Totales de la sesión",
+  "directoryExplorerDialog.browse.linkTarget": "Enlace a {path}",
+  "updateDialog.openCodeTooOld": "OpenChamber {version} necesita OpenCode {required}. Este servidor tiene {current}. Actualiza OpenCode primero.",
+  'chat.workStatus.breakdown.planCountSingle': '{count} plan',
+  'chat.workStatus.breakdown.planCountPlural': '{count} planes',
+  'chat.workStatus.linkedPlans.open': 'Abrir el plan {title}',
+  ...aboutReleaseNotesI18n.es,
+  ...updateCheckErrorsI18n.es,
+  ...sessionWarmingI18n.es,
+  ...usageToolI18n.es,
+  ...openchamberToolsLayoutI18n.es,
+  ...openchamberToolOutputI18n.es,
+  ...tooltipsDiffI18n['es'],
+  ...tooltipsFilesI18n['es'],
+  ...tooltipsGitI18n['es'],
+  ...tooltipsTrackerI18n['es'],
+  ...tooltipsWalkthroughI18n['es'],
+  ...tooltipsTerminalBrowserI18n['es'],
+  ...tooltipsWorkspaceI18n['es'],
+  ...tooltipsPanelI18n['es'],
+  ...tooltipsChatI18n['es'],
   ...m4LaneDI18n.es,
 };

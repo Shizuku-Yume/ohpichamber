@@ -1,42 +1,35 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import type { SessionGroup, SessionNode } from '../types';
 import type { ProjectSection } from '../projects/sessionProjectRender';
 import { buildSessionRootIndex, buildSidebarWorkIndex, buildWorktreeArchiveAnchors, isGroupWork, orderInWorkWorks, orderSidebarWorks } from './sidebarWorks';
 import { pickWorkSessionToOpen } from './workActions';
 
-const session = (sessionId: string, extra: Partial<Session> = {}): Session => ({
-  sessionId,
-  projectId: 'p',
-  workspaceId: 'w',
-  displayPath: '/repo',
-  rootSessionId: sessionId,
-  createdAt: 1,
-  updatedAt: 1,
-  epoch: '1',
-  headSequence: '0',
-  runtimeStatus: 'idle',
-  activeRunId: null,
-  mode: { kind: 'main' as const },
-  metadata: null,
-  metadataRevision: '0',
-  archiveRevision: '0',
-  ...extra,
-});
-
-const node = (sessionId: string, children: SessionNode[] = [], extra: Partial<Session> = {}): SessionNode => ({
-  session: session(sessionId, extra),
-  children,
-  worktree: null,
-});
-
+const session = (sessionId: string, extra: Partial<Session> = {}): Session => {
+  registerWorkspaceDirectory('workspace-repo', '/repo');
+  return {
+    sessionId,
+    projectId: 'project',
+    workspaceId: 'workspace-repo',
+    displayPath: '/repo',
+    rootSessionId: sessionId,
+    createdAt: 1,
+    updatedAt: 1,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    metadata: null,
+    metadataRevision: '0',
+    archiveRevision: '0',
+    ...extra,
+  };
+};
+const node = (id: string, children: SessionNode[] = [], extra: Partial<Session> = {}): SessionNode => ({ session: session(id, extra), children, worktree: null });
 const group = (id: string, sessions: SessionNode[], worktree: boolean): SessionGroup => ({
-  id,
-  label: id,
-  branch: worktree ? id : null,
-  description: null,
-  isMain: !worktree,
-  directory: `/${id}`,
+  id, label: id, branch: worktree ? id : null, description: null, isMain: !worktree, directory: `/${id}`,
   worktree: worktree ? { path: `/${id}`, projectDirectory: '/repo', branch: id, label: id } : null,
   sessions,
 });
@@ -55,7 +48,7 @@ describe('sidebar works', () => {
     const index = buildSidebarWorkIndex([section]);
     expect(index.bySessionId.get('review')?.key).toBe('session:root');
     expect(index.bySessionId.get('w2')?.key).toBe('p:wt');
-    expect(index.worktreeWorks.map((ref) => ref.key)).toEqual(['p:wt', 'p:empty-wt']);
+    expect(index.groupWorks.map((ref) => ref.key)).toEqual(['p:wt', 'p:empty-wt']);
   });
 
   test('an isolated space is one work with every session in it, like a worktree', () => {
@@ -70,7 +63,7 @@ describe('sidebar works', () => {
     const index = buildSidebarWorkIndex([{ ...section, groups: [...section.groups, space, archive] }]);
     expect(index.bySessionId.get('s1-review')?.key).toBe('p:space:abc');
     expect(index.bySessionId.get('s2')?.key).toBe('p:space:abc');
-    expect(index.worktreeWorks.map((ref) => ref.key)).toEqual(['p:wt', 'p:empty-wt', 'p:space:abc']);
+    expect(index.groupWorks.map((ref) => ref.key)).toEqual(['p:wt', 'p:empty-wt', 'p:space:abc']);
   });
 
   test('works come once each, in the order of their first matching session', () => {
@@ -81,12 +74,12 @@ describe('sidebar works', () => {
   });
 
   describe('in work outside every added project', () => {
-    const inWork = { metadata: { openchamber: { work: { state: 'open' } } } } as Partial<Session>;
-    const outside = { displayPath: '/not-a-project' };
+    const inWork: Partial<Session> = { metadata: { openchamber: { work: { state: 'open' } } } };
+    const outside: Partial<Session> = { workspaceId: 'workspace-outside' };
     // `promoted` has no parentID but nests under `outside-root` by lineage (a
     // promoted /btw or a review), so its work is its root's.
     const promoted = node('promoted', [], { ...outside, ...inWork });
-    const subagent = node('subagent', [], { ...outside, ...inWork, parentSessionId: 'outside-root' });
+    const subagent = node('subagent', [], { ...outside, ...inWork, parentSessionId: 'outside-root', rootSessionId: 'outside-root' });
     const outsideRoot = node('outside-root', [promoted, subagent], outside);
     const childrenMap = new Map([['outside-root', [promoted.session, subagent.session]]]);
     const rootOf = buildSessionRootIndex([outsideRoot.session, session('root')], childrenMap);
@@ -118,7 +111,8 @@ describe('sidebar works', () => {
       const index = buildSidebarWorkIndex([section]);
       const archived = session('archived', { ...outside, ...inWork, archivedAt: 2 });
       const idle = session('idle', outside);
-      const chat = session('chat', { ...inWork, displayPath: '/home/.config/openchamber/chats/2026-10-26/session-1' });
+      registerWorkspaceDirectory('workspace-chat', '/home/.config/openchamber/chats/2026-10-26/session-1');
+      const chat = session('chat', { ...inWork, workspaceId: 'workspace-chat' });
       const rootIndex = buildSessionRootIndex([archived, idle, chat], new Map());
       expect(orderInWorkWorks([archived, idle, chat], index, rootIndex, (directory) => directory?.includes('/chats/') ?? false))
         .toEqual([]);
@@ -132,11 +126,11 @@ describe('sidebar works', () => {
     const values = new Map([['lonely', 30], ['archived', 25], ['w1', 20], ['root', 10], ['old', 5]]);
     const order = ['lonely', 'w1', 'root'].map((id) => session(id));
     const anchors = buildWorktreeArchiveAnchors({
-      groupWorks: index.worktreeWorks,
+      groupWorks: index.groupWorks,
       archivedSessions: [
         session('archived', { displayPath: '/wt' }),
         session('old', { displayPath: '/empty-wt' }),
-        session('elsewhere', { displayPath: '/other' }),
+        session('elsewhere', { displayPath: '/elsewhere' }),
       ],
       orderedSessions: order,
       orderValueOf: (entry) => values.get(entry.sessionId) ?? 0,
@@ -149,7 +143,8 @@ describe('sidebar works', () => {
 
   test('a click opens the latest session that is not a review or fork, else the latest, else nothing', () => {
     const review = node('review', [], { metadata: { openchamber: { kind: 'review', originalSessionID: 'x' } } });
-    const fork = node('fork', [], { parentSessionId: 'x' });
+    const reviewMetadata = { metadata: { openchamber: { kind: 'review' as const, originalSessionID: 'x' } } };
+    const fork = node('fork', [], { metadata: { openchamber: { ...reviewMetadata.metadata.openchamber, originalSessionID: 'x' } } });
     expect(pickWorkSessionToOpen([review, fork, node('work')])?.sessionId).toBe('work');
     expect(pickWorkSessionToOpen([review, fork])?.sessionId).toBe('review');
     expect(pickWorkSessionToOpen([])).toBeNull();

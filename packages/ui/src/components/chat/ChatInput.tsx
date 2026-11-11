@@ -12,7 +12,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { createMessageQueueTarget, getMessageQueueKey, useMessageQueueStore, type QueuedContextPart, type QueuedMessage } from '@/stores/messageQueueStore';
-import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
+import { selectAutoReviewRunning, useAutoReviewStore } from '@/stores/useAutoReviewStore';
 import { useBtwStore } from '@/stores/useBtwStore';
 import { useSessionUIStore, type CanonicalSkillMentions, type DraftGoalObjective } from '@/sync/session-ui-store';
 import { ROOT_SELECTION_AGENT, useSelectionStore } from '@/sync/selection-store';
@@ -89,6 +89,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { ReferencePickerDialog } from '@/components/references/ReferencePickerDialog';
 import { useAttachReferences } from '@/components/references/useAttachReferences';
 import { useRepositoryReferenceProvider } from '@/components/references/referenceSources';
+import { useSourceControlDescriptorOf } from '@/lib/source-control/providers/registry';
 import {
     composerReferenceKey,
     toContextReference,
@@ -765,8 +766,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             await startReviewFlow({
                 originalSessionID: currentSessionId,
                 directory,
-                providerId: execution.providerId,
-                modelId: execution.modelId,
+                providerId: execution.providerID,
+                modelId: execution.modelID,
                 variant: execution.variant || undefined,
                 generateHandoff: execution.generateHandoff,
                 returnAfterHandoffRequest: execution.generateHandoff,
@@ -1324,11 +1325,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // A BTW draft is not a session; its stop action must never target the main run.
     const { phase: currentSessionPhase } = useSessionActivity(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
     const sessionPhase = isBtwActive ? 'idle' : currentSessionPhase;
-    const autoReviewRunning = useAutoReviewStore(React.useCallback((state) => {
-        if (!currentSessionId) return false;
-        const run = state.runsByOriginalSessionID[currentSessionId];
-        return run?.status === 'running' && run.runtimeKey === getRuntimeKey();
-    }, [currentSessionId]));
+    const autoReviewRunning = useAutoReviewStore(selectAutoReviewRunning(currentSessionId, currentSessionDirectoryForSync ?? currentDirectory ?? undefined));
 
     const handleOpenMobilePanel = React.useCallback((panel: MobileControlsPanel) => {
         if (!isMobile) {
@@ -1720,6 +1717,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     }, []);
     const referencePickerDirectory = currentSessionDirectoryForSync ?? currentDirectory ?? null;
     const repositoryProvider = useRepositoryReferenceProvider(referencePickerDirectory);
+    const descriptorOf = useSourceControlDescriptorOf();
     const addLinkedReferences = React.useCallback((references: ComposerReference[]) => {
         setLinkedReferences((current) => withComposerReferences(current, references));
     }, []);
@@ -3815,8 +3813,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                 url={reference.url}
                                 author={reference.author}
                                 branches={reference.head && reference.base ? { head: reference.head, base: reference.base } : undefined}
-                                openInBrowserLabel={t(changeRequestCopy('chat.chatInput.linked.pr.openInBrowserAria', reference.provider))}
-                                removeLabel={t(changeRequestCopy('chat.chatInput.linked.pr.removeAria', reference.provider))}
+                                openInBrowserLabel={t(changeRequestCopy('chat.chatInput.linked.pr.openInBrowserAria', descriptorOf(reference.provider).terminology.changeRequest))}
+                                removeLabel={t(changeRequestCopy('chat.chatInput.linked.pr.removeAria', descriptorOf(reference.provider).terminology.changeRequest))}
                                 onReopenPicker={() => setReferencePicker({ source: 'repository', kind: 'pull' })}
                                 onRemove={remove}
                             />
@@ -4327,10 +4325,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     className={cn(
                         "flex flex-col relative overflow-visible",
                         isComposerExpanded && 'flex-1 min-h-0',
-                        "border border-border/80 focus-within:border-interactive-selection-foreground/35",
-                        // The box floats over the transcript, so it is glass.
-                        'oc-glass-composer',
-                        isDragging && "ring-2 ring-primary ring-offset-2"
+                        // Opaque: always on screen over the moving transcript
+                        // (see .oc-surface-floating in design-system.css).
+                        'oc-surface-floating',
+                        // Lit like a dropdown (top edge, hairline, shadow). Its
+                        // box-shadow would hide the drag ring, so it steps aside
+                        // while a file is dragged over.
+                        isDragging ? "ring-2 ring-primary ring-offset-2" : 'oc-glass-floating oc-composer-sheen',
                     )}
                     style={{ borderRadius: chatInputRadius }}
                     ref={dropZoneRef}

@@ -5,6 +5,7 @@ import { Icon } from '@/components/icon/Icon';
 import { HoverTooltip } from '@/components/ui/row-tooltip';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { listModelVariantIds } from '@/lib/modelVariants';
 import { useConfigStore } from '@/stores/useConfigStore';
 
 /**
@@ -25,7 +26,7 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
   const { t } = useI18n();
   const variants = useConfigStore(React.useCallback((state) => {
     const model = state.providers.find((provider) => provider.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
-    return model?.variants.map((entry) => entry.variant).join('\n') ?? '';
+    return listModelVariantIds(model?.variants).join('\n');
   }, [modelId, providerId]));
   if (!variants) return null;
   const label = variant ?? t('multirun.modelMultiSelect.variant.default');

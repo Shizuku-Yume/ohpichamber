@@ -68,6 +68,7 @@ export const guestActionsWhere = (
 ): GuestActionEntry[] => entries.filter((entry) => entry.action.where === where);
 
 
+/** Entries for text selected in a message, a Files row, or selected lines. */
 export const guestActionWantsMessages = (action: GuestActionContribution): boolean => (
  action.payload?.includes('messages') ?? false
 );

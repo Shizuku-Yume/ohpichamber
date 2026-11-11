@@ -2770,4 +2770,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'Der Agent konnte nicht aktiviert werden: Die Konfigurationsdatei ließ sich nicht schreiben',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "Prompt-Verlauf durchsuchen",
 
+  'settings.themeImport.noReadableThemes': 'Aus diesem Paket konnte kein Farbdesign gelesen werden.',
+  'settings.providers.page.logo.title': 'Logo',
+  'settings.providers.page.logo.info': 'Wird statt des Logos oder Symbols des Anbieters in Listen, Auswahlmenüs und Nachrichten angezeigt. PNG, JPEG, WebP oder SVG, bis 1 MB.',
+  'settings.providers.page.logo.upload': 'Bild hochladen',
+  'settings.providers.page.logo.remove': 'Bild entfernen',
+  'settings.providers.page.logo.error.type': 'Wählen Sie ein PNG-, JPEG-, WebP- oder SVG-Bild.',
+  'settings.providers.page.logo.error.size': 'Wählen Sie ein Bild mit höchstens 1 MB.',
+  'settings.providers.page.logo.toast.uploadFailed': 'Das Logo konnte nicht hochgeladen werden: {reason}',
+  'settings.providers.page.logo.toast.removeFailed': 'Das Logo konnte nicht entfernt werden: {reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': 'Wenn der Browser auf einer Seite landet, die sich nicht öffnet, kopieren Sie deren Adresse und fügen Sie sie hier ein.',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': 'Adresse aus dem Browser einfügen',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra (25 europäische Sprachen)',
+  'settings.openchamber.visual.section.themes': 'Designs',
+  'settings.openchamber.visual.field.noThemesMatch': 'Keine Designs passen zu „{query}“.',
 };

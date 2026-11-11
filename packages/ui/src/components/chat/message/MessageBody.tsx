@@ -55,6 +55,9 @@ import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
 import { LiveActivityCollapse } from '../components/LiveActivityCollapse';
 import { LiveFinalActivityContext } from '../components/liveActivityContext';
+import { ShownToolCard } from './parts/ShownToolCard';
+import { isShownInPlace } from './parts/pageRenderView';
+import { toToolView } from './parts/toolView';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -1211,6 +1214,19 @@ const AssistantMessageBody = React.memo(({
     // A canonical result is a separate part appended after its call. Render the
     // matched result only: it already carries the call as paired context, so
     // showing the call as well produced two headers for one operation.
+    // The result a shown call draws, by call id: a card that reads an answer
+    // sees the same output the tool row does.
+    const resultsForTurn = React.useMemo(() => {
+        const results = new Map<string, ToolResultPart>();
+        for (const part of parts) {
+            if (part.type === 'tool_result') results.set(part.toolCallId, part);
+        }
+        for (const activity of turnGroupingContext?.activityParts ?? []) {
+            if (activity.part.type === 'tool_result') results.set(activity.part.toolCallId, activity.part);
+        }
+        return results;
+    }, [parts, turnGroupingContext?.activityParts]);
+
     const pairedResultKeys = React.useMemo(() => {
         const keys = new Set<string>();
         for (const part of parts) {
@@ -2078,6 +2094,29 @@ const AssistantMessageBody = React.memo(({
                         i = j;
                         continue;
                     }
+                }
+
+                // A call the chat draws in place shows that view instead of a
+                // tool row: the page an `openchamber_render` call showed, the
+                // run a `workflow.run` call proposed, the images an
+                // `image.generate` call saved, the card a secret request asks
+                // on. The canonical result is the joined view's answer.
+                if (sessionId && toolPart.type === 'tool_call' && isShownInPlace(
+                    toToolView(toolPart, resultsForTurn.get(toolPart.toolCallId), { sessionID: sessionId, messageID: messageId }),
+                )) {
+                    rendered.push(
+                        <ShownToolCard
+                            key={`shown-tool-${toolPart.partId}`}
+                            part={toolPart}
+                            result={resultsForTurn.get(toolPart.toolCallId)}
+                            sessionId={sessionId}
+                            messageId={messageId}
+                            onShowPopup={onShowPopup}
+                        />
+                    );
+                    flushSegmentsAfterTool(toolPartId);
+                    i += 1;
+                    continue;
                 }
 
                 // Expandable tools: bash, edit, write, task, question — individual rows

@@ -2779,4 +2779,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'エージェントを有効にできませんでした。設定ファイルに書き込めませんでした',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "プロンプト履歴を検索",
 
+  'settings.themeImport.noReadableThemes': 'このパッケージのカラーテーマを読み込めませんでした。',
+  'settings.providers.page.logo.title': 'ロゴ',
+  'settings.providers.page.logo.info': '一覧、ピッカー、メッセージで、プロバイダーのロゴやアイコンの代わりに表示されます。PNG、JPEG、WebP、SVG（1 MB まで）。',
+  'settings.providers.page.logo.upload': '画像をアップロード',
+  'settings.providers.page.logo.remove': '画像を削除',
+  'settings.providers.page.logo.error.type': 'PNG、JPEG、WebP、SVG の画像を選択してください。',
+  'settings.providers.page.logo.error.size': '1 MB 以下の画像を選択してください。',
+  'settings.providers.page.logo.toast.uploadFailed': 'ロゴをアップロードできませんでした: {reason}',
+  'settings.providers.page.logo.toast.removeFailed': 'ロゴを削除できませんでした: {reason}',
+  'settings.providers.page.auth.oauth.pasteRedirectHint': 'ブラウザーが開けないページで止まった場合は、そのページのアドレスをコピーしてここに貼り付けてください。',
+  'settings.providers.page.auth.oauth.pasteRedirectPlaceholder': 'ブラウザーのアドレスを貼り付け',
+  'settings.voice.page.stt.model.parakeetUltra': 'Parakeet Ultra（ヨーロッパ25言語）',
+  'settings.openchamber.visual.section.themes': 'テーマ',
+  'settings.openchamber.visual.field.noThemesMatch': '「{query}」に一致するテーマはありません。',
 } as const;

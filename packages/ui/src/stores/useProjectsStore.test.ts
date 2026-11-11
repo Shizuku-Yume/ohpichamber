@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { ProjectEntry } from "@/lib/api/types"
 import type { DesktopSettings } from "@/lib/desktop"
+import { parseSettingsDocument } from "@/lib/settings/registry"
 import { useProjectsStore } from "./useProjectsStore"
 import { useDirectoryStore } from "./useDirectoryStore"
 import { hostFilesystem } from '@/lib/host-filesystem'
@@ -233,4 +234,31 @@ describe("useProjectsStore.addProjects", () => {
     const home = useDirectoryStore.getState().homeDirectory;
     expect(added.map((p) => p.path)).toEqual(["/repo", "C:/repo", home ? `${home}/project` : "~/project"])
   })
+})
+
+describe("useProjectsStore project labels", () => {
+  const resetProjects = () => {
+    useProjectsStore.setState({
+      projects: [],
+      activeProjectId: null,
+      manualProjectOrder: [],
+    })
+  }
+
+  test("lowers a legacy auto-derived label that carries no provenance", () => {
+    const previous = useProjectsStore.getState()
+    try {
+      resetProjects()
+      const parsed = parseSettingsDocument({
+        projects: [{ path: "/home/me/code/example", label: "Example" }],
+      })
+      if (!parsed) throw new Error("Expected valid settings")
+      useProjectsStore.getState().synchronizeFromSettings(parsed)
+
+      expect(useProjectsStore.getState().projects[0]?.label).toBe("example")
+    } finally {
+      useProjectsStore.setState(previous, true)
+    }
+  })
+
 })

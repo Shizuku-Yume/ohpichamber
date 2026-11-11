@@ -21,19 +21,16 @@ export const formatPercent = (value: number | null): string => {
 };
 
 export const formatQuotaValueLabel = (
-  windowOrLabel: Pick<UsageWindow, 'valueLabel' | 'creditsUsed'> | string | null | undefined,
+  window: Pick<UsageWindow, 'valueLabel' | 'creditsUsed'>,
   percent: number | null,
-  translate?: (key: I18nKey, params?: I18nParams) => string,
+  translate: (key: I18nKey, params?: I18nParams) => string,
 ): string => {
-  if (windowOrLabel && typeof windowOrLabel === 'object') {
-    if (windowOrLabel.creditsUsed !== undefined && translate) {
-      const rounded = Math.round(windowOrLabel.creditsUsed * 10) / 10;
-      const credits = rounded.toLocaleString('en-US', { maximumFractionDigits: 1 });
-      return translate('quota.value.creditsUsed', { credits });
-    }
-    return windowOrLabel.valueLabel ?? formatPercent(percent);
+  if (window.creditsUsed !== undefined) {
+    const rounded = Math.round(window.creditsUsed * 10) / 10;
+    const credits = rounded.toLocaleString('en-US', { maximumFractionDigits: 1 });
+    return translate('quota.value.creditsUsed', { credits });
   }
-  return (windowOrLabel as string | null | undefined) ?? formatPercent(percent);
+  return window.valueLabel ?? formatPercent(percent);
 };
 
 export const formatQuotaWindowValueLabel = (

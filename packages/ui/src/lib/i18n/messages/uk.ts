@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Моделі Zen',
   'quota.value.requests': 'Запити: {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "Відхилити",
   ...workerRunsI18n.uk,
 
+  "chat.backgroundWork.aria": "Робота у фоні",
+  "chat.backgroundWork.count": "У фоні: {count}",
+  "chat.backgroundImages.generating": "Генерується картинка",
+  "sessions.sidebar.session.status.backgroundImage": "Картинка генерується у фоні",
+  "gitView.empty.repositoryUnreadable": "Git не зміг прочитати цю теку",
+  "gitView.empty.repositoryUnreadableDescription": "Ось що відповів Git. Виправте це й спробуйте ще раз.",
+  "gitView.empty.repositoryUnreadableRetry": "Спробувати ще раз",
+  "contextSidebar.section.sessionTotals": "Підсумки сесії",
+  "directoryExplorerDialog.browse.linkTarget": "Посилання на {path}",
+  "updateDialog.openCodeTooOld": "OpenChamber {version} потребує OpenCode {required}. На цьому сервері {current}. Спершу оновіть OpenCode.",
+  'chat.workStatus.breakdown.planCountSingle': '{count} план',
+  'chat.workStatus.breakdown.planCountPlural': '{count} плани',
+  'chat.workStatus.linkedPlans.open': 'Відкрити план {title}',
+  ...aboutReleaseNotesI18n.uk,
+  ...updateCheckErrorsI18n.uk,
+  ...sessionWarmingI18n.uk,
+  ...usageToolI18n.uk,
+  ...openchamberToolsLayoutI18n.uk,
+  ...openchamberToolOutputI18n.uk,
+  ...tooltipsDiffI18n['uk'],
+  ...tooltipsFilesI18n['uk'],
+  ...tooltipsGitI18n['uk'],
+  ...tooltipsTrackerI18n['uk'],
+  ...tooltipsWalkthroughI18n['uk'],
+  ...tooltipsTerminalBrowserI18n['uk'],
+  ...tooltipsWorkspaceI18n['uk'],
+  ...tooltipsPanelI18n['uk'],
+  ...tooltipsChatI18n['uk'],
   ...m4LaneDI18n.uk,
 };

@@ -16,10 +16,10 @@ export function HeaderSessionArchiveMenuItem({ sessionId, onArchive, Item }: {
   Item: SessionTabMenuComponents['Item'];
 }) {
   const { t } = useI18n();
-  const archived = useGlobalSessionsStore((state) => state.entityById.get(sessionId)?.archivedAt !== undefined);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const isCurrentSession = useSessionUIStore((state) => state.currentSessionId === sessionId);
   const archiveShortcut = formatShortcutForDisplay(getEffectiveShortcutCombo('archive_current_session', shortcutOverrides), '');
+  const archived = useGlobalSessionsStore((state) => state.entityById.get(sessionId)?.archivedAt !== undefined);
   const restorable = useGlobalSessionsStore((state) => {
     const session = state.entityById.get(sessionId);
     return !session || isRestorableOnItsOwn(session, state.entityById);

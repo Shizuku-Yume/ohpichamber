@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Zen-Modelle',
   'quota.value.requests': 'Anfragen: {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "Ablehnen",
   ...workerRunsI18n.de,
 
+  'chat.backgroundWork.aria': 'Arbeit im Hintergrund',
+  'chat.backgroundWork.count': 'Im Hintergrund: {count}',
+  'chat.backgroundImages.generating': 'Bild wird erstellt',
+  'sessions.sidebar.session.status.backgroundImage': 'Bild wird im Hintergrund erstellt',
+  'gitView.empty.repositoryUnreadable': 'Git konnte diesen Ordner nicht lesen',
+  'gitView.empty.repositoryUnreadableDescription': 'Das hat Git gemeldet. Beheben Sie es und versuchen Sie es erneut.',
+  'gitView.empty.repositoryUnreadableRetry': 'Erneut versuchen',
+  'contextSidebar.section.sessionTotals': 'Sitzung insgesamt',
+  'directoryExplorerDialog.browse.linkTarget': 'Verknüpfung zu {path}',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} benötigt OpenCode {required}. Dieser Server hat {current}. Aktualisiere zuerst OpenCode.',
+  'chat.workStatus.breakdown.planCountSingle': '{count} Plan',
+  'chat.workStatus.breakdown.planCountPlural': '{count} Pläne',
+  'chat.workStatus.linkedPlans.open': 'Plan {title} öffnen',
+  ...aboutReleaseNotesI18n.de,
+  ...updateCheckErrorsI18n.de,
+  ...sessionWarmingI18n.de,
+  ...usageToolI18n.de,
+  ...openchamberToolsLayoutI18n.de,
+  ...openchamberToolOutputI18n.de,
+  ...tooltipsDiffI18n['de'],
+  ...tooltipsFilesI18n['de'],
+  ...tooltipsGitI18n['de'],
+  ...tooltipsTrackerI18n['de'],
+  ...tooltipsWalkthroughI18n['de'],
+  ...tooltipsTerminalBrowserI18n['de'],
+  ...tooltipsWorkspaceI18n['de'],
+  ...tooltipsPanelI18n['de'],
+  ...tooltipsChatI18n['de'],
   ...m4LaneDI18n.de,
 };

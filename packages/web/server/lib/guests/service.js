@@ -8,14 +8,17 @@ import {
   GUEST_REQUEST_RESPONSE_MAX,
   GUEST_REQUEST_TIMEOUT_MS,
   isGuestRequestPath,
-  serviceProvides,
   OPENCHAMBER_HOST_CALLBACK_URL,
+  OPENCHAMBER_SERVICE_DATA_DIR,
 } from '@openchamber/sdk';
 
+import { isGuestPackageUnloaded } from './catalog.js';
 import { hostCallbackUrl } from './host-callback.js';
 import { readExtensionStore, updateExtensionStore } from './persist.js';
+import { SERVICE_TOKEN_ENV } from './service-registry.js';
 import { readBoundedResponseText } from './response-body.js';
 import { resolveServiceSocketEnv } from './sockets.js';
+import { guestDataDir } from './storage.js';
 
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const SERVICE_READY_TIMEOUT_MS = 15_000;
@@ -186,7 +189,9 @@ export const setServiceSocketOverride = async (guestId, socketId, persistPath, s
 };
 
 /**
- * @param {string} guestId
+ * Why a service last stopped working, for the extension's card: the end of its
+ * output, in memory only. A service that starts cleanly clears it.
+ * @type {Map<string, { at: number, output: string }>}
  */
 const lastFailures = new Map();
 
@@ -222,8 +227,8 @@ const stopEpochOf = (guestId) => stopEpochs.get(guestId) ?? 0;
  * Services the host starts on its own (a provider role) have no panel whose
  * closing would end them, so they end themselves: a request arms a timer, the
  * next request re-arms it, and when it fires with nothing in flight the
- * process goes away. The next request starts it again. A panel-driven service
- * passes no `idleStopMs` and keeps today's lifetime.
+ * process goes away. The next request starts it again. Panel requests do the
+ * same; a service that holds state or a connection sets `keepRunning`.
  * @type {Map<string, { timer: ReturnType<typeof setTimeout>, inflight: number, idleMs: number }>}
  */
 const idleStops = new Map();
@@ -333,6 +338,18 @@ const discardRuntime = async (guestId) => {
   }
 };
 
+/**
+ * The extension a callback bearer names: the token its running service was
+ * started with, or `null` for a process no longer running.
+ * @param {string} token
+ */
+export const guestIdOfServiceToken = (token) => {
+  for (const [guestId, runtime] of runtimes) {
+    if (runtime.status !== 'stopped' && runtime.status !== 'failed' && runtime.token === token) return guestId;
+  }
+  return null;
+};
+
 /** Test seam: the pid of a guest's running service, or `null`. */
 export const readServicePid = (guestId) => runtimes.get(guestId)?.child.pid ?? null;
 
@@ -379,7 +396,7 @@ const collectProcessOutput = (child, maxChars = 2_000) => {
  *   entry: string,
  *   socketBindings?: Array<{ id: string, candidatesByPlatform?: Partial<Record<'linux' | 'darwin' | 'win32', string[]>> }>,
  *   socketOverrides?: Record<string, string>,
- *   hostCallback?: boolean,
+ *   dataDir: string,
  * }} params
  */
 const startGuestService = async ({
@@ -388,7 +405,7 @@ const startGuestService = async ({
   entry,
   socketBindings = [],
   socketOverrides = {},
-  hostCallback = false,
+  dataDir,
   epoch,
   lifecycle,
 }) => {
@@ -430,23 +447,25 @@ const startGuestService = async ({
   const socketEnv = socketBindings.length > 0
     ? await resolveServiceSocketEnv(socketBindings, socketOverrides)
     : {};
+  await fs.mkdir(dataDir, { recursive: true, mode: 0o700 }).catch(() => {
+    throw new GuestServiceError('The service\'s data folder could not be created.', 'SERVICE_FAILED');
+  });
   if (cancelled()) {
     throw stoppedError();
   }
   const env = {
     ...inheritedServiceEnv(process.env),
     OPENCHAMBER_SERVICE_PORT: String(port),
-    OPENCHAMBER_SERVICE_TOKEN: token,
+    [SERVICE_TOKEN_ENV]: token,
+    [OPENCHAMBER_SERVICE_DATA_DIR]: dataDir,
     ELECTRON_RUN_AS_NODE: '1',
   };
   if (Object.keys(socketEnv).length > 0) {
     env.OPENCHAMBER_SERVICE_SOCKETS = JSON.stringify(socketEnv);
   }
-  // Only a service that stands in for a Git host may call OpenChamber back
-  // (`host-callback.js`); every other service never learns the listener.
-  if (hostCallback) {
-    env[OPENCHAMBER_HOST_CALLBACK_URL] = await hostCallbackUrl();
-  }
+  // How the service calls OpenChamber back (`host-callback.js`). The address
+  // alone opens nothing: each route asks for a bearer of its own.
+  env[OPENCHAMBER_HOST_CALLBACK_URL] = await hostCallbackUrl();
   if (cancelled()) {
     throw stoppedError();
   }
@@ -469,9 +488,14 @@ const startGuestService = async ({
   };
   runtimes.set(guestId, runtime);
 
-  child.once('exit', () => {
+  child.once('exit', (code, signal) => {
     const current = runtimes.get(guestId);
     if (current === runtime) {
+      // A deliberate stop drops the runtime first, so this exit was unexpected.
+      if (code || signal) {
+        const detail = [output.snapshot(), signal ? `Stopped by ${signal}.` : ''].filter(Boolean).join('\n');
+        lastFailures.set(guestId, { at: Date.now(), output: detail });
+      }
       runtime.status = runtime.status === 'starting' ? 'failed' : 'stopped';
     }
   });
@@ -488,15 +512,17 @@ const startGuestService = async ({
   if (!ready || child.exitCode !== null || child.signalCode) {
     runtime.status = 'failed';
     const detail = output.snapshot();
+    lastFailures.set(guestId, { at: Date.now(), output: detail });
     await discardRuntime(guestId);
     throw new GuestServiceError(
       detail
-        ? `Guest service failed to become ready. ${detail}`
-        : 'Guest service failed to become ready.',
+        ? `The extension's service failed to start. ${detail}`
+        : "The extension's service failed to start.",
       'SERVICE_FAILED',
     );
   }
   runtime.status = 'ready';
+  lastFailures.delete(guestId);
   return runtime;
 };
 
@@ -577,8 +603,8 @@ const ensureGuestService = async (params) => {
  *   timeoutMs?: number,
  *   idleStopMs?: number,
  *   signal?: AbortSignal,
- * }} params `timeoutMs` and `idleStopMs` are for host-driven calls; a
- * panel's `serviceRequest` keeps the SDK limits. With `idleStopMs` the
+ * }} params `timeoutMs` is for host-driven calls; a panel's `serviceRequest`
+ * keeps the SDK limits. With `idleStopMs` the
  * service stops itself after that long without a request; `holdGuestService`
  * suspends that while a long-lived consumer (a surface viewer) is attached.
  */
@@ -634,13 +660,17 @@ export const openGuestServiceRequest = async ({
 
   let runtime = runtimes.get(guestId);
   if (!runtime || runtime.status !== 'ready' || runtime.child.exitCode !== null || runtime.child.signalCode) {
+    // A folder mid-rebuild is listed from its last loaded manifest and grants; the new files are not what the user approved.
+    if (isGuestPackageUnloaded(packageRoot)) {
+      throw new GuestServiceError('The extension is being rebuilt; try again once its build finishes.', 'NO_SERVICE');
+    }
     runtime = await ensureGuestService({
       guestId,
       packageRoot,
       entry: service.entry,
       socketBindings,
       socketOverrides,
-      hostCallback: serviceProvides(service, 'source-control'),
+      dataDir: guestDataDir(persistPath, guestId),
       epoch,
       lifecycle,
     });

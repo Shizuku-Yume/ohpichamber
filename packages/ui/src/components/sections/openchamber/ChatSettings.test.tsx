@@ -96,7 +96,7 @@ describe('ChatSettings', () => {
     const t = (key: I18nKey): string => key;
     const result = buildSettingsSearchResults({ query: 'lgtm', runtimeCtx, t, getPageTitle: (page) => `${page}-page` })
       .find((item) => item.id === 'chat.selection-approval-text');
-    if (result) expect(result.page).toBe('chat');
+    expect(result?.page).toBe('chat');
     expect(chatSettingsTabForSearchTarget('chat.selection-approval-text')).toBe('messages');
     useChatSettingsTabStore.setState({ tab: 'messages' });
     useUIStore.setState({ selectionApprovalText: 'Existing feedback' });

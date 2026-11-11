@@ -1,6 +1,8 @@
-import type { Part } from '@openchamber/agent-contract';
+import type { Part, ToolResultPart } from '@openchamber/agent-contract';
 import { fenceUiBlocks } from '../../uiBlocks/taggedBlocks';
 import type { ChatMessageEntry, TurnRecord } from './types';
+import { isShownInPlace } from '../../message/parts/pageRenderView';
+import { toToolView } from '../../message/parts/toolView';
 
 /** A queued user message alone does not retire the previous turn. */
 export function getTurnsWithLaterAssistant(turns: readonly TurnRecord[]): Set<string> {
@@ -49,14 +51,38 @@ const UI_BLOCK_FENCE = /^ {0,3}(`{3,}|~{3,})openui-lang[ \t]*$/m;
  */
 export function getShownPages(messages: readonly ChatMessageEntry[], finalMessage?: ChatMessageEntry): ShownPart[] {
     const shown: ShownPart[] = [];
+    const results = toolResultsByCall(messages);
     for (const message of messages) {
         for (const part of message.parts) {
             if (part.type === 'tool_call') {
-                if (part.status === 'pending_approval' || part.status === 'approved' || part.status === 'running') shown.push(part);
+                const view = toToolView(part, results.get(part.toolCallId), {
+                    sessionID: message.sessionId, messageID: message.messageId,
+                });
+                if (isShownInPlace(view)) shown.push(part);
             } else if (part.type === 'text' && message !== finalMessage && UI_BLOCK_FENCE.test(fenceUiBlocks(part.content))) {
                 shown.push(part);
             }
         }
     }
     return shown;
+}
+
+/**
+ * Every tool result a turn's assistant messages carry, by call id. A shown
+ * call draws the result the transcript glued to it, so a card that reads an
+ * answer sees the same output the tool row does.
+ */
+export function toolResultsByCall(messages: readonly ChatMessageEntry[]): Map<string, ToolResultPart> {
+    const results = new Map<string, ToolResultPart>();
+    for (const message of messages) {
+        for (const part of message.parts) {
+            if (part.type === 'tool_result') results.set(part.toolCallId, part);
+        }
+    }
+    return results;
+}
+
+/** The message a shown part belongs to, so a card can name its session and message. */
+export function messageOwningPart(messages: readonly ChatMessageEntry[], partId: string): ChatMessageEntry | undefined {
+    return messages.find((message) => message.parts.some((part) => part.partId === partId));
 }

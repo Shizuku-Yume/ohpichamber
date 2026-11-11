@@ -134,6 +134,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Routine actions run on their own; anything risky or hard to undo waits for you. Jev decides, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Every approval request is accepted without asking.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Needs Jev, which needs a classification provider: the free OpenCode Zen promotion, a Zen API key in Settings → Providers, or a TypeSafe key.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Agent permissions',
   },
   nl: {
     'settings.classification.status.enterprise': 'Deze server draait in enterprise-modus. Jev blijft uit, zodat gesprekken alleen de providers in uw Agent Service-configuratie bereiken. Functies die Jev nodig hebben, blijven verborgen.',
@@ -269,6 +270,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Routinehandelingen draaien vanzelf; alles wat riskant of moeilijk ongedaan te maken is, wacht op u. Jev beslist, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Elk goedkeuringsverzoek wordt zonder vragen geaccepteerd.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Vereist Jev, en Jev vereist een classificatieprovider: de gratis OpenCode Zen-aanbieding, een Zen API-sleutel bij de providers of een TypeSafe-sleutel.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Agenttoestemmingen',
   },
   uk: {
     'chat.modelControls.autoModel': 'Авто',
@@ -404,6 +406,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Звичайні дії виконуються самі; усе ризиковане чи важко відворотне чекає на вас. Вирішує Jev через {provider}.',
     'settings.sessions.permissions.explain.auto': 'Кожен запит на схвалення приймається без запитання.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Потрібен Jev, а йому потрібен постачальник класифікації: безкоштовна акція OpenCode Zen, API-ключ Zen у розділі Постачальники або ключ TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Дозволи агента',
   },
   de: {
     'chat.modelControls.autoModel': 'Auto',
@@ -539,6 +542,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Routineaktionen laufen von selbst; alles Riskante oder schwer Rückgängigzumachende wartet auf Sie. Jev entscheidet, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Jede Berechtigungsanfrage wird ohne Nachfrage akzeptiert.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Benötigt Jev, und Jev braucht einen Klassifizierungsanbieter: die kostenlose OpenCode Zen-Aktion, einen Zen-API-Schlüssel unter Einstellungen → Anbieter oder einen TypeSafe-Schlüssel.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Agent-Berechtigungen',
   },
   fr: {
     'chat.modelControls.autoModel': 'Auto',
@@ -674,6 +678,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Les actions courantes s’exécutent seules ; tout ce qui est risqué ou difficile à annuler vous attend. Jev fait le tri, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Chaque demande d’autorisation est acceptée sans confirmation.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Nécessite Jev, qui a besoin d’un fournisseur de classification : la promotion gratuite OpenCode Zen, une clé API Zen dans Réglages → Fournisseurs ou une clé TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Permissions de l’agent',
   },
   es: {
     'chat.modelControls.autoModel': 'Auto',
@@ -809,6 +814,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Las acciones rutinarias se ejecutan solas; lo arriesgado o difícil de deshacer te espera. Decide Jev, a través de {provider}.',
     'settings.sessions.permissions.explain.auto': 'Cada solicitud de permiso se acepta sin preguntar.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Necesita Jev, que necesita un proveedor de clasificación: la promoción gratuita de OpenCode Zen, una clave API de Zen en Ajustes → Proveedores o una clave de TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Permisos del agente',
   },
   ja: {
     'chat.modelControls.autoModel': '自動',
@@ -944,6 +950,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': '通常の操作はそのまま実行され、危険な操作や取り消しにくい操作はあなたを待ちます。{provider} 経由の Jev が判断します。',
     'settings.sessions.permissions.explain.auto': 'すべての承認リクエストは、確認なしで受け入れられます。',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Jev が必要で、Jev には分類プロバイダーが必要です: 無料の OpenCode Zen プロモーション、設定 → プロバイダーの Zen API キー、または TypeSafe キー。',
+    'settings.sessions.permissions.agentPermissionsLink': 'エージェントの権限',
   },
   ko: {
     'chat.modelControls.autoModel': '자동',
@@ -1079,6 +1086,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': '일상적인 작업은 알아서 실행되고, 위험하거나 되돌리기 어려운 작업은 기다립니다. {provider}를 통해 Jev가 판단합니다.',
     'settings.sessions.permissions.explain.auto': '모든 승인 요청이 묻지 않고 수락됩니다.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Jev가 필요하며, Jev에는 분류 제공자가 필요합니다: 무료 OpenCode Zen 프로모션, 설정 → 제공자에서의 Zen API 키, 또는 TypeSafe 키.',
+    'settings.sessions.permissions.agentPermissionsLink': '에이전트 권한',
   },
   pl: {
     'chat.modelControls.autoModel': 'Auto',
@@ -1214,6 +1222,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Rutynowe działania wykonują się same; wszystko ryzykowne lub trudne do cofnięcia czeka na Ciebie. Rozstrzyga Jev przez {provider}.',
     'settings.sessions.permissions.explain.auto': 'Każde żądanie zatwierdzenia jest akceptowane bez pytania.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Wymaga Jev, a Jev potrzebuje dostawcy klasyfikacji: darmowej promocji OpenCode Zen, klucza API Zen w Ustawienia → Dostawcy lub klucza TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Uprawnienia agenta',
   },
   'pt-BR': {
     'chat.modelControls.autoModel': 'Auto',
@@ -1349,6 +1358,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Ações rotineiras rodam sozinhas; tudo que é arriscado ou difícil de desfazer espera por você. Quem decide é o Jev, via {provider}.',
     'settings.sessions.permissions.explain.auto': 'Cada solicitação de permissão é aceita sem perguntar.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Precisa do Jev, que precisa de um provedor de classificação: a promoção gratuita do OpenCode Zen, uma chave de API do Zen em Configurações → Provedores, ou uma chave da TypeSafe.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Permissões do agente',
   },
   tr: {
     'chat.modelControls.autoModel': 'Otomatik',
@@ -1484,6 +1494,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': 'Rutin eylemler kendiliğinden çalışır; riskli veya geri alınması zor olan her şey sizi bekler. {provider} üzerinden Jev karar verir.',
     'settings.sessions.permissions.explain.auto': 'Her onay isteği sormadan kabul edilir.',
     'settings.sessions.permissions.explain.safetyUnavailable': 'Jev gerekir; Jev de bir sınıflandırma sağlayıcısına ihtiyaç duyar: ücretsiz OpenCode Zen kampanyası, Ayarlar → Sağlayıcılar bölümünde bir Zen API anahtarı veya bir TypeSafe anahtarı.',
+    'settings.sessions.permissions.agentPermissionsLink': 'Ajan izinleri',
   },
   'zh-CN': {
     'chat.modelControls.autoModel': '自动',
@@ -1619,6 +1630,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': '常规操作会自动运行；任何有风险或难以撤销的操作都会等你决定。由 Jev 通过 {provider} 判断。',
     'settings.sessions.permissions.explain.auto': '每个批准请求都会直接接受，不再询问。',
     'settings.sessions.permissions.explain.safetyUnavailable': '需要 Jev，而 Jev 需要一个分类提供方：免费的 OpenCode Zen 促销、设置 → 提供方中的 Zen API 密钥，或 TypeSafe 密钥。',
+    'settings.sessions.permissions.agentPermissionsLink': '智能体权限',
   },
   'zh-TW': {
     'chat.modelControls.autoModel': '自動',
@@ -1754,6 +1766,7 @@ export const routingI18n = {
     'settings.sessions.permissions.explain.safetyVia': '一般操作會自動執行；任何有風險或難以復原的操作都會等你決定。由 Jev 透過 {provider} 判斷。',
     'settings.sessions.permissions.explain.auto': '每個核准要求都會直接接受，不再詢問。',
     'settings.sessions.permissions.explain.safetyUnavailable': '需要 Jev，而 Jev 需要一個分類提供者：免費的 OpenCode Zen 促銷、設定 → 供應商中的 Zen API 金鑰，或 TypeSafe 金鑰.',
+    'settings.sessions.permissions.agentPermissionsLink': '代理權限',
   },
   ar: {
     'chat.modelControls.autoModel': 'تلقائي',

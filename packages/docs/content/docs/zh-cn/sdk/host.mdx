@@ -153,22 +153,6 @@ host.onSessionLifecycle((event) => {
 
 `host.storage.get(key)`、`set(key, value)`、`delete(key)`、`keys()` 无需额外权限即可在连接的服务器保存扩展自己的 JSON。缺少的键返回 `undefined`，保存的 null 仍为 null。键长1到128字符，每个值最多64 KiB UTF-8，整个空间最多2 MiB及2,000个键。项目专属数据可将项目 ID 加入键名。写入串行且原子化，失败保留已有数据。卸载扩展会删除存储。
 
-## 后台 shell
-
-使用 `shells` 能力，观察在后台运行的 shell 命令，范围可限制在某个会话及其 subagent、已注册的项目或所有会话。OpenChamber 从其本地存储做出响应；不会发起网络读取。
-
-| 调用 | 作用 |
-| --- | --- |
-| `onRunningShells(scope, listener)` | 订阅指定范围内的 shell 命令：`{ kind: 'session', sessionId }` 涵盖该会话及其 subagent，`{ kind: 'project', projectId }` 涵盖已注册项目，`{ kind: 'global' }` 涵盖所有会话。按从早到晚的顺序获取运行中的命令（每条都带有 `background` 标志）以及已结束的命令。返回退订函数。 |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | 运行中或已结束命令的一页输出。没有 `cursor` 时，从末尾向前 `tailBytes`（最多 65536）处开始。返回 `{ output, cursor, skipped }`。 |
-| `stopShell(shellId)` | 先向 agent 发送停止通知，然后移除该命令。 |
-
-快照格式为 `{ kind: "shells", scope, shells, ended }`，其中 `scope` 与订阅的范围对应。每个运行中的 shell 为 `{ id, sessionID, command, startedAt, background }`，最多 200 个，按时间从早到晚排列。对于轮次无需等待完成的任务，`background` 为 `true`。
-
-`ended` 列出 OpenChamber 观测到已结束的命令，按结束时间从早到晚排列，最多保留 200 个（保留最新的）。如果命令退出时带有退出码，每项会包含 `status`、`endedAt` 和 `exit`。状态为 `exited`、`timeout`、被信号 `killed`、被用户 `stopped`，或在重新连接期间结束时的 `unknown`。OpenChamber 仅在内存中保留此列表。应用重新加载后列表为空，因此请把面板展示所需的内容保存在扩展存储中。
-
-Host 会为每个目录保留其最近 25 个已结束命令的输出。被停止的命令会立即丢失其输出。读取 OpenChamber 从未见过的 shell，或 host 已不再保留的输出，会返回 `NOT_FOUND`。停止未在运行的 shell 也是如此。未获批准的 `shells` 能力会返回 `NOT_GRANTED`。
-
 ## request
 
 ```ts
@@ -247,7 +231,11 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
-`sessions.start`、`sessions.send`、`sessions.retry` 和 `sessions.status` 需要 `contributes.sessionControl`，用户会把它作为单独一行批准。`sessions.lastReply` 需要 `sessionControl: { content: true }`。`setInstructions` 需要 `contributes.instructions`，用于补充智能体读取的内容，范围是一个文件夹，或者传 `null` 时覆盖所有位置。
+`sessions.start`、`sessions.send`、`sessions.retry`、`sessions.status` 和 `sessions.stop` 需要 `contributes.sessionControl`，用户会把它作为单独一行批准。`sessions.lastReply` 需要 `sessionControl: { content: true }`。通过 `sessions.send` 发送的消息会关闭智能体在该会话中等待的表单或页面，效果和在聊天中输入的消息一样。
+
+要把智能体的请求转到别处，比如聊天应用，加上 `answers: true`。用户会把它作为又一行批准，之后服务可以在任何会话中代用户回答：对 `permission-asked` 事件调用 `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })`（或带上智能体会读取的 `message` 的 `'deny'`），对 `event.question.kind` 为 `form` 的 `question-asked` 事件调用 `sessions.answerForm(sessionId, formId, values)`。事件内容列出表单的字段及其 `key` 和选项。用 `null` 代替值会直接关闭表单。一次允许只对这一个请求有效。
+
+`setInstructions` 需要 `contributes.instructions`，用于补充智能体读取的内容，范围是一个文件夹，或者传 `null` 时覆盖所有位置。
 
 `emit` 通过 `host.onServiceEvent` 到达你打开的框架，因此面板不必再轮询。事件不会重放，所以之后才打开的框架要先读取当前状态。`readSettings` 把集成的设置交给服务，包括 `secret` 字段，`needsConfiguration` 则在扩展的卡片上显示一条消息。
 
@@ -382,14 +370,14 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 
 ## 用量提供商
 
-服务可以在内置提供商旁边报告用量：声明 `provides: ["quota"]`，并在 `contributes.quota.providers` 中列出它需要凭据的 model providers。OpenChamber 把这个提供商命名为 `ext-<panel.id>`，用扩展的名称和图标绘制它的卡片，并像询问内置提供商那样询问它。
+服务可以在内置提供商旁边报告用量：声明 `provides: ["quota"]`，并在 `contributes.quota.providers` 中列出它需要凭据的 OpenCode 提供商。OpenChamber 把这个提供商命名为 `ext-<panel.id>`，用扩展的名称和图标绘制它的卡片，并像询问内置提供商那样询问它。
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-批准对话框会列出这些提供商，更改列表的版本会再次询问。每次刷新时，OpenChamber 向 `POST /quota` 发送一次 `usage.read` 调用，`input.credentials` 中带有 Host 为每个已列出且持有凭据的提供商保存的凭据（API 密钥，或浏览器登录的令牌），此外不带存储中的任何内容。Host 未保存凭据的已列出提供商显示为未配置，服务不会被调用；允许空列表，用于密钥保存在扩展自身设置中的提供商。
+批准对话框会列出这些提供商，更改列表的版本会再次询问。每次刷新时，OpenChamber 向 `POST /quota` 发送一次 `usage.read` 调用，`input.credentials` 中带有 OpenCode 为每个已列出且持有凭据的提供商保存的凭据（API 密钥，或浏览器登录的令牌），此外不带存储中的任何内容。OpenCode 未保存凭据的已列出提供商显示为未配置，服务不会被调用；允许空列表，用于密钥保存在扩展自身设置中的提供商。
 
 用 `readQuotaProviderRequest` 读取请求体，并以 `{ ok: true, data }` 回答内置提供商计算出的结果：`ok`、`configured`、`error`、`planLabel`，以及按窗口名称键控的 `usage.windows`，每个窗口带有 `usedPercent`、`windowSeconds`、`resetAt`（纪元毫秒）和可选的 `valueLabel` 或 `value`，另有按模型划分窗口的 `usage.models`。剩余份额、重置倒计时和格式化字符串由 OpenChamber 推导，因此卡片与内置提供商的卡片一致。
 

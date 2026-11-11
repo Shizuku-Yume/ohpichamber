@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Zen 모델',
   'quota.value.requests': '요청: {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "거부",
   ...workerRunsI18n.ko,
 
+  'chat.backgroundWork.aria': '백그라운드 작업',
+  'chat.backgroundWork.count': '백그라운드: {count}',
+  'chat.backgroundImages.generating': '이미지 생성 중',
+  'sessions.sidebar.session.status.backgroundImage': '백그라운드에서 이미지 생성 중',
+  'gitView.empty.repositoryUnreadable': 'Git이 이 폴더를 읽지 못했습니다',
+  'gitView.empty.repositoryUnreadableDescription': 'Git이 보낸 메시지입니다. 문제를 해결한 뒤 다시 시도하세요.',
+  'gitView.empty.repositoryUnreadableRetry': '다시 시도',
+  'contextSidebar.section.sessionTotals': '세션 합계',
+  'directoryExplorerDialog.browse.linkTarget': '{path}(으)로 연결되는 링크',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version}에는 OpenCode {required}이(가) 필요합니다. 이 서버는 {current}입니다. 먼저 OpenCode를 업데이트하세요.',
+  'chat.workStatus.breakdown.planCountSingle': '계획 {count}개',
+  'chat.workStatus.breakdown.planCountPlural': '계획 {count}개',
+  'chat.workStatus.linkedPlans.open': '{title} 계획 열기',
+  ...aboutReleaseNotesI18n.ko,
+  ...updateCheckErrorsI18n.ko,
+  ...sessionWarmingI18n.ko,
+  ...usageToolI18n.ko,
+  ...openchamberToolsLayoutI18n.ko,
+  ...openchamberToolOutputI18n.ko,
+  ...tooltipsDiffI18n['ko'],
+  ...tooltipsFilesI18n['ko'],
+  ...tooltipsGitI18n['ko'],
+  ...tooltipsTrackerI18n['ko'],
+  ...tooltipsWalkthroughI18n['ko'],
+  ...tooltipsTerminalBrowserI18n['ko'],
+  ...tooltipsWorkspaceI18n['ko'],
+  ...tooltipsPanelI18n['ko'],
+  ...tooltipsChatI18n['ko'],
   ...m4LaneDI18n.ko,
 };

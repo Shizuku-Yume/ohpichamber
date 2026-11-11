@@ -7,7 +7,7 @@ description: Installeer extensies, keur hun rechten goed, verbind accounts en ve
 
 Voeg via **Instellingen → Extensies** panelen van andere makers toe aan OpenChamber. Een extensie is een kleine pagina in de rechterbalk, naast de ingebouwde panelen. Ze kan gegevens uit een dienst tonen, een taak aan de chat koppelen en, met uw toestemming, sessies starten, prompts versturen of bestanden lezen.
 
-Extensies werken op OpenChamber web en desktop. Het zijn andere uitbreidingen dan the Host-plugins.
+Extensies werken op OpenChamber web en desktop. Het zijn andere uitbreidingen dan Host-plugins.
 
 ## Een extensie installeren
 
@@ -50,6 +50,7 @@ Een paneel tonen en lezen welk project en welke sessie geopend zijn, vereist gee
 - **Lezen wat de agent op de achtergrond zegt:** het eindantwoord van elke beurt, de vragen die de agent stelt en waarvoor hij toestemming vraagt, in elk project, verstuurd naar de lokale service van de extensie. Sta dit alleen toe als u vertrouwt waar de extensie het naartoe stuurt.
 - **Zelfstandig sessies starten en berichten sturen:** de lokale service doet dit zonder geopend venster. Dit verbruikt tokens en kan tools uitvoeren.
 - **Toevoegen aan wat agents lezen:** tekst in de instructies van uw sessies, en skills die aan elke agent worden aangeboden zolang de extensie aanstaat.
+- **Zijn links in chats herkennen:** ID's zoals `DEMO-12` en links naar de site van de extensie worden klikbaar in uw chatberichten. Het venster toont welke en zegt of een klik ze in de extensie opent of aan uw bericht koppelt. Links die OpenChamber al kent, zoals pull requests op GitHub en issues in Linear, werken zoals altijd.
 
 Een lokale service kan ook blijven draaien zolang OpenChamber draait, of volgens schema actief worden. Het toestemmingsvenster meldt dat onder **Een lokale service uitvoeren**, en ook wanneer wat u na `@` typt naar de service gaat. Een extensie kan eigen rijen aan het `@`-menu toevoegen en eigen blokken aan antwoorden van de agent. De extensie pauzeren haalt dit allemaal weg.
 
@@ -94,10 +95,11 @@ De OpenChamber SDK bevat een werkend voorbeeld, `examples/tracker-provider`, met
 
 ## Een extensie als verbruiksprovider
 
-Een extensie kan naast de ingebouwde providers een verbruiksprovider toevoegen: een provider die OpenChamber niet zelf uitleest, of een eigen provider. Haar toestemmingsdialoog heeft dan een regel die begint met **Rapporteert gebruik als een ingebouwde provider** en de the Host-providers noemt waarvan zij de aanmeldgegevens leest, zoals `openrouter`; een extensie die er geen noemt, zegt dat.
+Een extensie kan naast de ingebouwde providers een verbruiksprovider toevoegen: een provider die OpenChamber niet zelf uitleest, of een eigen provider. Haar toestemmingsdialoog heeft dan een regel die begint met **Rapporteert gebruik als een ingebouwde provider** en de OpenCode-providers noemt waarvan zij de aanmeldgegevens leest, zoals `openrouter`; een extensie die er geen noemt, zegt dat.
 
-Zodra u haar toestaat, staat haar kaart onder **Instellingen → Verbruik** achter de ingebouwde providers, met de naam en het pictogram van de extensie, en verschijnt zij net als elke ingebouwde provider in de limieten in de kopbalk, in de werkstatus, in de popover op de telefoon en in het systeemvak op de desktop wanneer u **Tonen in werkstatus** aanvinkt. Bij elke vernieuwing geeft OpenChamber de extensie de aanmeldgegevens die the Host voor elke genoemde provider bewaart, en verder niets; een versie die een andere provider noemt, vraagt opnieuw om uw toestemming. De extensie leest het verbruik zelf, en OpenChamber tekent het zoals bij een ingebouwde provider.
+Zodra u haar toestaat, staat haar kaart onder **Instellingen → Verbruik** achter de ingebouwde providers, met de naam en het pictogram van de extensie, en verschijnt zij net als elke ingebouwde provider in de limieten in de kopbalk, in de werkstatus, in de popover op de telefoon en in het systeemvak op de desktop wanneer u **Tonen in werkstatus** aanvinkt. Bij elke vernieuwing geeft OpenChamber de extensie de aanmeldgegevens die OpenCode voor elke genoemde provider bewaart, en verder niets; een versie die een andere provider noemt, vraagt opnieuw om uw toestemming. De extensie leest het verbruik zelf, en OpenChamber tekent het zoals bij een ingebouwde provider.
 
+Pauzeert u de extensie, dan verdwijnt de kaart tot u haar weer inschakelt, en uw verbruiksinstellingen ervoor blijven bewaard. Verwijdert u de extensie, dan verdwijnt de kaart voorgoed.
 
 De OpenChamber SDK bevat een werkend voorbeeld, `examples/quota-provider`, met een nep-verbruiks-API om ernaast te draaien. Zie [Een extensie bouwen](/nl/sdk/).
 

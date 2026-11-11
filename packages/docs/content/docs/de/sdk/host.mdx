@@ -153,22 +153,6 @@ Ohne `send` ersetzt `prompt` den Text im Chatfeld. Mit `send: true` sendet es di
 
 `host.storage.get(key)`, `set(key, value)`, `delete(key)` und `keys()` speichern eigenes JSON ohne weitere Berechtigung. Fehlende Schlüssel liefern `undefined`, gespeichertes null bleibt null. Schlüssel haben 1 bis 128 Zeichen, Werte höchstens 64 KiB UTF-8, der gesamte Speicher 2 MiB und 2.000 Schlüssel. Nutze Projekt-IDs im Schlüssel für projektspezifische Daten. Schreibvorgänge sind serialisiert und atomar; Fehler erhalten vorhandene Daten. Entfernen löscht den Speicher auf dem verbundenen Server.
 
-## Hintergrund-Shells
-
-Mit der Berechtigung `shells` beobachtest du die im Hintergrund laufenden Shell-Befehle, bezogen auf eine Session und ihre Sub-Agents, ein registriertes Projekt oder jede Session. OpenChamber antwortet aus seinem lokalen Speicher; es findet kein Netzwerkabruf statt.
-
-| Aufruf | Was er tut |
-| --- | --- |
-| `onRunningShells(scope, listener)` | abonniert die Shell-Befehle im Gültigkeitsbereich: `{ kind: 'session', sessionId }` deckt die Session und ihre Sub-Agents ab, `{ kind: 'project', projectId }` deckt ein registriertes Projekt ab und `{ kind: 'global' }` deckt jede Session ab. Du erhältst die laufenden Befehle in der Reihenfolge von alt nach neu, jeweils mit ihrem `background`-Flag, sowie die beendeten Befehle. Gibt eine Abmeldefunktion zurück. |
-| `readShellOutput(shellId, { cursor?, tailBytes? })` | eine Seite der Ausgabe eines laufenden oder beendeten Befehls. Ohne `cursor` beginnt sie `tailBytes` (bis zu 65536) vor dem Ende. Gibt `{ output, cursor, skipped }` zurück. |
-| `stopShell(shellId)` | sendet dem Agent zuerst den Stop-Hinweis und entfernt danach den Befehl. |
-
-Der Snapshot ist `{ kind: "shells", scope, shells, ended }`, wobei `scope` den Bereich des Abonnements widerspiegelt. Jede laufende Shell ist `{ id, sessionID, command, startedAt, background }`, maximal 200, von alt nach neu geordnet. `background` ist `true` für einen Job, auf den der Durchlauf nicht wartet.
-
-`ended` listet die Befehle auf, deren Ende OpenChamber beobachtet hat, nach Beendigungszeit von alt nach neu geordnet, maximal 200, wobei die neuesten behalten werden. Jeder Eintrag enthält zusätzlich `status`, `endedAt` und `exit`, wenn der Befehl mit einem Exit-Code beendet wurde. Der Status ist `exited`, `timeout`, `killed` durch ein Signal, `stopped` durch einen Nutzer oder `unknown`, wenn das Beenden während einer Wiederverbindung stattfand. OpenChamber behält diese Liste nur im Arbeitsspeicher. Nach einem Neuladen der App ist sie leer; speichere daher, was dein Panel anzeigt, im Erweiterungsspeicher.
-
-Der Host behält die Ausgabe eines beendeten Befehls für die jeweils letzten 25 beendeten Befehle pro Verzeichnis. Ein gestoppter Befehl verliert seine Ausgabe sofort. Das Auslesen einer Shell, die OpenChamber nie gesehen hat, oder einer Ausgabe, die der Host nicht mehr hat, liefert `NOT_FOUND`. Ebenso das Stoppen einer Shell, die nicht läuft. Eine nicht bestätigte `shells`-Berechtigung liefert `NOT_GRANTED`.
-
 ## request
 
 ```ts
@@ -247,7 +231,11 @@ await host.setInstructions(directory, 'Deploys run through the release branch.')
 await host.emit('deploy-finished', { id: 42 });
 ```
 
-`sessions.start`, `sessions.send`, `sessions.retry` und `sessions.status` brauchen `contributes.sessionControl`, das der Nutzer als eigene Zeile freigibt. `sessions.lastReply` braucht `sessionControl: { content: true }`. `setInstructions` braucht `contributes.instructions` und ergänzt, was Agenten lesen, in einem Ordner oder, mit `null`, überall.
+`sessions.start`, `sessions.send`, `sessions.retry`, `sessions.status` und `sessions.stop` brauchen `contributes.sessionControl`, das der Nutzer als eigene Zeile freigibt. `sessions.lastReply` braucht `sessionControl: { content: true }`. Eine Nachricht aus `sessions.send` schließt ein Formular oder eine Seite, auf die der Agent in dieser Sitzung wartet, genau wie eine im Chat getippte Nachricht.
+
+Um die Anfragen des Agenten woandershin zu bringen, etwa in eine Chat-App, füge `answers: true` hinzu. Der Nutzer gibt das als weitere Zeile frei, und der Dienst kann dann in jeder Sitzung im Namen des Nutzers antworten: `sessions.answerPermission(sessionId, requestId, { decision: 'allow' })` (oder `'deny'` mit einer `message`, die der Agent liest) auf ein `permission-asked`-Ereignis und `sessions.answerForm(sessionId, formId, values)` auf ein `question-asked`-Ereignis, dessen `event.question.kind` `form` ist. Der Inhalt des Ereignisses listet die Felder des Formulars mit ihrem `key` und den Auswahlmöglichkeiten. `null` statt Werten verwirft das Formular. Eine Freigabe gilt nur für diese eine Anfrage.
+
+`setInstructions` braucht `contributes.instructions` und ergänzt, was Agenten lesen, in einem Ordner oder, mit `null`, überall.
 
 `emit` erreicht deine offenen Frames über `host.onServiceEvent`, sodass ein Panel nicht mehr pollen muss. Nichts wird nachgeliefert, also liest ein später geöffneter Frame zuerst den aktuellen Zustand. `readSettings` gibt dem Dienst die Einstellungen der Integration einschließlich der `secret`-Felder, und `needsConfiguration` zeigt eine Meldung auf der Karte der Erweiterung.
 
@@ -382,14 +370,14 @@ Schaltet der Nutzer Sitzungskommentare ein, ruft OpenChamber `comments.create` m
 
 ## Nutzungsanbieter
 
-Ein Dienst kann die Nutzung neben den eingebauten Anbietern melden: Deklariere `provides: ["quota"]` und zähle in `contributes.quota.providers` die model providers auf, deren Zugangsdaten er braucht. OpenChamber nennt den Anbieter `ext-<panel.id>`, zeichnet seine Karte mit Name und Symbol der Erweiterung und fragt ihn so wie einen eingebauten Anbieter.
+Ein Dienst kann die Nutzung neben den eingebauten Anbietern melden: Deklariere `provides: ["quota"]` und zähle in `contributes.quota.providers` die OpenCode-Anbieter auf, deren Zugangsdaten er braucht. OpenChamber nennt den Anbieter `ext-<panel.id>`, zeichnet seine Karte mit Name und Symbol der Erweiterung und fragt ihn so wie einen eingebauten Anbieter.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-Der Freigabedialog zählt diese Anbieter auf, und eine Version, die die Liste ändert, fragt erneut. Bei jeder Aktualisierung sendet OpenChamber einen Aufruf, `usage.read`, an `POST /quota`; `input.credentials` enthält die Zugangsdaten, die Host für jeden aufgezählten Anbieter hält, für den es welche hat (einen API-Schlüssel oder die Tokens einer Browser-Anmeldung), und sonst nichts aus dem Speicher. Ein aufgezählter Anbieter ohne Zugangsdaten in Host wird als nicht eingerichtet angezeigt, und der Dienst wird nicht aufgerufen; eine leere Liste ist erlaubt, für einen Anbieter, dessen Schlüssel in den eigenen Einstellungen der Erweiterung liegt.
+Der Freigabedialog zählt diese Anbieter auf, und eine Version, die die Liste ändert, fragt erneut. Bei jeder Aktualisierung sendet OpenChamber einen Aufruf, `usage.read`, an `POST /quota`; `input.credentials` enthält die Zugangsdaten, die OpenCode für jeden aufgezählten Anbieter hält, für den es welche hat (einen API-Schlüssel oder die Tokens einer Browser-Anmeldung), und sonst nichts aus dem Speicher. Ein aufgezählter Anbieter ohne Zugangsdaten in OpenCode wird als nicht eingerichtet angezeigt, und der Dienst wird nicht aufgerufen; eine leere Liste ist erlaubt, für einen Anbieter, dessen Schlüssel in den eigenen Einstellungen der Erweiterung liegt.
 
 Lies den Body mit `readQuotaProviderRequest` und antworte mit `{ ok: true, data }` und dem Ergebnis, das ein eingebauter Anbieter berechnet: `ok`, `configured`, `error`, `planLabel` und `usage.windows` nach Fensternamen, jedes mit `usedPercent`, `windowSeconds`, `resetAt` (Epoche in Millisekunden) und optional `valueLabel` oder `value`, dazu `usage.models` für Fenster je Modell. OpenChamber leitet den verbleibenden Anteil, den Countdown bis zum Reset und die formatierten Zeichenketten ab, sodass die Karte der eines eingebauten Anbieters entspricht.
 

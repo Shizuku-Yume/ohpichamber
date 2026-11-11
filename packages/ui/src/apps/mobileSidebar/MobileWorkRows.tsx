@@ -15,6 +15,7 @@ import { refTintStyle } from '@/lib/source-control/prVisualState';
 import { cn } from '@/lib/utils';
 import { useGitBranchLabel } from '@/stores/useGitStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { MobileProjectIcon } from '../MobileProjectIcon';
 import { MobileRunProviderLogos } from '../MobileRunProviderLogos';
 import { MobileSessionRenameForm } from '../MobileSessionRenameForm';
@@ -42,7 +43,7 @@ const MobileSlotMark: React.FC<{ slotLeft: number; children: React.ReactNode }> 
  * A worktree work in the phone's list: one row for the worktree and every
  * session in it, as on the desktop. A tap opens what was last worked on
  * there; the chevron opens its sessions. Swiping reveals Done or Track,
- * Rename, Archive worktree and Delete.
+ * Rename, Pin or Unpin, Archive worktree and Delete.
  */
 export const MobileWorktreeRow: React.FC<{
   row: Extract<SessionSidebarRow, { kind: 'group-header' }>;
@@ -53,7 +54,7 @@ export const MobileWorktreeRow: React.FC<{
   const actions = useMobileSidebarActions();
   const { revealed, renaming } = useMobileRowSwipe(row.key);
   const work = useWorktreeWork({ group: row.group, projectId: row.projectId, collapsed: row.collapsed, onNavigate: actions.close });
-  const { worktree, project, refs, label, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
+  const { worktree, project, refs, label, secondName, branch, title, inWork, selected, finishing, worktreeRemoving, activityState } = work;
   const mixedProject = useMixedRowProject(row.projectId, row.mixed && row.detailed);
   const expandable = !row.empty;
   const expanded = row.forceExpanded || !row.collapsed;
@@ -71,8 +72,9 @@ export const MobileWorktreeRow: React.FC<{
     work.open();
   };
   const stopRename = () => useMobileSidebarRowsStore.getState().stopRename();
+  // The live state sits on the right before the time; the slot says what the row is.
   const stateMark = worktreeRemoving || finishing
-    ? <Spinner className="size-3.5" />
+    ? <Spinner className="size-3" />
     : activityState ? <CollapsedActivityIndicator state={activityState} /> : null;
   const branchMark = (
     <Icon
@@ -92,10 +94,9 @@ export const MobileWorktreeRow: React.FC<{
     : refs.primaryIssue ? { icon: refs.primaryIssue.icon, color: refs.primaryIssue.color, text: refs.primaryIssue.label } : null;
   const ref = refMark ? (
     <span
-      className={cn('inline-flex shrink-0 items-center gap-0.5 typography-micro', refMark.color ? 'oc-ref-tint' : 'text-muted-foreground')}
-      style={refMark.color ? refTintStyle(refMark.color) : undefined}
+      className="inline-flex shrink-0 items-center gap-0.5 typography-micro text-muted-foreground"
     >
-      <Icon name={refMark.icon} className="size-3" />
+      <Icon name={refMark.icon} className={cn('size-3', refMark.color && 'oc-ref-tint')} style={refMark.color ? refTintStyle(refMark.color) : undefined} />
       {row.detailed && refMark.text ? <span className="leading-none tabular-nums">{refMark.text}</span> : null}
     </span>
   ) : null;
@@ -109,7 +110,7 @@ export const MobileWorktreeRow: React.FC<{
           ? MOBILE_ACTIVE_TITLE_CLASS
           : activityState === 'unread' || activityState === 'permission' || activityState === 'form'
             ? 'font-semibold text-foreground'
-            : activityState === 'active' ? 'text-foreground' : 'text-muted-foreground',
+            : activityState === 'active' ? 'text-foreground' : 'oc-title-rest',
       )}
     >
       {label}
@@ -134,6 +135,12 @@ export const MobileWorktreeRow: React.FC<{
     </span>
   ) : null;
   const directoryIndicator = row.group.directory ? <DirectoryActionIndicator directory={row.group.directory} /> : null;
+  // With the Pinned section shown a pinned work is listed there, whose header
+  // already says so; otherwise the row carries the mark, as a session's does.
+  const pinnedSectionShown = useSessionDisplayStore((state) => state.showPinnedSection);
+  const pinMark = work.pinned && !pinnedSectionShown
+    ? <Icon name="pushpin" className="size-3 shrink-0 text-muted-foreground" aria-label={t('sessions.sidebar.session.status.pinned')} />
+    : null;
 
   let content: React.ReactNode;
   if (row.detailed) {
@@ -145,11 +152,11 @@ export const MobileWorktreeRow: React.FC<{
         chevron={toggle ? <MobileRowChevron expanded={expanded} kind="work" label={label} onToggle={toggle} /> : null}
         firstLine={renaming
           ? renameForm(0, 'h-[1lh] pe-0 typography-ui-label [&_button]:size-6 [&_button>svg]:size-3.5')
-          : <>{titleText}{missing}{directoryIndicator}{stateMark}{duration}</>}
+          : <>{titleText}{missing}{pinMark}{directoryIndicator}{stateMark}{duration}</>}
         secondLine={<>
           {mixedProject ? <MobileProjectIcon project={mixedProject} size="xs" /> : null}
           {branchMark}
-          {branch && branch !== label ? <span className="block min-w-0 truncate typography-micro">{branch}</span> : null}
+          {secondName ? <span dir="auto" className="block min-w-0 truncate typography-micro">{secondName}</span> : null}
           <span className="ms-auto flex shrink-0 items-center">{ref}</span>
         </>}
       />
@@ -158,7 +165,7 @@ export const MobileWorktreeRow: React.FC<{
     content = <>
       {toggle
         ? <MobileSlotChevron slotLeft={geometry.slotLeft(row.depth)}><MobileRowChevron expanded={expanded} kind="work" label={label} onToggle={toggle} /></MobileSlotChevron>
-        : <MobileSlotMark slotLeft={geometry.slotLeft(row.depth)}>{stateMark ?? branchMark}</MobileSlotMark>}
+        : <MobileSlotMark slotLeft={geometry.slotLeft(row.depth)}>{branchMark}</MobileSlotMark>}
       {renaming ? renameForm(geometry.textLeft(row.depth)) : (
         <button
           type="button"
@@ -167,18 +174,22 @@ export const MobileWorktreeRow: React.FC<{
           aria-label={t('sessions.sidebar.work.openAria', { label })}
           onClick={select}
         >
+          {/* The desktop work row's order. */}
           {titleText}
           {missing}
+          {pinMark}
           {ref}
           {directoryIndicator}
-          {toggle ? stateMark : null}
+          {stateMark}
           {duration}
         </button>
       )}
     </>;
   }
 
-  const slots = (work.workAction ? 1 : 0) + 1 + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
+  // The fork's worktree model offers no pin write (`useWorktreeWork` reports
+  // `canPin` false), so the row has no pin action to swipe.
+  const slots = (work.workAction ? 1 : 0) + (work.canRename ? 1 : 0) + (work.canArchive ? 1 : 0) + (worktree && !worktreeRemoving ? 1 : 0);
   return (
     <MobileSwipeActionsRow
       actionsWidth={slots * ROW_ACTION_SLOT_WIDTH}
@@ -197,12 +208,14 @@ export const MobileWorktreeRow: React.FC<{
             onClick={after(work.toggleWork)}
           />
         ) : null}
-        <MobileSwipeAction
-          icon="edit"
-          label={t('sessions.sidebar.work.menu.rename')}
-          revealed={revealed}
-          onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}
-        />
+        {work.canRename ? (
+          <MobileSwipeAction
+            icon="edit"
+            label={t('sessions.sidebar.work.menu.rename')}
+            revealed={revealed}
+            onClick={() => useMobileSidebarRowsStore.getState().startRename(row.key)}
+          />
+        ) : null}
         {work.canArchive ? (
           <MobileSwipeAction
             icon="archive"
@@ -268,7 +281,7 @@ export const MobileRunRow: React.FC<{
   const runMark = <ArrowsMerge className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />;
   const titleText = (
     // Muted like an idle session title; the run's state shows in its mark.
-    <span dir="auto" className={cn('block min-w-0 flex-1 truncate oc-ui-start-align typography-ui-label', work.isActive ? MOBILE_ACTIVE_TITLE_CLASS : 'text-muted-foreground')}>
+    <span dir="auto" className={cn('block min-w-0 flex-1 truncate oc-ui-start-align typography-ui-label', work.isActive ? MOBILE_ACTIVE_TITLE_CLASS : 'oc-title-rest')}>
       {run.title}
     </span>
   );
@@ -313,7 +326,7 @@ export const MobileRunRow: React.FC<{
     content = <>
       {toggle
         ? <MobileSlotChevron slotLeft={geometry.slotLeft(row.depth)}><MobileRowChevron expanded={expanded} kind="run" label={run.title} onToggle={toggle} /></MobileSlotChevron>
-        : <MobileSlotMark slotLeft={geometry.slotLeft(row.depth)}>{activity ?? runMark}</MobileSlotMark>}
+        : <MobileSlotMark slotLeft={geometry.slotLeft(row.depth)}>{runMark}</MobileSlotMark>}
       {renaming ? renameForm(geometry.textLeft(row.depth)) : (
         <button
           type="button"
@@ -324,7 +337,7 @@ export const MobileRunRow: React.FC<{
         >
           {titleText}
           <MobileRunProviderLogos providerIDs={run.providerIDs} />
-          {toggle ? activity : null}
+          {activity}
         </button>
       )}
     </>;
@@ -373,7 +386,6 @@ export const MobileDraftRow: React.FC<{
   const { revealed } = useMobileRowSwipe(row.key);
   const { isOpen, firstLine, attachmentCount, label, open, discard } = useSessionDraftRow(draft, actions.close);
   const mixedProject = useMixedRowProject(draft.projectId ?? null, row.detailed && row.mixed);
-  // Known once the directory's git status has been read; the line keeps its height without it.
   const branch = useGitBranchLabel(row.detailed ? draft.directory : null);
   const setRevealed = (next: boolean) => useMobileSidebarRowsStore.getState().setRevealed(row.key, next);
   const select = () => {
@@ -385,8 +397,9 @@ export const MobileDraftRow: React.FC<{
   };
   const pen = <Icon name="edit" className="size-3 shrink-0 text-muted-foreground" />;
   const attachment = firstLine && attachmentCount > 0 ? <Icon name="attachment-2" className="size-3 shrink-0 text-muted-foreground" /> : null;
+  const detailed = row.detailed && Boolean(mixedProject || branch || attachment);
   const titleText = (
-    <span dir="auto" className={cn('block min-w-0 flex-1 truncate oc-ui-start-align typography-ui-label italic', isOpen ? MOBILE_ACTIVE_TITLE_CLASS : 'text-muted-foreground')}>
+    <span dir="auto" className={cn('block min-w-0 flex-1 truncate oc-ui-start-align typography-ui-label italic', isOpen ? MOBILE_ACTIVE_TITLE_CLASS : 'oc-title-rest')}>
       {label}
     </span>
   );
@@ -412,7 +425,7 @@ export const MobileDraftRow: React.FC<{
         />
       )}
     >
-      {row.detailed ? (
+      {detailed ? (
         <MobileTwoLineLayout
           indent={geometry.detailedLeft(row.depth)}
           onSelect={select}

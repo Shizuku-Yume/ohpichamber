@@ -105,7 +105,6 @@ export const createGitCheckIgnoreTimeoutMs = () => {
 
 export const createFsSearchRuntime = ({ fsPromises, path, spawn, resolveGitBinaryForSpawn, workspaceSearch = false }) => {
   const gitCheckIgnoreTimeoutMs = createGitCheckIgnoreTimeoutMs();
-
   const readIgnoredPaths = async (directory, names, signal) => {
     if ((!workspaceSearch && names.length === 0) || signal?.aborted) return new Set();
     try {

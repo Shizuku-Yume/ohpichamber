@@ -10,13 +10,14 @@ import {
     planActivityTrim,
 } from '../lib/turns/activityRows';
 import type { ChatMessageEntry, TurnRecord } from '../lib/turns/types';
-import { getLiveFinalMessage, getShownPages } from '../lib/turns/liveActivity';
+import { getLiveFinalMessage, getShownPages, toolResultsByCall } from '../lib/turns/liveActivity';
 import { summarizeLiveActivity } from '../lib/turns/liveActivitySummary';
 import { LiveActivityCollapse } from './LiveActivityCollapse';
 import { LiveFinalActivityContext, LiveTurnHoistedPagesContext } from './liveActivityContext';
 import { TurnMessageWindow } from './TurnMessageWindow';
 import { useActivityRowGlide } from './useActivityRowGlide';
 import { TurnMessageWindowContext, openedFoldMessageWindow } from '../lib/turns/turnMessageWindow';
+import { ShownPartCard } from '../message/parts/ShownToolCard';
 import { dispatchRowExpand } from '../lib/scroll/timelineScrollIntent';
 
 const NO_MESSAGES: ChatMessageEntry[] = [];
@@ -181,11 +182,27 @@ export function TurnFold({ turn, hasLaterAssistant, expanded, onToggle, renderMe
     return <LiveTurnActivity turn={turn} hasLaterAssistant={hasLaterAssistant} expanded={expanded} onToggle={onToggle} renderMessage={renderMessage} />;
 }
 
-export function TurnPagesRow({ turn }: { turn: TurnRecord }) {
+/**
+ * The pages a turn showed, drawn outside the fold and above the answer: the
+ * `openchamber_render` page, the run a `workflow.run` call proposed, the images
+ * an `image.generate` call saved, the card a secret request asks on, and the
+ * text of an earlier step that carries a UI block.
+ */
+export function TurnPagesRow({ turn, sessionId }: { turn: TurnRecord; sessionId: string | undefined }) {
     const pages = React.useMemo(() => getShownPages(turn.assistantMessages), [turn.assistantMessages]);
-    return pages.length > 0 ? (
+    const results = React.useMemo(() => toolResultsByCall(turn.assistantMessages), [turn.assistantMessages]);
+    if (!sessionId || pages.length === 0) return null;
+    return (
         <div className="chat-message-column">
-            {pages.map((part) => <div key={part.partId}>{part.type}</div>)}
+            {pages.map((part) => (
+                <ShownPartCard
+                    key={part.partId}
+                    part={part}
+                    result={part.type === 'tool_call' ? results.get(part.toolCallId) : undefined}
+                    sessionId={sessionId}
+                    messageId={part.partId}
+                />
+            ))}
         </div>
-    ) : null;
+    );
 }

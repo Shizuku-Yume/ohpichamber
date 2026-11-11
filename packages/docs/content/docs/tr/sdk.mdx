@@ -49,6 +49,9 @@ Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https
   "openchamber": {
     "apiVersion": 1,
     "engines": { "openchamber": ">=3.0.0" },
+    "id": "acme-hello",
+    "name": "Hello",
+    "icon": "window",
     "contributes": {
       "panel": { "entry": "panel/index.html" },
       "attach": "dialog",
@@ -94,7 +97,7 @@ Panolar `host.storage` ile proje, worktree ve oturum listelerini ve canlı durum
 
 `contributes.integration` isteğe bağlıdır. Ayarlar → Entegrasyonlar sayfasına kullanıcının hesap bağladığı bir kart ekler. Bkz. [Hesaplar ve ağ](#hesaplar-ve-ağ).
 
-`contributes.service` isteğe bağlıdır. OpenChamber'ın eklentinin yanında başlattığı yerel bir süreç tanımlar; bir web sayfasının ulaşamadığı şeyler için, örneğin bir Docker soketi. Bu süreç kullanıcının tam erişimiyle ve sandbox olmadan çalışır, bu yüzden onay iletişim kutusu bunu uyarır; sayfa işi yapamadığında bir tane tanımlayın. Paket dosyası `GUEST_SERVICES.md` dosyasına bakın. `provides: ["browser"]` içeren bir hizmet ajanın tarayıcısının yerine de geçebilir: `browser.*` eylemlerini sunucuda yanıtlar, böylece ajanlar açık bir masaüstü uygulaması olmadan gezinir; kullanıcı bunu Ayarlar → OpenChamber Araçları'ndan seçer. Böyle bir hizmetin panele ihtiyacı yoktur. Bir hizmete kullanıcının oturumlarında olanlar da bildirilebilir: yanına `contributes.sessionEvents` tanımlayın, OpenChamber biten ya da başarısız olan her turu ve ajanın sorduğu her izni ya da soruyu, her projeden ve açık bir pencere olmadan hizmete gönderir. Bkz. [Oturum olayları](/sdk/host/#oturum-olayları). `provides: ["notifications"]` içeren bir hizmet ise kullanıcının bildirimlerini masaüstü ve telefonun yanında Slack'e, Matrix'e ya da kendi sunucunuza iletir; kullanıcı hesabı Ayarlar → Entegrasyonlar'da bağlar ve token OpenChamber'da kalır. Bkz. [Bildirim kanalları](/sdk/host/#bildirim-kanalları). `provides: ["tracker"]` olan bir servis, Linear'ın yanında bir iş öğesi izleyicisidir ve hesap kartı Uzantı hesapları altında durur; bkz. [İzleyiciler](/sdk/host/#i̇zleyiciler). `provides: ["quota"]` olan bir servis ise yerleşik sağlayıcıların yanında kullanımı bildirir ve bunun için Host'un manifestte listelenen sağlayıcılar için sakladığı kimlik bilgilerini okur; bkz. [Kullanım sağlayıcıları](/sdk/host/#kullanım-sağlayıcıları).
+`contributes.service` isteğe bağlıdır. OpenChamber'ın eklentinin yanında başlattığı yerel bir süreç tanımlar; bir web sayfasının ulaşamadığı şeyler için, örneğin bir Docker soketi. Bu süreç kullanıcının tam erişimiyle ve sandbox olmadan çalışır, bu yüzden onay iletişim kutusu bunu uyarır; sayfa işi yapamadığında bir tane tanımlayın. Paket dosyası `GUEST_SERVICES.md` dosyasına bakın. `provides: ["browser"]` içeren bir hizmet ajanın tarayıcısının yerine de geçebilir: `browser.*` eylemlerini sunucuda yanıtlar, böylece ajanlar açık bir masaüstü uygulaması olmadan gezinir; kullanıcı bunu Ayarlar → OpenChamber Araçları'ndan seçer. Böyle bir hizmetin panele ihtiyacı yoktur. Bir hizmete kullanıcının oturumlarında olanlar da bildirilebilir: yanına `contributes.sessionEvents` tanımlayın, OpenChamber biten ya da başarısız olan her turu ve ajanın sorduğu her izni ya da soruyu, her projeden ve açık bir pencere olmadan hizmete gönderir. Bkz. [Oturum olayları](/sdk/host/#oturum-olayları). `provides: ["notifications"]` içeren bir hizmet ise kullanıcının bildirimlerini masaüstü ve telefonun yanında Slack'e, Matrix'e ya da kendi sunucunuza iletir; kullanıcı hesabı Ayarlar → Entegrasyonlar'da bağlar ve token OpenChamber'da kalır. Bkz. [Bildirim kanalları](/sdk/host/#bildirim-kanalları). `provides: ["tracker"]` olan bir servis, Linear'ın yanında bir iş öğesi izleyicisidir ve hesap kartı Uzantı hesapları altında durur; bkz. [İzleyiciler](/sdk/host/#i̇zleyiciler). `provides: ["quota"]` olan bir servis ise yerleşik sağlayıcıların yanında kullanımı bildirir ve bunun için OpenCode'un manifestte listelenen sağlayıcılar için sakladığı kimlik bilgilerini okur; bkz. [Kullanım sağlayıcıları](/sdk/host/#kullanım-sağlayıcıları).
 
 ## Yetenekler
 
@@ -106,12 +109,29 @@ Panel çizmek ve geçerli oturumu okumak izin gerektirmez. Kullanıcı adına bi
 | `sessions` | projeleri, worktree ve oturum durumlarını listelemek; kayıtlı projelerde oturum oluşturmak ve açmak |
 | `files` | açık projedeki dosyaları okuyup yazmak (göreli yol ile `readFile`, `writeFile`, `listDir`, `stat`) |
 | `model` | kullanıcının Small Model'iyle tek seferlik metin üretimi (`generate`), herhangi bir oturumun dışında |
-| `shells` | ajanlarınızın arka planda çalıştırdığı kabuk komutlarını izlemek, çıktılarını okumak ve onları durdurmak (`onRunningShells`, `readShellOutput`, `stopShell`) |
 
-On tanesi sizin için otomatik eklenir: bir `integration` tanımladığınızda `network`, bir `service` tanımladığınızda `service`, `filesystem` desenleri tanımladığınızda `filesystem`, `origins` tanımladığınızda `origins`, bir oturum eylemi mesajları istediğinde `conversation` (bkz. [Eylemler, komutlar ve rozet](#eylemler-komutlar-ve-rozet)), `sessionEvents` veya `sessionControl` `content` istediğinde `transcript` (bkz. [Oturum olayları](/sdk/host/#oturum-olayları)), servisiniz oturumlar üzerinde işlem yaptığında `sessionControl` (bkz. [OpenChamber'ı çağırma](/sdk/host/#openchamberı-servisinizden-çağırma)), ajanların okuduklarına ekleme yaptığında `instructions` ve `contributes.skills` tanımladığınızda `skills`. `contributes.skills`, eklenti açıkken her ajana ulaşan skill'lerin bulunduğu bir paket klasörüdür. `contributes..
+On on bir tanesi sizin için otomatik eklenir: bir `integration` tanımladığınızda `network`, bir `service` tanımladığınızda `service`, `filesystem` desenleri tanımladığınızda `filesystem`, `origins` tanımladığınızda `origins`, bir oturum eylemi mesajları istediğinde `conversation` (bkz. [Eylemler, komutlar ve rozet](#eylemler-komutlar-ve-rozet)), `sessionEvents` veya `sessionControl` `content` istediğinde `transcript` (bkz. [Oturum olayları](/sdk/host/#oturum-olayları)), servisiniz oturumlar üzerinde işlem yaptığında `sessionControl` (bkz. [OpenChamber'ı çağırma](/sdk/host/#openchamberı-servisinizden-çağırma)), servisiniz kullanıcı adına ajanın izin isteklerini ve formlarını yanıtladığında `sessionAnswers` (`sessionControl: { answers: true }`), ajanların okuduklarına ekleme yaptığında `instructions` ve `contributes.skills` tanımladığınızda `skills`. `contributes.skills`, eklenti açıkken her ajana ulaşan skill'lerin bulunduğu bir paket klasörüdür. `contributes.links` tanımladığınızda da `links` eklenir (bkz. [Sohbet mesajlarındaki bağlantılar](#sohbet-mesajlarındaki-bağlantılar)).
 
 Kullanıcı tam listeyi bir kez, eklentiyi kurarken görür ve ya onaylar ya da eklentiyi kaldırır. Yeni bir sürüm daha fazlasını isterse pencere yeniden görünür. Kullanıcının onaylamadığı bir yeteneği gerektiren çağrı `NOT_GRANTED` ile başarısız olur.
 
+## Sohbet mesajlarındaki bağlantılar
+
+Bir uzantı, sohbet mesajlarındaki kendi tanımlayıcılarını ve bağlantılarını tıklanabilir yapabilir; böylece bir ajan yanıtındaki `DEMO-12`, o görevi tarayıcı sekmesi yerine uzantınızda açar. Neyin tanınacağını ve tıklamanın ne yapacağını tanımlayın:
+
+```json
+"links": {
+  "action": "open",
+  "identifier": { "keys": ["DEMO"] },
+  "urls": { "origin": "https://tasks.example.com", "identifier": "key-number", "item": ["/tasks/{id}"] }
+}
+```
+
+- `identifier.keys`, büyük harfle yazılmış en fazla 8 sabit anahtardır. `DEMO`, `DEMO-12` ifadesini yalnızca tam bir sözcük olarak tanır; kod, bağlantılar, yollar, `XDEMO-1` gibi sözcükler ve `DEMO-1.5` gibi sürümler metin olarak kalır.
+- `urls`, tek bir https kaynağındaki bağlantıları tam eşleşmeyle tanır. `item`, izleyicinin kendi kullandığı biçimdeki bağlantı şablonlarıdır: `{id}` bir kez, yolun içinde ya da `?name={id}` olarak; değişen kısımlar için de `{segment}` veya `{segments+}`. `identifier`, `{id}` değerinin neye benzediğini söyler: `key-number`, `number` veya `short-code`. Hiçbir zaman düzenli ifade yazmazsınız; şablonları OpenChamber derler.
+- `action: "open"`, uzantınızı `ready.item` (veya `onItem`) değeri `{ kind: "link", identifier, url? }` olacak şekilde açar: `attach` değeri `"dialog"` ise kendi iletişim kutunuzda, değilse şerit panelinde. Türü `isGuestLinkItem` ile daraltın. Bunun için `panel.entry` gerekir. `url`, tıklanan bağlantıdan `#` sonrası kısmın ve şablonun kendi parametreleri dışındaki sorgu parametrelerinin çıkarılmış hâlidir; metindeki bir tanımlayıcı için, `{segment}` içermeyen bir şablonunuz varsa ve tanımlayıcı `urls.identifier` ile tanımlanan biçimdeyse, bu türden ilk şablonunuzun oluşturduğu bağlantıdır (`DEMO-12` hiçbir zaman bir `number` yerine geçmez).
+- `action: "attach"` bunun yerine sohbet kutusuna tanımlayıcıyı taşıyan bir etiket ekler ve etiketin kendi bağlantısını gösterebilmesi için `{segment}` veya `{segments+}` içermeyen bir şablon gerektirir; `identifier.keys` ile `urls.identifier` değeri `number` olamaz.
+
+Tanıma, ajan yanıtlarında ve kullanıcının kendi mesajlarında çalışır; akıl yürütmede, araç çıktısında ve Files görünümünde çalışmaz. Bir mesajı kopyalamak metni yazıldığı gibi korur. OpenChamber'ın kendisinin okuduğu bir bağlantı, yani bir izleyici öğesi, bir deponun issue'su veya pull request'i ya da bir commit, her zamanki gibi davranır; değiştirici tuşla yapılan tıklama da tarayıcının olağan davranışını korur. `links` tanımlamak `links` yeteneğini ekler: onay iletişim kutusu anahtarlarınızı ve kaynağınızı listeler ve tıklamanın ne yaptığını söyler; bunlardan herhangi birini değiştiren bir sürüm yeniden onay ister. `examples/tasks-demo`, `DEMO-2` ve `https://example.com/tasks/DEMO-2` bağlantılarını tanır.
 
 ## Metin üretme
 
@@ -304,7 +324,19 @@ Bir MCP sunucusu veya entegre araç bir araç eklediğinde sohbet, çağrıları
 
 `match`, çalışma zamanının bildirdiği haliyle aracın adıdır; sondaki `*` bir öneki eşleştirir. `icon`, `panel.icon` gibi bir Remixicon adı ya da paketinizdeki bir `.svg` dosyasıdır. `title` ve `subtitle`, çağrının `input`, `output` ve `metadata` değerleri üzerinde çalışan şablonlardır. `output`, gövdenin nasıl çizileceğini seçer: `text`, `json` (ağaç), `markdown`, `language` ile `code`, `columns` ile `table` (satırlar çıktı dizisinden veya `output.items` içinden gelir) ya da varsayılan için `auto`. Tam bir `match` joker karakteri yener; eşitlikte ilk yüklenen eklenti kazanır. İzin gerekmez: bu yalnızca sohbette zaten bulunan verilerin nasıl çizildiğini değiştirir.
 
-Yalnızca araçları biçimlendiren bir eklentinin sayfaya hiç ihtiyacı yoktur: `panel.entry` öğesini atlayın, şeritte simgesi olmaz, sadece Ayarlar → Uzantılar içinde bir kart görünür. Sayfası olmadan yalnızca `tools` tanımlayabilir, başka bir şey tanımlamaz. Diğer istisna, kendi `entry` sayfası olan bir Work Status bölümü veya dosya düzenleyicisidir, yukarıya bakın.
+Yalnızca araçları biçimlendiren bir eklentinin sayfaya hiç ihtiyacı yoktur: `panel.entry` öğesini atlayın, şeritte simgesi olmaz, sadece Ayarlar → Uzantılar içinde bir kart görünür. Sayfası olmadan yalnızca `tools` ve `providerLogos` tanımlayabilir, başka bir şey tanımlamaz. Diğer istisna, kendi `entry` sayfası olan bir Work Status bölümü veya dosya düzenleyicisidir, yukarıya bakın.
+
+## Sağlayıcınızın logosu
+
+Sağlayıcınızın kendi logosu olduğunda, model seçiciler ve Ayarlar genellikle genel bir işaret çizer. Logoyu paketinize koyun ve sağlayıcıyı adlandırın, kod gerekmez:
+
+```json
+"providerLogos": {
+  "acme-cloud": "assets/acme-cloud.svg"
+}
+```
+
+Anahtar, OpenCode'un bildirdiği sağlayıcı kimliğidir. Değer, paketinizdeki en fazla 1 MB boyutunda bir `.svg` veya `.png` dosyasıdır. Eksik, boş veya daha büyük bir dosya kurulumu başarısız kılar. Bir paket en fazla 256 sağlayıcı adlandırır ve iki kimlik aynı dosyayı gösterebilir. Logo kendi renklerini korur ve SVG içindeki `currentColor` açık veya koyu temayı izler. Uygulamanın bu kimlik için getirdiği logonun yerine geçer. Kullanıcının bu sağlayıcı için ayarladıkları önce gelir, eşitlikte ilk kurulan eklenti kazanır. İzin gerekmez. Telefon eklenti yüklemediği için bu logoları göstermez.
 
 ## Paneldeki ilk satırlar
 

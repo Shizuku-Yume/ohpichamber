@@ -1,8 +1,11 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import type { CanonicalEvent, Session, ShellJob } from '@openchamber/agent-contract';
+import type { CanonicalEvent } from '@openchamber/agent-contract';
+import type { Session } from '@openchamber/agent-contract';
+
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { registerWorkspaceDirectory } from '@/stores/globalSessions';
 import { applyBackgroundShellEvents, resetBackgroundShells } from '@/sync/background-shells';
 import { replaceGlobalSessionStatusById, setSessionParentResolver } from '@/sync/global-session-status';
 import { applyPrWatch, resetPrWatchesForRuntimeSwitch } from '@/sync/pr-watch';
@@ -11,60 +14,51 @@ import { installHookTestDom } from '../test-utils/testDom';
 import { useSidebarLiveFacts } from './useSidebarLiveFacts';
 import type { SidebarLiveFacts } from './workFacts';
 
-const finished = (id: string, parentID?: string): Session => ({
-  sessionId: id,
-  parentSessionId: parentID,
-  projectId: 'p',
-  workspaceId: '/repo',
-  displayPath: '/repo',
-  rootSessionId: parentID ?? id,
-  createdAt: 1,
-  updatedAt: 2,
-  epoch: 'epoch-1',
-  headSequence: '0',
-  runtimeStatus: 'idle',
-  activeRunId: null,
-  mode: { kind: 'main' },
-  title: id,
-  metadata: { openchamber: { workbench: { lastIdleAt: 2 } } },
-  metadataRevision: '1',
-  archiveRevision: '0',
-});
+/**
+ * A session whose last turn ended (`workbench.lastIdleAt`) however much work
+ * it left running.
+ */
+const finished = (sessionId: string, parentSessionId?: string): Session => {
+  registerWorkspaceDirectory('workspace-repo', '/repo');
+  return {
+    sessionId,
+    parentSessionId,
+    rootSessionId: parentSessionId ?? sessionId,
+    projectId: 'p',
+    workspaceId: 'workspace-repo',
+    displayPath: '/repo',
+    createdAt: 1,
+    updatedAt: 2,
+    epoch: '1',
+    headSequence: '0',
+    runtimeStatus: 'idle',
+    activeRunId: null,
+    mode: { kind: 'main' },
+    title: sessionId,
+    metadata: { openchamber: { workbench: { lastIdleAt: 2 } } },
+    metadataRevision: '1',
+    archiveRevision: '0',
+  };
+};
 
-const jobRunning: Extract<ShellJob, { status: 'running' }> = {
-  jobId: 'sh_1',
-  sessionId: 'waiting',
-  epoch: 'epoch_1',
-  workerGeneration: 'worker_1',
-  workspaceId: 'workspace_1',
-  projectId: 'p',
-  command: 'sleep 300',
-  background: true,
-  startedAt: 1,
-  outputCursor: '0',
-  status: 'running',
-};
+const shellIdentity = { jobId: 'sh_1', sessionId: 'waiting', epoch: '1', workerGeneration: 'worker-1' };
 const shellStarted: CanonicalEvent = {
-  sessionId: 'waiting',
-  epoch: 'epoch_1',
-  sequence: '1',
-  timestamp: 1,
   type: 'shell.updated',
-  job: jobRunning,
-};
-const shellEnded: CanonicalEvent = {
-  sessionId: 'waiting',
-  epoch: 'epoch_1',
-  sequence: '2',
-  timestamp: 2,
-  type: 'shell.updated',
+  sessionId: 'waiting', epoch: '1', sequence: '1', timestamp: 1,
   job: {
-    ...jobRunning,
-    status: 'ended',
-    endedAt: 2,
-    termination: { reason: 'exit', exitCode: 0 },
+    ...shellIdentity, workspaceId: 'workspace-repo', projectId: 'p', command: 'sleep 300', background: true,
+    startedAt: 1, outputCursor: '0', status: 'running',
   },
 };
+const shellEnded: CanonicalEvent = {
+  type: 'shell.updated',
+  sessionId: 'waiting', epoch: '1', sequence: '2', timestamp: 2,
+  job: {
+    ...shellIdentity, workspaceId: 'workspace-repo', projectId: 'p', command: 'sleep 300', background: true,
+    startedAt: 1, outputCursor: '0', status: 'ended', endedAt: 2, termination: { reason: 'exit', exitCode: 0 },
+  },
+};
+
 const reset = () => {
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
   replaceGlobalSessionStatusById(new Map());

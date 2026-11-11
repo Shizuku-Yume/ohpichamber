@@ -27,7 +27,7 @@ const CLASSIFICATION_DOCS_URL = 'https://docs.openchamber.dev/classification-pro
 
 interface ClassificationProvidersPageProps {
   titleLeading: React.ReactNode;
-  /** Opens the native provider whose API key a source uses. */
+  /** Opens the OpenCode provider whose API key a source reads. */
   onOpenProvider: (providerId: string) => void;
 }
 
@@ -173,7 +173,7 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
               {/* Enterprise mode leaves Off as the only choice. */}
               {locked ? null : (
                 <>
-                  {/* The promotion is offered only while it runs; after that it is not a choice. */}
+                  {/* The promotion is offered only while the server can use it; otherwise only an existing pick still shows it. */}
                   {promoUsable || classifier.selected === 'zen-promo' ? (
                     <SettingsRadioOption
                       selected={classifier.selected === 'zen-promo'}

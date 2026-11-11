@@ -64,6 +64,12 @@ import { guestStatusViewI18n } from './guest-status-view.i18n';
 import { ompSettingsI18n } from './omp-settings.i18n';
 import { workerRunsI18n } from './worker-runs.i18n';
 import { btwI18n } from './btw.i18n';
+import { aboutReleaseNotesI18n } from './about-release-notes.i18n';
+import { updateCheckErrorsI18n } from './update-check-errors.i18n';
+import { sessionWarmingI18n } from './session-warming.i18n';
+import { usageToolI18n } from './usage-tool.i18n';
+import { openchamberToolsLayoutI18n } from './openchamber-tools-layout.i18n';
+import { openchamberToolOutputI18n } from './openchamber-tool-output.i18n';
 export const dict = {
   'quota.family.zen': 'Zen モデル',
   'quota.value.requests': 'リクエスト数: {count}',
@@ -9372,5 +9378,33 @@ export const dict = {
   'chat.planReview.reject': "却下",
   ...workerRunsI18n.ja,
 
+  'chat.backgroundWork.aria': 'バックグラウンドの作業',
+  'chat.backgroundWork.count': 'バックグラウンド: {count}',
+  'chat.backgroundImages.generating': '画像を生成中',
+  'sessions.sidebar.session.status.backgroundImage': 'バックグラウンドで画像を生成中',
+  'gitView.empty.repositoryUnreadable': 'Git がこのフォルダーを読み取れませんでした',
+  'gitView.empty.repositoryUnreadableDescription': 'Git からのメッセージは次のとおりです。問題を解決してから再試行してください。',
+  'gitView.empty.repositoryUnreadableRetry': '再試行',
+  'contextSidebar.section.sessionTotals': 'セッション合計',
+  'directoryExplorerDialog.browse.linkTarget': '{path} へのリンク',
+  'updateDialog.openCodeTooOld': 'OpenChamber {version} には OpenCode {required} が必要です。このサーバーは {current} です。先に OpenCode を更新してください。',
+  'chat.workStatus.breakdown.planCountSingle': 'プラン {count} 件',
+  'chat.workStatus.breakdown.planCountPlural': 'プラン {count} 件',
+  'chat.workStatus.linkedPlans.open': 'プラン「{title}」を開く',
+  ...aboutReleaseNotesI18n.ja,
+  ...updateCheckErrorsI18n.ja,
+  ...sessionWarmingI18n.ja,
+  ...usageToolI18n.ja,
+  ...openchamberToolsLayoutI18n.ja,
+  ...openchamberToolOutputI18n.ja,
+  ...tooltipsDiffI18n['ja'],
+  ...tooltipsFilesI18n['ja'],
+  ...tooltipsGitI18n['ja'],
+  ...tooltipsTrackerI18n['ja'],
+  ...tooltipsWalkthroughI18n['ja'],
+  ...tooltipsTerminalBrowserI18n['ja'],
+  ...tooltipsWorkspaceI18n['ja'],
+  ...tooltipsPanelI18n['ja'],
+  ...tooltipsChatI18n['ja'],
   ...m4LaneDI18n.ja,
 };

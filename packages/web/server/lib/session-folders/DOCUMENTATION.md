@@ -48,6 +48,10 @@ owns the change semantics (the UI applies the same changes through
 - A change about a folder that is gone does nothing. A create whose parent is
   gone places the folder at the top level.
 - A chat is in at most one folder of a scope after `assign`.
+- An `assign` or `unassign` with `from` skips each chat that another client moved
+  away from the folder `from` names for it. A chat left in no folder because that
+  folder was deleted was not moved, and the change applies. Without `from`, which
+  older clients and changes they queued send, it applies to every chat.
 - Deleting a folder deletes its sub-folders. Every deleted id (by `delete` or
   `forget-scopes`) is kept as a tombstone for 30 days, so an older client that
   still holds the folder cannot bring it back with its whole copy. A `create`

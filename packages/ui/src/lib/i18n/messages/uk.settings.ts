@@ -2779,4 +2779,18 @@ export const settingsDict = {
   'settings.agents.sidebar.toast.enableFailed': 'Не вдалося увімкнути агента: не вийшло записати його конфіг',
   'settings.openchamber.keyboardShortcuts.action.search_prompt_history.label': "Пошук в історії запитів",
 
+  'settings.themeImport.noReadableThemes': 'Не вдалося прочитати жодної колірної теми з цього пакета.',
+  "settings.providers.page.logo.title": "Логотип",
+  "settings.providers.page.logo.info": "Показується замість логотипа чи значка провайдера у списках, вибірниках і повідомленнях. PNG, JPEG, WebP або SVG, до 1 МБ.",
+  "settings.providers.page.logo.upload": "Завантажити зображення",
+  "settings.providers.page.logo.remove": "Прибрати зображення",
+  "settings.providers.page.logo.error.type": "Виберіть зображення PNG, JPEG, WebP або SVG.",
+  "settings.providers.page.logo.error.size": "Виберіть зображення до 1 МБ.",
+  "settings.providers.page.logo.toast.uploadFailed": "Не вдалося завантажити логотип: {reason}",
+  "settings.providers.page.logo.toast.removeFailed": "Не вдалося прибрати логотип: {reason}",
+  "settings.providers.page.auth.oauth.pasteRedirectHint": "Якщо браузер зупиниться на сторінці, яка не відкривається, скопіюйте її адресу і вставте сюди.",
+  "settings.providers.page.auth.oauth.pasteRedirectPlaceholder": "Вставте адресу з браузера",
+  "settings.voice.page.stt.model.parakeetUltra": "Parakeet Ultra (25 європейських мов)",
+  "settings.openchamber.visual.section.themes": "Теми",
+  "settings.openchamber.visual.field.noThemesMatch": "Немає тем, що відповідають «{query}».",
 } as const;

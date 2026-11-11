@@ -220,8 +220,7 @@ export const createLegacyLinearTrackerAPI = (fetch: TrackerFetch): Omit<TrackerA
       'Failed to start Linear auth',
     ),
 
-    // The legacy routes predate token and OAuth-client entry; the dialog asks
-    // a newer server for those, and this one answers that it cannot.
+    // An older server serves no extension tracker, so neither of its ways in exists there.
     authConnectToken: async () => ({ ok: false, code: 'UNSUPPORTED', message: null }),
     authSaveOAuthClient: async () => ({ ok: false, code: 'UNSUPPORTED', message: null }),
 

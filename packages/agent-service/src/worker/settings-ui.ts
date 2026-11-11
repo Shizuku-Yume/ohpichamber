@@ -15,7 +15,7 @@ import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
  * (`tui.`, `task.`, `skills.`) each span several surfaces, and a new id has to
  * be placed deliberately instead of inheriting a neighbour's guess.
  */
-export type OmpSettingPlacement =
+type OmpSettingPlacement =
   | { readonly surface: 'gui' }
   | { readonly surface: 'tui-only' }
   | { readonly surface: 'duplicate'; readonly owner: string }

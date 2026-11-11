@@ -11,10 +11,9 @@ import {
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import type { AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import { ProjectionError } from '../projection/journal.ts';
-import { join } from 'node:path';
 import { presentOmpSetting } from './settings-ui.ts';
+import { join } from 'node:path';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
-import { MAIN_CONFIG_FILENAMES } from '@oh-my-pi/pi-utils';
 
 /**
  * Contract-driven allowlist of OMP settings exposed through the API.
@@ -51,48 +50,44 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
     : undefined;
   const rawValue = setting.layered(settings);
   const rawDefault = setting.definition.default;
+  const id = OmpSettingIdSchema.parse(setting.id);
+  const presentation = presentOmpSetting(id, ui?.condition, settings);
   const descriptor: OmpSetting = {
-    id: OmpSettingIdSchema.parse(setting.id),
+    id,
     type: setting.definition.type,
     value: rawValue === undefined ? null : JsonValueSchema.parse(rawValue),
     default: rawDefault === undefined ? null : JsonValueSchema.parse(rawDefault),
     configured: setting.isConfigured(settings),
+    surface: presentation.surface,
   };
+  if (presentation.owner !== undefined) descriptor.owner = presentation.owner;
+  if (presentation.condition !== undefined) {
+    descriptor.condition = presentation.condition;
+    descriptor.conditionActive = presentation.conditionActive ?? true;
+  }
   if (setting.enumValues !== undefined) descriptor.enumValues = [...setting.enumValues];
   if (list !== undefined) descriptor.options = list;
   if (ui?.label !== undefined) descriptor.label = ui.label;
   if (ui?.description !== undefined) descriptor.description = ui.description;
   if (ui?.group !== undefined) descriptor.group = ui.group;
   if (ui?.tab !== undefined) descriptor.tab = ui.tab;
-  const presentation = presentOmpSetting(descriptor.id, ui?.condition, settings);
-  descriptor.surface = presentation.surface;
-  if (presentation.owner !== undefined) descriptor.owner = presentation.owner;
-  if (presentation.condition !== undefined) {
-    descriptor.condition = presentation.condition;
-    descriptor.conditionActive = presentation.conditionActive ?? true;
-  }
   return OmpSettingSchema.parse(descriptor);
 }
 
-export class NativeSettings {
-  constructor(private readonly settings: Settings) { }
+/** The config file the settings write, shown so the page can offer it. */
+const OMP_CONFIG_FILENAME = 'config.yml';
 
-  /**
-   * The file `flush` writes. The Settings instance exposes only its agent
-   * directory, so the config file name comes from the same pinned constant its
-   * own loader joins.
-   */
-  private configPath(): string | undefined {
-    const agentDir = this.settings.agentDir;
-    if (!agentDir) return undefined;
-    return join(agentDir, MAIN_CONFIG_FILENAMES[0]);
+export class NativeSettings {
+  private readonly configFilePath: string | undefined;
+
+  constructor(private readonly settings: Settings, agentDirectory?: string) {
+    this.configFilePath = agentDirectory === undefined ? undefined : join(agentDirectory, OMP_CONFIG_FILENAME);
   }
 
   private state(workspaceId: string, revision: string): OmpSettingsState {
-    const configPath = this.configPath();
     return OmpSettingsStateSchema.parse({
       workspaceId, revision,
-      ...(configPath === undefined ? {} : { configPath }),
+      ...(this.configFilePath === undefined ? {} : { configPath: this.configFilePath }),
       settings: OMP_SETTING_IDS.map(id => descriptor(handle(id), this.settings)),
     });
   }

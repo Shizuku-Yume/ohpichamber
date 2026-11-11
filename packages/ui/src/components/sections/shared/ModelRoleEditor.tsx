@@ -16,7 +16,7 @@ import {
   modelForSelector,
 } from '@/components/sections/shared/modelRoleSelectors';
 
-export interface ModelEffortPickerProps {
+interface ModelEffortPickerProps {
   model: Model | undefined;
   /** The level the selector carries explicitly; empty means "the model's own". */
   effort: string;
@@ -52,7 +52,7 @@ export const ModelEffortPicker: React.FC<ModelEffortPickerProps> = ({
   );
 };
 
-export interface ModelRoleEditorProps {
+interface ModelRoleEditorProps {
   /** Role id this row writes, for example `vision` or `commit`. */
   role: string;
   /** The whole `modelRoles` record, so an unset role can say what it inherits. */

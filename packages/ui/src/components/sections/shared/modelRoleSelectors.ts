@@ -14,7 +14,7 @@ import type { I18nKey } from '@/lib/i18n';
 /** Level ids a picker may show, in OMP's display order minus the grammar-only `inherit`. */
 const EFFORT_LEVELS = THINKING_LEVELS.filter((level) => level !== 'inherit');
 
-export const EFFORT_LABEL_KEYS: Record<string, I18nKey> = {
+const EFFORT_LABEL_KEYS: Record<string, I18nKey> = {
   minimal: 'settings.omp.modelRoles.effort.minimal',
   low: 'settings.omp.modelRoles.effort.low',
   medium: 'settings.omp.modelRoles.effort.medium',

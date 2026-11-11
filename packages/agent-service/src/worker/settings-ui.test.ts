@@ -18,7 +18,7 @@ async function fixture() {
   await mkdir(agentDirectory, { recursive: true });
   const settings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
   return {
-    settings, native: new NativeSettings(settings),
+    settings, agentDirectory, native: new NativeSettings(settings, agentDirectory),
     async close() {
       settings.cancelPendingSaves();
       await rm(root, { recursive: true, force: true });
@@ -54,6 +54,8 @@ test('reads surface, owner and condition from the pinned definitions', async () 
   const f = await fixture();
   try {
     const state = await f.native.read('workspace_1', '0');
+    // The page needs the file it hides settings from, not a second renderer.
+    expect(state.configPath).toBe(join(f.agentDirectory, 'config.yml'));
     const byId = new Map(state.settings.map(setting => [setting.id, setting]));
     expect(byId.get('compaction.thresholdPercent')).toMatchObject({ surface: 'gui' });
     expect(byId.get('enabledModels')).toMatchObject({ surface: 'duplicate', owner: 'providers.models' });

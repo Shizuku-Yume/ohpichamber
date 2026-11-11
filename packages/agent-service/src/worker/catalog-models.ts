@@ -198,7 +198,7 @@ export function publicModel(native: NativeCatalogModel, configured?: Model, enab
  // an effort picker can show the level that actually runs instead of a
  // synthetic "default" row.
  const defaultLevel = native.thinking?.defaultLevel;
- if (defaultLevel !== undefined && (defaultLevel === 'off' || efforts.includes(defaultLevel))) {
+ if (defaultLevel !== undefined && efforts.includes(defaultLevel)) {
   candidate.defaultReasoningEffort = defaultLevel;
  }
  if (native.supportsTools !== undefined) candidate.toolsSupported = native.supportsTools;

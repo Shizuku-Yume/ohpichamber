@@ -21,10 +21,13 @@ const SECTIONS_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  * is the same, and the pair is deliberately two views of one concept.
  */
 const SAME_PAGE_CLAIMS: Readonly<Record<string, string>> = {
+  'commands.argument-hint': 'CommandsPage shows the hint in the list row and in the editor',
   'plugins.content': 'PluginsPage lists the plugin; AddPluginDialog edits one',
+  'projects.worktree': 'The project tab and its worktree list both name the worktree setting',
+  'providers.auth': 'ProvidersPage authenticates the same provider in two places',
   'providers.connect': 'ProviderConnectPicker opens the form ProviderGrid resells',
   'providers.custom': 'ProviderConnectPicker offers custom setup; CustomProviderForm is it',
-  'providers.auth': 'ProvidersPage authenticates the same provider in two places',
+  'sessions.small-model': 'The opt-out toggle and the model picker are one setting, disabled together',
 };
 
 interface Claim {
@@ -70,9 +73,9 @@ describe('settings item ownership', () => {
       const others = claims.filter((other) => other.id === claim.id && other.file !== claim.file);
       if (others.length === 0) continue;
       const pages = new Set([claim.page, ...others.map((other) => other.page)]);
-      if (pages.size === 1 && (SAME_PAGE_CLAIMS[claim.id] !== undefined || others.every((other) => other.page === claim.page))) {
-        continue;
-      }
+      // Same page: allowed only when the pair is named here with its reason,
+      // so a second control on one page is still a deliberate decision.
+      if (pages.size === 1 && SAME_PAGE_CLAIMS[claim.id] !== undefined) continue;
       offenders.push(`${claim.id}: ${[claim.file, ...others.map((other) => other.file)].join(', ')}`);
     }
     expect([...new Set(offenders)].sort()).toEqual([]);

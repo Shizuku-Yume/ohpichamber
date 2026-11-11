@@ -44,7 +44,6 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
   const groups = useUsageProviderGroups();
   const displayMode = useQuotaStore((state) => state.displayMode);
   const isLoading = useQuotaStore((state) => state.isLoading);
-  const loadedRuntimeKey = useQuotaStore((state) => state.loadedRuntimeKey);
   const quotaPhase = useQuotaStore((state) => state.phase);
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
   const fetchQuotas = useQuotaStore((state) => state.fetchQuotas);
@@ -53,7 +52,9 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
 
   // Bootstrap once to discover providers. Confirmed absence renders no readout
   // and creates no ongoing refresh demand; credential changes invalidate it.
-  useQuotaAutoRefresh(visible && (groups.length > 0 || loadedRuntimeKey === null));
+  // Demand exists while rows are shown, or while the first read has not
+  // answered; a read that failed is not demand, so it is not retried forever.
+  useQuotaAutoRefresh(visible && (groups.length > 0 || quotaPhase === 'unknown'));
 
   React.useEffect(() => {
     if (groups.length === 0) return;

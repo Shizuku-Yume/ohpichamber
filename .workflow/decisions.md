@@ -931,3 +931,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes (conservative option within the 2026-11-10 merge decision)
 - **Revisit when:** integration carries commits that other branches or releases depend on, which then requires history-preserving updates instead.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - A tool result is a part of its call's message; a failure keeps a kind beside its detail
+
+- **Decided:** the canonical projection publishes a `tool_result` part inside the assistant message that authored its `tool_call`, at part id `<call-part>:result`, and streams OMP's partial result frames as `part.updated` on that same part. `ToolResultPart` keeps `error: string` and gains `errorKind`. A assistant step carries `timing: { startedAt, firstTokenAt?, completedAt? }` derived only from the native message. A run OMP prompts itself opens a turn with no authored user message, and the client joins its steps to the previous turn.
+- **Instead of:** a separate `role: 'system'` result message paired by the client, an object-valued `error`, or a `tool_result`-only turn role.
+- **Because:** the journal and reducer already key parts by partId and already flip call status from `tool.started`/`tool.completed`, so one message makes the live stream and the restored transcript identical and lets the client delete every heuristic it used to re-join them. `error` is read as text in cards the effort does not own, and absolute epochs survive both live emission and history replay without a second clock.
+- **Mine:** yes (settled inside task 23's design; maintainer approved the user-less-turn rule as an out-of-list edit)
+- **Revisit when:** the contract gains a first-class result message or `error` becomes a structured value with every card migrated.
+- **Effort:** ux-v270-omp-alignment

@@ -30,7 +30,9 @@ When requirements conflict, documents follow this strict hierarchy:
 3. **Fail-Closed Security.** Task 28 observed public-factory built-in write approval/deny, bash selector cancellation and headless refusal. This is not complete tool-approval or Host Gatekeeper coverage. Any tool execution or capability request with missing, ambiguous, or incomplete permission definitions must halt and require explicit approval.
 4. **No Silent Empty Success.** Unsupported endpoints, missing sessions, or invalid capability negotiations return explicit HTTP errors using the top-level Problem Details schema below. A server never returns HTTP 200 with an empty body (`{}` or `[]`) to mask unsupported features.
 5. **JSON-Safe Projections.** Raw OMP SDK objects, Circular references, Symbols, and Node.js or Bun stream handles must never cross process or network boundaries. The Agent Service projects SDK state into plain, JSON-serializable Data Transfer Objects (DTOs).
-6. **Path Isolation.** Client-facing payloads, attachments, and internal URIs must never expose host absolute filesystem paths. All files use opaque identifiers or repository-relative paths.
+6. **Tool Result Placement.** A `tool_result` part belongs to the message that authored its `tool_call`, at the deterministic part id `<call-part>:result`. The contract has no separate result message and no `system` role for a result; the client renders the part beside its call and never pairs parts across messages. `system` remains only for notice rows a transcript owns (for example a rewind report). A run OMP prompts itself (plan or goal continuation) opens a turn without an authored user message: `Turn.userMessageId` stays an opaque identity, and the turn's steps join the conversation's last turn in the client. OMP's partial results are `part.updated` frames of the same result part while the call runs.
+7. **Step Timing and Failure Detail.** An assistant step carries `timing: { startedAt, firstTokenAt?, completedAt? }` as absolute epochs derived only from the native message, so a restored step equals the value the live stream published. A failed result keeps its human `error` and adds `errorKind` naming the class OMP knows (`synthetic`, `interrupted`, `timeout`, `background-job`, a tool's own `errorKind`, or `tool_error`). Never replace either with a placeholder.
+8. **Path Isolation.** Client-facing payloads, attachments, and internal URIs must never expose host absolute filesystem paths. All files use opaque identifiers or repository-relative paths.
 
 ## Refreshed-source implementation obligations
 
@@ -371,9 +373,9 @@ SSE names and WebSocket `type` values use the same vocabulary. SDK events and in
 | `session.updated`, `session.deleted`, `session.status` | Authoritative session projection or runtime state change |
 | `run.started`, `run.completed`, `run.failed`, `run.cancelled` | Outer user-request lifecycle |
 | `turn.started`, `turn.completed` | One model cycle inside a run, never outer-request completion |
-| `message.created` | Stable message identity and role |
-| `part.started`, `part.delta`, `part.completed` | Stable part identity, append delta and settled part |
-| `tool.started`, `tool.completed` | Tool execution and its terminal result, including failure/denial/cancellation |
+| `message.created`, `message.updated` | Stable message identity, role, and the metadata a step acquires (provider/model/usage and its own `timing`) |
+| `part.started`, `part.delta`, `part.updated`, `part.completed` | Stable part identity, append delta, live replacement of a part still being produced, and its settled value |
+| `tool.started`, `tool.completed` | Tool execution and its terminal result, including failure/denial/cancellation and the structured `errorKind` beside the human detail |
 | `approval.requested`, `approval.resolved` | Versioned approval creation and resolution/expiry |
 | `question.requested`, `question.resolved` | Versioned question creation and resolution/expiry |
 | `queue.updated` | Host delivery-owner queue projection |

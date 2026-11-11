@@ -6,6 +6,8 @@
 **Files:** `packages/agent-contract/src/{messages,events}.ts`; `packages/agent-service/src/worker/{projection,host-tool}.ts`; `packages/agent-service/src/native-policy-protocol.ts`; `packages/web/server/lib/openchamber-control/`; `packages/ui/src/sync/event-reducer.ts` (tool events only); `packages/ui/src/components/chat/lib/messageDisplayNormalization.ts`; `packages/ui/src/components/chat/{MessageList,ChatMessage}.tsx` (system-row handling only); `packages/ui/src/components/chat/lib/turns/streamingTailEntry.ts`
 **Read first:** `research/ux-v270-systemic-review.md` R3; `.workflow/omp-migration/contracts.md`; OMP `pi-agent-core` event types (`tool_execution_update`); skills `sync-state-invariants`, `relay-transport`, `ui-api-decoupling`
 **Check:** `bun --cwd packages/agent-contract test && bun --cwd packages/agent-service test && VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/sync packages/ui/src/components/chat/lib` → exit 0, with projection tests showing no `system` role for tool results, no synthetic empty user messages, partial tool output events and per-step timings; real path: a long `bash` call shows output while running, and an `openchamber_render` call renders inline
+**Base commit:** 8327e6403f13f040ecc09b10b26ff7a2201b2d14
+**Status:** active
 
 - [ ] Change the contract so a tool result belongs to the message that owns its tool call (or a canonical tool role), and stop authoring empty user messages for non-user turns.
 - [ ] Subscribe the projection to OMP partial tool results and emit them as live updates.

@@ -20,7 +20,7 @@
 
 ## Progress
 
-**Review:** pending the reviewer pass against base `8327e6403`.
+**Review:** pass (base `8327e6403`), after one round of fixes. The reviewer found ten defects; all are fixed and covered: thrown string causes, approval-refusal details, native MCP causes in catalog outcomes, catalog registration causes, partial fan-out causes in the top-level detail, the guardrail's logging loophole, the sentinel test not exercising `canonicalClient`, provider selection authorized by non-empty ids alone, profile reads claiming to introduce a preset, and the capacity fixture emitting `operation.error` without `detail`.
 
 **Check before:** no prior run on this branch; the base commit's own state is recorded below.
 
@@ -37,6 +37,8 @@
 - Created `probe-server` through the MCP settings form (revision 1) and connected it: `{"status":"connected","toolCount":3}`.
 - Refusals name the refusing check: a stale MCP write answered 409 `"The MCP configuration revision does not match the expected revision"`, and a stale agent write answered 409 `"The catalog revision does not match the expected revision"`.
 - Server stopped afterwards.
+
+**Review round:** the reviewer's ten findings are all fixed in `29a9746a3`; the guardrail now rejects a log-only read, the sentinel drives the real `canonicalClient`, and a new `catalog-agents.test.ts` case pins that a write proposes its preset while a profile read does not.
 
 **Evidence:**
 - 265 `WorkerOperationError` sites and 46 `CatalogCoordinatorError` sites now carry a written cause; `'SDK worker operation failed'`, `'Session operation failed'`, `'Catalog operation failed'` and `'The authorized Agent workspace is unavailable'` are gone as substitutes for a known cause.

@@ -64,13 +64,12 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
   useReportWorkStatusPresence('usage', groups.length > 0);
 
   // Unread is not "nothing configured": say so rather than showing no readout.
+  // A plain line, not a section, so the panel does not claim an empty provider
+  // list and no icon/sprite work happens for a row that never had data.
   if (groups.length === 0) {
-    if (quotaPhase !== 'unknown') return null;
-    return (
-      <WorkStatusCollapsibleSection id="usage" title={t('chat.workStatus.section.usage')} icon="timer" summary={t('settings.usage.state.unknown')}>
-        <p className="typography-meta text-muted-foreground">{t('settings.usage.state.unknown')}</p>
-      </WorkStatusCollapsibleSection>
-    );
+    return quotaPhase === 'unknown'
+      ? <p className="typography-meta text-muted-foreground">{t('settings.usage.state.unknown')}</p>
+      : null;
   }
 
   const modeLabel = displayMode === 'remaining'

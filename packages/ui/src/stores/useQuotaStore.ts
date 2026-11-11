@@ -401,7 +401,11 @@ export const useQuotaStore = create<QuotaStore>()(
           // up front meant a load that failed on a cold or briefly unreachable
           // instance was never attempted again — Usage would stay empty until
           // the three-minute refresh, or forever after a switch.
-          if (answered && generation === quotaGeneration) set({ loadedRuntimeKey: runtimeKey, phase: 'ready' });
+          if (generation !== quotaGeneration) return;
+          // Answered is ready; a read that reached no provider is an error, not
+          // a silent "never loaded", so a consumer can stop waiting on it.
+          if (answered) set({ loadedRuntimeKey: runtimeKey, phase: 'ready' });
+          else if (get().phase === 'unknown') set({ phase: 'error' });
         })().finally(() => { if (generation === quotaGeneration) inFlightRuntimeLoad = null; });
 
         return inFlightRuntimeLoad;

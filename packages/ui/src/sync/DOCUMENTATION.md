@@ -237,9 +237,16 @@ Host metadata (`SessionMetadataState`) and durable queue (`QueueState`) are stor
 - Metadata and `session.updated` events for a session this directory does not
   project yet are held, not dropped. `installSessionMetadata` buffers them in
   `state.pendingMetadata` (highest revision wins) and `installHostSession`
-  releases that record when the session row arrives; `applyDirectoryEvent` with
-  no snapshot installs a `session.updated` that carries `event.session` and
-  accepts `session.deleted`, instead of forcing a resnapshot. An auto-generated
+  releases that record when the session row arrives. Buffering is opt-in
+  (`installSessionMetadata(..., { bufferUnknown: true })`) and
+  `applyCanonicalMetadataEvent` enables it for exactly one child store, because
+  the record's directory is not stated there: every open store copying a record
+  that belongs to a directory whose list never changes would leave permanent
+  ghosts. A metadata-only event for a session the *global* store does not hold
+  is still dropped; the next list read carries the record, and no fabricated
+  session is created from metadata alone. `applyDirectoryEvent` with no snapshot
+  installs a `session.updated` that carries `event.session` and accepts
+  `session.deleted`, instead of forcing a resnapshot. An auto-generated
   title is announced for a session created seconds ago, so dropping it left the
   sidebar stale until a reload.
 

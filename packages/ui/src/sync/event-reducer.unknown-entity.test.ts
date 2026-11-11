@@ -103,7 +103,7 @@ describe('canonical events for sessions no store holds yet', () => {
 
   test('metadata for an unheld session is held until its record arrives, then released', () => {
     const metadata: SessionMetadataState = { sessionId: 'session-1', revision: '3', metadata: { notes: 'Held' } };
-    const buffered = installSessionMetadata(EMPTY, metadata);
+    const buffered = installSessionMetadata(EMPTY, metadata, { bufferUnknown: true });
     expect(buffered.pendingMetadata?.['session-1']).toEqual(metadata);
 
     const installed = installHostSession(buffered, sessionRecord());
@@ -113,7 +113,7 @@ describe('canonical events for sessions no store holds yet', () => {
   });
 
   test('a buffered record never overrides newer metadata', () => {
-    const buffered = installSessionMetadata(EMPTY, { sessionId: 'session-1', revision: '5', metadata: { notes: 'Newest' } });
+    const buffered = installSessionMetadata(EMPTY, { sessionId: 'session-1', revision: '5', metadata: { notes: 'Newest' } }, { bufferUnknown: true });
     const installed = installHostSession(buffered, sessionRecord({ metadata: { notes: 'Stale' }, metadataRevision: '2' }));
     expect(installed.session[0]?.metadata).toEqual({ notes: 'Newest' });
     expect(installed.session[0]?.metadataRevision).toBe('5');

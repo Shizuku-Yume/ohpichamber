@@ -100,9 +100,20 @@ const omitPendingMetadata = (record: Record<string, SessionMetadataState>, sessi
  return next
 }
 
-export function installSessionMetadata(state: State, metadata: SessionMetadataState): State {
+/**
+ * `bufferUnknown` holds a metadata record for a session this directory does not
+ * project yet. Callers enable it only where the record's own directory is not
+ * known, so every child store of a live workspace does not accumulate copies of
+ * metadata that belongs to another directory.
+ */
+export function installSessionMetadata(
+ state: State,
+ metadata: SessionMetadataState,
+ options: { bufferUnknown?: boolean } = {},
+): State {
  const current = state.session.find((item) => item.sessionId === metadata.sessionId)
  if (!current) {
+  if (!options.bufferUnknown) return state
   // Metadata arrives before the session list does: an auto-generated title is
   // announced for a session created moments ago. Dropping it left the sidebar
   // stale until a reload, so it is held until a session record arrives.

@@ -1,5 +1,11 @@
 import React from 'react';
 import {
+  formatModelRef,
+  formatModelSelector,
+  formatModelSelectorValue,
+  parseConfiguredThinkingLevel,
+  parseModelSelector,
+  splitSelectorThinking,
   type Model,
   type OmpSetting,
   type OmpSettingValue,
@@ -66,28 +72,22 @@ interface ParsedRoleSelector {
   effort: string;
 }
 
+/** The role's model half and thinking level, read by the one selector grammar. */
 function parseRoleSelector(selector: unknown): ParsedRoleSelector {
-  if (typeof selector !== 'string') return { model: '', effort: '' };
-  const trimmed = selector.trim();
-  if (!trimmed) return { model: '', effort: '' };
-  const colonIndex = trimmed.lastIndexOf(':');
-  if (colonIndex > 0) {
-    const base = trimmed.slice(0, colonIndex);
-    const suffix = trimmed.slice(colonIndex + 1);
-    const knownEfforts = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'];
-    if (knownEfforts.includes(suffix.toLowerCase())) {
-      return { model: base, effort: suffix };
-    }
-  }
-  return { model: trimmed, effort: '' };
+  const split = splitSelectorThinking(typeof selector === 'string' ? selector : null);
+  return { model: split.model, effort: split.thinkingLevel ?? '' };
 }
 
+/** Write a role back as `provider/model[:level]`; an empty level writes none. */
 function formatRoleSelector(model: string, effort: string): string {
-  const trimmedModel = model.trim();
-  if (!trimmedModel) return '';
-  const trimmedEffort = effort.trim();
-  if (!trimmedEffort || trimmedEffort === 'default' || trimmedEffort === '__default__') return trimmedModel;
-  return `${trimmedModel}:${trimmedEffort}`;
+  const trimmed = model.trim();
+  if (!trimmed) return '';
+  const parsedLevel = parseConfiguredThinkingLevel(effort);
+  const parsed = parseModelSelector(trimmed);
+  if (parsed) {
+    return formatModelSelector({ providerId: parsed.providerId, modelId: parsed.modelId, thinkingLevel: parsedLevel });
+  }
+  return formatModelSelectorValue(trimmed, parsedLevel);
 }
 
 function resolveRoleFallback(
@@ -139,7 +139,7 @@ type Values = Record<string, OmpSettingValue>;
 
 /** The label a model list shows for a selector, for the trigger to render too. */
 const modelOptionLabel = (models: Model[], selector: string): string => {
-  const model = models.find((candidate) => `${candidate.provider}/${candidate.modelId}` === selector);
+  const model = models.find((candidate) => formatModelRef(candidate) === selector);
   return model ? `${model.name || model.modelId} (${selector})` : selector;
 };
 
@@ -357,7 +357,7 @@ const EnabledModelsEditor: React.FC<{
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => {
-                  const selector = `${m.provider}/${m.modelId}`;
+                  const selector = formatModelRef(m);
                   return (
                     <SelectItem key={selector} value={selector} className="text-xs">
                       {m.name || m.modelId} ({selector})
@@ -469,7 +469,7 @@ const AddRoleOverrideRow: React.FC<{
         </SelectTrigger>
         <SelectContent>
           {models.map((m) => {
-            const selector = `${m.provider}/${m.modelId}`;
+            const selector = formatModelRef(m);
             return (
               <SelectItem key={selector} value={selector} className="text-xs">
                 {m.name || m.modelId} ({selector})
@@ -662,7 +662,7 @@ const ModelPresetsEditor: React.FC<{
                           </SelectTrigger>
                           <SelectContent>
                             {models.map((m) => {
-                              const selector = `${m.provider}/${m.modelId}`;
+                              const selector = formatModelRef(m);
                               return (
                                 <SelectItem key={selector} value={selector} className="text-xs">
                                   {m.name || m.modelId} ({selector})
@@ -730,7 +730,7 @@ const ModelPresetsEditor: React.FC<{
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => {
-                  const selector = `${m.provider}/${m.modelId}`;
+                  const selector = formatModelRef(m);
                   return (
                     <SelectItem key={selector} value={selector} className="text-xs">
                       {m.name || m.modelId} ({selector})
@@ -931,7 +931,7 @@ const RetryFallbackChainsEditor: React.FC<{
                     </SelectTrigger>
                     <SelectContent>
                       {models.map((m) => {
-                        const selector = `${m.provider}/${m.modelId}`;
+                        const selector = formatModelRef(m);
                         return (
                           <SelectItem key={selector} value={selector} className="text-xs">
                             {m.name || m.modelId} ({selector})
@@ -1238,7 +1238,7 @@ const CompactionModelThresholdsEditor: React.FC<{
                 </SelectTrigger>
                 <SelectContent>
                   {models.map((m) => {
-                    const selector = `${m.provider}/${m.modelId}`;
+                    const selector = formatModelRef(m);
                     return (
                       <SelectItem key={selector} value={selector} className="text-xs">
                         {selector}
@@ -1550,7 +1550,7 @@ const ModelRolesSection: React.FC<{
           const roleLabel = i18n ? t(i18n.label) : role.id;
           const roleDesc = i18n ? t(i18n.desc) : undefined;
 
-          const matchedModel = models.find((m) => `${m.provider}/${m.modelId}` === parsed.model);
+          const matchedModel = models.find((m) => formatModelRef(m) === parsed.model);
           const supportsReasoning = matchedModel?.reasoningEffortSupported ?? false;
           const reasoningOptions = matchedModel?.reasoningOptions ?? [];
 
@@ -1605,7 +1605,7 @@ const ModelRolesSection: React.FC<{
                         {t('settings.omp.modelRoles.inheritFallback')}
                       </SelectItem>
                       {models.map((m) => {
-                        const selector = `${m.provider}/${m.modelId}`;
+                        const selector = formatModelRef(m);
                         return (
                           <SelectItem key={selector} value={selector} className="text-xs">
                             {m.name || m.modelId} ({selector})

@@ -26,7 +26,7 @@ import { reportSettingsSaveState } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import type { RoutingCategory, RoutingConfig } from '@/lib/routing/routingApi';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { parseModelSelector } from '@openchamber/agent-contract';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useRoutingStore } from '@/stores/useRoutingStore';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
@@ -266,7 +266,7 @@ export const RoutingPage: React.FC = () => {
   const prefilledRef = React.useRef(false);
   React.useEffect(() => {
     if (prefilledRef.current || !loaded || !serverConfig || serverConfig.fallback) return;
-    const parsed = parseModelIdentifier(settingsDefaultModel);
+    const parsed = parseModelSelector(settingsDefaultModel);
     // A default of Auto is what this fallback exists to resolve; nothing to prefill from it.
     if (!parsed || isAutoModel(parsed.providerId, parsed.modelId)) return;
     prefilledRef.current = true;

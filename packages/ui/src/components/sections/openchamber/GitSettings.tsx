@@ -1,5 +1,12 @@
 import React from 'react';
 import type { Model, OmpSettingsState } from '@openchamber/agent-contract';
+import {
+ formatModelRef,
+ formatModelSelector,
+ parseConfiguredThinkingLevel,
+ parseModelSelector,
+ splitSelectorThinking,
+} from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { loadDesktopSettings, reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
@@ -30,23 +37,22 @@ import {
 const COMMIT_ROLE = 'commit';
 /** The picker's "no role assigned" choice: OMP falls back to its own default. */
 const INHERIT_VALUE = '__inherit__';
-const KNOWN_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'] as const;
 
 /**
  * `provider/model` role selectors may carry a `:effort` suffix. The picker
- * edits the model half, so the suffix is read once and written back unchanged
- * while the chosen model still supports reasoning.
+ * edits the model half, so the suffix is read once by the one selector
+ * grammar and written back unchanged while the chosen model still reasons.
  */
 const splitRoleSelector = (selector: string): { model: string; effort: string } => {
- const trimmed = selector.trim();
- const colon = trimmed.lastIndexOf(':');
- if (colon > 0) {
-  const suffix = trimmed.slice(colon + 1);
-  if ((KNOWN_EFFORTS as readonly string[]).includes(suffix.toLowerCase())) {
-   return { model: trimmed.slice(0, colon), effort: suffix };
-  }
- }
- return { model: trimmed, effort: '' };
+ const split = splitSelectorThinking(selector);
+ return { model: split.model, effort: split.thinkingLevel ?? '' };
+};
+
+/** Write the commit role back as `provider/model[:level]`, keeping its level. */
+const formatCommitSelector = (model: string, effort: string): string => {
+ const parsed = parseModelSelector(model);
+ const thinkingLevel = parseConfiguredThinkingLevel(effort);
+ return parsed ? formatModelSelector({ providerId: parsed.providerId, modelId: parsed.modelId, thinkingLevel }) : model;
 };
 
 /** Only string roles survive; a malformed record must not erase the others. */
@@ -219,12 +225,12 @@ export const GitSettings: React.FC = () => {
    void writeCommitRole('');
    return;
   }
-  const nextModel = models.find((model) => `${model.provider}/${model.modelId}` === value);
+  const nextModel = models.find((model) => formatModelRef(model) === value);
   const effortToKeep = nextModel
    && (nextModel.reasoningEffortSupported || nextModel.reasoningOptions.length > 0)
    ? commitEffort
    : '';
-  void writeCommitRole(effortToKeep ? `${value}:${effortToKeep}` : value);
+  void writeCommitRole(formatCommitSelector(value, effortToKeep));
  }, [commitEffort, models, writeCommitRole]);
 
  if (isLoading) {
@@ -250,9 +256,14 @@ export const GitSettings: React.FC = () => {
       >
        <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')}>
         {commitModelId
-         ? (models.find((model) => `${model.provider}/${model.modelId}` === commitModelId)
-          ? `${models.find((model) => `${model.provider}/${model.modelId}` === commitModelId)?.name || commitModelId.split('/').pop()} (${commitModelId.split('/')[0]})`
-          : `${commitModelId} (${t('settings.omp.modelRoles.customModel')})`)
+         ? (() => {
+           const matched = models.find((model) => formatModelRef(model) === commitModelId);
+           if (!matched) return `${commitModelId} (${t('settings.omp.modelRoles.customModel')})`;
+           const parsed = parseModelSelector(commitModelId);
+           return parsed
+             ? `${matched.name || parsed.modelId} (${parsed.providerId})`
+             : `${commitModelId} (${t('settings.omp.modelRoles.customModel')})`;
+         })()
          : t('settings.omp.modelRoles.inheritFallback')}
        </SelectValue>
       </SelectTrigger>
@@ -261,14 +272,14 @@ export const GitSettings: React.FC = () => {
         {t('settings.omp.modelRoles.inheritFallback')}
        </SelectItem>
        {models.map((model) => {
-        const id = `${model.provider}/${model.modelId}`;
+        const id = formatModelRef(model);
         return (
          <SelectItem key={id} value={id}>
           {model.name || model.modelId} ({model.provider})
          </SelectItem>
         );
        })}
-       {commitModelId && !models.some((model) => `${model.provider}/${model.modelId}` === commitModelId) ? (
+       {commitModelId && !models.some((model) => formatModelRef(model) === commitModelId) ? (
         <SelectItem value={commitModelId}>
          {commitModelId} ({t('settings.omp.modelRoles.customModel')})
         </SelectItem>

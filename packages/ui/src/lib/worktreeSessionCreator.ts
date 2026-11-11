@@ -13,7 +13,7 @@ import { useContextStore } from '@/stores/contextStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { checkIsGitRepository, resolveGitPrimaryRoot, resolveGitRepositoryPrefix } from '@/lib/gitApi';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { parseModelSelector } from '@openchamber/agent-contract';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeSetupWaitEnabled } from '@/lib/openchamberConfig';
 import {
@@ -146,7 +146,7 @@ const applyDefaultAgentAndModelSelection = (sessionId: string, configState = use
       return;
     }
 
-    const parsed = parseModelIdentifier(settingsDefaultModel);
+    const parsed = parseModelSelector(settingsDefaultModel);
     if (!parsed) {
       return;
     }

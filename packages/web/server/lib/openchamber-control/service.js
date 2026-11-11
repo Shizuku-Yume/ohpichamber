@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { createImageGenerationAction } from './generate-image.js';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
+import { parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 import { asNonEmptyString } from '../shared/guards.js';
 import { OpenChamberControlError, asControlError } from './error.js';
 import {
@@ -89,11 +90,9 @@ const extractTextMessages = (messages, role = 'all') => {
 const parseModel = (value) => {
  const model = asNonEmptyString(value);
  if (!model) throw new OpenChamberControlError('model is required', 400);
- const slashIndex = model.indexOf('/');
- if (slashIndex <= 0 || slashIndex === model.length - 1) {
-  throw new OpenChamberControlError('model must be in provider/model format', 400);
- }
- return { providerID: model.slice(0, slashIndex), modelID: model.slice(slashIndex + 1) };
+ const parsed = parseModelSelector(model);
+ if (!parsed) throw new OpenChamberControlError('model must be in provider/model format', 400);
+ return { providerID: parsed.providerId, modelID: parsed.modelId, thinkingLevel: parsed.thinkingLevel };
 };
 const sessionOptions = (input) => {
  const model = input.model === undefined ? null : parseModel(input.model);
@@ -102,7 +101,8 @@ const sessionOptions = (input) => {
   modelId: model?.modelID ?? null,
   agentId: asNonEmptyString(input.agent) || null,
   variant: asNonEmptyString(input.variant) || null,
-  reasoningEffort: null,
+  // A `provider/model:high` selection is a reasoning request, not just a model.
+  reasoningEffort: thinkingLevelToReasoningEffort(model?.thinkingLevel),
  };
 };
 

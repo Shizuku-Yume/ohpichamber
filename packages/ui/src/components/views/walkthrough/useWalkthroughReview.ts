@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { formatModelRef, parseModelString } from '@openchamber/agent-contract';
 import { type Locale, useI18n } from '@/lib/i18n';
 import { buildWalkthroughView } from '@/lib/walkthrough/model';
 import type { WalkthroughTarget } from '@/lib/walkthrough/types';
@@ -133,19 +134,20 @@ export const useWalkthroughReview = ({ directory, target, visible, needsSourceSe
   const readinessModelRef = entry.readiness?.model
     && entry.readiness.model.hasLogin !== false
     && providerIsAuthenticated(entry.readiness.model.providerID)
-    ? `${entry.readiness.model.providerID}/${entry.readiness.model.modelID}`
+    ? formatModelRef(entry.readiness.model)
     : undefined;
   const resultModelRef = entry.result?.model
     && providerIsAuthenticated(entry.result.model.providerID)
-    ? `${entry.result.model.providerID}/${entry.result.model.modelID}`
+    ? formatModelRef(entry.result.model)
     : undefined;
-  const selectedModelUsable = selectedModel
-    && providerIsAuthenticated(selectedModel.split('/')[0])
+  const activeModel = selectedModel && providerIsAuthenticated(parseModelString(selectedModel)?.providerId)
     ? selectedModel
-    : undefined;
-  const activeModel = selectedModelUsable ?? resultModelRef ?? readinessModelRef;
-  const [activeProviderId, ...activeModelParts] = (activeModel ?? '').split('/');
-  const activeModelId = activeModelParts.join('/');
+    : resultModelRef ?? readinessModelRef;
+  // The picker and its messages read these as plain strings; a selector that
+  // does not parse names no model, which is how the panel already showed it.
+  const activeSelection = parseModelString(activeModel ?? '');
+  const activeProviderId = activeSelection?.providerId ?? '';
+  const activeModelId = activeSelection?.modelId ?? '';
 
   const isStructuredOutputCapable = useCallback(
     (providerId: string, modelId: string) =>

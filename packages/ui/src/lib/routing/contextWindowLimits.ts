@@ -1,3 +1,5 @@
+import { parseModelString } from '@openchamber/agent-contract';
+
 export type ContextWindowLimits = {
   /** 0 when unknown; the readouts then fall back to their own default. */
   context: number;
@@ -63,9 +65,8 @@ export const limitsForAnsweringModel = (
   providers: readonly ProviderLike[],
 ): ContextWindowLimits => {
   if (!answeringModelKey) return NO_CONTEXT_WINDOW_LIMITS;
-  const separator = answeringModelKey.indexOf('/');
-  const providerId = answeringModelKey.slice(0, separator);
-  const modelId = answeringModelKey.slice(separator + 1);
-  const model = providers.find((provider) => provider.id === providerId)?.models.find((entry) => entry.id === modelId);
+  const parsed = parseModelString(answeringModelKey);
+  if (!parsed) return NO_CONTEXT_WINDOW_LIMITS;
+  const model = providers.find((provider) => provider.id === parsed.providerId)?.models.find((entry) => entry.id === parsed.modelId);
   return { context: model?.limit?.context ?? 0, output: model?.limit?.output ?? 0 };
 };

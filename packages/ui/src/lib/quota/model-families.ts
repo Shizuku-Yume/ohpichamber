@@ -1,3 +1,4 @@
+import { parseModelString } from '@openchamber/agent-contract';
 import type { QuotaProviderId } from '@/types';
 import type { I18nKey } from '@/lib/i18n';
 
@@ -15,16 +16,10 @@ export interface ModelFamily {
  *       "antigravity/claude-sonnet" -> "claude-sonnet"
  */
 export function getDisplayModelName(modelName: string): string {
-  // Handle prefixes like "gemini/", "antigravity/"
-  const slashIndex = modelName.indexOf('/');
-  if (slashIndex !== -1) {
-    const prefix = modelName.substring(0, slashIndex);
-    // Check if it's an auth source prefix
-    if (prefix === 'gemini' || prefix === 'antigravity') {
-      return modelName.substring(slashIndex + 1);
-    }
-  }
-  return modelName;
+  // The split is the selector grammar's: a quota id is `provider/model`.
+  const parsed = parseModelString(modelName);
+  if (!parsed) return modelName;
+  return parsed.providerId === 'gemini' || parsed.providerId === 'antigravity' ? parsed.modelId : modelName;
 }
 
 const GOOGLE_MODEL_FAMILIES: ModelFamily[] = [
@@ -41,8 +36,7 @@ const ANTIGRAVITY_MODEL_FAMILIES: ModelFamily[] = [
     id: 'antigravity-gemini',
     label: 'Gemini Models',
     matcher: (modelName) => {
-      const lower = modelName.toLowerCase();
-      const name = lower.includes('/') ? lower.split('/')[1] : lower;
+      const name = getDisplayModelName(modelName).toLowerCase();
       return name.startsWith('gemini');
     },
     order: 1,
@@ -51,8 +45,7 @@ const ANTIGRAVITY_MODEL_FAMILIES: ModelFamily[] = [
     id: 'antigravity-3p',
     label: 'Claude & Third-Party Models',
     matcher: (modelName) => {
-      const lower = modelName.toLowerCase();
-      const name = lower.includes('/') ? lower.split('/')[1] : lower;
+      const name = getDisplayModelName(modelName).toLowerCase();
       return name.startsWith('claude') || name.startsWith('gpt');
     },
     order: 2,
@@ -147,9 +140,8 @@ export function getDefaultModels(
     if (providerId === 'claude') return true;
     // The Zen workspace reports the models it served, all of them useful.
     if (providerId === 'opencode') return true;
-    const lower = model.toLowerCase();
-    // Handle gemini/ and antigravity/ prefixes
-    const modelName = lower.includes('/') ? lower.split('/')[1] : lower;
+    // A quota row may name its auth source as a `provider/model` prefix.
+    const modelName = getDisplayModelName(model).toLowerCase();
     // Gemini 3.x, including the dotted (gemini-3.6-flash) and hyphenated
     // (gemini-3-6-flash) minor versions
     if (GEMINI_3_MODEL.test(modelName)) return true;

@@ -19,7 +19,7 @@ import { cfgTaskDisabledAgents, cfgTaskAgentModelOverrides } from '@oh-my-pi/pi-
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import {
   AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema,
-  AgentDeleteRequestSchema, AgentMutationResultSchema, PositiveCounterSchema,
+  AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema,
   type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest,
   type AgentDeleteRequest, type AgentMutationResult,
 } from '@openchamber/agent-contract';
@@ -113,9 +113,13 @@ export class NativeAgents {
     const selector = definition.model?.[0];
     const resolved = selector ? resolveCliModel({ cliModel: selector, modelRegistry: this.context.modelRegistry, settings: this.context.settings }).model : undefined;
     let model: Agent['model'] = resolved ? { providerId: resolved.provider, modelId: resolved.id } : null;
-    if (!model && selector && !selector.startsWith('@')) {
-      const slash = selector.indexOf('/');
-      if (slash > 0) model = { providerId: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
+    if (!model && selector) {
+      // A selector the registry did not resolve still names a pair: read it
+      // with the one grammar so `provider/model:high` keeps its level too.
+      const parsed = parseModelSelector(selector);
+      if (parsed && !parseRoleAlias(selector)) {
+        model = { providerId: parsed.providerId, modelId: parsed.modelId };
+      }
     }
     const profile = metadata.openchamber;
     const availableToolNames = this.context.availableToolNames();

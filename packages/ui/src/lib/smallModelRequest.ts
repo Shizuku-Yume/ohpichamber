@@ -1,4 +1,13 @@
-import type { CompletionRequest, CompletionResult, Model, ModelSelection } from '@openchamber/agent-contract';
+import {
+  parseModelSelector,
+  resolveRoleSelector,
+  thinkingLevelToReasoningEffort,
+  type CompletionRequest,
+  type CompletionResult,
+  type ConfiguredThinkingLevel,
+  type Model,
+  type ModelSelection,
+} from '@openchamber/agent-contract';
 import { toast } from 'sonner';
 import { canonicalClient } from '@/api/canonicalClient';
 import { formatMessage, useI18nStore } from '@/lib/i18n';
@@ -25,7 +34,16 @@ export type SmallModelRequest = Pick<CompletionRequest, 'prompt'> & Partial<Pick
 const families = ['luna', 'flash-lite', 'flash', 'haiku'];
 const usable = (model: Model): boolean => model.enabled !== false && model.status !== 'deprecated' && model.modalities.includes('text');
 
-export async function resolveSmallModel(input: Pick<SmallModelRequest, 'directory' | 'workspaceId' | 'sessionId' | 'selection' | 'preferred' | 'role'> = {}): Promise<{ workspaceId: string; selection: ModelSelection | null; model: Model | null }> {
+/** What a role or preference resolved to: the selection, its catalogue row, and the level it asked for. */
+interface ResolvedSmallModel {
+  workspaceId: string;
+  selection: ModelSelection | null;
+  model: Model | null;
+  /** The thinking level the resolved selector carried, if any. */
+  thinkingLevel: ConfiguredThinkingLevel | undefined;
+}
+
+export async function resolveSmallModel(input: Pick<SmallModelRequest, 'directory' | 'workspaceId' | 'sessionId' | 'selection' | 'preferred' | 'role'> = {}): Promise<ResolvedSmallModel> {
   const config = useConfigStore.getState();
   const preferred = input.preferred ?? (config.currentProviderId && config.currentModelId ? { providerId: config.currentProviderId, modelId: config.currentModelId } : null);
   const runtimeKey = getRuntimeKey();
@@ -51,17 +69,25 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
         : null
     );
     if (input.selection) {
-      return { workspaceId: workspace.workspaceId, selection: input.selection, model: catalogModel(input.selection) };
+      return { workspaceId: workspace.workspaceId, selection: input.selection, model: catalogModel(input.selection), thinkingLevel: undefined };
     }
+    // A role value may carry a `:thinkingLevel` suffix; the level is the role's
+    // own request for reasoning and must reach the completion as its effort,
+    // not be dropped when the selector is split into provider and model.
     const rolesValue = ompSettings?.settings.find((s) => s.id === 'modelRoles')?.value;
     const modelRoles = rolesValue && typeof rolesValue === 'object' ? (rolesValue as Record<string, string>) : null;
-    const roleOverride = modelRoles?.[targetRole] || modelRoles?.default;
-    if (roleOverride && typeof roleOverride === 'string') {
-      const slash = roleOverride.indexOf('/');
-      if (slash <= 0 || slash === roleOverride.length - 1) return { workspaceId: workspace.workspaceId, selection: null, model: null };
-      const selection = { providerId: roleOverride.slice(0, slash), modelId: roleOverride.slice(slash + 1) };
+    const roleSelector = modelRoles ? resolveRoleSelector(targetRole, modelRoles) : undefined;
+    if (roleSelector) {
+      const parsed = parseModelSelector(roleSelector);
+      if (!parsed) return { workspaceId: workspace.workspaceId, selection: null, model: null, thinkingLevel: undefined };
+      const selection = { providerId: parsed.providerId, modelId: parsed.modelId };
       const available = catalog.models.some((model) => usable(model) && model.provider === selection.providerId && model.modelId === selection.modelId);
-      return { workspaceId: workspace.workspaceId, selection: available ? selection : null, model: available ? catalogModel(selection) : null };
+      return {
+        workspaceId: workspace.workspaceId,
+        selection: available ? selection : null,
+        model: available ? catalogModel(selection) : null,
+        thinkingLevel: parsed.thinkingLevel,
+      };
     }
     const models = catalog.models.filter(model => usable(model) && (!preferred || model.provider === preferred.providerId));
     // A default utility selection may use a smaller model, but only within
@@ -76,6 +102,7 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
       workspaceId: workspace.workspaceId,
       selection: chosen ? { providerId: chosen.provider, modelId: chosen.modelId } : null,
       model: chosen ?? null,
+      thinkingLevel: undefined,
     };
   } finally {
     unsubscribe();
@@ -97,13 +124,22 @@ export class SmallModelCompletionError extends Error {
  * also stays at `null`: asking for an effort the model cannot serve would make
  * `complete` refuse the request outright instead of answering it.
  */
-function resolveReasoningEffort(reasoning: boolean | undefined, model: Model | null): string | null {
-  if (!reasoning || !model?.reasoningEffortSupported) return null;
+function resolveReasoningEffort(
+  reasoning: boolean | undefined,
+  model: Model | null,
+  thinkingLevel: ConfiguredThinkingLevel | undefined,
+): string | null {
+  // A selector's `:thinkingLevel` is the caller's own request for reasoning,
+  // so it survives even without the toggle.
+  const requested = thinkingLevelToReasoningEffort(thinkingLevel);
+  if (!model?.reasoningEffortSupported) return null;
+  if (!requested && !reasoning) return null;
   const efforts = model.reasoningOptions
     .map((option) => option.reasoningEffort)
     .filter((effort) => effort !== 'off');
   if (efforts.length === 0) return null;
-  return efforts.includes(PREFERRED_REASONING_EFFORT) ? PREFERRED_REASONING_EFFORT : efforts[0];
+  const wanted = requested ?? PREFERRED_REASONING_EFFORT;
+  return efforts.includes(wanted) ? wanted : efforts[0];
 }
 
 /** The effort a reasoning-enabled generation asks for when the model offers it. */
@@ -130,14 +166,14 @@ export async function requestSmallModel(input: SmallModelRequest, options: { not
   input.signal?.addEventListener('abort', abort, { once: true });
   try {
     input.signal?.throwIfAborted();
-    const { workspaceId, selection, model } = await resolveSmallModel(input);
+    const { workspaceId, selection, model, thinkingLevel } = await resolveSmallModel(input);
     if (changed || getRuntimeKey() !== runtimeKey) throw new DOMException('Runtime changed', 'AbortError');
     input.signal?.throwIfAborted();
     if (!selection) throw new SmallModelUnavailableError('No background model available in the selected provider');
     owner = { workspaceId, completionId: crypto.randomUUID() };
     const request: CompletionRequest = {
       ...owner, selection, prompt: input.prompt, format: input.format ?? { kind: 'text' },
-      overflow: input.overflow ?? 'truncate', variant: null, reasoningEffort: resolveReasoningEffort(input.reasoning, model),
+      overflow: input.overflow ?? 'truncate', variant: null, reasoningEffort: resolveReasoningEffort(input.reasoning, model, thinkingLevel),
       timeoutMs: input.timeoutMs ?? 60_000,
     };
     if (input.system !== undefined) request.system = input.system;

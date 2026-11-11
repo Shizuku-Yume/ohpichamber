@@ -34,11 +34,9 @@ import { hydrateSessionFoldersFromServer, useSessionFoldersStore } from './useSe
 import { useSkillsCatalogStore } from './useSkillsCatalogStore';
 import { useSkillsStore } from './useSkillsStore';
 import { useWebSearchStore } from './useWebSearchStore';
+import type { LoadPhase } from './loadPhase';
 
-/** How far a server-owned read has got. `unknown` is never an empty answer. */
-export type LoadPhase = 'unknown' | 'ready' | 'error';
-
-export type ServerStateBootEntry = {
+type ServerStateBootEntry = {
   /** Stable id, also the key in the phase record. */
   id: string;
   /**

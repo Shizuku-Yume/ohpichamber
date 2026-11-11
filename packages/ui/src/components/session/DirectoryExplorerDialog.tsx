@@ -196,6 +196,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const setSessionSwitcherOpen = useUIStore((s) => s.setSessionSwitcherOpen);
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
   const gitIdentityProfiles = useGitIdentitiesStore((s) => s.profiles);
+  const gitIdentityPhase = useGitIdentitiesStore((s) => s.phase);
   const globalGitIdentity = useGitIdentitiesStore((s) => s.globalIdentity);
   const defaultGitIdentityId = useGitIdentitiesStore((s) => s.defaultGitIdentityId);
   const { canRequestAccess, requestAccess, startAccessing } = useFileSystemAccess();
@@ -803,7 +804,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.clone.identityMismatch')}</p>
       ) : null}
     </>
-  ) : null;
+  ) : gitIdentityPhase === 'ready' ? null : (
+    <p className="typography-micro text-muted-foreground">{t('gitIdentities.state.unknown')}</p>
+  );
 
   const inputSection = (
     <div className="px-2.5 py-1.5">

@@ -9407,4 +9407,8 @@ export const dict = {
   ...tooltipsPanelI18n['pl'],
   ...tooltipsChatI18n['pl'],
   ...m4LaneDI18n.pl,
+  "gitIdentities.state.unknown": "Tożsamości Git nie zostały jeszcze wczytane.",
+  "settings.usage.state.unknown": "Użycie nie zostało jeszcze wczytane.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Zapisana pamięć nie została jeszcze wczytana.",
+
 };

@@ -43,6 +43,7 @@ export const UsagePage: React.FC = () => {
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const results = useQuotaStore((state) => state.results);
+  const quotaPhase = useQuotaStore((state) => state.phase);
   const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const fetchProviderQuota = useQuotaStore((state) => state.fetchProviderQuota);
@@ -156,7 +157,9 @@ export const UsagePage: React.FC = () => {
   if (!selectedProviderId) {
     return (
         <div className="flex h-full items-center justify-center text-muted-foreground">
-        <p className="typography-ui-label">{t('settings.usage.page.empty.selectProvider')}</p>
+        <p className="typography-ui-label">
+          {quotaPhase === 'unknown' ? t('settings.usage.state.unknown') : t('settings.usage.page.empty.selectProvider')}
+        </p>
       </div>
     );
   }

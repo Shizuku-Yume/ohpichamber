@@ -9407,4 +9407,8 @@ export const dict = {
   ...tooltipsPanelI18n['nl'],
   ...tooltipsChatI18n['nl'],
   ...m4LaneDI18n.nl,
+  "gitIdentities.state.unknown": "Git-identiteiten zijn nog niet geladen.",
+  "settings.usage.state.unknown": "Gebruik is nog niet geladen.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Opgeslagen geheugen is nog niet geladen.",
+
 };

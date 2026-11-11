@@ -59,12 +59,14 @@ export const GitPage: React.FC = () => {
   const {
     profiles,
     globalIdentity,
+    phase,
     defaultGitIdentityId,
     deleteProfile,
     setDefaultGitIdentityId,
   } = useGitIdentitiesStore(useShallow((s) => ({
     profiles: s.profiles,
     globalIdentity: s.globalIdentity,
+    phase: s.phase,
     defaultGitIdentityId: s.defaultGitIdentityId,
     deleteProfile: s.deleteProfile,
     setDefaultGitIdentityId: s.setDefaultGitIdentityId,
@@ -151,8 +153,14 @@ export const GitPage: React.FC = () => {
               />
             ))}
 
-            {/* Empty state */}
-            {!globalIdentity && profiles.length === 0 && (
+            {/* Empty state, only once the instance answered: an unread list is
+                not "this instance has no identities". */}
+            {phase === 'unknown' && (
+              <p className="px-4 py-8 text-center typography-meta text-muted-foreground">
+                {t('gitIdentities.state.unknown')}
+              </p>
+            )}
+            {phase !== 'unknown' && !globalIdentity && profiles.length === 0 && (
               <div className="py-8 px-4 text-center text-muted-foreground">
                 <Icon name="shield-keyhole" className="mx-auto mb-2 h-8 w-8 opacity-40" />
                 <p className="typography-ui-label">{t('settings.gitIdentities.page.empty.title')}</p>

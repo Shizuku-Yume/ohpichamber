@@ -234,6 +234,44 @@ Host metadata (`SessionMetadataState`) and durable queue (`QueueState`) are stor
 - Durable queue items (`QueueItem`) are discriminated on `status: 'queued' | 'leased'`. Each item includes `context: ContextDescriptor[]` and `createdAt: number`.
 - `installQueue` in `event-reducer.ts` verifies `queue.revision` monotonically before updating `state.queue`.
 - Failed metadata or queue reads preserve prior authoritative data.
+- Metadata and `session.updated` events for a session this directory does not
+  project yet are held, not dropped. `installSessionMetadata` buffers them in
+  `state.pendingMetadata` (highest revision wins) and `installHostSession`
+  releases that record when the session row arrives; `applyDirectoryEvent` with
+  no snapshot installs a `session.updated` that carries `event.session` and
+  accepts `session.deleted`, instead of forcing a resnapshot. An auto-generated
+  title is announced for a session created seconds ago, so dropping it left the
+  sidebar stale until a reload.
+
+## Freshness is same-source ordering
+
+`session.updatedAt` is the native transcript file's modification time, stamped
+on the machine running the Agent Service; `metadata.openchamber.*` stamps are
+`Date.now()` on the Host. Comparing the two measured the distance between two
+clocks: touching a session file purged a suggestion or a done hint that still
+applied, and a skewed clock purged them for good.
+
+Freshness therefore compares one source with itself:
+
+- `lib/sessionAssistMetadata.ts` keeps the payload while
+  `generatedAt >= hostTurnEndedAt(session)`; with no Host turn stamp the payload
+  is kept, since "no evidence" is not "stale".
+- `lib/sessionWorkMetadata.ts` applies the same rule to `suggestDoneAt` and
+  `reviewOffer.at`.
+- `sync/host-session-status-seed.ts` has no client-clock age window at all: a
+  running session the Host lists is seeded, and the live stream corrects it.
+- `lib/sessionSourceClock.ts` owns the Host-clock readers
+  (`openchamber.workbench.lastIdleAt`, `openchamber.turn.endedAt`,
+  `openchamber.reviewOffer.at`).
+
+`oxlint.config.ts` enforces this with
+`tools/oxlint/openchamber/rules/no-cross-source-time-compare.ts`: a comparison
+between `session.updatedAt` and another clock (a Host stamp, `Date.now()`,
+`now`) is an error for `packages/ui/src`. Two `updatedAt` values, two Host
+stamps, and a presentation window that spans days (`overviewModel.ts`) stay
+allowed, the last with a justified inline disable.
+
+
 
 ## Approvals and Questions (CAS Interaction)
 

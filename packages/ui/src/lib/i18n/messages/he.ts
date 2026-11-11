@@ -9065,4 +9065,8 @@ export const dict = {
   ...tooltipsPanelI18n['he'],
   ...tooltipsChatI18n['he'],
   ...m4LaneDI18n['he'],
+  "gitIdentities.state.unknown": "זהויות Git טרם נטענו.",
+  "settings.usage.state.unknown": "השימוש טרם נטען.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "הזיכרון השמור טרם נטען.",
+
 };

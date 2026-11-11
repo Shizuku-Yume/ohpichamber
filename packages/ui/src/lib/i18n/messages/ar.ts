@@ -9065,4 +9065,8 @@ export const dict = {
   ...tooltipsPanelI18n['ar'],
   ...tooltipsChatI18n['ar'],
   ...m4LaneDI18n['ar'],
+  "gitIdentities.state.unknown": "لم يتم تحميل هويات Git بعد.",
+  "settings.usage.state.unknown": "لم يتم تحميل الاستخدام بعد.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "لم يتم تحميل الذاكرة المخزنة بعد.",
+
 };

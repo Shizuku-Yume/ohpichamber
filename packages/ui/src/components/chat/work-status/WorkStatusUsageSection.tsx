@@ -45,6 +45,7 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
   const displayMode = useQuotaStore((state) => state.displayMode);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const loadedRuntimeKey = useQuotaStore((state) => state.loadedRuntimeKey);
+  const quotaPhase = useQuotaStore((state) => state.phase);
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
   const fetchQuotas = useQuotaStore((state) => state.fetchQuotas);
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
@@ -62,7 +63,15 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
 
   useReportWorkStatusPresence('usage', groups.length > 0);
 
-  if (groups.length === 0) return null;
+  // Unread is not "nothing configured": say so rather than showing no readout.
+  if (groups.length === 0) {
+    if (quotaPhase !== 'unknown') return null;
+    return (
+      <WorkStatusCollapsibleSection id="usage" title={t('chat.workStatus.section.usage')} icon="timer" summary={t('settings.usage.state.unknown')}>
+        <p className="typography-meta text-muted-foreground">{t('settings.usage.state.unknown')}</p>
+      </WorkStatusCollapsibleSection>
+    );
+  }
 
   const modeLabel = displayMode === 'remaining'
     ? t('header.services.remaining')

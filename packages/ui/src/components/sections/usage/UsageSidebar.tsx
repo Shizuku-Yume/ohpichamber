@@ -33,6 +33,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isLoading = useQuotaStore((state) => state.isLoading);
+  const quotaPhase = useQuotaStore((state) => state.phase);
   const usageDisplayMode = useQuotaStore((state) => state.displayMode);
   const setUsageDisplayMode = useQuotaStore((state) => state.setDisplayMode);
   const providers = useQuotaProviders();
@@ -94,6 +95,9 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
       </div>
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
+        {quotaPhase === 'unknown' && providers.length === 0 ? (
+          <p className="typography-meta px-1 text-muted-foreground">{t('settings.usage.state.unknown')}</p>
+        ) : null}
         {providers.map((provider) => {
           const result = results.find((entry) => entry.providerId === provider.id);
           const percent = getUsagePercent(result?.usage);

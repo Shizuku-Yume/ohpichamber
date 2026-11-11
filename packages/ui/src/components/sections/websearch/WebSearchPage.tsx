@@ -467,6 +467,7 @@ export const WebSearchPage: React.FC = () => {
         </>
       ) : failed || error !== null ? null : (
         <SettingsSection divider={false}>
+          {/* Never read yet, or a read is in flight: both are "not answered". */}
           <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.state.loading')}</p>
         </SettingsSection>
       )}

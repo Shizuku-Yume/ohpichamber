@@ -9407,4 +9407,8 @@ export const dict = {
   ...tooltipsPanelI18n['ko'],
   ...tooltipsChatI18n['ko'],
   ...m4LaneDI18n.ko,
+  "gitIdentities.state.unknown": "Git ID가 아직 로드되지 않았습니다.",
+  "settings.usage.state.unknown": "사용량이 아직 로드되지 않았습니다.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "저장된 메모리가 아직 로드되지 않았습니다.",
+
 };

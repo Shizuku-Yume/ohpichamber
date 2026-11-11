@@ -1,5 +1,5 @@
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
-import { hostTurnEndedAt } from './sessionSourceClock';
+import { hostReviewOfferAt, hostTurnEndedAt } from './sessionSourceClock';
 
 export type SessionWork = NonNullable<NonNullable<SessionMetadata['openchamber']>['work']>;
 
@@ -19,7 +19,7 @@ export function isDoneSuggested(session: Session | null | undefined): boolean {
 }
 
 export function isReviewSuggested(session: Session | null | undefined): boolean {
-  const offeredAt = session?.metadata?.openchamber?.reviewOffer?.at;
+  const offeredAt = hostReviewOfferAt(session);
   return isHintCurrent(session, offeredAt) && !isDoneSuggested(session);
 }
 

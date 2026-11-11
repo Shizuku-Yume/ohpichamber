@@ -9407,4 +9407,8 @@ export const dict = {
   ...tooltipsPanelI18n['de'],
   ...tooltipsChatI18n['de'],
   ...m4LaneDI18n.de,
+  "gitIdentities.state.unknown": "Git-Identitäten sind noch nicht geladen.",
+  "settings.usage.state.unknown": "Die Nutzung ist noch nicht geladen.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Gespeicherte Erinnerungen sind noch nicht geladen.",
+
 };

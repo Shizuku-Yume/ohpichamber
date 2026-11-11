@@ -82,20 +82,38 @@ const resolveLineage = (
   return result;
 };
 
-/** The nearest explicit mode up the session's lineage, `ask` when there is none. */
+/**
+ * The nearest explicit mode up the session's lineage, or `null` when the
+ * policy has not been read. `null` is not `ask`: a policy read that has not
+ * answered must not be rendered as the user having chosen Ask, and callers
+ * that need a concrete mode pass the configured default themselves.
+ */
 export const resolvePermissionMode = (input: {
   modes: PermissionModeMap;
   sessions: readonly Session[];
   sessionById?: ReadonlyMap<string, Session>;
   sessionId: string;
-}): PermissionMode => {
+}): PermissionMode | null => {
   const { modes, sessions, sessionById, sessionId } = input;
-  if (Object.keys(modes).length === 0) return "ask";
+  if (Object.keys(modes).length === 0) return null;
 
   for (const id of resolveLineage(sessionId, sessions, sessionById)) {
     const mode = modes[id];
     if (mode) return mode;
   }
 
-  return "ask";
+  return null;
 };
+
+/**
+ * The mode to act on when the policy has no entry for this session's lineage:
+ * the nearest explicit mode, otherwise the instance's configured default. Ask
+ * remains the answer only when the policy itself was read and said nothing.
+ */
+export const resolvePermissionModeOrDefault = (input: {
+  modes: PermissionModeMap;
+  sessions: readonly Session[];
+  sessionById?: ReadonlyMap<string, Session>;
+  sessionId: string;
+  defaultMode: PermissionMode;
+}): PermissionMode => resolvePermissionMode(input) ?? input.defaultMode;

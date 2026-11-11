@@ -70,18 +70,47 @@ export function mergeHostSession(incoming: Session, previous?: Session): Session
 export function installHostSession(state: State, incoming: Session): State {
  const index = state.session.findIndex((item) => item.sessionId === incoming.sessionId)
  const previous = state.session[index]
- const next = mergeHostSession(incoming, previous)
- if (next === previous) return state
+ const pending = index < 0 ? state.pendingMetadata?.[incoming.sessionId] : undefined
+ const next = mergeHostSession(
+  pending && compareCounters(pending.revision, incoming.metadataRevision) >= 0
+   ? { ...incoming, metadata: pending.metadata, metadataRevision: pending.revision }
+   : incoming,
+  previous,
+ )
+ if (next === previous && !pending) return state
  const session = [...state.session]
  if (index < 0) session.push(next)
  else session[index] = next
  const revision = (state.sessionRevision ?? 0) + 1
- return { ...state, session, sessionTotal: session.length, sessionRevision: revision, sessionEventRevision: { ...state.sessionEventRevision, [incoming.sessionId]: revision } }
+ const released = index < 0 && state.pendingMetadata?.[incoming.sessionId] !== undefined
+ const pendingMetadata = released && state.pendingMetadata
+  ? omitPendingMetadata(state.pendingMetadata, incoming.sessionId)
+  : state.pendingMetadata
+ const next_state = {
+  ...state, session, sessionTotal: session.length, sessionRevision: revision,
+  sessionEventRevision: { ...state.sessionEventRevision, [incoming.sessionId]: revision },
+ }
+ if (pendingMetadata !== undefined) next_state.pendingMetadata = pendingMetadata
+ return next_state
+}
+
+const omitPendingMetadata = (record: Record<string, SessionMetadataState>, sessionId: string) => {
+ const next = { ...record }
+ delete next[sessionId]
+ return next
 }
 
 export function installSessionMetadata(state: State, metadata: SessionMetadataState): State {
  const current = state.session.find((item) => item.sessionId === metadata.sessionId)
- if (!current || compareCounters(metadata.revision, current.metadataRevision) < 0) return state
+ if (!current) {
+  // Metadata arrives before the session list does: an auto-generated title is
+  // announced for a session created moments ago. Dropping it left the sidebar
+  // stale until a reload, so it is held until a session record arrives.
+  const pending = state.pendingMetadata?.[metadata.sessionId]
+  if (pending && (compareCounters(metadata.revision, pending.revision) < 0 || same(pending, metadata))) return state
+  return { ...state, pendingMetadata: { ...state.pendingMetadata, [metadata.sessionId]: metadata } }
+ }
+ if (compareCounters(metadata.revision, current.metadataRevision) < 0) return state
  return installHostSession(state, { ...current, metadata: metadata.metadata, metadataRevision: metadata.revision })
 }
 
@@ -290,7 +319,50 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
  }
  const id = event.sessionId
  const snapshot = state.snapshot[id]
- if (!snapshot || event.epoch !== snapshot.session.epoch) return { kind: "resnapshot", state }
+ if (!snapshot) {
+  // A session this directory does not project yet. Deletion and a Host session
+  // record are authoritative on their own: an auto-generated title or a
+  // deletion announced before the list was read must not be dropped and
+  // recovered later. Everything else still needs the epoch and head the
+  // snapshot carries, so it asks for a resnapshot.
+  if (event.type === 'session.deleted') {
+   const released = state.pendingMetadata
+    ? event.deletedSessionIds.filter((sessionId) => state.pendingMetadata?.[sessionId] !== undefined)
+    : []
+   if (released.length === 0) return { kind: 'applied', state }
+   const pendingMetadata = { ...state.pendingMetadata }
+   for (const sessionId of released) delete pendingMetadata[sessionId]
+   return { kind: 'applied', state: { ...state, pendingMetadata } }
+  }
+  if (event.type === 'session.updated' && event.session) {
+   if (event.session.sessionId !== id || event.session.epoch !== event.epoch || compareCounters(event.session.headSequence, event.sequence) > 0) {
+    return { kind: 'resnapshot', state }
+   }
+   const pending = state.pendingMetadata?.[id]
+   let session: Session = {
+    ...event.session, metadata: event.metadata ?? null,
+    metadataRevision: event.metadataRevision ?? '0',
+    archiveRevision: event.archiveRevision ?? '0',
+   }
+   if (event.mode) session.mode = event.mode
+   if (event.continuationPending !== undefined) session.continuationPending = event.continuationPending
+   if (event.title !== undefined) session.title = event.title
+   if (event.loop !== undefined) session.loop = event.loop
+   // A metadata record announced before the list was read is newer than the
+   // projection this event carries; keep the announced one.
+   if (pending && compareCounters(pending.revision, session.metadataRevision) >= 0) {
+    session = { ...session, metadata: pending.metadata, metadataRevision: pending.revision }
+   }
+   if (event.archiveRevision !== undefined) {
+    session = { ...session, archiveRevision: event.archiveRevision }
+    if (event.archivedAt === null) delete session.archivedAt
+    else if (event.archivedAt !== undefined) session.archivedAt = event.archivedAt
+   }
+   return { kind: 'applied', state: installHostSession(state, session) }
+  }
+  return { kind: "resnapshot", state }
+ }
+ if (event.epoch !== snapshot.session.epoch) return { kind: "resnapshot", state }
  const comparison = compareCounters(event.sequence, snapshot.session.headSequence)
  if (comparison <= 0) return { kind: "duplicate", state }
  if (BigInt(event.sequence) !== BigInt(snapshot.session.headSequence) + 1n) return { kind: "resnapshot", state }

@@ -15,6 +15,7 @@ import type {
  ModelCatalog,
  ProviderCatalog,
  AgentCatalog,
+ SessionMetadataState,
 } from "@openchamber/agent-contract"
 
 /** Resolved filesystem context retained for UI routing and directory selection. */
@@ -45,6 +46,12 @@ export type State = {
  agents?: AgentCatalog
  discoveryErrors?: Record<string, string>
  session: Session[]
+ /**
+  * Host metadata for sessions this directory does not hold yet, kept until a
+  * session record arrives. An auto-generated title is announced for a session
+  * created moments ago; dropping it left the row stale until a reload.
+  */
+ pendingMetadata?: Record<string, SessionMetadataState>
  sessionTotal: number
  sessionListSource?: "empty" | "persisted" | "live" | "authoritative"
  sessionRevision?: number
@@ -148,6 +155,7 @@ export const INITIAL_STATE: State = {
  session: [],
  sessionTotal: 0,
  sessionListSource: "empty",
+ pendingMetadata: {},
  sessionRevision: 0,
  sessionEventRevision: {},
  runControlRevision: {},

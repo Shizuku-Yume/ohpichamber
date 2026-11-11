@@ -27,7 +27,7 @@ import { latestTodoPhases } from './todoHistory';
 // tray folded to the active item with its progress.
 
 const browser = new Window({ url: 'http://localhost/' });
-Object.assign(globalThis, {
+for (const [name, value] of Object.entries({
     window: browser,
     document: browser.document,
     navigator: browser.navigator,
@@ -35,7 +35,9 @@ Object.assign(globalThis, {
     Element: browser.Element,
     HTMLElement: browser.HTMLElement,
     IS_REACT_ACT_ENVIRONMENT: true,
-});
+})) {
+    Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+}
 
 afterAll(() => {
     browser.close();

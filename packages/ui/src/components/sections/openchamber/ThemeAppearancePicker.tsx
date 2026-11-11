@@ -17,6 +17,7 @@ import { ThemeSchematic, type ThemeSchematicLayout } from './ThemeSchematic';
 import { useThemeVariantTabStore, type ThemeVariant } from './themeVariantTab';
 import { handleDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
 import { SettingsCardSearch } from '../shared/SettingsCards';
+import { problemMessage } from '@/lib/problemMessage';
 
 
 const MODE_OPTIONS: Array<{ value: ThemeMode; labelKey: 'settings.openchamber.visual.option.themeMode.system' | 'settings.openchamber.visual.option.themeMode.light' | 'settings.openchamber.visual.option.themeMode.dark' }> = [
@@ -322,8 +323,8 @@ function ThemeList({ themes, emptyText, selectedId, ariaLabel, touch, onSelect, 
       await deleteImportedTheme(id);
       onPreview(null);
       if (hadFocus) window.requestAnimationFrame(() => focusRow(neighbour?.metadata.id));
-    } catch {
-      toast.error(t('settings.themeImport.deleteError'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.themeImport.deleteError')));
     } finally {
       setDeletingId(null);
     }

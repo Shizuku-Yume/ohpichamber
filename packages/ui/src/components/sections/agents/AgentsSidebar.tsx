@@ -18,6 +18,7 @@ import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
+import { problemMessage } from '@/lib/problemMessage';
 
 interface AgentsSidebarProps { onItemSelect?: () => void }
 interface AgentAction { agent: Agent; revision: string; directory: string | null }
@@ -79,12 +80,12 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
     try {
       const result = await updateAgent({ ...action.agent, name }, action.directory, action.revision);
       if (directoryRef.current !== action.directory) return;
-      if (!result.ok) { toast.error(t('settings.agents.sidebar.toast.renameFailed')); return; }
+      if (!result.ok) { toast.error(problemMessage(result.error, t('settings.agents.sidebar.toast.renameFailed'))); return; }
       if (selectedAgentName === action.agent.name) setSelectedAgent(name);
       toast.success(t('settings.agents.sidebar.toast.agentRenamed', { name }));
       setRenameAction(null);
-    } catch {
-      toast.error(t('settings.agents.sidebar.toast.renameFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.agents.sidebar.toast.renameFailed')));
     } finally { setPendingAction(false); }
   };
 
@@ -95,12 +96,12 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
     try {
       const result = await deleteAgent(action.agent.agentId, action.directory, action.revision);
       if (directoryRef.current !== action.directory) return;
-      if (!result.ok) { toast.error(t('settings.agents.sidebar.toast.deleteFailed')); return; }
+      if (!result.ok) { toast.error(problemMessage(result.error, t('settings.agents.sidebar.toast.deleteFailed'))); return; }
       if (selectedAgentName === action.agent.name) setSelectedAgent(null);
       toast.success(t('settings.agents.sidebar.toast.agentDeleted', { name: action.agent.name }));
       setDeleteAction(null);
-    } catch {
-      toast.error(t('settings.agents.sidebar.toast.deleteFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.agents.sidebar.toast.deleteFailed')));
     } finally { setPendingAction(false); }
   };
 

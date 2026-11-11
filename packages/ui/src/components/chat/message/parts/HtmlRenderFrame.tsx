@@ -52,6 +52,7 @@ import { DeclinePageButton } from './DeclinePageButton';
 import { usePageDecline } from './usePageDecline';
 import { PageAskStatus } from './PageAskStatus';
 import { UiPageFrame } from './UiPageFrame';
+import { problemMessage } from '@/lib/problemMessage';
 
 // A timeline row unmounts when it scrolls away and mounts again when it comes
 // back. The page's last height is kept per call, so it comes back at its size
@@ -442,8 +443,8 @@ function HtmlRenderFrame({ part, html, title, ask }: HtmlRenderFrameProps) {
         const file = new File([buildHtmlRenderDocument(pageHtml, theme)], fileName, { type: 'text/html' });
         try {
             await saveFile(file);
-        } catch {
-            toast.error(t('chat.htmlRender.downloadFailed'));
+        } catch (error) {
+            toast.error(problemMessage(error, t('chat.htmlRender.downloadFailed')));
         }
     }, [pageHtml, t, theme, title]);
 

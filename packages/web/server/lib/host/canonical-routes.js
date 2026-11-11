@@ -325,7 +325,7 @@ export function registerCanonicalHostRoutes(app, {
     });
     if (!reopened.ok) {
      const parsedError = C.ProblemDetailsSchema.safeParse(await reopened.json());
-     if (!parsedError.success) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The agent error response is invalid.');
+     if (!parsedError.success) return problem(res, 503, 'SERVICE_UNAVAILABLE', `The Agent Service refused the session reopen with HTTP ${reopened.status} without a problem document.`);
      return res.status(reopened.status).type('application/problem+json').json(parsedError.data);
     }
    }
@@ -395,7 +395,7 @@ export function registerCanonicalHostRoutes(app, {
    });
    if (!response.ok) {
     const parsedError = C.ProblemDetailsSchema.safeParse(await response.json());
-    if (!parsedError.success) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The agent error response is invalid.');
+    if (!parsedError.success) return problem(res, 503, 'SERVICE_UNAVAILABLE', `The Agent Service answered HTTP ${response.status} without a problem document.`);
     return res.status(response.status).type('application/problem+json').json(parsedError.data);
    }
    if (route.stream) {

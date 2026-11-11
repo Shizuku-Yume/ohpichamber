@@ -52,7 +52,8 @@ async function requestResponse(path: string, init: RequestInit = {}): Promise<Re
     if (problem.success) throw new CanonicalApiError(problem.data);
     throw new CanonicalApiError(C.ProblemDetailsSchema.parse({
       type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Agent Service unavailable',
-      status: response.status, detail: 'The canonical operation failed.', code: 'SERVICE_UNAVAILABLE', retryable: response.status >= 500,
+      status: response.status, detail: `The Host answered HTTP ${response.status} without a problem document.`,
+      code: 'SERVICE_UNAVAILABLE', retryable: response.status >= 500,
     }));
   }
   return response;
@@ -628,7 +629,8 @@ export class CanonicalClient {
           if (problem.success) throw new CanonicalApiError(problem.data);
           throw new CanonicalApiError(C.ProblemDetailsSchema.parse({
             type: 'urn:ohpichamber:problem:SERVICE_UNAVAILABLE', title: 'Agent event stream unavailable',
-            status: response.status, detail: 'The canonical event stream failed.', code: 'SERVICE_UNAVAILABLE', retryable: response.status >= 500,
+            status: response.status, detail: `The Host answered the event stream request with HTTP ${response.status} without a problem document.`,
+            code: 'SERVICE_UNAVAILABLE', retryable: response.status >= 500,
           }));
         }
         if (response.headers.get('Content-Type')?.split(';', 1)[0].trim().toLowerCase() !== 'text/event-stream') {

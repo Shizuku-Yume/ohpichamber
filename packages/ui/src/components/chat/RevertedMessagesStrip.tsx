@@ -13,6 +13,7 @@ import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { clearStagedRevert } from '@/sync/session-actions';
 import { useDirectorySync } from '@/sync/sync-context';
+import { problemMessage } from '@/lib/problemMessage';
 import {
     EMPTY_REVERTED_MESSAGE_DOCK_STATE,
     buildRevertedMessageDockState,
@@ -82,7 +83,7 @@ export const RevertedMessagesStrip: React.FC<RevertedMessagesStripProps> = React
             await clearStagedRevert(sessionId);
         } catch (error) {
             console.warn('[revert] failed to restore reverted messages:', error);
-            toast.error(t('chat.revertPopover.toast.restoreFailed'));
+            toast.error(problemMessage(error, t('chat.revertPopover.toast.restoreFailed')));
         } finally {
             setRestoring(false);
         }

@@ -33,24 +33,24 @@ describe('Host MCP OAuth authorization', () => {
     const configuration = Object.fromEntries(endpointFields.map(field => [field, `https://oauth.example/${field}?resource=tools`]));
     Object.assign(configuration, { clientId: 'public-client', scopes: 'mcp:tools', prompt: 'consent', callbackPort: 3000, callbackPath: '/callback', stripSameOriginResource: false });
     expect(await authorize(scope, { type: 'mcp-oauth', server, configuration })).toEqual({ allowed: true });
-    expect(await authorize(scope, { type: 'provider-entry' })).toEqual({ allowed: false, code: 'enterprise_mode', status: 403 });
+    expect(await authorize(scope, { type: 'provider-entry' })).toMatchObject({ allowed: false, code: 'enterprise_mode', status: 403 });
   });
 
   it.each(endpointFields)('refuses unsafe %s without treating it as an unavailable policy', async field => {
     for (const url of ['file:///etc/passwd', 'https://user:secret@oauth.example/token', 'https://oauth.example/token#fragment', 'not-a-url']) {
-      expect(await authorize(scope, { type: 'mcp-oauth', server, configuration: { [field]: url } })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await authorize(scope, { type: 'mcp-oauth', server, configuration: { [field]: url } })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
     }
   });
 
   it('refuses secret, transport injection and unknown configuration fields', async () => {
     for (const configuration of [{ clientSecret: 'private' }, { fetch: 'injected' }, { headers: { Authorization: 'private' } }, { arbitrary: true }]) {
-      expect(await authorize(scope, { type: 'mcp-oauth', server, configuration })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await authorize(scope, { type: 'mcp-oauth', server, configuration })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
     }
   });
 
   it('keeps configured-server and captured-source authority independent of endpoint validity', async () => {
-    expect(await authorize(scope, { type: 'mcp-oauth', server: { ...server, transport: { type: 'http', url: 'https://foreign.example/tools' } }, configuration: {} })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-    expect(await authorize({ ...scope, agentDirectoryId: 'foreign-agent-directory' }, { type: 'mcp-oauth', server, configuration: {} })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    expect(await authorize(scope, { type: 'mcp-oauth', server: { ...server, transport: { type: 'http', url: 'https://foreign.example/tools' } }, configuration: {} })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    expect(await authorize({ ...scope, agentDirectoryId: 'foreign-agent-directory' }, { type: 'mcp-oauth', server, configuration: {} })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
   });
 });
 
@@ -79,13 +79,13 @@ describe('Host-owned native descriptor authority', () => {
       await fs.writeFile(outside, 'outside');
       const read = { type: 'tool', toolName: 'read', input: { path: 'inside.txt:2-8' } };
       const descriptor = { toolName: 'read', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
-      expect(await harness.authorize(harness.scope, read)).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, read)).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
       expect(await harness.authorize(harness.scope, read, descriptor)).toEqual({ allowed: true });
-      expect(await harness.authorize(harness.scope, read, { ...descriptor, sourcePaths: [outside] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, read, { ...descriptor, sourcePaths: [outside] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       for (const effectiveMode of ['apply_patch', 'hashline', 'patch', 'replace', 'sloppy']) {
         const request = { type: 'tool', toolName: 'edit', input: { changes: 'source-owned native edit input' } };
         const edit = { toolName: 'edit', effectiveMode, sourcePaths: [inside], destinationPaths: [inside], fileOps: [{ kind: 'rename', path: inside, to: outside }] };
-        expect(await harness.authorize(harness.scope, request, edit)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+        expect(await harness.authorize(harness.scope, request, edit)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
         expect(await fs.readFile(outside, 'utf8')).toBe('outside');
       }
       expect(await fs.readFile(inside, 'utf8')).toBe('inside');
@@ -98,8 +98,8 @@ describe('Host-owned native descriptor authority', () => {
       await fs.symlink(harness.outside, path.join(harness.scope.cwd, 'linked'));
       await fs.writeFile(path.join(harness.outside, 'secret.txt'), 'SECRET_UNCHANGED');
       const escaped = path.join(harness.scope.cwd, 'linked', 'secret.txt');
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'read', input: { path: 'linked/secret.txt:1' } }, { toolName: 'read', sourcePaths: [escaped], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'write', input: { path: 'linked/secret.txt', content: 'overwrite' } }, { toolName: 'write', sourcePaths: [], destinationPaths: [escaped], fileOps: [{ kind: 'write', path: escaped }] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'read', input: { path: 'linked/secret.txt:1' } }, { toolName: 'read', sourcePaths: [escaped], destinationPaths: [], fileOps: [] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'write', input: { path: 'linked/secret.txt', content: 'overwrite' } }, { toolName: 'write', sourcePaths: [], destinationPaths: [escaped], fileOps: [{ kind: 'write', path: escaped }] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await fs.readFile(path.join(harness.outside, 'secret.txt'), 'utf8')).toBe('SECRET_UNCHANGED');
     } finally { await harness.close(); }
   });
@@ -115,20 +115,20 @@ describe('Host-owned native descriptor authority', () => {
       for (const scheme of ['agent', 'history', 'artifact', 'local', 'proc', 'skill', 'xd', 'mcp', 'omp', 'issue', 'pr']) {
         expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: [`${scheme}://native`] })).toEqual({ allowed: true });
       }
-      expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: ['file:///etc/passwd'] })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
-      expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: ['agent://native\0'] })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
-      expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: ['https://example.com'] })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: ['file:///etc/passwd'] })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: ['agent://native\0'] })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: ['https://example.com'] })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
 
       const mixed = { type: 'tool', toolName: 'read', input: { path: 'inside.txt;agent://native' } };
       expect(await harness.authorize(harness.scope, mixed, { ...internalDescriptor, sourcePaths: [inside] })).toEqual({ allowed: true });
-      expect(await harness.authorize(harness.scope, mixed, { ...internalDescriptor, sourcePaths: [path.join(harness.outside, 'secret')] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, mixed, { ...internalDescriptor, sourcePaths: [path.join(harness.outside, 'secret')] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
 
       for (const toolName of ['write', 'edit', 'grep', 'glob']) {
         const request = { type: 'tool', toolName, input: { path: 'agent://native' } };
-        expect(await harness.authorize(harness.scope, request, { ...internalDescriptor, toolName })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+        expect(await harness.authorize(harness.scope, request, { ...internalDescriptor, toolName })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       }
       harness.policy.fileTools = [];
-      expect(await harness.authorize(harness.scope, internalRead, internalDescriptor)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, internalRead, internalDescriptor)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
   });
 
@@ -136,7 +136,7 @@ describe('Host-owned native descriptor authority', () => {
     const harness = await nativeHarness();
     try {
       expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'wait', input: { ids: ['bg_1'] } })).toEqual({ allowed: true });
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'wait-foreign', input: {} })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'wait-foreign', input: {} })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
   });
 
@@ -147,7 +147,7 @@ describe('Host-owned native descriptor authority', () => {
       const descriptor = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' };
       expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: true });
       for (const delta of [{ providerId: 'foreign' }, { modelId: 'foreign' }, { endpoint: 'https://foreign.example/v1' }]) {
-        expect(await harness.authorize(harness.scope, request, { ...descriptor, ...delta })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+        expect(await harness.authorize(harness.scope, request, { ...descriptor, ...delta })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       }
     } finally { await harness.close(); }
   });
@@ -159,11 +159,11 @@ describe('Host-owned native descriptor authority', () => {
       const request = { type: 'tool', toolName: 'bash', input: { command }, approvalId: 'approval', toolCallId: 'call' };
       const descriptor = { toolName: 'bash', sourcePaths: [harness.scope.cwd], destinationPaths: [], fileOps: [], command };
       const approvalGrant = { approvalId: 'approval', toolCallId: 'call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch', command };
-      expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
-      expect(await harness.authorize(harness.scope, request, { ...descriptor, sourcePaths: [harness.outside] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, request, descriptor)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+      expect(await harness.authorize(harness.scope, request, { ...descriptor, sourcePaths: [harness.outside] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, request, { ...descriptor, approvalGrant })).toEqual({ allowed: true });
       for (const mismatch of [{ command: 'printf other' }, { toolCallId: 'other-call' }, { rootSessionId: 'foreign-root' }, { workerGeneration: 'retired-generation' }]) {
-        expect(await harness.authorize(harness.scope, request, { ...descriptor, approvalGrant: { ...approvalGrant, ...mismatch } })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+        expect(await harness.authorize(harness.scope, request, { ...descriptor, approvalGrant: { ...approvalGrant, ...mismatch } })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
       }
       harness.policy.shellCommands.push(command);
       expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'bash', input: { command } }, descriptor)).toEqual({ allowed: true });
@@ -181,7 +181,7 @@ describe('Host-owned native descriptor authority', () => {
         toolName: 'bash', sourcePaths: [], destinationPaths: [], fileOps: [], command,
         approvalGrant: { approvalId: 'approval', toolCallId: 'call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch', command }
       };
-      expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, request, descriptor)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
   });
 
@@ -191,14 +191,14 @@ describe('Host-owned native descriptor authority', () => {
     const harness = await nativeHarness();
     try {
       expect(await harness.authorize(harness.scope, request)).toEqual({ allowed: true });
-      expect(await harness.authorize(harness.scope, { ...request, toolName: 'custom-question' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, permissionPresetId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, toolName: 'custom-question' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, permissionPresetId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
     const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'ask', pattern: JSON.stringify(input) } }]);
     try {
-      expect(await denied.authorize(denied.scope, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await denied.authorize(denied.scope, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await denied.close(); }
   });
 
@@ -208,12 +208,12 @@ describe('Host-owned native descriptor authority', () => {
     const harness = await nativeHarness();
     try {
       expect(await harness.authorize(harness.scope, request)).toEqual({ allowed: true });
-      expect(await harness.authorize(harness.scope, { ...request, toolName: 'custom-yield' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, toolName: 'custom-yield' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
     const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'yield', pattern: JSON.stringify(input) } }]);
     try {
-      expect(await denied.authorize(denied.scope, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await denied.authorize(denied.scope, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await denied.close(); }
   });
 
@@ -224,16 +224,16 @@ describe('Host-owned native descriptor authority', () => {
         const request = { type: 'tool', toolName: 'goal', input: { op, objective: 'Finish the task' } };
         expect(await harness.authorize(harness.scope, request)).toEqual({ allowed: true });
         for (const mismatch of [{ workspaceId: 'foreign' }, { agentDirectoryId: 'foreign' }, { cwd: harness.outside }]) {
-          expect(await harness.authorize({ ...harness.scope, ...mismatch }, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+          expect(await harness.authorize({ ...harness.scope, ...mismatch }, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
         }
-        expect(await harness.authorize(harness.scope, { ...request, toolName: 'unregistered-tool' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+        expect(await harness.authorize(harness.scope, { ...request, toolName: 'unregistered-tool' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       }
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'goal', input: { op: 'complete' }, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'goal', input: { op: 'complete' }, agentId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
     const input = { op: 'complete' };
     const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'goal', pattern: JSON.stringify(input) } }]);
     try {
-      expect(await denied.authorize(denied.scope, { type: 'tool', toolName: 'goal', input })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await denied.authorize(denied.scope, { type: 'tool', toolName: 'goal', input })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await denied.close(); }
   });
 
@@ -247,16 +247,16 @@ describe('Host-owned native descriptor authority', () => {
         const request = { type: 'tool', toolName: 'todo', input };
         expect(await harness.authorize(harness.scope, request)).toEqual({ allowed: true });
         for (const mismatch of [{ workspaceId: 'foreign' }, { agentDirectoryId: 'foreign' }, { cwd: harness.outside }]) {
-          expect(await harness.authorize({ ...harness.scope, ...mismatch }, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+          expect(await harness.authorize({ ...harness.scope, ...mismatch }, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
         }
       }
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'todo', input: { op: 'init' }, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'todo', input: { op: 'init' }, permissionPresetId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'todo', input: { op: 'init' }, agentId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'todo', input: { op: 'init' }, permissionPresetId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
     const input = { op: 'init' };
     const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'todo', pattern: JSON.stringify(input) } }]);
     try {
-      expect(await denied.authorize(denied.scope, { type: 'tool', toolName: 'todo', input })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await denied.authorize(denied.scope, { type: 'tool', toolName: 'todo', input })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await denied.close(); }
   });
 
@@ -267,20 +267,20 @@ describe('Host-owned native descriptor authority', () => {
     try {
       harness.policy.agentIds.push('profile');
       expect(await harness.authorize(harness.scope, { ...request, agentId: 'profile' })).toEqual({ allowed: true });
-      expect(await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, permissionPresetId: 'foreign' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, toolName: 'arbitrary-tool' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, input: { ...input, isolated: true } })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, input: { tasks: [{ ...input, isolated: true }] } })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, input: { ...input, name: '../escape' } })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
-      expect(await harness.authorize(harness.scope, { ...request, input: { tasks: [{ ...input, name: 'nested/escape' }] } })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, permissionPresetId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, toolName: 'arbitrary-tool' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, input: { ...input, isolated: true } })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, input: { tasks: [{ ...input, isolated: true }] } })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, input: { ...input, name: '../escape' } })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, { ...request, input: { tasks: [{ ...input, name: 'nested/escape' }] } })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
       expect(await harness.authorize(harness.scope, { ...request, input: { agent: input.agent, task: input.task } })).toEqual({ allowed: true });
       expect(await harness.authorize(harness.scope, { ...request, input: { tasks: [{ ...input, name: 'safe-child-2' }] } })).toEqual({ allowed: true });
     } finally { await harness.close(); }
     const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'task', pattern: JSON.stringify(input) } }]);
     try {
-      expect(await denied.authorize(denied.scope, request)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await denied.authorize(denied.scope, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await denied.close(); }
   });
   it('validates permissionPresetId and authorizes permission.preset tools against workspace policy', async () => {
@@ -307,24 +307,87 @@ describe('Host-owned native descriptor authority', () => {
         toolName: 'permission.preset',
         input: { presetId: 'invalid' },
         permissionPresetId: 'invalid',
-      })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
 
       expect(await harness.authorize(harness.scope, {
         type: 'tool',
         toolName: 'permission.preset',
         input: { presetId: 'auto' },
         permissionPresetId: 'auto',
-      })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
 
       expect(await harness.authorize(harness.scope, {
         type: 'tool',
         toolName: 'permission.preset',
         input: { presetId: 'ask' },
         permissionPresetId: 'safety',
-      })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally {
       await harness.close();
     }
+  });
+});
+
+describe('proposed-state authorization', () => {
+  it('C1/C2/C6 authorize the MCP server a persist operation introduces', async () => {
+    const harness = await nativeHarness();
+    try {
+      const proposed = { serverId: 'proposed-server', label: 'Proposed', enabled: true, transport: { type: 'http', url: 'https://proposed.example/tools' } };
+      expect(await harness.authorize(harness.scope, { type: 'mcp-server', server: proposed }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'mcp-server', server: proposed, proposed: true })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { type: 'mcp-oauth', server: proposed, configuration: {}, proposed: true })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { type: 'mcp-server', server: { ...proposed, enabled: false }, proposed: true }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'mcp-server', server: { ...proposed, managed: false }, proposed: true }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'mcp-oauth', server: { ...proposed, transport: { type: 'stdio', command: 'server', args: [] } }, configuration: {}, proposed: true }))
+        .toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+    } finally { await harness.close(); }
+  });
+
+  it('C3/C4 authorize the permission preset an agent write introduces', async () => {
+    const harness = await nativeHarness();
+    try {
+      const request = { type: 'tool', toolName: 'permission.preset', input: { presetId: 'auto' }, permissionPresetId: 'auto' };
+      expect(await harness.authorize(harness.scope, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, proposed: true })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { ...request, proposed: true, input: { presetId: 'safety' } }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, proposed: true, input: { presetId: 'invented' }, permissionPresetId: 'invented' }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+    } finally { await harness.close(); }
+  });
+
+  it('C5 authorizes the provider and model a completion introduces', async () => {
+    const harness = await nativeHarness();
+    try {
+      const request = { type: 'tool', toolName: 'provider.use', input: { providerId: 'added', modelId: 'added-model' } };
+      const descriptor = { toolName: 'provider.use', sourcePaths: [], destinationPaths: [], fileOps: [], providerId: 'added', modelId: 'added-model' };
+      expect(await harness.authorize(harness.scope, request, descriptor)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { ...request, proposed: true }, descriptor)).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { ...request, proposed: true }, { ...descriptor, modelId: undefined }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, request, { ...descriptor, providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' })).toEqual({ allowed: true });
+    } finally { await harness.close(); }
+  });
+
+  it('names the refusing check in every refusal', async () => {
+    const harness = await nativeHarness();
+    try {
+      const refusals = [
+        await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, { type: 'tool', toolName: 'wait', input: {} }),
+        await harness.authorize(harness.scope, { type: 'tool', toolName: 'wait', input: {}, agentId: 'foreign' }),
+        await harness.authorize(harness.scope, { type: 'mcp-server', server }),
+        await harness.authorize(harness.scope, { type: 'tool', toolName: 'read', input: { path: 'x' } }),
+        await harness.authorize(harness.scope, { type: 'tool', toolName: 'bash', input: { command: 'true' } }),
+      ];
+      for (const refusal of refusals) {
+        expect(refusal.allowed).toBe(false);
+        expect(typeof refusal.detail).toBe('string');
+        expect(refusal.detail.length).toBeGreaterThan(0);
+      }
+    } finally { await harness.close(); }
   });
 });
 
@@ -335,9 +398,9 @@ describe('native web-search egress authority', () => {
     try {
       expect(await harness.authorize(harness.scope, { type: 'web-search' })).toEqual({ allowed: true });
       policyText = JSON.stringify({ enterpriseMode: true });
-      expect(await harness.authorize(harness.scope, { type: 'web-search' })).toEqual({ allowed: false, code: 'enterprise_mode', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'web-search' })).toMatchObject({ allowed: false, code: 'enterprise_mode', status: 403 });
       policyText = '{broken';
-      expect(await harness.authorize(harness.scope, { type: 'web-search' })).toEqual({ allowed: false, code: 'enterprise_mode', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'web-search' })).toMatchObject({ allowed: false, code: 'enterprise_mode', status: 403 });
       policyText = JSON.stringify({ enterpriseMode: false });
       expect(await harness.authorize(harness.scope, { type: 'web-search' })).toEqual({ allowed: true });
     } finally { await harness.close(); }
@@ -347,9 +410,9 @@ describe('native web-search egress authority', () => {
     const harness = await nativeHarness([], { env: {}, readFile: () => '{}' });
     try {
       for (const mismatch of [{ workspaceId: 'foreign' }, { agentDirectoryId: 'foreign' }, { cwd: harness.outside }, { agentDirectory: harness.outside }]) {
-        expect(await harness.authorize({ ...harness.scope, ...mismatch }, { type: 'web-search' })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+        expect(await harness.authorize({ ...harness.scope, ...mismatch }, { type: 'web-search' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       }
-      expect(await harness.authorize(harness.scope, { type: 'web-search', endpoint: 'http://localhost:8080' })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, { type: 'web-search', endpoint: 'http://localhost:8080' })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
     } finally { await harness.close(); }
   });
 });
@@ -414,18 +477,18 @@ describe('Host-owned native LSP tool authorization', () => {
       const req = { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'outside.ts', line: 1 } };
 
       // Outside path
-      expect(await harness.authorize(harness.scope, req, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [outside], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, req, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [outside], destinationPaths: [], fileOps: [] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
 
       // Symlink escape
-      expect(await harness.authorize(harness.scope, req, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [escapedSymlink], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, req, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [escapedSymlink], destinationPaths: [], fileOps: [] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
 
       // Read permission stripped from policy
       harness.policy.fileTools = ['write'];
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts', line: 1 } }, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts', line: 1 } }, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
 
       // Read-only query claiming destination paths fails closed
       harness.policy.fileTools = ['read', 'write'];
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts', line: 1 } }, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [inside], fileOps: [] })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts', line: 1 } }, { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [inside], fileOps: [] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
   });
 
@@ -436,19 +499,19 @@ describe('Host-owned native LSP tool authorization', () => {
       await fs.writeFile(inside, 'inside');
 
       // Missing descriptor -> 400
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
 
       // Descriptor missing lspAction -> 400
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } }, { toolName: 'lsp', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } }, { toolName: 'lsp', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
 
       // Descriptor toolName mismatch -> 400
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } }, { toolName: 'read', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toEqual({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'lsp', input: { action: 'hover', file: 'inside.ts' } }, { toolName: 'read', sourcePaths: [inside], destinationPaths: [], fileOps: [] })).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
 
       // Unsupported actions -> 403
       for (const action of ['reload', 'request', 'unknown_action', 'eval']) {
         const req = { type: 'tool', toolName: 'lsp', input: { action } };
         const desc = { toolName: 'lsp', lspAction: action, sourcePaths: [inside], destinationPaths: [], fileOps: [] };
-        expect(await harness.authorize(harness.scope, req, desc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+        expect(await harness.authorize(harness.scope, req, desc)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       }
     } finally { await harness.close(); }
   });
@@ -463,22 +526,22 @@ describe('Host-owned native LSP tool authorization', () => {
       // rename without approval grant -> 403 approvalRequired
       const renameReq = { type: 'tool', toolName: 'lsp', input: { action: 'rename', file: 'inside.ts', line: 1, new_name: 'renamed' }, approvalId: 'app-1', toolCallId: 'call-1' };
       const renameDesc = { toolName: 'lsp', lspAction: 'rename', sourcePaths: [inside], destinationPaths: [inside], fileOps: [] };
-      expect(await harness.authorize(harness.scope, renameReq, renameDesc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+      expect(await harness.authorize(harness.scope, renameReq, renameDesc)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
 
       // code_actions with apply: true without grant -> 403 approvalRequired
       const caApplyReq = { type: 'tool', toolName: 'lsp', input: { action: 'code_actions', file: 'inside.ts', apply: true }, approvalId: 'app-1', toolCallId: 'call-1' };
       const caApplyDesc = { toolName: 'lsp', lspAction: 'code_actions', sourcePaths: [inside], destinationPaths: [inside], fileOps: [] };
-      expect(await harness.authorize(harness.scope, caApplyReq, caApplyDesc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+      expect(await harness.authorize(harness.scope, caApplyReq, caApplyDesc)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
 
       // rename_file without grant -> 403 approvalRequired
       const rfReq = { type: 'tool', toolName: 'lsp', input: { action: 'rename_file', file: 'inside.ts', new_name: 'renamed.ts' }, approvalId: 'app-1', toolCallId: 'call-1' };
       const rfDesc = { toolName: 'lsp', lspAction: 'rename_file', sourcePaths: [inside], destinationPaths: [renamed], fileOps: [{ kind: 'rename', path: inside, to: renamed }] };
-      expect(await harness.authorize(harness.scope, rfReq, rfDesc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
+      expect(await harness.authorize(harness.scope, rfReq, rfDesc)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true });
 
       // Mutation without write permission in fileTools fails closed
       harness.policy.fileTools = ['read'];
       const grant = { approvalId: 'app-1', toolCallId: 'call-1', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', command: 'rename' };
-      expect(await harness.authorize(harness.scope, renameReq, { ...renameDesc, approvalGrant: grant })).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, renameReq, { ...renameDesc, approvalGrant: grant })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
 
       // Mutation with valid grant and write permission succeeds
       harness.policy.fileTools = ['read', 'write'];
@@ -497,7 +560,7 @@ describe('Host-owned native LSP tool authorization', () => {
       await fs.writeFile(inside, 'inside');
       const req = { type: 'tool', toolName: 'lsp', input };
       const desc = { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
-      expect(await harness.authorize(harness.scope, req, desc)).toEqual({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
+      expect(await harness.authorize(harness.scope, req, desc)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
   });
 });

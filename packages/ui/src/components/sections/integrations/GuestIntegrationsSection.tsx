@@ -36,6 +36,7 @@ import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { openExternalUrl } from '@/lib/url';
+import { problemMessage } from '@/lib/problemMessage';
 
 type GuestIntegrationCardProps = {
   guest: InstalledGuest;
@@ -236,7 +237,7 @@ export const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ gues
     } catch (error) {
       if (!isCurrent()) return;
       console.error('Failed to start guest connect:', error);
-      toast.error(t('settings.integrations.guests.toast.startFailed', { name }));
+      toast.error(problemMessage(error, t('settings.integrations.guests.toast.startFailed', { name })));
       stopWaiting();
     } finally {
       if (isCurrent()) setIsBusy(false);
@@ -259,7 +260,7 @@ export const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ gues
     } catch (error) {
       if (!isCurrent()) return;
       console.error('Failed to disconnect guest:', error);
-      toast.error(t('settings.integrations.guests.toast.disconnectFailed', { name }));
+      toast.error(problemMessage(error, t('settings.integrations.guests.toast.disconnectFailed', { name })));
     } finally {
       if (isCurrent()) setIsBusy(false);
     }

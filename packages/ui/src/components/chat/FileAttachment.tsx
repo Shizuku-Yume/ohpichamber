@@ -19,6 +19,7 @@ import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
 
 import type { ToolPopupContent } from './message/types';
+import { problemMessage } from '@/lib/problemMessage';
 
 const FileAttachmentButton = memo(() => {
   const { t } = useI18n();
@@ -589,8 +590,8 @@ export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, comp
       const url = URL.createObjectURL(blob);
       popupUrl.current = { attachmentId: part.attachmentId, url };
       onShowPopup({ open: true, title: part.name, content: '', image: { url, mimeType: part.mediaType, filename: part.name, size: part.size } });
-    } catch {
-      if (current()) toast.error(t('filesView.error.readFileFailed'));
+    } catch (error) {
+      if (current()) toast.error(problemMessage(error, t('filesView.error.readFileFailed')));
     }
   };
   const downloadAttachment = React.useCallback(async (part: AttachmentPart) => {
@@ -617,8 +618,8 @@ export const MessageFilesDisplay = memo(({ files, workspaceId, onShowPopup, comp
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-    } catch {
-      if (current()) toast.error(t('filesView.toast.saveFailed'));
+    } catch (error) {
+      if (current()) toast.error(problemMessage(error, t('filesView.toast.saveFailed')));
     } finally {
       const createdUrl = url;
       if (createdUrl) setTimeout(() => URL.revokeObjectURL(createdUrl), 0);

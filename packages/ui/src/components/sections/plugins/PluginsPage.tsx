@@ -37,6 +37,7 @@ import { PluginsGrid, pluginUpdateFor, type PluginDeleteTarget, type PluginSelec
 import { MarketplaceSourcesDialog } from './MarketplaceSourcesDialog';
 import { ExtensionControlCenter } from './ExtensionControlCenter';
 import { PluginStatusBanner } from './PluginStatusBanner';
+import { problemMessage } from '@/lib/problemMessage';
 
 const parseSettings = (text: string) => {
   try {
@@ -201,8 +202,8 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
       } else {
         try {
           settings[key] = JsonValueSchema.parse(JSON.parse(value));
-        } catch {
-          return autosaveFailed(t('settings.plugins.page.field.options.invalidJson'));
+        } catch (error) {
+          return autosaveFailed(problemMessage(error, t('settings.plugins.page.field.options.invalidJson')));
         }
       }
     }

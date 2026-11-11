@@ -64,6 +64,7 @@ import { BrowserEmptyState } from './BrowserEmptyState';
 import { useAnnotationAttach, useAnnotationOverlayLabels } from './useAnnotationAttach';
 import { readEventPayload, useWebviewNavigation } from './useWebviewNavigation';
 import { isStageShown, useWebviewFocusGuard, type HoldPageFocus } from './useWebviewFocusGuard';
+import { problemMessage } from '@/lib/problemMessage';
 
 export type BrowserPaneProps = {
   initialUrl: string;
@@ -908,7 +909,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory: tab
         // Cleared storage only shows in a page that reloads without it.
         try { webviewRef.current?.reloadIgnoringCache(); } catch { /* not attached */ }
       })
-      .catch(() => toast.error(t('contextPanel.browser.clearFailed')));
+      .catch((error) => toast.error(problemMessage(error, t('contextPanel.browser.clearFailed'))));
   }, [directory, t]);
 
   // The stage is measured rather than assumed: the panel is resizable, and a

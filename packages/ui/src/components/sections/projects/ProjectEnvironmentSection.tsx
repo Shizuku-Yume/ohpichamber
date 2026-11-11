@@ -20,6 +20,7 @@ import {
 import type { ProjectRef } from '@/lib/openchamberConfig';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { useI18n, type I18nKey } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 
 type LoadState =
   | { state: 'loading' }
@@ -92,9 +93,9 @@ export const ProjectEnvironmentSection: React.FC<{ projectRef: ProjectRef }> = (
       applyEnvironment(await updateProjectEnvironment(projectRef.id, patch));
       reportSettingsSaveState('saved');
       return true;
-    } catch {
+    } catch (error) {
       reportSettingsSaveState('error');
-      toast.error(t('settings.environment.editor.saveFailed'));
+      toast.error(problemMessage(error, t('settings.environment.editor.saveFailed')));
       return false;
     }
   }, [applyEnvironment, projectRef.id, t]);
@@ -111,8 +112,8 @@ export const ProjectEnvironmentSection: React.FC<{ projectRef: ProjectRef }> = (
       if (saved && commandDraft.trim()) {
         applyEnvironment(await reloadProjectEnvironment(projectRef.id));
       }
-    } catch {
-      toast.error(t('settings.projects.environment.runFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.projects.environment.runFailed')));
     } finally {
       setBusy(false);
     }
@@ -122,8 +123,8 @@ export const ProjectEnvironmentSection: React.FC<{ projectRef: ProjectRef }> = (
     setBusy(true);
     try {
       applyEnvironment(await reloadProjectEnvironment(projectRef.id));
-    } catch {
-      toast.error(t('settings.projects.environment.runFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.projects.environment.runFailed')));
     } finally {
       setBusy(false);
     }

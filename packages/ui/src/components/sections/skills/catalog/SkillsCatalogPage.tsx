@@ -30,6 +30,7 @@ import { AddCatalogDialog } from './AddCatalogDialog';
 import { InstallSkillDialog } from './InstallSkillDialog';
 import { SkillsCatalogRows } from './SkillsCatalogRows';
 import { skillCatalogUrl } from './skillCatalogUrl';
+import { problemMessage } from '@/lib/problemMessage';
 
 type SkillsMode = 'manual' | 'external';
 
@@ -360,8 +361,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
         return;
       }
       setIsRemoveCatalogDialogOpen(false);
-    } catch {
-      toast.error(t('settings.skills.catalog.add.toast.saveFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.skills.catalog.add.toast.saveFailed')));
     } finally {
       setIsRemovingCatalog(false);
     }

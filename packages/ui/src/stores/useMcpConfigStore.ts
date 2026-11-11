@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { MCPApplyResultSchema, MCPServerConfigSchema, type MCPApplyResult, type MCPConfigurationState, type MCPServerConfig } from '@openchamber/agent-contract';
 import { canonicalClient, CanonicalApiError } from '@/api/canonicalClient';
+import { problemMessage } from '@/lib/problemMessage';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 export type McpDraft = MCPServerConfig;
@@ -83,7 +84,7 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
         ? { ok: true, result }
         : { ok: false, error: result.workers.filter(worker => worker.outcome === 'failed').map(worker => worker.error.detail).join('\n'), result };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = problemMessage(error, 'The MCP configuration could not be saved.');
       const parsed = error instanceof CanonicalApiError ? MCPApplyResultSchema.safeParse(error.problem.details?.result) : null;
       const result = parsed?.success && parsed.data.configuration.workspaceId === workspaceId ? parsed.data : undefined;
       if (ownerGeneration === generation) {

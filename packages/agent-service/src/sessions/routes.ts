@@ -23,7 +23,7 @@ function identity(value: string): string {
  try {
   return EntityIdSchema.parse(decodeURIComponent(value));
  } catch {
-  throw new WorkerOperationError(400, 'INVALID_REQUEST');
+  throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The session id is not a valid entity id');
  }
 }
 

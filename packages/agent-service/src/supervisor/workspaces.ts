@@ -67,16 +67,16 @@ export class WorkspaceCatalogs {
         this.pluginBindings.set(binding.workspaceId, binding);
       }
     } catch (error) {
-      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The workspace state directory could not be inspected');
     }
   }
   async register(workspaceId: string, input: PrivateWorkspaceRegistration) {
     return this.stateMutation(async () => {
       const existing = this.workspaces.get(workspaceId);
       const owner = this.owners.get(input.agentDirectoryId);
-      if (owner && owner.agentDirectory !== input.agentDirectory) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
-      if ([...this.owners.values()].some(item => item.agentDirectory === input.agentDirectory && item.agentDirectoryId !== input.agentDirectoryId)) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
-      if (existing && (existing.projectId !== input.projectId || existing.cwd !== input.cwd || existing.agentDirectory !== input.agentDirectory || existing.agentDirectoryId !== input.agentDirectoryId)) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (owner && owner.agentDirectory !== input.agentDirectory) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The workspace owner already points at a different agent directory');
+      if ([...this.owners.values()].some(item => item.agentDirectory === input.agentDirectory && item.agentDirectoryId !== input.agentDirectoryId)) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'Another candidate owns this agent directory under a different id');
+      if (existing && (existing.projectId !== input.projectId || existing.cwd !== input.cwd || existing.agentDirectory !== input.agentDirectory || existing.agentDirectoryId !== input.agentDirectoryId)) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The registered workspace does not match the requested identity');
       const workspace: Workspace = existing ?? { workspaceId, projectId: input.projectId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId, agentDirectoryIds: [input.agentDirectoryId], authorizationRootId: randomUUID() };
       if (!existing) {
         this.workspaces.set(workspaceId, workspace);
@@ -94,13 +94,13 @@ export class WorkspaceCatalogs {
   }
   async registerRoot(input: { workspaceId: string; projectId: string; cwd: string; agentDirectory: string; agentDirectoryId?: string }): Promise<string> {
     const workspace = this.get(input.workspaceId);
-    if (workspace.projectId !== input.projectId || workspace.cwd !== input.cwd) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    if (workspace.projectId !== input.projectId || workspace.cwd !== input.cwd) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The workspace identity does not match the requested project and directory');
     const agentDirectoryId = input.agentDirectoryId ?? (input.agentDirectory === workspace.agentDirectory ? workspace.agentDirectoryId : undefined);
-    if (agentDirectoryId === undefined) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    if (agentDirectoryId === undefined) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'A catalog worker requires an agent directory id');
     await this.stateMutation(async () => {
       const owner = this.owners.get(agentDirectoryId);
-      if (owner && owner.agentDirectory !== input.agentDirectory) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
-      if ([...this.owners.values()].some(item => item.agentDirectory === input.agentDirectory && item.agentDirectoryId !== agentDirectoryId)) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (owner && owner.agentDirectory !== input.agentDirectory) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The workspace owner already points at a different agent directory');
+      if ([...this.owners.values()].some(item => item.agentDirectory === input.agentDirectory && item.agentDirectoryId !== agentDirectoryId)) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'Another candidate owns this agent directory under a different id');
       if (workspace.agentDirectoryIds.includes(agentDirectoryId)) return;
       if (!owner) this.owners.set(agentDirectoryId, { agentDirectoryId, agentDirectory: input.agentDirectory, revision: '0' });
       const previous = workspace.agentDirectoryIds;
@@ -112,14 +112,14 @@ export class WorkspaceCatalogs {
   }
   get(workspaceId: string): Workspace {
     const workspace = this.workspaces.get(workspaceId);
-    if (!workspace) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    if (!workspace) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The workspace is not registered for catalog work');
     return workspace;
   }
   revision(workspaceId: string, agentDirectoryId = this.get(workspaceId).agentDirectoryId): string {
     const workspace = this.get(workspaceId);
-    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The agent directory is not registered with this workspace');
     const owner = this.owners.get(agentDirectoryId);
-    if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'No workspace owner exists for this catalog operation');
     return owner.revision;
   }
   matches(input: { workspaceId: string; projectId: string; cwd: string; agentDirectory: string; agentDirectoryId?: string }): boolean {
@@ -132,7 +132,7 @@ export class WorkspaceCatalogs {
     const workspace = this.get(workspaceId);
     // Environments are refreshed only by authenticated Host admission, never restored from disk.
     const env = this.environments.get(workspaceId);
-    if (!env) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (!env) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The workspace environment was not captured');
     await this.workers.startStateless({ rootSessionId: workspace.authorizationRootId, projectId: workspace.projectId, workspaceId, cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId, catalogRevision: this.revision(workspaceId), mcpConfigPath: join(workspace.cwd, '.omp', 'mcp.json'), env });
     return workspace.authorizationRootId;
   }
@@ -157,7 +157,7 @@ export class WorkspaceCatalogs {
 
   async readCacheWarming(workspaceId: string): Promise<CacheWarmingState> {
     const result = await this.operation(workspaceId, { type: 'catalog.warming.read' });
-    if (result.type !== 'catalog.warming') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    if (result.type !== 'catalog.warming') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog.warming operation.');
     return result.state;
   }
 
@@ -166,7 +166,7 @@ export class WorkspaceCatalogs {
     const workspace = this.get(workspaceId);
     return this.serial(workspace.agentDirectoryId, async () => {
       const result = await this.operationNow(workspaceId, { type: 'catalog.warming.persist', request });
-      if (result.type !== 'catalog.warming') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      if (result.type !== 'catalog.warming') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog.warming operation.');
       const persisted = result.state;
       // Capture generations after persistence; never restart cold workers just to warm them.
       const active = this.workers.list().filter(worker => worker.kind === 'session' && worker.workspaceId === workspaceId && (worker.state === 'ready' || worker.state === 'starting'));
@@ -175,7 +175,7 @@ export class WorkspaceCatalogs {
         try {
           const applied = await this.workers.request(worker.rootSessionId, { type: 'catalog', revision: persisted.revision, operation: { type: 'catalog.warming.apply', mode: persisted.mode } }, worker.workerGeneration);
           const current = this.workers.info(worker.rootSessionId);
-          if (applied.type !== 'catalog' || applied.result.type !== 'catalog.warming.applied' || applied.result.mode !== persisted.mode || current?.workerGeneration !== worker.workerGeneration || current.state !== 'ready') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+          if (applied.type !== 'catalog' || applied.result.type !== 'catalog.warming.applied' || applied.result.mode !== persisted.mode || current?.workerGeneration !== worker.workerGeneration || current.state !== 'ready') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker did not apply the persisted cache warming mode');
           return { worker: identity, outcome: 'applied', mode: persisted.mode };
         } catch {
           return { worker: identity, outcome: 'failed', mode: persisted.mode, error: { code: 'SERVICE_UNAVAILABLE', detail: 'The active worker did not confirm the configured cache-warming mode.', retryable: true } };
@@ -190,15 +190,15 @@ export class WorkspaceCatalogs {
   private async operationNow(workspaceId: string, operation: CatalogOperation): Promise<CatalogResult> {
     const workspace = this.get(workspaceId);
     const owner = this.owners.get(workspace.agentDirectoryId);
-    if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'No workspace owner exists for the catalog revision');
     const requestOperation = operation.type === 'fileResources' ? operation.operation : operation;
     const expectedRevision = 'request' in requestOperation && 'expectedRevision' in requestOperation.request ? requestOperation.request.expectedRevision : undefined;
     const mutation = expectedRevision !== undefined && (operation.type !== 'catalog.provider.oauth' || operation.request.action === 'commit');
-    if (expectedRevision !== undefined && expectedRevision !== owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', { currentRevision: owner.revision });
+    if (expectedRevision !== undefined && expectedRevision !== owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The catalog revision does not match the expected revision', { currentRevision: owner.revision });
     const revision = mutation ? CounterSchema.parse((BigInt(owner.revision) + 1n).toString()) : owner.revision;
     const root = await this.stateless(workspaceId);
     const result = await this.workers.request(root, { type: 'catalog', operation, revision });
-    if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog operation.');
     const committed = mutation && (operation.type === 'fileResources' || result.result.type !== 'catalog.credential.handed-off' || result.result.result.outcome.status === 'imported');
     if (committed) {
       await this.stateMutation(async () => {
@@ -208,7 +208,7 @@ export class WorkspaceCatalogs {
         catch (error) {
           owner.revision = previous;
           if (operation.type === 'catalog.warming.persist' && result.result.type === 'catalog.warming') {
-            throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', CacheWarmingPartialWriteDetailsSchema.parse({
+            throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The native cache warming configuration was committed but not applied', CacheWarmingPartialWriteDetailsSchema.parse({
               workspaceId, configuredMode: result.result.state.mode, currentRevision: previous,
               nativeConfigurationCommitted: true, liveApplication: 'not-started',
             }));
@@ -223,7 +223,7 @@ export class WorkspaceCatalogs {
     const result = await this.workers.request(rootSessionId, { type: 'catalog', revision: '0', operation: { type: 'plugins.owner' } }, workerGeneration);
     if (result.type !== 'catalog' || result.result.type !== 'plugins.owner'
       || !isAbsolute(result.result.rootPath) || !isAbsolute(result.result.localSourcePath) || (result.result.projectRegistryPath !== null && !isAbsolute(result.result.projectRegistryPath))) {
-      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The native cache warming configuration could not be written');
     }
     return result.result;
   }
@@ -245,7 +245,7 @@ export class WorkspaceCatalogs {
       }
     });
     const owner = this.pluginOwners.get(identity.rootPath);
-    if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (!owner) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'No workspace owner exists for the plugin operation');
     return { rootSessionId, identity, owner };
   }
 
@@ -256,14 +256,14 @@ export class WorkspaceCatalogs {
   private async pluginOperation(workspaceId: string, operation: NativePluginOperation): Promise<CatalogResult> {
     const binding = await this.pluginBinding(workspaceId);
     const coordinator = this.pluginCoordinator?.();
-    if (!coordinator) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (!coordinator) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'No plugin coordinator exists for this workspace');
     return this.serial(`plugins:${binding.identity.rootPath}`, async () => {
       const expectedRevision = 'request' in operation && 'expectedRevision' in operation.request
         ? operation.request.expectedRevision : undefined;
       const execute = async (): Promise<CatalogResult> => {
-        if (expectedRevision !== undefined && expectedRevision !== binding.owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', { currentRevision: binding.owner.revision });
+        if (expectedRevision !== undefined && expectedRevision !== binding.owner.revision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The catalog revision does not match the expected revision', { currentRevision: binding.owner.revision });
         const nativeOwner = await this.readPluginOwner(binding.rootSessionId);
-        if (nativeOwner.rootPath !== binding.identity.rootPath) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+        if (nativeOwner.rootPath !== binding.identity.rootPath) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The relocated native owner still points at a different root path');
         const revision = expectedRevision === undefined ? binding.owner.revision : CounterSchema.parse((BigInt(binding.owner.revision) + 1n).toString());
         const global = operation.type === 'plugins.marketplace.manage'
           || operation.type === 'plugins.marketplace.upgradeAll'
@@ -301,7 +301,7 @@ export class WorkspaceCatalogs {
           };
         });
         const result = await this.workers.request(binding.rootSessionId, { type: 'catalog', operation, revision });
-        if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog operation.');
         if (expectedRevision === undefined) {
           return result.result.type === 'plugins.catalog' ? {
             type: 'plugins.catalog', catalog: {
@@ -310,7 +310,7 @@ export class WorkspaceCatalogs {
             }
           } : result.result;
         }
-        if (result.result.type !== 'plugins.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (result.result.type !== 'plugins.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested plugins.catalog operation.');
         const committedIdentity = await this.readPluginOwner(binding.rootSessionId);
         await this.stateMutation(async () => {
           const previousBinding = this.pluginBindings.get(workspaceId);
@@ -340,7 +340,7 @@ export class WorkspaceCatalogs {
             type: 'catalog', revision,
             operation: { type: 'plugins.apply', persistedRevision: revision }
           }, worker.workerGeneration);
-          if (response.type !== 'catalog' || response.result.type !== 'plugins.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (response.type !== 'catalog' || response.result.type !== 'plugins.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested plugins.applied operation.');
           return response.result.result;
         });
         const applied = outcomes.some(outcome => outcome.outcome === 'applied');
@@ -361,10 +361,10 @@ export class WorkspaceCatalogs {
     restart: (targets: CatalogWorkerIdentity[], revision: string, admit: CatalogAdmission) => Promise<PluginWorkerApplyOutcome[]>): Promise<PluginMutationResult> {
     const binding = await this.pluginBinding(workspaceId);
     const coordinator = this.pluginCoordinator?.();
-    if (!coordinator) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (!coordinator) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'No plugin coordinator exists for this workspace');
     return this.serial(`plugins:${binding.identity.rootPath}`, () => coordinator.runPluginApplication(async admit => {
       const revision = binding.owner.revision;
-      if (revision !== request.expectedRevision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', { currentRevision: revision });
+      if (revision !== request.expectedRevision) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The plugin revision does not match the expected revision', { currentRevision: revision });
       const targets: CatalogWorkerIdentity[] = [];
       for (const worker of await coordinator.pluginTargets()) {
         const identity = await this.readPluginOwner(worker.rootSessionId, worker.workerGeneration);
@@ -372,7 +372,7 @@ export class WorkspaceCatalogs {
       }
       const workers = await restart(targets, revision, admit);
       const response = await this.workers.request(binding.rootSessionId, { type: 'catalog', revision, operation: { type: 'plugins.read' } });
-      if (response.type !== 'catalog' || response.result.type !== 'plugins.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      if (response.type !== 'catalog' || response.result.type !== 'plugins.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested plugins.catalog operation.');
       const applied = workers.some(worker => worker.outcome === 'applied');
       const failed = workers.some(worker => worker.outcome === 'failed');
       return PluginMutationResultSchema.parse({

@@ -932,6 +932,22 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** integration carries commits that other branches or releases depend on, which then requires history-preserving updates instead.
 - **Effort:** ux-v270-omp-alignment
 
+## 2026-11-12 - UI error suites run under bun test, Host suites under the web vitest config
+
+- **Decided:** task 21's Check runs `bun test` for `packages/ui/src/lib/problemMessage*` and `bunx vitest run server/lib/host` from `packages/web`.
+- **Instead of:** the single root `bunx vitest run packages/web/server/lib/host packages/ui/src/api packages/ui/src/lib/problemMessage.test.ts` the task originally named.
+- **Because:** `packages/ui` tests import `bun:test`, and the repo has no root `vitest.config.ts` (upstream `bc50ba56a` has none either), so a root vitest run fails to resolve `bun:test` for UI paths before running a single test. `packages/web/vitest.config.ts` is the only config that aliases `bun:test` and `@/`, and it resolves `server/lib/host` correctly.
+- **Mine:** yes (agent decision, confirmed by the maintainer's dispatch note).
+- **Revisit when:** a root vitest config appears, or the UI suites migrate off `bun:test`.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - Upstream UI error displays carry the fork problem cause in the v2.7.0 merge
+
+- **Decided:** the nine upstream UI files that task 21 touched keep the fork's `problemMessage(error, …)` display and are recorded as `fork-differs` decision rows in the drift ledger.
+- **Instead of:** leaving them `unexplained` in the ledger, or reverting them to upstream's translation-only toasts to avoid the divergence.
+- **Because:** the R6 fix is a deliberate fork change: a caught failure must show the cause the Agent Service wrote. Reverting those nine files would restore the defect the task exists to remove, and an unexplained row would fail `bun run check`.
+- **Mine:** yes (agent decision, within the task's stated scope).
+- **Revisit when:** upstream adopts an equivalent cause-carrying display, at which point the rows collapse into `identical`.
 ## 2026-11-12 - A tool result is a part of its call's message; a failure keeps a kind beside its detail
 
 - **Decided:** the canonical projection publishes a `tool_result` part inside the assistant message that authored its `tool_call`, at part id `<call-part>:result`, and streams OMP's partial result frames as `part.updated` on that same part. `ToolResultPart` keeps `error: string` and gains `errorKind`. A assistant step carries `timing: { startedAt, firstTokenAt?, completedAt? }` derived only from the native message. A run OMP prompts itself opens a turn with no authored user message, and the client joins its steps to the previous turn.

@@ -63,8 +63,7 @@ export interface ModelRoleEditorProps {
   info?: React.ReactNode;
   /** Anchor for the model control. */
   settingsItem?: string;
-  /** Anchor for the effort control, when it is a control of its own. */
-  effortSettingsItem?: string;
+  /** Accessible name for the effort control when the row's label is not it. */
   effortLabel?: string;
   disabled?: boolean;
   /** Row layout: a field row in a section, or a stacked cell in a two-column grid. */
@@ -83,7 +82,7 @@ export interface ModelRoleEditorProps {
  * the selector grammar and the effort vocabulary live here once.
  */
 export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
-  role, roles, models, label, description, info, settingsItem, effortSettingsItem, effortLabel,
+  role, roles, models, label, description, info, settingsItem, effortLabel,
   disabled, layout = 'row', onChange,
 }) => {
   const { t } = useI18n();
@@ -134,10 +133,6 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
     </>
   );
 
-  const effortAnchor = effortSettingsItem === undefined
-    ? null
-    : <span className="hidden" data-settings-item={effortSettingsItem} />;
-
   if (layout === 'stacked') {
     return (
       <SettingsStackedField
@@ -149,7 +144,6 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
       >
         <div className="flex flex-wrap items-center gap-2">
           {controls}
-          {effortAnchor}
         </div>
       </SettingsStackedField>
     );
@@ -162,7 +156,6 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
       settingsItem={settingsItem}
     >
       {controls}
-      {effortAnchor}
     </SettingsFieldRow>
   );
 };

@@ -142,6 +142,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Expose each skill as a chat command.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'Project MCP config',
     'settings.omp.items.mcp.enableProjectConfig.description': 'Read MCP servers from the project\'s own config.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'A model that names no level of its own runs at this level.',
   },
   'ar': {
     'settings.omp.modelRoles.effort.off': 'إيقاف',
@@ -277,6 +278,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'اعرض كل مهارة كأمر محادثة.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'إعداد MCP للمشروع',
     'settings.omp.items.mcp.enableProjectConfig.description': 'اقرأ خوادم MCP من إعداد المشروع نفسه.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'النموذج الذي لا يحدد مستوى خاصاً به يعمل بهذا المستوى.',
   },
   'he': {
     'settings.omp.modelRoles.effort.off': 'כבוי',
@@ -412,6 +414,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'חשוף כל מיומנות כפקודת צ׳אט.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'הגדרות MCP לפרויקט',
     'settings.omp.items.mcp.enableProjectConfig.description': 'קרא שרתי MCP מהגדרות הפרויקט עצמו.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'מודל שאינו מציין רמה משלו פועל ברמה הזו.',
   },
   'de': {
     'settings.omp.modelRoles.effort.off': 'Aus',
@@ -547,6 +550,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Jeden Skill als Chat-Befehl anbieten.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'MCP-Projektkonfiguration',
     'settings.omp.items.mcp.enableProjectConfig.description': 'MCP-Server aus der Konfiguration des Projekts lesen.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'Ein Modell ohne eigene Stufe läuft auf dieser Stufe.',
   },
   'es': {
     'settings.omp.modelRoles.effort.off': 'Desactivado',
@@ -682,6 +686,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Exponer cada habilidad como comando de chat.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'Configuración MCP del proyecto',
     'settings.omp.items.mcp.enableProjectConfig.description': 'Leer los servidores MCP desde la configuración del propio proyecto.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'Un modelo que no indica un nivel propio se ejecuta en este nivel.',
   },
   'fr': {
     'settings.omp.modelRoles.effort.off': 'Désactivé',
@@ -817,6 +822,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Exposer chaque compétence comme commande de chat.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'Configuration MCP du projet',
     'settings.omp.items.mcp.enableProjectConfig.description': 'Lire les serveurs MCP dans la configuration du projet.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'Un modèle qui n\'indique pas son propre niveau s\'exécute à ce niveau.',
   },
   'ja': {
     'settings.omp.modelRoles.effort.off': 'オフ',
@@ -952,6 +958,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': '各スキルをチャットコマンドとして公開します。',
     'settings.omp.items.mcp.enableProjectConfig.label': 'プロジェクトの MCP 設定',
     'settings.omp.items.mcp.enableProjectConfig.description': 'プロジェクト自身の設定から MCP サーバーを読みます。',
+    'settings.omp.modelRoles.thinkingDefaultInfo': '独自のレベルを指定しないモデルはこのレベルで動きます。',
   },
   'ko': {
     'settings.omp.modelRoles.effort.off': '끄기',
@@ -1087,6 +1094,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': '각 스킬을 채팅 명령으로 노출합니다.',
     'settings.omp.items.mcp.enableProjectConfig.label': '프로젝트 MCP 설정',
     'settings.omp.items.mcp.enableProjectConfig.description': '프로젝트 자체 설정에서 MCP 서버를 읽습니다.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': '자체 수준을 지정하지 않은 모델은 이 수준에서 동작합니다.',
   },
   'nl': {
     'settings.omp.modelRoles.effort.off': 'Uit',
@@ -1222,6 +1230,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Elke vaardigheid als chatopdracht aanbieden.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'MCP-projectconfiguratie',
     'settings.omp.items.mcp.enableProjectConfig.description': 'MCP-servers uit de eigen configuratie van het project lezen.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'Een model zonder eigen niveau loopt op dit niveau.',
   },
   'pl': {
     'settings.omp.modelRoles.effort.off': 'Wyłączone',
@@ -1357,6 +1366,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Udostępnij każdą umiejętność jako polecenie czatu.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'Konfiguracja MCP projektu',
     'settings.omp.items.mcp.enableProjectConfig.description': 'Czytaj serwery MCP z konfiguracji samego projektu.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'Model, który nie wskazuje własnego poziomu, działa na tym poziomie.',
   },
   'pt-BR': {
     'settings.omp.modelRoles.effort.off': 'Desligado',
@@ -1492,6 +1502,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Expor cada habilidade como comando de chat.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'Configuração MCP do projeto',
     'settings.omp.items.mcp.enableProjectConfig.description': 'Ler servidores MCP da configuração do próprio projeto.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'Um modelo sem nível próprio roda neste nível.',
   },
   'tr': {
     'settings.omp.modelRoles.effort.off': 'Kapalı',
@@ -1627,6 +1638,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Her beceriyi bir sohbet komutu olarak sun.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'Proje MCP yapılandırması',
     'settings.omp.items.mcp.enableProjectConfig.description': 'MCP sunucularını projenin kendi yapılandırmasından oku.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'Kendi düzeyini belirtmeyen model bu düzeyde çalışır.',
   },
   'uk': {
     'settings.omp.modelRoles.effort.off': 'Вимкнено',
@@ -1762,6 +1774,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': 'Подавати кожну навичку як команду чату.',
     'settings.omp.items.mcp.enableProjectConfig.label': 'MCP-конфігурація проєкту',
     'settings.omp.items.mcp.enableProjectConfig.description': 'Читати MCP-сервери з власної конфігурації проєкту.',
+    'settings.omp.modelRoles.thinkingDefaultInfo': 'Модель без власного рівня працює на цьому рівні.',
   },
   'zh-CN': {
     'settings.omp.modelRoles.effort.off': '关闭',
@@ -1897,6 +1910,7 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': '把每个技能暴露为聊天命令。',
     'settings.omp.items.mcp.enableProjectConfig.label': '项目 MCP 配置',
     'settings.omp.items.mcp.enableProjectConfig.description': '从项目自身的配置读取 MCP 服务器。',
+    'settings.omp.modelRoles.thinkingDefaultInfo': '未指定自身级别的模型按此级别运行。',
   },
   'zh-TW': {
     'settings.omp.modelRoles.effort.off': '關閉',
@@ -2032,5 +2046,6 @@ export const ompSettingsI18n = {
     'settings.omp.items.skills.enableSkillCommands.description': '把每項技能公開為聊天命令。',
     'settings.omp.items.mcp.enableProjectConfig.label': '專案 MCP 設定',
     'settings.omp.items.mcp.enableProjectConfig.description': '從專案自身的設定讀取 MCP 伺服器。',
+    'settings.omp.modelRoles.thinkingDefaultInfo': '未指定自身等級的模型以此等級執行。',
   },
 } as const;

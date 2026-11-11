@@ -369,15 +369,14 @@ export const DefaultsSettings: React.FC = () => {
           roles={roleSelectors}
           models={models}
           settingsItem="sessions.default-model"
-          effortSettingsItem="sessions.default-thinking"
           disabled={isSavingOmp || !ompState}
           label={t('settings.openchamber.defaults.field.defaultModel')}
           onChange={handleDefaultModelChange}
         />
         <SettingsFieldRow
-          settingsItem="sessions.default-thinking-level"
+          settingsItem="sessions.default-thinking"
           label={t('settings.openchamber.defaults.field.defaultThinking')}
-          description={t('settings.openchamber.defaults.field.defaultThinkingDescription')}
+          info={t('settings.omp.modelRoles.thinkingDefaultInfo')}
         >
           {matchedModel ? (
             <ModelEffortPicker

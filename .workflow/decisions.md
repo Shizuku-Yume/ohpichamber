@@ -801,6 +801,16 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** a concrete GUI user need appears for a hidden OMP setting.
 - **Effort:** ux-v270-omp-alignment
 
+## 2026-11-12 - Classify every OMP setting by GUI surface and let one role editor own model assignment
+
+- **Decided:** `OmpSettingSchema` states where each allowlisted OMP setting belongs — `gui`, `tui-only`, `duplicate` (naming the settings-item id that owns the concept) or `advanced` — and carries OMP's own `ui.condition` with whether it holds. The Agent Service owns one explicit per-id table; an unplaced id fails its classification test rather than falling into a default. The OMP page draws only `gui` rows from a declarative registry, offers the real `config.yml` path for the rest, and one `ModelRoleEditor` now serves Defaults, Git and OMP with the model's concrete effort level instead of a synthetic `default`.
+- **Instead of:** a prefix rule in the page (e.g. "everything `tui.*` is terminal-only"), a second defaults editor per surface, and an effort picker whose first row was a sentinel the user could not inspect.
+- **Because:** prefixes each span several surfaces (`task.`, `skills.`, `compaction.`), so a prefix rule decides for ids nobody examined; and the page's 157-row type switch had already grown a per-page copy of the role editor, the effort vocabulary and three sentinel conventions.
+- **Also decided:** the UI Check leg runs `bun --cwd packages/ui test …` instead of `bunx vitest run packages/ui/…`. `packages/ui` suites are `bun:test` files run one process per file by `scripts/run-isolated-tests.mjs`; no vitest configuration covers that root, so the vitest invocation fails at baseline with `Cannot find package 'bun:test'` (task 20 recorded the same).
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** a vitest configuration lands under `packages/ui`, or a prefix rule becomes a reliable classifier for its whole namespace.
+- **Effort:** ux-v270-omp-alignment
+
 ## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge
 
 - **Decided:** the lane 12 work modules (`openchamber-sessions`, `openchamber-control`, `quota`, `small-model`, `routing`, `session-assist`, `session-work`, `scheduled-tasks`, `workflows`, `tts`, `package-manager.js`) keep the fork's Host/Canonical API shape; upstream v2.7.0 engine code is not adopted there.

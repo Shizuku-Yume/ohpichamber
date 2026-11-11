@@ -992,8 +992,9 @@ export class WorkerRegistry {
     } catch (error) {
       const code = error instanceof WorkerOperationError ? error.code : 'WORKER_INIT_FAILED';
       try {
-        const reason = error instanceof Error && error.message ? `: ${error.message}` : '';
-        this.options.onDiagnostic?.({ level: 'error', rootSessionId: input.rootSessionId, workerGeneration, message: `Worker initialization failed (${code})${reason}` });
+        // Diagnostics stay code-only: the cause reaches the caller through the
+        // problem response, and worker free text never enters a Host log.
+        this.options.onDiagnostic?.({ level: 'error', rootSessionId: input.rootSessionId, workerGeneration, message: `Worker initialization failed (${code})` });
       } catch { /* diagnostics never affect lifecycle */ }
       await this.stopEntry(entry);
       throw error;

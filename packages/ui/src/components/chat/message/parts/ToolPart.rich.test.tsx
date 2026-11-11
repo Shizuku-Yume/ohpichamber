@@ -179,7 +179,7 @@ test('a paired completed edit renders its diff and opens the output dialog', asy
 
         expect(container.textContent).toContain('+1/-1');
         expect(container.textContent).toContain('src/a.ts');
-        const external = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label="edit"]'))
+        const external = Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-label="Edit"]'))
             .filter((button) => button.querySelector('use[href="#oc-external-link"]'));
         const trigger = external.at(-1);
         if (!trigger) throw new Error('Expected the output dialog trigger');
@@ -338,7 +338,7 @@ test('a running call stays visible and toggles by its native part id', async () 
 
     await withToolHarness(async ({ container, render }) => {
         await render(call, { onToggle: id => toggled.push(id) });
-        expect(container.textContent).toContain('bash');
+        expect(container.textContent).toContain('Bash');
         expect(container.textContent).toContain('npm test');
 
         const disclosure = container.querySelector<HTMLButtonElement>('button[aria-expanded]');

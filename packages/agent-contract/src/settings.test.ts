@@ -12,6 +12,7 @@ const descriptor = {
   label: 'Compaction Threshold',
   group: 'Compaction',
   tab: 'context',
+  surface: 'gui' as const,
 };
 const state = { workspaceId: 'workspace_1', revision: '2', settings: [descriptor] };
 
@@ -20,6 +21,18 @@ test('OMP settings state carries allowlisted descriptors and revisions', () => {
   expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [descriptor, descriptor] }).success).toBe(false);
   expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [{ ...descriptor, id: 'appearance.theme' }] }).success).toBe(false);
   expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [{ ...descriptor, value: undefined }] }).success).toBe(false);
+  expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [{ ...descriptor, surface: 'off' }] }).success).toBe(false);
+});
+
+test('a duplicate names its owner, and a conditional setting reports its condition state', () => {
+  const duplicate = { ...descriptor, surface: 'duplicate' as const, owner: 'providers.models' };
+  expect(OmpSettingsStateSchema.parse({ ...state, settings: [duplicate] })).toEqual({ ...state, settings: [duplicate] });
+  expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [{ ...descriptor, surface: 'duplicate' }] }).success).toBe(false);
+  expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [{ ...duplicate, surface: 'gui' }] }).success).toBe(false);
+
+  const conditional = { ...descriptor, condition: 'usageAwareFallbackEnabled', conditionActive: false };
+  expect(OmpSettingsStateSchema.parse({ ...state, settings: [conditional] })).toEqual({ ...state, settings: [conditional] });
+  expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [{ ...descriptor, condition: 'usageAwareFallbackEnabled' }] }).success).toBe(false);
 });
 
 test('OMP settings changes require unique allowlisted ids and a next revision request', () => {

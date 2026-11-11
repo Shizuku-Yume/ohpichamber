@@ -11,6 +11,7 @@ import {
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import type { AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import { ProjectionError } from '../projection/journal.ts';
+import { presentOmpSetting } from './settings-ui.ts';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 /**
@@ -61,11 +62,18 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   if (ui?.description !== undefined) descriptor.description = ui.description;
   if (ui?.group !== undefined) descriptor.group = ui.group;
   if (ui?.tab !== undefined) descriptor.tab = ui.tab;
+  const presentation = presentOmpSetting(descriptor.id, ui?.condition, settings);
+  descriptor.surface = presentation.surface;
+  if (presentation.owner !== undefined) descriptor.owner = presentation.owner;
+  if (presentation.condition !== undefined) {
+    descriptor.condition = presentation.condition;
+    descriptor.conditionActive = presentation.conditionActive ?? true;
+  }
   return OmpSettingSchema.parse(descriptor);
 }
 
 export class NativeSettings {
-  constructor(private readonly settings: Settings) {}
+  constructor(private readonly settings: Settings) { }
 
   async read(workspaceId: string, revision: string): Promise<OmpSettingsState> {
     await this.settings.reloadFromDisk();

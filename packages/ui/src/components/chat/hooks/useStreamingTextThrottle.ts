@@ -28,6 +28,13 @@ interface StreamingThrottleState {
     timer: ReturnType<typeof setTimeout> | null;
     pendingText: string;
     lastEmitAt: number;
+    /**
+     * Whether this stream has shown any text yet. The leading edge is free:
+     * the first change after a stream starts renders on the frame it arrives,
+     * so the reply begins visibly at once. Later changes coalesce to one
+     * update per throttle window.
+     */
+    emitted: boolean;
 }
 
 const clearTimer = (state: StreamingThrottleState): void => {
@@ -53,6 +60,7 @@ export const useStreamingTextThrottle = ({
         timer: null,
         pendingText: text,
         lastEmitAt: 0,
+        emitted: false,
     });
 
     React.useEffect(() => {
@@ -68,6 +76,7 @@ export const useStreamingTextThrottle = ({
         clearTimer(state);
         state.pendingText = latestTextRef.current;
         state.lastEmitAt = 0;
+        state.emitted = false;
         setThrottledText(latestTextRef.current);
     }, [identityKey]);
 
@@ -80,16 +89,28 @@ export const useStreamingTextThrottle = ({
         if (!isStreaming) {
             clearTimer(state);
             state.lastEmitAt = Date.now();
-            setThrottledText(stableText);
+            state.emitted = false;
+            if (stableText !== currentThrottled) {
+                setThrottledText(stableText);
+            }
+            return;
+        }
+
+        if (stableText === currentThrottled) {
+            // Nothing new to show; a stale scheduled update would only repeat it.
+            clearTimer(state);
             return;
         }
 
         const now = Date.now();
-        const remaining = computeStreamingThrottleDelay(state.lastEmitAt, now, throttleMs);
+        const remaining = state.emitted
+            ? computeStreamingThrottleDelay(state.lastEmitAt, now, throttleMs)
+            : 0;
 
         if (remaining <= 0) {
             clearTimer(state);
             state.lastEmitAt = now;
+            state.emitted = true;
             setThrottledText(stableText);
             return;
         }
@@ -98,6 +119,7 @@ export const useStreamingTextThrottle = ({
         state.timer = setTimeout(() => {
             state.timer = null;
             state.lastEmitAt = Date.now();
+            state.emitted = true;
             setThrottledText((prev) => {
                 return getStreamingThrottleText(prev, state.pendingText, isStreaming, allowTextReplacement);
             });

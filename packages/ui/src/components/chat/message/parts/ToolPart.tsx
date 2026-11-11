@@ -1420,7 +1420,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                         <div className="relative ml-2 pl-3">
                             {isTodoTool(toolName) && result && !result.isError ? (() => {
                                 const phases = extractTodoPhases(resultContent.details);
-                                return phases ? <TodoCard phases={phases} /> : null;
+                                return phases ? <TodoCard phases={phases} defaultExpanded /> : null;
                             })() : null}
                             <BlockLine onToggle={toggleRow} topOffset={1} />
                             <ToolExpandedContent

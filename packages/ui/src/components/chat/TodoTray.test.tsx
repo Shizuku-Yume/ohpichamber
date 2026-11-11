@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import React, { act } from 'react';
+import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { JsonValue, Message, ToolResultPart } from '@openchamber/agent-contract';
@@ -8,6 +8,7 @@ import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/
 import { SyncProvider, useDirectoryStore } from '@/sync/sync-context';
 import type { DirectoryStore } from '@/sync/child-store';
 import { nativeClient, nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
+import { I18nProvider } from '@/lib/i18n';
 import { TodoTray } from './TodoTray';
 
 const browser = new Window({ url: 'http://runtime.test' });
@@ -116,56 +117,56 @@ describe('TodoTray integration', () => {
   const renderTray = async (sessionId: string | null = SESSION_ID, directory: string | null = DIR, show = true) => {
     await act(async () => {
       root!.render(
-        <SyncProvider client={nativeClient()} directory={DIR}>
-          <StoreProbe />
-          {show ? <TodoTray sessionId={sessionId} directory={directory} /> : null}
-        </SyncProvider>,
+        <I18nProvider>
+          <SyncProvider client={nativeClient()} directory={DIR}>
+            <StoreProbe />
+            {show ? <TodoTray sessionId={sessionId} directory={directory} /> : null}
+          </SyncProvider>
+        </I18nProvider>,
       );
     });
   };
 
-  test('renders two-phase todo checklist from current session history', async () => {
+  const setMessages = async (messages: Message[], branchVersion = '1') => {
+    const snapshot = nativeSnapshot(SESSION_ID, []);
+    snapshot.branch = { branchId: 'branch-main', branchVersion, leafMessageId: messages.at(-1)?.messageId ?? 'msg-1' };
+    await act(async () => {
+      directoryStore!.setState({ snapshot: { [SESSION_ID]: snapshot }, message: { [SESSION_ID]: messages } });
+    });
+  };
+
+  test('folds to the active item and its progress, and expands to every phase', async () => {
     await renderTray();
     expect(directoryStore).not.toBeNull();
-
-    const initialSnapshot = nativeSnapshot(SESSION_ID, []);
-    initialSnapshot.branch = { branchId: 'branch-main', branchVersion: '1', leafMessageId: 'msg-1' };
-    const msg = assistantTodoMessage('msg-1', twoPhaseTodos);
-
-    await act(async () => {
-      directoryStore!.setState({
-        snapshot: { [SESSION_ID]: initialSnapshot },
-        message: { [SESSION_ID]: [msg] },
-      });
-    });
+    await setMessages([assistantTodoMessage('msg-1', twoPhaseTodos)]);
 
     const tray = host.querySelector('[data-testid="todo-tray"]');
     expect(tray).not.toBeNull();
-    const text = tray?.textContent ?? '';
-    expect(text).toContain('Discovery');
-    expect(text).toContain('Search codebase');
-    expect(text).toContain('Inspect findings');
-    expect(text).toContain('Execution');
-    expect(text).toContain('Apply modifications');
+    // Folded: the item being worked on and closed/total, nothing else.
+    expect(tray?.textContent).toContain('Inspect findings');
+    expect(tray?.textContent).toContain('1/3');
+    expect(tray?.textContent).not.toContain('Apply modifications');
+    expect(tray?.textContent).not.toContain('Discovery');
+    expect(tray?.querySelector('button')?.getAttribute('aria-expanded')).toBe('false');
+
+    await act(async () => {
+      tray?.querySelector('button')?.dispatchEvent(new browser.MouseEvent('click', { bubbles: true }) as unknown as Event);
+    });
+
+    const expanded = host.querySelector('[data-testid="todo-tray"]');
+    expect(expanded?.textContent).toContain('Discovery');
+    expect(expanded?.textContent).toContain('Search codebase');
+    expect(expanded?.textContent).toContain('Execution');
+    expect(expanded?.textContent).toContain('Apply modifications');
+    expect(expanded?.querySelector('button')?.getAttribute('aria-expanded')).toBe('true');
 
     const inProgressItem = host.querySelector('li[data-status="in_progress"]');
-    expect(inProgressItem).not.toBeNull();
     expect(inProgressItem?.textContent).toContain('Inspect findings');
   });
 
   test('remount preserves two-phase history without loss', async () => {
     await renderTray();
-    const initialSnapshot = nativeSnapshot(SESSION_ID, []);
-    initialSnapshot.branch = { branchId: 'branch-main', branchVersion: '1', leafMessageId: 'msg-1' };
-    const msg = assistantTodoMessage('msg-1', twoPhaseTodos);
-
-    await act(async () => {
-      directoryStore!.setState({
-        snapshot: { [SESSION_ID]: initialSnapshot },
-        message: { [SESSION_ID]: [msg] },
-      });
-    });
-
+    await setMessages([assistantTodoMessage('msg-1', twoPhaseTodos)]);
     expect(host.querySelector('[data-testid="todo-tray"]')).not.toBeNull();
 
     // Unmount TodoTray while keeping SyncProvider mounted
@@ -174,58 +175,28 @@ describe('TodoTray integration', () => {
 
     // Remount TodoTray
     await renderTray(SESSION_ID, DIR, true);
-
     const remountedTray = host.querySelector('[data-testid="todo-tray"]');
     expect(remountedTray).not.toBeNull();
-    const text = remountedTray?.textContent ?? '';
-    expect(text).toContain('Discovery');
-    expect(text).toContain('Execution');
+    expect(remountedTray?.textContent).toContain('Inspect findings');
+    expect(remountedTray?.textContent).toContain('1/3');
   });
 
   test('reacts to branch update with updated phases', async () => {
     await renderTray();
-
-    const branch1Snapshot = nativeSnapshot(SESSION_ID, []);
-    branch1Snapshot.branch = { branchId: 'branch-1', branchVersion: '1', leafMessageId: 'msg-1' };
     const msg1 = assistantTodoMessage('msg-1', twoPhaseTodos);
+    await setMessages([msg1], '1');
+    expect(host.querySelector('[data-testid="todo-tray"]')?.textContent).toContain('1/3');
 
-    await act(async () => {
-      directoryStore!.setState({
-        snapshot: { [SESSION_ID]: branch1Snapshot },
-        message: { [SESSION_ID]: [msg1] },
-      });
-    });
-
-    const pendingItemBefore = host.querySelector('li[data-status="pending"]');
-    expect(pendingItemBefore?.textContent).toContain('Apply modifications');
-
-    // Update branch with second turn completing all tasks
-    const branch2Snapshot = nativeSnapshot(SESSION_ID, []);
-    branch2Snapshot.branch = { branchId: 'branch-1', branchVersion: '2', leafMessageId: 'msg-2' };
     const msg2 = assistantTodoMessage('msg-2', updatedPhases);
-
-    await act(async () => {
-      directoryStore!.setState({
-        snapshot: { [SESSION_ID]: branch2Snapshot },
-        message: { [SESSION_ID]: [msg1, msg2] },
-      });
-    });
-
-    const completedItems = host.querySelectorAll('li[data-status="completed"]');
-    expect(completedItems.length).toBe(3); // Search codebase, Inspect findings, Apply modifications
-    const pendingItemsAfter = host.querySelectorAll('li[data-status="pending"]');
-    expect(pendingItemsAfter.length).toBe(0);
+    await setMessages([msg1, msg2], '2');
+    // Every task closed: the folded row still names the plan and its progress.
+    expect(host.querySelector('[data-testid="todo-tray"]')?.textContent).toContain('3/3');
+    expect(host.querySelector('li[data-status="pending"]')).toBeNull();
   });
 
   test('renders null when history has no todo phases or session is null', async () => {
     await renderTray();
-
-    await act(async () => {
-      directoryStore!.setState({
-        snapshot: { [SESSION_ID]: nativeSnapshot(SESSION_ID, []) },
-        message: { [SESSION_ID]: [] },
-      });
-    });
+    await setMessages([]);
 
     await renderTray(null);
     expect(host.querySelector('[data-testid="todo-tray"]')).toBeNull();

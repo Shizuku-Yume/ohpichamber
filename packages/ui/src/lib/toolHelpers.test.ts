@@ -3,7 +3,7 @@ import { ToolCallPartSchema } from '@openchamber/agent-contract';
 import {
   detectToolOutputLanguage, formatToolInput,
   isFileChangeTool, isQuestionTool, isShellTool, isSubagentTool, normalizeToolName,
-  parseNativeReadPath, toolInputPath, toolInputPaths,
+  parseNativeReadPath, toolBaseName, toolInputPath, toolInputPaths,
 } from './toolHelpers';
 import { describeToolCall } from './toolPresentation';
 
@@ -22,7 +22,8 @@ describe('native tool helpers', () => {
     expect(isQuestionTool('ask')).toBe(true);
     expect(isFileChangeTool('patch')).toBe(false);
     expect(normalizeToolName('mcp.bash:2')).toBe('mcp.bash:2');
-    expect(normalizeToolName('runtime.read:2')).toBe('read');
+    expect(toolBaseName('runtime.read:2')).toBe('read');
+    expect(normalizeToolName(' runtime.read:2 ')).toBe('runtime.read:2');
   });
 
   test('describes a call from its own input, never a neighbouring result', () => {

@@ -9448,6 +9448,7 @@ export const dict = {
   "settings.usage.state.unknown": "Usage has not loaded yet.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Stored memory has not loaded yet.",
 
+  "chat.workStatus.mcp.unknown": "MCP servers have not loaded yet.",
 };
 
 export type I18nKey = keyof typeof dict;

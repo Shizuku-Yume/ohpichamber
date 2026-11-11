@@ -25,6 +25,9 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
   const mcpStatus = useMcpStore(
     React.useCallback((state) => state.getStatusForDirectory(directory), [directory]),
   );
+  const mcpPhase = useMcpStore(
+    React.useCallback((state) => state.getPhaseForDirectory(directory), [directory]),
+  );
   const ensureMcpFresh = useMcpStore((state) => state.ensureFresh);
   const connect = useMcpStore((state) => state.connect);
   const disconnect = useMcpStore((state) => state.disconnect);
@@ -68,7 +71,13 @@ export const WorkStatusMcpSection: React.FC<Props> = ({ directory }) => {
 
   useReportWorkStatusPresence('mcp', mcpServers.length > 0);
 
-  if (mcpServers.length === 0) return null;
+  // Unread is not "no MCP servers configured": the read for this directory has
+  // not answered, so the panel says that rather than showing nothing.
+  if (mcpServers.length === 0) {
+    return mcpPhase === 'unknown'
+      ? <p className="typography-meta text-muted-foreground">{t('chat.workStatus.mcp.unknown')}</p>
+      : null;
+  }
 
   return (
     <WorkStatusCollapsibleSection

@@ -9069,4 +9069,5 @@ export const dict = {
   "settings.usage.state.unknown": "لم يتم تحميل الاستخدام بعد.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "لم يتم تحميل الذاكرة المخزنة بعد.",
 
+  "chat.workStatus.mcp.unknown": "لم يتم تحميل خوادم MCP بعد.",
 };

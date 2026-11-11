@@ -9411,4 +9411,5 @@ export const dict = {
   "settings.usage.state.unknown": "El uso aún no se ha cargado.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "La memoria almacenada aún no se ha cargado.",
 
+  "chat.workStatus.mcp.unknown": "Los servidores MCP aún no se han cargado.",
 };

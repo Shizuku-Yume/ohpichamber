@@ -13,7 +13,9 @@ describe('server state boot registry', () => {
 
   test('every store whose content is the server\'s answer declares a hydrator', () => {
     // Directory- or event-scoped projections have nothing to read at boot:
-    // they follow the directory in use or an announcement.
+    // they follow the directory in use or an announcement. Each still carries
+    // a per-directory phase where a consumer renders one (MCP), and reset-only
+    // entries clear the previous instance's values.
     const eventOnly = new Set(['advisor', 'cleanse', 'mcp', 'skills', 'skills-catalog']);
     for (const entry of SERVER_STATE_BOOT_ENTRIES) {
       if (eventOnly.has(entry.id)) {

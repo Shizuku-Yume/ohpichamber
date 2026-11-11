@@ -9411,4 +9411,5 @@ export const dict = {
   "settings.usage.state.unknown": "Kullanım henüz yüklenmedi.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Kayıtlı bellek henüz yüklenmedi.",
 
+  "chat.workStatus.mcp.unknown": "MCP sunucuları henüz yüklenmedi.",
 };

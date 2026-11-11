@@ -9411,4 +9411,5 @@ export const dict = {
   "settings.usage.state.unknown": "使用状況はまだ読み込まれていません。",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "保存されたメモリはまだ読み込まれていません。",
 
+  "chat.workStatus.mcp.unknown": "MCP サーバーはまだ読み込まれていません。",
 };

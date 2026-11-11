@@ -9411,4 +9411,5 @@ export const dict = {
   "settings.usage.state.unknown": "Використання ще не завантажено.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Збережена пам'ять ще не завантажена.",
 
+  "chat.workStatus.mcp.unknown": "Сервери MCP ще не завантажено.",
 };

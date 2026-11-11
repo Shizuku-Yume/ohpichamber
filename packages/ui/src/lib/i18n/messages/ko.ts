@@ -9411,4 +9411,5 @@ export const dict = {
   "settings.usage.state.unknown": "사용량이 아직 로드되지 않았습니다.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "저장된 메모리가 아직 로드되지 않았습니다.",
 
+  "chat.workStatus.mcp.unknown": "MCP 서버가 아직 로드되지 않았습니다.",
 };

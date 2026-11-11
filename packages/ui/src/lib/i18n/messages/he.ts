@@ -9069,4 +9069,5 @@ export const dict = {
   "settings.usage.state.unknown": "השימוש טרם נטען.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "הזיכרון השמור טרם נטען.",
 
+  "chat.workStatus.mcp.unknown": "שרתי MCP טרם נטענו.",
 };

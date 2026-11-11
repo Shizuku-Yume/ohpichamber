@@ -9411,4 +9411,5 @@ export const dict = {
   "settings.usage.state.unknown": "Użycie nie zostało jeszcze wczytane.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Zapisana pamięć nie została jeszcze wczytana.",
 
+  "chat.workStatus.mcp.unknown": "Serwery MCP nie zostały jeszcze wczytane.",
 };

@@ -9402,4 +9402,5 @@ export const dict = {
   "settings.usage.state.unknown": "用量尚未加载。",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "已存储的记忆尚未加载。",
 
+  "chat.workStatus.mcp.unknown": "MCP 服务器尚未加载。",
 };

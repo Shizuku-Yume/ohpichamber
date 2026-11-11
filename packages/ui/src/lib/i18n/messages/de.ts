@@ -9411,4 +9411,5 @@ export const dict = {
   "settings.usage.state.unknown": "Die Nutzung ist noch nicht geladen.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Gespeicherte Erinnerungen sind noch nicht geladen.",
 
+  "chat.workStatus.mcp.unknown": "MCP-Server sind noch nicht geladen.",
 };

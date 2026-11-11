@@ -29,7 +29,7 @@ export class WorkerPolicy {
     if (!pending) return;
     this.pending.delete(requestId);
     if (result.allowed) pending.resolve();
-    else pending.reject(result.approvalRequired ? new NativeApprovalRequired() : new ProjectionError(result.status, result.code, 'Host policy refused the operation'));
+    else pending.reject(result.approvalRequired ? new NativeApprovalRequired() : new ProjectionError(result.status, result.code, result.detail));
   }
 
   close(): void {

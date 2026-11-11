@@ -458,7 +458,7 @@ export class WorkerSession {
       resolveCredentialRef: reference => mcpCredentials.resolve(reference),
       // authorizeServer already checked the Host-resolved command before this resolver is called.
       resolveCommand: async transport => transport.command,
-      authorizeServer: server => authorize({ type: 'mcp-server', server }),
+      authorizeServer: (server, proposed) => authorize({ type: 'mcp-server', server, ...(proposed ? { proposed: true } : {}) }),
       authorizeOAuth: (server, configuration) => {
         const publicConfiguration = MCPOAuthPublicConfigurationSchema.parse(configuration);
         const present = Object.fromEntries(Object.entries(publicConfiguration).filter(([, value]) => value !== undefined));
@@ -533,7 +533,7 @@ export class WorkerSession {
         cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration,
         get extensionRoots() { return nativeExtensionRoots(settings, pluginExtensionPaths); },
         get options() { return nativeSkillOptions(settings, pluginExtensionPaths); },
-        permissionPreset: presetId => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId }),
+        permissionPreset: presetId => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId, proposed: true }),
         availableToolNames: () => nativeSession.getAllToolInfos().map(tool => tool.name),
         assertProviderEntryAllowed: () => authorize({ type: 'provider-entry' }),
         publishSkills: async staged => {

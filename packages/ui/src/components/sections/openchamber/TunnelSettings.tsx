@@ -18,6 +18,7 @@ import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { useDurationTickerNow, useWaitingBlink } from '@/hooks/useDurationTicker';
 import { SettingsChipGroup, SettingsFieldRow, SettingsSection, SettingsStackedField, SettingsGroupTitle, SETTINGS_FIELD_LABEL_CLASS, SETTINGS_CALLOUT_TITLE_CLASS, SETTINGS_DESCRIPTION_CLASS, SETTINGS_HELPER_CLASS, SETTINGS_SELECT_ROW_TRIGGER_CLASS } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
+import { problemMessage } from '@/lib/problemMessage';
 
 type TunnelState =
   | 'checking'
@@ -645,10 +646,10 @@ export const TunnelSettings: React.FC = () => {
       }
 
       setState(dependencyAvailable ? 'idle' : 'not-available');
-    } catch {
+    } catch (error) {
       if (!signal.aborted) {
         setState('error');
-        setErrorMessage(t('settings.openchamber.tunnel.toast.checkAvailabilityFailed'));
+        setErrorMessage(problemMessage(error, t('settings.openchamber.tunnel.toast.checkAvailabilityFailed')));
       }
     }
   }, [applyDependencyCheck, t]);
@@ -752,8 +753,8 @@ export const TunnelSettings: React.FC = () => {
       if (Object.prototype.hasOwnProperty.call(payload, 'managedRemoteTunnelPresets') && payload.managedRemoteTunnelPresets) {
         setManagedRemoteTunnelPresets(payload.managedRemoteTunnelPresets);
       }
-    } catch {
-      toast.error(t('settings.openchamber.tunnel.toast.saveSettingsFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.openchamber.tunnel.toast.saveSettingsFailed')));
     } finally {
       setIsSavingMode(false);
     }
@@ -766,8 +767,8 @@ export const TunnelSettings: React.FC = () => {
         tunnelBootstrapTtlMs: nextBootstrapTtlMs,
         tunnelSessionTtlMs: nextSessionTtlMs,
       });
-    } catch {
-      toast.error(t('settings.openchamber.tunnel.toast.saveTtlFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.openchamber.tunnel.toast.saveTtlFailed')));
     } finally {
       setIsSavingTtl(false);
     }
@@ -797,8 +798,8 @@ export const TunnelSettings: React.FC = () => {
         next.add(payload.presetId);
         return next;
       });
-    } catch {
-      toast.error(t('settings.openchamber.tunnel.toast.saveTokenFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.openchamber.tunnel.toast.saveTokenFailed')));
     }
   }, [sessionTokensByPresetId, t]);
 
@@ -980,9 +981,9 @@ export const TunnelSettings: React.FC = () => {
       } else {
         toast.success(t('settings.openchamber.tunnel.toast.linkReady'));
       }
-    } catch {
+    } catch (error) {
       setState('error');
-      setErrorMessage(t('settings.openchamber.tunnel.toast.startFailed'));
+      setErrorMessage(problemMessage(error, t('settings.openchamber.tunnel.toast.startFailed')));
       toast.error(t('settings.openchamber.tunnel.toast.startFailed'));
     }
   }, [
@@ -1015,9 +1016,9 @@ export const TunnelSettings: React.FC = () => {
       setQrDataUrl(null);
       setState('idle');
       toast.success(t('settings.openchamber.tunnel.toast.stopped'));
-    } catch {
+    } catch (error) {
       setState('error');
-      setErrorMessage(t('settings.openchamber.tunnel.toast.stopFailed'));
+      setErrorMessage(problemMessage(error, t('settings.openchamber.tunnel.toast.stopFailed')));
       toast.error(t('settings.openchamber.tunnel.toast.stopFailed'));
     }
   }, [t]);
@@ -1032,8 +1033,8 @@ export const TunnelSettings: React.FC = () => {
       setCopied(true);
       toast.success(t('settings.openchamber.tunnel.toast.connectLinkCopied'));
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error(t('settings.openchamber.tunnel.toast.copyUrlFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.openchamber.tunnel.toast.copyUrlFailed')));
     }
   }, [t, tunnelInfo?.connectUrl]);
 
@@ -1073,8 +1074,8 @@ export const TunnelSettings: React.FC = () => {
       await updateDesktopSettings({
         managedRemoteTunnelPresets: presets,
       });
-    } catch {
-      toast.error(t('settings.openchamber.tunnel.toast.saveSelectedManagedRemoteFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.openchamber.tunnel.toast.saveSelectedManagedRemoteFailed')));
     }
   }, [t]);
 

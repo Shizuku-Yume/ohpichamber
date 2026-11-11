@@ -14,6 +14,7 @@ import type { ToolPopupContent } from '../types';
 import { generatedImageDestination } from './generatedImageDestination';
 import { ToolbarTooltipButton } from '@/components/ui/action-toolbar';
 import { saveFile } from './saveFile';
+import { problemMessage } from '@/lib/problemMessage';
 
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('../ToolOutputDialog'));
 
@@ -87,8 +88,8 @@ function GeneratedImage({ part, path, directory, onShowPopup }: {
             const blob = await loadMessageImageBlob({ source: path, directory, sessionId: part.sessionID, messageId: part.messageID, signal: new AbortController().signal });
             const name = path.split(/[\\/]/).pop() || 'image.png';
             await saveFile(new File([blob], name, { type: blob.type }));
-        } catch {
-            toast.error(t('chat.image.downloadFailed'));
+        } catch (error) {
+            toast.error(problemMessage(error, t('chat.image.downloadFailed')));
         }
     }, [directory, part.messageID, part.sessionID, path, t]);
     return (

@@ -22,7 +22,7 @@ export class HostSkillSources {
   }
   readonly execute = async (input: HostSkillSourceOperation): Promise<HostSkillSourceResult> => {
     const operation = HostSkillSourceOperationSchema.parse(input);
-    if (this.closed || !process.send || !process.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (this.closed || !process.send || !process.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The Host skill source channel is closed');
     const requestId = randomUUID();
     const { promise, resolve, reject } = Promise.withResolvers<HostSkillSourceResult>();
     this.pending.set(requestId, { resolve, reject });
@@ -33,7 +33,7 @@ export class HostSkillSources {
       const pending = this.pending.get(requestId);
       if (!pending) return;
       this.pending.delete(requestId);
-      pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+      pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The Host skill source channel is closed'));
     });
     return promise;
   };
@@ -42,7 +42,7 @@ export class HostSkillSources {
     this.closed = true;
     process.removeListener('message', this.onMessage);
     process.removeListener('disconnect', this.onDisconnect);
-    for (const pending of this.pending.values()) pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+    for (const pending of this.pending.values()) pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The Host skill source channel is closed'));
     this.pending.clear();
   }
 }

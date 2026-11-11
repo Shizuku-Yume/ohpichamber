@@ -13,8 +13,10 @@ import { describeNativeOperation } from '../worker/native-policy-descriptor.ts';
 import type { JsonObject, ProblemCode } from '@openchamber/agent-contract';
 import type { NativeApprovalGrant } from '../native-policy-protocol.ts';
 
+/** `message` is the cause a reader sees in the problem response; it is required
+ * and never a placeholder. Argument order matches `ProjectionError`. */
 export class WorkerOperationError extends Error {
-  constructor(readonly status: number, readonly code: ProblemCode, readonly details?: JsonObject, message = 'SDK worker operation failed') { super(message); }
+  constructor(readonly status: number, readonly code: ProblemCode, message: string, readonly details?: JsonObject) { super(message); }
 }
 
 interface RestartReservation {
@@ -266,7 +268,7 @@ export class WorkerRegistry {
   authorizationPolicy(workspaceId: string, agentDirectoryId: string, rootSessionId?: string): HostNativePolicySnapshot {
     const candidates = rootSessionId === undefined ? [...this.workerEntries.values()] : [this.workerEntries.get(rootSessionId)];
     const entry = candidates.find(candidate => candidate?.kind !== 'usage' && candidate?.input.workspaceId === workspaceId && candidate.input.agentDirectoryId === agentDirectoryId && candidate.child.connected && (candidate.info.state === 'starting' || candidate.info.state === 'ready') && candidate.policySnapshot !== undefined);
-    if (!entry?.policySnapshot) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (!entry?.policySnapshot) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker has not published its authorization policy');
     return structuredClone(entry.policySnapshot);
   }
 
@@ -282,7 +284,7 @@ export class WorkerRegistry {
     for (const lease of this.worktreeLeases.values()) {
       if (isInsideOrSameDirectory(lease.canonicalDirectory, cwd)
         || isInsideOrSameDirectory(cwd, lease.canonicalDirectory)) {
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId });
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The worktree lease directory overlaps the requested directory', { leaseId: lease.leaseId });
       }
     }
   }
@@ -297,16 +299,16 @@ export class WorkerRegistry {
    */
   async acquireWorktreeLease(leaseId: string, directory: string): Promise<WorktreeLeaseAcquireResult> {
     if (typeof leaseId !== 'string' || !WORKTREE_LEASE_ID_PATTERN.test(leaseId)) {
-      throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Lease id is invalid');
+      throw new WorkerOperationError(400, 'INVALID_REQUEST', 'Lease id is invalid');
     }
     if (typeof directory !== 'string' || !directory || !isAbsolute(directory)) {
-      throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Worktree directory must be absolute');
+      throw new WorkerOperationError(400, 'INVALID_REQUEST', 'Worktree directory must be absolute');
     }
     const pending = { directory, cancelled: false };
     const named = this.worktreeLeases.get(leaseId);
     const acquiring = this.pendingWorktreeLeaseAcquires.get(leaseId);
     if (named || acquiring) {
-      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', {
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'A lease with this id is already being acquired', {
         leaseId,
         directory: named?.canonicalDirectory ?? acquiring?.directory ?? directory,
       });
@@ -318,20 +320,20 @@ export class WorkerRegistry {
       try {
         canonicalDirectory = await this.canonicalizeDirectory(directory);
       } catch {
-        throw new WorkerOperationError(400, 'INVALID_REQUEST', undefined, 'Worktree directory does not resolve');
+        throw new WorkerOperationError(400, 'INVALID_REQUEST', 'Worktree directory does not resolve');
       }
       return await this.withLeaseMutation(async () => {
         if (pending.cancelled) {
-          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId, directory });
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The lease acquisition was cancelled', { leaseId, directory });
         }
         const current = this.worktreeLeases.get(leaseId);
         if (current) {
-          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId, directory: current.canonicalDirectory });
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'A lease with this id already exists', { leaseId, directory: current.canonicalDirectory });
         }
         for (const lease of this.worktreeLeases.values()) {
           if (isInsideOrSameDirectory(lease.canonicalDirectory, canonicalDirectory)
             || isInsideOrSameDirectory(canonicalDirectory, lease.canonicalDirectory)) {
-            throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
+            throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The requested directory overlaps an existing worktree lease', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
           }
         }
         for (const fence of this.relocationFences.values()) {
@@ -339,7 +341,7 @@ export class WorkerRegistry {
             || isInsideOrSameDirectory(fence.destinationCanonical, canonicalDirectory)
             || isInsideOrSameDirectory(canonicalDirectory, fence.sourceCanonical)
             || isInsideOrSameDirectory(fence.sourceCanonical, canonicalDirectory)) {
-            throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', {
+            throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The requested directory is inside an active session relocation', {
               leaseId,
               directory: canonicalDirectory,
               relocationSessionId: fence.sessionId,
@@ -412,7 +414,7 @@ export class WorkerRegistry {
           || isInsideOrSameDirectory(destinationCanonical, lease.canonicalDirectory)
           || isInsideOrSameDirectory(lease.canonicalDirectory, sourceCanonical)
           || isInsideOrSameDirectory(sourceCanonical, lease.canonicalDirectory)) {
-          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The relocation directory overlaps an existing worktree lease', { leaseId: lease.leaseId, directory: lease.canonicalDirectory });
         }
       }
       for (const [leaseId, pending] of this.pendingWorktreeLeaseAcquires) {
@@ -420,12 +422,12 @@ export class WorkerRegistry {
           || isInsideOrSameDirectory(destinationCanonical, pending.directory)
           || isInsideOrSameDirectory(pending.directory, sourceCanonical)
           || isInsideOrSameDirectory(sourceCanonical, pending.directory)) {
-          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { leaseId, directory: pending.directory });
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The relocation directory overlaps a pending lease acquisition', { leaseId, directory: pending.directory });
         }
       }
       const existing = this.relocationFences.get(sessionId);
       if (existing) {
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', { sessionId });
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session already has a relocation in flight', { sessionId });
       }
 
       const fence: RelocationFence = { sessionId, sourceCanonical, destinationCanonical };
@@ -462,9 +464,8 @@ export class WorkerRegistry {
     return this.withRoot(entry.info.rootSessionId, async () => {
       const current = this.workerEntries.get(entry.info.rootSessionId);
       if (current !== entry) return null;
-      const refuse = (code: 'RUN_ACTIVE' | 'COMMAND_IN_FLIGHT') => new WorkerOperationError(
-        409, code, { sessionId: entry.info.rootSessionId },
-      );
+      const refuse = (code: 'RUN_ACTIVE' | 'COMMAND_IN_FLIGHT') => new WorkerOperationError(409, code, code === 'RUN_ACTIVE' ? 'The session still has an active run'
+        : 'The session still has a command in flight', { sessionId: entry.info.rootSessionId });
       const pendingWork = (candidate: WorkerEntry): boolean => candidate.pending.size > 0
         || [...this.actions.values()].some(action => action.entry === candidate);
       if (entry.kind === 'session') {
@@ -497,7 +498,7 @@ export class WorkerRegistry {
       // only entry removal and child exit are proved, not the process group.
       const groupGone = await waitForWorkerProcessTree(again.child.pid);
       if (this.workerEntries.get(entry.info.rootSessionId) === again || !exited || !groupGone) {
-        throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', { sessionId: entry.info.rootSessionId });
+        throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker did not stop within the lease release', { sessionId: entry.info.rootSessionId });
       }
       return entry.info.rootSessionId;
     });
@@ -506,11 +507,11 @@ export class WorkerRegistry {
   reserveRestart(rootSessionId: string, generation: string): RestartReservation {
     const entry = this.workerEntries.get(rootSessionId);
     if (this.closing || !entry || entry.kind !== 'session' || entry.info.state !== 'ready' || !entry.child.connected)
-      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
-    if (entry.info.workerGeneration !== generation) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker is not ready to restart');
+    if (entry.info.workerGeneration !== generation) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The worker generation does not match the restart target');
     if (this.restartReservations.has(rootSessionId) || this.mutations.has(rootSessionId) || entry.pending.size > 0
       || [...this.actions.values()].some(action => action.entry === entry))
-      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The worker has pending work, so the restart is refused');
     this.restartReservations.set(rootSessionId, generation);
     return {
       release: () => {
@@ -518,12 +519,12 @@ export class WorkerRegistry {
       },
       assertIdle: async () => {
         if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready' || this.restartReservations.get(rootSessionId) !== generation)
-          throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+          throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The worker generation or reservation changed during the restart');
         const result = await this.dispatch(entry, { type: 'shell', operation: { type: 'snapshot' } });
-        if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
-        if (result.type !== 'shell' || result.result.type !== 'snapshot') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready') throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The worker left the registry during the restart');
+        if (result.type !== 'shell' || result.result.type !== 'snapshot') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker reply did not match the requested shell snapshot operation.');
         if (result.result.snapshot.running.length > 0 || [...this.actions.values()].some(action => action.entry === entry))
-          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The worker still runs a shell job or a Host action');
       },
     };
   }
@@ -532,9 +533,9 @@ export class WorkerRegistry {
     const parsed = WorkerOperationSchema.parse(operation);
     const entry = this.workerEntries.get(rootSessionId);
     if (entry && this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
-      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
-    if (entry && expectedGeneration !== undefined && expectedGeneration !== entry.info.workerGeneration) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
-    if (this.closing || !entry || entry.info.state !== 'ready' || !entry.child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The worker already has a restart reservation');
+    if (entry && expectedGeneration !== undefined && expectedGeneration !== entry.info.workerGeneration) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The request generation does not match the worker generation');
+    if (this.closing || !entry || entry.info.state !== 'ready' || !entry.child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker left service before the request was admitted');
     return this.dispatch(entry, parsed);
   }
 
@@ -552,7 +553,7 @@ export class WorkerRegistry {
     const result = new Promise<WorkerOperationResult>((resolve, reject) => entry.pending.set(commandId, { resolve, reject }));
     entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId, operation }, error => {
       if (!error) return;
-      const pending = entry.pending.get(commandId); entry.pending.delete(commandId); pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+      const pending = entry.pending.get(commandId); entry.pending.delete(commandId); pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker stopped before accepting the operation'));
     });
     return result;
   }
@@ -560,7 +561,7 @@ export class WorkerRegistry {
   /** Serialize capacity decisions so two roots cannot both claim the same free slot or evict past the cap. */
   private withCapacity<T>(operation: () => Promise<T>): Promise<T> {
     const run = this.capacityQueue.then(operation, operation);
-    this.capacityQueue = run.then(() => {}, () => {});
+    this.capacityQueue = run.then(() => { }, () => { });
     return run;
   }
 
@@ -573,7 +574,7 @@ export class WorkerRegistry {
    */
   private async reserveSessionCapacity(rootSessionId: string): Promise<void> {
     const maxActiveRootWorkers = this.capacityPolicy.maxActiveRootWorkers;
-    for (;;) {
+    for (; ;) {
       const active = new Set<string>();
       for (const entry of this.workerEntries.values()) {
         if (entry.kind === 'session' && entry.info.rootSessionId !== rootSessionId
@@ -595,9 +596,9 @@ export class WorkerRegistry {
         if (await this.evictCandidate(candidate, false)) { evicted = true; break; }
       }
       if (evicted) continue;
-      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', {
+      throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', `Session capacity is full (${active.size} of ${maxActiveRootWorkers} active). Every worker is busy; finish or close one before sending another message.`, {
         reason: 'worker_capacity', activeRootWorkers: active.size, maxActiveRootWorkers,
-      }, `Session capacity is full (${active.size} of ${maxActiveRootWorkers} active). Every worker is busy; finish or close one before sending another message.`);
+      });
     }
   }
 
@@ -661,12 +662,14 @@ export class WorkerRegistry {
       const result = await Promise.race([
         new Promise<WorkerOperationResult>((resolve, reject) => {
           entry.pending.set(commandId, { resolve, reject });
-          entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId,
-            operation: { type: 'shell', operation: { type: 'snapshot' } } }, error => {
+          entry.child.send({
+            type: 'operation', workerGeneration: entry.info.workerGeneration, commandId,
+            operation: { type: 'shell', operation: { type: 'snapshot' } }
+          }, error => {
             if (!error) return;
             const pending = entry.pending.get(commandId);
             entry.pending.delete(commandId);
-            pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+            pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker stopped before answering the shell snapshot'));
           });
         }),
         new Promise<undefined>(resolve => {
@@ -686,27 +689,27 @@ export class WorkerRegistry {
 
   async start(input: WorkerBootstrap, replace = false, approvalPolicies?: WorkerApprovalPolicy[], restartGeneration?: string): Promise<WorkerInfo> {
     return this.withRoot(input.rootSessionId, async () => {
-      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The supervisor is shutting down');
       const previous = this.workerEntries.get(input.rootSessionId);
       const reserved = this.restartReservations.get(input.rootSessionId);
       if (reserved !== undefined && (restartGeneration !== reserved || previous?.info.workerGeneration !== reserved))
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The restart reservation does not match the held generation');
       if (restartGeneration !== undefined && (reserved !== restartGeneration || previous?.info.workerGeneration !== restartGeneration))
-        throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+        throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The reserved restart generation does not match the worker generation');
       if (restartGeneration !== undefined && previous && (previous.pending.size > 0 || [...this.actions.values()].some(action => action.entry === previous)))
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
-      if (previous && previous.kind !== 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The previous worker has pending work, so the restart is refused');
+      if (previous && previous.kind !== 'session') throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The previous worker is not a session worker');
       if (previous?.info.state === 'ready' && !replace) return { ...previous.info };
       await this.withCapacity(() => this.reserveSessionCapacity(input.rootSessionId));
       try {
         if (previous) {
           const clean = await this.stopEntry(previous);
-          if (restartGeneration !== undefined && !clean) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED');
+          if (restartGeneration !== undefined && !clean) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The previous worker did not stop cleanly');
         }
-        if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The supervisor is shutting down');
         const prepared = WorkerBootstrapSchema.parse(this.options.prepareBootstrap ? await this.options.prepareBootstrap(input) : input);
-        if (prepared.rootSessionId !== input.rootSessionId) throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
-        if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        if (prepared.rootSessionId !== input.rootSessionId) throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The prepared bootstrap names a different root session');
+        if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The supervisor is shutting down');
         return await this.launch({ kind: 'session', input: prepared }, approvalPolicies);
       } finally {
         this.pendingRootAdmissions.delete(input.rootSessionId);
@@ -719,18 +722,18 @@ export class WorkerRegistry {
     const current = this.workerEntries.get(input.rootSessionId);
     if (current?.kind === 'stateless' && this.mutations.has(input.rootSessionId)
       && (replace || !this.sameStatelessIdentity(current, input, environment)))
-      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The stateless worker identity changed under a pending mutation');
     return this.withRoot(input.rootSessionId, async () => {
-      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The supervisor is shutting down');
       const previous = this.workerEntries.get(input.rootSessionId);
-      if (previous && previous.kind !== 'stateless') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (previous && previous.kind !== 'stateless') throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The previous worker is not a stateless worker');
       if (previous?.info.state === 'ready' && !replace && this.sameStatelessIdentity(previous, input, environment)) return { ...previous.info };
       if (previous) {
         if (previous.pending.size > 0 || [...this.actions.values()].some(action => action.entry === previous))
-          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
-        if (!await this.stopEntry(previous)) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+          throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The previous worker has pending work, so the start is refused');
+        if (!await this.stopEntry(previous)) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The previous stateless worker did not stop');
       }
-      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The supervisor is shutting down');
       return this.launch({ kind: 'stateless', input: structuredClone(input) }, undefined, environment);
     });
   }
@@ -750,12 +753,12 @@ export class WorkerRegistry {
 
   async startUsage(input: StatelessWorkerInput): Promise<WorkerInfo> {
     return this.withRoot(input.rootSessionId, async () => {
-      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The supervisor is shutting down');
       const previous = this.workerEntries.get(input.rootSessionId);
-      if (previous && previous.kind !== 'usage') throw new WorkerOperationError(409, 'CATALOG_CONFLICT');
+      if (previous && previous.kind !== 'usage') throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The previous worker is not a usage worker');
       if (previous?.info.state === 'ready') return { ...previous.info };
       if (previous) await this.stopEntry(previous);
-      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (this.closing) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The supervisor is shutting down');
       return this.launch({ kind: 'usage', input: structuredClone(input) });
     });
   }
@@ -764,14 +767,14 @@ export class WorkerRegistry {
     return this.withRoot(rootSessionId, async () => {
       const entry = this.workerEntries.get(rootSessionId);
       if (entry && this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The restart of this session is already reserved');
       return entry ? this.stopEntry(entry) : true;
     });
   }
   async withStoppedRoot<T>(rootSessionId: string, operation: () => Promise<T>): Promise<T> {
     return this.withRoot(rootSessionId, async () => {
       if (this.closing || this.workerEntries.has(rootSessionId) || this.restartReservations.has(rootSessionId))
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The worker is already registered or a restart is reserved');
       return operation();
     });
   }
@@ -783,19 +786,19 @@ export class WorkerRegistry {
       if (!entry || entry.kind !== 'session' || this.closing) return true;
       if (entry.info.state === 'starting' || this.restartReservations.has(rootSessionId) || entry.pending.size > 0
         || [...this.actions.values()].some(action => action.entry === entry)) {
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted, so its worker cannot restart');
       }
       if (!this.sessionIsIdle(rootSessionId)) {
-        throw new WorkerOperationError(409, 'RUN_ACTIVE');
+        throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session still has an active run');
       }
       if (!(await this.hasNoRunningShellJobs(entry))) {
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is controlled, so its worker cannot restart');
       }
       if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready' || this.closing
         || this.restartReservations.has(rootSessionId) || entry.pending.size > 0
         || [...this.actions.values()].some(action => action.entry === entry)
         || !this.sessionIsIdle(rootSessionId)) {
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT');
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is relocating, so its worker cannot restart');
       }
       return this.stopEntry(entry);
     });
@@ -912,11 +915,10 @@ export class WorkerRegistry {
         entry.info.state = 'ready';
         ready.resolve();
       } else if (reply.data.type === 'error') {
-        ready.reject(new WorkerOperationError(503, reply.data.code, undefined,
-          reply.data.detail ?? 'SDK worker operation failed'));
+        ready.reject(new WorkerOperationError(503, reply.data.code, reply.data.detail ?? 'The worker failed to initialize'));
       } else if (reply.data.type === 'operation.error') {
         const pending = entry.pending.get(reply.data.commandId);
-        if (pending) { entry.pending.delete(reply.data.commandId); pending.reject(new WorkerOperationError(reply.data.status, reply.data.code)); }
+        if (pending) { entry.pending.delete(reply.data.commandId); pending.reject(new WorkerOperationError(reply.data.status, reply.data.code, reply.data.detail)); }
       } else if (reply.data.type === 'opened') {
         if (entry.kind === 'session') {
           entry.input.sessionFile = reply.data.sessionFile;
@@ -938,15 +940,15 @@ export class WorkerRegistry {
         const request = reply.data.request;
         void (async () => {
           const descriptor = await describeNativeOperation(input.cwd, request, reply.data.type === 'policy.request' ? reply.data.nativeContext : undefined);
-          if (this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
+          if (this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The worker left service before its policy request was answered' } as const;
           if (descriptor && request.type === 'tool' && request.toolName === 'bash' && request.approvalId && request.toolCallId) {
             descriptor.approvalGrant = this.options.consumeApprovalGrant?.(entry.info.rootSessionId, workerGeneration, request);
           }
-          return check ? check(entry.info.rootSessionId, request, descriptor) : { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } as const;
+          return check ? check(entry.info.rootSessionId, request, descriptor) : { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The Host has no policy check for worker operations' } as const;
         })().then(result => {
           if (this.workerEntries.get(entry.info.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: WorkerPolicyResultSchema.parse(result) });
         }).catch(() => {
-          if (this.workerEntries.get(entry.info.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 } });
+          if (this.workerEntries.get(entry.info.rootSessionId) === entry && entry.info.workerGeneration === workerGeneration && (entry.info.state === 'starting' || entry.info.state === 'ready') && entry.child.connected) entry.child.send({ type: 'policy.result', workerGeneration, requestId, result: { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The Host policy check failed' } });
         });
       } else if (reply.data.type === 'action.cancel') {
         const handle = this.actions.get(reply.data.requestId);
@@ -976,21 +978,21 @@ export class WorkerRegistry {
       const wasStarting = entry.info.state === 'starting';
       if (entry.info.state !== 'stopping') entry.info.state = 'crashed';
       if (wasStarting) ready.reject(new Error('SDK worker exited before initialization'));
-      for (const pending of entry.pending.values()) pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+      for (const pending of entry.pending.values()) pending.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker stopped before the pending operation was answered'));
       entry.pending.clear();
       this.options.callbacks?.onExit?.(entry.info.rootSessionId, workerGeneration);
       exited.resolve();
     });
     try {
-      if (!child.connected) ready.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE'));
+      if (!child.connected) ready.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker process is not connected'));
       else child.send(command, error => { if (error) ready.reject(error); });
       await waitWithin(entry.ready, this.options.startupTimeoutMs ?? 15_000);
-      if (this.closing || this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+      if (this.closing || this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.state !== 'ready' || !child.connected) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker left service before the handshake completed');
       return { ...entry.info };
     } catch (error) {
       const code = error instanceof WorkerOperationError ? error.code : 'WORKER_INIT_FAILED';
       try {
-        const reason = error instanceof Error && error.message && error.message !== 'SDK worker operation failed' ? `: ${error.message}` : '';
+        const reason = error instanceof Error && error.message ? `: ${error.message}` : '';
         this.options.onDiagnostic?.({ level: 'error', rootSessionId: input.rootSessionId, workerGeneration, message: `Worker initialization failed (${code})${reason}` });
       } catch { /* diagnostics never affect lifecycle */ }
       await this.stopEntry(entry);

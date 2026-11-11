@@ -10,18 +10,20 @@ import { openApprovalPolicyStore } from './approval-policy-store.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
 import { createSkillFileOwner } from './skill-file-owner.js';
 
-const unavailable = (code = 'SERVICE_UNAVAILABLE', status = 503) => Object.assign(
-  new Error('The authorized Agent workspace is unavailable'), { code, status },
-);
+const failure = (message, code = 'SERVICE_UNAVAILABLE', status = 503) => Object.assign(new Error(message), { code, status });
+// The Agent Service problem document is the authority: its detail travels unchanged
+// so the UI can name the refusing check instead of a Host-invented sentence.
 const readResponse = async (response, schema) => {
   let body;
-  try { body = await response.json(); } catch { throw unavailable(); }
+  try { body = await response.json(); }
+  catch { throw failure(`The Agent Service answered HTTP ${response.status} with a body that is not JSON`); }
   if (!response.ok) {
     const parsed = ProblemDetailsSchema.safeParse(body);
-    throw parsed.success ? unavailable(parsed.data.code, parsed.data.status) : unavailable();
+    if (parsed.success) throw failure(parsed.data.detail, parsed.data.code, parsed.data.status);
+    throw failure(`The Agent Service answered HTTP ${response.status} without a problem document`);
   }
   const result = schema.safeParse(body);
-  if (!result.success) throw unavailable();
+  if (!result.success) throw failure(`The Agent Service reply did not match the expected response schema (HTTP ${response.status})`);
   return result.data;
 };
 const sameScope = (left, right) => left.projectId === right.projectId
@@ -112,7 +114,7 @@ export function createHostAgentRuntime({
       },
     ), HostWorkspaceRegisteredSchema);
     if (registration.workspaceId !== scope.workspaceId || registration.projectId !== scope.projectId
-      || registration.agentDirectoryId !== scope.agentDirectoryId) throw unavailable();
+      || registration.agentDirectoryId !== scope.agentDirectoryId) throw failure('The Agent Service registered a different workspace than the one admitted');
     return { ...scope, env };
   };
   const resolveWorkspaceScope = async (workspaceId, claimId) => {
@@ -125,7 +127,7 @@ export function createHostAgentRuntime({
     const response = await service.request(`/api/agent/v1/sessions/${encodeURIComponent(sessionId)}`);
     if (response.status === 404) return null;
     const native = await readResponse(response, RuntimeSessionSchema);
-    if (native.sessionId !== sessionId) throw unavailable();
+    if (native.sessionId !== sessionId) throw failure('The Agent Service resolved a different session than the one requested');
     // SDK children inherit only an already-admitted Host root; this cannot admit a new root from a caller ID.
     if (native.rootSessionId === sessionId) return null;
     const root = await scopeRuntime.resolveSessionScope(native.rootSessionId);

@@ -40,6 +40,7 @@ import { CustomProviderForm } from './CustomProviderForm';
 import { listConnectableProviders } from './connectableProviders';
 import { oauthMethodsForProvider, requiresProviderAuth, shouldAutoOpenAuthPanel } from './providerAuth';
 import { CUSTOM_PROVIDER_ID, type CustomProviderPersistPlan } from './custom-provider-form';
+import { problemMessage } from '@/lib/problemMessage';
 
 const ADD_PROVIDER_ID = '__add_provider__';
 const CLASSIFICATION_PAGE_ID = '__classification__';
@@ -180,13 +181,13 @@ function ProviderDetail({
         onClearAuthFailure();
         await onRefresh();
       }
-    } catch {
+    } catch (error) {
       if (current()) {
-        setAccountError(t(request.action === 'label'
+        setAccountError(problemMessage(error, t(request.action === 'label'
           ? 'settings.providers.accounts.toast.renameFailed'
           : request.action === 'select'
             ? 'settings.providers.accounts.toast.switchFailed'
-            : 'settings.providers.accounts.toast.removeFailed'));
+            : 'settings.providers.accounts.toast.removeFailed')));
       }
     } finally {
       if (current()) setAccountBusyId(null);

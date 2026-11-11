@@ -9,6 +9,7 @@ import { SettingsFieldRow, SETTINGS_HELPER_CLASS } from '@/components/sections/s
 import { useI18n } from '@/lib/i18n';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { openExternalUrl } from '@/lib/url';
+import { problemMessage } from '@/lib/problemMessage';
 
 interface McpOAuthSignInProps {
   serverId: string;
@@ -123,8 +124,8 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
     try {
       await navigator.clipboard.writeText(url);
       toast.success(t('settings.mcp.page.toast.authorizationUrlCopied'));
-    } catch {
-      toast.error(t('settings.mcp.page.toast.authorizationUrlCopyFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.mcp.page.toast.authorizationUrlCopyFailed')));
     }
   };
 

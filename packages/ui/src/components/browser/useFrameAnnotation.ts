@@ -11,6 +11,7 @@ import { hasDesktopInvoke } from '@/lib/desktop';
 import { invokeDesktopCommand } from '@/lib/desktopNative';
 import { useI18n } from '@/lib/i18n';
 import { isIMECompositionEvent } from '@/lib/ime';
+import { problemMessage } from '@/lib/problemMessage';
 
 // The bridge answers within a frame of the page being idle; a page without it
 // (navigated elsewhere, or one whose own CSP blocks inline scripts) never does.
@@ -105,8 +106,8 @@ export const useFrameAnnotation = ({
         const result = await runAnnotationSession({ host, theme, labels: overlayLabels });
         if (!isCurrent()) return;
         if (result) await attachAnnotation({ ...result, payload: describePage(result.payload) });
-      } catch {
-        if (isCurrent()) toast.error(t('contextPanel.browser.annotate.failed'));
+      } catch (error) {
+        if (isCurrent()) toast.error(problemMessage(error, t('contextPanel.browser.annotate.failed')));
       } finally {
         if (isCurrent()) {
           hostRef.current = null;

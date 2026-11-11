@@ -11,6 +11,7 @@ import { setContextObligatoryMessage } from '@/sync/session-actions';
 import { WorkStatusRow, WorkStatusSection } from './WorkStatusPrimitives';
 import { useReportWorkStatusPresence } from './presenceContext';
 import type { State } from '@/sync/types';
+import { problemMessage } from '@/lib/problemMessage';
 
 type Props = {
   sessionId: string | null;
@@ -121,8 +122,8 @@ export const WorkStatusPinnedSection: React.FC<Props> = ({ sessionId, directory 
         { id: messageId, createdAt: 0, role: 'user' },
         false,
       );
-    } catch {
-      toast.error(t('chat.workStatus.pinned.unpinFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('chat.workStatus.pinned.unpinFailed')));
     } finally {
       setBusyId((current) => (current === messageId ? null : current));
     }

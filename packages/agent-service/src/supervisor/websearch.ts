@@ -31,13 +31,13 @@ export class WebSearchCoordinator {
       let persisted: WebSearchMutationResult;
       try {
         const reply = await this.workers.request(root, { type: 'web-search', operation });
-        if (reply.type !== 'web-search' || reply.result.type !== 'mutated') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (reply.type !== 'web-search' || reply.result.type !== 'mutated') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested web-search mutation operation.');
         persisted = WebSearchMutationResultSchema.parse(reply.result.result);
         this.assertWorkspace(workspaceId, persisted.state);
       } catch (error) {
         if (error instanceof WorkerOperationError && error.status === 409 && error.code === 'CATALOG_CONFLICT') {
           const state = await this.readState(workspaceId);
-          throw new WorkerOperationError(409, 'CATALOG_CONFLICT', JsonObjectSchema.parse({ currentRevision: state.revision, state }));
+          throw new WorkerOperationError(409, 'CATALOG_CONFLICT', 'The web search configuration changed while it was being written', JsonObjectSchema.parse({ currentRevision: state.revision, state }));
         }
         throw error;
       }
@@ -51,7 +51,7 @@ export class WebSearchCoordinator {
         const identity = { sessionId: worker.rootSessionId, workerGeneration: worker.workerGeneration };
         try {
           const reply = await this.workers.request(worker.rootSessionId, { type: 'web-search', operation: { type: 'apply' } }, worker.workerGeneration);
-          if (reply.type !== 'web-search' || reply.result.type !== 'applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (reply.type !== 'web-search' || reply.result.type !== 'applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested web-search apply operation.');
           outcomes.push({ ...identity, status: 'applied', code: null });
         } catch (error) {
           outcomes.push({ ...identity, status: 'failed', code: error instanceof WorkerOperationError ? error.code : 'INTERNAL_ERROR' });
@@ -67,14 +67,14 @@ export class WebSearchCoordinator {
   private async readState(workspaceId: string): Promise<WebSearchConfigState> {
     const root = await this.workspaces.stateless(workspaceId);
     const reply = await this.workers.request(root, { type: 'web-search', operation: { type: 'read' } });
-    if (reply.type !== 'web-search' || reply.result.type !== 'state') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    if (reply.type !== 'web-search' || reply.result.type !== 'state') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested web-search state operation.');
     const state = WebSearchConfigStateSchema.parse(reply.result.state);
     this.assertWorkspace(workspaceId, state);
     return state;
   }
 
   private assertWorkspace(workspaceId: string, state: WebSearchConfigState): void {
-    if (state.workspaceId !== workspaceId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    if (state.workspaceId !== workspaceId) throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The web search state belongs to a different workspace');
   }
 
   private serial<T>(owner: string, operation: () => Promise<T>): Promise<T> {

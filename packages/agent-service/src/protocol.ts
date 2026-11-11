@@ -58,18 +58,21 @@ const UsageSessionReferenceSchema = z.strictObject({
 export type UsageSessionReference = z.infer<typeof UsageSessionReferenceSchema>;
 export const UsageAuthorizationSchema = z.array(z.strictObject({ workspaceId: EntityIdSchema, projectId: EntityIdSchema }));
 
+/** `proposed` marks a value the authorized operation itself introduces. The authorizer then
+ * validates that candidate against the invariants the post-operation state must satisfy
+ * instead of demanding it already appear in the pre-operation policy snapshot. */
 export const WorkerPolicyRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('provider-entry') }),
   z.strictObject({ type: z.literal('web-search') }),
-  z.strictObject({ type: z.literal('mcp-server'), server: MCPServerConfigSchema }),
-  z.strictObject({ type: z.literal('mcp-oauth'), server: MCPServerConfigSchema, configuration: JsonObjectSchema }),
+  z.strictObject({ type: z.literal('mcp-server'), server: MCPServerConfigSchema, proposed: z.literal(true).optional() }),
+  z.strictObject({ type: z.literal('mcp-oauth'), server: MCPServerConfigSchema, configuration: JsonObjectSchema, proposed: z.literal(true).optional() }),
   z.strictObject({ type: z.literal('shell'), request: ShellStartRequestSchema }),
-  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), permissionPresetId: EntityIdSchema.optional(), approvalId: EntityIdSchema.optional(), toolCallId: EntityIdSchema.optional() }),
+  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), permissionPresetId: EntityIdSchema.optional(), approvalId: EntityIdSchema.optional(), toolCallId: EntityIdSchema.optional(), proposed: z.literal(true).optional() }),
 ]);
 export type WorkerPolicyRequest = z.infer<typeof WorkerPolicyRequestSchema>;
 export const WorkerPolicyResultSchema = z.discriminatedUnion('allowed', [
   z.strictObject({ allowed: z.literal(true) }),
-  z.strictObject({ allowed: z.literal(false), code: ProblemCodeSchema, status: z.number().int().min(400).max(599), approvalRequired: z.literal(true).optional() }),
+  z.strictObject({ allowed: z.literal(false), code: ProblemCodeSchema, status: z.number().int().min(400).max(599), detail: z.string().min(1).max(300), approvalRequired: z.literal(true).optional() }),
 ]);
 export type WorkerPolicyResult = z.infer<typeof WorkerPolicyResultSchema>;
 
@@ -178,7 +181,7 @@ export const WorkerCommandSchema = z.discriminatedUnion('type', [
 export const WorkerReplySchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('ready'), workerGeneration: EntityIdSchema }),
   z.strictObject({ type: z.literal('error'), workerGeneration: EntityIdSchema, code: ProblemCodeSchema, detail: z.string().min(1).max(200).optional() }),
-  z.strictObject({ type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema, status: z.number().int().min(400).max(599) }),
+  z.strictObject({ type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema, status: z.number().int().min(400).max(599), detail: z.string().min(1).max(200) }),
   z.strictObject({ type: z.literal('lifecycle'), workerGeneration: EntityIdSchema, state: z.enum(['initialized', 'closed']) }),
   z.strictObject({ type: z.literal('opened'), workerGeneration: EntityIdSchema, sessionFile: PrivatePathSchema, seed: ProjectionSeedSchema }),
   z.strictObject({ type: z.literal('subagent'), workerGeneration: EntityIdSchema, subagentId: EntityIdSchema, status: z.enum(['started', 'completed', 'failed', 'aborted']), role: z.string().min(1), solutionSpace: z.string().optional(), sessionFile: PrivatePathSchema.optional(), toolCallId: EntityIdSchema.optional() }),

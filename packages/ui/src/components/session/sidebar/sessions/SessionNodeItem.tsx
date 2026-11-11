@@ -99,6 +99,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { resolveEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import type { WorktreeMetadata } from '@/types/worktree';
+import { problemMessage } from '@/lib/problemMessage';
 import {
   getSessionWorktreeMenuState,
   type SessionWorktreeMenuTarget,
@@ -568,8 +569,8 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
       }
       // Done work leaves the working set, as Mark done in the composer does.
       leaveFinishedSessions(workSessionsInWork.map((entry) => entry.sessionId));
-    } catch {
-      toast.error(t('sessions.sidebar.session.work.updateFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('sessions.sidebar.session.work.updateFailed')));
     }
   };
   const sessionGoalLabel = sessionGoal ? t(sessionGoalMarkLabelKey[sessionGoal.status]) : '';
@@ -1252,12 +1253,12 @@ function SessionNodeItemComponent(props: SessionNodeItemProps): React.ReactNode 
         onPin={() => {
           if (!sessionDirectory) return;
           toggleSessionPin({ directory: sessionDirectory, sessionId: session.sessionId })
-            .catch(() => toast.error(t('sessions.sidebar.session.pin.pinFailed')));
+            .catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.pin.pinFailed'))));
         }}
         onUnpin={() => {
           if (!sessionDirectory) return;
           toggleSessionPin({ directory: sessionDirectory, sessionId: session.sessionId })
-            .catch(() => toast.error(t('sessions.sidebar.session.pin.unpinFailed')));
+            .catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.pin.unpinFailed'))));
         }}
       />
       {canTrackWork ? (

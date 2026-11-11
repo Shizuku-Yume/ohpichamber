@@ -79,6 +79,7 @@ import { useDurationTickerNow, useWaitingBlink } from '@/hooks/useDurationTicker
 import { Spinner } from '@/components/ui/spinner';
 import { useSshConfirmation } from './useSshConfirmation';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { problemMessage } from '@/lib/problemMessage';
 
 const randomPort = (): number => {
   return Math.floor(20000 + Math.random() * 30000);
@@ -1868,8 +1869,8 @@ export const RemoteInstancesPage: React.FC = () => {
               setDirectImporting(true);
               try {
                 await importDirectConnectLink();
-              } catch {
-                setDirectError(t('mobile.connect.error.unreachable'));
+              } catch (error) {
+                setDirectError(problemMessage(error, t('mobile.connect.error.unreachable')));
               } finally {
                 setDirectImporting(false);
               }

@@ -73,9 +73,10 @@ export class CatalogCoordinatorError extends Error {
   constructor(
     readonly status: 409 | 503,
     readonly code: CatalogCoordinatorErrorCode,
+    message: string,
     readonly details: { result?: MCPApplyResult | SkillsApplyResult | (MCPWorkspaceReconnectResult & { kind?: never }); currentRevision?: string },
   ) {
-    super(code);
+    super(message);
     this.name = 'CatalogCoordinatorError';
   }
 }
@@ -110,11 +111,11 @@ function ownerIdentity(worker: CatalogWorker): ContractCatalogWorkerIdentity {
   };
 }
 
-function operationError(error: Error | undefined, fallbackCode: string, detail: string): CatalogOperationError {
+function operationError(error: Error | undefined, fallbackCode: string, fallbackDetail: string): CatalogOperationError {
   if (error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError) {
-    return { code: error.code, detail, retryable: error.status >= 500 };
+    return { code: error.code, detail: error.message, retryable: error.status >= 500 };
   }
-  return { code: fallbackCode, detail, retryable: true };
+  return { code: fallbackCode, detail: fallbackDetail, retryable: true };
 }
 
 export class CatalogCoordinator {
@@ -151,7 +152,7 @@ export class CatalogCoordinator {
       }
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
-        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The catalog state file is unreadable', {});
       }
     }
     this.initialized = true;
@@ -172,7 +173,7 @@ export class CatalogCoordinator {
         catch {
           existing.agentDirectoryIds.pop();
           if (!agent) this.agents.delete(agentDirectoryId);
-          throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+          throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The workspace registration could not be persisted', {});
         }
         return;
       }
@@ -207,7 +208,7 @@ export class CatalogCoordinator {
     CatalogWorkerIdentityWithOwnerSchema.parse(worker.identity);
     const workspace = this.workspaces.get(worker.identity.workspaceId);
     if (!workspace || !workspace.agentDirectoryIds.includes(worker.identity.agentDirectoryId)) {
-      throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+      throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The worker workspace or agent directory is not registered in the catalog', {});
     }
     const previous = this.workers.get(worker.identity.rootSessionId);
     if (previous && previous.identity.workerGeneration !== worker.identity.workerGeneration) this.dropWorker(previous);
@@ -220,13 +221,13 @@ export class CatalogCoordinator {
       const [mcp, skills] = await Promise.all([worker.mcp.read(configuration), worker.skills.read(sources)]);
       if (this.workers.get(worker.identity.rootSessionId)?.identity.workerGeneration !== generation || !await this.live(worker)) {
         this.dropWorker(worker);
-        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The worker generation changed while the catalogs were read', {});
       }
       this.mcpSnapshots.set(worker.identity.rootSessionId, mcp);
       this.skillSnapshots.set(worker.identity.rootSessionId, skills);
     } catch {
       this.dropWorker(worker);
-      throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+      throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The worker catalogs could not be read', {});
     }
   }
 
@@ -242,7 +243,7 @@ export class CatalogCoordinator {
       const result = await worker.mcp.read(this.workspace(worker.identity.workspaceId).configuration);
       if (this.workers.get(rootSessionId)?.identity.workerGeneration !== generation || !await this.live(worker)) {
         this.dropWorker(worker);
-        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The worker generation changed while the MCP catalog was read', {});
       }
       this.mcpSnapshots.set(rootSessionId, result);
       return result;
@@ -255,7 +256,7 @@ export class CatalogCoordinator {
       const result = await worker.skills.read(this.sourcesFor(worker));
       if (this.workers.get(rootSessionId)?.identity.workerGeneration !== generation || !await this.live(worker)) {
         this.dropWorker(worker);
-        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The worker generation changed while the skill catalog was read', {});
       }
       this.skillSnapshots.set(rootSessionId, result);
       return result;
@@ -293,39 +294,43 @@ export class CatalogCoordinator {
 
   async pluginsChanged(input: { revision: string; rootSessionIds: string[] },
     apply: (worker: ContractCatalogWorkerIdentity) => Promise<PluginWorkerApplyOutcome>): Promise<PluginWorkerApplyOutcome[]> {
-      const selectedRoots = new Set(input.rootSessionIds);
-      const targets = await this.snapshotWorkers(worker => selectedRoots.has(worker.identity.rootSessionId));
-      const outcomes: PluginWorkerApplyOutcome[] = [];
-      for (const worker of targets) {
-        const identity = ownerIdentity(worker);
-        let outcome: PluginWorkerApplyOutcome;
-        try { outcome = PluginWorkerApplyOutcomeSchema.parse(await apply(identity)); }
-        catch (error) { outcome = { worker: identity, outcome: 'failed', appliedRevision: this.pluginSnapshots.get(identity.rootSessionId)?.appliedRevision ?? null,
-          error: operationError(error instanceof Error ? error : undefined, 'PLUGIN_APPLY_FAILED', 'Plugin configuration is committed but active runtime application failed.') }; }
-        if (outcome.worker.rootSessionId !== identity.rootSessionId || outcome.worker.workspaceId !== identity.workspaceId
-          || outcome.worker.workerGeneration !== identity.workerGeneration) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
-        if (!await this.live(worker) || this.workers.get(identity.rootSessionId)?.identity.workerGeneration !== identity.workerGeneration) {
-          this.dropWorker(worker);
-          outcome = { worker: identity, outcome: 'retired' };
-        } else if (outcome.outcome === 'applied') {
-          if (outcome.appliedRevision !== input.revision) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
-          this.pluginSnapshots.set(identity.rootSessionId, { worker: identity, status: 'ready', appliedRevision: outcome.appliedRevision, error: null });
-        } else if (outcome.outcome === 'failed') {
-          const appliedRevision = this.pluginSnapshots.get(identity.rootSessionId)?.appliedRevision ?? outcome.appliedRevision;
-          outcome = { ...outcome, appliedRevision };
-          this.pluginSnapshots.set(identity.rootSessionId, { worker: identity, status: 'unavailable', appliedRevision, error: outcome.error });
-        }
-        outcomes.push(outcome);
+    const selectedRoots = new Set(input.rootSessionIds);
+    const targets = await this.snapshotWorkers(worker => selectedRoots.has(worker.identity.rootSessionId));
+    const outcomes: PluginWorkerApplyOutcome[] = [];
+    for (const worker of targets) {
+      const identity = ownerIdentity(worker);
+      let outcome: PluginWorkerApplyOutcome;
+      try { outcome = PluginWorkerApplyOutcomeSchema.parse(await apply(identity)); }
+      catch (error) {
+        outcome = {
+          worker: identity, outcome: 'failed', appliedRevision: this.pluginSnapshots.get(identity.rootSessionId)?.appliedRevision ?? null,
+          error: operationError(error instanceof Error ? error : undefined, 'PLUGIN_APPLY_FAILED', 'Plugin configuration is committed but active runtime application failed.')
+        };
       }
-      for (let index = 0; index < outcomes.length; index++) {
-        const outcome = outcomes[index];
-        const current = this.workers.get(outcome.worker.rootSessionId);
-        if (!current || current.identity.workerGeneration !== outcome.worker.workerGeneration || !await this.live(current)) {
-          if (current?.identity.workerGeneration === outcome.worker.workerGeneration) this.dropWorker(current);
-          outcomes[index] = { worker: outcome.worker, outcome: 'retired' };
-        }
+      if (outcome.worker.rootSessionId !== identity.rootSessionId || outcome.worker.workspaceId !== identity.workspaceId
+        || outcome.worker.workerGeneration !== identity.workerGeneration) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The plugin outcome does not belong to the addressed worker', {});
+      if (!await this.live(worker) || this.workers.get(identity.rootSessionId)?.identity.workerGeneration !== identity.workerGeneration) {
+        this.dropWorker(worker);
+        outcome = { worker: identity, outcome: 'retired' };
+      } else if (outcome.outcome === 'applied') {
+        if (outcome.appliedRevision !== input.revision) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The worker applied a different plugin revision than the request named', {});
+        this.pluginSnapshots.set(identity.rootSessionId, { worker: identity, status: 'ready', appliedRevision: outcome.appliedRevision, error: null });
+      } else if (outcome.outcome === 'failed') {
+        const appliedRevision = this.pluginSnapshots.get(identity.rootSessionId)?.appliedRevision ?? outcome.appliedRevision;
+        outcome = { ...outcome, appliedRevision };
+        this.pluginSnapshots.set(identity.rootSessionId, { worker: identity, status: 'unavailable', appliedRevision, error: outcome.error });
       }
-      return outcomes;
+      outcomes.push(outcome);
+    }
+    for (let index = 0; index < outcomes.length; index++) {
+      const outcome = outcomes[index];
+      const current = this.workers.get(outcome.worker.rootSessionId);
+      if (!current || current.identity.workerGeneration !== outcome.worker.workerGeneration || !await this.live(current)) {
+        if (current?.identity.workerGeneration === outcome.worker.workerGeneration) this.dropWorker(current);
+        outcomes[index] = { worker: outcome.worker, outcome: 'retired' };
+      }
+    }
+    return outcomes;
   }
 
 
@@ -351,7 +356,7 @@ export class CatalogCoordinator {
       const owner = this.workspace(workspaceId);
       await this.ensureHydrated(workspaceId, owner.agentDirectoryIds[0]);
       if (revision !== undefined && revision !== owner.configuration.persistedRevision) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: owner.configuration.persistedRevision });
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP configuration revision does not match the expected revision', { currentRevision: owner.configuration.persistedRevision });
       }
       return operation(owner.configuration);
     });
@@ -364,12 +369,12 @@ export class CatalogCoordinator {
     return this.serial(async () => {
       const current = this.workspace(workspaceId).configuration;
       if (current.persistedRevision !== configuration.persistedRevision) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current.persistedRevision });
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP OAuth configuration revision does not match the expected revision', { currentRevision: current.persistedRevision });
       }
       const parsed = MCPOAuthResultSchema.parse(result);
       if (parsed.serverId !== serverId || parsed.persistedRevision !== configuration.persistedRevision || parsed.worker.workspaceId !== workspaceId
         || (workerGeneration !== undefined && parsed.worker.workerGeneration !== workerGeneration)) {
-        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The MCP OAuth result does not match the addressed worker or revision', {});
       }
       return parsed;
     });
@@ -391,23 +396,23 @@ export class CatalogCoordinator {
     const input = MCPConfigureRequestSchema.parse(request);
     const owner = this.workspace(workspaceId);
     const current = owner.configuration;
-    if (input.expectedPersistedRevision !== current.persistedRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current.persistedRevision });
+    if (input.expectedPersistedRevision !== current.persistedRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP configuration revision does not match the expected persisted revision', { currentRevision: current.persistedRevision });
     const next: MCPConfigurationState = { workspaceId, persistedRevision: nextRevision(current.persistedRevision), config: MCPConfigSchema.parse(input.config) };
     try { await this.options.commitMcp(workspaceId, input, next); }
     catch (error) {
       if (error instanceof WorkerOperationError) throw error;
-      throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', {});
+      throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', 'The MCP configuration could not be committed to the workers', {});
     }
     owner.configuration = next;
     try { await this.persist(); }
-    catch { throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', {}); }
+    catch { throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', 'The MCP configuration revision could not be persisted', {}); }
     return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision });
   }
 
   reconnectWorkspaceMcp(workspaceId: string, serverId: string, request: MCPApplyRequest, probe: (configuration: MCPConfigurationState) => Promise<MCPConnectionTestResult>): Promise<MCPWorkspaceReconnectResult> {
     return this.withWorkspaceMcp(workspaceId, MCPApplyRequestSchema.parse(request).persistedRevision, async configuration => {
       EntityIdSchema.parse(serverId);
-      if (!configuration.config.servers.some(server => server.serverId === serverId && server.enabled)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+      if (!configuration.config.servers.some(server => server.serverId === serverId && server.enabled)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP server is not configured and enabled', {});
       const outcomes: MCPWorkerApplyOutcome[] = [];
       for (const worker of await this.snapshotWorkers(item => item.identity.workspaceId === workspaceId)) {
         let previous: MCPCatalogRead;
@@ -430,7 +435,7 @@ export class CatalogCoordinator {
       const payload: MCPWorkspaceReconnectResult = { workspaceId, serverId, persistedRevision: configuration.persistedRevision, status, workers: outcomes };
       if (status === 'no-active-workers') payload.probe = await probe(configuration);
       const result = MCPWorkspaceReconnectResultSchema.parse(payload);
-      if (status === 'partial' || status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', { result });
+      if (status === 'partial' || status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', 'The MCP reconnect did not reach every active worker', { result });
       return result;
     });
   }
@@ -439,7 +444,7 @@ export class CatalogCoordinator {
     const input = MCPApplyRequestSchema.parse(request);
     const configuration = this.workspace(workspaceId).configuration;
     if (input.persistedRevision !== configuration.persistedRevision) {
-      throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: configuration.persistedRevision });
+      throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP configuration revision does not match the apply request', { currentRevision: configuration.persistedRevision });
     }
     const outcomes: MCPWorkerApplyOutcome[] = [];
     for (const worker of await this.snapshotWorkers(item => item.identity.workspaceId === workspaceId)) {
@@ -447,7 +452,7 @@ export class CatalogCoordinator {
     }
     await this.finalizeMcpOutcomes(outcomes);
     const result = { kind: 'mcp' as const, status: aggregate(outcomes), configuration, workers: outcomes } satisfies MCPApplyResult;
-    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', { result });
+    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', 'The MCP apply did not reach every active worker', { result });
     return result;
   }
 
@@ -457,23 +462,22 @@ export class CatalogCoordinator {
       const input = MCPReconnectRequestSchema.parse(request);
       const configuration = this.workspace(worker.identity.workspaceId).configuration;
       if (input.persistedRevision !== configuration.persistedRevision || input.workerGeneration !== worker.identity.workerGeneration) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The worker generation or configuration revision does not match the reconnect', {});
       }
       if (!await this.live(worker)) {
         this.dropWorker(worker);
-        throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', {});
+        throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', 'The worker left service before the MCP reconnect', {});
       }
       try {
         const result = await worker.mcp.reconnect(serverId, input, configuration);
         if (!await this.live(worker)) {
           this.dropWorker(worker);
-          throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', {});
+          throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', 'The worker left service during the MCP reconnect', {});
         }
         this.mcpSnapshots.set(rootSessionId, result);
         return result;
       } catch (error) {
-        throw new CatalogCoordinatorError(error instanceof CatalogCoordinatorError ? error.status : 503,
-          error instanceof CatalogCoordinatorError ? error.code : 'MCP_RECONNECT_FAILED', {});
+        throw new CatalogCoordinatorError(error instanceof CatalogCoordinatorError ? error.status : 503, error instanceof CatalogCoordinatorError ? error.code : 'MCP_RECONNECT_FAILED', error instanceof CatalogCoordinatorError ? error.message : 'The MCP reconnect failed', {});
       }
     });
   }
@@ -497,12 +501,12 @@ export class CatalogCoordinator {
       EntityIdSchema.parse(serverId);
       const captured = this.workers.get(rootSessionId);
       if (request && (!captured || request.workerGeneration !== captured.identity.workerGeneration || !await this.live(captured))) {
-        throw new CatalogCoordinatorError(409, 'WORKER_GENERATION_CONFLICT', {});
+        throw new CatalogCoordinatorError(409, 'WORKER_GENERATION_CONFLICT', 'The worker generation or captured worker does not match the OAuth request', {});
       }
       const worker = await this.resolveWorker(rootSessionId);
       const configuration = this.workspace(worker.identity.workspaceId).configuration;
       if (request && request.persistedRevision !== configuration.persistedRevision) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: configuration.persistedRevision });
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP configuration revision does not match the OAuth request', { currentRevision: configuration.persistedRevision });
       }
       return { worker, configuration };
     });
@@ -510,16 +514,16 @@ export class CatalogCoordinator {
 
   private finishOAuth(worker: CatalogWorker, configuration: MCPConfigurationState, serverId: string, result: MCPOAuthResult): Promise<MCPOAuthResult> {
     return this.serial(async () => {
-      if (!await this.live(worker)) throw new CatalogCoordinatorError(409, 'WORKER_GENERATION_CONFLICT', {});
+      if (!await this.live(worker)) throw new CatalogCoordinatorError(409, 'WORKER_GENERATION_CONFLICT', 'The worker left service before the OAuth flow finished', {});
       const current = this.workspace(worker.identity.workspaceId).configuration;
       if (current.persistedRevision !== configuration.persistedRevision) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current.persistedRevision });
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP configuration revision changed during the OAuth flow', { currentRevision: current.persistedRevision });
       }
       const parsed = MCPOAuthResultSchema.parse(result);
       if (parsed.serverId !== serverId || parsed.persistedRevision !== configuration.persistedRevision
         || parsed.worker.rootSessionId !== worker.identity.rootSessionId || parsed.worker.workspaceId !== worker.identity.workspaceId
         || parsed.worker.workerGeneration !== worker.identity.workerGeneration) {
-        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The MCP OAuth result does not match the addressed worker or revision', {});
       }
       return parsed;
     });
@@ -533,13 +537,13 @@ export class CatalogCoordinator {
   private async publishSourcesNow(workspaceId: string, input: SkillSourcePublication): Promise<SkillInstallResult> {
     const workspace = this.workspace(workspaceId);
     const selectedAgentDirectoryId = input.agentDirectoryId ?? workspace.agentDirectoryIds[0];
-    if (!selectedAgentDirectoryId || !workspace.agentDirectoryIds.includes(selectedAgentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+    if (!selectedAgentDirectoryId || !workspace.agentDirectoryIds.includes(selectedAgentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The skill source agent directory is not registered with the workspace', {});
     const scope: SkillSourceScope = input.scope === 'workspace' ? { kind: 'workspace', workspaceId } : { kind: 'agent', agentDirectoryId: selectedAgentDirectoryId };
     const owner = input.scope === 'workspace' ? workspace.workspaceSourceRevision : this.agent(selectedAgentDirectoryId).sourceRevision;
     CounterSchema.parse(input.sourceRevision);
     CounterSchema.parse(input.expectedSourceRevision);
     if (owner === input.sourceRevision) return { scope, sourceRevision: input.sourceRevision, persistence: 'committed', apply: null };
-    if (owner !== input.expectedSourceRevision || BigInt(input.sourceRevision) <= BigInt(owner)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: owner });
+    if (owner !== input.expectedSourceRevision || BigInt(input.sourceRevision) <= BigInt(owner)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The skill source revision does not match the expected revision', { currentRevision: owner });
     if (input.scope === 'workspace') workspace.workspaceSourceRevision = input.sourceRevision;
     else this.agent(selectedAgentDirectoryId).sourceRevision = input.sourceRevision;
     try { await this.persist(); }
@@ -557,11 +561,11 @@ export class CatalogCoordinator {
 
   private async reconcileSourcesNow(workspaceId: string, agentDirectoryId: string, input: SkillSourceRevisions): Promise<SkillSourceRevisions> {
     const workspace = this.workspace(workspaceId);
-    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The skill reconcile agent directory is not registered with the workspace', {});
     const sources = SkillSourceRevisionsSchema.parse(input);
     const agent = this.agent(agentDirectoryId);
     const previous = { workspace: workspace.workspaceSourceRevision, agent: agent.sourceRevision };
-    if (BigInt(sources.workspace) < BigInt(previous.workspace) || BigInt(sources.agent) < BigInt(previous.agent)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+    if (BigInt(sources.workspace) < BigInt(previous.workspace) || BigInt(sources.agent) < BigInt(previous.agent)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The reconciled skill source revisions may not move backwards', {});
     if (sources.workspace === previous.workspace && sources.agent === previous.agent) return sources;
     workspace.workspaceSourceRevision = sources.workspace;
     agent.sourceRevision = sources.agent;
@@ -576,9 +580,9 @@ export class CatalogCoordinator {
     return this.serial(async () => {
       const sources = await this.reconcileSourcesNow(workspaceId, input.agentDirectoryId, await callbacks.reconcile(workspaceId, input.agentDirectoryId));
       const current = sources[input.scope];
-      if (current !== input.expectedSourceRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: current });
+      if (current !== input.expectedSourceRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The committed skill source revision does not match the expected revision', { currentRevision: current });
       const sourceRevision = CounterSchema.parse(await callbacks.commit());
-      if (BigInt(sourceRevision) !== BigInt(current) + 1n) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+      if (BigInt(sourceRevision) !== BigInt(current) + 1n) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The committed skill source revision did not advance by one', {});
       const result = await this.publishSourcesNow(workspaceId, { scope: input.scope, sourceRevision, expectedSourceRevision: current, agentDirectoryId: input.agentDirectoryId });
       const apply = await this.applySkillsScope(workspaceId, input.agentDirectoryId, { scope: input.scope, sourceRevision }, callbacks.reconcile);
       return { ...result, apply };
@@ -598,7 +602,7 @@ export class CatalogCoordinator {
 
   private async applySkillsScope(workspaceId: string, agentDirectoryId: string, request: { scope: 'workspace' | 'agent'; sourceRevision: string }, reconcile: SkillSourceReconciler): Promise<SkillsApplyResult> {
     const workspace = this.workspace(workspaceId);
-    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The skill apply agent directory is not registered with the workspace', {});
     const input = SkillsApplyRequestSchema.parse(request);
     const targets = await this.snapshotWorkers(item => input.scope === 'workspace'
       ? item.identity.workspaceId === workspaceId : item.identity.agentDirectoryId === agentDirectoryId);
@@ -607,7 +611,7 @@ export class CatalogCoordinator {
     for (const worker of targets) pairs.set(JSON.stringify([worker.identity.workspaceId, worker.identity.agentDirectoryId]), worker.identity);
     for (const pair of pairs.values()) await this.reconcileSourcesNow(pair.workspaceId, pair.agentDirectoryId, await reconcile(pair.workspaceId, pair.agentDirectoryId));
     const sourceOwner = input.scope === 'workspace' ? workspace.workspaceSourceRevision : this.agent(agentDirectoryId).sourceRevision;
-    if (sourceOwner !== input.sourceRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', { currentRevision: sourceOwner });
+    if (sourceOwner !== input.sourceRevision) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The skill apply source revision does not match its owner', { currentRevision: sourceOwner });
     const scope: SkillSourceScope = input.scope === 'workspace' ? { kind: 'workspace', workspaceId } : { kind: 'agent', agentDirectoryId };
     const outcomes: SkillsWorkerApplyOutcome[] = [];
     for (const worker of targets) outcomes.push(await this.applySkillsWorker(worker));
@@ -619,7 +623,7 @@ export class CatalogCoordinator {
       }
     }
     const result = { kind: 'skills' as const, status: aggregate(outcomes), scope, sourceRevision: input.sourceRevision, workers: outcomes } satisfies SkillsApplyResult;
-    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'SKILL_APPLY_FAILED', { result });
+    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'SKILL_APPLY_FAILED', 'The skill apply did not reach every active worker', { result });
     return result;
   }
 
@@ -628,12 +632,12 @@ export class CatalogCoordinator {
       const worker = await this.resolveWorker(rootSessionId);
       const input = SkillExpandRequestSchema.parse(request);
       if (input.workerGeneration !== worker.identity.workerGeneration || !await this.live(worker)) {
-        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', {});
+        throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The skill source revision does not match the requested revision', {});
       }
       const result = await worker.skills.expand(input);
       if (this.workers.get(rootSessionId)?.identity.workerGeneration !== worker.identity.workerGeneration || !await this.live(worker)) {
         this.dropWorker(worker);
-        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The skill catalog could not be expanded', {});
       }
       return result;
     });
@@ -654,7 +658,7 @@ export class CatalogCoordinator {
   }
   private async ensureHydrated(workspaceId: string, agentDirectoryId: string): Promise<WorkspaceState> {
     const workspace = this.workspaces.get(workspaceId);
-    if (!workspace || !workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+    if (!workspace || !workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The workspace is not registered for its agent directory', {});
     const pending = this.hydrating.get(workspaceId);
     if (pending) {
       await pending;
@@ -663,13 +667,13 @@ export class CatalogCoordinator {
     const hydration = (async () => {
       let native: MCPConfigurationState | null;
       try { native = await this.options.readMcpConfiguration(workspaceId); }
-      catch { throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {}); }
+      catch { throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The MCP configuration could not be read from the workspace', {}); }
       if (native !== null) {
-        if (native.workspaceId !== workspaceId) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        if (native.workspaceId !== workspaceId) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The MCP configuration belongs to a different workspace', {});
         workspace.configuration = MCPConfigurationStateSchema.parse(native);
         await this.persist();
       } else if (workspace.configuration.persistedRevision !== '0') {
-        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+        throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The persisted MCP configuration revision is not zero', {});
       }
     })();
     this.hydrating.set(workspaceId, hydration);
@@ -680,13 +684,13 @@ export class CatalogCoordinator {
 
   private workspace(workspaceId: string): WorkspaceState {
     const workspace = this.workspaces.get(workspaceId);
-    if (!workspace) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+    if (!workspace) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The workspace is not registered in the catalog', {});
     return workspace;
   }
 
   private agent(agentDirectoryId: string): AgentState {
     const agent = this.agents.get(agentDirectoryId);
-    if (!agent) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+    if (!agent) throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The agent directory is not registered in the catalog', {});
     return agent;
   }
 
@@ -702,7 +706,7 @@ export class CatalogCoordinator {
     const worker = this.workers.get(rootSessionId);
     if (!worker || !await this.live(worker)) {
       if (worker) this.dropWorker(worker);
-      throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', {});
+      throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The worker left service before the catalog operation', {});
     }
     await this.ensureHydrated(worker.identity.workspaceId, worker.identity.agentDirectoryId);
     return worker;
@@ -748,9 +752,11 @@ export class CatalogCoordinator {
         this.dropWorker(worker);
         return { worker: ownerIdentity(worker), outcome: 'retired' };
       }
-      return MCPWorkerApplyOutcomeSchema.parse({ worker: ownerIdentity(worker), outcome: 'failed',
+      return MCPWorkerApplyOutcomeSchema.parse({
+        worker: ownerIdentity(worker), outcome: 'failed',
         revisions: { runtimeStatus: previous.workerCatalog.runtimeStatus, appliedRevision: previous.workerCatalog.appliedRevision, catalogRevision: previous.workerCatalog.catalogRevision },
-        error: operationError(error instanceof Error ? error : undefined, 'MCP_APPLY_FAILED', 'MCP runtime application failed; the prior catalog is retained.') });
+        error: operationError(error instanceof Error ? error : undefined, 'MCP_APPLY_FAILED', 'MCP runtime application failed; the prior catalog is retained.')
+      });
     }
   }
 
@@ -786,12 +792,14 @@ export class CatalogCoordinator {
         this.dropWorker(worker);
         return { worker: ownerIdentity(worker), outcome: 'retired' };
       }
-      return SkillsWorkerApplyOutcomeSchema.parse({ worker: ownerIdentity(worker), outcome: 'failed', revisions: {
-        runtimeStatus: previous.runtimeStatus,
-        persistedSources: sources,
-        appliedSources: previous.appliedSources,
-        catalogRevision: previous.catalogRevision,
-      }, error: operationError(error instanceof Error ? error : undefined, 'SKILL_APPLY_FAILED', 'Skill application failed; the prior catalog is retained.') });
+      return SkillsWorkerApplyOutcomeSchema.parse({
+        worker: ownerIdentity(worker), outcome: 'failed', revisions: {
+          runtimeStatus: previous.runtimeStatus,
+          persistedSources: sources,
+          appliedSources: previous.appliedSources,
+          catalogRevision: previous.catalogRevision,
+        }, error: operationError(error instanceof Error ? error : undefined, 'SKILL_APPLY_FAILED', 'Skill application failed; the prior catalog is retained.')
+      });
     }
   }
 

@@ -6,6 +6,7 @@ import { fetchUserEnvironment, updateUserEnvironment, type EnvironmentVariablesP
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 
 type LoadState =
   | { state: 'loading' }
@@ -39,9 +40,9 @@ export const EnvironmentVariablesSettings: React.FC = () => {
       setLoad({ state: 'ready', names: environment.names });
       reportSettingsSaveState('saved');
       return true;
-    } catch {
+    } catch (error) {
       reportSettingsSaveState('error');
-      toast.error(t('settings.environment.editor.saveFailed'));
+      toast.error(problemMessage(error, t('settings.environment.editor.saveFailed')));
       return false;
     }
   }, [t]);

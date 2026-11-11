@@ -252,7 +252,8 @@ export interface NativeMcpDependencies {
   readonly resolveCredentialRef: (reference: string) => Promise<string>;
   readonly resolveCommand: (server: Extract<MCPServerConfig['transport'], { type: 'stdio' }>) => Promise<string>;
   /** Existing Host network/enterprise policy, evaluated at each crossing. */
-  readonly authorizeServer: (server: MCPServerConfig) => Promise<void>;
+  /** `proposed` marks a server the persisting operation itself introduces. */
+  readonly authorizeServer: (server: MCPServerConfig, proposed?: boolean) => Promise<void>;
   readonly authorizeOAuth: (server: MCPServerConfig, config: MCPOAuthPublicConfiguration) => Promise<void>;
   readonly sanitizeTool: (tool: MCPTool) => MCPTool;
   readonly onCatalog: (state: MCPCatalogState) => void;
@@ -345,7 +346,7 @@ export class WorkerMcp extends MCPManager {
         || JSON.stringify(configuration.config) !== JSON.stringify(request.config)) {
         throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
       }
-      for (const server of configuration.config.servers) await this.deps.authorizeServer(server);
+      for (const server of configuration.config.servers) await this.deps.authorizeServer(server, true);
       const persisted = await writeNativeMcpConfiguration(this.deps.configPath, configuration);
       await this.#retireIncompatibleOAuth(persisted);
       return persisted;

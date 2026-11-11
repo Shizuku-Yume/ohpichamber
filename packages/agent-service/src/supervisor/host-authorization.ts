@@ -4,7 +4,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { HostWorkerAuthorizationReplySchema, HostWorkerAuthorizationRequestSchema, HostWorkerActionReplySchema, HostWorkerActionRequestSchema, type HostAuthorizationScope, type NativeOperationDescriptor, type HostActionRequest, type HostActionResult } from './host-authorization-protocol.ts';
 import type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
 
-const unavailable = (): WorkerPolicyResult & { allowed: false } => ({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 });
+const unavailable = (): WorkerPolicyResult & { allowed: false } => ({ allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The Host authorization channel is unavailable' });
 const actionUnavailable = (): HostActionResult => ({ ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 });
 
 /** The supervisor parses native targets, but only its captured Node Host grants work. */
@@ -39,7 +39,7 @@ export class HostWorkerAuthorization {
   readonly authorize = async (rootSessionId: string, request: WorkerPolicyRequest, descriptor?: NativeOperationDescriptor): Promise<WorkerPolicyResult> => {
     if (this.closed || !process.send || !process.connected) return unavailable();
     const message = HostWorkerAuthorizationRequestSchema.safeParse({ type: 'worker.authorization.request', requestId: randomUUID(), scope: this.resolveScope(rootSessionId), request, descriptor });
-    if (!message.success) return { allowed: false, code: 'UNAUTHORIZED', status: 403 };
+    if (!message.success) return { allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The worker authorization request did not match the Host protocol' };
     const { requestId, scope } = message.data;
     const { promise, resolve } = Promise.withResolvers<WorkerPolicyResult>();
     const fail = (): void => {

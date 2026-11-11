@@ -38,6 +38,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { brandIconFor } from '@/lib/integrations-catalog/brand-icons';
 import { vendorLogoFor } from '@/lib/integrations-catalog/vendor-logos';
 import type { MCPServerConfig } from '@openchamber/agent-contract';
+import { problemMessage } from '@/lib/problemMessage';
 import {
   CATALOG_CATEGORY_ORDER,
   CATALOG_ENTRIES,
@@ -482,10 +483,10 @@ export function IntegrationsCatalogView(): React.ReactNode {
           }
           try {
             await useMcpStore.getState().connect(entry.id, currentDirectory);
-          } catch {
+          } catch (error) {
             // A failed connect is expected for an OAuth server: the detail
             // page's sign-in panel is how the user finishes that install.
-            if (component.auth !== 'oauth') toast.error(t('integrationsCatalog.connect.failed', { name: entry.name }));
+            if (component.auth !== 'oauth') toast.error(problemMessage(error, t('integrationsCatalog.connect.failed', { name: entry.name })));
           }
           if (component.auth === 'oauth') setSelectedId(entry.id);
         } else if (component.kind === 'plugin') {

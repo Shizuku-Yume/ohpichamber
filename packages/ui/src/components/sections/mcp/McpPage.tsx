@@ -43,6 +43,7 @@ import { getMcpServerStatus, isMcpServerConnected, useMcpStore } from '@/stores/
 import { McpGrid } from './McpGrid';
 import { McpOAuthSignIn } from './McpOAuthSignIn';
 import { parseImportedMcpSnippet } from './mcpImport';
+import { problemMessage } from '@/lib/problemMessage';
 
 type RemoteTransportType = 'http' | 'sse';
 type RemoteTransport = Extract<MCPServerConfig['transport'], { type: 'http' | 'sse' }>;
@@ -256,8 +257,8 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
         else merged[existing] = pair;
       }
       onRowsChange(merged);
-    } catch {
-      toast.error(t('settings.mcp.page.toast.clipboardReadFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.mcp.page.toast.clipboardReadFailed')));
     }
   };
 
@@ -556,7 +557,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         setCreated(true);
         void useMcpStore.getState().refresh({ directory, silent: true });
       }
-      if (!result.ok) setError(result.error || t('settings.mcp.page.toast.saveFailed'));
+      if (!result.ok) setError(problemMessage(result.error, t('settings.mcp.page.toast.saveFailed')));
     } finally {
       if (mounted.current) setBusy(false);
     }
@@ -597,7 +598,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
         setDraft(value => ({ ...value, enabled: nextEnabled }));
         await useMcpStore.getState().refresh({ directory, silent: true });
       }
-      if (!result.ok) throw new Error(result.error || t('settings.mcp.page.toast.saveFailed'));
+      if (!result.ok) throw new Error(problemMessage(result.error, t('settings.mcp.page.toast.saveFailed')));
       if (nextEnabled) await useMcpStore.getState().reconnect(initial.serverId, directory);
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : String(failure));
@@ -685,7 +686,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
       const updated = await useMcpConfigStore.getState().updateMcp(initial.serverId, { transport }, directory);
       assertRuntime();
       if (!updated.result) {
-        throw new Error(!updated.ok ? updated.error : t('settings.mcp.page.toast.saveFailed'));
+        throw new Error(!updated.ok ? problemMessage(updated.error, t('settings.mcp.page.toast.saveFailed')) : t('settings.mcp.page.toast.saveFailed'));
       }
       if (!mounted.current) return;
       assertRuntime();
@@ -749,8 +750,8 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
       const text = await readClipboardText();
       setSnippet(text);
       setImportError(null);
-    } catch {
-      setImportError(t('settings.mcp.page.toast.clipboardReadFailed'));
+    } catch (error) {
+      setImportError(problemMessage(error, t('settings.mcp.page.toast.clipboardReadFailed')));
     }
   };
 

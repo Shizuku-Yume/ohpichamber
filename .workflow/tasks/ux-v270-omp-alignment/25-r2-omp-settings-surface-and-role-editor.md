@@ -94,3 +94,27 @@ registered as a project so `workspaces/resolve` authorizes it):
   "打开 config.yml" action.
 Live payload cross-check (`GET /api/agent/v1/workspaces/<id>/settings`): 30 `gui`, 13 `tui-only`,
 7 `duplicate`, 107 `advanced`, and `configPath` set.
+
+Review: round 1 found five blocking mechanisms, all fixed in `25f5300c`. Re-checked on the final
+tree: `bun --cwd packages/agent-contract test` 246 pass / 0 fail, `bun --cwd packages/agent-service test`
+485 tests / 0 fail, the UI leg 1331/1331 files, `bun run lint` exit 0, `tsc --noEmit` and `oxlint`
+clean on the touched files.
+
+1. One user action wrote two updates at the same revision (role record and
+   `defaultThinkingLevel`), so the second conflicted and the level did not persist. Both
+   changes now travel in one `updateOmpSettings`, including the 409 retry.
+2. `ModelRoleEditor` passed `directory={undefined}` to `ModelSelector`, so the pickers read the
+   active project's catalog rather than the project the Settings selector names. The settings
+   directory now flows through Defaults, Git and the OMP page.
+3. An unset effort resolved to `off` while OMP falls back to the session-wide
+   `defaultThinkingLevel`. `concreteEffort` now resolves in OMP's order (explicit, model default,
+   session default, `off`) and the picker keeps that level selectable.
+4. The multirun effort menu labelled an unset selection with the first variant's effort, which is
+   ordering rather than a default; it reads only published model and global defaults now.
+5. `settingsItemOwnership.test.ts` read only literal `settingsItem="..."` attributes, so the
+   dynamic `omp.modelRoles.<role>` anchors were invisible to the invariant it enforces. Template
+   anchors are now namespace claims that collide with any id beneath them.
+
+Also added while closing: `publicModel` coverage for when a model publishes
+`defaultReasoningEffort` (advertised level only, absent otherwise), and heading coverage for the
+five section keys, which had rendered as raw keys before.

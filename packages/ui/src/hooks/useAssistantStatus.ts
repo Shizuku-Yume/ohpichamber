@@ -8,29 +8,13 @@ import { useSessionActivity } from './useSessionActivity';
 import type { AgentStatus } from '@/lib/agentStatus';
 import { normalizeIntent, toolPresentation } from '@/lib/toolPresentation';
 
-type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
-
 interface WorkingSummary {
-    activity: AssistantActivity;
-    hasWorkingContext: boolean;
-    hasActiveTools: boolean;
     isWorking: boolean;
-    isStreaming: boolean;
-    isCooldown: boolean;
-    lifecyclePhase: 'streaming' | 'cooldown' | null;
-    statusText: string | null;
-    /** The same activity as a dictionary key, so the pill and status row localize it. */
+    /** The status row's and the pill's localized phrase. */
     status: AgentStatus | null;
-    isGenericStatus: boolean;
     isWaitingForPermission: boolean;
-    canAbort: boolean;
-    compactionDeadline: number | null;
-    activePartType?: 'text' | 'tool' | 'reasoning' | 'editing';
-    activeToolName?: string;
-    wasAborted: boolean;
     abortActive: boolean;
-    lastCompletionId: string | null;
-    isComplete: boolean;
+    /** The retry the run is waiting on, from its newest `auto_retry_start` notice. */
     retryInfo: { attempt?: number; next?: number } | null;
 }
 
@@ -61,25 +45,10 @@ interface ModelRef {
 }
 
 const DEFAULT_WORKING: WorkingSummary = {
-    activity: 'idle',
-    hasWorkingContext: false,
-    hasActiveTools: false,
     isWorking: false,
-    isStreaming: false,
-    isCooldown: false,
-    lifecyclePhase: null,
-    statusText: null,
     status: null,
-    isGenericStatus: true,
     isWaitingForPermission: false,
-    canAbort: false,
-    compactionDeadline: null,
-    activePartType: undefined,
-    activeToolName: undefined,
-    wasAborted: false,
     abortActive: false,
-    lastCompletionId: null,
-    isComplete: false,
     retryInfo: null,
 };
 
@@ -90,10 +59,9 @@ const isLiveToolStatus = (status: ToolCallPart['status']): boolean =>
     status === 'pending_approval' || status === 'approved' || status === 'running';
 
 export type ParsedStatusResult = {
-    activePartType: 'tool' | 'reasoning' | 'text' | undefined;
-    activeToolName: string | undefined;
     status: AgentStatus;
-    isGenericStatus: boolean;
+    /** True when the run is writing its answer rather than naming a call. */
+    isAnswering: boolean;
 };
 
 /**
@@ -122,36 +90,27 @@ export const createParsedStatus = (parts: readonly Part[]): ParsedStatusResult =
         const intent = normalizeIntent(typeof activeCall.input.i === 'string' ? activeCall.input.i : '');
         const described = intent ?? presentation.describeCall(activeCall.input);
         return {
-            activePartType: 'tool',
-            activeToolName: activeCall.toolName,
             status: described
                 ? { key: 'chat.agentStatus.usingTool', name: presentation.label, text: described }
                 : { key: 'chat.agentStatus.usingTool', name: presentation.label },
-            isGenericStatus: false,
+            isAnswering: false,
         };
     }
 
     if (reasoning && !text) {
-        return { activePartType: 'reasoning', activeToolName: undefined, status: { key: 'chat.agentStatus.thinking' }, isGenericStatus: false };
+        return { status: { key: 'chat.agentStatus.thinking' }, isAnswering: false };
     }
 
-    return {
-        activePartType: text ? 'text' : undefined,
-        activeToolName: undefined,
-        status: { key: 'chat.agentStatus.working' },
-        isGenericStatus: true,
-    };
+    return { status: { key: 'chat.agentStatus.working' }, isAnswering: text };
 };
 
 const encodeParsedStatus = (status: ParsedStatusResult): string => [
-    status.activePartType ?? '',
-    status.activeToolName ?? '',
-    status.isGenericStatus ? '1' : '0',
+    status.isAnswering ? '1' : '0',
     JSON.stringify([status.status.key, status.status.count ?? null, status.status.name ?? null, status.status.text ?? null]),
 ].join(STATUS_SIGNATURE_SEPARATOR);
 
 const decodeParsedStatus = (signature: string): ParsedStatusResult => {
-    const [activePartType, activeToolName, isGenericStatus, encodedStatus] = signature.split(STATUS_SIGNATURE_SEPARATOR);
+    const [isAnswering, encodedStatus] = signature.split(STATUS_SIGNATURE_SEPARATOR);
     let status: AgentStatus = { key: 'chat.agentStatus.working' };
     if (encodedStatus) {
         try {
@@ -164,14 +123,7 @@ const decodeParsedStatus = (signature: string): ParsedStatusResult => {
             // A signature from an older build carries no key; the working line stands in.
         }
     }
-    return {
-        activePartType: activePartType === 'text' || activePartType === 'tool' || activePartType === 'reasoning'
-            ? activePartType
-            : undefined,
-        activeToolName: activeToolName || undefined,
-        status,
-        isGenericStatus: isGenericStatus === '1',
-    };
+    return { status, isAnswering: isAnswering === '1' };
 };
 
 /**
@@ -266,7 +218,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }, [currentSessionId])
     );
 
-    const { phase: activityPhase, isWorking: isPhaseWorking } = useSessionActivity(currentSessionId, currentSessionDirectory ?? undefined);
+    const { isWorking: isPhaseWorking } = useSessionActivity(currentSessionId, currentSessionDirectory ?? undefined);
 
     const parsedStatus = React.useMemo<ParsedStatusResult>(() => {
         const [signature] = lastAssistantSignature.split(STATUS_SIGNATURE_SEPARATOR);
@@ -288,45 +240,23 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     }, [sessionAbortRecord]);
 
     const baseWorking = React.useMemo<WorkingSummary>(() => {
-        if (abortState.wasAborted) {
-            return {
-                ...DEFAULT_WORKING,
-                wasAborted: true,
-                abortActive: abortState.abortActive,
-            };
-        }
-
-        const isWorking = isPhaseWorking;
-        const isStreaming = activityPhase === 'busy';
-        const hasActiveTools = parsedStatus.activePartType === 'tool';
-
+        if (abortState.wasAborted) return { ...DEFAULT_WORKING, abortActive: abortState.abortActive };
         return {
-            ...DEFAULT_WORKING,
-            activity: isWorking ? (hasActiveTools ? 'tooling' : 'streaming') : 'idle',
-            hasWorkingContext: isWorking,
-            hasActiveTools,
-            isWorking,
-            isStreaming,
-            lifecyclePhase: isStreaming ? 'streaming' : null,
-            statusText: isWorking ? parsedStatus.status.text ?? parsedStatus.status.name ?? null : null,
-            status: isWorking ? parsedStatus.status : null,
-            isGenericStatus: isWorking ? parsedStatus.isGenericStatus : true,
-            canAbort: isWorking,
-            activePartType: isWorking ? parsedStatus.activePartType : undefined,
-            activeToolName: isWorking ? parsedStatus.activeToolName : undefined,
-            retryInfo: isWorking ? retryInfo : null,
+            isWorking: isPhaseWorking,
+            status: isPhaseWorking ? parsedStatus.status : null,
+            isWaitingForPermission: false,
+            abortActive: false,
+            retryInfo: isPhaseWorking ? retryInfo : null,
         };
-    }, [activityPhase, isPhaseWorking, parsedStatus, retryInfo, abortState]);
+    }, [isPhaseWorking, parsedStatus, retryInfo, abortState]);
 
     const forming = React.useMemo<FormingSummary>(() => {
-        const isActive = isPhaseWorking && parsedStatus.activePartType === 'text';
+        const isActive = isPhaseWorking && parsedStatus.isAnswering;
         return { isActive, characterCount: 0 };
-    }, [isPhaseWorking, parsedStatus.activePartType]);
+    }, [isPhaseWorking, parsedStatus.isAnswering]);
 
     const working = React.useMemo<WorkingSummary>(() => {
-        if (baseWorking.wasAborted || baseWorking.abortActive) {
-            return baseWorking;
-        }
+        if (baseWorking.abortActive) return baseWorking;
 
         const hasPendingPermission = sessionPermissionRequests.length > 0;
         const hasPendingForm = sessionFormRequests.length > 0;
@@ -336,25 +266,13 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }
 
         if (hasPendingForm) {
-            return {
-                ...baseWorking,
-                statusText: null,
-                isWorking: false,
-                hasWorkingContext: false,
-                hasActiveTools: false,
-                canAbort: false,
-                activePartType: undefined,
-                activeToolName: undefined,
-                retryInfo: null,
-            };
+            return { ...baseWorking, isWorking: false, status: null, retryInfo: null };
         }
 
         return {
             ...baseWorking,
-            statusText: 'waiting for permission',
             status: { key: 'chat.agentStatus.waitingPermission' },
             isWaitingForPermission: true,
-            canAbort: false,
             retryInfo: null,
         };
     }, [baseWorking, sessionPermissionRequests, sessionFormRequests]);

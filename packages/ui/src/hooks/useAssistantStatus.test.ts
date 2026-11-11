@@ -154,12 +154,11 @@ describe('createParsedStatus', () => {
     test('finished calls leave the plain working line', () => {
         expect(statusOf([tool('1', 'read', 'completed')]).status).toEqual({ key: 'chat.agentStatus.working' });
         expect(statusOf([tool('2', 'bash', 'failed')]).status).toEqual({ key: 'chat.agentStatus.working' });
-        expect(statusOf([tool('2', 'bash', 'failed')]).activePartType).toBeUndefined();
     });
 
     test('live reasoning with no intent reads as thinking', () => {
         expect(statusOf([{ type: 'reasoning', partId: 'reason_1', content: 'weighing options' }]).status).toEqual({ key: 'chat.agentStatus.thinking' });
-        expect(statusOf([{ type: 'reasoning', partId: 'reason_1', content: 'weighing options' }]).activePartType).toBe('reasoning');
+        expect(statusOf([{ type: 'reasoning', partId: 'reason_1', content: 'weighing options' }]).isAnswering).toBe(false);
     });
 
     test('text after reasoning is the answer, not thinking', () => {
@@ -171,7 +170,7 @@ describe('createParsedStatus', () => {
 
     test('an unknown extension tool still names itself', () => {
         expect(statusOf([tool('1', 'mcp__srv_custom')]).status).toEqual({ key: 'chat.agentStatus.usingTool', name: 'mcp__srv_custom' });
-        expect(statusOf([tool('1', 'mcp__srv_custom')]).isGenericStatus).toBe(false);
+        expect(statusOf([tool('1', 'mcp__srv_custom')]).isAnswering).toBe(false);
     });
 });
 

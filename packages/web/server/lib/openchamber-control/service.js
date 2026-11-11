@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import { createImageGenerationAction } from './generate-image.js';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
-import { parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 import { asNonEmptyString } from '../shared/guards.js';
 import { OpenChamberControlError, asControlError } from './error.js';
 import {
@@ -16,6 +15,7 @@ import {
 import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
+import { modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const MAX_WAIT_TIMEOUT_SECONDS = 86_400;
@@ -80,7 +80,7 @@ const extractTextMessages = (messages, role = 'all') => {
    role: messageRole,
    createdAt: Number.isFinite(record?.time?.created) ? record.time.created : null,
    completedAt: Number.isFinite(record?.time?.completed) ? record.time.completed : null,
-   model: providerID && modelID ? `${providerID}/${modelID}` : null,
+   model: modelRefKey(providerID, modelID) || null,
    text,
   });
  }
@@ -483,7 +483,7 @@ export const createOpenChamberControlService = (dependencies) => {
   return {
    workspaceId,
    models: page.map((model) => ({
-    id: `${model.provider}/${model.modelId}`,
+    id: modelRefKey(model.provider, model.modelId),
     name: model.name,
     provider: providerNames.get(model.provider) ?? model.provider,
     preference: PREFERENCE_BY_RANK[rank.get(modelRefKey({ providerId: model.provider, modelId: model.modelId }))],
@@ -550,7 +550,7 @@ export const createOpenChamberControlService = (dependencies) => {
      role: message.role,
      createdAt: Number.isFinite(message.createdAt) ? message.createdAt : null,
      completedAt: Number.isFinite(turn?.finishedAt) ? turn.finishedAt : null,
-     model: message.providerId && message.modelId ? `${message.providerId}/${message.modelId}` : null,
+     model: modelRefKey(message.providerId, message.modelId) || null,
      text: messageText(message),
     };
    })

@@ -1,6 +1,8 @@
 import React from 'react';
 import {
   formatModelRef,
+  MAX_THINKING_SUFFIX_OPTIONS,
+  type ParseModelSelectorOptions,
   formatModelSelector,
   formatModelSelectorValue,
   parseConfiguredThinkingLevel,
@@ -73,8 +75,8 @@ interface ParsedRoleSelector {
 }
 
 /** The role's model half and thinking level, read by the one selector grammar. */
-function parseRoleSelector(selector: unknown): ParsedRoleSelector {
-  const split = splitSelectorThinking(typeof selector === 'string' ? selector : null);
+function parseRoleSelector(selector: unknown, literal: ParseModelSelectorOptions['isLiteralModelId']): ParsedRoleSelector {
+  const split = splitSelectorThinking(typeof selector === 'string' ? selector : null, { ...MAX_THINKING_SUFFIX_OPTIONS, isLiteralModelId: literal });
   return { model: split.model, effort: split.thinkingLevel ?? '' };
 }
 
@@ -1517,6 +1519,12 @@ const ModelRolesSection: React.FC<{
 }> = ({ setting, value, models, disabled, onImmediate }) => {
   const { t } = useI18n();
   const currentRoles = React.useMemo(() => parseSafeRolesRecord(value), [value]);
+  // A catalog model whose own id ends in a suffix (`glm-4.7:max`, `router:low`)
+  // keeps it; only a suffix no catalog model claims is this role's level.
+  const literalModelId = React.useCallback(
+    (providerId: string | undefined, modelId: string) => providerId !== undefined && models.some((m) => m.provider === providerId && m.modelId === modelId),
+    [models],
+  );
 
   const updateRole = (roleId: string, model: string, effort: string) => {
     const next = { ...currentRoles };
@@ -1543,7 +1551,7 @@ const ModelRolesSection: React.FC<{
         {OMP_MODEL_ROLES.map((role) => {
           const rawSelector = currentRoles[role.id];
           const isExplicit = typeof rawSelector === 'string' && rawSelector.trim().length > 0;
-          const parsed = parseRoleSelector(rawSelector);
+          const parsed = parseRoleSelector(rawSelector, literalModelId);
           const fallback = resolveRoleFallback(role.id, currentRoles);
 
           const i18n = ROLE_I18N[role.id];

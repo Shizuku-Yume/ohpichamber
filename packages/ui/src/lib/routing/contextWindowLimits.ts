@@ -1,4 +1,4 @@
-import { parseModelString } from '@openchamber/agent-contract';
+import { modelRefKey, parseModelString } from '@openchamber/agent-contract';
 
 export type ContextWindowLimits = {
   /** 0 when unknown; the readouts then fall back to their own default. */
@@ -18,7 +18,7 @@ type AnsweringMessage = { role?: string; providerId?: string; modelId?: string; 
 const messageModelKey = (message: AnsweringMessage): string | null => {
   const providerId = message.providerId ?? message.providerID;
   const modelId = message.modelId ?? message.modelID;
-  return providerId && modelId ? `${providerId}/${modelId}` : null;
+  return modelRefKey(providerId, modelId) || null;
 };
 
 /**

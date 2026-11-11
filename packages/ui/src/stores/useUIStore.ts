@@ -1,3 +1,4 @@
+import { modelRefKey } from '@openchamber/agent-contract';
 import { create } from 'zustand';
 import { z } from 'zod';
 import { devtools, persist } from 'zustand/middleware';
@@ -3259,7 +3260,7 @@ export const useUIStore = create<UIStore>()(
     },
 
     setLastSelectedModel: (providerID, modelID) => {
-     const next = `${providerID}/${modelID}`;
+     const next = modelRefKey(providerID, modelID);
      if (get().lastSelectedModel === next) return;
      set({ lastSelectedModel: next });
     },
@@ -3296,7 +3297,7 @@ export const useUIStore = create<UIStore>()(
      if (!provider || !model) {
       return;
      }
-     const key = `${provider}/${model}`;
+     const key = modelRefKey(provider, model);
      const normalizedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant.trim() : 'default';
      set((state) => {
       const current = state.recentEfforts[key] ?? [];
@@ -3314,7 +3315,7 @@ export const useUIStore = create<UIStore>()(
     },
     rememberLastUsedEffort: (provider, model, variant) => {
      if (!provider || !model) return;
-     const key = `${provider}/${model}`;
+     const key = modelRefKey(provider, model);
      const normalizedVariant = variant?.trim() || null;
      set((state) => {
       if (state.lastUsedEfforts[key] === normalizedVariant) {

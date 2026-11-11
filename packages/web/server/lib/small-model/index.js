@@ -1,10 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import {
-  parseModelSelector,
-  resolveRoleSelector,
-  thinkingLevelToReasoningEffort,
-} from '@openchamber/agent-contract';
+import { parseModelSelector, resolveRoleSelector, thinkingLevelToReasoningEffort, modelRefKey, isRoleConfigured } from '@openchamber/agent-contract';
 import {
   completeSmallModel,
   findModelInfo,
@@ -20,7 +16,12 @@ const nonEmptyTextSchema = z.string().refine((value) => value.trim().length > 0)
 const parseSelection = (value) => {
   if (!nonEmptyTextSchema.safeParse(value).success) return null;
   const parsed = parseModelSelector(value.trim());
-  return parsed ? { providerID: parsed.providerId, modelID: parsed.modelId, thinkingLevel: parsed.thinkingLevel } : null;
+  return parsed ? {
+    providerID: parsed.providerId,
+    modelID: parsed.modelId,
+    thinkingLevel: parsed.thinkingLevel,
+    variant: parsed.variant ?? null,
+  } : null;
 };
 
 // Conservative estimate for Host input budgeting against canonical limits.
@@ -64,7 +65,7 @@ const clampPromptToModelLimit = ({ prompt, modelInfo, providerID, modelID, onOve
   }
   if (onOverflow === 'error') {
     throw Object.assign(
-      new Error(`Input is too large for ${providerID}/${modelID}: ${prompt.length} characters exceeds the ${maxChars} the model's context allows`),
+      new Error(`Input is too large for ${modelRefKey(providerID, modelID)}: ${prompt.length} characters exceeds the ${maxChars} the model's context allows`),
       { statusCode: 413, code: 'context-too-small', providerID, modelID, requiredChars: prompt.length, availableChars: maxChars },
     );
   }
@@ -113,7 +114,9 @@ const resolveSmallModel = async ({ client, workspaceId, model, preferredProvider
   // its `default` fallback before the selector is read.
   const roleSelector = resolveRoleSelector(targetRole, modelRoles);
   const fromRoles = parseSelection(roleSelector);
-  if (roleSelector && !fromRoles) return null;
+  // A configured role that cannot resolve (a cycle, a non-selector value) is a
+  // failure, never a reason to pick some other model from the catalog.
+  if (!fromRoles && (isRoleConfigured(targetRole, modelRoles) || isRoleConfigured('default', modelRoles))) return null;
   if (fromRoles) {
     const info = findModelInfo(models, fromRoles.providerID, fromRoles.modelID);
     return usableModel(info) ? { ...fromRoles, source: 'modelRoles' } : null;
@@ -178,7 +181,7 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
     completionId: randomUUID(), workspaceId,
     selection: { providerId: resolved.providerID, modelId: resolved.modelID },
     prompt: clamped.prompt, format: responseSchema ? { kind: 'json', schema: responseSchema } : { kind: 'text' },
-    overflow: onOverflow === 'error' ? 'reject' : 'truncate', variant: null,
+    overflow: onOverflow === 'error' ? 'reject' : 'truncate', variant: resolved.variant ?? null,
     // The selected role's `:thinkingLevel` is a reasoning request; only a level
     // the model advertises is asked for, so the completion is never refused.
     reasoningEffort: resolveReasoningEffort(modelInfo, resolved.thinkingLevel),

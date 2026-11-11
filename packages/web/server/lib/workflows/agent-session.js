@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
+import { parseModelSelector, thinkingLevelToReasoningEffort, modelRefKey } from '@openchamber/agent-contract';
 
 // The idle turn is polled: the Host has no push subscription this module may
 // hold, and a workflow agent is one prompt, so a short poll is enough.
@@ -225,7 +225,7 @@ export const createWorkflowAgentSessions = ({
     }).safeParse(message.usage);
     if (!usage.success) return null;
     return {
-      model: message.providerId && message.modelId ? `${message.providerId}/${message.modelId}` : null,
+      model: modelRefKey(message.providerId, message.modelId) || null,
       usage: {
         cost: usage.data.cost.total,
         input: usage.data.input,

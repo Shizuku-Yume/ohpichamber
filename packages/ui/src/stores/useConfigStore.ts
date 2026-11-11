@@ -21,7 +21,7 @@ import { useDirectoryStore } from "@/stores/useDirectoryStore";
 import { useProjectsStore } from "@/stores/useProjectsStore";
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution";
 import { streamDebugEnabled } from "@/stores/utils/streamDebug";
-import { parseModelSelector } from "@openchamber/agent-contract";
+import { modelRefKey, parseModelSelector } from "@openchamber/agent-contract";
 import type { ModelRef } from "@/lib/settings/parsers";
 import { runtimeFetch } from "@/lib/runtime-fetch";
 import { EMPTY_VOICE_API_KEYS, fetchVoiceApiKeys, migrateLegacyVoiceApiKeys, updateVoiceApiKeys, type VoiceApiKeyKind, type VoiceApiKeyState } from "@/lib/voiceKeysApi";
@@ -2076,7 +2076,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             // resolved default until a real catalog replaces it.
                             const keepPreviousDefaults = modelCatalog.models.length === 0 && modelCatalog.defaults.model === null;
                             const ompDefaultModel = modelCatalog.defaults.model
-                                ? `${modelCatalog.defaults.model.providerId}/${modelCatalog.defaults.model.modelId}`
+                                ? modelRefKey(modelCatalog.defaults.model.providerId, modelCatalog.defaults.model.modelId)
                                 : undefined;
                             const ompDefaultReasoningEffort = modelCatalog.defaults.thinkingLevel ?? undefined;
                             const defaults = previousDefaults;

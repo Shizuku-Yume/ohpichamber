@@ -9,6 +9,7 @@ import {
   splitSelectorThinking,
   splitThinkingSuffix,
   splitUpstreamRouting,
+  isRoleConfigured,
   thinkingLevelToReasoningEffort,
   type ModelSelector,
 } from './modelSelector.ts';
@@ -211,6 +212,28 @@ describe('roles', () => {
 
   test('a cycle resolves to nothing instead of looping', () => {
     expect(resolveRoleSelector('a', { a: '@b', b: '@a' })).toBeUndefined();
+  });
+});
+
+describe('role chains', () => {
+  test('the outermost level wins over an inner alias level', () => {
+    const roles = { smol: '@tiny:high', tiny: '@slow:low', slow: 'provider/model' };
+    expect(resolveRoleSelector('smol', roles)).toBe('provider/model:high');
+  });
+
+  test('a carried level lands before a variant, so it still parses back', () => {
+    const roles = { smol: '@tiny:high', tiny: 'provider/model#route' };
+    const resolved = resolveRoleSelector('smol', roles)!;
+    expect(resolved).toBe('provider/model:high#route');
+    expect(parseModelSelector(resolved)?.thinkingLevel).toBe('high');
+    expect(parseModelSelector(resolved)?.variant).toBe('route');
+  });
+
+  test('an array-valued native role expands from its first entry', () => {
+    const roles = { smol: ['chosen/haiku', 'other/backup'] };
+    expect(resolveRoleSelector('smol', roles)).toBe('chosen/haiku');
+    expect(isRoleConfigured('smol', roles)).toBe(true);
+    expect(isRoleConfigured('slow', roles)).toBe(false);
   });
 });
 

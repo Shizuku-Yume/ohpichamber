@@ -24,6 +24,12 @@ export default defineConfig({
     "**/ios/**",
     "**/android/**",
   ],
+  rules: {
+    // One grammar owns a model selector; this finds ad-hoc `/`/`:` splits and
+    // template joins outside packages/agent-contract/src/modelSelector.ts. It
+    // sits at the top level because the Host's parsers are `.js`.
+    "openchamber/no-model-ref-splitting": "error",
+  },
   overrides: [
     {
       files: TYPESCRIPT_FILES,
@@ -96,9 +102,6 @@ export default defineConfig({
         "react-hooks/rules-of-hooks": "error",
         "react-hooks/exhaustive-deps": "warn",
         "react/only-export-components": ["error", { allowConstantExport: true }],
-        // One grammar owns a model selector; this finds ad-hoc `/`/`:` splits
-        // and template joins outside packages/agent-contract/src/modelSelector.ts.
-        "openchamber/no-model-ref-splitting": "error",
       },
     },
     {

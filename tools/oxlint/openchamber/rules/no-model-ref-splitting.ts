@@ -4,7 +4,7 @@ import type { ESTree } from "@oxlint/plugins";
 
 // A model reference has one owned grammar: `@openchamber/agent-contract`'s
 // `modelSelector.ts` (`parseModelSelector`/`formatModelSelector`). Splitting a
-// selector ad hoc loses the `:thinkingLevel`, `#variant` and `@upstream`
+// selector ad hoc loses the `:thinkingLevel` (and `#variant`, `@upstream`)
 // suffixes, which is how a stored `provider/model:high` role stopped resolving
 // to its model. This rule finds those splits and joins outside that module.
 
@@ -59,28 +59,29 @@ function isModelOperand(name: string | undefined): boolean {
   return name !== undefined && MODEL_OPERAND.test(name);
 }
 
-/** True for a template that joins a provider expression and a model expression over `/` or `:`. */
+const PROVIDER_NAME = /^(?:provider|providerId|providerID)$/;
+const MODEL_NAME = /^(?:model|modelId|modelID)$/;
+
+/** The operand name an expression reads: `m.modelId` -> modelId, `modelId` -> modelId. */
+function readOperandName(node: ESTree.Node): string | undefined {
+  if (node.type === "Identifier") return node.name;
+  if (node.type !== "MemberExpression" || node.computed) return undefined;
+  return node.property.type === "Identifier" ? node.property.name : undefined;
+}
+
+/** True for a template that joins a provider operand and a model operand over `/` or `:`. */
 function joinsModelRef(quasis: readonly ESTree.TemplateElement[], expressions: readonly ESTree.Node[]): boolean {
   if (expressions.length < 2) return false;
   for (let index = 0; index < expressions.length - 1; index += 1) {
     const separator = quasis[index + 1]?.value.raw ?? "";
     if (separator !== "/" && separator !== ":") continue;
-    const left = expressions[index];
-    const right = expressions[index + 1];
-    if (readModelProperty(left)?.endsWith("provider") && readModelProperty(right)?.startsWith("model")) {
-      return true;
-    }
-    if (readModelProperty(left)?.endsWith("providerId") && readModelProperty(right)?.startsWith("modelId")) {
+    const left = readOperandName(expressions[index]);
+    const right = readOperandName(expressions[index + 1]);
+    if (left !== undefined && right !== undefined && PROVIDER_NAME.test(left) && MODEL_NAME.test(right)) {
       return true;
     }
   }
   return false;
-}
-
-/** The property name an expression reads through an identifier, e.g. `m.modelId`. */
-function readModelProperty(node: ESTree.Node): string | undefined {
-  if (node.type !== "MemberExpression" || node.computed) return undefined;
-  return node.property.type === "Identifier" ? node.property.name.toLowerCase() : undefined;
 }
 
 /** Disallow ad-hoc model-selector splitting and joining outside the selector module. */

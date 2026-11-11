@@ -37,22 +37,54 @@ Lint: `openchamber/no-model-ref-splitting` in `tools/oxlint/openchamber` wired i
 `oxlint.config.ts`; zero findings across ui/web/agent-service/agent-contract paths.
 
 Check before: `bun --cwd packages/agent-contract test` exit 0 (baseline). The Check's vitest leg
-`VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/lib packages/web/server/lib/small-model` fails
-on the base commit too ("Cannot find package 'bun:test'", 412 files, 0 tests): only
-`packages/web` carries a vitest config, and it aliases `bun:test` only for its own root.
+`VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/lib packages/web/server/lib/small-model` cannot
+run from the repo root, at baseline or on this branch: 412 files fail with
+`Cannot find package 'bun:test'`. The only vitest config in the tree is `packages/web/vitest.config.ts`,
+which shims `bun:test` through `test/bun-test-shim.ts` and aliases `@/` for the web root only;
+`bunx vitest run --root ../ui` from `packages/web` applies no aliases at all (1,224 files, 0 tests).
+`packages/ui` has no vitest config because its suites are `bun:test` files run one process per file by
+`scripts/run-isolated-tests.mjs` (module-level singletons and mixed runners make a shared process fail
+by load order). The equivalent legs below are the ones the packages themselves run.
 
 Check after (real results, scoped equivalents where the Check's vitest leg cannot run):
 - `bun --cwd packages/agent-contract test` → exit 0, 242 tests, 0 fail (includes the round-trip test
   for `provider/model:high`, `:max`, `:auto`, `#variant`, `@upstream`).
 - `bun run lint` → exit 0; `openchamber/no-model-ref-splitting` reports zero sites.
-- UI: `bun --cwd packages/ui test src/lib/smallModelRequest.test.ts src/lib/modelDisplay.test.ts
-  src/lib/defaultSendSelection.test.ts src/lib/routing src/lib/quota src/components/views/walkthrough`
-  → 69 tests, 68 pass, 1 pre-existing walkthrough timing failure that passes when run alone.
+- UI, the vitest leg's equivalent: `bun --cwd packages/ui test src/lib 2>&1` (the package's isolated
+  runner, one process per file) plus `bun --cwd packages/ui test src/components/views/walkthrough`.
+  The first combined `bun test` invocation over both roots reported 68/69 with one walkthrough failure;
+  run alone the walkthrough suite passes three times out of three, and its failure text is a mock leak
+  from a sibling `src/lib` file ("Unexpected git directories response"), so the flake is cross-file
+  state, unrelated to this diff and pre-existing.
 - Web: `bun vitest run server/lib/small-model server/lib/limit-failover server/lib/workflows
   server/lib/scheduled-tasks server/lib/openchamber-control server/lib/session-assist`
   → 27 files, 336 tests pass (including the new `:thinkingLevel` role→effort case).
 - `bun run dead-code` → pre-existing findings only; none for the new exports.
 
-Not yet done: the real path (Web on port 4120 with a real provider and `provider/model:high` small-model
-role, AI Rename), the reviewer round, merging `ux-v270-omp-alignment/integration`, landing, and the
-done file. Stopped at the run's request budget boundary.
+## Real path
+
+Web on port 4120 (`bun server/index.js --port 4120`) with the real provider env. The live
+`modelRoles` record already stored suffixed values (`CLIProxyAPI/gemini-3.8-flash:high`), the exact
+shape the old parser mis-split. Set `smol` to `CLIProxyAPI/claude-haiku-5-5:high` (a real model from
+the workspace catalog that advertises `high`), then ran the sidebar's "使用 AI 重命名" (AI Rename)
+on the session titled `Ready confirmation exchange`. Result: the session title became
+`Ready confirmation`, read back from `GET /api/agent/v1/sessions`. Server closed afterwards; no secret
+appears in the server log.
+
+## Review
+
+One `reviewer` round on `8327e6403..HEAD`; every blocking finding fixed:
+- Settings lost `:max`/`:auto` and literal ids: `splitSelectorThinking` now receives the catalog's
+  literal-id lookup in Defaults, Git and OMP Settings, so a suffix the catalog claims stays in the id.
+- A cyclic or unparseable configured role silently fell through to the composer model: both the UI
+  and Host small-model paths now distinguish "not configured" from "configured but unresolvable" via
+  `isRoleConfigured` and fail instead of redirecting.
+- An inner alias's `:level` overrode the outer one: the outermost level now wins.
+- A carried level was appended after `#variant`, which put it inside the variant: it is now formatted
+  into the parsed selector, so `provider/model:high#route` reads back.
+- Native array-valued roles threw on `.trim()`: `ModelRoleValues` accepts `string | readonly string[]`
+  and expands from the first entry.
+- `#variant` was dropped from utility completions: both small-model paths forward it.
+- The lint rule missed camel-case and bare-identifier joins and excluded `.js`: fixed, and the rule now
+  sits at the top level of `oxlint.config.ts`. That surfaced 46 real sites across UI/Host/service which
+  are all migrated onto `modelRefKey`/`modelRefInstanceKey`/`formatModelRef`.

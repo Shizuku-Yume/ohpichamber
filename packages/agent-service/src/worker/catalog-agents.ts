@@ -17,12 +17,7 @@ import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capabili
 import { resolveCliModel } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgTaskDisabledAgents, cfgTaskAgentModelOverrides } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
-import {
-  AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema,
-  AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema,
-  type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest,
-  type AgentDeleteRequest, type AgentMutationResult,
-} from '@openchamber/agent-contract';
+import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, formatModelRef } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 
 export type NativeAgentsContext = {
@@ -208,7 +203,7 @@ export class NativeAgents {
     }
     const fields: Record<string, unknown> = { name: agent.agentId, description: agent.description, openchamber: agent };
     if (agent.allowedTools !== null) fields.tools = agent.allowedTools;
-    if (agent.model) fields.model = `${agent.model.providerId}/${agent.model.modelId}`;
+    if (agent.model) fields.model = formatModelRef({ providerId: agent.model.providerId, modelId: agent.model.modelId });
     if (agent.thinkingLevel !== undefined) fields.thinkingLevel = agent.thinkingLevel;
     if (agent.spawns !== undefined) fields.spawns = agent.spawns;
     if (agent.blocking !== undefined) fields.blocking = agent.blocking;

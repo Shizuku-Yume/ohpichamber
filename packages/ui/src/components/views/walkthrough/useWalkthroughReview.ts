@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatModelRef, parseModelString } from '@openchamber/agent-contract';
+import { formatModelRef, modelRefKey, parseModelString } from '@openchamber/agent-contract';
 import { type Locale, useI18n } from '@/lib/i18n';
 import { buildWalkthroughView } from '@/lib/walkthrough/model';
 import type { WalkthroughTarget } from '@/lib/walkthrough/types';
@@ -151,7 +151,7 @@ export const useWalkthroughReview = ({ directory, target, visible, needsSourceSe
 
   const isStructuredOutputCapable = useCallback(
     (providerId: string, modelId: string) =>
-      modelsMetadata.get(`${providerId}/${modelId}`)?.structured_output !== false,
+      modelsMetadata.get(modelRefKey(providerId, modelId))?.structured_output !== false,
     [modelsMetadata]
   );
 
@@ -165,7 +165,7 @@ export const useWalkthroughReview = ({ directory, target, visible, needsSourceSe
   // still showing the previous answer, and a banner claiming something is
   // missing before we know would be the same flicker in another place.
   const shownModel = entry.result?.model
-    ? `${entry.result.model.providerID}/${entry.result.model.modelID}`
+    ? modelRefKey(entry.result.model.providerID, entry.result.model.modelID)
     : undefined;
   const shownLanguage = entry.result?.language;
   const shownLocale = shownLanguage && locales.includes(shownLanguage as Locale)
@@ -251,7 +251,7 @@ export const useWalkthroughReview = ({ directory, target, visible, needsSourceSe
   );
   const selectModel = useCallback(
     (providerId: string, modelId: string) => {
-      selectModelInStore(directory, target, providerId && modelId ? `${providerId}/${modelId}` : null);
+      selectModelInStore(directory, target, modelRefKey(providerId, modelId) || null);
     },
     [directory, selectModelInStore, target]
   );

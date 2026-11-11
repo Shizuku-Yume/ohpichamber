@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Model, OmpSettingsState } from '@openchamber/agent-contract';
 import {
+ MAX_THINKING_SUFFIX_OPTIONS,
  formatModelRef,
  formatModelSelector,
  parseConfiguredThinkingLevel,
@@ -43,8 +44,11 @@ const INHERIT_VALUE = '__inherit__';
  * edits the model half, so the suffix is read once by the one selector
  * grammar and written back unchanged while the chosen model still reasons.
  */
-const splitRoleSelector = (selector: string): { model: string; effort: string } => {
- const split = splitSelectorThinking(selector);
+const splitRoleSelector = (
+ selector: string,
+ literalModelId: (providerId: string | undefined, modelId: string) => boolean,
+): { model: string; effort: string } => {
+ const split = splitSelectorThinking(selector, { ...MAX_THINKING_SUFFIX_OPTIONS, isLiteralModelId: literalModelId });
  return { model: split.model, effort: split.thinkingLevel ?? '' };
 };
 
@@ -150,9 +154,15 @@ export const GitSettings: React.FC = () => {
   () => readRoleRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value),
   [ompState],
  );
+ // A catalog model whose own id ends in a suffix keeps it; only an unclaimed
+ // suffix is this role's thinking level.
+ const literalModelId = React.useCallback(
+  (providerId: string | undefined, modelId: string) => providerId !== undefined && models.some((model) => model.provider === providerId && model.modelId === modelId),
+  [models],
+ );
  const { model: commitModelId, effort: commitEffort } = React.useMemo(
-  () => splitRoleSelector(roleRecord[COMMIT_ROLE] ?? ''),
-  [roleRecord],
+  () => splitRoleSelector(roleRecord[COMMIT_ROLE] ?? '', literalModelId),
+  [roleRecord, literalModelId],
  );
 
  const handleGitmojiChange = React.useCallback(async (enabled: boolean) => {

@@ -2,6 +2,8 @@ import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import {
   JsonObjectSchema,
+  MAX_THINKING_SUFFIX_OPTIONS,
+  type ParseModelSelectorOptions,
   formatModelRef,
   formatModelSelector,
   formatModelSelectorValue,
@@ -49,8 +51,8 @@ const DEFAULT_EFFORT_OPTIONS: readonly { value: string; labelKey: I18nKey }[] = 
 ] as const;
 
 /** The role's model half and thinking level, read by the one selector grammar. */
-function parseRoleSelector(selector: unknown): { model: string; effort: string } {
-  const split = splitSelectorThinking(typeof selector === 'string' ? selector : null);
+function parseRoleSelector(selector: unknown, literal: ParseModelSelectorOptions['isLiteralModelId']): { model: string; effort: string } {
+  const split = splitSelectorThinking(typeof selector === 'string' ? selector : null, { ...MAX_THINKING_SUFFIX_OPTIONS, isLiteralModelId: literal });
   return { model: split.model, effort: split.thinkingLevel ?? '' };
 }
 
@@ -158,9 +160,16 @@ export const DefaultsSettings: React.FC = () => {
     [rolesMap],
   );
 
+  // A model the catalog serves with a suffix in its own id (a `:max` tier, a
+  // `router:low` route) keeps that id whole: only an unclaimed suffix is a level.
+  const literalModelId = React.useCallback(
+    (providerId: string | undefined, modelId: string) => providerId !== undefined && models.some((m) => m.provider === providerId && m.modelId === modelId),
+    [models],
+  );
+
   const { model: selectedModelId, effort: selectedEffort } = React.useMemo(
-    () => parseRoleSelector(roleSelectors.default),
-    [roleSelectors.default],
+    () => parseRoleSelector(roleSelectors.default, literalModelId),
+    [roleSelectors.default, literalModelId],
   );
 
   const matchedModel = React.useMemo(

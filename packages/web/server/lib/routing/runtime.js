@@ -10,7 +10,7 @@
  * the request. The Auto sentinel is a Host selection, never an OMP model.
  */
 import { z } from 'zod';
-import { ApprovalRequestSchema, EntityIdSchema, ModelCatalogSchema, ProviderCatalogSchema } from '@openchamber/agent-contract';
+import { ApprovalRequestSchema, EntityIdSchema, ModelCatalogSchema, ProviderCatalogSchema, modelRefKey } from '@openchamber/agent-contract';
 import { BUILTIN_CATEGORIES, ZEN_JEV_PROMOTION_ACTIVE } from './defaults.js';
 import { createRoutingStore, parseEffectiveConfig } from './store.js';
 import { buildPermissionRequest, buildProbeRequest, buildRoutingRequest, createJevClient, decidePermission, decideRouting, isProbeAnswer } from './jev.js';
@@ -309,7 +309,7 @@ export function createRoutingRuntime({
         decision: { ...selection.decision, reasoningEffort: effort },
       };
     }
-    console.warn(`[routing] ${providerId}/${modelId} has no "${effort}" thinking level; using its default`);
+    console.warn(`[routing] ${modelRefKey(providerId, modelId)} has no "${effort}" thinking level; using its default`);
     return {
       ...selection,
       model: { providerId, modelId, reasoningEffort: null, variant: null },

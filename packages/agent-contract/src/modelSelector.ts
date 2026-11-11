@@ -316,6 +316,24 @@ export function selectorMatchesMessage(
   return modelRefEquals(selector, message);
 }
 
+/**
+ * The stable in-memory map key for a provider/model pair, `providerId/modelId`.
+ * Callers that key a cache, a preference record or a look-up map use this
+ * instead of spelling the join themselves; it is not a persisted format.
+ */
+export function modelRefKey(providerId: string | null | undefined, modelId: string | null | undefined): string {
+  const provider = providerId?.trim() ?? '';
+  const model = modelId?.trim() ?? '';
+  return provider && model ? `${provider}/${model}` : '';
+}
+
+/** The same key in the UI's colon form, for React keys and dnd ids. */
+export function modelRefInstanceKey(providerId: string | null | undefined, modelId: string | null | undefined): string {
+  const provider = providerId?.trim() ?? '';
+  const model = modelId?.trim() ?? '';
+  return provider && model ? `${provider}:${model}` : '';
+}
+
 /** OMP's model-role ids, in display order. A configured record may add keys. */
 export const MODEL_ROLE_IDS = [
   'default', 'smol', 'slow', 'vision', 'plan', 'commit', 'tiny', 'memory', 'task', 'advisor',
@@ -330,8 +348,24 @@ export const LEGACY_MODEL_ROLE_ALIAS_PREFIX = 'pi/';
 export const DEFAULT_MODEL_ROLE = 'default';
 export const DEFAULT_MODEL_ROLE_ALIAS = '*';
 
-/** A configured model-role record, as OMP's `modelRoles` setting holds it. */
-export type ModelRoleValues = Readonly<Record<string, string>>;
+/**
+ * A configured model-role record, as OMP's `modelRoles` setting holds it. A
+ * native value may be a list of fallback selectors; the first is that role's
+ * primary and the rest are tried in order elsewhere.
+ */
+export type ModelRoleValues = Readonly<Record<string, string | readonly string[]>>;
+
+/** A role's primary selector: its first entry when the native value is a list. */
+function roleValue(value: string | readonly string[] | undefined): string | undefined {
+  const first = typeof value === 'string' ? value : value?.[0];
+  const trimmed = typeof first === 'string' ? first.trim() : '';
+  return trimmed || undefined;
+}
+
+/** True when the record configures this role at all, even to an unexpandable value. */
+export function isRoleConfigured(role: string, roles: ModelRoleValues): boolean {
+  return roleValue(roles[role]) !== undefined;
+}
 
 /**
  * Minimum colon index for splitting a `:<level>` suffix off a role alias, or
@@ -372,10 +406,10 @@ export function resolveRoleSelector(role: string, roles: ModelRoleValues): strin
   const name = alias ?? (isRoleName(split.base, roles) ? split.base : undefined);
   // A provider/model selector resolves to itself; its suffix is already its own.
   if (name === undefined) return trimmed;
-  const configured = roles[name]?.trim();
+  const configured = roleValue(roles[name]);
   if (configured) return expandRoleChain(configured, roles, split.level, new Set([name]));
   if (name === DEFAULT_MODEL_ROLE) return undefined;
-  const fallback = roles[DEFAULT_MODEL_ROLE]?.trim();
+  const fallback = roleValue(roles[DEFAULT_MODEL_ROLE]);
   return fallback ? expandRoleChain(fallback, roles, split.level, new Set([name, DEFAULT_MODEL_ROLE])) : undefined;
 }
 
@@ -391,25 +425,29 @@ function expandRoleChain(
   visited: Set<string>,
 ): string | undefined {
   const split = splitThinkingSuffix(value, roleAliasPrefixLength(value) ?? -1, MAX_THINKING_SUFFIX_OPTIONS);
-  const level = split.level ?? carriedLevel;
+  // The outermost level wins: a role written `@tiny:high` asks for high even
+  // when `tiny` itself carries `:low`.
+  const level = carriedLevel ?? split.level;
   const alias = parseRoleAlias(split.base);
-  if (alias === undefined) {
-    return carriedLevel === undefined ? value : appendThought(value, carriedLevel);
-  }
+  if (alias === undefined) return withLevel(value, carriedLevel);
   if (visited.has(alias)) return undefined;
   visited.add(alias);
-  const configured = roles[alias]?.trim();
+  const configured = roleValue(roles[alias]);
   if (configured) return expandRoleChain(configured, roles, level, visited);
   if (alias === DEFAULT_MODEL_ROLE || visited.has(DEFAULT_MODEL_ROLE)) return undefined;
   visited.add(DEFAULT_MODEL_ROLE);
-  const fallback = roles[DEFAULT_MODEL_ROLE]?.trim();
+  const fallback = roleValue(roles[DEFAULT_MODEL_ROLE]);
   return fallback ? expandRoleChain(fallback, roles, level, visited) : undefined;
 }
 
-/** Replace any level a selector already names with `level`. */
-function appendThought(selector: string, level: ConfiguredThinkingLevel): string {
-  const split = splitThinkingSuffix(selector, -1, MAX_THINKING_SUFFIX_OPTIONS);
-  return formatModelSelectorValue(split.level === undefined ? selector : split.base, level);
+/**
+ * Apply a carried level to a resolved selector. The level goes in its grammar
+ * position, before `#variant`/`@upstream`, so a later parse reads it back.
+ */
+function withLevel(selector: string, level: ConfiguredThinkingLevel | undefined): string {
+  if (level === undefined) return selector;
+  const parsed = parseModelSelector(selector, { ...MAX_THINKING_SUFFIX_OPTIONS, allowUpstreamRouting: true });
+  return parsed ? formatModelSelector({ ...parsed, thinkingLevel: level }) : selector;
 }
 
 /**

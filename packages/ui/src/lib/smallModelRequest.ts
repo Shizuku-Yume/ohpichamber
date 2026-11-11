@@ -1,5 +1,6 @@
 import {
   parseModelSelector,
+  isRoleConfigured,
   resolveRoleSelector,
   thinkingLevelToReasoningEffort,
   type CompletionRequest,
@@ -41,6 +42,8 @@ interface ResolvedSmallModel {
   model: Model | null;
   /** The thinking level the resolved selector carried, if any. */
   thinkingLevel: ConfiguredThinkingLevel | undefined;
+  /** The variant the resolved selector carried, if any. */
+  variant: string | null;
 }
 
 export async function resolveSmallModel(input: Pick<SmallModelRequest, 'directory' | 'workspaceId' | 'sessionId' | 'selection' | 'preferred' | 'role'> = {}): Promise<ResolvedSmallModel> {
@@ -69,17 +72,21 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
         : null
     );
     if (input.selection) {
-      return { workspaceId: workspace.workspaceId, selection: input.selection, model: catalogModel(input.selection), thinkingLevel: undefined };
+      return { workspaceId: workspace.workspaceId, selection: input.selection, model: catalogModel(input.selection), thinkingLevel: undefined, variant: null };
     }
     // A role value may carry a `:thinkingLevel` suffix; the level is the role's
     // own request for reasoning and must reach the completion as its effort,
     // not be dropped when the selector is split into provider and model.
     const rolesValue = ompSettings?.settings.find((s) => s.id === 'modelRoles')?.value;
     const modelRoles = rolesValue && typeof rolesValue === 'object' ? (rolesValue as Record<string, string>) : null;
+    const roleConfigured = modelRoles ? isRoleConfigured(targetRole, modelRoles) || isRoleConfigured('default', modelRoles) : false;
     const roleSelector = modelRoles ? resolveRoleSelector(targetRole, modelRoles) : undefined;
-    if (roleSelector) {
-      const parsed = parseModelSelector(roleSelector);
-      if (!parsed) return { workspaceId: workspace.workspaceId, selection: null, model: null, thinkingLevel: undefined };
+    if (roleConfigured) {
+      // A configured role that does not resolve (a cycle, a value that is not
+      // a selector) fails here. It must not fall through to the composer's
+      // model, which is a different model than the one the user configured.
+      const parsed = roleSelector ? parseModelSelector(roleSelector) : null;
+      if (!parsed) return { workspaceId: workspace.workspaceId, selection: null, model: null, thinkingLevel: undefined, variant: null };
       const selection = { providerId: parsed.providerId, modelId: parsed.modelId };
       const available = catalog.models.some((model) => usable(model) && model.provider === selection.providerId && model.modelId === selection.modelId);
       return {
@@ -87,6 +94,7 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
         selection: available ? selection : null,
         model: available ? catalogModel(selection) : null,
         thinkingLevel: parsed.thinkingLevel,
+        variant: parsed.variant ?? null,
       };
     }
     const models = catalog.models.filter(model => usable(model) && (!preferred || model.provider === preferred.providerId));
@@ -103,6 +111,7 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
       selection: chosen ? { providerId: chosen.provider, modelId: chosen.modelId } : null,
       model: chosen ?? null,
       thinkingLevel: undefined,
+      variant: null,
     };
   } finally {
     unsubscribe();
@@ -166,14 +175,14 @@ export async function requestSmallModel(input: SmallModelRequest, options: { not
   input.signal?.addEventListener('abort', abort, { once: true });
   try {
     input.signal?.throwIfAborted();
-    const { workspaceId, selection, model, thinkingLevel } = await resolveSmallModel(input);
+    const { workspaceId, selection, model, thinkingLevel, variant } = await resolveSmallModel(input);
     if (changed || getRuntimeKey() !== runtimeKey) throw new DOMException('Runtime changed', 'AbortError');
     input.signal?.throwIfAborted();
     if (!selection) throw new SmallModelUnavailableError('No background model available in the selected provider');
     owner = { workspaceId, completionId: crypto.randomUUID() };
     const request: CompletionRequest = {
       ...owner, selection, prompt: input.prompt, format: input.format ?? { kind: 'text' },
-      overflow: input.overflow ?? 'truncate', variant: null, reasoningEffort: resolveReasoningEffort(input.reasoning, model, thinkingLevel),
+      overflow: input.overflow ?? 'truncate', variant, reasoningEffort: resolveReasoningEffort(input.reasoning, model, thinkingLevel),
       timeoutMs: input.timeoutMs ?? 60_000,
     };
     if (input.system !== undefined) request.system = input.system;

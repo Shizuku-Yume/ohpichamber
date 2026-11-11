@@ -3,6 +3,7 @@ import { devtools } from 'zustand/middleware';
 import type { MCPCatalogState, MCPServerConfig, MCPConnectionTestResult } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import { resolveMcpDirectory, useMcpConfigStore } from './useMcpConfigStore';
+import type { LoadPhase } from './loadPhase';
 
 export interface McpServerRuntimeState {
   configuration: MCPServerConfig;
@@ -33,10 +34,16 @@ export const computeMcpHealth = (status: McpStatusMap | null | undefined) => {
 type RefreshOptions = { directory?: string | null; silent?: boolean };
 interface McpStore {
   byDirectory: Record<string, McpStatusMap>;
+  /**
+   * Per directory: `unknown` until its status was read. An unread directory's
+   * empty map is not "every configured server is unapplied".
+   */
+  phaseKeys: Record<string, LoadPhase>;
   loadingKeys: Record<string, boolean>;
   lastErrorKeys: Record<string, string | null>;
   refreshedAtKeys: Record<string, number>;
   getStatusForDirectory: (directory?: string | null) => McpStatusMap;
+  getPhaseForDirectory: (directory?: string | null) => LoadPhase;
   getErrorForDirectory: (directory?: string | null) => string | null;
   refresh: (options?: RefreshOptions) => Promise<void>;
   ensureFresh: (options: RefreshOptions & { maxAgeMs: number }) => Promise<void>;
@@ -57,14 +64,15 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
     if (!result.ok) throw new Error(result.error);
   };
   return {
-    byDirectory: {}, loadingKeys: {}, lastErrorKeys: {}, refreshedAtKeys: {},
+    byDirectory: {}, phaseKeys: {}, loadingKeys: {}, lastErrorKeys: {}, refreshedAtKeys: {},
     resetForRuntimeSwitch: () => {
       generation += 1;
       inFlight.clear();
       useMcpConfigStore.getState().resetForRuntimeSwitch();
-      set({ byDirectory: {}, loadingKeys: {}, lastErrorKeys: {}, refreshedAtKeys: {} });
+      set({ byDirectory: {}, phaseKeys: {}, loadingKeys: {}, lastErrorKeys: {}, refreshedAtKeys: {} });
     },
     getStatusForDirectory: directory => get().byDirectory[directoryKey(directory)] ?? EMPTY_STATUS,
+    getPhaseForDirectory: directory => get().phaseKeys[directoryKey(directory)] ?? 'unknown',
     getErrorForDirectory: directory => get().lastErrorKeys[directoryKey(directory)] ?? null,
     refresh: async options => {
       const owner = generation;
@@ -90,12 +98,16 @@ export const useMcpStore = create<McpStore>()(devtools((set, get) => {
           return [server.serverId, entry];
         }));
         set(state => ({ byDirectory: { ...state.byDirectory, [key]: entries },
+          phaseKeys: { ...state.phaseKeys, [key]: 'ready' },
           refreshedAtKeys: { ...state.refreshedAtKeys, [key]: Date.now() }, lastErrorKeys: { ...state.lastErrorKeys, [key]: null } }));
       } catch (error) {
         if (owner !== generation || revision !== operationRevision) return;
         const message = error instanceof Error ? error.message : 'Failed to load MCP status';
         set((state) => ({
           loadingKeys: { ...state.loadingKeys, [key]: false },
+          // A failed read keeps any status already held; with nothing held it
+          // is unknown, not an empty map of unapplied servers.
+          phaseKeys: { ...state.phaseKeys, [key]: state.phaseKeys[key] === 'ready' ? 'ready' : 'error' },
           lastErrorKeys: { ...state.lastErrorKeys, [key]: message },
         }));
       }

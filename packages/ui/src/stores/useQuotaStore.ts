@@ -12,6 +12,7 @@ import { fetchConfiguredQuotaProviders, fetchQuota } from '@/lib/quota/fetchQuot
 import { getRuntimeKey, isTransientRuntimeKey } from '@/lib/runtime-switch';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { runBackgroundNetworkTask } from '@/lib/background-network';
+import type { LoadPhase } from './loadPhase';
 
 const QUOTA_REFRESH_INTERVAL_MS = 3 * 60 * 1000;
 const QUOTA_OPEN_FRESHNESS_MS = 15 * 1000;
@@ -54,6 +55,12 @@ interface QuotaStore extends QuotaSettingsState {
    * server announces a change; a failed read keeps the list it had.
    */
   extensionProviders: ExtensionQuotaProvider[];
+  /**
+   * How far the instance's usage read has got. `unknown` is not "no providers
+   * configured": the settings and the provider list have not been read yet, so
+   * an empty list must not be presented as the answer.
+   */
+  phase: LoadPhase;
   /** Instance whose quotas `results` describes, or `null` when nothing is loaded. */
   loadedRuntimeKey: string | null;
   selectedProviderId: QuotaProviderId | null;
@@ -209,6 +216,7 @@ export const useQuotaStore = create<QuotaStore>()(
     (set, get) => ({
       results: [],
       extensionProviders: [],
+      phase: 'unknown',
       loadedRuntimeKey: null,
       selectedProviderId: null,
       isLoading: false,
@@ -227,6 +235,7 @@ export const useQuotaStore = create<QuotaStore>()(
           set({ ...settings, dropdownProviderIds: resolveDropdownProviderIds(settings.savedDropdownProviderIds, quotaProviderIds(get().extensionProviders)) });
         } catch (error) {
           console.warn('Failed to load usage settings:', error);
+          if (generation === quotaGeneration && get().phase === 'unknown') set({ phase: 'error' });
         }
       },
 
@@ -392,7 +401,7 @@ export const useQuotaStore = create<QuotaStore>()(
           // up front meant a load that failed on a cold or briefly unreachable
           // instance was never attempted again — Usage would stay empty until
           // the three-minute refresh, or forever after a switch.
-          if (answered && generation === quotaGeneration) set({ loadedRuntimeKey: runtimeKey });
+          if (answered && generation === quotaGeneration) set({ loadedRuntimeKey: runtimeKey, phase: 'ready' });
         })().finally(() => { if (generation === quotaGeneration) inFlightRuntimeLoad = null; });
 
         return inFlightRuntimeLoad;
@@ -415,6 +424,7 @@ export const useQuotaStore = create<QuotaStore>()(
           // over would query the new instance through the old one's choices.
           // The extensions' providers are the instance's too.
           ...defaultQuotaSettings(),
+          phase: 'unknown',
           extensionProviders: [],
           results: [],
           loadedRuntimeKey: null,
@@ -438,7 +448,7 @@ export const useQuotaStore = create<QuotaStore>()(
         extensionLoadAgain = false;
         lastVisibleRefreshAt = null;
         lastVisibleRefreshIncludedAll = false;
-        set({ results: [], loadedRuntimeKey: null, isLoading: false, isFetchingProvider: {}, lastUpdated: null, refreshErrors: {}, error: null });
+        set({ results: [], phase: 'unknown', loadedRuntimeKey: null, isLoading: false, isFetchingProvider: {}, lastUpdated: null, refreshErrors: {}, error: null });
         if (!hasVisibleQuotaReadout()) return;
         await get().ensureLoadedForRuntime({ refresh: true, allProviders: [...quotaAutoRefreshConsumers.values()].some(Boolean), visibleOnly: true });
       },

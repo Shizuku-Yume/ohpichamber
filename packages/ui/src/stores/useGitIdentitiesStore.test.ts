@@ -73,6 +73,13 @@ describe('author profile storage', () => {
     savedProfiles = JSON.stringify([{ ...author, sshKey: '/private/key' }]);
     expect(await useGitIdentitiesStore.getState().loadProfiles()).toBe(false);
     expect(useGitIdentitiesStore.getState().profiles).toEqual([]);
+    // A rejected read is never a ready empty list of identities.
+    expect(useGitIdentitiesStore.getState().phase).toBe('error');
+  });
+
+  test('starts unknown until the instance answers', () => {
+    useGitIdentitiesStore.getState().resetForRuntimeSwitch('runtime-test');
+    expect(useGitIdentitiesStore.getState().phase).toBe('unknown');
   });
 
   test('a rejected edit preserves the stored public profile', async () => {
@@ -85,6 +92,7 @@ describe('author profile storage', () => {
 
   test('global Git configuration becomes author data only', async () => {
     expect(await useGitIdentitiesStore.getState().loadGlobalIdentity()).toBe(true);
+    expect(useGitIdentitiesStore.getState().phase).toBe('ready');
     useGitIdentitiesStore.getState().setSelectedProfile('global');
 
     expect(useGitIdentitiesStore.getState().getProfileById('global')).toEqual({

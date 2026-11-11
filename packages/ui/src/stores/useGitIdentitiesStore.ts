@@ -17,6 +17,7 @@ import {
 } from '@/lib/api/git-identity';
 import { loadDesktopSettings, reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import type { LoadPhase } from './loadPhase';
 
 export type { GitIdentityProfile } from '@/lib/api/types';
 
@@ -25,6 +26,11 @@ interface GitIdentitiesStore {
   defaultGitIdentityId: string | null;
   profiles: GitIdentityProfile[];
   globalIdentity: GitIdentityProfile | null;
+  /**
+   * Whether the instance's identities have been read. `unknown` means the lists
+   * are empty because nothing was read, not because the instance has none.
+   */
+  phase: LoadPhase;
   isLoading: boolean;
 
   setSelectedProfile: (id: string | null) => void;
@@ -87,6 +93,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
       defaultGitIdentityId: null,
       profiles: [],
       globalIdentity: null,
+      phase: 'unknown',
       isLoading: false,
 
       setSelectedProfile: (id) => set({ selectedProfileId: id }),
@@ -99,13 +106,15 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
         try {
           const profiles = gitIdentityProfilesSchema.parse(await getGitIdentities());
           if (!isRuntimeCurrent(runtime) || loadGeneration !== profilesLoadGeneration) return false;
-          if (mutationRevision === profilesMutationRevision) set({ profiles, isLoading: false });
-          else set({ isLoading: false });
+          if (mutationRevision === profilesMutationRevision) set({ profiles, isLoading: false, phase: 'ready' });
+          else set({ isLoading: false, phase: 'ready' });
           return true;
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== profilesLoadGeneration) return false;
           console.error('Failed to load git identity profiles:', error);
-          set({ isLoading: false });
+          // A failed read keeps whatever was held and says so; it never claims
+          // the instance has no profiles.
+          set((state) => ({ isLoading: false, ...(state.phase === 'unknown' ? { phase: 'error' as const } : {}) }));
           return false;
         }
       },
@@ -121,6 +130,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           // author configured: it is how a person says no override applies
           // here, and a machine with no author still has to be able to clone.
           set({
+            phase: 'ready',
             globalIdentity: {
               id: 'global',
               // The display name is the product's word for it, resolved where
@@ -136,6 +146,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== globalIdentityLoadGeneration) return false;
           console.error('Failed to load global git identity:', error);
+          set((state) => (state.phase === 'unknown' ? { phase: 'error' } : {}));
           return false;
         }
       },
@@ -158,6 +169,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== defaultIdentityLoadGeneration) return false;
           console.error('Failed to load default git identity setting:', error);
+          set((state) => (state.phase === 'unknown' ? { phase: 'error' } : {}));
           return false;
         }
       },
@@ -263,6 +275,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           defaultGitIdentityId: null,
           profiles: [],
           globalIdentity: null,
+          phase: 'unknown',
           isLoading: false,
         });
       },

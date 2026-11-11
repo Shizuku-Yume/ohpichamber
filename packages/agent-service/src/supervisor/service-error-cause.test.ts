@@ -9,8 +9,10 @@ import { z } from 'zod';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import { ProblemDetailsSchema } from '@openchamber/agent-contract';
 
-import { CanonicalApiError } from '../../../ui/src/api/canonicalClient.ts';
+import { CanonicalApiError, CanonicalClient } from '../../../ui/src/api/canonicalClient.ts';
 import { problemMessage } from '../../../ui/src/lib/problemMessage.ts';
+import { configureRuntimeUrlResolver, getRuntimeUrlResolver, setRuntimeUrlResolver } from '../../../ui/src/lib/runtime-url.ts';
+import { setRuntimeExtraHeaders } from '../../../ui/src/lib/runtime-auth.ts';
 import { WorkerReplySchema } from '../protocol.ts';
 import { AgentService } from './service.ts';
 import type { HostSkillSourceResult } from './file-resources-host-protocol.ts';
@@ -103,9 +105,18 @@ test('a worker cause reaches the problem response and the toast unchanged', asyn
     const problem = ProblemDetailsSchema.parse(refused.body);
     expect(problem.detail).toBe(`BTW record not found: ${sentinel}`);
 
-    // The canonical client surfaces the same sentence as the error message…
-    const error = new CanonicalApiError(problem);
-    expect(error.message).toBe(`BTW record not found: ${sentinel}`);
+    // …and the real canonical client surfaces the same sentence as its error
+    // message, so the chain is exercised end to end rather than reconstructed.
+    const previousResolver = getRuntimeUrlResolver();
+    configureRuntimeUrlResolver({ apiBaseUrl: `http://127.0.0.1:${port}` });
+    setRuntimeExtraHeaders({ 'x-internal-secret': secret });
+    let error: unknown;
+    try {
+      await new CanonicalClient().branchFromBtw(rootSessionId, sentinel);
+    } catch (caught) { error = caught; }
+    finally { setRuntimeExtraHeaders({}); setRuntimeUrlResolver(previousResolver); }
+    expect(error).toBeInstanceOf(CanonicalApiError);
+    expect((error as Error).message).toBe(`BTW record not found: ${sentinel}`);
 
     // …and the toast text a person reads is that cause, not the fallback.
     expect(problemMessage(error, 'The /btw branch could not be created.')).toBe(`BTW record not found: ${sentinel}`);

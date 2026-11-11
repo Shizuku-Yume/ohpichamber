@@ -9,6 +9,15 @@ import { NativeMcpError } from './mcp.ts';
 import { WorkerHostActions } from './host-actions.ts';
 import { getUsageStats, getUsageTools } from './usage.ts';
 
+/** The cause a thrown value carries, whatever its shape. A thrown string is a
+ * cause the worker chose, not a missing one; only a value with nothing readable
+ * falls back to a sentence that says so. */
+function operationCause(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === 'string' && error.trim()) return error;
+  return 'The operation failed without a reported cause';
+}
+
 function nativeMcpStatus(error: NativeMcpError): number {
   switch (error.code) {
     case 'CATALOG_CONFLICT': case 'WORKER_GENERATION_CONFLICT': case 'MCP_OAUTH_CANCELLED': return 409;
@@ -96,7 +105,7 @@ process.on('message', raw => {
       send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
         status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError ? nativeMcpStatus(error) : 503,
         code: error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE',
-        detail: (error instanceof Error && error.message ? error.message : 'The operation failed without a reported cause').slice(0, 200) });
+        detail: operationCause(error).slice(0, 200) });
     });
     return;
   }

@@ -22,8 +22,13 @@ const allowed = { allowed: true };
 // hand-written config the UI must never mutate. Reusing an existing server id is
 // how an edit is expressed, so it is not a refusal.
 const proposedServerPermitted = server => server.enabled && server.managed !== false;
+// A proposed provider/model must name a complete, well-formed selection: the
+// worker resolves it against the live catalog, and the Host still refuses an
+// empty or query-bearing endpoint rather than authorizing an opaque target.
 const proposedProviderPermitted = descriptor => typeof descriptor?.providerId === 'string' && descriptor.providerId.length > 0
- && typeof descriptor.modelId === 'string' && descriptor.modelId.length > 0;
+ && typeof descriptor.modelId === 'string' && descriptor.modelId.length > 0
+ && (descriptor.endpoint === undefined || (typeof descriptor.endpoint === 'string'
+  && /^https?:\/\/[^\s]+$/.test(descriptor.endpoint) && !descriptor.endpoint.includes('@')));
 // SDK isolation drops the programmatic tool extensions that re-enter this
 // authorizer, so an isolated child could write or run unobserved. Host-owned
 // workers only admit non-isolated delegation, and a caller-supplied artifact id

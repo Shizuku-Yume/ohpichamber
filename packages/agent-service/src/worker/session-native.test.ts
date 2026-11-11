@@ -223,7 +223,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   if (machineCommands.includes(command)) return;
   const grant = request.approvalId && request.toolCallId
    ? interactions.consumeApprovalGrant(rootSessionId, generation, request.approvalId, request.toolCallId, request.toolName, request.input) : undefined;
-  if (!grant) throw new NativeApprovalRequired();
+  if (!grant) throw new NativeApprovalRequired('Host policy requires approval for this exact native command');
   grants.push(grant.approvalId);
  }, async (request, signal) => {
   if (!invoke) throw new Error('Host action was not part of this scenario');

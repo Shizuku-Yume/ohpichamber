@@ -24,13 +24,22 @@ test('a catch that discards its error and shows a translation is a finding', () 
   assert.deepEqual(findTranslationOnlyCatches(root, root), ['a.ts:1', 'b.tsx:1']);
 });
 
-test('reading the caught error clears the finding', () => {
+test('showing the caught cause clears the finding', () => {
   const root = tree({
     'a.ts': 'try { await save() } catch (error) {\n  toast.error(problemMessage(error, t(\'save.failed\')));\n}\n',
-    'b.ts': 'try { await save() } catch (error) {\n  console.error(error);\n  toast.error(t(\'save.failed\'));\n}\n',
+    'b.ts': 'try { await save() } catch (error) {\n  setSaveError(error.message);\n}\n',
     'c.ts': 'try { await save() } catch {\n  toast.success(t(\'saved\'));\n}\n',
   });
   assert.deepEqual(findTranslationOnlyCatches(root, root), []);
+});
+
+test('logging the caught error is not showing it', () => {
+  const root = tree({
+    'a.ts': 'try { await save() } catch (error) {\n  console.error(error);\n  toast.error(t(\'save.failed\'));\n}\n',
+    'b.ts': 'try { await save() } catch (error) {\n  console.error(\'save failed\', error);\n  setSaveError(t(\'save.failed\'));\n}\n',
+    'c.ts': 'try { await save() } catch (error) {\n  console.error(error);\n  toast.error(problemMessage(error, t(\'save.failed\')));\n}\n',
+  });
+  assert.deepEqual(findTranslationOnlyCatches(root, root), ['a.ts:1', 'b.ts:1']);
 });
 
 test('a denial without a reason is a finding', () => {

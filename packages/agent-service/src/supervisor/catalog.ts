@@ -111,10 +111,19 @@ function ownerIdentity(worker: CatalogWorker): ContractCatalogWorkerIdentity {
   };
 }
 
+/** The worker causes a partial fan-out reported, so the reader sees why it failed
+ * instead of only that it did. The full per-worker result stays in `details`. */
+function applyFailureCause(result: { workers: Array<{ outcome: string; error?: { detail: string } }> }, fallback: string): string {
+  const causes = [...new Set(result.workers.flatMap(worker => worker.outcome === 'failed' && worker.error?.detail ? [worker.error.detail] : []))];
+  return causes.length > 0 ? causes.join('; ') : fallback;
+}
+
 function operationError(error: Error | undefined, fallbackCode: string, fallbackDetail: string): CatalogOperationError {
   if (error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError) {
     return { code: error.code, detail: error.message, retryable: error.status >= 500 };
   }
+  // A native MCP error or any other typed failure still knows its own cause.
+  if (error instanceof Error && error.message.trim()) return { code: fallbackCode, detail: error.message, retryable: true };
   return { code: fallbackCode, detail: fallbackDetail, retryable: true };
 }
 
@@ -225,9 +234,11 @@ export class CatalogCoordinator {
       }
       this.mcpSnapshots.set(worker.identity.rootSessionId, mcp);
       this.skillSnapshots.set(worker.identity.rootSessionId, skills);
-    } catch {
+    } catch (error) {
       this.dropWorker(worker);
-      throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE', 'The worker catalogs could not be read', {});
+      if (error instanceof CatalogCoordinatorError) throw error;
+      throw new CatalogCoordinatorError(503, 'SERVICE_UNAVAILABLE',
+        error instanceof Error && error.message.trim() ? error.message : 'The worker catalogs could not be read', {});
     }
   }
 
@@ -452,7 +463,7 @@ export class CatalogCoordinator {
     }
     await this.finalizeMcpOutcomes(outcomes);
     const result = { kind: 'mcp' as const, status: aggregate(outcomes), configuration, workers: outcomes } satisfies MCPApplyResult;
-    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', 'The MCP apply did not reach every active worker', { result });
+    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
     return result;
   }
 
@@ -623,7 +634,7 @@ export class CatalogCoordinator {
       }
     }
     const result = { kind: 'skills' as const, status: aggregate(outcomes), scope, sourceRevision: input.sourceRevision, workers: outcomes } satisfies SkillsApplyResult;
-    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'SKILL_APPLY_FAILED', 'The skill apply did not reach every active worker', { result });
+    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'SKILL_APPLY_FAILED', applyFailureCause(result, 'The skill apply did not reach every active worker'), { result });
     return result;
   }
 

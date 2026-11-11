@@ -104,6 +104,7 @@ import { remoteTraits, identityDisplayName } from '@/lib/source-control/identity
 import { activeAuthor, offeredAuthors } from './git/gitAuthors';
 import { dirtySwitchPushTarget } from './git/dirtySwitchPushTarget';
 import { mapWithConcurrency } from '@/lib/concurrency';
+import { problemMessage } from '@/lib/problemMessage';
 
 type SyncAction = 'fetch' | 'pull' | 'sync' | 'publish' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -2824,7 +2825,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
        // cancelled: the user must see the failed push on the branch it
        // belongs to instead of discovering it later from elsewhere.
        console.error('Push after commit failed:', error);
-       toast.error(t('gitView.dirtySwitch.pushFailed'));
+       toast.error(problemMessage(error, t('gitView.dirtySwitch.pushFailed')));
        await refreshStatusAndBranches();
        await refreshLog();
        setPendingDirtySwitchBranch(null);

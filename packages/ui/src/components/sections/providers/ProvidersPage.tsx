@@ -219,7 +219,7 @@ function ProviderDetail({
     } catch (error) {
       if (runtime === getRuntimeKey()) {
         console.error('Failed to disconnect provider:', error);
-        toast.error(t('settings.providers.page.toast.providerDisconnectFailed'));
+        toast.error(problemMessage(error, t('settings.providers.page.toast.providerDisconnectFailed')));
         await onRefresh();
       }
     } finally {

@@ -27,6 +27,9 @@ const AUTHORIZER = path.join(REPO_ROOT, 'packages/web/server/lib/host/worker-ope
 // A failure shown as a translated sentence. `problemMessage(error, t(…))` is the
 // accepted form: the cause wins and the translation is the fallback.
 const TRANSLATION_ONLY_DISPLAY = /\b(?:toast\.(?:error|warning)|set[A-Z]\w*(?:Error|Failure|Message)|autosaveFailed|setImportError)\s*\(\s*t\(/;
+// Reading the error only to log it is not showing it: the person still sees the
+// translated sentence. These calls consume the binding without displaying it.
+const LOG_ONLY_USE = /\b(?:console\.(?:log|warn|error|debug|info)|reportError|Sentry\.\w+|logger\.\w+)\s*\([^;]*?\)/g;
 
 const sourceFiles = (root) => {
   const files = [];
@@ -66,9 +69,15 @@ export const findTranslationOnlyCatches = (root, reportRoot = REPO_ROOT) => {
         else if (src[end] === '}') { depth -= 1; if (depth === 0) break; }
       }
       const body = src.slice(j, end + 1);
-      const readsError = binding !== null && binding !== ''
-        && new RegExp(`(^|[^\\w$.])${binding.replace(/[^\w$]/g, '')}([^\\w$]|$)`).test(body.slice(1));
-      if (readsError || !TRANSLATION_ONLY_DISPLAY.test(body)) continue;
+      if (!TRANSLATION_ONLY_DISPLAY.test(body)) continue;
+      // Reading the error only to log it does not show it: the person still gets
+      // the translated sentence. Remove logging calls, then any remaining
+      // reference to the binding means the cause itself is displayed.
+      const name = binding === null || binding === '' ? null : binding.replace(/[^\w$]/g, '');
+      const withoutLogging = body.slice(1).replace(LOG_ONLY_USE, 'log(');
+      const displaysCause = name !== null
+        && new RegExp(`(^|[^\\w$.])${name}([^\\w$]|$)`).test(withoutLogging);
+      if (displaysCause) continue;
       findings.push(`${path.relative(reportRoot, file).replaceAll(path.sep, '/')}:${src.slice(0, i).split('\n').length}`);
     }
   }

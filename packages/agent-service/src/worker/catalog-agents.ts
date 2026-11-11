@@ -31,7 +31,9 @@ export type NativeAgentsContext = {
   modelRegistry: ModelRegistry;
   settings: Settings;
   extensionRoots: EffectiveExtensionRoots;
-  permissionPreset: (id: string) => Promise<void>;
+  /** `proposed` is true only when this write introduces the preset; reading an
+   * existing profile's preset must satisfy the snapshot membership test. */
+  permissionPreset: (id: string, proposed: boolean) => Promise<void>;
   availableToolNames: () => readonly string[];
 };
 const ProfileMetadataSchema = z.object({ openchamber: AgentSchema.optional() });
@@ -153,7 +155,7 @@ export class NativeAgents {
     const definition = (await this.discover()).find(agent => agent.name === agentId);
     if (!definition) throw new ProjectionError(404, 'INVALID_REQUEST', 'Agent profile is unavailable');
     const publicAgent = await this.project(definition);
-    if (publicAgent.permissionPresetId) await this.context.permissionPreset(publicAgent.permissionPresetId);
+    if (publicAgent.permissionPresetId) await this.context.permissionPreset(publicAgent.permissionPresetId, false);
     return publicAgent.systemPromptOverride === undefined
       ? { ...definition }
       : { ...definition, systemPrompt: publicAgent.systemPromptOverride };
@@ -198,7 +200,7 @@ export class NativeAgents {
   }
 
   private async write(agent: Agent, revision: string, existing?: AgentDefinition): Promise<AgentMutationResult> {
-    if (agent.permissionPresetId) await this.context.permissionPreset(agent.permissionPresetId);
+    if (agent.permissionPresetId) await this.context.permissionPreset(agent.permissionPresetId, true);
     if (agent.model && !this.context.modelRegistry.find(agent.model.providerId, agent.model.modelId)) {
       throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Agent profile model is unavailable');
     }

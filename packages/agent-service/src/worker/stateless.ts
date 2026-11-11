@@ -75,11 +75,13 @@ export class StatelessWorker {
       cwd: input.cwd, agentDirectory: input.agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
       availableToolNames: () => BUILTIN_TOOL_NAMES,
-      permissionPreset: presetId => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId, proposed: true }),
+      permissionPreset: (presetId, proposed) => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId, ...(proposed ? { proposed: true } : {}) }),
     });
     this.completion = new WorkerCompletion(runtime.modelRegistry, input.workspaceId, async (selection, controls) => {
       const resolved = await models.selection(selection, controls);
-      await authorize({ type: 'tool', toolName: 'provider.use', proposed: true, input: { providerId: selection.providerId, modelId: selection.modelId, endpoint: resolved.nativeModel.baseUrl } });
+      // The stateless worker publishes a fresh policy snapshot before every
+      // operation, so the selection is checked against the live catalog.
+      await authorize({ type: 'tool', toolName: 'provider.use', input: { providerId: selection.providerId, modelId: selection.modelId, endpoint: resolved.nativeModel.baseUrl } });
       return resolved;
     });
   }

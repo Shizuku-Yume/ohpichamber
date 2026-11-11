@@ -37,6 +37,7 @@ describe('a problem cause reaches the rendered toast', () => {
 
   test('the toast shows the cause the Agent Service wrote, not a translated fallback', async () => {
     await act(async () => root.render(<Toaster />));
+    // The same shape the canonical client builds from a real problem response.
     const error = new CanonicalApiError(ProblemDetailsSchema.parse({
       type: 'urn:ohpichamber:problem:SESSION_NOT_FOUND', title: 'Session not found',
       status: 404, detail: `BTW record not found: ${SENTINEL}`, code: 'SESSION_NOT_FOUND', retryable: false,

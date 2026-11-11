@@ -34,6 +34,7 @@ import { getContextObligatoryMessages } from '@/lib/contextObligatoryMessages';
 import { setContextObligatoryMessage } from '@/sync/session-actions';
 import { useChatColumnActions } from './chatColumnSession';
 import { isFileChangeTool, isShellTool } from '@/lib/toolHelpers';
+import { problemMessage } from '@/lib/problemMessage';
 
 const ToolOutputDialog = lazyWithChunkRecovery(() => import('./message/ToolOutputDialog'));
 
@@ -270,7 +271,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             requestAnimationFrame(focusColumnInput);
         } catch (error) {
             console.error('[chat-message] failed to update context pin', error);
-            toast.error(t('chat.messageBody.actions.contextPinFailed'));
+            toast.error(problemMessage(error, t('chat.messageBody.actions.contextPinFailed')));
         } finally {
             setPinPending(false);
         }

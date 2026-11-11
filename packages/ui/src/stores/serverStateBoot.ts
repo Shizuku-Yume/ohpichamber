@@ -84,6 +84,9 @@ export const SERVER_STATE_BOOT_ENTRIES: readonly ServerStateBootEntry[] = [
   },
   {
     id: 'agent-memory',
+    // Boot reads the store as it stands (no project yet). The project-scoped
+    // read belongs to `useAgentMemorySync`, which resolves the directory's
+    // project; `maxAgeMs` there keeps the two from reading the same path twice.
     hydrate: () => useAgentMemoryStore.getState().load(useAgentMemoryStore.getState().projectPath),
     reset: () => useAgentMemoryStore.getState().reset(),
   },

@@ -1,4 +1,4 @@
-import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
+import type { ToolCallPart } from '@openchamber/agent-contract';
 
 import {
  isExplorationTool as registryExploration,

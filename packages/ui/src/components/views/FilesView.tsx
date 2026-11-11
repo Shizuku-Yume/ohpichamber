@@ -142,6 +142,7 @@ import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { syncScheduledTaskLoops } from '@/lib/scheduledTasksApi';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { problemMessage } from '@/lib/problemMessage';
 
 
 type FileNode = {
@@ -1920,8 +1921,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
         if (project) {
           try {
             await syncScheduledTaskLoops(project.id);
-          } catch {
-            toast.error(t('sessions.scheduledTasks.dialog.toast.updateFailed'));
+          } catch (error) {
+            toast.error(problemMessage(error, t('sessions.scheduledTasks.dialog.toast.updateFailed')));
           }
         }
       }

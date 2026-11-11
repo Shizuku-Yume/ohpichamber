@@ -57,7 +57,7 @@ import {
 import { SessionErrorNotice } from '@/components/chat/SessionErrorNotice';
 import { CleanseTimelineBoard } from '@/components/chat/CleanseStatusBoard';
 import { AdvisorTimelineCard } from '@/components/chat/AdvisorMessage';
-import { canonicalProblemDetail } from '@/lib/problemMessage';
+import { problemMessage } from '@/lib/problemMessage';
 import ScrollToBottomButton from './components/ScrollToBottomButton';
 import { PromptNavigatorRail } from './components/PromptNavigatorRail';
 import { useAuthSessionStore } from '@/lib/runtime-auth-expiry';
@@ -908,7 +908,9 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   currentSessionId ?? '',
   effectiveSessionDirectory,
  );
- const sessionLoadProblem = canonicalProblemDetail(sessionMessageLoadState.error);
+ const sessionLoadProblem = sessionMessageLoadState.error === null
+  ? null
+  : problemMessage(sessionMessageLoadState.error, t('chat.container.sessionLoadError.description'));
  const [firstVisiblePerformance] = React.useState(createFirstVisibleSessionPerformanceTracker);
 
  React.useEffect(() => {

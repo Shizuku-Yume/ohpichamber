@@ -25,7 +25,7 @@ import { runtimeFetch } from "@/lib/runtime-fetch"
 import type { PermissionMode } from "@/stores/utils/permissionAutoAccept"
 import { toast } from "sonner"
 import { canonicalClient } from "@/api/canonicalClient"
-import { canonicalProblemDetail } from "@/lib/problemMessage"
+import { problemMessage } from "@/lib/problemMessage"
 import { useConfigStore } from "@/stores/useConfigStore"
 import { useProjectsStore } from "@/stores/useProjectsStore"
 import { useSessionDisplayStore } from "@/stores/useSessionDisplayStore"
@@ -1013,8 +1013,7 @@ const createSessionWithDraftLifecycle = async (
   } catch (error) {
     assertSendRuntime(runtimeKey, runtimeRevision)
     console.error("[session-ui-store] createSession failed", error)
-    const detail = canonicalProblemDetail(error instanceof Error ? error : null)
-    if (detail) toast.error(detail)
+    toast.error(problemMessage(error, 'The session could not be created.'))
     return null
   }
 }

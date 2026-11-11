@@ -7,6 +7,7 @@ import { useSessionDraftsStore, type SessionDraft } from '@/stores/useSessionDra
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { openSessionDraft } from './openSessionDraft';
+import { problemMessage } from '@/lib/problemMessage';
 
 /**
  * What a draft's row knows and does, whatever draws it: the desktop row with
@@ -34,7 +35,7 @@ export function useSessionDraftRow(draft: SessionDraft, onNavigate: () => void) 
     });
   };
   const discard = (): void => {
-    void useSessionDraftsStore.getState().discard(draft.id, { final: true }).catch(() => toast.error(t('sessions.sidebar.draft.discardFailed')));
+    void useSessionDraftsStore.getState().discard(draft.id, { final: true }).catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.draft.discardFailed'))));
     if (!isOpen) return;
     // Thrown away while in the composer: its text goes too, and the composer
     // starts a fresh draft in the same place.

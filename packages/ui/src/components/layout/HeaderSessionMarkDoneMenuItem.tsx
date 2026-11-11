@@ -9,6 +9,7 @@ import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { setSessionWorkState } from '@/sync/session-actions';
 import type { SessionTabMenuComponents } from './SessionTabsStrip';
+import { problemMessage } from '@/lib/problemMessage';
 
 /**
  * Mark done for a header tab's session, the same action as the composer's:
@@ -28,8 +29,8 @@ export function HeaderSessionMarkDoneMenuItem({ session, Item }: {
       const sessionId = session.sessionId;
       await setSessionWorkState(sessionId, resolveGlobalSessionDirectory(session), 'done');
       leaveFinishedSessions([sessionId]);
-    } catch {
-      toast.error(t('sessions.sidebar.session.work.updateFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('sessions.sidebar.session.work.updateFailed')));
     }
   };
 

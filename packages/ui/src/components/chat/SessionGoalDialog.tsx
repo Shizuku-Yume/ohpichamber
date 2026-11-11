@@ -17,6 +17,7 @@ import { useSessionGoal } from '@/hooks/useSessionGoal';
 import { useI18n } from '@/lib/i18n';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { canonicalClient } from '@/api/canonicalClient';
+import { problemMessage } from '@/lib/problemMessage';
 
 interface SessionGoalDialogProps {
   open: boolean;
@@ -66,8 +67,8 @@ function SessionGoalDialogBody({ mobile, onOpenChange, sessionId, directory }: S
     try {
       await action();
       if (closeAfter) onOpenChange(false);
-    } catch {
-      toast.error(t('chat.goal.toast.actionFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('chat.goal.toast.actionFailed')));
     } finally {
       setBusy(false);
     }

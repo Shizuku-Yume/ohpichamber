@@ -8,6 +8,7 @@ import { streamPerfMark } from '@/stores/utils/streamDebug';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { collectSessionSubtreeIds, runSessionSubtreeAction } from './sessionSubtreeActions';
 import { describeSessionActionError } from './sessionActionError';
+import { problemMessage } from '@/lib/problemMessage';
 
 type DeleteSessionSource = {
   archivedBucket?: boolean;
@@ -142,7 +143,7 @@ export const useSessionActions = (args: Args) => {
         }
         toast.error(t('sessions.sidebar.session.copyId.error'));
       })
-      .catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
+      .catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.copyId.error'))));
   }, [t]);
 
   const executeDeleteSession = React.useCallback(

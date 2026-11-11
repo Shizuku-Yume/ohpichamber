@@ -5,6 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useSessions } from '@/sync/sync-context';
 import * as sessionActions from '@/sync/session-actions';
 import { useChatColumnActions, useChatSessionSelection } from './chatColumnSession';
+import { problemMessage } from '@/lib/problemMessage';
 
 export type PermissionResponse = 'once' | 'always' | 'reject';
 
@@ -63,8 +64,8 @@ export const usePermissionResponse = (
             await sessionActions.respondToPermission(permission.sessionId, permission.approvalId, response);
             setHasResponded(true);
             onResponse?.(response);
-        } catch {
-            toast.error(t('chat.questionCard.submitFailed'), { description: t('chat.formCard.tryAgain') });
+        } catch (error) {
+            toast.error(problemMessage(error, t('chat.questionCard.submitFailed')), { description: t('chat.formCard.tryAgain') });
             void sessionActions.refetchSessionMessages(permission.sessionId).catch(() => {
                 // The request stays visible; the next sync event retries recovery.
             });

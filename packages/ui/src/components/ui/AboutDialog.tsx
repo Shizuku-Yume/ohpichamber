@@ -12,6 +12,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useI18n } from '@/lib/i18n';
 import { getDesktopAppVersion } from '@/lib/desktopNative';
 import { runtimeFetch } from '@/lib/runtime-fetch';
+import { problemMessage } from '@/lib/problemMessage';
 
 const VERSION_SLOT = '\u0000';
 
@@ -56,7 +57,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
         });
       }
     } catch (error) {
-      toast.error(t('aboutDialog.toast.copyFailed'));
+      toast.error(problemMessage(error, t('aboutDialog.toast.copyFailed')));
       console.error('Failed to copy diagnostics:', error);
     } finally {
       setIsCopyingDiagnostics(false);

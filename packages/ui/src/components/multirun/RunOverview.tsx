@@ -32,6 +32,7 @@ import { LANE_STATUS_COUNT_KEYS, LANE_STATUS_ORDER, resolveLaneStatus, type Lane
 import { useGlobalBlockingRequestsStore } from '@/sync/global-blocking-requests';
 import { isSessionUnread } from '@/sync/session-unread';
 import { useGlobalSessionsStore, resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
+import { problemMessage } from '@/lib/problemMessage';
 
 type BarMode =
  | { kind: 'idle' }
@@ -255,7 +256,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
    openChat(sessionId);
   } catch (error) {
    console.error('[MultiRun] Keep failed', error);
-   toast.error(t('multirun.overview.keep.failed'));
+   toast.error(problemMessage(error, t('multirun.overview.keep.failed')));
   } finally {
    setBusyAction(null);
    setBar({ kind: 'idle' });
@@ -293,7 +294,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
    });
   } catch (error) {
    console.error('[MultiRun] Could not add a lane', error);
-   toast.error(t('multirun.overview.ask.failed'));
+   toast.error(problemMessage(error, t('multirun.overview.ask.failed')));
   } finally {
    setBusyAction(null);
   }
@@ -315,7 +316,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
    toast.success(t('multirun.overview.card.detachDone', { name: nameOf(sessionId) }));
   } catch (error) {
    console.error('[MultiRun] Could not detach a session', error);
-   toast.error(t('multirun.overview.card.detachFailed'));
+   toast.error(problemMessage(error, t('multirun.overview.card.detachFailed')));
   } finally {
    setBusyAction(null);
   }

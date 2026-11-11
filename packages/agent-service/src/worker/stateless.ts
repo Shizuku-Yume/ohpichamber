@@ -64,7 +64,7 @@ export class StatelessWorker {
       worker: { rootSessionId: input.authorizationRootId, workspaceId: input.workspaceId, workerGeneration: input.workerGeneration },
       resolveCredentialRef: reference => this.mcpCredentials.resolve(reference),
       resolveCommand: async transport => transport.command,
-      authorizeServer: server => authorize({ type: 'mcp-server', server }),
+      authorizeServer: (server, proposed) => authorize({ type: 'mcp-server', server, ...(proposed ? { proposed: true } : {}) }),
       authorizeOAuth: (server, configuration) => authorize({ type: 'mcp-oauth', server, configuration: JsonObjectSchema.parse(Object.fromEntries(Object.entries(MCPOAuthPublicConfigurationSchema.parse(configuration)).filter(([, value]) => value !== undefined))) }),
       sanitizeTool: tool => tool,
       onCatalog: () => { },
@@ -75,10 +75,12 @@ export class StatelessWorker {
       cwd: input.cwd, agentDirectory: input.agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
       availableToolNames: () => BUILTIN_TOOL_NAMES,
-      permissionPreset: presetId => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId }),
+      permissionPreset: (presetId, proposed) => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId, ...(proposed ? { proposed: true } : {}) }),
     });
     this.completion = new WorkerCompletion(runtime.modelRegistry, input.workspaceId, async (selection, controls) => {
       const resolved = await models.selection(selection, controls);
+      // The stateless worker publishes a fresh policy snapshot before every
+      // operation, so the selection is checked against the live catalog.
       await authorize({ type: 'tool', toolName: 'provider.use', input: { providerId: selection.providerId, modelId: selection.modelId, endpoint: resolved.nativeModel.baseUrl } });
       return resolved;
     });
@@ -123,7 +125,7 @@ export class StatelessWorker {
         throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
       }
       for (const server of configuration.config.servers) {
-        await this.authorize({ type: 'mcp-server', server });
+        await this.authorize({ type: 'mcp-server', server, proposed: true });
         const references = server.transport.type === 'stdio' ? Object.values(server.transport.envCredentialRefs ?? {})
           : [...Object.values(server.transport.headerCredentialRefs ?? {}), ...(server.transport.credentialRef ? [server.transport.credentialRef] : [])];
         for (const reference of references) await this.mcpCredentials.resolve(reference);

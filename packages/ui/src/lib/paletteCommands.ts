@@ -13,6 +13,7 @@ import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { problemMessage } from '@/lib/problemMessage';
 
 type Translate = (key: I18nKey, params?: I18nParams) => string;
 
@@ -79,7 +80,7 @@ export const pinCurrentSession = (t: Translate): PaletteCommand => () => {
   const failedKey = isSessionPinned(useSessionPinnedStore.getState().ids, directory, sessionId)
     ? 'sessions.sidebar.session.pin.unpinFailed'
     : 'sessions.sidebar.session.pin.pinFailed';
-  void toggleSessionPin({ directory, sessionId }).catch(() => toast.error(t(failedKey)));
+  void toggleSessionPin({ directory, sessionId }).catch((error) => toast.error(problemMessage(error, t(failedKey))));
 };
 
 export const copyCurrentSessionId = (t: Translate): PaletteCommand => () => {
@@ -93,7 +94,7 @@ export const copyCurrentSessionId = (t: Translate): PaletteCommand => () => {
       }
       toast.error(t('sessions.sidebar.session.copyId.error'));
     })
-    .catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
+    .catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.copyId.error'))));
 };
 
 export const toggleWorkCurrentSession = (t: Translate): PaletteCommand => () => {
@@ -106,7 +107,7 @@ export const toggleWorkCurrentSession = (t: Translate): PaletteCommand => () => 
   if (!directory || isChatDirectoryPath(directory)) return false;
   const next = isSessionInWork(session) ? 'done' : 'open';
   void setSessionWorkState(sessionId, directory, next)
-    .catch(() => toast.error(t('sessions.sidebar.session.work.updateFailed')));
+    .catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.work.updateFailed'))));
 };
 
 export const openMultiRun: PaletteCommand = () => {

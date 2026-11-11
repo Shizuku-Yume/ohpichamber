@@ -6,7 +6,7 @@ import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, NoticePartSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema, parseModelString } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, TokenUsage, Turn } from '@openchamber/agent-contract';
+import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, StepTiming, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -27,7 +27,7 @@ const WORKER_RUN_TYPE = 'ohpichamber.worker-run.v1';
 const TURN_TYPE = 'ohpichamber.turn.v1';
 const ReferenceSchema = z.strictObject({
   nativeEntryId: EntityIdSchema, messageId: EntityIdSchema, turnId: EntityIdSchema,
-  runId: EntityIdSchema, userMessageId: EntityIdSchema, virtualUser: z.boolean(),
+  runId: EntityIdSchema, userMessageId: EntityIdSchema, /** Written by earlier builds for a turn it authored no user message for; read only. */ virtualUser: z.boolean().optional(),
   attachments: z.array(PromptAttachmentSchema),
   sessionMentions: z.array(SessionMentionSchema).optional(),
 });
@@ -122,8 +122,8 @@ const TurnTerminalSchema = TerminalSchema.extend({ turnId: EntityIdSchema, start
 const HistoryCursorSchema = z.tuple([EntityIdSchema, CounterSchema, EntityIdSchema.nullable(), EntityIdSchema.nullable(), z.number().int().nonnegative()]);
 interface LiveMessage {
   messageId: string; turnId: string; runId: string; userMessageId: string;
-  virtualUser: boolean; nativeMessage: VisibleMessage;
-  attachments: PromptAttachment[]; sessionMentions: SessionMention[]; started: Set<number>; toolCallIndexById: Map<string, number>; providerId?: string; modelId?: string; usage?: TokenUsage;
+  nativeMessage: VisibleMessage;
+  attachments: PromptAttachment[]; sessionMentions: SessionMention[]; started: Set<number>; toolCallIndexById: Map<string, number>; providerId?: string; modelId?: string; usage?: TokenUsage; timing?: StepTiming;
 }
 
 type NativeAssistantMessage = Extract<VisibleMessage, { role: 'assistant' }>;
@@ -155,9 +155,33 @@ function canonicalUsage(usage: NonNullable<NativeAssistantMessage['usage']>): To
   });
 }
 
-function metadata(message: VisibleMessage): Pick<LiveMessage, 'providerId' | 'modelId' | 'usage'> {
+/**
+ * The step's own timeline. Absolute epochs, derived only from what the native
+ * message records, so a transcript restored from disk equals the stream that
+ * produced it: `ttft` and `duration` are request-relative, `timestamp` and
+ * `completedAt` are absolute.
+ */
+function stepTiming(message: NativeAssistantMessage): StepTiming {
+  const startedAt = Math.max(0, Math.round(message.timestamp));
+  const timing: StepTiming = { startedAt };
+  if (typeof message.ttft === 'number' && Number.isFinite(message.ttft)) {
+    timing.firstTokenAt = Math.max(startedAt, Math.round(startedAt + message.ttft));
+  }
+  const completed = typeof message.completedAt === 'number' && Number.isFinite(message.completedAt)
+    ? message.completedAt
+    : typeof message.duration === 'number' && Number.isFinite(message.duration) ? startedAt + message.duration : undefined;
+  if (completed !== undefined && Number.isFinite(completed)) timing.completedAt = Math.max(startedAt, Math.round(completed));
+  return timing;
+}
+
+function metadata(message: VisibleMessage): Pick<LiveMessage, 'providerId' | 'modelId' | 'usage' | 'timing'> {
   if (message.role !== 'assistant') return {};
-  return { providerId: message.provider, modelId: message.model, usage: message.usage ? canonicalUsage(message.usage) : undefined };
+  return {
+    providerId: message.provider,
+    modelId: message.model,
+    usage: message.usage ? canonicalUsage(message.usage) : undefined,
+    timing: stepTiming(message),
+  };
 }
 function visible(message: NativeMessage): message is VisibleMessage {
   return message.role === 'assistant' || message.role === 'toolResult' || (message.role === 'user' && message.synthetic !== true);
@@ -165,23 +189,94 @@ function visible(message: NativeMessage): message is VisibleMessage {
 function partId(messageId: string, index: number): string { return `${messageId}:${index}`; }
 /** SDK tool arguments can carry symbol-keyed markers; canonical records are JSON (see NativeInteraction.observeToolCall). */
 function toolInput(value: JsonValue): JsonObject { return JsonObjectSchema.parse(JSON.parse(JSON.stringify(value))); }
-function parts(message: VisibleMessage, messageId: string, attachments: PromptAttachment[], mentions: readonly SessionMention[], toolResults?: ReadonlyMap<string, boolean>): Part[] {
+
+/**
+ * A tool outcome as the SDK reports it. `content` blocks, optional structured
+ * `details` and the non-throwing failure flag; every native result shape, from
+ * a partial frame to a persisted `toolResult` message, parses through this.
+ */
+const ToolResultPayloadSchema = z.looseObject({
+  toolCallId: z.string().optional(), toolName: z.string().optional(),
+  content: z.unknown().optional(), details: z.unknown().optional(), isError: z.boolean().optional().catch(undefined),
+});
+/** A native result as JSON, which is what the wire and their IPC carry. */
+function resultPayload(value: unknown): ToolResultPayload {
+  const json = JsonValueSchema.safeParse(JSON.parse(JSON.stringify(value ?? {})));
+  return ToolResultPayloadSchema.parse(json.success ? json.data : {});
+}
+type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
+/** The failure markers OMP puts on `details`; the kind comes from the most specific one. */
+const ToolFailureDetailsSchema = z.looseObject({
+  __synthetic: z.boolean().optional(), __interrupted: z.boolean().optional(),
+  upstreamError: z.string().optional(), errorKind: z.string().min(1).optional(), timedOut: z.boolean().optional(),
+  async: z.looseObject({ state: z.string().optional() }).optional(),
+});
+const ToolTextBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() });
+const HostDetailsSchema = z.looseObject({ openchamber: z.json().optional() });
+
+/** The text a reader sees for a result: its text blocks, joined. */
+function toolResultText(content: unknown): string {
+  const blocks = z.array(z.unknown()).safeParse(content ?? []);
+  if (!blocks.success) return '';
+  return blocks.data.flatMap((block) => {
+    const text = ToolTextBlockSchema.safeParse(block);
+    return text.success ? [text.data.text] : [];
+  }).join('\n').trim();
+}
+
+/**
+ * The canonical output object: the SDK's content and details verbatim, so a
+ * tool card reads what the tool returned. An OpenChamber host tool carries its
+ * envelope in `details.openchamber`; it is also hoisted to the top level,
+ * which is where a card's `metadata.openchamber` looks.
+ */
+function toolResultOutput(content: unknown, details: unknown): JsonValue {
+  const host = HostDetailsSchema.safeParse(details ?? {});
+  const base: Record<string, unknown> = details === undefined ? { content: content ?? [] } : { content: content ?? [], details };
+  if (host.success && host.data.openchamber !== undefined) base.openchamber = host.data.openchamber;
+  // SDK details can hold undefined fields; IPC and the wire carry JSON.
+  return JsonValueSchema.parse(JSON.parse(JSON.stringify(base)));
+}
+
+/**
+ * A result part for one call: its output, and for a failure the kind OMP
+ * knows (`synthetic` for a call it never ran, `interrupted`, an edit's own
+ * `errorKind`, a bash `timeout`, a dead background job) beside the detail the
+ * tool itself reported, never a placeholder the reader cannot act on.
+ */
+function toolResultPart(resultPartId: string, toolCallId: string, toolName: string, payload: ToolResultPayload): Part {
+  const parsed = ToolFailureDetailsSchema.safeParse(payload.details ?? {});
+  const fields = parsed.success ? parsed.data : {};
+  const part: Part = {
+    type: 'tool_result', partId: resultPartId, toolCallId, toolName,
+    isError: payload.isError === true,
+    output: toolResultOutput(payload.content, payload.details),
+  };
+  if (payload.isError !== true) return part;
+  const detail = toolResultText(payload.content) || (fields.upstreamError ?? '').trim();
+  if (detail) part.error = detail;
+  part.errorKind = fields.__synthetic === true ? 'synthetic'
+    : fields.__interrupted === true ? 'interrupted'
+      : fields.errorKind ?? (fields.timedOut === true ? 'timeout' : undefined)
+        ?? (fields.async?.state === 'failed' || fields.async?.state === 'cancelled' ? 'background-job' : undefined)
+        ?? 'tool_error';
+  return part;
+}
+
+function parts(message: VisibleMessage, messageId: string, attachments: PromptAttachment[], mentions: readonly SessionMention[], toolResults?: ReadonlyMap<string, ToolResultPayload>): Part[] {
+  if (message.role === 'toolResult') return [];
   const result: Part[] = [];
-  if (message.role === 'toolResult') {
-    result.push({ type: 'tool_result', partId: partId(messageId, 0), toolCallId: message.toolCallId,
-      toolName: message.toolName, isError: message.isError,
-      output: JsonValueSchema.parse(JSON.parse(JSON.stringify({ content: message.content, details: message.details }))),
-      error: message.isError ? 'Tool execution failed' : undefined,
-    });
-  } else if (Array.isArray(message.content)) {
+  if (Array.isArray(message.content)) {
     for (const [index, item] of message.content.entries()) {
       if (item.type === 'text') result.push({ type: 'text', partId: partId(messageId, index), content: item.text });
-      else if (item.type === 'thinking') result.push({ type: 'reasoning', partId: partId(messageId, index), content: item.thinking,
+      else if (item.type === 'thinking') result.push({
+        type: 'reasoning', partId: partId(messageId, index), content: item.thinking,
         signature: item.thinkingSignature,
       });
-      else if (item.type === 'toolCall') result.push({ type: 'tool_call', partId: partId(messageId, index), toolCallId: item.id,
+      else if (item.type === 'toolCall') result.push({
+        type: 'tool_call', partId: partId(messageId, index), toolCallId: item.id,
         toolName: item.name, input: toolInput(JSON.parse(JSON.stringify(item.arguments))),
-        status: toolResults?.has(item.id) ? toolResults.get(item.id) ? 'failed' : 'completed' : 'running',
+        status: toolResults?.has(item.id) ? toolResults.get(item.id)!.isError === true ? 'failed' : 'completed' : 'running',
       });
     }
   } else {
@@ -215,7 +310,7 @@ function parts(message: VisibleMessage, messageId: string, attachments: PromptAt
 /** Native transcript owns content; custom entries retain canonical identity and lifecycle times. */
 export class WorkerProjection {
   private run: Run | null = null;
-  private turn: { turnId: string; userMessageId: string; virtualUser: boolean; open: boolean; startedAt: number } | undefined;
+  private turn: { turnId: string; userMessageId: string; open: boolean; startedAt: number } | undefined;
   private message: LiveMessage | undefined;
   private readonly pending: LiveMessage[] = [];
   private attachments: PromptAttachment[] = [];
@@ -229,6 +324,39 @@ export class WorkerProjection {
   private lastCacheRead = 0;
   private manualCompactionMode: string | undefined;
   private readonly deferredNotices: NoticePart[] = [];
+  /**
+   * Which message owns each live tool call, and the part its result attaches
+   * to. A result is a part of the message that made the call, so the owner is
+   * recorded when the call is authored and never guessed from a later message.
+   */
+  private readonly liveToolCallOwners = new Map<string, { messageId: string; callPartId: string }>();
+  private readonly publishedResultParts = new Set<string>();
+  private readonly completedResultParts = new Set<string>();
+
+  private ownToolCall(toolCallId: string, messageId: string | undefined, contentIndex: number | undefined): void {
+    if (!messageId || contentIndex === undefined) return;
+    this.liveToolCallOwners.set(toolCallId, { messageId, callPartId: partId(messageId, contentIndex) });
+  }
+
+  /** The result part a call's outcome belongs to, published on the call's message. */
+  private publishToolResult(payload: ToolResultPayload, terminal: boolean, emit: (event: ProjectionEvent) => void): void {
+    const toolCallId = payload.toolCallId;
+    const toolName = payload.toolName;
+    if (!toolCallId || !toolName) return;
+    const owner = this.liveToolCallOwners.get(toolCallId);
+    if (!owner) return;
+    const part = toolResultPart(`${owner.callPartId}:result`, toolCallId, toolName, payload);
+    if (!this.publishedResultParts.has(part.partId)) {
+      this.publishedResultParts.add(part.partId);
+      emit({ type: 'part.started', messageId: owner.messageId, part });
+    }
+    // A partial frame is a live update; the terminal frame closes the part once
+    // so a restored transcript and the stream end on the same value. The native
+    // result message that follows the terminal frame repeats that same outcome.
+    if (terminal && this.completedResultParts.has(part.partId)) return;
+    if (terminal) this.completedResultParts.add(part.partId);
+    emit(terminal ? { type: 'part.completed', part } : { type: 'part.updated', part });
+  }
 
   private persistAndPublishNotice(
     notice: NoticePartInput,
@@ -409,15 +537,20 @@ export class WorkerProjection {
     this.turn = undefined;
     this.message = undefined;
     this.stopReason = undefined;
+    this.liveToolCallOwners.clear();
+    this.publishedResultParts.clear();
+    this.completedResultParts.clear();
     this.attachments = attachments;
     this.sessionMentions = sessionMentions(context);
     const result: ProjectionInput[] = [{ timestamp, event: { type: 'run.started', runId, origin, createdAt: timestamp } }];
     if (origin !== 'host') {
+      // The turn's opaque user identity is all a non-host run needs: the
+      // native prompt OMP writes for a plan or goal turn is the turn's own
+      // content, so OpenChamber must not author an empty user message beside it.
       const turnId = randomUUID(), userMessageId = randomUUID();
-      this.turn = { turnId, userMessageId, virtualUser: true, open: true, startedAt: timestamp };
+      this.turn = { turnId, userMessageId, open: true, startedAt: timestamp };
       this.manager.appendCustomEntry(WORKER_RUN_TYPE, { runId, origin, createdAt: timestamp, turnId, userMessageId });
-      result.push({ timestamp, event: { type: 'turn.started', turnId, runId, userMessageId } },
-        { timestamp, event: { type: 'message.created', messageId: userMessageId, turnId, role: 'user' } });
+      result.push({ timestamp, event: { type: 'turn.started', turnId, runId, userMessageId } });
     }
     return result;
   }
@@ -461,8 +594,8 @@ export class WorkerProjection {
         const mode = this.manualCompactionMode;
         const method = mode === 'shake' ? 'shaken'
           : mode === 'snapcompact' ? 'snap-compacted'
-          : mode === 'remote' ? 'remote-compacted'
-          : 'soft-compacted';
+            : mode === 'remote' ? 'remote-compacted'
+              : 'soft-compacted';
         const tokensAfter = event.result && 'tokensAfter' in event.result && typeof (event.result as { tokensAfter?: unknown }).tokensAfter === 'number'
           ? (event.result as { tokensAfter: number }).tokensAfter
           : undefined;
@@ -536,20 +669,26 @@ export class WorkerProjection {
       case 'message_start': {
         if (!visible(event.message)) break;
         const native = event.message;
+        if (native.role === 'toolResult') {
+          // A native result message is the same outcome `tool_execution_end`
+          // already published as a part of the message that made the call; the
+          // native message itself is never a row of its own.
+          this.publishToolResult(resultPayload(native), true, emit);
+          break;
+        }
         if (native.role === 'user' || !this.turn?.open) {
           const turnId = randomUUID();
           const userMessageId = queued?.messageId ?? randomUUID();
-          const virtualUser = native.role !== 'user';
-          this.turn = { turnId, userMessageId, virtualUser, open: true, startedAt: timestamp };
+          this.turn = { turnId, userMessageId, open: true, startedAt: timestamp };
           emit({ type: 'turn.started', turnId, runId: run.runId, userMessageId });
-          if (virtualUser) emit({ type: 'message.created', messageId: userMessageId, turnId, role: 'user' });
         }
         const turn = this.turn;
         if (!turn) throw new ProjectionError(503, 'INTERNAL_ERROR', 'Native message has no turn');
         const messageId = native.role === 'user' ? turn.userMessageId : randomUUID();
         const nativeMetadata = metadata(native);
-        const current: LiveMessage = { messageId, turnId: turn.turnId, runId: run.runId,
-          userMessageId: turn.userMessageId, virtualUser: turn.virtualUser,
+        const current: LiveMessage = {
+          messageId, turnId: turn.turnId, runId: run.runId,
+          userMessageId: turn.userMessageId,
           nativeMessage: native,
           attachments: native.role === 'user' ? queued?.attachments ?? this.attachments : [], started: new Set(), ...nativeMetadata,
           sessionMentions: native.role === 'user' ? queued?.sessionMentions ?? this.sessionMentions : [],
@@ -558,8 +697,7 @@ export class WorkerProjection {
         if (native.role === 'user') { this.queuedPrompts.delete(native); this.attachments = []; this.sessionMentions = []; }
         this.message = current;
         this.pending.push(current);
-        emit({ type: 'message.created', messageId, turnId: turn.turnId,
-          role: native.role === 'toolResult' ? 'system' : native.role, ...nativeMetadata });
+        emit({ type: 'message.created', messageId, turnId: turn.turnId, role: native.role, ...nativeMetadata });
         for (const part of parts(native, messageId, current.attachments, current.sessionMentions)) {
           if (native.role === 'assistant' && (part.type === 'text' || part.type === 'reasoning')) {
             // A live assistant start may already carry the first streamed text. The
@@ -568,7 +706,7 @@ export class WorkerProjection {
             part.content = '';
           }
           emit({ type: 'part.started', messageId, part });
-          const index = native.role === 'toolResult' ? 0 : native.content instanceof Array
+          const index = native.content instanceof Array
             ? native.content.findIndex((item, index) => part.partId === partId(messageId, index)) : 0;
           if (index >= 0) current.started.add(index);
         }
@@ -616,6 +754,7 @@ export class WorkerProjection {
               status: 'running',
             };
             current.toolCallIndexById.set(src.id, update.contentIndex);
+            this.ownToolCall(src.id, current.messageId, update.contentIndex);
             current.started.add(update.contentIndex);
             emit({ type: 'part.started', messageId: current.messageId, part });
             break;
@@ -624,6 +763,7 @@ export class WorkerProjection {
             const src = update.partial.content[update.contentIndex];
             if (src?.type !== 'toolCall' || !src.id || !src.name) break;
             const id = partId(current.messageId, update.contentIndex);
+            this.ownToolCall(src.id, current.messageId, update.contentIndex);
             const part: Part = {
               type: 'tool_call',
               partId: id,
@@ -653,6 +793,7 @@ export class WorkerProjection {
               status: 'running',
             };
             current.toolCallIndexById.set(call.id, update.contentIndex);
+            this.ownToolCall(call.id, current.messageId, update.contentIndex);
             if (!current.started.has(update.contentIndex)) {
               current.started.add(update.contentIndex);
               emit({ type: 'part.started', messageId: current.messageId, part });
@@ -666,12 +807,20 @@ export class WorkerProjection {
         break;
       }
       case 'message_end': {
+        if (!visible(event.message)) break;
+        // A result message ends after its call's message already closed; the
+        // outcome is published on the call's message either way.
+        if (event.message.role === 'toolResult') {
+          this.publishToolResult(resultPayload(event.message), true, emit);
+          break;
+        }
         const current = this.message;
-        if (!current || !visible(event.message)) break;
+        if (!current) break;
         current.nativeMessage = event.message;
         for (const part of parts(event.message, current.messageId, current.attachments, current.sessionMentions)) {
           const index = Number(part.partId.slice(current.messageId.length + 1));
           this.textSuffixes.delete(part.partId);
+          if (part.type === 'tool_call') this.ownToolCall(part.toolCallId, current.messageId, index);
           if (!current.started.has(index) && part.type !== 'attachment') {
             emit({ type: 'part.started', messageId: current.messageId, part });
           }
@@ -725,15 +874,31 @@ export class WorkerProjection {
         break;
       }
       case 'tool_execution_start':
+        this.ownToolCall(event.toolCallId, this.message?.messageId, this.message?.toolCallIndexById.get(event.toolCallId));
         emit({ type: 'tool.started', toolCallId: event.toolCallId, toolName: event.toolName, input: toolInput(JSON.parse(JSON.stringify(event.args))) });
         break;
-      case 'tool_execution_end':
-        emit({ type: 'tool.completed', toolCallId: event.toolCallId, status: event.isError ? 'failed' : 'completed',
-          // SDK tool details contain optional undefined fields; IPC carries their JSON representation.
-          isError: event.isError === true, output: JsonValueSchema.parse(JSON.parse(JSON.stringify(event.result))),
-          error: event.isError ? 'Tool execution failed' : undefined,
+      case 'tool_execution_update': {
+        // A long tool reports what it has produced so far. The live row reads
+        // it from the result part, so a running call shows output instead of
+        // waiting for its end.
+        const payload = resultPayload(event.partialResult);
+        this.publishToolResult({ ...payload, toolCallId: event.toolCallId, toolName: event.toolName }, false, emit);
+        break;
+      }
+      case 'tool_execution_end': {
+        const payload = resultPayload(event.result);
+        const outcome = { ...payload, toolCallId: event.toolCallId, toolName: event.toolName, isError: event.isError === true || payload.isError === true };
+        this.publishToolResult(outcome, true, emit);
+        const part = toolResultPart(`bridge:${event.toolCallId}`, event.toolCallId, event.toolName, outcome);
+        emit({
+          type: 'tool.completed', toolCallId: event.toolCallId, status: outcome.isError ? 'failed' : 'completed',
+          isError: outcome.isError === true,
+          output: part.type === 'tool_result' ? part.output : undefined,
+          ...(part.type === 'tool_result' && part.error !== undefined ? { error: part.error } : {}),
+          ...(part.type === 'tool_result' && part.errorKind !== undefined ? { errorKind: part.errorKind } : {}),
         });
         break;
+      }
       case 'tool_stream_update': {
         const current = this.message;
         if (!current || !event.toolCallId || !event.toolName) break;
@@ -786,8 +951,10 @@ export class WorkerProjection {
 
   private recordTurn(status: 'completed' | 'failed' | 'cancelled', finishedAt: number, error?: string): void {
     if (!this.turn?.open || !this.run) return;
-    this.manager.appendCustomEntry(TURN_TYPE, { turnId: this.turn.turnId, runId: this.run.runId,
-      status, startedAt: this.turn.startedAt, finishedAt, error });
+    this.manager.appendCustomEntry(TURN_TYPE, {
+      turnId: this.turn.turnId, runId: this.run.runId,
+      status, startedAt: this.turn.startedAt, finishedAt, error
+    });
     this.turn.open = false;
   }
 
@@ -803,7 +970,7 @@ export class WorkerProjection {
     const event: ProjectionEvent = settled === 'failed'
       ? { type: 'run.failed', runId: run.runId, finishedAt: timestamp, error: error ?? 'Agent execution failed' }
       : settled === 'cancelled' ? { type: 'run.cancelled', runId: run.runId, finishedAt: timestamp }
-      : { type: 'run.completed', runId: run.runId, finishedAt: timestamp };
+        : { type: 'run.completed', runId: run.runId, finishedAt: timestamp };
     result.push({ timestamp, event });
     run.status = settled;
     run.finishedAt = timestamp;
@@ -822,9 +989,11 @@ export class WorkerProjection {
       const pendingIndex = this.pending.findIndex(item => item.nativeMessage === entry.message);
       if (pendingIndex < 0) continue;
       const live = this.pending.splice(pendingIndex, 1)[0];
-      const reference: Reference = { nativeEntryId: entry.id, messageId: live.messageId, turnId: live.turnId,
-        runId: live.runId, userMessageId: live.userMessageId, virtualUser: live.virtualUser, attachments: live.attachments,
-        ...(live.sessionMentions.length ? { sessionMentions: live.sessionMentions } : {}) };
+      const reference: Reference = {
+        nativeEntryId: entry.id, messageId: live.messageId, turnId: live.turnId,
+        runId: live.runId, userMessageId: live.userMessageId, virtualUser: false, attachments: live.attachments,
+        ...(live.sessionMentions.length ? { sessionMentions: live.sessionMentions } : {})
+      };
       this.manager.appendCustomEntry(REF_TYPE, reference);
     }
     this.entryOffset = end;
@@ -851,10 +1020,11 @@ export class WorkerProjection {
     const turns = seed.turns.slice(start, Math.min(start + (parsed.limit ?? 100), end));
     const selected = new Set(turns.map(turn => turn.turnId));
     const next = start + turns.length;
-    return HistoryPageSchema.parse({ sessionId: this.sessionId, branch: seed.branch, turns,
+    return HistoryPageSchema.parse({
+      sessionId: this.sessionId, branch: seed.branch, turns,
       messages: seed.messages.filter(message => selected.has(message.turnId)),
       nextCursor: next < end ? Buffer.from(JSON.stringify([seed.branch.branchId, seed.branch.branchVersion,
-        seed.branch.leafMessageId, parsed.leafTurnId ?? null, next])).toString('base64url') : null,
+      seed.branch.leafMessageId, parsed.leafTurnId ?? null, next])).toString('base64url') : null,
     });
   }
 
@@ -864,13 +1034,12 @@ export class WorkerProjection {
     const references = new Map<string, Reference>();
     const terminals = new Map<string, z.infer<typeof TerminalSchema>>();
     const turnTerminals = new Map<string, z.infer<typeof TurnTerminalSchema>>();
-    const toolResults = new Map<string, boolean>();
+    const toolResults = new Map<string, ToolResultPayload>();
     for (const entry of entries) if (entry.type === 'message' && entry.message.role === 'toolResult') {
-      toolResults.set(entry.message.toolCallId, entry.message.isError);
+      toolResults.set(entry.message.toolCallId, ToolResultPayloadSchema.parse(entry.message));
     }
     let version = 0n;
     let updatedAt = 0;
-    const virtualTurns = new Set<string>();
     const workerRuns = new Map<string, z.infer<typeof WorkerRunSchema>>();
     const noticesByMessageId = new Map<string, NoticePart[]>();
     const unassociatedNotices: NoticePart[] = [];
@@ -890,13 +1059,15 @@ export class WorkerProjection {
       }
       const timestamp = Date.parse(entry.timestamp);
       if (Number.isFinite(timestamp)) updatedAt = Math.max(updatedAt, timestamp);
-      if ((entry.type === 'message' && visible(entry.message)) || (entry.type === 'custom_message' && entry.customType === 'rewind-report')) version++;
+      // A tool result is a part of the message that made the call, not a
+      // message of its own, so only messages that author a row count.
+      if ((entry.type === 'message' && visible(entry.message) && entry.message.role !== 'toolResult')
+        || (entry.type === 'custom_message' && entry.customType === 'rewind-report')) version++;
       if (entry.type !== 'custom') continue;
       if (entry.customType === BRANCH_TYPE) version++;
       if (entry.customType === REF_TYPE) {
         const reference = ReferenceSchema.parse(entry.data);
         references.set(reference.nativeEntryId, reference);
-        if (reference.virtualUser) virtualTurns.add(reference.turnId);
       } else if (entry.customType === RUN_TYPE) {
         const terminal = TerminalSchema.parse(entry.data);
         terminals.set(terminal.runId, terminal);
@@ -910,12 +1081,16 @@ export class WorkerProjection {
     }
     for (const workerRun of workerRuns.values()) {
       if (workerRun.runId !== this.run?.runId && !terminals.has(workerRun.runId)) {
-        terminals.set(workerRun.runId, { runId: workerRun.runId, status: 'failed', origin: workerRun.origin,
-          finishedAt: workerRun.createdAt, error: 'Agent execution was interrupted' });
+        terminals.set(workerRun.runId, {
+          runId: workerRun.runId, status: 'failed', origin: workerRun.origin,
+          finishedAt: workerRun.createdAt, error: 'Agent execution was interrupted'
+        });
       }
     }
     const turns: Turn[] = [];
     const messages: Message[] = [];
+    /** Where each call lives, so a native result joins that same message. */
+    const toolCallMessages = new Map<string, { message: Message; callPartId: string }>();
     const turnById = new Map<string, Turn>();
     const liveTurnIds = new Set<string>();
     const activeRunId = this.run?.runId;
@@ -945,11 +1120,11 @@ export class WorkerProjection {
         const rawMethod = entry.method;
         const method: 'soft-compacted' | 'snap-compacted' | 'shaken' | 'remote-compacted' | 'handed-off' | 'compacted' =
           rawMethod === 'soft' ? 'soft-compacted'
-          : rawMethod === 'remote' ? 'remote-compacted'
-          : rawMethod === 'shake' ? 'shaken'
-          : rawMethod === 'snapcompact' ? 'snap-compacted'
-          : rawMethod === 'handoff' ? 'handed-off'
-          : 'compacted';
+            : rawMethod === 'remote' ? 'remote-compacted'
+              : rawMethod === 'shake' ? 'shaken'
+                : rawMethod === 'snapcompact' ? 'snap-compacted'
+                  : rawMethod === 'handoff' ? 'handed-off'
+                    : 'compacted';
         const compactionPart: NoticePart = {
           type: 'notice',
           partId: `${entry.id}:compaction`,
@@ -976,6 +1151,15 @@ export class WorkerProjection {
         continue;
       }
       if (entry.type !== 'message' || !visible(entry.message)) continue;
+      if (entry.message.role === 'toolResult') {
+        // The result belongs to the message that made the call, exactly as the
+        // live stream publishes it. A transcript never grows a result row of
+        // its own, so history and stream agree on where it lives.
+        const owner = toolCallMessages.get(entry.message.toolCallId);
+        if (owner) owner.message.parts.push(toolResultPart(`${owner.callPartId}:result`,
+          entry.message.toolCallId, entry.message.toolName, resultPayload(entry.message)));
+        continue;
+      }
       const native = entry.message;
       const reference = references.get(entry.id);
       const messageId = reference?.messageId ?? opaqueNativeId('message', this.sessionId, entry.id);
@@ -990,20 +1174,23 @@ export class WorkerProjection {
         const live = activeRunId !== undefined && (reference?.runId === activeRunId
           || (this.turn?.open === true && entryIndex >= this.entryOffset));
         if (live) liveTurnIds.add(turnId);
-        turn = { turnId, sessionId: this.sessionId, runId, userMessageId, assistantMessageIds: [],
+        turn = {
+          turnId, sessionId: this.sessionId, runId, userMessageId, assistantMessageIds: [],
           status: terminal?.status ?? (live ? 'running' : 'completed'), startedAt: terminal?.startedAt ?? timestamp,
           ...(terminal?.finishedAt !== undefined ? { finishedAt: terminal.finishedAt } : live ? {} : { finishedAt: timestamp }),
           error: terminal?.error,
         };
         turns.push(turn);
         turnById.set(turnId, turn);
-        if (native.role !== 'user') messages.push({ messageId: userMessageId, turnId, sessionId: this.sessionId, role: 'user', createdAt: timestamp, parts: [] });
       }
       current = turn;
       const nativeMetadata = metadata(native);
-      messages.push({ messageId, turnId, sessionId: this.sessionId, role: native.role === 'toolResult' ? 'system' : native.role,
+      const message: Message = {
+        messageId, turnId, sessionId: this.sessionId, role: native.role,
         createdAt: timestamp, parts: parts(native, messageId, reference?.attachments ?? [], reference?.sessionMentions ?? [], toolResults), ...nativeMetadata,
-      });
+      };
+      messages.push(message);
+      for (const part of message.parts) if (part.type === 'tool_call') toolCallMessages.set(part.toolCallId, { message, callPartId: part.partId });
       if (native.role === 'assistant') turn.assistantMessageIds.push(messageId);
       if (!turnTerminals.has(turn.turnId)) {
         if (liveTurnIds.has(turn.turnId) || this.run?.runId === turn.runId) {
@@ -1068,9 +1255,12 @@ export class WorkerProjection {
     }
     for (const turn of turns) if (turn.error !== undefined) turn.error = this.publicText(turn.error);
     const title = this.manager.getSessionName()?.trim();
-    const seed: ProjectionSeed = { createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode, selection: nativeSelection,
-      branch: { branchId: `branch:${this.sessionId}`, branchVersion: (version + BigInt(virtualTurns.size)).toString(), leafMessageId,
-        ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined) }, turns, messages,
+    const seed: ProjectionSeed = {
+      createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode, selection: nativeSelection,
+      branch: {
+        branchId: `branch:${this.sessionId}`, branchVersion: version.toString(), leafMessageId,
+        ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined)
+      }, turns, messages,
     };
     if (title) seed.title = title;
     return seed;

@@ -44,6 +44,13 @@ export const ModelSchema = z.strictObject({
   maxOutputTokens: z.number().int().positive(),
   reasoningEffortSupported: z.boolean(),
   reasoningOptions: z.array(ModelReasoningOptionSchema),
+  /**
+   * The level this model picks when the selection names none: OMP's own
+   * `thinking.defaultLevel`, or `off` on a model it disables by default. Absent
+   * when OMP publishes no per-model default, so a picker can fall back to the
+   * configured global level instead of inventing one.
+   */
+  defaultReasoningEffort: z.string().min(1).optional(),
   variants: z.array(ModelVariantSchema),
   toolsSupported: z.boolean().optional(),
   enabled: z.boolean().optional(),
@@ -67,6 +74,12 @@ export const ModelSchema = z.strictObject({
   }
   if (model.variants.some((variant) => variant.reasoningEffort !== null && !efforts.has(variant.reasoningEffort))) {
     context.addIssue({ code: 'custom', path: ['variants'], message: 'Variant reasoning selections are advertised options' });
+  }
+  if (model.defaultReasoningEffort !== undefined && !model.reasoningEffortSupported) {
+    context.addIssue({ code: 'custom', path: ['defaultReasoningEffort'], message: 'A non-reasoning model has no default reasoning level' });
+  }
+  if (model.defaultReasoningEffort !== undefined && model.defaultReasoningEffort !== 'off' && !efforts.has(model.defaultReasoningEffort)) {
+    context.addIssue({ code: 'custom', path: ['defaultReasoningEffort'], message: 'The default reasoning level is an advertised option' });
   }
 });
 export type Model = z.infer<typeof ModelSchema>;

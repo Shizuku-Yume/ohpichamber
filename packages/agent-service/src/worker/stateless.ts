@@ -52,7 +52,7 @@ export class StatelessWorker {
       join(dirname(runtime.modelsPath), 'provider-account-labels.json'));
     this.oauth = new NativeProviderOAuth(runtime.authStorage, input.workerGeneration);
     this.webSearch = new NativeWebSearch(runtime, input.workspaceId, authorize);
-    this.settingsStore = new NativeSettings(runtime.settings);
+    this.settingsStore = new NativeSettings(runtime.settings, input.agentDirectory);
     this.mcpCredentials = new NativeMcpCredentials(runtime.authStorage, input.workspaceId);
     this.fileResources = new NativeFileResources({
       cwd: input.cwd, agentDirectory: input.agentDirectory,

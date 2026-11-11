@@ -172,6 +172,17 @@ export type OmpSettingId = z.infer<typeof OmpSettingIdSchema>;
 export const OmpSettingTypeSchema = z.enum(['boolean', 'number', 'string', 'enum', 'array', 'record']);
 export type OmpSettingType = z.infer<typeof OmpSettingTypeSchema>;
 
+/**
+ * Where a setting belongs on a GUI surface:
+ * - `gui`: an observable behaviour the app offers its own control for.
+ * - `tui-only`: terminal presentation or terminal interaction.
+ * - `duplicate`: an existing OpenChamber control already owns the concept,
+ *   named by `owner` (that control's settings-item id).
+ * - `advanced`: an internal tuning knob, left to `config.yml`.
+ */
+export const OmpSettingSurfaceSchema = z.enum(['gui', 'tui-only', 'duplicate', 'advanced']);
+export type OmpSettingSurface = z.infer<typeof OmpSettingSurfaceSchema>;
+
 export const OmpSettingOptionSchema = z.strictObject({
   value: z.string(),
   label: z.string().min(1),
@@ -198,12 +209,35 @@ export const OmpSettingSchema = z.strictObject({
   description: z.string().min(1).optional(),
   group: z.string().min(1).optional(),
   tab: z.string().min(1).optional(),
-});
+  /** Which surface renders this setting; see `OmpSettingSurfaceSchema`. */
+  surface: OmpSettingSurfaceSchema,
+  /** The owning settings-item id of a `duplicate`; present exactly then. */
+  owner: z.string().min(1).optional(),
+  /** OMP's `ui.condition` name, when the pinned definition declares one. */
+  condition: z.string().min(1).optional(),
+  /** Whether that condition holds in the snapshot that carried this row. */
+  conditionActive: z.boolean().optional(),
+}).refine(
+  (setting) => setting.surface !== 'duplicate' || setting.owner !== undefined,
+  'A duplicate setting names the settings item that owns it',
+).refine(
+  (setting) => setting.surface === 'duplicate' || setting.owner === undefined,
+  'Only a duplicate setting names an owner',
+).refine(
+  (setting) => setting.condition === undefined || setting.conditionActive !== undefined,
+  'A conditional setting reports whether its condition holds',
+);
 export type OmpSetting = z.infer<typeof OmpSettingSchema>;
 
 export const OmpSettingsStateSchema = z.strictObject({
   workspaceId: EntityIdSchema,
   revision: CounterSchema,
+  /**
+   * Absolute path of the OMP config file these settings write, so the page can
+   * offer the file itself instead of a second renderer for internals. Absent
+   * when the runtime keeps its config in memory.
+   */
+  configPath: z.string().min(1).optional(),
   settings: z.array(OmpSettingSchema),
 }).refine((state) => new Set(state.settings.map((setting) => setting.id)).size === state.settings.length,
   'OMP setting ids are unique');

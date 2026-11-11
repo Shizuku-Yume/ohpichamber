@@ -35,7 +35,9 @@ export class WorkerCatalogs {
     this.models = context.models;
     this.agents = new NativeAgents(context);
     this.skills = new WorkerSkills(context);
-    this.settingsStore = new NativeSettings(context.settings);
+    // OMP keeps its global behaviour config beside the agent directory the
+    // catalog already knows; the page offers that file for what it hides.
+    this.settingsStore = new NativeSettings(context.settings, context.agentDirectory);
     this.credentials = new NativeCredentials(context.authStorage, this.models, context.worker.workspaceId, context.agentDirectoryId,
       join(dirname(context.modelsPath), 'provider-account-labels.json'));
     this.oauth = new NativeProviderOAuth(context.authStorage, context.worker.workerGeneration);

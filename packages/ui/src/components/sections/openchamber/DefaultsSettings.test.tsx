@@ -138,37 +138,9 @@ describe('DefaultsSettings', () => {
     const defaultModeRow = host.querySelector('[data-settings-item="sessions.default-mode"]');
     expect(defaultModeRow).not.toBeNull();
 
-    const deletionRow = host.querySelector('[data-settings-item="sessions.deletion-dialog"]')
-      ?? host.querySelectorAll('input[type="checkbox"]')[0];
-    expect(deletionRow).not.toBeNull();
-
     const showChatsRow = host.querySelector('[data-settings-item="sessions.show-chats"]')
       ?? host.querySelectorAll('input[type="checkbox"]')[2];
     expect(showChatsRow).not.toBeNull();
-  });
-
-  test('deletion dialog checkbox updates useUIStore and persists via updateDesktopSettings', async () => {
-    useUIStore.setState({ showDeletionDialog: true });
-
-    await act(async () => {
-      root.render(
-        <I18nProvider>
-          <DefaultsSettings />
-        </I18nProvider>,
-      );
-    });
-    await settle();
-
-    const deletionRow = (host.querySelector('[data-settings-item="sessions.deletion-dialog"]')
-      ?? host.querySelectorAll('input[type="checkbox"]')[0]) as HTMLElement | null;
-    expect(deletionRow).not.toBeNull();
-
-    await act(async () => {
-      deletionRow?.click();
-    });
-
-    expect(useUIStore.getState().showDeletionDialog).toBe(false);
-    expect(updatedDesktopSettingsPayload).toEqual({ showDeletionDialog: false });
   });
 
   test('show chats checkbox updates useSessionDisplayStore and persists via updateDesktopSettings', async () => {

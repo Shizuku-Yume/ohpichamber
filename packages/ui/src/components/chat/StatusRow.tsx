@@ -15,7 +15,6 @@ const STATUS_ROW_CONTAINER_STYLE = { containerType: "inline-size" as const, cont
 interface StatusRowProps {
   isWorking?: boolean;
   status?: AgentStatus | null;
-  isGenericStatus?: boolean;
   isWaitingForPermission?: boolean;
   abortActive?: boolean;
   retryInfo?: { attempt?: number; next?: number; resetsAt?: number } | null;
@@ -29,7 +28,6 @@ interface StatusRowProps {
 export const StatusRow: React.FC<StatusRowProps> = ({
   isWorking = false,
   status = null,
-  isGenericStatus,
   isWaitingForPermission,
   abortActive,
   retryInfo,
@@ -75,7 +73,6 @@ export const StatusRow: React.FC<StatusRowProps> = ({
               key={currentSessionId ?? "no-session"}
               isWorking={isWorking}
               status={status}
-              isGenericStatus={isGenericStatus}
               isWaitingForPermission={isWaitingForPermission}
               retryInfo={retryInfo}
               agentName={agentName}

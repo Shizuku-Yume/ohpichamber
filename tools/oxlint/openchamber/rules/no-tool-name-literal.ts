@@ -17,14 +17,18 @@ function isTestFile(filename: string): boolean {
     || /\.(?:test|spec)\.(?:js|jsx|ts|tsx)$/.test(filename);
 }
 
-/** Operands that hold a tool name, not a file path, a mode, or an editor kind. */
-const TOOL_OPERAND = /^(?:tool|toolName|toolId|popupToolName|activeToolName)$/;
+/**
+ * Operands that hold a tool name. Deliberately narrow: `name` alone is a
+ * syntax node, a command, a skill or a DOM attribute far more often than a
+ * tool, so only the tool-specific spellings are checked.
+ */
+const TOOL_OPERAND = /^(?:tool|toolName|toolId|popupToolName|activeToolName|nextToolName|previousToolName)$/;
 
 /** Comparisons that read a tool name off a part rather than a local string. */
 const isToolOperand = (node: ESTree.Node): boolean => {
   if (node.type === "Identifier") return TOOL_OPERAND.test(node.name);
   if (node.type !== "MemberExpression" || node.computed) return false;
-  return node.property.type === "Identifier" && (node.property.name === "toolName" || node.property.name === "name");
+  return node.property.type === "Identifier" && node.property.name === "toolName";
 };
 
 /** The literal text of a comparison operand, when it is a plain string. */

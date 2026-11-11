@@ -74,13 +74,19 @@ export function listModelEfforts(
 }
 
 /**
- * The level that actually runs when the selection carries none: the model's own
- * default. A picker shows this level as the current one instead of inventing a
- * "default" row the user cannot inspect.
+ * The level that actually runs when the selection names none, resolved in the
+ * order OMP applies: the selection's own level, then the model's own default,
+ * then the session-wide `defaultThinkingLevel`, and only then `off`. A picker
+ * shows the resolved level as the current one instead of inventing a "default"
+ * row the user cannot inspect.
  */
-export function concreteEffort(model: Model | undefined, explicitLevel: string): string {
+export function concreteEffort(
+  model: Model | undefined,
+  explicitLevel: string,
+  globalLevel?: string,
+): string {
   if (explicitLevel) return explicitLevel;
-  return model?.defaultReasoningEffort ?? 'off';
+  return model?.defaultReasoningEffort ?? globalLevel ?? 'off';
 }
 
 /** Localized name of a level, from the shared effort vocabulary. */

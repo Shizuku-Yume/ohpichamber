@@ -1,7 +1,7 @@
 import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { JsonObjectSchema, formatModelRef } from '@openchamber/agent-contract';
-import type { JsonValue, Model, OmpSettingsState } from '@openchamber/agent-contract';
+import type { JsonValue, Model, OmpSettingsChange, OmpSettingsState } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsSection,
@@ -146,25 +146,13 @@ export const DefaultsSettings: React.FC = () => {
     return typeof value === 'string' ? value : '';
   }, [ompState]);
 
-  const writeThinkingLevel = React.useCallback(async (level: string) => {
-    const currentState = ompStateRef.current;
-    if (!currentState) return;
-    setIsSavingOmp(true);
-    try {
-      const next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
-        expectedRevision: currentState.revision,
-        changes: [{ id: 'defaultThinkingLevel', value: level || null }],
-      });
-      setOmpState(next);
-    } catch (error) {
-      console.warn('Failed to update the default thinking level:', error);
-    } finally {
-      setIsSavingOmp(false);
-    }
-  }, []);
-
+  /**
+   * Write the role record, plus any settings that must land with it. Two writes
+   * from one user action would race the same revision: the first moves it and
+   * the second conflicts, so the value the user picked halfway never persists.
+   */
   const updateRolesOnServer = React.useCallback(
-    async (nextRoles: Record<string, JsonValue>) => {
+    async (nextRoles: Record<string, JsonValue>, also: OmpSettingsChange[] = []) => {
       const currentState = ompStateRef.current;
       if (!currentState) return;
       // The snapshot this write was computed against, so a 409 re-applies only
@@ -176,7 +164,7 @@ export const DefaultsSettings: React.FC = () => {
         try {
           next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
             expectedRevision: currentState.revision,
-            changes: [{ id: 'modelRoles', value: nextRoles }],
+            changes: [{ id: 'modelRoles', value: nextRoles }, ...also],
           });
         } catch (error) {
           if (error instanceof CanonicalApiError && error.problem.status === 409) {
@@ -190,7 +178,9 @@ export const DefaultsSettings: React.FC = () => {
             for (const role of changed.removed) delete merged[role];
             next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
               expectedRevision: latest.revision,
-              changes: [{ id: 'modelRoles', value: merged }],
+              // The accompanying values are this action's own: the newer
+              // snapshot's value for them was never the user's choice.
+              changes: [{ id: 'modelRoles', value: merged }, ...also],
             });
           } else {
             throw error;
@@ -219,13 +209,14 @@ export const DefaultsSettings: React.FC = () => {
   const handleDefaultEffortChange = React.useCallback(
     (level: string) => {
       const nextRoles = { ...rolesMap };
-      nextRoles.default = formatRoleSelector(selectedModelId, level);
-      void updateRolesOnServer(nextRoles);
+      const selector = formatRoleSelector(selectedModelId, level);
+      if (selector) nextRoles.default = selector;
+      else delete nextRoles.default;
       // Keep the session-wide level in step: a model with no configured role
-      // level inherits it, so the one picker sets both.
-      void writeThinkingLevel(level);
+      // level inherits it, so the one picker sets both in one write.
+      void updateRolesOnServer(nextRoles, [{ id: 'defaultThinkingLevel', value: level || null }]);
     },
-    [rolesMap, selectedModelId, updateRolesOnServer, writeThinkingLevel],
+    [rolesMap, selectedModelId, updateRolesOnServer],
   );
 
   /**
@@ -368,6 +359,8 @@ export const DefaultsSettings: React.FC = () => {
           role="default"
           roles={roleSelectors}
           models={models}
+          directory={directory ?? undefined}
+          globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.default-model"
           disabled={isSavingOmp || !ompState}
           label={t('settings.openchamber.defaults.field.defaultModel')}
@@ -470,6 +463,8 @@ export const DefaultsSettings: React.FC = () => {
           role="smol"
           roles={roleSelectors}
           models={models}
+          directory={directory ?? undefined}
+          globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.small-model"
           disabled={!usesOwnSmallModel || isSavingOmp || !ompState}
           label={t('settings.openchamber.defaults.smallModel.title')}
@@ -490,6 +485,8 @@ export const DefaultsSettings: React.FC = () => {
           role="slow"
           roles={roleSelectors}
           models={models}
+          directory={directory ?? undefined}
+          globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.walkthrough-model"
           disabled={!usesOwnWalkthroughModel || isSavingOmp || !ompState}
           label={t('settings.openchamber.defaults.walkthroughModel.title')}

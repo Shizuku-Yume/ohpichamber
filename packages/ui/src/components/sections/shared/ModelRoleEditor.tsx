@@ -21,6 +21,8 @@ interface ModelEffortPickerProps {
   model: Model | undefined;
   /** The level the selector carries explicitly; empty means "the model's own". */
   effort: string;
+  /** The session-wide level an unset model default inherits. */
+  globalLevel?: string;
   disabled?: boolean;
   ariaLabel: string;
   onChange: (level: string) => void;
@@ -32,20 +34,20 @@ interface ModelEffortPickerProps {
  * trigger says is what a send would carry.
  */
 export const ModelEffortPicker: React.FC<ModelEffortPickerProps> = ({
-  model, effort: explicitEffort, disabled, ariaLabel, onChange,
+  model, effort: explicitEffort, globalLevel, disabled, ariaLabel, onChange,
 }) => {
   const { t } = useI18n();
   const efforts = React.useMemo(() => listModelEfforts(model, t), [model, t]);
-  // A level written earlier is what runs even when the catalog no longer lists
-  // it, so it stays visible instead of the select showing some other level.
+  const current = concreteEffort(model, explicitEffort, globalLevel);
+  // The level that runs has to be selectable whether or not the catalog lists
+  // it: a level written earlier, or the session-wide one, still runs.
   const options = React.useMemo(
-    () => (efforts.some((entry) => entry.level === explicitEffort) || !explicitEffort
+    () => (efforts.some((entry) => entry.level === current)
       ? efforts
-      : [...efforts, { level: explicitEffort, label: levelLabel(t, explicitEffort) }]),
-    [efforts, explicitEffort, t],
+      : [...efforts, { level: current, label: levelLabel(t, current) }]),
+    [current, efforts, t],
   );
   if (options.length === 0) return null;
-  const current = concreteEffort(model, explicitEffort);
   const currentLabel = options.find((entry) => entry.level === current)?.label ?? current;
   return (
     <Select value={current} onValueChange={onChange} disabled={disabled}>
@@ -67,6 +69,12 @@ interface ModelRoleEditorProps {
   /** The whole `modelRoles` record, so an unset role can say what it inherits. */
   roles: Readonly<Record<string, string>>;
   models: readonly Model[];
+  /**
+   * The project this editor describes, so its model picker reads that
+   * project's catalog. Omitted means the active project, which is a different
+   * workspace whenever Settings follows its own selector.
+   */
+  directory?: string;
   label: React.ReactNode;
   description?: React.ReactNode;
   info?: React.ReactNode;
@@ -91,7 +99,7 @@ interface ModelRoleEditorProps {
  * the selector grammar and the effort vocabulary live here once.
  */
 export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
-  role, roles, models, label, description, info, settingsItem, effortLabel,
+  role, roles, models, directory, globalLevel, label, description, info, settingsItem, effortLabel,
   disabled, layout = 'row', onChange,
 }) => {
   const { t } = useI18n();
@@ -128,13 +136,14 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
         providerId={parsed?.providerId ?? ''}
         modelId={parsed?.modelId ?? ''}
         onChange={onModelChange}
-        directory={undefined}
+        directory={directory}
         placeholder={t('settings.omp.modelRoles.inheritFallback')}
         className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
       />
       <ModelEffortPicker
         model={model}
         effort={effort}
+        globalLevel={globalLevel}
         disabled={disabled}
         ariaLabel={effortLabel ?? t('settings.omp.modelRoles.effortAria', { role: String(label) })}
         onChange={onEffortChange}

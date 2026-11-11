@@ -34,6 +34,8 @@ interface Claim {
   readonly id: string;
   readonly page: string;
   readonly file: string;
+  /** True when `id` is a static prefix covering every id beneath it. */
+  readonly namespace?: boolean;
 }
 
 function walk(directory: string, files: string[] = []): string[] {
@@ -49,20 +51,40 @@ function walk(directory: string, files: string[] = []): string[] {
   return files;
 }
 
-/** Every literal `settingsItem="..."` anchor in the sections tree. */
+/**
+ * A claim is either one id or a whole namespace: `settingsItem={`omp.modelRoles.${role}`}`
+ * claims every `omp.modelRoles.<role>` id, not just a literal it happens to write.
+ * `owner: null` marks a namespace, whose static prefix is its `id`.
+ */
 function collectClaims(): Claim[] {
   const claims: Claim[] = [];
   for (const file of walk(SECTIONS_ROOT)) {
     const source = readFileSync(file, 'utf8');
-    for (const match of source.matchAll(/settingsItem="([^"{}]+)"/g)) {
-      claims.push({
-        id: match[1],
-        page: relative(SECTIONS_ROOT, file).split('/')[0],
-        file: relative(SECTIONS_ROOT, file),
-      });
+    const page = relative(SECTIONS_ROOT, file).split('/')[0];
+    for (const match of source.matchAll(/settingsItem=(?:"([^"]*)"|`([^`]*)`)/g)) {
+      const literal = match[1];
+      const template = match[2];
+      if (literal !== undefined) {
+        claims.push({ id: literal, page, file: relative(SECTIONS_ROOT, file) });
+        continue;
+      }
+      // `a.${x}.b` covers `a.<x>.b`; the trailing static part still separates
+      // it from the sibling `a.<x>.c` namespace.
+      const prefixHead = template.split('${')[0];
+      const prefixTail = template.includes('}') ? template.slice(template.lastIndexOf('}') + 1) : '';
+      if (prefixHead.length === 0 || prefixTail.length > 0) continue;
+      claims.push({ id: prefixHead, page, file: relative(SECTIONS_ROOT, file), namespace: true });
     }
   }
   return claims;
+}
+
+/** Two claims collide when one id falls inside the other's namespace. */
+function collides(left: Claim, right: Claim): boolean {
+  if (left.namespace === true && right.namespace === true) return left.id === right.id;
+  if (left.namespace === true) return right.id.startsWith(left.id);
+  if (right.namespace === true) return left.id.startsWith(right.id);
+  return left.id === right.id;
 }
 
 describe('settings item ownership', () => {
@@ -70,7 +92,7 @@ describe('settings item ownership', () => {
     const claims = collectClaims();
     const offenders: string[] = [];
     for (const claim of claims) {
-      const others = claims.filter((other) => other.id === claim.id && other.file !== claim.file);
+      const others = claims.filter((other) => other !== claim && other.file !== claim.file && collides(claim, other));
       if (others.length === 0) continue;
       const pages = new Set([claim.page, ...others.map((other) => other.page)]);
       // Same page: allowed only when the pair is named here with its reason,

@@ -121,6 +121,11 @@ export const GitSettings: React.FC = () => {
   () => Object.fromEntries(Object.entries(roleRecord).filter(([, selector]) => selector.length > 0)),
   [roleRecord],
  );
+ /** What the commit role runs at when its selector names no level of its own. */
+ const globalThinkingLevel = React.useMemo(() => {
+  const value = ompState?.settings.find((setting) => setting.id === 'defaultThinkingLevel')?.value;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+ }, [ompState]);
 
  const handleGitmojiChange = React.useCallback(async (enabled: boolean) => {
   setSettingsGitmojiEnabled(enabled);
@@ -202,6 +207,8 @@ export const GitSettings: React.FC = () => {
      role={COMMIT_ROLE}
      roles={roleSelectors}
      models={models}
+     directory={settingsDirectory ?? undefined}
+     globalLevel={globalThinkingLevel}
      settingsItem="git.commit-model"
      disabled={isSavingCommitModel || !ompState}
      label={t('settings.omp.modelRoles.role.commit.label')}

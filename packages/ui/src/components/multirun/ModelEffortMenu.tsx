@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { listModelVariantIds } from '@/lib/modelVariants';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { levelLabel } from '@/components/sections/shared/modelRoleSelectors';
 
 /**
  * Thinking effort (model variant) picker for one model; renders nothing for
@@ -24,16 +25,21 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
   tooltip?: string;
 }): React.ReactNode {
   const { t } = useI18n();
-  const { variants, defaultLevel } = useConfigStore(React.useCallback((state) => {
+  const { variants, modelDefaultLevel, globalDefaultLevel } = useConfigStore(React.useCallback((state) => {
     const model = state.providers.find((provider) => provider.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
     return {
       variants: listModelVariantIds(model?.variants).join('\n'),
-      // The label names the level the model runs at, not a synthetic Default.
-      defaultLevel: model?.defaultReasoningEffort ?? model?.variants?.[0]?.reasoningEffort ?? undefined,
+      // Only published defaults name the level an unset selection runs at. A
+      // variant's position in the list is ordering, not a default.
+      modelDefaultLevel: model?.defaultReasoningEffort,
+      globalDefaultLevel: state.settingsDefaultReasoningEffort,
     };
   }, [modelId, providerId]));
   if (!variants) return null;
-  const defaultLabel = defaultLevel || t('multirun.modelMultiSelect.variant.default');
+  const defaultLevel = modelDefaultLevel ?? globalDefaultLevel;
+  const defaultLabel = defaultLevel
+    ? levelLabel(t, defaultLevel)
+    : t('multirun.modelMultiSelect.variant.default');
   const label = variant ?? defaultLabel;
   const trigger = (
       <DropdownMenuTrigger asChild>

@@ -408,6 +408,12 @@ export const OmpSettingsPage: React.FC = () => {
     [form.modelRoles]
   );
 
+  /** What a role with no level of its own runs at, per OMP's session default. */
+  const globalThinkingLevel = React.useMemo(() => {
+    const value = state?.settings.find((setting) => setting.id === 'defaultThinkingLevel')?.value;
+    return typeof value === 'string' && value.length > 0 ? value : undefined;
+  }, [state]);
+
   const onRoleChange = React.useCallback((role: string, selector: string) => {
     setForm((current) => {
       const nextRoles: Record<string, string> = { ...readRoleSelectors(current.modelRoles ?? null) };
@@ -469,6 +475,8 @@ export const OmpSettingsPage: React.FC = () => {
                   role={role}
                   roles={roles}
                   models={models}
+                  directory={directory ?? undefined}
+                  globalLevel={globalThinkingLevel}
                   layout="stacked"
                   disabled={loading}
                   label={t(keys.label)}

@@ -15,7 +15,7 @@ import {
 import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
-import { modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
+import { formatModelRef, modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const MAX_WAIT_TIMEOUT_SECONDS = 86_400;
@@ -483,7 +483,7 @@ export const createOpenChamberControlService = (dependencies) => {
   return {
    workspaceId,
    models: page.map((model) => ({
-    id: modelRefKey(model.provider, model.modelId),
+    id: formatModelRef({ provider: model.provider, modelId: model.modelId }),
     name: model.name,
     provider: providerNames.get(model.provider) ?? model.provider,
     preference: PREFERENCE_BY_RANK[rank.get(modelRefKey({ providerId: model.provider, modelId: model.modelId }))],

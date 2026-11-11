@@ -1,7 +1,7 @@
 import React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import type { Part, Session, ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
-import { isQuestionTool, normalizeToolName, parseNativeReadPath } from '@/lib/toolHelpers';
+import { isQuestionTool, isReadTool, normalizeToolName, parseNativeReadPath } from '@/lib/toolHelpers';
 import { ReadToolGroup, type ReadToolGroupItem } from './parts/ReadToolGroup';
 import { normalizeWorkspaceToolPath } from './parts/toolDiffUtils';
 
@@ -2037,7 +2037,7 @@ const AssistantMessageBody = React.memo(({
                     continue;
                 }
                 // Group consecutive read tool calls into ReadToolGroup
-                if (normalizeToolName(toolName) === 'read') {
+                if (isReadTool(toolName)) {
                     const readItemsByCallId = new Map<string, ReadToolGroupItem>();
                     let j = i;
                     while (j < visibleParts.length) {

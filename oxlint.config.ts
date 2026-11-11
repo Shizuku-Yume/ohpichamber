@@ -29,6 +29,9 @@ export default defineConfig({
     // template joins outside packages/agent-contract/src/modelSelector.ts. It
     // sits at the top level because the Host's parsers are `.js`.
     "openchamber/no-model-ref-splitting": "error",
+    // One registry owns tool names and their presentation; this finds literal
+    // `toolName === "read"` comparisons outside it.
+    "openchamber/no-tool-name-literal": "error",
   },
   overrides: [
     {

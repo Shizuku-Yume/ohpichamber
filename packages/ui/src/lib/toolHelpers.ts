@@ -1,48 +1,52 @@
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 
-/** OMP's builtin tool registry; extension and MCP names remain opaque. */
-export const NATIVE_TOOLS = {
- read: 'read', bash: 'bash', edit: 'edit', ast_grep: 'ast_grep', ast_edit: 'ast_edit', ask: 'ask',
- debug: 'debug', ida: 'ida', eval: 'eval', github: 'github', glob: 'glob', grep: 'grep', find: 'find', lsp: 'lsp',
- checkpoint: 'checkpoint', rewind: 'rewind', context_notes: 'context_notes', new_context: 'new_context',
- security_scan: 'security_scan', task: 'task', wait: 'wait', todo: 'todo', web_search: 'web_search', write: 'write',
- memory_edit: 'memory_edit', retain: 'retain', recall: 'recall', reflect: 'reflect', learn: 'learn', manage_skill: 'manage_skill',
-} as const;
-
-export const NATIVE_TOOL_NAMES = Object.values(NATIVE_TOOLS);
+import {
+ isExplorationTool as registryExploration,
+ isFileChangeTool as registryFileChange,
+ isQuestionTool as registryQuestion,
+ isShellTool as registryShell,
+ isStaticTool as registryStaticTool,
+ isSubagentTool as registrySubagent,
+ isTodoTool as registryTodo,
+ isWebTool as registryWeb,
+ isEditTool as registryEdit,
+ isWriteTool as registryWrite,
+ isFindTool,
+ isGrepTool,
+ isGlobTool,
+ isReadTool as registryRead,
+ isWebSearchTool,
+ isAstEditTool as registryAstEdit,
+ askAnswers,
+ toolBaseName,
+ toolPresentation,
+} from '@/lib/toolPresentation';
 
 export type ToolName = string | undefined;
-export function normalizeToolName(toolName: ToolName): string {
- return toolName?.trim() ?? '';
-}
 
-export const isShellTool = (name: ToolName): boolean => name === NATIVE_TOOLS.bash;
-export const isSubagentTool = (name: ToolName): boolean => name === NATIVE_TOOLS.task;
-export const isQuestionTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ask;
-export const isEditTool = (name: ToolName): boolean => name === NATIVE_TOOLS.edit;
-export const isWriteTool = (name: ToolName): boolean => name === NATIVE_TOOLS.write;
-const isAstEditTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ast_edit;
-const isAstGrepTool = (name: ToolName): boolean => name === NATIVE_TOOLS.ast_grep;
-const isEvalTool = (name: ToolName): boolean => name === NATIVE_TOOLS.eval;
-const isLspTool = (name: ToolName): boolean => name === NATIVE_TOOLS.lsp;
-export const isFileChangeTool = (name: ToolName): boolean => isEditTool(name) || isWriteTool(name) || isAstEditTool(name);
-export const isExplorationTool = (name: ToolName): boolean => name === NATIVE_TOOLS.read || name === NATIVE_TOOLS.grep || name === NATIVE_TOOLS.glob || name === NATIVE_TOOLS.find;
-export const isWebTool = (name: ToolName): boolean => name === NATIVE_TOOLS.web_search || name === 'fetch';
+export function normalizeToolName(toolName: ToolName): string { return toolBaseName(toolName); }
 
-export function isReplyWrite(toolName: ToolName, input: unknown): boolean {
- if (toolName !== NATIVE_TOOLS.write && normalizeToolName(toolName) !== 'write') return false;
- if (!input || typeof input !== 'object') return false;
- const path = 'path' in input && typeof input.path === 'string'
-  ? input.path
-  : 'file_path' in input && typeof input.file_path === 'string'
-   ? input.file_path
-   : undefined;
- return path === 'out://' || (typeof path === 'string' && path.startsWith('out://'));
-}
-
-export function toolInputPath(input: ToolCallPart['input'] | undefined): string | null {
- return typeof input?.path === 'string' && input.path.trim() ? input.path : null;
-}
+export const isShellTool = registryShell;
+export const isFileChangeTool = registryFileChange;
+export const isSubagentTool = registrySubagent;
+export const isQuestionTool = registryQuestion;
+export const isExplorationTool = registryExploration;
+export const isWebTool = registryWeb;
+export const isStaticTool = registryStaticTool;
+export const isTodoTool = registryTodo;
+export const isEditTool = registryEdit;
+export const isAstEditTool = registryAstEdit;
+export const isReadTool = registryRead;
+export const isWriteTool = registryWrite;
+export {
+ askAnswers,
+ isFindTool,
+ isGlobTool,
+ isGrepTool,
+ isWebSearchTool,
+ toolBaseName,
+ toolPresentation,
+};
 
 /** Inline native selectors are presentation instructions, never editor paths. */
 export function parseNativeReadPath(rawPath: string): { path: string; line?: number } {
@@ -53,6 +57,15 @@ export function parseNativeReadPath(rawPath: string): { path: string; line?: num
  return { path: rawPath.slice(0, selectorIndex), ...(firstLine ? { line: Number(firstLine[1]) } : {}) };
 }
 
+const inputPathOf = (input: ToolCallPart['input'] | undefined): string | null => {
+ const path = input?.path;
+ if (typeof path === 'string' && path.trim()) return path;
+ const filePath = input?.file_path;
+ return typeof filePath === 'string' && filePath.trim() ? filePath : null;
+};
+
+export const toolInputPath = inputPathOf;
+
 export function toolInputPaths(call: ToolCallPart): string[] {
  const path = toolInputPath(call.input);
  const paths = path ? [path] : [];
@@ -62,8 +75,8 @@ export function toolInputPaths(call: ToolCallPart): string[] {
   }
  } else if (isAstEditTool(call.toolName)) {
   if (Array.isArray(call.input.paths)) {
-   for (const p of call.input.paths) {
-    if (typeof p === 'string' && !paths.includes(p)) paths.push(p);
+   for (const candidate of call.input.paths) {
+    if (typeof candidate === 'string' && !paths.includes(candidate)) paths.push(candidate);
    }
   } else if (typeof call.input.path === 'string' && !paths.includes(call.input.path)) {
    paths.push(call.input.path);
@@ -74,76 +87,16 @@ export function toolInputPaths(call: ToolCallPart): string[] {
  return paths;
 }
 
-export interface ToolMetadata {
- displayName: string;
- outputLanguage: string;
- category: 'file' | 'search' | 'code' | 'system' | 'ai' | 'web';
-}
-
-export function getToolMetadata(toolName: string): ToolMetadata {
- const category = isFileChangeTool(toolName) || toolName === NATIVE_TOOLS.read ? 'file'
-  : isSubagentTool(toolName) || isQuestionTool(toolName) ? 'ai'
-   : isWebTool(toolName) ? 'web'
-    : isExplorationTool(toolName) || isAstGrepTool(toolName) ? 'search'
-     : isEvalTool(toolName) || isLspTool(toolName) ? 'code' : 'system';
- const outputLanguage = isEditTool(toolName) || isAstEditTool(toolName) ? 'diff'
-  : toolName === NATIVE_TOOLS.read || isWriteTool(toolName) ? 'auto' : 'text';
- return { displayName: toolName || 'tool', category, outputLanguage };
-}
-
-export type ToolDescription =
- | { kind: 'path'; value: string }
- | { kind: 'text'; value: string }
- | { kind: 'files'; count: number; files: string[] }
- | { kind: 'questions'; count: number };
-
-/** A result may borrow input only from its exact native call identity. */
-export function toolDescription(part: ToolCallPart | ToolResultPart, pairedCall?: ToolCallPart): ToolDescription | null {
- const call = part.type === 'tool_call' ? part
-  : pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
- if (!call) return part.type === 'tool_result' && part.error ? { kind: 'text', value: part.error } : null;
- const input = call.input;
- if (isAstEditTool(call.toolName)) {
-  const ops = Array.isArray(input.ops) ? input.ops : [];
-  const firstOp = ops[0];
-  const pattern = firstOp && typeof firstOp === 'object' && 'pat' in firstOp && typeof firstOp.pat === 'string' ? firstOp.pat : undefined;
-  const replacement = firstOp && typeof firstOp === 'object' && 'out' in firstOp && typeof firstOp.out === 'string' ? firstOp.out : undefined;
-  if (pattern !== undefined && replacement !== undefined) {
-   const summary = `${pattern} → ${replacement}`.split('\n')[0]?.slice(0, 160) ?? '';
-   return { kind: 'text', value: summary };
-  }
-  const paths = toolInputPaths(call);
-  if (paths.length > 1) return { kind: 'files', count: paths.length, files: paths };
-  if (paths[0]) return { kind: 'path', value: paths[0] };
- }
- if (isFileChangeTool(call.toolName) || call.toolName === NATIVE_TOOLS.read) {
-  const paths = toolInputPaths(call);
-  return paths.length > 1 ? { kind: 'files', count: paths.length, files: paths }
-   : paths[0] ? { kind: 'path', value: paths[0] } : null;
- }
- if (isQuestionTool(call.toolName) && Array.isArray(call.input.questions) && call.input.questions.length) {
-  return { kind: 'questions', count: call.input.questions.length };
- }
- const value = isShellTool(call.toolName) ? input.command
-  : call.toolName === NATIVE_TOOLS.grep ? input.pattern
-   : call.toolName === NATIVE_TOOLS.glob ? input.path
-    : call.toolName === NATIVE_TOOLS.find ? input.query
-     : call.toolName === NATIVE_TOOLS.web_search ? input.query
-      : call.toolName === 'fetch' ? input.url
-       : call.toolName === NATIVE_TOOLS.ast_grep ? (typeof input.pat === 'string' ? input.pat : typeof input.pattern === 'string' ? input.pattern : undefined)
-        : call.toolName === NATIVE_TOOLS.eval ? (typeof input.title === 'string' && input.title ? input.title : typeof input.code === 'string' ? `${typeof input.language === 'string' && input.language ? `${input.language}: ` : ''}${input.code}` : undefined)
-         : call.toolName === NATIVE_TOOLS.lsp ? (typeof input.action === 'string' ? `${input.action}${typeof input.file === 'string' && input.file ? ` ${input.file}` : typeof input.symbol === 'string' && input.symbol ? ` ${input.symbol}` : ''}` : undefined)
-          : call.toolName === NATIVE_TOOLS.checkpoint ? (typeof input.goal === 'string' ? `checkpoint: ${input.goal}` : 'checkpoint')
-           : call.toolName === NATIVE_TOOLS.rewind ? (typeof input.report === 'string' ? `rewind: ${input.report}` : 'rewind')
-            : isSubagentTool(call.toolName) ? input.name ?? input.task : undefined;
- return typeof value === 'string' && value ? { kind: 'text', value: value.split('\n')[0].slice(0, 160) } : null;
+/** The row's one-line description of a call, from the registry. */
+export function toolCallDescription(input: ToolCallPart['input'], toolName: ToolName): string | null {
+ return toolPresentation(toolName).describeCall(input);
 }
 
 export function detectToolOutputLanguage(toolName: string, _output: string, input?: ToolCallPart['input']): string {
- const language = getToolMetadata(toolName).outputLanguage;
+ const language = toolPresentation(toolName).outputLanguage;
  if (language !== 'auto') return language;
  const path = toolInputPath(input);
- if (path) return getLanguageFromExtension(toolName === NATIVE_TOOLS.read ? parseNativeReadPath(path).path : path) ?? 'text';
+ if (path) return getLanguageFromExtension(isReadTool(toolName) ? parseNativeReadPath(path).path : path) ?? 'text';
  return 'text';
 }
 
@@ -539,8 +492,6 @@ export function getLanguageFromExtension(filePath: string): string | null {
   'diff': 'diff',
   'patch': 'diff',
 
-
-
   // Prisma
   'prisma': 'prisma',
 
@@ -553,8 +504,6 @@ export function getLanguageFromExtension(filePath: string): string | null {
   // WASM
   'wat': 'wasm',
   'wast': 'wasm',
-
-
 
   // GLSL/Shaders
   'glsl': 'glsl',
@@ -762,3 +711,5 @@ export function formatToolInput(input: ToolCallPart['input'], toolName: string):
  // Keep complete structured native edit/task/custom-tool inputs visible.
  return JSON.stringify(input, null, 2);
 }
+
+export type { ToolCallPart, ToolResultPart };

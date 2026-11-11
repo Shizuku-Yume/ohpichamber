@@ -14,21 +14,26 @@ import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { BlockLine } from './BlockLine';
 import { FormMarkdown } from '../../FormMarkdown';
 import {
+    askAnswers,
+    isAstEditTool,
     detectToolOutputLanguage,
     formatToolInput,
-    getToolMetadata,
     isEditTool,
+    isFindTool,
     isQuestionTool,
+    isReadTool,
     isShellTool,
     isSubagentTool,
+    isTodoTool,
+    isWebSearchTool,
     isWriteTool,
-    isReplyWrite,
-    NATIVE_TOOLS,
+    toolInputPaths,
     normalizeToolName,
     parseNativeReadPath,
-    toolDescription,
-    type ToolDescription,
+    toolInputPath,
+    toolPresentation,
 } from '@/lib/toolHelpers';
+import { describeToolCall } from '@/lib/toolPresentation';
 import { TodoCard } from './TodoCard';
 import { extractTodoPhases } from '../../todoData';
 import { toolDisplayStyles } from '@/lib/typography';
@@ -631,39 +636,6 @@ const ToolScrollableTextOutput: React.FC<{
     );
 };
 
-const parseQuestionOutput = (output: string): Array<{ question: string; answer: string }> | null => {
-    const match = output.match(/^User has answered your questions:\s*(.+?)\.\s*You can now/s);
-    if (!match) return null;
-
-    const pairs: Array<{ question: string; answer: string }> = [];
-    const pairRegex = /"([^"]+)"="([^"]*(?:[^"\\]|\\.)*)"/g;
-    let pairMatch;
-    while ((pairMatch = pairRegex.exec(match[1])) !== null) {
-        pairs.push({ question: pairMatch[1], answer: pairMatch[2] });
-    }
-    return pairs.length > 0 ? pairs : null;
-};
-
-type DescriptionTranslate = (
-    key: 'chat.toolPart.questionsAsked' | 'chat.toolPart.filesCount',
-    params: { count: number },
-) => string;
-
-/** Localized text for a tool description; paths are made relative to the project. */
-const describeTool = (described: ToolDescription | null, currentDirectory: string, t: DescriptionTranslate): string => {
-    if (!described) return '';
-    switch (described.kind) {
-        case 'path':
-            return getRelativeFilePath(described.value, currentDirectory);
-        case 'text':
-            return described.value;
-        case 'questions':
-            return t('chat.toolPart.questionsAsked', { count: described.count });
-        case 'files':
-            return t('chat.toolPart.filesCount', { count: described.count });
-    }
-};
-
 interface ToolExpandedContentProps {
     part: ToolCallPart | ToolResultPart;
     call: ToolCallPart | undefined;
@@ -725,7 +697,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const hasInputText = !hideToolInputPreview && !writeContent && inputTextContent.trim().length > 0;
 
     const webSearchOutput = React.useMemo(
-        () => (toolName === 'web_search' && part.type === 'tool_result' && !part.isError && hasStringOutput
+        () => (isWebSearchTool(toolName) && part.type === 'tool_result' && !part.isError && hasStringOutput
             ? renderWebSearchOutput(part.output, { unstyled: true })
             : null),
         [hasStringOutput, part, toolName],
@@ -780,9 +752,9 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     };
 
     const renderQuestionContent = () => {
-        if (part.type === 'tool_result' && !part.isError && hasStringOutput) {
-            const parsedQA = parseQuestionOutput(outputString);
-            if (parsedQA && parsedQA.length > 0) {
+        if (part.type === 'tool_result' && !part.isError) {
+            const parsedQA = askAnswers(resultContent.details);
+            if (parsedQA.length > 0) {
                 return renderScrollableBlock(
                     <div className="space-y-2">
                         {parsedQA.map((qa, index) => (
@@ -914,7 +886,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (webSearchOutput) {
             return renderScrollableBlock(webSearchOutput, { className: 'p-1', maxHeightClass: 'max-h-[50vh]' });
         }
-        if (toolName === NATIVE_TOOLS.find && hasStringOutput && outputString.trim()) {
+        if (isFindTool(toolName) && hasStringOutput && outputString.trim()) {
             const lines = outputString.split('\n');
             const findOutput = (
                 <div className="space-y-1 font-mono text-xs">
@@ -1214,7 +1186,8 @@ const ToolPart: React.FC<ToolPartProps> = ({
         : pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
     const result = part.type === 'tool_result' ? part : undefined;
     const presentation = useGuestToolPresentation(part.toolName);
-    const displayName = getToolMetadata(toolName).displayName;
+    const toolRow = toolPresentation(toolName);
+    const displayName = toolRow.label;
 
     const resultContent = React.useMemo(() => nativeToolResultContent(result), [result]);
     const fileChanges = React.useMemo(() => getToolFileChanges(part, call), [part, call]);
@@ -1225,15 +1198,26 @@ const ToolPart: React.FC<ToolPartProps> = ({
         metadata: undefined,
     }) : null, [call?.input, presentation, result, resultContent.text]);
 
-    const described = React.useMemo(() => toolDescription(part, call), [call, part]);
-    const describedPath = described?.kind === 'path'
-        ? normalizeWorkspaceToolPath(toolName === NATIVE_TOOLS.read ? parseNativeReadPath(described.value).path : described.value)
-        : null;
-    const descriptionPath = describedPath ? getRelativeFilePath(describedPath, currentDirectory) : null;
-    const builtInDescription = described?.kind === 'path'
-        ? descriptionPath ?? ''
-        : describeTool(described, currentDirectory, t);
-    const description = guestHeader?.subtitle ?? builtInDescription;
+    // The registry knows how every OMP tool names its target. A call with
+    // several files, or several questions, describes the count instead.
+    const described = React.useMemo<{ text: string; path: string | null }>(() => {
+        if (!call) return { text: '', path: null };
+        const paths = toolInputPaths(call);
+        if (paths.length > 1) return { text: t('chat.toolPart.filesCount', { count: paths.length }), path: null };
+        const filePath = isReadTool(toolName) || isEditTool(toolName) || isWriteTool(toolName) || isAstEditTool(toolName)
+            ? toolInputPath(call.input)
+            : null;
+        if (filePath) {
+            const target = normalizeWorkspaceToolPath(isReadTool(toolName) ? parseNativeReadPath(filePath).path : filePath);
+            const display = getRelativeFilePath(target, currentDirectory);
+            return { text: display || describeToolCall(call.input, toolName) || '', path: display ? target : null };
+        }
+        if (isQuestionTool(toolName) && Array.isArray(call.input.questions) && call.input.questions.length > 1) {
+            return { text: t('chat.toolPart.questionsAsked', { count: call.input.questions.length }), path: null };
+        }
+        return { text: describeToolCall(call.input, toolName) ?? '', path: null };
+    }, [call, currentDirectory, t, toolName]);
+    const description = guestHeader?.subtitle ?? described.text;
     const title = guestHeader?.title ?? displayName;
 
     const callStatus = call?.status;
@@ -1320,27 +1304,6 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const popupLanguage = isShellTool(toolName) ? 'bash'
         : detectToolOutputLanguage(toolName, popupContent, call?.input);
 
-    const toolCallInput = call?.input;
-    if (isReplyWrite(toolName, toolCallInput)) {
-        const replyContent = typeof toolCallInput?.content === 'string'
-            ? toolCallInput.content
-            : '';
-        return (
-            <div className="group/reply-write relative break-words my-1" data-tool-part-id={part.partId}>
-                <SimpleMarkdownRenderer
-                    content={replyContent}
-                    variant="assistant"
-                    onShowPopup={onShowPopup}
-                />
-                {part.type === 'tool_result' && part.isError ? (
-                    <div className="mt-1 px-3 py-1.5 rounded-lg border border-status-error/30 bg-status-error/10 text-status-error text-xs">
-                        {part.error || t('chat.toolPart.error')}
-                    </div>
-                ) : null}
-            </div>
-        );
-    }
-
     return (
         <ToolPartErrorBoundary
             displayName={title}
@@ -1421,8 +1384,8 @@ const ToolPart: React.FC<ToolPartProps> = ({
                     <div className={cn('flex items-center gap-1 flex-1 min-w-0', TOOL_ROW_DESCRIPTION_CLASS)} style={{ color: 'var(--tools-description)' }}>
                         <div className="flex items-center gap-1 flex-1 min-w-0">
                             {description ? (
-                                descriptionPath && description === descriptionPath ? (
-                                    renderAnimatedPathWithIcon(descriptionPath, animateTailText, false, showToolFileIcons)
+                                described.path ? (
+                                    renderAnimatedPathWithIcon(description, animateTailText, false, showToolFileIcons)
                                 ) : (
                                     <Text
                                         variant={animateTailText ? 'generate-effect' : 'static'}
@@ -1455,7 +1418,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 >
                     {shouldRenderExpandedContent ? (
                         <div className="relative ml-2 pl-3">
-                            {toolName === NATIVE_TOOLS.todo && result && !result.isError ? (() => {
+                            {isTodoTool(toolName) && result && !result.isError ? (() => {
                                 const phases = extractTodoPhases(resultContent.details);
                                 return phases ? <TodoCard phases={phases} /> : null;
                             })() : null}

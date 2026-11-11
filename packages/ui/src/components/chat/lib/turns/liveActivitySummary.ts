@@ -1,7 +1,7 @@
 import type { ToolCallPart } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { normalizeFilePath, toAbsoluteFilePath } from '@/lib/path-utils';
-import { isExplorationTool, isShellTool, isSubagentTool, isWebTool } from '@/lib/toolHelpers';
+import { isEditTool, isExplorationTool, isShellTool, isSubagentTool, isWebTool } from '@/lib/toolHelpers';
 import { getToolFileChanges } from '../../message/parts/toolDiffUtils';
 import type { ChatMessageEntry } from './types';
 
@@ -81,8 +81,8 @@ export function summarizeLiveActivity(messages: readonly ChatMessageEntry[]): Li
                 }
             }
             const changes = getToolFileChanges(part, calls.get(callKey));
-            if (part.toolName === 'edit' && changes.length === 0) summary.hasCompleteDiff = false;
-            if (part.toolName === 'edit' && !editBatchSchema.safeParse(part.output).success) summary.hasCompleteDiff = false;
+            if (isEditTool(part.toolName) && changes.length === 0) summary.hasCompleteDiff = false;
+            if (isEditTool(part.toolName) && !editBatchSchema.safeParse(part.output).success) summary.hasCompleteDiff = false;
             for (const change of changes) {
                 const complete = change.additions !== undefined && change.deletions !== undefined;
                 if (complete && change.additions === 0 && change.deletions === 0 && !change.sourcePath && change.op !== 'create' && change.op !== 'delete') continue;

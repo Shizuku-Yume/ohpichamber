@@ -1,37 +1,18 @@
 import { describe, expect, test } from 'bun:test';
-import { ToolCallPartSchema, ToolResultPartSchema } from '@openchamber/agent-contract';
+import { ToolCallPartSchema } from '@openchamber/agent-contract';
 import {
-  detectToolOutputLanguage, formatToolInput, getToolMetadata, NATIVE_TOOL_NAMES,
+  detectToolOutputLanguage, formatToolInput,
   isFileChangeTool, isQuestionTool, isShellTool, isSubagentTool, normalizeToolName,
-  parseNativeReadPath, toolDescription, toolInputPath, toolInputPaths,
+  parseNativeReadPath, toolInputPath, toolInputPaths,
 } from './toolHelpers';
+import { describeToolCall } from './toolPresentation';
 
 const call = ToolCallPartSchema.parse({
   type: 'tool_call', partId: 'call-part', toolCallId: 'call-1', toolName: 'bash',
   input: { command: 'git status\necho done' }, status: 'completed',
 });
-const result = ToolResultPartSchema.parse({
-  type: 'tool_result', partId: 'result-part', toolCallId: 'call-1', toolName: 'bash',
-  output: { content: [{ type: 'text', text: 'done' }], details: { exitCode: 0 } }, isError: false,
-});
 
 describe('native tool helpers', () => {
-  test('classifies every builtin in the pinned OMP registry and keeps extension names intact', () => {
-    expect(NATIVE_TOOL_NAMES).toEqual([
-      'read', 'bash', 'edit', 'ast_grep', 'ast_edit', 'ask', 'debug', 'ida', 'eval', 'github', 'glob', 'grep',
-      'find', 'lsp', 'checkpoint', 'rewind', 'context_notes', 'new_context', 'security_scan', 'task', 'wait',
-      'todo', 'web_search', 'write', 'memory_edit', 'retain', 'recall', 'reflect', 'learn', 'manage_skill',
-    ]);
-    for (const name of NATIVE_TOOL_NAMES) {
-      expect(getToolMetadata(name).displayName).toBe(name);
-      expect(['file', 'search', 'code', 'system', 'ai', 'web'].includes(getToolMetadata(name).category)).toBe(true);
-    }
-    expect(getToolMetadata('mcp__server_custom').displayName).toBe('mcp__server_custom');
-    expect(NATIVE_TOOL_NAMES).not.toContain('shell');
-    expect(NATIVE_TOOL_NAMES).not.toContain('subagent');
-    expect(NATIVE_TOOL_NAMES).not.toContain('question');
-    expect(NATIVE_TOOL_NAMES).not.toContain('codesearch');
-  });
   test('recognizes actual native identities without legacy aliases or namespace collisions', () => {
     expect(isShellTool('bash')).toBe(true);
     expect(isShellTool('shell')).toBe(false);
@@ -41,21 +22,17 @@ describe('native tool helpers', () => {
     expect(isQuestionTool('ask')).toBe(true);
     expect(isFileChangeTool('patch')).toBe(false);
     expect(normalizeToolName('mcp.bash:2')).toBe('mcp.bash:2');
-    expect(getToolMetadata('mcp.my_tool').displayName).toBe('mcp.my_tool');
+    expect(normalizeToolName('runtime.read:2')).toBe('read');
   });
 
-  test('pairs separate result and call identities without borrowing unrelated input', () => {
-    expect(toolDescription(result, call)).toEqual({ kind: 'text', value: 'git status' });
-    expect(toolDescription(result)).toBeNull();
-    expect(toolDescription(result, { ...call, toolCallId: 'other' })).toBeNull();
-    expect(toolDescription(result, { ...call, toolName: 'edit' })).toBeNull();
-    expect(toolDescription({ ...result, isError: true, error: 'permission denied' })).toEqual({ kind: 'text', value: 'permission denied' });
+  test('describes a call from its own input, never a neighbouring result', () => {
+    expect(describeToolCall(call.input, call.toolName)).toBe('git status');
+    expect(describeToolCall({}, 'mcp__server_custom')).toBeNull();
   });
 
   test('keeps native structured input and uses only native paths', () => {
     const edit = ToolCallPartSchema.parse({ ...call, toolName: 'edit', input: { path: 'src/main.ts', edits: [{ op: 'update', diff: '@@\n-a\n+b' }] } });
     expect(toolInputPaths(edit)).toEqual(['src/main.ts']);
-    expect(toolDescription(edit)).toEqual({ kind: 'path', value: 'src/main.ts' });
     expect(toolInputPath({ filePath: 'legacy.ts' })).toBeNull();
     expect(JSON.parse(formatToolInput(edit.input, edit.toolName))).toEqual(edit.input);
     expect(formatToolInput(call.input, 'bash')).toBe('git status\necho done');
@@ -63,12 +40,11 @@ describe('native tool helpers', () => {
     expect(detectToolOutputLanguage('read', '', { path: 'src/main.ts' })).toBe('typescript');
     const rename = ToolCallPartSchema.parse({ ...edit, input: { path: 'old.ts', edits: [{ op: 'update', rename: 'new.ts' }] } });
     expect(toolInputPaths(rename)).toEqual(['old.ts', 'new.ts']);
-    expect(toolDescription(rename)).toEqual({ kind: 'files', count: 2, files: ['old.ts', 'new.ts'] });
     expect(toolInputPaths({ ...edit, input: { input: '[src/main.ts#A123]\nPUT 1.=1:\n+updated' } })).toEqual([]);
-    expect(toolDescription({ ...call, toolName: 'find', input: { query: 'session deletion', grep_keywords: ['delete'] } })).toEqual({ kind: 'text', value: 'session deletion' });
-    expect(toolDescription({ ...call, toolName: 'task', input: { agent: 'child', name: 'inspect', task: 'Inspect files' } })).toEqual({ kind: 'text', value: 'inspect' });
-    expect(toolDescription({ ...call, toolName: 'ask', input: { questions: [{ id: 'q1', question: 'Proceed?', options: [{ label: 'Yes' }] }] } })).toEqual({ kind: 'questions', count: 1 });
-    expect(toolDescription({ ...call, toolName: 'web_search', input: { query: 'canonical contracts' } })).toEqual({ kind: 'text', value: 'canonical contracts' });
+    expect(describeToolCall({ query: 'session deletion', grep_keywords: ['delete'] }, 'find')).toBe('session deletion');
+    expect(describeToolCall({ agent: 'child', name: 'inspect', task: 'Inspect files' }, 'task')).toBe('inspect');
+    expect(describeToolCall({ questions: [{ id: 'q1', question: 'Proceed?', options: [{ label: 'Yes' }] }] }, 'ask')).toBe('Proceed?');
+    expect(describeToolCall({ query: 'canonical contracts' }, 'web_search')).toBe('canonical contracts');
   });
 
   test('opens native inline read selectors without changing filesystem identity', () => {

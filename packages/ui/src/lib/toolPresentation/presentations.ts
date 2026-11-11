@@ -1,0 +1,354 @@
+import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
+import { z } from 'zod';
+
+import type { ToolGroup, ToolPresentation } from './types';
+
+/** A JSON field's non-blank text. */
+const text = (value: JsonValue | undefined, max = 160): string | null => {
+    const parsed = z.string().safeParse(value).data?.trim();
+    if (!parsed) return null;
+    const line = parsed.split('\n')[0]?.trim() ?? '';
+    return line ? line.slice(0, max) : null;
+};
+
+/** The first present field of a call's input, as a short row description. */
+const inputText = (input: JsonObject, ...keys: readonly string[]): string | null => {
+    for (const key of keys) {
+        const value = text(input[key]);
+        if (value) return value;
+    }
+    return null;
+};
+
+const detailValue = (value: JsonValue | undefined, key: string): JsonValue | undefined =>
+    value && typeof value === 'object' && !Array.isArray(value) ? value[key] : undefined;
+
+const detailNumber = (value: JsonValue | undefined, key: string): number | null => {
+    const field = detailValue(value, key);
+    return typeof field === 'number' ? field : null;
+};
+
+const detailText = (value: JsonValue | undefined, key: string): string | null => text(detailValue(value, key));
+
+
+/** `3 matches · 2 files`, or whichever of the two the result reported. */
+const counted = (value: JsonValue | undefined, amountKey: string, fileKey: string): string | null => {
+    const amount = detailNumber(value, amountKey);
+    const files = detailNumber(value, fileKey);
+    if (amount === null && files === null) return null;
+    return [amount !== null ? `${amount} matches` : null, files !== null ? `${files} files` : null]
+        .filter(Boolean).join(' · ');
+};
+
+/** Added and removed line counts from a unified diff, as `+3/-1`. */
+const diffStats = (diff: string): string | null => {
+    let added = 0;
+    let removed = 0;
+    for (const line of diff.split('\n')) {
+        if (line.startsWith('+++') || line.startsWith('---')) continue;
+        if (line.startsWith('+')) added += 1;
+        else if (line.startsWith('-')) removed += 1;
+    }
+    return added || removed ? `+${added}/-${removed}` : null;
+};
+
+const editSummary: ToolPresentation['describeResult'] = (result) =>
+    diffStats(detailText(result, 'diff') ?? '') ?? detailText(result, 'message');
+
+const jsonSummary: ToolPresentation['describeResult'] = (result) => {
+    const root = result && typeof result === 'object' && !Array.isArray(result) ? result : null;
+    if (!root) return null;
+    const keys = Object.keys(root);
+    return keys.length > 0 ? `${keys.length} fields` : null;
+};
+
+const todoSummary: ToolPresentation['describeResult'] = (result) => {
+    const phases = detailValue(result, 'phases');
+    const parsed = z.array(z.object({ tasks: z.array(z.object({ status: z.string() })) })).safeParse(phases);
+    if (!parsed.success) return null;
+    const tasks = parsed.data.flatMap((phase) => phase.tasks);
+    const done = tasks.filter((task) => task.status === 'completed').length;
+    return tasks.length > 0 ? `${done}/${tasks.length}` : null;
+};
+
+const askSummary: ToolPresentation['describeResult'] = (result) => {
+    const results = detailValue(result, 'results');
+    const multi = z.array(z.object({
+        selectedOptions: z.array(z.string()).optional(),
+        customInput: z.string().optional(),
+        timedOut: z.boolean().optional(),
+    })).safeParse(results).data;
+    if (multi && multi.length > 0) {
+        const answered = multi.filter((item) => (item.selectedOptions?.length ?? 0) > 0 || item.customInput || item.timedOut).length;
+        return `${answered}/${multi.length} answered`;
+    }
+    if (typeof detailValue(result, 'chatRedirect') === 'boolean' && detailValue(result, 'chatRedirect') === true) return 'sent to chat';
+    if (detailValue(result, 'timedOut') === true) return 'timed out';
+    const selected = z.array(z.string()).safeParse(detailValue(result, 'selectedOptions')).data;
+    return selected?.length ? text(selected.join(', ')) : detailText(result, 'customInput');
+};
+
+const taskSummary: ToolPresentation['describeResult'] = (result) => {
+    const results = z.array(z.unknown()).safeParse(detailValue(result, 'results')).data;
+    return results?.length ? `${results.length} agents` : null;
+};
+
+const waitSummary: ToolPresentation['describeResult'] = (result) => {
+    const jobs = z.array(z.unknown()).safeParse(detailValue(result, 'jobs')).data;
+    const agents = z.array(z.unknown()).safeParse(detailValue(result, 'agents')).data;
+    const parts = [jobs?.length ? `${jobs.length} jobs` : null, agents?.length ? `${agents.length} agents` : null].filter(Boolean);
+    return parts.length ? parts.join(' · ') : null;
+};
+
+const bashSummary: ToolPresentation['describeResult'] = (result) => {
+    const exitCode = detailNumber(result, 'exitCode');
+    if (exitCode === null) return detailValue(result, 'timedOut') === true ? 'timed out' : null;
+    return exitCode === 0 ? 'exit 0' : `exit ${exitCode}`;
+};
+
+const searchSummary = (value: JsonValue | undefined): string | null =>
+    counted(value, 'matchCount', 'fileCount') ?? counted(value, 'totalReplacements', 'filesTouched');
+
+const hostCall: ToolPresentation['describeCall'] = (input) => {
+    const action = z.object({ action: z.string().optional(), input: z.record(z.string(), z.unknown()).optional() }).safeParse(input).data;
+    if (!action?.action) return null;
+    const salient = action.input ? Object.values(action.input).find((item) => typeof item === 'string') : undefined;
+    return typeof salient === 'string' && salient.trim() ? `${action.action}: ${salient.trim().slice(0, 120)}` : action.action;
+};
+
+const readPresentation: ToolPresentation = {
+    label: 'Read', icon: 'file-text', group: 'read', outputLanguage: 'auto',
+    describeCall: (input) => inputText(input, 'path', 'file_path'),
+    describeResult: (result) => {
+        const totalLines = detailNumber(result, 'totalLines');
+        const truncation = detailText(result, 'truncation');
+        return totalLines !== null ? `${totalLines} lines${truncation ? ` · ${truncation}` : ''}` : null;
+    },
+};
+
+const bashPresentation: ToolPresentation = {
+    label: 'Bash', icon: 'terminal-box', group: 'call', outputLanguage: 'text',
+    describeCall: (input) => inputText(input, 'command'),
+    describeResult: bashSummary,
+};
+
+/** A tool whose call row shows a free-form query. */
+const queryTool = (label: string, icon: ToolPresentation['icon'], keys: readonly string[], group: ToolGroup = 'search'): ToolPresentation => ({
+    label, icon, group, outputLanguage: 'text',
+    describeCall: (input) => inputText(input, ...keys),
+    describeResult: jsonSummary,
+});
+
+/** A tool whose results are code or JSON with no dedicated summary. */
+const plainTool = (label: string, icon: ToolPresentation['icon'], keys: readonly string[] = ['action'], group: ToolGroup = 'call'): ToolPresentation => ({
+    label, icon, group, outputLanguage: 'text',
+    describeCall: (input) => inputText(input, ...keys),
+    describeResult: () => null,
+});
+
+export const TOOL_PRESENTATIONS = {
+    read: readPresentation,
+    bash: bashPresentation,
+    edit: {
+        label: 'Edit', icon: 'pencil', group: 'call', outputLanguage: 'diff',
+        describeCall: (input) => inputText(input, 'path', 'file_path'),
+        describeResult: editSummary,
+    },
+    apply_patch: {
+        label: 'Edit', icon: 'pencil', group: 'call', outputLanguage: 'diff',
+        describeCall: (input) => inputText(input, 'path', 'file_path'),
+        describeResult: editSummary,
+    },
+    ast_grep: {
+        label: 'AST Grep', icon: 'code-box', group: 'search', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'pat', 'pattern'),
+        describeResult: searchSummary,
+    },
+    ast_edit: {
+        label: 'AST Edit', icon: 'code-box', group: 'call', outputLanguage: 'diff',
+        describeCall: (input) => {
+            const ops = z.array(z.object({ pat: z.string(), out: z.string() })).safeParse(input.ops).data;
+            return ops?.[0] ? text(`${ops[0].pat} → ${ops[0].out}`) : inputText(input, 'path', 'paths');
+        },
+        describeResult: searchSummary,
+    },
+    ask: {
+        label: 'Ask', icon: 'survey', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const questions = z.array(z.object({ question: z.string() })).safeParse(input.questions).data;
+            if (questions?.length === 1) return text(questions[0].question);
+            if (questions && questions.length > 1) return `${questions.length} questions`;
+            return inputText(input, 'question');
+        },
+        describeResult: askSummary,
+    },
+    debug: plainTool('Debug', 'bug', ['action', 'program']),
+    ida: plainTool('IDA', 'bug', ['action', 'target']),
+    eval: {
+        label: 'Eval', icon: 'code', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'title', 'language', 'code'),
+        describeResult: (result) => {
+            const cells = z.array(z.unknown()).safeParse(detailValue(result, 'cells')).data;
+            return cells?.length ? `${cells.length} cells` : null;
+        },
+    },
+    github: plainTool('GitHub', 'github', ['op', 'repo', 'query']),
+    glob: queryTool('Glob', 'file-search', ['path', 'pattern']),
+    grep: queryTool('Grep', 'menu-search', ['pattern']),
+    search: queryTool('Grep', 'menu-search', ['pattern']),
+    find: queryTool('Find', 'compass-3', ['query']),
+    lsp: {
+        label: 'LSP', icon: 'code', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => {
+            const action = inputText(input, 'action');
+            const target = inputText(input, 'file', 'symbol');
+            return [action, target].filter(Boolean).join(' ') || null;
+        },
+        describeResult: (result) => detailText(result, 'serverName'),
+    },
+    checkpoint: {
+        label: 'Checkpoint', icon: 'history', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'goal'),
+        describeResult: () => null,
+    },
+    rewind: {
+        label: 'Rewind', icon: 'history', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'report'),
+        describeResult: () => null,
+    },
+    resolve: {
+        label: 'Resolve', icon: 'checkbox', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'action', 'id'),
+        describeResult: (result) => detailText(result, 'action'),
+    },
+    reject: {
+        label: 'Resolve', icon: 'checkbox', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'action', 'id'),
+        describeResult: (result) => detailText(result, 'action'),
+    },
+    context_notes: {
+        label: 'Context notes', icon: 'book-open', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'text'),
+        describeResult: (result) => detailNumber(result, 'bytes') !== null ? `${detailNumber(result, 'bytes')} bytes` : null,
+    },
+    new_context: plainTool('New context', 'book-open'),
+    security_scan: plainTool('Security scan', 'shield-check', ['action', 'plan_id']),
+    task: {
+        label: 'Task', icon: 'ai-agent', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'name', 'task'),
+        describeResult: taskSummary,
+    },
+    wait: {
+        label: 'Wait', icon: 'time', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'op'),
+        describeResult: waitSummary,
+    },
+    todo: {
+        label: 'Todo', icon: 'list-check-2', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'task', 'phase', 'op'),
+        describeResult: todoSummary,
+    },
+    web_search: {
+        label: 'Web search', icon: 'global', group: 'search', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'query'),
+        describeResult: (result) => detailText(result, 'error') ? 'failed' : null,
+    },
+    write: {
+        label: 'Write', icon: 'file-edit', group: 'call', outputLanguage: 'auto',
+        describeCall: (input) => inputText(input, 'path', 'file_path'),
+        describeResult: (result) => detailText(result, 'message'),
+    },
+    memory_edit: plainTool('Memory edit', 'brain-4', ['op']),
+    retain: {
+        label: 'Retain', icon: 'brain-4', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => Array.isArray(input.items) ? `${input.items.length} items` : null,
+        describeResult: (result) => detailNumber(result, 'count') !== null ? `${detailNumber(result, 'count')} saved` : null,
+    },
+    recall: queryTool('Recall', 'brain-4', ['query'], 'call'),
+    reflect: queryTool('Reflect', 'brain-4', ['query'], 'call'),
+    learn: queryTool('Learn', 'lightbulb', ['memory'], 'call'),
+    manage_skill: {
+        label: 'Manage skill', icon: 'book-open', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'action', 'name'),
+        describeResult: (result) => detailText(result, 'name'),
+    },
+    yield: plainTool('Yield', 'send-plane'),
+    goal: plainTool('Goal', 'flag', ['op']),
+    think: plainTool('Think', 'brain-ai-3'),
+    advise: {
+        label: 'Advise', icon: 'lightbulb', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'note'),
+        describeResult: (result) => detailText(result, 'severity'),
+    },
+    vibe_spawn: plainTool('Vibe spawn', 'ai-agent', ['cli', 'prompt']),
+    vibe_send: plainTool('Vibe send', 'send-plane', ['id', 'message']),
+    vibe_wait: plainTool('Vibe wait', 'time', ['id']),
+    vibe_kill: plainTool('Vibe kill', 'close', ['id']),
+    vibe_list: plainTool('Vibe list', 'layout'),
+    openchamber: {
+        label: 'OpenChamber', icon: 'openchamber', group: 'call', outputLanguage: 'text',
+        describeCall: hostCall,
+        describeResult: jsonSummary,
+    },
+    openchamber_knowledge: {
+        label: 'Project knowledge', icon: 'book-open', group: 'call', outputLanguage: 'text',
+        describeCall: hostCall,
+        describeResult: jsonSummary,
+    },
+    web: {
+        label: 'Browser', icon: 'global', group: 'call', outputLanguage: 'text',
+        describeCall: hostCall,
+        describeResult: jsonSummary,
+    },
+    memory: {
+        label: 'Memory', icon: 'brain-4', group: 'call', outputLanguage: 'text',
+        describeCall: hostCall,
+        describeResult: jsonSummary,
+    },
+    notify: {
+        label: 'Notify', icon: 'notification-3', group: 'call', outputLanguage: 'text',
+        describeCall: hostCall,
+        describeResult: jsonSummary,
+    },
+    openchamber_image: {
+        label: 'Image', icon: 'image', group: 'call', outputLanguage: 'text',
+        describeCall: hostCall,
+        describeResult: jsonSummary,
+    },
+    openchamber_render: {
+        label: 'Render', icon: 'layout', group: 'call', outputLanguage: 'text',
+        describeCall: hostCall,
+        describeResult: jsonSummary,
+    },
+    reasoning: {
+        label: 'Reasoning', icon: 'brain-ai-3', group: 'call', outputLanguage: 'text',
+        describeCall: () => null, describeResult: () => null,
+    },
+    'image-preview': {
+        label: 'Image', icon: 'file-image', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'path'), describeResult: () => null,
+    },
+    'mermaid-preview': {
+        label: 'Diagram', icon: 'file-list-2', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'path'), describeResult: () => null,
+    },
+    skill: {
+        label: 'Skill', icon: 'book-open', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'name', 'path'), describeResult: () => null,
+    },
+} satisfies Record<string, ToolPresentation>;
+
+export type KnownToolName = keyof typeof TOOL_PRESENTATIONS;
+
+/** OMP's model-facing tools plus hidden ones, aliases, vibes, advise and the fork's host tools. */
+export const KNOWN_TOOL_NAMES = Object.keys(TOOL_PRESENTATIONS) as KnownToolName[];
+
+/** The generic row for an extension, MCP or plugin tool the registry has never seen. */
+export const fallbackPresentation = (toolName: string): ToolPresentation => ({
+    label: toolName || 'Tool',
+    icon: 'tools',
+    group: 'call',
+    outputLanguage: 'text',
+    describeCall: () => null,
+    describeResult: () => null,
+});

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { NATIVE_TOOL_NAMES } from '@/lib/toolHelpers';
+import { OMP_TOOL_NAMES } from '@/lib/toolPresentation';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
@@ -374,7 +374,7 @@ export const AgentsPage: React.FC = () => {
                   size="xs"
                   onClick={() => {
                     setToolsEditing(true);
-                    setForm((current) => ({ ...current, allowedTools: [...NATIVE_TOOL_NAMES] }));
+                    setForm((current) => ({ ...current, allowedTools: [...OMP_TOOL_NAMES] }));
                     requestSave();
                   }}
                 >
@@ -395,7 +395,7 @@ export const AgentsPage: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {NATIVE_TOOL_NAMES.map((tool) => {
+                {OMP_TOOL_NAMES.map((tool) => {
                   const checked = (form.allowedTools ?? []).includes(tool);
                   return (
                     <label

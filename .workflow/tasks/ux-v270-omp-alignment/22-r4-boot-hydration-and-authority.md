@@ -25,7 +25,7 @@
 
 - `node scripts/run-isolated-tests.mjs packages/ui/src` → `1225/1225 test files passed` (the whole UI tree, including `stores/serverStateBoot.test.ts`, `sync/event-reducer.unknown-entity.test.ts`, the per-store phase tests, the freshness regressions and the component tests whose mount-time readers were removed).
 - `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/stores packages/ui/src/sync packages/ui/src/lib` → **not usable here**: vitest spawns one worker per file and every file fails with `Cannot find package 'bun:test'` (578/578 failed, "Tests no tests"). The repo's tests in these roots are `bun:test`; the isolated runner above is the same set of files run with the canonical runner.
-- `bun run lint` → exit 0 (only the pre-existing `react-hooks/exhaustive-deps` warnings).
+- `bun run lint` → exit 0 (only the pre-existing `react-hooks/exhaustive-deps` warnings). The four new `unknown` message keys exist translated in all 15 dictionaries (`gitIdentities.state.unknown`, `settings.usage.state.unknown`, `rightSidebar.contextNotesTodo.memory.state.unknown`, `chat.workStatus.mcp.unknown`), and MCP carries its own per-directory phase shown in the dropdown and the work-status section.
 - `bun run --cwd packages/ui type-check` → `No type errors in 3,511 files across 2 projects`.
 - `bunx oxlint -c oxlint.config.ts packages/ui/src tools/oxlint --report-unused-disable-directives` → no findings from `openchamber/no-cross-source-time-compare`, no unused disables.
 - `bunx oxlint -c oxlint.anti-slop.config.ts` on the authored files (`serverStateBoot.ts`, `loadPhase.ts`, `sessionSourceClock.ts`, `no-cross-source-time-compare.ts`) → clean; `sync/event-reducer.ts` holds 16 findings, identical to its pre-change count.

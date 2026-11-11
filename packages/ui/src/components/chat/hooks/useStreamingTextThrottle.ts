@@ -137,5 +137,11 @@ export const useStreamingTextThrottle = ({
         };
     }, []);
 
-    return throttledText;
+    // Leading edge during render: before the stream has shown anything, the
+    // text on screen is the text that arrived, so the first token lands in the
+    // commit that delivers it instead of waiting for the effect that commits
+    // the throttled value after paint. There is nothing to coalesce yet.
+    return isStreaming && throttledText.length === 0
+        ? getStreamingThrottleText('', text, isStreaming, allowTextReplacement)
+        : throttledText;
 };

@@ -277,14 +277,11 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   return undefined;
  }, [currentSessionId, inferredWorktreeMetadata, newSessionDraft?.open, worktreeMap]);
 
- const { profiles, globalIdentity, defaultGitIdentityId, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId } =
+ const { profiles, globalIdentity, defaultGitIdentityId } =
   useGitIdentitiesStore(useShallow((s) => ({
    profiles: s.profiles,
    globalIdentity: s.globalIdentity,
    defaultGitIdentityId: s.defaultGitIdentityId,
-   loadProfiles: s.loadProfiles,
-   loadGlobalIdentity: s.loadGlobalIdentity,
-   loadDefaultGitIdentityId: s.loadDefaultGitIdentityId,
   })));
 
  // The root the view is anchored to (session/worktree context stays keyed on
@@ -981,12 +978,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   });
  }, [commitMessage, gitDirectory, generatedHighlights]);
 
- React.useEffect(() => {
-  if (!isActive) return;
-  loadProfiles();
-  loadGlobalIdentity();
-  loadDefaultGitIdentityId();
- }, [isActive, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId]);
 
  const refreshRemotes = React.useCallback(async () => {
   if (!gitDirectory || !git?.getRemotes || isGitRepo !== true) {

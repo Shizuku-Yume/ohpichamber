@@ -61,18 +61,12 @@ export const GitPage: React.FC = () => {
     globalIdentity,
     defaultGitIdentityId,
     deleteProfile,
-    loadProfiles,
-    loadGlobalIdentity,
-    loadDefaultGitIdentityId,
     setDefaultGitIdentityId,
   } = useGitIdentitiesStore(useShallow((s) => ({
     profiles: s.profiles,
     globalIdentity: s.globalIdentity,
     defaultGitIdentityId: s.defaultGitIdentityId,
     deleteProfile: s.deleteProfile,
-    loadProfiles: s.loadProfiles,
-    loadGlobalIdentity: s.loadGlobalIdentity,
-    loadDefaultGitIdentityId: s.loadDefaultGitIdentityId,
     setDefaultGitIdentityId: s.setDefaultGitIdentityId,
   })));
   // An identity whose account was disconnected has to say so, so the accounts
@@ -85,12 +79,6 @@ export const GitPage: React.FC = () => {
   const [editorProfileId, setEditorProfileId] = React.useState<string | null>(null);
   const [deleteDialogProfile, setDeleteDialogProfile] = React.useState<GitIdentityProfile | null>(null);
   const [isDeletePending, setIsDeletePending] = React.useState(false);
-
-  React.useEffect(() => {
-    loadProfiles();
-    loadGlobalIdentity();
-    loadDefaultGitIdentityId();
-  }, [loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId]);
 
   const openEditor = (id: string | null) => {
     setEditorProfileId(id);

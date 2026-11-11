@@ -29,6 +29,7 @@ import { useUpdatePolling } from '@/hooks/useUpdatePolling';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
+import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import type { RuntimeAPIs } from '@/lib/api/types';
@@ -1320,6 +1321,13 @@ function MobileAppContent({ apis }: MobileAppProps) {
   useWindowTitle();
   useRoutingSync();
   useEnterprisePolicySync();
+  // The phone mounts the same server-owned stores as the desktop app; without
+  // this it read the previous instance's values until a page happened to load.
+  React.useEffect(() => {
+    if (!isInitialized) return;
+    void bootServerStateStores();
+  }, [isInitialized]);
+  React.useEffect(() => installServerStateBootEvents(), []);
   // Same as App.tsx: the session's memory index and the Memory tab both read
   // this snapshot, and without it the phone showed no memory at all.
   useAgentMemorySync(currentDirectory || null);

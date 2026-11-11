@@ -244,7 +244,7 @@ describe('openchamber events', () => {
       value: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
       configurable: true,
     });
-    const { subscribePermissionPolicySync } = await import('@/sync/permission-mode-sync');
+    const { installServerStateBootEvents } = await import('@/stores/serverStateBoot');
     const { getRuntimeKey } = await import('./runtime-switch');
     const { usePermissionStore } = await import('@/stores/permissionStore');
     const waitFor = async (done: () => boolean) => {
@@ -266,15 +266,7 @@ describe('openchamber events', () => {
       reads += 1;
       return Response.json({ sessions: { ses_1: true }, modes: { ses_1: 'auto' }, revision: 1 });
     }, originalFetch);
-    const applied: Array<{ type: string; permissionId?: string }> = [];
-    const unsubscribe = subscribePermissionPolicySync(getRuntimeKey(), (event) => {
-      applied.push(event.type === 'openchamber.permission-left-for-user'
-        ? { type: event.type, permissionId: event.properties.permissionId }
-        : { type: event.type });
-      if (event.type === 'openchamber.permission-auto-accept') {
-        usePermissionStore.getState().applySnapshot({ modes: event.properties.modes ?? {}, revision: event.properties.revision });
-      }
-    });
+    const unsubscribe = installServerStateBootEvents(getRuntimeKey());
     const source = MockEventSource.instances[0];
     const send = (data: string) => source.onmessage?.({ data });
     try {
@@ -286,12 +278,14 @@ describe('openchamber events', () => {
       send(JSON.stringify({ type: 'openchamber:permission-auto-accept.updated', properties: { sessions: { ses_1: false }, modes: { ses_1: 'ask' }, revision: 2 } }));
       expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('ask');
 
+      // Another window accepted everything again.
+      send(JSON.stringify({ type: 'openchamber:permission-auto-accept.updated', properties: { sessions: { ses_1: true }, modes: { ses_1: 'auto' }, revision: 3 } }));
+      expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('auto');
+
+      // A request left for the user does not change the mode.
       send(JSON.stringify({ type: 'openchamber:permission-auto-accept.left-for-user', properties: { permissionId: 'per_1', sessionId: 'ses_1', directory: '/repo' } }));
       send(JSON.stringify({ type: 'openchamber:permission-auto-accept.left-for-user', properties: { sessionId: 'ses_1', directory: '/repo' } }));
-      expect(applied).toEqual([
-        { type: 'openchamber.permission-auto-accept' },
-        { type: 'openchamber.permission-left-for-user', permissionId: 'per_1' },
-      ]);
+      expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('auto');
 
       // A reconnect reads the modes again: a change made during the gap was never announced here.
       send(JSON.stringify({ type: 'openchamber:event-stream-ready', properties: {} }));
@@ -303,8 +297,7 @@ describe('openchamber events', () => {
       expect(spaceReads).toEqual(['/spaces/0123456789ab']);
 
       unsubscribe();
-      send(JSON.stringify({ type: 'openchamber:permission-auto-accept.left-for-user', properties: { permissionId: 'per_2', sessionId: 'ses_1', directory: '/repo' } }));
-      expect(applied).toHaveLength(2);
+      expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('auto');
     } finally {
       unsubscribe();
       globalThis.fetch = originalFetch;

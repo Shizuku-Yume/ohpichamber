@@ -19,6 +19,7 @@ import { useGitStore } from '@/stores/useGitStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { SyncProvider, useSessions } from '@/sync/sync-context';
+import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useSync } from '@/sync/use-sync';
 import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { SyncRuntimeEffects } from './AppEffects';
@@ -339,6 +340,14 @@ export function ElectronMiniChatApp({ apis }: ElectronMiniChatAppProps) {
   useWindowTitle();
   useRoutingSync();
   useRootScrollLock();
+  // Mini-chat is a full surface: the same server-owned reads, including the
+  // agent memory the send path needs, belong on its boot too.
+  const isInitialized = useConfigStore((state) => state.isInitialized);
+  React.useEffect(() => {
+    if (!isInitialized) return;
+    void bootServerStateStores();
+  }, [isInitialized]);
+  React.useEffect(() => installServerStateBootEvents(), []);
 
   return (
     <ErrorBoundary>

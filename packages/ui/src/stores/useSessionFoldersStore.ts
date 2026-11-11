@@ -789,3 +789,9 @@ if (typeof window !== 'undefined') {
 
 export const handleSessionFoldersChanged = (updatedAt: number = Date.now()) => sessionFolders.handleSessionFoldersChanged(updatedAt);
 export const handleSessionFoldersStreamReady = () => sessionFolders.handleSessionFoldersStreamReady();
+/**
+ * First contact with the server, read by the boot registry. The store also
+ * runs it once at module load; boot asks again so a switch that cleared the
+ * folders re-reads them without waiting for that store's own queue.
+ */
+export const hydrateSessionFoldersFromServer = () => sessionFolders.hydrateFromServer();

@@ -198,9 +198,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const gitIdentityProfiles = useGitIdentitiesStore((s) => s.profiles);
   const globalGitIdentity = useGitIdentitiesStore((s) => s.globalIdentity);
   const defaultGitIdentityId = useGitIdentitiesStore((s) => s.defaultGitIdentityId);
-  const loadGitIdentityProfiles = useGitIdentitiesStore((s) => s.loadProfiles);
-  const loadGlobalGitIdentity = useGitIdentitiesStore((s) => s.loadGlobalIdentity);
-  const loadDefaultGitIdentityId = useGitIdentitiesStore((s) => s.loadDefaultGitIdentityId);
   const { canRequestAccess, requestAccess, startAccessing } = useFileSystemAccess();
   const { isMobile } = useDeviceInfo();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -271,12 +268,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   }, [open, isCloneMode, refreshAccounts, sourceControl, runtimeKey]);
 
 
-  React.useEffect(() => {
-    if (!open) return;
-    void loadGitIdentityProfiles();
-    void loadGlobalGitIdentity();
-    void loadDefaultGitIdentityId();
-  }, [loadDefaultGitIdentityId, loadGitIdentityProfiles, loadGlobalGitIdentity, open]);
 
   const connectedAccountIds = useConnectedAccountIds();
   const availableGitIdentities = React.useMemo(

@@ -7,7 +7,6 @@
 **Read first:** `research/ux-v270-systemic-review.md` R6; `packages/web/server/lib/host/DOCUMENTATION.md`; `.workflow/omp-migration/contracts.md` (problem details); skills `ui-api-decoupling`, `locale-ui-patterns`
 **Check:** `bun --cwd packages/agent-service test && bun test packages/ui/src/lib/problemMessage.test.ts packages/ui/src/lib/problemMessage.toast.test.tsx && (cd packages/web && VITEST_MAX_WORKERS=2 bunx vitest run server/lib/host) && bun run lint` → exit 0, with the sentinel propagation test and the C1-C6 proposed-state authorizer tests passing; real path: install and connect an MCP server from the Integrations catalog → success, and a refused operation's toast names the refusing check
 **Base commit:** 8327e6403f13f040ecc09b10b26ff7a2201b2d14
-**Status:** active
 
 **Check amended:** the UI helper test imports `bun:test`, and this repo has no root `vitest.config.ts` (upstream `bc50ba56a` has none), so `bunx vitest` from the root cannot resolve `bun:test` for `packages/ui` paths. The UI suites run under `bun test`; the Host suites run under the `packages/web` vitest config, which is the only one that aliases `bun:test` and `@/`. Agent decision, 2026-11-12.
 
@@ -25,7 +24,7 @@
 **Check before:** no prior run on this branch; the base commit's own state is recorded below.
 
 **Check after:**
-- `bun --cwd packages/agent-service test` → 482 tests, 471 pass, 10 skip, 0 fail (67 files). The one failure this change introduced (a diagnostics test asserting a code-only initialization message) was fixed by keeping diagnostics code-only and letting the cause travel through the problem response.
+- `bun --cwd packages/agent-service test` → 483 tests, 473 pass, 10 skip, 0 fail (67 files), after the review fixes. An earlier run exposed one failure this change introduced (a diagnostics test asserting a code-only initialization message); it was fixed by keeping diagnostics code-only and letting the cause travel through the problem response.
 - `bun test packages/ui/src/lib/problemMessage.test.ts packages/ui/src/lib/problemMessage.toast.test.tsx` → 5 pass, 0 fail.
 - `(cd packages/web && VITEST_MAX_WORKERS=2 bunx vitest run server/lib/host)` → 65 files, 647 pass, 1 skip, 0 fail.
 - `bun run lint` → exit 0 (pre-existing react-hooks warnings only).

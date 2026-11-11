@@ -23,9 +23,15 @@ describe('problemMessage', () => {
       .toBe('The MCP server is not in the workspace configuration');
   });
 
+  test('a store that already reduced its failure to a sentence keeps it', () => {
+    expect(problemMessage('The MCP server is not in the workspace configuration', 'fallback'))
+      .toBe('The MCP server is not in the workspace configuration');
+  });
+
   test('falls back only when the failure carries no sentence', () => {
     expect(problemMessage(new Error('   '), 'The MCP configuration could not be saved.')).toBe('The MCP configuration could not be saved.');
     expect(problemMessage(undefined, 'The MCP configuration could not be saved.')).toBe('The MCP configuration could not be saved.');
-    expect(problemMessage('not an error', 'The MCP configuration could not be saved.')).toBe('The MCP configuration could not be saved.');
+    expect(problemMessage('', 'The MCP configuration could not be saved.')).toBe('The MCP configuration could not be saved.');
+    expect(problemMessage({ reason: 'no message' }, 'The MCP configuration could not be saved.')).toBe('The MCP configuration could not be saved.');
   });
 });

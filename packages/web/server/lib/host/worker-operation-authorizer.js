@@ -16,8 +16,11 @@ const denied = (reason, code = 'UNAUTHORIZED', status = 403) => ({ allowed: fals
 const approvalRequired = reason => ({ ...denied(reason), approvalRequired: true });
 const allowed = { allowed: true };
 // A proposed value is one the authorized operation itself introduces into the
-// workspace. It cannot appear in the pre-operation policy snapshot, so the check
+// workspace, so the pre-operation snapshot cannot describe it and the check
 // validates the candidate the post-operation state will contain instead.
+// For a server that means: the workspace will actually run it — enabled, and not
+// hand-written config the UI must never mutate. Reusing an existing server id is
+// how an edit is expressed, so it is not a refusal.
 const proposedServerPermitted = server => server.enabled && server.managed !== false;
 const proposedProviderPermitted = descriptor => typeof descriptor?.providerId === 'string' && descriptor.providerId.length > 0
  && typeof descriptor.modelId === 'string' && descriptor.modelId.length > 0;

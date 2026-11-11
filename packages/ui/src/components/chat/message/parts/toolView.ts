@@ -85,10 +85,9 @@ const statusToState = (status: ToolCallPart['status']): CanonicalToolState['stat
 };
 
 /**
- * The presentation view of one canonical call and its (optionally glued)
- * result. `result` is the result part paired with this call by
- * `attachToolResultsForDisplay`, so a call shown while it runs gets its live
- * output as soon as the agent reports it.
+ * The presentation view of one canonical call and its result. The projection
+ * puts the result in the same message as the call, so a call shown while it
+ * runs gets the output the agent has reported so far.
  */
 export const toToolView = (
     call: ToolCallPart,

@@ -22,9 +22,11 @@ describe('live activity projection', () => {
     expect(hasLiveActivity(activeTurn!, false)).toBe(true);
     expect(textOnlyTurn).toBeDefined();
     expect(hasLiveActivity(textOnlyTurn!, false)).toBe(false);
-    const [unrelatedTurn] = projectTurnRecords([user(), assistant('orphan', [tool('orphan-tool', 'bash', 'running')], { turnId: 'unrelated' })]).turns;
-    expect(unrelatedTurn?.assistantMessageIds).toEqual([]);
-    expect(hasLiveActivity(unrelatedTurn!, false)).toBe(false);
+    // A step from a run OMP prompted itself joins the turn above it, so its
+    // tool activity is that turn's live activity.
+    const [joinedTurn] = projectTurnRecords([user(), assistant('joined', [tool('joined-tool', 'bash', 'running')], { turnId: 'unrelated' })]).turns;
+    expect(joinedTurn?.assistantMessageIds).toEqual(['joined']);
+    expect(hasLiveActivity(joinedTurn!, false)).toBe(true);
   });
   test('anchors native task results and subsequent activity once after the standalone task call', () => {
     const taskCall: Part = {

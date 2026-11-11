@@ -232,6 +232,12 @@ export type OmpSetting = z.infer<typeof OmpSettingSchema>;
 export const OmpSettingsStateSchema = z.strictObject({
   workspaceId: EntityIdSchema,
   revision: CounterSchema,
+  /**
+   * Absolute path of the OMP config file these settings write, so the page can
+   * offer the file itself instead of a second renderer for internals. Absent
+   * when the runtime keeps its config in memory.
+   */
+  configPath: z.string().min(1).optional(),
   settings: z.array(OmpSettingSchema),
 }).refine((state) => new Set(state.settings.map((setting) => setting.id)).size === state.settings.length,
   'OMP setting ids are unique');

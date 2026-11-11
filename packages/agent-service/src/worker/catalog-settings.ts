@@ -11,8 +11,10 @@ import {
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import type { AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import { ProjectionError } from '../projection/journal.ts';
+import { join } from 'node:path';
 import { presentOmpSetting } from './settings-ui.ts';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
+import { MAIN_CONFIG_FILENAMES } from '@oh-my-pi/pi-utils';
 
 /**
  * Contract-driven allowlist of OMP settings exposed through the API.
@@ -75,11 +77,29 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
 export class NativeSettings {
   constructor(private readonly settings: Settings) { }
 
+  /**
+   * The file `flush` writes. The Settings instance exposes only its agent
+   * directory, so the config file name comes from the same pinned constant its
+   * own loader joins.
+   */
+  private configPath(): string | undefined {
+    const agentDir = this.settings.agentDir;
+    if (!agentDir) return undefined;
+    return join(agentDir, MAIN_CONFIG_FILENAMES[0]);
+  }
+
+  private state(workspaceId: string, revision: string): OmpSettingsState {
+    const configPath = this.configPath();
+    return OmpSettingsStateSchema.parse({
+      workspaceId, revision,
+      ...(configPath === undefined ? {} : { configPath }),
+      settings: OMP_SETTING_IDS.map(id => descriptor(handle(id), this.settings)),
+    });
+  }
+
   async read(workspaceId: string, revision: string): Promise<OmpSettingsState> {
     await this.settings.reloadFromDisk();
-    return OmpSettingsStateSchema.parse({
-      workspaceId, revision, settings: OMP_SETTING_IDS.map(id => descriptor(handle(id), this.settings)),
-    });
+    return this.state(workspaceId, revision);
   }
 
   async write(workspaceId: string, revision: string, request: OmpSettingsUpdateRequest): Promise<OmpSettingsState> {
@@ -118,8 +138,6 @@ export class NativeSettings {
       throw new ProjectionError(503, 'INTERNAL_ERROR', 'OMP settings could not be persisted');
     }
     await this.settings.reloadFromDisk();
-    return OmpSettingsStateSchema.parse({
-      workspaceId, revision, settings: OMP_SETTING_IDS.map(id => descriptor(handle(id), this.settings)),
-    });
+    return this.state(workspaceId, revision);
   }
 }

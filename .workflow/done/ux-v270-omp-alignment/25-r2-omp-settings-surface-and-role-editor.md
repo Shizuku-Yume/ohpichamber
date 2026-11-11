@@ -7,7 +7,6 @@
 **Read first:** `decisions.md: 2026-11-10 - OMP TUI parity means function and display parity…`; `research/ux-v270-systemic-review.md` R2 (classification counts, TUI-only keys); `packages/ui/src/components/sections/PATTERNS.md`; skills `locale-ui-patterns`, `ui-api-decoupling`
 **Check:** `bun --cwd packages/agent-contract test && bun --cwd packages/agent-service test && VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/components/sections packages/ui/src/lib/i18n && bun run lint` → exit 0, with the surface-classification test (every `OMP_SETTING_IDS` entry classified, duplicates name an existing owner), the all-locale test and the duplicate-owner test passing; real path: the OMP Settings page shows only GUI settings in zh-CN with no raw ids, and conditional rows hide when their condition is off
 **Base commit:** eb91091a02185997762b6e5ccdc69b6dbe5fe0a0
-**Status:** active
 
 - [x] Add `surface` (`gui | tui-only | duplicate | advanced`, with `owner` for duplicates) and OMP's `condition` to the settings schema, classified by an explicit per-id table in the service.
 - [x] Render `gui` settings from a declarative row registry with `PATTERNS.md` rows; offer "open config.yml" for the rest. Every key is translated in all 15 locales.
@@ -95,14 +94,14 @@ registered as a project so `workspaces/resolve` authorizes it):
 Live payload cross-check (`GET /api/agent/v1/workspaces/<id>/settings`): 30 `gui`, 13 `tui-only`,
 7 `duplicate`, 107 `advanced`, and `configPath` set.
 
-Review: round 1 found five blocking mechanisms, all fixed in `25f5300c`. Re-checked on the final
-tree: `bun --cwd packages/agent-contract test` 246 pass / 0 fail, `bun --cwd packages/agent-service test`
-485 tests / 0 fail, the UI leg 1331/1331 files, `bun run lint` exit 0, `tsc --noEmit` and `oxlint`
-clean on the touched files.
+Review: pass (base eb91091a0). Round 1 raised five blocking findings; all five are fixed in
+`25f5300c` and re-checked on the final tree: `bun --cwd packages/agent-contract test` 246 pass /
+0 fail, `bun --cwd packages/agent-service test` 485 tests / 0 fail, the UI leg 1331/1331 files,
+`bun run lint` exit 0, `tsc --noEmit` and `oxlint` clean on the touched files.
 
 1. One user action wrote two updates at the same revision (role record and
-   `defaultThinkingLevel`), so the second conflicted and the level did not persist. Both
-   changes now travel in one `updateOmpSettings`, including the 409 retry.
+   `defaultThinkingLevel`), so the second conflicted and the level did not persist. Both changes
+   now travel in one `updateOmpSettings`, including the 409 retry.
 2. `ModelRoleEditor` passed `directory={undefined}` to `ModelSelector`, so the pickers read the
    active project's catalog rather than the project the Settings selector names. The settings
    directory now flows through Defaults, Git and the OMP page.

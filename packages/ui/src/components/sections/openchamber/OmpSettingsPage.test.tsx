@@ -66,6 +66,11 @@ const state = {
     // A concept another page owns is not drawn here at all.
     setting({ id: 'enabledModels', type: 'array', value: [], surface: 'duplicate', owner: 'providers.models' }),
     setting({ id: 'recap.enabled', type: 'boolean', value: true, surface: 'duplicate', owner: 'chat.session-recap' }),
+    // One row per section, so every heading renders and is checked as prose.
+    setting({ id: 'lsp.enabled', type: 'boolean', value: true, label: 'LSP', tab: 'lsp' }),
+    setting({ id: 'task.maxConcurrency', type: 'number', value: 3, label: 'Task concurrency' }),
+    setting({ id: 'skills.enabled', type: 'boolean', value: true, label: 'Skills' }),
+    setting({ id: 'mcp.enableProjectConfig', type: 'boolean', value: false, label: 'Project MCP config' }),
     // OMP's own condition gates these two.
     setting({ id: 'retry.usageReservePct', type: 'number', value: 15, condition: 'usageAwareFallbackEnabled', conditionActive: false, label: 'Usage reserve' }),
     setting({ id: 'plan.defaultOnStartup', type: 'boolean', value: false, condition: 'planModeEnabled', conditionActive: true, label: 'Start in plan mode' }),
@@ -250,6 +255,18 @@ test('renders every page row translated in zh-CN with no raw setting id on scree
 
     expect(container.textContent).toContain(ompSettingsI18n['zh-CN']['settings.omp.modelRoles.title']);
     expect(container.textContent).toContain(ompSettingsI18n['zh-CN']['settings.omp.items.compaction.enabled.label']);
+    // A section heading is addressed by key like every row, so a heading the
+    // vocabulary forgot would render as `settings.omp.group.<id>.label`.
+    for (const key of [
+      'settings.omp.group.retry_fallback.label',
+      'settings.omp.group.compaction.label',
+      'settings.omp.group.lsp.label',
+      'settings.omp.group.modes.label',
+      'settings.omp.group.commands_skills.label',
+    ]) {
+      expect(container.textContent, key).toContain(ompSettingsI18n['zh-CN'][key]);
+    }
+    expect(container.textContent).not.toContain('settings.omp.group.');
     // No raw `setting.id` leaks: the ids are snake/dot vocabulary, never prose.
     for (const raw of ['compaction.enabled', 'compaction.thresholdPercent', 'retry.fallbackOn', 'plan.defaultOnStartup', 'modelRoles']) {
       expect(`${raw}: ${(container.textContent ?? "").includes(raw)}`).toBe(`${raw}: false`);

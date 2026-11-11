@@ -11,6 +11,7 @@ import {
  OPENCHAMBER_KNOWLEDGE_ACTIONS,
  OPENCHAMBER_NOTIFY_ACTIONS,
  OPENCHAMBER_IMAGE_ACTIONS,
+ OPENCHAMBER_RENDER_ACTIONS,
 } from './actions.js';
 import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
@@ -29,6 +30,7 @@ const TOOL_ACTIONS = new Map([
  ['openchamber_knowledge', new Set(OPENCHAMBER_KNOWLEDGE_ACTIONS)],
  ['notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
  ['openchamber_image', new Set(OPENCHAMBER_IMAGE_ACTIONS)],
+ ['openchamber_render', new Set(OPENCHAMBER_RENDER_ACTIONS)],
 ]);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
  'schedule.update',
@@ -1128,7 +1130,9 @@ export const createOpenChamberControlService = (dependencies) => {
       ? settings?.agentKnowledgeToolEnabled !== false
       : toolName === 'openchamber_image'
        ? settings?.agentImageToolEnabled === true
-       : settings?.agentNotifyToolEnabled === true;
+       : toolName === 'openchamber_render'
+        ? settings?.agentRenderToolEnabled !== false
+        : settings?.agentNotifyToolEnabled === true;
   return enabled ? null : { code: 'UNAUTHORIZED', status: 403, detail: `${toolName} tool is disabled` };
  };
 
@@ -1161,7 +1165,12 @@ export const createOpenChamberControlService = (dependencies) => {
     return fail('UNAUTHORIZED', 403, 'Session is outside the authorized scope');
    }
    const input = request.input ?? {};
-   const value = await execute(request.action, input, scope.cwd, { signal, contextSessionId: request.sessionId });
+   // The call that asked travels with the request: a page that waits for the
+   // user's answer is resolved by its own call, not by the session alone.
+   const value = await execute(request.action, input, scope.cwd, {
+    signal, contextSessionId: request.sessionId,
+    contextCallId: typeof request.toolCallId === 'string' ? request.toolCallId : undefined,
+   });
    return { ok: true, value: value === undefined ? null : value };
   } catch (error) {
    const status = Number.isInteger(error?.statusCode) ? error.statusCode : Number.isInteger(error?.status) ? error.status : 500;

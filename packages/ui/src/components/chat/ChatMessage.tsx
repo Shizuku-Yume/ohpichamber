@@ -232,8 +232,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return next;
     }, [collapsedTools, defaultOpenToolIds, expandedTools]);
 
-    const shouldHideUserMessage = isUser && displayParts.length === 0;
-
     const footerProviderID = isUser ? null : (message.providerId ?? null);
     const footerModelName = React.useMemo(() => {
         if (isUser || !message.modelId) return undefined;
@@ -468,10 +466,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [setImagePreviewOpen]);
 
     if (message.role === 'system') {
-        return null;
-    }
-
-    if (shouldHideUserMessage) {
         return null;
     }
 

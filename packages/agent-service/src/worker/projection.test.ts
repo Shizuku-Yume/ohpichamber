@@ -680,3 +680,180 @@ test('reopening a native session maps reasoningTokens usage into the canonical s
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('a tool result is a part of the message that made the call, live and restored', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-result-owner-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    deliver({ role: 'user', content: 'Run the command.', timestamp: 2 });
+    const call = assistant([{ type: 'toolCall', id: 'call', name: 'bash', arguments: { command: 'printf fixture' } }], 'toolUse', 3);
+    deliver(call);
+    journal.append(projection.consume({ type: 'tool_execution_start', toolCallId: 'call', toolName: 'bash', args: { command: 'printf fixture' } }));
+    const result = { role: 'toolResult' as const, toolCallId: 'call', toolName: 'bash', content: [{ type: 'text' as const, text: 'fixture' }], details: { exitCode: 0 }, isError: false, timestamp: 4 };
+    journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'bash', result: { content: result.content, details: result.details } }));
+    deliver(result);
+    journal.append(projection.consume({ type: 'turn_end', message: call, toolResults: [result] }));
+    journal.append(projection.completeRun(5));
+    await manager.flush();
+    const history = projection.history({ sessionId: 'session' });
+
+    const assistantMessage = history.messages.find(message => message.role === 'assistant');
+    expect(assistantMessage?.parts.map(part => part.type)).toEqual(['tool_call', 'tool_result']);
+    const resultPart = assistantMessage?.parts.find(part => part.type === 'tool_result');
+    expect(resultPart).toMatchObject({ partId: `${assistantMessage?.parts[0]?.partId}:result`, toolCallId: 'call', isError: false });
+    expect(history.messages.some(message => message.role === 'system')).toBe(false);
+    expect(journal.snapshot().messages.some(message => message.role === 'system')).toBe(false);
+
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const restored = new WorkerProjection(reopened, 'session').seed();
+    expect(restored.messages).toEqual(history.messages);
+    expect(restored.messages.flatMap(message => message.parts).filter(part => part.type === 'tool_result')).toHaveLength(1);
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a partial tool result reaches the call while it runs', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-partial-result-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const deliver = (message: NativeMessage): void => {
+      journal.append(projection.consume({ type: 'message_start', message }));
+      manager.appendMessage(message);
+      journal.append(projection.consume({ type: 'message_end', message }));
+      projection.bindPending();
+    };
+    deliver({ role: 'user', content: 'Run a long command.', timestamp: 2 });
+    const call = assistant([{ type: 'toolCall', id: 'call', name: 'bash', arguments: { command: 'sleep 5' } }], 'toolUse', 3);
+    deliver(call);
+    journal.append(projection.consume({ type: 'tool_execution_start', toolCallId: 'call', toolName: 'bash', args: { command: 'sleep 5' } }));
+
+    const first = projection.consume({ type: 'tool_execution_update', toolCallId: 'call', toolName: 'bash', args: {},
+      partialResult: { content: [{ type: 'text', text: 'line one' }], details: {} } });
+    const firstPart = journal.append(first).find(event => event.type === 'part.started');
+    expect(firstPart).toMatchObject({ type: 'part.started', part: { type: 'tool_result', toolCallId: 'call', isError: false } });
+    journal.append(projection.consume({ type: 'tool_execution_update', toolCallId: 'call', toolName: 'bash', args: {},
+      partialResult: { content: [{ type: 'text', text: 'line one\nline two' }], details: {} } }));
+    const live = journal.snapshot().messages.find(message => message.role === 'assistant');
+    const liveResult = live?.parts.find(part => part.type === 'tool_result');
+    expect(liveResult).toMatchObject({ output: { content: [{ type: 'text', text: 'line one\nline two' }] } });
+
+    const outcome = { content: [{ type: 'text' as const, text: 'line one\nline two\ndone' }], details: { exitCode: 0 } };
+    journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'bash', result: outcome }));
+    deliver({ role: 'toolResult', toolCallId: 'call', toolName: 'bash', content: outcome.content, details: outcome.details, isError: false, timestamp: 4 });
+    const finished = journal.snapshot().messages.find(message => message.role === 'assistant')
+      ?.parts.find(part => part.type === 'tool_result');
+    expect(finished).toMatchObject({ output: { content: outcome.content, details: outcome.details } });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a failed tool reports the kind and the detail the tool gave', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-tool-error-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const call = assistant([{ type: 'toolCall', id: 'call', name: 'bash', arguments: { command: 'slow' } }], 'toolUse', 2);
+    journal.append(projection.consume({ type: 'message_start', message: call }));
+    manager.appendMessage(call);
+    journal.append(projection.consume({ type: 'message_end', message: call }));
+    journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'bash',
+      result: { content: [{ type: 'text', text: 'Command timed out after 30s' }], details: { timedOut: true, exitCode: 124 } }, isError: true }));
+    const completed = journal.snapshot().messages.flatMap(message => message.parts).find(part => part.type === 'tool_result');
+    expect(completed).toMatchObject({ isError: true, errorKind: 'timeout', error: 'Command timed out after 30s' });
+    const editor = assistant([{ type: 'toolCall', id: 'edit-call', name: 'edit', arguments: { path: 'a.ts' } }], 'toolUse', 3);
+    journal.append(projection.consume({ type: 'message_start', message: editor }));
+    manager.appendMessage(editor);
+    journal.append(projection.consume({ type: 'message_end', message: editor }));
+    journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'edit-call', toolName: 'edit',
+      result: { content: [{ type: 'text', text: 'Not unique' }], details: { errorKind: 'not-unique' } }, isError: true }));
+    const editResult = journal.snapshot().messages.flatMap(message => message.parts).filter(part => part.type === 'tool_result')[1];
+    expect(editResult).toMatchObject({ errorKind: 'not-unique', error: 'Not unique' });
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an assistant step carries its own start, first token and completion', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-step-timing-'));
+  const manager = SessionManager.create(root, root);
+  let reopened: SessionManager | undefined;
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    journal.append(projection.beginRun('run', 1));
+    const user = { role: 'user' as const, content: 'ping', timestamp: 1000 };
+    journal.append(projection.consume({ type: 'message_start', message: user }));
+    manager.appendMessage(user);
+    journal.append(projection.consume({ type: 'message_end', message: user }));
+    projection.bindPending();
+    const step = { ...assistant([{ type: 'text' as const, text: 'pong' }], 'stop', 1000), ttft: 250, duration: 1400, completedAt: 2400 };
+    journal.append(projection.consume({ type: 'message_start', message: step }));
+    manager.appendMessage(step);
+    const created = projection.consume({ type: 'message_end', message: step });
+    journal.append(created);
+    projection.bindPending();
+    journal.append(projection.completeRun(2400));
+    const expected = { startedAt: 1000, firstTokenAt: 1250, completedAt: 2400 };
+    const history = projection.history({ sessionId: 'session' });
+    const live = history.messages.find(message => message.role === 'assistant');
+    expect(live?.timing).toEqual(expected);
+    expect(created).toContainEqual({ timestamp: expect.any(Number), event: expect.objectContaining({ type: 'message.updated', timing: expected }) });
+    await manager.flush();
+    const file = manager.getSessionFile();
+    if (!file) throw new Error('Native session file is required');
+    await manager.close();
+    reopened = await SessionManager.open(file, root, undefined, { initialCwd: root, throwIfMissing: true });
+    const restored = new WorkerProjection(reopened, 'session').seed();
+    expect(restored.messages.find(message => message.role === 'assistant')?.timing).toEqual(expected);
+  } finally {
+    await reopened?.close();
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a run OMP prompts itself opens a turn without an empty user message', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-worker-turn-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    const journal = new SessionJournal({ sessionId: 'session', rootSessionId: 'session', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, projection.seed());
+    const begun = journal.append(projection.beginRun('plan-run', 1, [], 'plan'));
+    expect(begun.map(event => event.type)).toEqual(['run.started', 'turn.started']);
+    expect(begun.some(event => event.type === 'message.created')).toBe(false);
+    journal.append(projection.consume({ type: 'message_start', message: assistant([{ type: 'text', text: 'Working on it.' }], 'stop', 2) }));
+    expect(journal.snapshot().messages.some(message => message.role === 'user')).toBe(false);
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});

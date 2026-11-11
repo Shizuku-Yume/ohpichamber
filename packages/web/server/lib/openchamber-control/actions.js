@@ -115,7 +115,7 @@ const OPENCHAMBER_RENDER_ACTION_DEFINITIONS = Object.freeze([
   { action: 'render.page', title: 'Show a page', description: 'Requires html and title' },
 ]);
 
-const OPENCHAMBER_RENDER_ACTIONS = Object.freeze(
+export const OPENCHAMBER_RENDER_ACTIONS = Object.freeze(
   OPENCHAMBER_RENDER_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 

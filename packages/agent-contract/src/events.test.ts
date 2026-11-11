@@ -51,5 +51,20 @@ describe('canonical event boundaries', () => {
     expect(CanonicalEventSchema.parse({ ...envelope, type: 'session.status', runtimeStatus: 'running', activeRunId: 'run_1' }).type).toBe('session.status');
     expect(CanonicalEventSchema.safeParse({ ...envelope, type: 'session.status', runtimeStatus: 'running', activeRunId: null }).success).toBe(false);
     expect(CanonicalEventSchema.safeParse({ ...envelope, type: 'tool.completed', toolCallId: 'tool_1', status: 'running', isError: false }).success).toBe(false);
+    const failed = { ...envelope, type: 'tool.completed', toolCallId: 'tool_1', status: 'failed', isError: true, error: 'Command failed', errorKind: 'timeout' };
+    expect(CanonicalEventSchema.parse(failed)).toEqual(failed);
+    expect(CanonicalEventSchema.safeParse({ ...failed, errorKind: '' }).success).toBe(false);
+  });
+
+  test('a step timing rides the message lifecycle events and restores with the message', () => {
+    const timing = { startedAt: 1, firstTokenAt: 40, completedAt: 900 };
+    const created = { ...envelope, type: 'message.created', messageId: 'm1', turnId: 't1', role: 'assistant', providerId: 'p', modelId: 'm', timing };
+    expect(CanonicalEventSchema.parse(JSON.parse(JSON.stringify(created)))).toEqual(created);
+    const updated = { ...envelope, type: 'message.updated', messageId: 'm1', providerId: 'p', modelId: 'm', timing };
+    expect(CanonicalEventSchema.parse(JSON.parse(JSON.stringify(updated)))).toEqual(updated);
+    // A user or notice row carries no timing, and an untimed creation stays valid.
+    const untimed = { ...envelope, type: 'message.created', messageId: 'm2', turnId: 't1', role: 'user' };
+    expect(CanonicalEventSchema.parse(untimed)).toEqual(untimed);
+    expect(CanonicalEventSchema.safeParse({ ...created, timing: { startedAt: 0.5 } }).success).toBe(false);
   });
 });

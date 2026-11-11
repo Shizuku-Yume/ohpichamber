@@ -217,7 +217,17 @@ export const projectTurnRecords = (
     messages.forEach((message, index) => {
         const role = resolveMessageRole(message);
         if (role === 'assistant') {
-            const currentTurn = turnByCanonicalId.get(message.turnId);
+            let currentTurn = turnByCanonicalId.get(message.turnId);
+            if (!currentTurn && turns.length > 0) {
+                // A run OMP starts itself (a plan or goal continuation) opens a
+                // turn without a user prompt of its own. Its steps continue the
+                // conversation the user is already reading, so they join that
+                // turn; they are never hidden for lacking a prompt row.
+                currentTurn = turns[turns.length - 1];
+                turnByCanonicalId.set(message.turnId, currentTurn);
+            }
+            // A session whose transcript opens on an answer has no turn to
+            // join; the row stands alone rather than disappearing.
             if (!currentTurn) return;
             currentTurn.assistantMessages.push(message);
             currentTurn.assistantMessageIds.push(message.messageId);
@@ -275,10 +285,9 @@ export const projectTurnRecords = (
     const projection = projectTurnIndexes(stableTurns);
     const ungroupedMessageIds = new Set<string>();
     messages.forEach((message) => {
-        // An assistant reply without a canonical user turn has nothing to
-        // anchor it; render it neither as a turn nor as a standalone row. A
-        // page loaded from the middle of a session starts on such a reply.
-        if (message.role !== 'assistant' && !groupedMessageIds.has(message.messageId)) {
+        // A message that joined no turn still has content the reader asked to
+        // see: render it as its own row, notice rows included.
+        if (!groupedMessageIds.has(message.messageId)) {
             ungroupedMessageIds.add(message.messageId);
         }
     });

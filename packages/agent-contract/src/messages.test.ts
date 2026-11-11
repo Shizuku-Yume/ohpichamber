@@ -112,6 +112,29 @@ describe('message wire schemas', () => {
     expect(PartSchema.safeParse({ ...part, sessionMentions: [{ kind: 'session-message', sessionId: 's', sessionTitle: 'T', excerpt: 'E' }] }).success).toBe(false);
     expect(PartSchema.safeParse({ ...part, sessionMentions: [{ ...mentions[0], metadata: {} }] }).success).toBe(false);
   });
+
+  test('a failed result carries a machine kind beside its human detail', () => {
+    const failed = { ...toolResultPart, isError: true, error: 'Command timed out after 30s', errorKind: 'timeout' };
+    expect(ToolResultPartSchema.parse(failed)).toEqual(failed);
+    expect(PartSchema.parse(failed)).toEqual(failed);
+    expect(ToolResultPartSchema.parse(toolResultPart).errorKind).toBeUndefined();
+    expect(ToolResultPartSchema.safeParse({ ...failed, errorKind: '' }).success).toBe(false);
+  });
+
+  test('an assistant step carries absolute start, first-token and completion times', () => {
+    const message = {
+      messageId: 'message-timed', sessionId: 'session-1', turnId: 'turn-1', role: 'assistant',
+      createdAt: 1000, parts: [textPart],
+      timing: { startedAt: 1000, firstTokenAt: 1420, completedAt: 3050 },
+    };
+    expect(MessageSchema.parse(message)).toEqual(message);
+    expect(MessageSchema.parse({ ...message, timing: { startedAt: 1000 } }).timing).toEqual({ startedAt: 1000 });
+    // A partially timed step still restores: the live stream publishes the
+    // start before the first token exists.
+    expect(MessageSchema.safeParse({ ...message, timing: { startedAt: 1000, firstTokenAt: 1420 } }).success).toBe(true);
+    expect(() => MessageSchema.parse({ ...message, timing: { startedAt: -1 } })).toThrow();
+    expect(MessageSchema.parse({ ...message, timing: undefined }).timing).toBeUndefined();
+  });
 });
 
 describe('token usage schema', () => {

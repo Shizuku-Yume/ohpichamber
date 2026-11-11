@@ -1,13 +1,12 @@
 import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
-import { normalizeIntent } from './intent';
 import { fallbackPresentation, KNOWN_TOOL_NAMES, TOOL_PRESENTATIONS, type KnownToolName } from './presentations';
 import type { ToolGroup, ToolPresentation } from './types';
 
 export { normalizeIntent, intentOf } from './intent';
 export type { ToolGroup, ToolPresentation, ToolOutputLanguage } from './types';
-export { KNOWN_TOOL_NAMES, TOOL_PRESENTATIONS, fallbackPresentation } from './presentations';
+export { KNOWN_TOOL_NAMES } from './presentations';
 export type { KnownToolName } from './presentations';
 
 /** A runtime row's name may carry a stream index and a `runtime.` prefix. */
@@ -27,22 +26,9 @@ export const toolPresentation = (toolName: string | undefined): ToolPresentation
 /** The OMP tool names a native call can claim; extension and MCP names stay opaque. */
 export const OMP_TOOL_NAMES: readonly string[] = KNOWN_TOOL_NAMES.filter((name) => !['reasoning', 'image-preview', 'mermaid-preview', 'skill'].includes(name));
 
-/**
- * The status line's text for a call: the harness intent when it carries one,
- * else the tool's own call description, else its label.
- */
-export const callStatusText = (input: JsonObject, toolName: string | undefined): string => {
-    const presentation = toolPresentation(toolName);
-    return normalizeIntent(typeof input.i === 'string' ? input.i : '') ?? presentation.describeCall(input) ?? presentation.label;
-};
-
 /** One line describing the call's target from its arguments. */
 export const describeToolCall = (input: JsonObject, toolName: string | undefined): string | null =>
     toolPresentation(toolName).describeCall(input);
-
-/** One line summarizing the result from the SDK's `details`. */
-export const describeToolResult = (details: JsonValue | undefined, toolName: string | undefined): string | null =>
-    toolPresentation(toolName).describeResult(details);
 
 /** The activity-row grouping class for a tool name. */
 export const toolGrouping = (toolName: string | undefined): ToolGroup => toolPresentation(toolName).group;
@@ -141,5 +127,3 @@ export const isWebTool = (toolName: string | undefined): boolean => {
     const name = toolBaseName(toolName);
     return name === 'web_search' || name === 'web';
 };
-
-export type { JsonObject, JsonValue };

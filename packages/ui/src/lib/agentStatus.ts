@@ -41,7 +41,7 @@ export const applyPlural = (template: string, count: number, locale: Locale): st
 };
 
 /** The phrase alone, as the dictionary writes it ("running 3 commands"). */
-export const formatAgentStatusPhrase = (t: Translate, locale: Locale, status: AgentStatus): string => {
+const formatAgentStatusPhrase = (t: Translate, locale: Locale, status: AgentStatus): string => {
   const raw = status.text ?? t(status.key);
   const counted = status.count === undefined ? raw : applyPlural(raw, status.count, locale);
   // A function, so `$&` or `$$` in a tool's name stay as written.
@@ -55,6 +55,3 @@ export const formatAgentStatus = (t: Translate, locale: Locale, status: AgentSta
   if (model) return t('chat.statusRow.modelStatus', { model, status: phrase });
   return phrase.charAt(0).toLocaleUpperCase(locale) + phrase.slice(1);
 };
-
-/** A stable string for comparing statuses: equal statuses read the same in every language. */
-export const agentStatusSignature = (status: AgentStatus): string => `${status.key}|${status.count ?? ''}|${status.name ?? ''}|${status.text ?? ''}`;

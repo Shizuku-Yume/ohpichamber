@@ -24,7 +24,7 @@ import {
 
 export type ToolName = string | undefined;
 
-export function normalizeToolName(toolName: ToolName): string { return toolBaseName(toolName); }
+export function normalizeToolName(toolName: ToolName): string { return toolName?.trim() ?? ''; }
 
 export const isShellTool = registryShell;
 export const isFileChangeTool = registryFileChange;
@@ -85,11 +85,6 @@ export function toolInputPaths(call: ToolCallPart): string[] {
  // Raw edit modes carry a native program, not a path field. Their resolved
  // targets come from the result's details, not a guessed client-side parser.
  return paths;
-}
-
-/** The row's one-line description of a call, from the registry. */
-export function toolCallDescription(input: ToolCallPart['input'], toolName: ToolName): string | null {
- return toolPresentation(toolName).describeCall(input);
 }
 
 export function detectToolOutputLanguage(toolName: string, _output: string, input?: ToolCallPart['input']): string {
@@ -711,5 +706,3 @@ export function formatToolInput(input: ToolCallPart['input'], toolName: string):
  // Keep complete structured native edit/task/custom-tool inputs visible.
  return JSON.stringify(input, null, 2);
 }
-
-export type { ToolCallPart, ToolResultPart };

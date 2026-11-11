@@ -24,6 +24,14 @@ Top-level worker sessions are initialized with `tuiTranscript: true`, which info
 
 `WorkerProjection` handles `toolcall_start`, `toolcall_delta`, and `tool_stream_update` events to project progressive tool arguments (`write.content`, `edit.input`, `eval.code`) live into `part.started` and `part.updated` canonical events, keeping `status: 'running'` and redacting private paths via `publicJsonObject(...)` before arguments are emitted over the canonical event stream.
 
+## Tool result placement, partial output and step timing
+
+A tool result belongs to the message that authored its `tool_call`: the projection records the call's owner when the call is authored, and publishes the outcome as a `tool_result` part at `<call-part>:result` on that message. OMP's `tool_execution_update` frames become `part.updated` on the same part while the call runs, so a long `bash`/`task` shows its body live; the terminal `tool_execution_end` and the native `toolResult` message both close it. A native result message never becomes a canonical message, and no `system` role is authored for a result. A failed result carries the tool's own detail in `error` and a class in `errorKind` (`synthetic` for a call OMP never ran, `interrupted`, an edit's own `errorKind`, `timeout` from `details.timedOut`, `background-job` from a dead `details.async`, else `tool_error`).
+
+`metadata()` also derives each assistant step's `timing` from the native `AssistantMessage` alone (`timestamp`, `ttft`, `duration`/`completedAt`), so a restored step and the live stream publish the same absolute epochs. A run OMP prompts itself (plan/goal continuation) opens a turn with no authored user message; the Host prompt path authors the user message it was given.
+
+Host tools (`openchamber`, `openchamber_knowledge`, `web`, `memory`, `notify`, `openchamber_image`, `openchamber_render`) are registered by `worker/host-tool.ts`; `openchamber_render` sends the tool call id so a waiting page can be answered, and returns its answer under `details.openchamber`, which the projection also hoists to the result's top level for the render card.
+
 ## OMP TUI timeline notices and compaction projection
 
 `WorkerProjection` projects OMP timeline notices into canonical `NoticePart` items via `persistAndPublishNotice()`:

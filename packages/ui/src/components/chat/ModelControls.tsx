@@ -1,3 +1,4 @@
+import { formatModelRef, modelRefInstanceKey } from '@openchamber/agent-contract';
 import React from 'react';
 import { useChatColumnActions } from './chatColumnSession';
 import { MobileModelButton } from './MobileModelButton';
@@ -59,7 +60,7 @@ type ProviderModel = Model;
 
 type MobileVariantTarget = { providerId: string; modelId: string };
 
-const buildModelRefKey = (providerId: string, modelId: string) => `${providerId}:${modelId}`;
+const buildModelRefKey = (providerId: string, modelId: string) => modelRefInstanceKey(providerId, modelId);
 
 const selectLatestReplyModelChoice = (messages: Message[]) => findLatestUserModelChoice(messages);
 const MAX_INLINE_MOBILE_VARIANT_OPTIONS = 6;
@@ -837,7 +838,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         // with Auto the router itself switches the session's model each turn,
         // and the picker keeps showing Auto.
         const recordModelKey = sessionRecordChoice && latestLoadedUserChoice === sessionRecordChoice
-            ? `${sessionRecordChoice.providerId}/${sessionRecordChoice.modelId}#${sessionRecordChoice.variant ?? ''}`
+            ? `${formatModelRef(sessionRecordChoice)}#${sessionRecordChoice.variant ?? ''}`
             : null;
         const recordModelSwitched = recordModelKey !== null
             && useSelectionStore.getState().isSessionModelSwitched(currentSessionId, recordModelKey);

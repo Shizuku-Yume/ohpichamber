@@ -80,10 +80,6 @@ mock.module('@/lib/git/branchNameGenerator', () => ({
   generateBranchName: () => 'generated-branch',
 }));
 
-mock.module('@/lib/modelIdentifier', () => ({
-  parseModelIdentifier: () => null,
-}));
-
 mock.module('@/lib/openchamberConfig', () => ({
   getWorktreeSetupWaitEnabled: async () => false,
 }));

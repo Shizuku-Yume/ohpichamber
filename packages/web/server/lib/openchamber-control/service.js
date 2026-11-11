@@ -11,10 +11,12 @@ import {
  OPENCHAMBER_KNOWLEDGE_ACTIONS,
  OPENCHAMBER_NOTIFY_ACTIONS,
  OPENCHAMBER_IMAGE_ACTIONS,
+ OPENCHAMBER_RENDER_ACTIONS,
 } from './actions.js';
 import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
 import { createPageAnswers, createRenderPageAction } from './render-page.js';
+import { formatModelRef, modelRefKey, parseModelSelector, thinkingLevelToReasoningEffort } from '@openchamber/agent-contract';
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const MAX_WAIT_TIMEOUT_SECONDS = 86_400;
@@ -28,6 +30,7 @@ const TOOL_ACTIONS = new Map([
  ['openchamber_knowledge', new Set(OPENCHAMBER_KNOWLEDGE_ACTIONS)],
  ['notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
  ['openchamber_image', new Set(OPENCHAMBER_IMAGE_ACTIONS)],
+ ['openchamber_render', new Set(OPENCHAMBER_RENDER_ACTIONS)],
 ]);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
  'schedule.update',
@@ -79,7 +82,7 @@ const extractTextMessages = (messages, role = 'all') => {
    role: messageRole,
    createdAt: Number.isFinite(record?.time?.created) ? record.time.created : null,
    completedAt: Number.isFinite(record?.time?.completed) ? record.time.completed : null,
-   model: providerID && modelID ? `${providerID}/${modelID}` : null,
+   model: modelRefKey(providerID, modelID) || null,
    text,
   });
  }
@@ -89,11 +92,9 @@ const extractTextMessages = (messages, role = 'all') => {
 const parseModel = (value) => {
  const model = asNonEmptyString(value);
  if (!model) throw new OpenChamberControlError('model is required', 400);
- const slashIndex = model.indexOf('/');
- if (slashIndex <= 0 || slashIndex === model.length - 1) {
-  throw new OpenChamberControlError('model must be in provider/model format', 400);
- }
- return { providerID: model.slice(0, slashIndex), modelID: model.slice(slashIndex + 1) };
+ const parsed = parseModelSelector(model);
+ if (!parsed) throw new OpenChamberControlError('model must be in provider/model format', 400);
+ return { providerID: parsed.providerId, modelID: parsed.modelId, thinkingLevel: parsed.thinkingLevel };
 };
 const sessionOptions = (input) => {
  const model = input.model === undefined ? null : parseModel(input.model);
@@ -102,7 +103,8 @@ const sessionOptions = (input) => {
   modelId: model?.modelID ?? null,
   agentId: asNonEmptyString(input.agent) || null,
   variant: asNonEmptyString(input.variant) || null,
-  reasoningEffort: null,
+  // A `provider/model:high` selection is a reasoning request, not just a model.
+  reasoningEffort: thinkingLevelToReasoningEffort(model?.thinkingLevel),
  };
 };
 
@@ -483,7 +485,7 @@ export const createOpenChamberControlService = (dependencies) => {
   return {
    workspaceId,
    models: page.map((model) => ({
-    id: `${model.provider}/${model.modelId}`,
+    id: formatModelRef({ provider: model.provider, modelId: model.modelId }),
     name: model.name,
     provider: providerNames.get(model.provider) ?? model.provider,
     preference: PREFERENCE_BY_RANK[rank.get(modelRefKey({ providerId: model.provider, modelId: model.modelId }))],
@@ -550,7 +552,7 @@ export const createOpenChamberControlService = (dependencies) => {
      role: message.role,
      createdAt: Number.isFinite(message.createdAt) ? message.createdAt : null,
      completedAt: Number.isFinite(turn?.finishedAt) ? turn.finishedAt : null,
-     model: message.providerId && message.modelId ? `${message.providerId}/${message.modelId}` : null,
+     model: modelRefKey(message.providerId, message.modelId) || null,
      text: messageText(message),
     };
    })
@@ -1128,7 +1130,9 @@ export const createOpenChamberControlService = (dependencies) => {
       ? settings?.agentKnowledgeToolEnabled !== false
       : toolName === 'openchamber_image'
        ? settings?.agentImageToolEnabled === true
-       : settings?.agentNotifyToolEnabled === true;
+       : toolName === 'openchamber_render'
+        ? settings?.agentRenderToolEnabled !== false
+        : settings?.agentNotifyToolEnabled === true;
   return enabled ? null : { code: 'UNAUTHORIZED', status: 403, detail: `${toolName} tool is disabled` };
  };
 
@@ -1161,7 +1165,12 @@ export const createOpenChamberControlService = (dependencies) => {
     return fail('UNAUTHORIZED', 403, 'Session is outside the authorized scope');
    }
    const input = request.input ?? {};
-   const value = await execute(request.action, input, scope.cwd, { signal, contextSessionId: request.sessionId });
+   // The call that asked travels with the request: a page that waits for the
+   // user's answer is resolved by its own call, not by the session alone.
+   const value = await execute(request.action, input, scope.cwd, {
+    signal, contextSessionId: request.sessionId,
+    contextCallId: typeof request.toolCallId === 'string' ? request.toolCallId : undefined,
+   });
    return { ok: true, value: value === undefined ? null : value };
   } catch (error) {
    const status = Number.isInteger(error?.statusCode) ? error.statusCode : Number.isInteger(error?.status) ? error.status : 500;

@@ -63,6 +63,7 @@ const HostToolActions = {
   openchamber_knowledge: ['knowledge.list', 'knowledge.save', 'knowledge.delete', 'knowledge.show'],
   notify: ['notify.send'],
   openchamber_image: ['image.generate'],
+  openchamber_render: ['render.page'],
 } as const;
 export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
   z.strictObject({ toolName: z.literal('openchamber'), action: z.enum(HostToolActions.openchamber), input: JsonObjectSchema, sessionId: EntityIdSchema }),
@@ -71,6 +72,9 @@ export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
   z.strictObject({ toolName: z.literal('openchamber_knowledge'), action: z.enum(HostToolActions.openchamber_knowledge), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('notify'), action: z.enum(HostToolActions.notify), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('openchamber_image'), action: z.enum(HostToolActions.openchamber_image), input: JsonObjectSchema, sessionId: EntityIdSchema }),
+  // A page that waits for the user's answer is resolved by its own call, so
+  // the call's identity travels with the request.
+  z.strictObject({ toolName: z.literal('openchamber_render'), action: z.enum(HostToolActions.openchamber_render), input: JsonObjectSchema, sessionId: EntityIdSchema, toolCallId: EntityIdSchema.optional() }),
 ]);
 export type HostActionRequest = z.infer<typeof HostActionRequestSchema>;
 export const HostActionResultSchema = z.discriminatedUnion('ok', [

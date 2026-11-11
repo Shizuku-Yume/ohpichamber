@@ -17,6 +17,7 @@ import {
 } from './store.js';
 import { loadSourceSections, parseSource, sourceKey, WalkthroughSourceError } from './sources.js';
 import { supportsChangeRequestPatch } from './pull-request.js';
+import { formatModelRef, modelRefKey } from '@openchamber/agent-contract';
 
 // Walkthrough generation is always user-initiated and never automatic: it costs
 // tokens, and a background regeneration on every keystroke would be a way to
@@ -115,7 +116,7 @@ const jobs = new Map();
 // enough, and the cost of one wasted first attempt after that is small.
 const schemaRefusedBy = new Set();
 
-const modelKey = (model) => `${model.providerID}/${model.modelID}`;
+const modelKey = (model) => modelRefKey(model.providerID, model.modelID);
 const addReadContext = (result, readContext) => {
   if (readContext) result.readContext = readContext;
   return result;
@@ -201,7 +202,7 @@ export async function cancelWalkthroughGeneration({ directory, source: rawSource
   return addReadContext({ cancelled: true }, readContext);
 }
 
-const modelLabel = (model) => `${model.providerID}/${model.modelID}`;
+const modelLabel = (model) => formatModelRef({ providerId: model.providerID, modelId: model.modelID });
 
 /**
  * Resolve the model for this feature: an explicit per-review choice outranks the
@@ -549,7 +550,7 @@ async function runGeneration({ directory, workspaceId, source, repoRoot, key, fo
     prompt: options.prompt,
     system: options.system,
     workspaceId,
-    model: `${model.providerID}/${model.modelID}`,
+    model: formatModelRef({ providerId: model.providerID, modelId: model.modelID }),
     variant: model.variant,
     responseSchema: options.responseSchema,
     onOverflow: 'error',

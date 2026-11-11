@@ -7,7 +7,7 @@ helper shares (`callback-address.js`). The managed tools an agent calls are
 declared in `../openchamber-control/actions.js` and dispatched by the same
 control service the CLI uses, so tool, UI and CLI behavior have one owner.
 
-The Agent Service exposes six tools to the model from its worker
+The Agent Service exposes seven tools to the model from its worker
 (`packages/agent-service/src/worker/host-tool.ts`):
 
 - `openchamber` — projects, models, sessions, scheduled tasks, workflows, and
@@ -27,6 +27,12 @@ The Agent Service exposes six tools to the model from its worker
   model the user chose in Settings (`../openchamber-control/generate-image.js`,
   which reads `agentImageModel`). Off by default: the control service runs it
   only while `agentImageToolEnabled` is `true`.
+- `openchamber_render` — `render.page`, a page shown inline in the chat from
+  its HTML or openui-lang program (`../openchamber-control/render-page.js`).
+  With `awaitAnswer` the call waits for the user's answer and returns their
+  summary and data; the worker sends the tool call id so the answer reaches
+  that call. Enabled while `agentRenderToolEnabled` is not `false`. The answer
+  is published under `details.openchamber` in the result.
 
 Each tool accepts `{ action, input }`; the Host checks that the action belongs
 to that tool's set, applies the feature policy named above, and dispatches.

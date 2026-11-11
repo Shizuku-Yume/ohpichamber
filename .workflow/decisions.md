@@ -948,4 +948,18 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** the R6 fix is a deliberate fork change: a caught failure must show the cause the Agent Service wrote. Reverting those nine files would restore the defect the task exists to remove, and an unexplained row would fail `bun run check`.
 - **Mine:** yes (agent decision, within the task's stated scope).
 - **Revisit when:** upstream adopts an equivalent cause-carrying display, at which point the rows collapse into `identical`.
+## 2026-11-12 - A tool result is a part of its call's message; a failure keeps a kind beside its detail
+
+- **Decided:** the canonical projection publishes a `tool_result` part inside the assistant message that authored its `tool_call`, at part id `<call-part>:result`, and streams OMP's partial result frames as `part.updated` on that same part. `ToolResultPart` keeps `error: string` and gains `errorKind`. A assistant step carries `timing: { startedAt, firstTokenAt?, completedAt? }` derived only from the native message. A run OMP prompts itself opens a turn with no authored user message, and the client joins its steps to the previous turn.
+- **Instead of:** a separate `role: 'system'` result message paired by the client, an object-valued `error`, or a `tool_result`-only turn role.
+- **Because:** the journal and reducer already key parts by partId and already flip call status from `tool.started`/`tool.completed`, so one message makes the live stream and the restored transcript identical and lets the client delete every heuristic it used to re-join them. `error` is read as text in cards the effort does not own, and absolute epochs survive both live emission and history replay without a second clock.
+- **Mine:** yes (settled inside task 23's design; maintainer approved the user-less-turn rule as an out-of-list edit)
+- **Revisit when:** the contract gains a first-class result message or `error` becomes a structured value with every card migrated.
+## 2026-11-12 - `@upstream` routing is opt-in for the selector grammar
+
+- **Decided:** `parseModelSelector` reads a trailing `@<slug>` as provider routing only when the caller passes `allowUpstreamRouting: true`. By default the `@` and its slug stay part of the model half, and `splitUpstreamRouting` remains exported for callers that check the base first.
+- **Instead of:** reproducing OMP's two-stage behavior (split, then re-resolve only when the base is an OpenRouter or Vercel-Gateway model) inside a grammar module that has no model registry. The alternative would have been to accept an `supportsUpstreamRouting(model)` predicate in the parse options, which doesn't exist without a catalog lookup and would make a pure string grammar depend on live provider state.
+- **Because:** an ungated split rewrites real ids that legitimately contain `@` — `anthropic/claude-opus-4-8@default` becomes provider `anthropic`, id `claude-opus-4-8`, upstream `default` — and those ids are persisted in role settings and project defaults, so a wrong split corrupts stored configuration. Leaving it off is the safe default; a caller that can prove the base is an aggregator turns it on.
+- **Mine:** yes (conservative option inside the 2026-11-10 R7 cutover)
+- **Revisit when:** a layer that parses selectors has the resolved model in hand and needs routing fidelity; it should then pass `allowUpstreamRouting: true` plus its registry check.
 - **Effort:** ux-v270-omp-alignment

@@ -1,3 +1,4 @@
+import { formatModelRef } from '@openchamber/agent-contract';
 import React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
@@ -629,10 +630,10 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
             const name = provider?.models.find((entry) => entry.modelId === model.modelId)?.name || model.modelId;
             const share = max > 0 ? (valueOf(model) / max) * 100 : 0;
             return (
-              <li key={`${model.providerId}/${model.modelId}#${model.variant ?? ''}`} className="flex min-w-0 flex-col gap-1">
+              <li key={`${formatModelRef(model)}#${model.variant ?? ''}`} className="flex min-w-0 flex-col gap-1">
                 <div className="flex min-w-0 items-center gap-2">
                   <ProviderLogo providerId={model.providerId} alt={providerName} className="size-4 shrink-0" />
-                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate" title={`${providerName} · ${model.providerId}/${model.modelId}`}>
+                  <span className="flex min-w-0 flex-1 items-baseline gap-1.5 truncate" title={`${providerName} · ${formatModelRef(model)}`}>
                     <span className="truncate typography-ui-label text-foreground">{name}</span>
                     {model.variant ? <span className="shrink-0 typography-micro text-muted-foreground">{model.variant}</span> : null}
                     {/* Phones keep the row for the model name; the logo names the provider there. */}

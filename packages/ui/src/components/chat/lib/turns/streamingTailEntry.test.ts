@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import type { Part } from '@openchamber/agent-contract';
 
-import { attachToolResultsForDisplay } from '../messageDisplayNormalization';
 import { buildLiveStreamingEntry, type StreamingTailEntry } from './streamingTailEntry';
 import type { ChatMessageEntry, TurnRecord } from './types';
 
@@ -109,33 +108,27 @@ describe('buildLiveStreamingEntry', () => {
         expect(next.turn.assistantMessages[0]?.parts).toEqual([summary, visible]);
     });
 
-    test('keeps display-paired tool results when live parts omit the system result', () => {
+    test('a tool result travels with its call\'s own live parts', () => {
         const call: Part = {
             type: 'tool_call', partId: 'edit-call', toolCallId: 'edit-1', toolName: 'edit',
             input: { path: 'NOTES.md' }, status: 'completed',
         };
         const result: Part = {
-            type: 'tool_result', partId: 'edit-result', toolCallId: 'edit-1', toolName: 'edit',
+            type: 'tool_result', partId: 'edit-call:result', toolCallId: 'edit-1', toolName: 'edit',
             output: { content: [{ type: 'text', text: 'updated' }], details: { diff: '-old\n+new', op: 'update' } },
             isError: false,
         };
-        const rawAssistant = message('assistant_1', 'assistant', 'user_1', [call]);
-        const system = message('system_1', 'system', 'user_1', [result]);
-        const display = attachToolResultsForDisplay([rawAssistant], [rawAssistant, system])[0]!;
-        expect(display.parts).toHaveLength(2);
-        const entry = turnEntry(display);
+        const assistant = message('assistant_1', 'assistant', 'user_1', [call]);
 
-        // The live part store still carries the result on the system message,
-        // so the assistant's live parts contain only the call.
-        const next = buildLiveStreamingEntry(entry, {
-            livePartsByMessageId: { assistant_1: [call] },
+        const next = buildLiveStreamingEntry(turnEntry(assistant), {
+            livePartsByMessageId: { assistant_1: [call, result] },
             showTextJustificationActivity: true,
             showTurnChangedFiles: false,
         });
 
         expect(next.kind).toBe('turn');
         if (next.kind !== 'turn') return;
-        expect(next.turn.assistantMessages[0]?.parts).toEqual([call, result]);
+        expect(next.turn.assistantMessages[0]?.parts.map((part) => part.partId)).toEqual(['edit-call', 'edit-call:result']);
         expect(next.turn.activityParts.some((activity) => activity.part === result)).toBe(true);
     });
 

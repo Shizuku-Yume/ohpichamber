@@ -409,7 +409,7 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
    break
   }
   case "message.created": {
-   if (!messages.some((message) => message.messageId === event.messageId)) messages = [...messages, { messageId: event.messageId, sessionId: id, turnId: event.turnId, role: event.role, createdAt: event.timestamp, parts: [], ...(event.providerId === undefined ? {} : { providerId: event.providerId }), ...(event.modelId === undefined ? {} : { modelId: event.modelId }), ...(event.usage === undefined ? {} : { usage: event.usage }) }]
+   if (!messages.some((message) => message.messageId === event.messageId)) messages = [...messages, { messageId: event.messageId, sessionId: id, turnId: event.turnId, role: event.role, createdAt: event.timestamp, parts: [], ...(event.providerId === undefined ? {} : { providerId: event.providerId }), ...(event.modelId === undefined ? {} : { modelId: event.modelId }), ...(event.usage === undefined ? {} : { usage: event.usage }), ...(event.timing === undefined ? {} : { timing: event.timing }) }]
    if (event.role === "assistant") {
     const index = turns.findIndex((turn) => turn.turnId === event.turnId)
     if (index < 0) { recover = true; break }
@@ -425,7 +425,8 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     const providerId = event.providerId ?? message.providerId
     const modelId = event.modelId ?? message.modelId
     const usage = event.usage ?? message.usage
-    return providerId === message.providerId && modelId === message.modelId && same(usage, message.usage) ? message : { ...message, ...(providerId === undefined ? {} : { providerId }), ...(modelId === undefined ? {} : { modelId }), ...(usage === undefined ? {} : { usage }) }
+    const timing = event.timing ?? message.timing
+    return providerId === message.providerId && modelId === message.modelId && same(usage, message.usage) && same(timing, message.timing) ? message : { ...message, ...(providerId === undefined ? {} : { providerId }), ...(modelId === undefined ? {} : { modelId }), ...(usage === undefined ? {} : { usage }), ...(timing === undefined ? {} : { timing }) }
    })
    break
   case "part.started": upsertPart(event.messageId, event.part); break

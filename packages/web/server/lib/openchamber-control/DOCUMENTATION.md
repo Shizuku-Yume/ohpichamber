@@ -18,6 +18,13 @@ other.
 - `routes.js` is the authenticated CLI HTTP adapter. It forwards one action,
   preserves service status and partial-result details, and propagates request
   cancellation. It also carries the chat's answer to a waiting page.
+- `render-page.js` owns `render.page`, the page an agent shows inline in the
+  chat. The chat draws the page from the call's own input; the service checks
+  it is a drawable page, applies the render feature policy
+  (`agentRenderToolEnabled`), and with `awaitAnswer` waits for the user's
+  answer keyed by session and tool call id (`pageAnswers`). Every inner host
+  action request for `openchamber_render` carries that `toolCallId`, so an
+  answer reaches the call that showed the page.
 - `../agent-tool/runtime.js` is the managed-tool adapter. It wraps service
   results in the versioned native-tool envelope and uses a separate ephemeral
   loopback credential.

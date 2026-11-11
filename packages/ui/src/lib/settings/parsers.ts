@@ -1,3 +1,4 @@
+import { modelRefKey } from '@openchamber/agent-contract';
 /**
  * Boundary parsers for settings values. Every value that arrives from the
  * server, the VS Code bridge, or browser storage passes through one of these
@@ -162,7 +163,7 @@ export const parseModelRefs = (limit: number): SettingsParser<ModelRef[]> => fro
     for (const entry of entries) {
       const parsed = modelRefSchema.safeParse(entry);
       if (!parsed.success) continue;
-      const key = `${parsed.data.providerID}/${parsed.data.modelID}`;
+      const key = modelRefKey(parsed.data.providerID, parsed.data.modelID);
       if (seen.has(key)) continue;
       seen.add(key);
       result.push(parsed.data);

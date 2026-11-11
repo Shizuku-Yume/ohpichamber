@@ -11,6 +11,9 @@ import {
 
 const modelRefSchema = z.string();
 const nonEmptyTextSchema = z.string().refine((value) => value.trim().length > 0);
+// The thinking level a role selector may carry (`provider/model:high`). A role
+// names a model; the level belongs to the next turn, not to this resolution.
+const ROLE_EFFORT_SUFFIXES = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'];
 
 function parseModelRef(value) {
   const parsed = modelRefSchema.safeParse(value);
@@ -18,9 +21,14 @@ function parseModelRef(value) {
   const trimmed = parsed.data.trim();
   const slash = trimmed.indexOf('/');
   if (slash <= 0 || slash === trimmed.length - 1) return null;
+  const colon = trimmed.lastIndexOf(':');
+  // OMP writes role selectors as `provider/model:effort`; reading the suffix as
+  // part of the model ID made every role with a level unresolvable.
+  const andEffort = colon > slash + 1 && ROLE_EFFORT_SUFFIXES.includes(trimmed.slice(colon + 1).toLowerCase());
+  const ref = andEffort ? trimmed.slice(0, colon) : trimmed;
   return {
-    providerID: trimmed.slice(0, slash),
-    modelID: trimmed.slice(slash + 1),
+    providerID: ref.slice(0, slash),
+    modelID: ref.slice(slash + 1),
   };
 }
 

@@ -62,6 +62,21 @@ export function selectBoundRunId(state: Pick<State, 'snapshot' | 'session'>, ses
 }
 
 /**
+ * The phase a status and a run binding prove, before pending approvals are
+ * considered. `unavailable` is a settled session unless a native run binding
+ * still exists: the Agent Service reports it for a session it does not hold
+ * (a restart, a reload, a cold journal read), which is not work in progress.
+ */
+export const sessionActivityPhase = (
+  status: SessionRuntimeStatus | undefined,
+  activeRunId: string | null,
+): SessionActivityPhase => {
+  if (status !== undefined && isLiveStatus(status)) return 'busy';
+  if (status === 'idle') return 'idle';
+  return activeRunId !== null ? 'unknown' : 'idle';
+};
+
+/**
  * Precedence is the composer contract:
  * 1. Pending permissions/forms own the send button, so the prompt can be
  *    superseded with a new message instead of a stop.
@@ -80,9 +95,8 @@ export function deriveSessionActivity(input: {
 }): SessionActivityResult {
   if (!input.sessionId) return IDLE_RESULT;
   if (input.permissionsPending || input.formsPending) return IDLE_RESULT;
-  if (input.status !== undefined && isLiveStatus(input.status)) return BUSY_RESULT;
-  if (input.status === 'idle') return IDLE_RESULT;
-  return input.activeRunId !== null ? UNKNOWN_RESULT : IDLE_RESULT;
+  const phase = sessionActivityPhase(input.status, input.activeRunId);
+  return phase === 'busy' ? BUSY_RESULT : phase === 'unknown' ? UNKNOWN_RESULT : IDLE_RESULT;
 }
 
 /**

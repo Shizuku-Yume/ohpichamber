@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
 import { nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
-import { deriveSessionActivity, selectBoundRunId } from './useSessionActivity';
+import { deriveSessionActivity, selectBoundRunId, sessionActivityPhase } from './useSessionActivity';
 
 const projected = (activeRunId: string | null): Session => ({
   ...nativeSnapshot('session-1', []).session,
@@ -62,6 +62,18 @@ describe('session activity authority', () => {
     expect(activity({ status: 'running', activeRunId: 'run-1', permissionsPending: true }).phase).toBe('idle');
     expect(activity({ status: 'running', activeRunId: 'run-1', formsPending: true }).phase).toBe('idle');
     expect(activity({ status: 'unavailable', activeRunId: 'run-1', formsPending: true }).phase).toBe('idle');
+  });
+
+  test('an unavailable session is settled, which is what shows its recap and suggestion', () => {
+    // A reload reaches a session the Agent Service does not hold: the projection
+    // says `unavailable` with no run binding. The assist surfaces treat that as
+    // settled, so a real payload written before the reload still renders.
+    expect(sessionActivityPhase('unavailable', null)).toBe('idle');
+    expect(sessionActivityPhase(undefined, null)).toBe('idle');
+    expect(sessionActivityPhase('idle', 'run-1')).toBe('idle');
+    // Proof of work, or a run the client cannot see the end of, is not settled.
+    expect(sessionActivityPhase('running', 'run-1')).toBe('busy');
+    expect(sessionActivityPhase('unavailable', 'run-1')).toBe('unknown');
   });
 
   test('no session has no activity', () => {

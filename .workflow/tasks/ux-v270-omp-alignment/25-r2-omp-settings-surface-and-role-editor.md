@@ -57,9 +57,40 @@ UI (commit `c492c01`, `8582dd0`):
   test dropped the moved assertions.
 - `settingsItemOwnership.test.ts`: no literal `settingsItem` id is claimed by two pages, with a documented
   `SAME_PAGE_CLAIMS` allowlist for the four same-page dialog/form pairs.
-- i18n: `omp-settings.i18n.ts` was regenerated from one curated vocabulary — 133 keys × 15 locales.
-  `messages.test.ts` gained an explicit all-locale OMP test (key present, prose translated, placeholders
-  preserved) in place of the old `settings.omp.*` exemption.
+- i18n: `omp-settings.i18n.ts` was regenerated from one curated vocabulary — 134 keys × 15 locales, including
+  the five section headings the page addresses. `messages.test.ts` gained an explicit all-locale OMP test
+  (key present, prose translated, placeholders preserved) in place of the old `settings.omp.*` exemption.
+  The page title stays `OMP` in every locale: the product name is not prose.
 
 Check before: `bun --cwd packages/agent-contract test` exit 0 (246 tests) and `bun run lint` exit 0 at
 `eb91091a0`. The vitest leg cannot run at baseline (see the substitution above).
+
+Check after:
+- `bun --cwd packages/agent-contract test` → exit 0, 246 pass, 0 fail (26 files).
+- `bun --cwd packages/agent-service test` → exit 0, 475 pass, 10 skip, 0 fail (485 tests / 67 files),
+  including `settings-ui.test.ts` (classification coverage, owner uniqueness, live descriptor read,
+  condition flips after a write, unknown-condition fallback) and `catalog-settings.test.ts`.
+- `VITEST_MAX_WORKERS=2 bun --cwd packages/ui test src/components/sections src/lib/i18n` → exit 0,
+  1331/1331 test files passed. The sections leg includes `OmpSettingsPage.test.tsx`,
+  `DefaultsSettings.test.tsx`, `settingsItemOwnership.test.ts` and `messages.test.ts`.
+- `bun run lint` → exit 0 (pre-existing warnings only).
+- `bunx tsc --noEmit -p packages/ui/tsconfig.json` and `-p packages/agent-service/tsconfig.json` → clean.
+- `bunx oxlint <changed files>` → exit 0.
+- `bun run dead-code` → exit 1, pre-existing findings only; nothing in the files this task adds or
+  rewrites (the previously reported `OMP_CATALOG_SETTING_IDS` export and the four non-exported helper
+  types are gone; `ompSettingsI18n.ts` is a stale duplicate of the regenerated `omp-settings.i18n.ts`
+  that predates this task).
+
+Real path (built `packages/web/dist` served on 127.0.0.1:4125, headless Chrome, zh-CN, worktree
+registered as a project so `workspaces/resolve` authorizes it):
+- The OMP Settings page renders 46 `omp.*` anchors and no `settings.omp.*` key reaches the screen.
+- Only `gui` rows draw: retry (9), compaction (7), LSP (2), subagents (3), modes (4), skills (2),
+  integrations (1) plus the 12 model roles. `tui.maxFps`, `cycleOrder`, `tools.artifactTailLines`,
+  `enabledModels`, `recap.enabled` are absent.
+- OMP's conditions hold: `retry.usageReservePct`/`usageReservePolicy` are hidden with
+  `usageAwareFallbackEnabled` off, `plan.defaultOnStartup` is drawn with `planModeEnabled` on.
+- Effort labels are prose (`高`, `最高`), not the bare catalog ids.
+- "Other OMP settings" shows the real `/home/shizuku/.omp/agent/config.yml` path and the
+  "打开 config.yml" action.
+Live payload cross-check (`GET /api/agent/v1/workspaces/<id>/settings`): 30 `gui`, 13 `tui-only`,
+7 `duplicate`, 107 `advanced`, and `configPath` set.

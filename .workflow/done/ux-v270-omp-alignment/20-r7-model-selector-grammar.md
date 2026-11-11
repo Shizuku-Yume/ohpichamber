@@ -7,7 +7,6 @@
 **Read first:** `research/ux-v270-systemic-review.md` R7; OMP `pi-tui/overlays/model-selector` (`parseModelString`, `splitThinkingSuffix`, `formatModelSelectorValue`) and `pi-coding-agent/config/model-resolver`; skill `openchamber-change-discipline`
 **Check:** `bun --cwd packages/agent-contract test && VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/lib packages/web/server/lib/small-model && bun run lint` → exit 0, with the round-trip test passing `provider/model:high`, `provider/model:max`, `:auto`, `#variant`, `@upstream`, and the model-ref rule reporting zero sites; real path: with the small-model role set to `provider/model:high`, AI Rename renames a session
 **Base commit:** 8327e6403f13f040ecc09b10b26ff7a2201b2d14
-**Status:** active
 
 - [x] Add `parseModelSelector`/`formatModelSelector` to `@openchamber/agent-contract`, porting OMP's grammar verbatim: thinking-level suffix, `:auto`, the `:max` literal-id guard, abbreviations, `#variant`, `@upstream`. Roles resolve with OMP's fallback to `default`.
 - [x] Route every parser, formatter and `${provider}/${modelId}` comparison in UI, Host and Agent Service through it (the review counts 14 parsers, 12 formatters, 31 comparisons; re-locate them on the merged tree). Small-model requests map the thinking level to reasoning effort instead of discarding the role.
@@ -15,6 +14,8 @@
 - [x] Deletes: `parseModelIdentifier`, `parseRoleSelector`, `splitRoleSelector`, the `KNOWN_EFFORTS` copies, `parseModelRef` and the other private splitters.
 
 ## Progress
+
+Review: pass (base 8327e6403f13f040ecc09b10b26ff7a2201b2d14)
 
 Implemented: `packages/agent-contract/src/modelSelector.ts` (+ round-trip test) ports OMP's grammar
 (`parseThinkingSuffix`, `splitThinkingSuffix`, `parseModelString`, `formatModelSelectorValue`,
@@ -46,7 +47,10 @@ which shims `bun:test` through `test/bun-test-shim.ts` and aliases `@/` for the 
 `scripts/run-isolated-tests.mjs` (module-level singletons and mixed runners make a shared process fail
 by load order). The equivalent legs below are the ones the packages themselves run.
 
-Check after (real results, scoped equivalents where the Check's vitest leg cannot run):
+Check after: `bun --cwd packages/agent-contract test` exit 0 (245 tests), `bun run lint` exit 0,
+model-ref rule zero sites; scoped equivalents where the Check's vitest leg cannot run:
+`bun --cwd packages/ui test src/lib src/components/views/walkthrough` 1637/1637 files pass and
+`bun vitest run server/lib` (packages/web) 498 passed + 9 skipped files, 8256 passed + 142 skipped tests.
 - `bun --cwd packages/agent-contract test` → exit 0, 242 tests, 0 fail (includes the round-trip test
   for `provider/model:high`, `:max`, `:auto`, `#variant`, `@upstream`).
 - `bun run lint` → exit 0; `openchamber/no-model-ref-splitting` reports zero sites.
@@ -70,8 +74,6 @@ the workspace catalog that advertises `high`), then ran the sidebar's "使用 AI
 on the session titled `Ready confirmation exchange`. Result: the session title became
 `Ready confirmation`, read back from `GET /api/agent/v1/sessions`. Server closed afterwards; no secret
 appears in the server log.
-
-## Review
 
 One `reviewer` round on `8327e6403..HEAD`; every blocking finding fixed:
 - Settings lost `:max`/`:auto` and literal ids: `splitSelectorThinking` now receives the catalog's

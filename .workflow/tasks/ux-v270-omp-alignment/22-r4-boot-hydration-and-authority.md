@@ -23,7 +23,7 @@
 
 **Check after:**
 
-- `node scripts/run-isolated-tests.mjs packages/ui/src/stores packages/ui/src/sync packages/ui/src/lib packages/ui/src/apps` → `599/599 test files passed`, including the new `stores/serverStateBoot.test.ts`, `sync/event-reducer.unknown-entity.test.ts`, the permission/store phase tests and the freshness regressions.
+- `node scripts/run-isolated-tests.mjs packages/ui/src` → `1225/1225 test files passed` (the whole UI tree, including `stores/serverStateBoot.test.ts`, `sync/event-reducer.unknown-entity.test.ts`, the per-store phase tests, the freshness regressions and the component tests whose mount-time readers were removed).
 - `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/stores packages/ui/src/sync packages/ui/src/lib` → **not usable here**: vitest spawns one worker per file and every file fails with `Cannot find package 'bun:test'` (578/578 failed, "Tests no tests"). The repo's tests in these roots are `bun:test`; the isolated runner above is the same set of files run with the canonical runner.
 - `bun run lint` → exit 0 (only the pre-existing `react-hooks/exhaustive-deps` warnings).
 - `bun run --cwd packages/ui type-check` → `No type errors in 3,511 files across 2 projects`.

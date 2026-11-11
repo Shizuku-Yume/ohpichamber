@@ -20,8 +20,7 @@ import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
  * All setting definitions come from the pinned @oh-my-pi/pi-coding-agent package
  * and are constrained by OMP_SETTING_IDS in @openchamber/agent-contract.
  */
-export const OMP_CATALOG_SETTING_IDS = OMP_SETTING_IDS;
-const allowlist = new Set<string>(OMP_CATALOG_SETTING_IDS);
+const allowlist = new Set<string>(OMP_SETTING_IDS);
 const byId = new Map<string, AnySetting>();
 
 /**
@@ -74,7 +73,7 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   return OmpSettingSchema.parse(descriptor);
 }
 
-/** The config file the settings write, shown so the page can offer it. */
+/** The config file the settings write, shown so the page can offer it. OMP reads it inside the agent directory. */
 const OMP_CONFIG_FILENAME = 'config.yml';
 
 export class NativeSettings {

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useI18n } from '@/lib/i18n';
 import {
   concreteEffort,
+  levelLabel,
   listModelEfforts,
   splitRoleSelector,
   formatRoleSelector,
@@ -35,16 +36,24 @@ export const ModelEffortPicker: React.FC<ModelEffortPickerProps> = ({
 }) => {
   const { t } = useI18n();
   const efforts = React.useMemo(() => listModelEfforts(model, t), [model, t]);
-  if (efforts.length === 0) return null;
+  // A level written earlier is what runs even when the catalog no longer lists
+  // it, so it stays visible instead of the select showing some other level.
+  const options = React.useMemo(
+    () => (efforts.some((entry) => entry.level === explicitEffort) || !explicitEffort
+      ? efforts
+      : [...efforts, { level: explicitEffort, label: levelLabel(t, explicitEffort) }]),
+    [efforts, explicitEffort, t],
+  );
+  if (options.length === 0) return null;
   const current = concreteEffort(model, explicitEffort);
-  const currentLabel = efforts.find((entry) => entry.level === current)?.label ?? current;
+  const currentLabel = options.find((entry) => entry.level === current)?.label ?? current;
   return (
     <Select value={current} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={ariaLabel}>
         <SelectValue>{currentLabel}</SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {efforts.map((entry) => (
+        {options.map((entry) => (
           <SelectItem key={entry.level} value={entry.level}>{entry.label}</SelectItem>
         ))}
       </SelectContent>

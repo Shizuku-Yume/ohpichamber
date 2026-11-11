@@ -15,10 +15,12 @@ import type { I18nKey } from '@/lib/i18n';
 const EFFORT_LEVELS = THINKING_LEVELS.filter((level) => level !== 'inherit');
 
 const EFFORT_LABEL_KEYS: Record<string, I18nKey> = {
+  off: 'settings.omp.modelRoles.effort.off',
   minimal: 'settings.omp.modelRoles.effort.minimal',
   low: 'settings.omp.modelRoles.effort.low',
   medium: 'settings.omp.modelRoles.effort.medium',
   high: 'settings.omp.modelRoles.effort.high',
+  xhigh: 'settings.omp.modelRoles.effort.xhigh',
   max: 'settings.omp.modelRoles.effort.max',
 };
 
@@ -59,10 +61,16 @@ export function listModelEfforts(
   translate: (key: I18nKey) => string,
 ): { level: string; label: string }[] {
   if (!model || !model.reasoningEffortSupported) return [];
-  const levels = model.reasoningOptions.length > 0
-    ? model.reasoningOptions.map((option) => ({ level: option.reasoningEffort, label: option.label }))
-    : EFFORT_LEVELS.map((level) => ({ level, label: levelLabel(translate, level) }));
-  return levels;
+  if (model.reasoningOptions.length > 0) {
+    // A catalog label that is just the level id (`high`) is a spelling, not a
+    // name: translate it. A model-specific label (`High effort`) is the model's
+    // own wording and stays as published.
+    return model.reasoningOptions.map((option) => ({
+      level: option.reasoningEffort,
+      label: option.label === option.reasoningEffort ? levelLabel(translate, option.reasoningEffort) : option.label,
+    }));
+  }
+  return EFFORT_LEVELS.map((level) => ({ level, label: levelLabel(translate, level) }));
 }
 
 /**
@@ -76,9 +84,9 @@ export function concreteEffort(model: Model | undefined, explicitLevel: string):
 }
 
 /** Localized name of a level, from the shared effort vocabulary. */
-const levelLabel = (translate: (key: I18nKey) => string, level: string): string => {
+export const levelLabel = (translate: (key: I18nKey) => string, level: string): string => {
   const key = EFFORT_LABEL_KEYS[level];
   if (key === undefined) return level;
   const label = translate(key);
   return label === key ? level : label;
-}
+};

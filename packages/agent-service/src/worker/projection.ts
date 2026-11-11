@@ -331,6 +331,7 @@ export class WorkerProjection {
    */
   private readonly liveToolCallOwners = new Map<string, { messageId: string; callPartId: string }>();
   private readonly publishedResultParts = new Set<string>();
+  private readonly completedResultParts = new Set<string>();
 
   private ownToolCall(toolCallId: string, messageId: string | undefined, contentIndex: number | undefined): void {
     if (!messageId || contentIndex === undefined) return;
@@ -349,8 +350,11 @@ export class WorkerProjection {
       this.publishedResultParts.add(part.partId);
       emit({ type: 'part.started', messageId: owner.messageId, part });
     }
-    // A partial frame is a live update; the terminal frame closes the part so
-    // a restored transcript and the stream end on the same value.
+    // A partial frame is a live update; the terminal frame closes the part once
+    // so a restored transcript and the stream end on the same value. The native
+    // result message that follows the terminal frame repeats that same outcome.
+    if (terminal && this.completedResultParts.has(part.partId)) return;
+    if (terminal) this.completedResultParts.add(part.partId);
     emit(terminal ? { type: 'part.completed', part } : { type: 'part.updated', part });
   }
 
@@ -533,6 +537,9 @@ export class WorkerProjection {
     this.turn = undefined;
     this.message = undefined;
     this.stopReason = undefined;
+    this.liveToolCallOwners.clear();
+    this.publishedResultParts.clear();
+    this.completedResultParts.clear();
     this.attachments = attachments;
     this.sessionMentions = sessionMentions(context);
     const result: ProjectionInput[] = [{ timestamp, event: { type: 'run.started', runId, origin, createdAt: timestamp } }];

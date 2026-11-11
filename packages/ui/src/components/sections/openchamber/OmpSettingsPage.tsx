@@ -1,5 +1,13 @@
 import React from 'react';
 import {
+  formatModelRef,
+  MAX_THINKING_SUFFIX_OPTIONS,
+  type ParseModelSelectorOptions,
+  formatModelSelector,
+  formatModelSelectorValue,
+  parseConfiguredThinkingLevel,
+  parseModelSelector,
+  splitSelectorThinking,
   type Model,
   type OmpSetting,
   type OmpSettingValue,
@@ -66,28 +74,22 @@ interface ParsedRoleSelector {
   effort: string;
 }
 
-function parseRoleSelector(selector: unknown): ParsedRoleSelector {
-  if (typeof selector !== 'string') return { model: '', effort: '' };
-  const trimmed = selector.trim();
-  if (!trimmed) return { model: '', effort: '' };
-  const colonIndex = trimmed.lastIndexOf(':');
-  if (colonIndex > 0) {
-    const base = trimmed.slice(0, colonIndex);
-    const suffix = trimmed.slice(colonIndex + 1);
-    const knownEfforts = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'];
-    if (knownEfforts.includes(suffix.toLowerCase())) {
-      return { model: base, effort: suffix };
-    }
-  }
-  return { model: trimmed, effort: '' };
+/** The role's model half and thinking level, read by the one selector grammar. */
+function parseRoleSelector(selector: unknown, literal: ParseModelSelectorOptions['isLiteralModelId']): ParsedRoleSelector {
+  const split = splitSelectorThinking(typeof selector === 'string' ? selector : null, { ...MAX_THINKING_SUFFIX_OPTIONS, isLiteralModelId: literal });
+  return { model: split.model, effort: split.thinkingLevel ?? '' };
 }
 
+/** Write a role back as `provider/model[:level]`; an empty level writes none. */
 function formatRoleSelector(model: string, effort: string): string {
-  const trimmedModel = model.trim();
-  if (!trimmedModel) return '';
-  const trimmedEffort = effort.trim();
-  if (!trimmedEffort || trimmedEffort === 'default' || trimmedEffort === '__default__') return trimmedModel;
-  return `${trimmedModel}:${trimmedEffort}`;
+  const trimmed = model.trim();
+  if (!trimmed) return '';
+  const parsedLevel = parseConfiguredThinkingLevel(effort);
+  const parsed = parseModelSelector(trimmed);
+  if (parsed) {
+    return formatModelSelector({ providerId: parsed.providerId, modelId: parsed.modelId, thinkingLevel: parsedLevel });
+  }
+  return formatModelSelectorValue(trimmed, parsedLevel);
 }
 
 function resolveRoleFallback(
@@ -139,7 +141,7 @@ type Values = Record<string, OmpSettingValue>;
 
 /** The label a model list shows for a selector, for the trigger to render too. */
 const modelOptionLabel = (models: Model[], selector: string): string => {
-  const model = models.find((candidate) => `${candidate.provider}/${candidate.modelId}` === selector);
+  const model = models.find((candidate) => formatModelRef(candidate) === selector);
   return model ? `${model.name || model.modelId} (${selector})` : selector;
 };
 
@@ -357,7 +359,7 @@ const EnabledModelsEditor: React.FC<{
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => {
-                  const selector = `${m.provider}/${m.modelId}`;
+                  const selector = formatModelRef(m);
                   return (
                     <SelectItem key={selector} value={selector} className="text-xs">
                       {m.name || m.modelId} ({selector})
@@ -469,7 +471,7 @@ const AddRoleOverrideRow: React.FC<{
         </SelectTrigger>
         <SelectContent>
           {models.map((m) => {
-            const selector = `${m.provider}/${m.modelId}`;
+            const selector = formatModelRef(m);
             return (
               <SelectItem key={selector} value={selector} className="text-xs">
                 {m.name || m.modelId} ({selector})
@@ -662,7 +664,7 @@ const ModelPresetsEditor: React.FC<{
                           </SelectTrigger>
                           <SelectContent>
                             {models.map((m) => {
-                              const selector = `${m.provider}/${m.modelId}`;
+                              const selector = formatModelRef(m);
                               return (
                                 <SelectItem key={selector} value={selector} className="text-xs">
                                   {m.name || m.modelId} ({selector})
@@ -730,7 +732,7 @@ const ModelPresetsEditor: React.FC<{
               </SelectTrigger>
               <SelectContent>
                 {models.map((m) => {
-                  const selector = `${m.provider}/${m.modelId}`;
+                  const selector = formatModelRef(m);
                   return (
                     <SelectItem key={selector} value={selector} className="text-xs">
                       {m.name || m.modelId} ({selector})
@@ -931,7 +933,7 @@ const RetryFallbackChainsEditor: React.FC<{
                     </SelectTrigger>
                     <SelectContent>
                       {models.map((m) => {
-                        const selector = `${m.provider}/${m.modelId}`;
+                        const selector = formatModelRef(m);
                         return (
                           <SelectItem key={selector} value={selector} className="text-xs">
                             {m.name || m.modelId} ({selector})
@@ -1238,7 +1240,7 @@ const CompactionModelThresholdsEditor: React.FC<{
                 </SelectTrigger>
                 <SelectContent>
                   {models.map((m) => {
-                    const selector = `${m.provider}/${m.modelId}`;
+                    const selector = formatModelRef(m);
                     return (
                       <SelectItem key={selector} value={selector} className="text-xs">
                         {selector}
@@ -1517,6 +1519,12 @@ const ModelRolesSection: React.FC<{
 }> = ({ setting, value, models, disabled, onImmediate }) => {
   const { t } = useI18n();
   const currentRoles = React.useMemo(() => parseSafeRolesRecord(value), [value]);
+  // A catalog model whose own id ends in a suffix (`glm-4.7:max`, `router:low`)
+  // keeps it; only a suffix no catalog model claims is this role's level.
+  const literalModelId = React.useCallback(
+    (providerId: string | undefined, modelId: string) => providerId !== undefined && models.some((m) => m.provider === providerId && m.modelId === modelId),
+    [models],
+  );
 
   const updateRole = (roleId: string, model: string, effort: string) => {
     const next = { ...currentRoles };
@@ -1543,14 +1551,14 @@ const ModelRolesSection: React.FC<{
         {OMP_MODEL_ROLES.map((role) => {
           const rawSelector = currentRoles[role.id];
           const isExplicit = typeof rawSelector === 'string' && rawSelector.trim().length > 0;
-          const parsed = parseRoleSelector(rawSelector);
+          const parsed = parseRoleSelector(rawSelector, literalModelId);
           const fallback = resolveRoleFallback(role.id, currentRoles);
 
           const i18n = ROLE_I18N[role.id];
           const roleLabel = i18n ? t(i18n.label) : role.id;
           const roleDesc = i18n ? t(i18n.desc) : undefined;
 
-          const matchedModel = models.find((m) => `${m.provider}/${m.modelId}` === parsed.model);
+          const matchedModel = models.find((m) => formatModelRef(m) === parsed.model);
           const supportsReasoning = matchedModel?.reasoningEffortSupported ?? false;
           const reasoningOptions = matchedModel?.reasoningOptions ?? [];
 
@@ -1605,7 +1613,7 @@ const ModelRolesSection: React.FC<{
                         {t('settings.omp.modelRoles.inheritFallback')}
                       </SelectItem>
                       {models.map((m) => {
-                        const selector = `${m.provider}/${m.modelId}`;
+                        const selector = formatModelRef(m);
                         return (
                           <SelectItem key={selector} value={selector} className="text-xs">
                             {m.name || m.modelId} ({selector})

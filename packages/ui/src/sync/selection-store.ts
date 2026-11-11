@@ -1,3 +1,4 @@
+import { modelRefKey } from '@openchamber/agent-contract';
 /**
  * Selection Store — per-session model, agent, and variant selections.
  * Extracted from session-ui-store for subscription isolation.
@@ -239,7 +240,7 @@ export const useSelectionStore = create<SelectionState>()(
         const agentRevision = get().sessionFollowedAgentRevisions.get(sessionId)
         return () => {
           if (!isAutoModel(providerId, modelId) && get().sessionFollowedModelRevisions.get(sessionId) === modelRevision) {
-            get().markSessionModelFollowed(sessionId, `${providerId}/${modelId}#${variant ?? ''}`)
+            get().markSessionModelFollowed(sessionId, `${modelRefKey(providerId, modelId)}#${variant ?? ''}`)
           }
           if (agent && get().sessionFollowedAgentRevisions.get(sessionId) === agentRevision) {
             get().followSessionAgent(sessionId, agent)
@@ -301,7 +302,7 @@ export const useSelectionStore = create<SelectionState>()(
       }),
 
       saveAgentModelVariantForSession: (sessionId, agentName, providerId, modelId, variant) => set((state) => {
-        const key = `${providerId}/${modelId}`
+        const key = modelRefKey(providerId, modelId)
         const sessionKey = variantSessionKey(sessionId)
         if (state.agentModelVariantSelections.get(sessionKey)?.get(agentName)?.get(key) === variant) return state
         const selections = new Map(state.agentModelVariantSelections)
@@ -320,11 +321,11 @@ export const useSelectionStore = create<SelectionState>()(
       }),
 
       getAgentModelVariantForSession: (sessionId, agentName, providerId, modelId) => {
-        const key = `${providerId}/${modelId}`
+        const key = modelRefKey(providerId, modelId)
         return get().agentModelVariantSelections.get(variantSessionKey(sessionId))?.get(agentName)?.get(key)
       },
       saveAgentModelReasoningEffortForSession: (sessionId, agentName, providerId, modelId, effort) => set((state) => {
-        const key = `${providerId}/${modelId}`
+        const key = modelRefKey(providerId, modelId)
         const sessionKey = variantSessionKey(sessionId)
         if (state.agentModelReasoningEffortSelections.get(sessionKey)?.get(agentName)?.get(key) === effort) return state
         const selections = new Map(state.agentModelReasoningEffortSelections)
@@ -339,7 +340,7 @@ export const useSelectionStore = create<SelectionState>()(
         return { agentModelReasoningEffortSelections: selections }
       }),
       getAgentModelReasoningEffortForSession: (sessionId, agentName, providerId, modelId) => {
-        const key = `${providerId}/${modelId}`
+        const key = modelRefKey(providerId, modelId)
         return get().agentModelReasoningEffortSelections.get(variantSessionKey(sessionId))?.get(agentName)?.get(key) ?? undefined
       },
     }),

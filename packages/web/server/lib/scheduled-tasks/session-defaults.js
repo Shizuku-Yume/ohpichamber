@@ -1,9 +1,9 @@
+import { parseModelSelector } from '@openchamber/agent-contract';
+
 /** Resolve Host-configured selection without inventing service model defaults. */
 const splitModel = (value) => {
-  const text = typeof value === 'string' ? value.trim() : '';
-  const slash = text.indexOf('/');
-  if (slash <= 0 || slash === text.length - 1) return null;
-  return { providerId: text.slice(0, slash), modelId: text.slice(slash + 1) };
+  const parsed = parseModelSelector(typeof value === 'string' ? value : '');
+  return parsed ? { providerId: parsed.providerId, modelId: parsed.modelId, thinkingLevel: parsed.thinkingLevel } : null;
 };
 
 const text = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);

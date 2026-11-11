@@ -51,6 +51,27 @@ describe('canonical utility generation', () => {
     expect((await resolveSmallModel({ directory: '/repo', role: 'commit' })).selection).toEqual({ providerId: 'other', modelId: 'haiku' });
   });
 
+  test('a role chain that cannot resolve fails instead of redirecting to the composer model', async () => {
+    ompSettingsRoles = { smol: '@tiny', tiny: '@smol' };
+    const complete = spyOn(canonicalClient, 'complete');
+    restorers.push(() => complete.mockRestore());
+    await expect(requestSmallModel({ directory: '/repo', prompt: 'hello' }, { notifyOnError: false })).rejects.toThrow();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  test('a role selector variant travels with the completion request', async () => {
+    models = [model('chosen', 'large')];
+    ompSettingsRoles = { smol: 'chosen/large#careful' };
+    let captured: CompletionRequest | undefined;
+    const complete = spyOn(canonicalClient, 'complete').mockImplementation(async (_workspace, input) => {
+      captured = input;
+      return { completionId: input.completionId, selection: input.selection, status: 'completed', output: { kind: 'text', text: 'ok' }, finishReason: 'complete', usage: null };
+    });
+    restorers.push(() => complete.mockRestore());
+    await requestSmallModel({ directory: '/repo', prompt: 'hello' }, { notifyOnError: false });
+    expect(captured?.variant).toBe('careful');
+  });
+
   test('unavailable or malformed role intent never silently redirects to the composer model', async () => {
     const complete = spyOn(canonicalClient, 'complete');
     restorers.push(() => complete.mockRestore());

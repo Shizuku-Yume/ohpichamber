@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { parseModelSelector, resolveRoleSelector, thinkingLevelToReasoningEffort, modelRefKey, isRoleConfigured } from '@openchamber/agent-contract';
 import {
   completeSmallModel,
   findModelInfo,
@@ -9,20 +10,19 @@ import {
   listProviderInfos,
 } from './client.js';
 
-const modelRefSchema = z.string();
 const nonEmptyTextSchema = z.string().refine((value) => value.trim().length > 0);
 
-function parseModelRef(value) {
-  const parsed = modelRefSchema.safeParse(value);
-  if (!parsed.success) return null;
-  const trimmed = parsed.data.trim();
-  const slash = trimmed.indexOf('/');
-  if (slash <= 0 || slash === trimmed.length - 1) return null;
-  return {
-    providerID: trimmed.slice(0, slash),
-    modelID: trimmed.slice(slash + 1),
-  };
-}
+/** `provider/model[:thinkingLevel]`, read by the one selector grammar. */
+const parseSelection = (value) => {
+  if (!nonEmptyTextSchema.safeParse(value).success) return null;
+  const parsed = parseModelSelector(value.trim());
+  return parsed ? {
+    providerID: parsed.providerId,
+    modelID: parsed.modelId,
+    thinkingLevel: parsed.thinkingLevel,
+    variant: parsed.variant ?? null,
+  } : null;
+};
 
 // Conservative estimate for Host input budgeting against canonical limits.
 const DEFAULT_CONTEXT_TOKENS = 64_000;
@@ -65,7 +65,7 @@ const clampPromptToModelLimit = ({ prompt, modelInfo, providerID, modelID, onOve
   }
   if (onOverflow === 'error') {
     throw Object.assign(
-      new Error(`Input is too large for ${providerID}/${modelID}: ${prompt.length} characters exceeds the ${maxChars} the model's context allows`),
+      new Error(`Input is too large for ${modelRefKey(providerID, modelID)}: ${prompt.length} characters exceeds the ${maxChars} the model's context allows`),
       { statusCode: 413, code: 'context-too-small', providerID, modelID, requiredChars: prompt.length, availableChars: maxChars },
     );
   }
@@ -104,15 +104,19 @@ const usableModel = (model) => Boolean(model && model.enabled !== false && model
 /** Resolve only from explicit intent and the authorized workspace catalog. */
 const resolveSmallModel = async ({ client, workspaceId, model, preferredProviderID, preferredModelID, role = 'smol' }) => {
   const models = await listModelInfos(client, workspaceId);
-  const explicit = parseModelRef(model);
+  const explicit = parseSelection(model);
   if (nonEmptyTextSchema.safeParse(model).success && !explicit) throw Object.assign(new Error('Invalid background model selection'), { statusCode: 400, code: 'INVALID_REQUEST' });
   if (explicit) return usableModel(findModelInfo(models, explicit.providerID, explicit.modelID)) ? { ...explicit, source: 'request' } : null;
 
   const modelRoles = await getModelRoles(client, workspaceId).catch(() => ({}));
   const targetRole = role || 'smol';
-  const roleOverride = modelRoles?.[targetRole] || modelRoles?.default;
-  const fromRoles = parseModelRef(roleOverride);
-  if (roleOverride && !fromRoles) return null;
+  // A role may name another role (`@tiny`); expansion follows OMP's chain and
+  // its `default` fallback before the selector is read.
+  const roleSelector = resolveRoleSelector(targetRole, modelRoles);
+  const fromRoles = parseSelection(roleSelector);
+  // A configured role that cannot resolve (a cycle, a non-selector value) is a
+  // failure, never a reason to pick some other model from the catalog.
+  if (!fromRoles && (isRoleConfigured(targetRole, modelRoles) || isRoleConfigured('default', modelRoles))) return null;
   if (fromRoles) {
     const info = findModelInfo(models, fromRoles.providerID, fromRoles.modelID);
     return usableModel(info) ? { ...fromRoles, source: 'modelRoles' } : null;
@@ -132,6 +136,19 @@ const resolveSmallModel = async ({ client, workspaceId, model, preferredProvider
 };
 
 
+
+/**
+ * The effort a role's `:thinkingLevel` asks for, limited to what the model
+ * advertises. A level it cannot serve keeps its nearest advertised one, and a
+ * non-reasoning model keeps `null` rather than inventing support.
+ */
+const resolveReasoningEffort = (modelInfo, thinkingLevel) => {
+  const wanted = thinkingLevelToReasoningEffort(thinkingLevel);
+  if (!wanted || !modelInfo?.reasoningEffortSupported) return null;
+  const efforts = (modelInfo.reasoningOptions ?? []).map((option) => option.reasoningEffort).filter((effort) => effort !== 'off');
+  if (efforts.length === 0) return null;
+  return efforts.includes(wanted) ? wanted : efforts[0];
+};
 
 const completionError = (result, resolved) => {
   const detail = result.error?.detail || 'Small-model completion failed';
@@ -164,7 +181,10 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
     completionId: randomUUID(), workspaceId,
     selection: { providerId: resolved.providerID, modelId: resolved.modelID },
     prompt: clamped.prompt, format: responseSchema ? { kind: 'json', schema: responseSchema } : { kind: 'text' },
-    overflow: onOverflow === 'error' ? 'reject' : 'truncate', variant: null, reasoningEffort: null,
+    overflow: onOverflow === 'error' ? 'reject' : 'truncate', variant: resolved.variant ?? null,
+    // The selected role's `:thinkingLevel` is a reasoning request; only a level
+    // the model advertises is asked for, so the completion is never refused.
+    reasoningEffort: resolveReasoningEffort(modelInfo, resolved.thinkingLevel),
     timeoutMs: Number(timeoutMs) > 0 ? Number(timeoutMs) : 60_000,
   };
   if (outputTokens) request.maxOutputTokens = outputTokens;

@@ -1,3 +1,4 @@
+import { modelRefInstanceKey } from '@openchamber/agent-contract';
 import { create } from 'zustand';
 import type { PromptAttachment, Session, SessionMetadataState } from '@openchamber/agent-contract';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -253,14 +254,14 @@ export const useMultiRunStore = create<MultiRunStore>()(
             const modelCounts = new Map<string, number>();
             for (const model of group.models) {
               assertCurrent();
-              const key = `${model.providerId}:${model.modelId}`;
+              const key = modelRefInstanceKey(model.providerId, model.modelId);
               modelCounts.set(key, (modelCounts.get(key) || 0) + 1);
             }
 
             const modelIndexes = new Map<string, number>();
 
             for (const model of group.models) {
-              const key = `${model.providerId}:${model.modelId}`;
+              const key = modelRefInstanceKey(model.providerId, model.modelId);
               const count = modelCounts.get(key) || 1;
               const index = (modelIndexes.get(key) || 0) + 1;
               modelIndexes.set(key, index);

@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseModelString } from '@openchamber/agent-contract';
 
 import {
   findAnsweringModelKey,
@@ -30,11 +31,9 @@ export const useContextWindowLimits = (sessionId: string | null, directory?: str
   );
 
   return React.useMemo(() => {
-    if (answeringModelKey) {
-      const separator = answeringModelKey.indexOf('/');
-      const providerId = answeringModelKey.slice(0, separator);
-      const modelId = answeringModelKey.slice(separator + 1);
-      const answeringModel = providers.find((provider) => provider.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
+    const answering = parseModelString(answeringModelKey ?? '');
+    if (answering) {
+      const answeringModel = providers.find((provider) => provider.providerId === answering.providerId)?.models.find((entry) => entry.modelId === answering.modelId);
       if (answeringModel) return { context: answeringModel.contextWindow, output: answeringModel.maxOutputTokens };
     }
     const model = providers.find((provider) => provider.providerId === currentProviderId)?.models.find((entry) => entry.modelId === currentModelId);

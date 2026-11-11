@@ -1,6 +1,16 @@
 import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
-import { JsonObjectSchema } from '@openchamber/agent-contract';
+import {
+  JsonObjectSchema,
+  MAX_THINKING_SUFFIX_OPTIONS,
+  type ParseModelSelectorOptions,
+  formatModelRef,
+  formatModelSelector,
+  formatModelSelectorValue,
+  parseConfiguredThinkingLevel,
+  parseModelSelector,
+  splitSelectorThinking,
+} from '@openchamber/agent-contract';
 import type { JsonValue, Model, OmpSettingsState } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -40,28 +50,21 @@ const DEFAULT_EFFORT_OPTIONS: readonly { value: string; labelKey: I18nKey }[] = 
   { value: 'max', labelKey: 'settings.omp.modelRoles.effort.max' },
 ] as const;
 
-function parseRoleSelector(selector: unknown): { model: string; effort: string } {
-  if (typeof selector !== 'string') return { model: '', effort: '' };
-  const trimmed = selector.trim();
-  if (!trimmed) return { model: '', effort: '' };
-  const colonIndex = trimmed.lastIndexOf(':');
-  if (colonIndex > 0) {
-    const base = trimmed.slice(0, colonIndex);
-    const suffix = trimmed.slice(colonIndex + 1);
-    const knownEfforts = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'];
-    if (knownEfforts.includes(suffix.toLowerCase())) {
-      return { model: base, effort: suffix };
-    }
-  }
-  return { model: trimmed, effort: '' };
+/** The role's model half and thinking level, read by the one selector grammar. */
+function parseRoleSelector(selector: unknown, literal: ParseModelSelectorOptions['isLiteralModelId']): { model: string; effort: string } {
+  const split = splitSelectorThinking(typeof selector === 'string' ? selector : null, { ...MAX_THINKING_SUFFIX_OPTIONS, isLiteralModelId: literal });
+  return { model: split.model, effort: split.thinkingLevel ?? '' };
 }
 
+/** Write a role back as `provider/model[:level]`; an empty level writes none. */
 function formatRoleSelector(model: string, effort: string): string {
-  const trimmedModel = model.trim();
-  if (!trimmedModel) return '';
-  const trimmedEffort = effort.trim();
-  if (!trimmedEffort || trimmedEffort === 'default' || trimmedEffort === '__default__') return trimmedModel;
-  return `${trimmedModel}:${trimmedEffort}`;
+  const trimmed = model.trim();
+  if (!trimmed) return '';
+  const level = effort.trim();
+  const parsedLevel = level && level !== 'default' && level !== '__default__' ? parseConfiguredThinkingLevel(level) : undefined;
+  const parsed = parseModelSelector(trimmed);
+  if (!parsed) return formatModelSelectorValue(trimmed, parsedLevel);
+  return formatModelSelector({ providerId: parsed.providerId, modelId: parsed.modelId, thinkingLevel: parsedLevel });
 }
 
 /** Every entry the native `modelRoles` record holds, arrays and objects included. */
@@ -157,13 +160,20 @@ export const DefaultsSettings: React.FC = () => {
     [rolesMap],
   );
 
+  // A model the catalog serves with a suffix in its own id (a `:max` tier, a
+  // `router:low` route) keeps that id whole: only an unclaimed suffix is a level.
+  const literalModelId = React.useCallback(
+    (providerId: string | undefined, modelId: string) => providerId !== undefined && models.some((m) => m.provider === providerId && m.modelId === modelId),
+    [models],
+  );
+
   const { model: selectedModelId, effort: selectedEffort } = React.useMemo(
-    () => parseRoleSelector(roleSelectors.default),
-    [roleSelectors.default],
+    () => parseRoleSelector(roleSelectors.default, literalModelId),
+    [roleSelectors.default, literalModelId],
   );
 
   const matchedModel = React.useMemo(
-    () => models.find((m) => `${m.provider}/${m.modelId}` === selectedModelId),
+    () => models.find((m) => formatModelRef(m) === selectedModelId),
     [models, selectedModelId],
   );
 
@@ -238,7 +248,7 @@ export const DefaultsSettings: React.FC = () => {
       if (val === '__inherit__') {
         delete nextRoles.default;
       } else {
-        const nextModel = models.find((m) => `${m.provider}/${m.modelId}` === val);
+        const nextModel = models.find((m) => formatModelRef(m) === val);
         const nextSupportsReasoning = Boolean(
           nextModel?.reasoningEffortSupported ||
           (nextModel?.reasoningOptions && nextModel.reasoningOptions.length > 0),
@@ -291,7 +301,7 @@ export const DefaultsSettings: React.FC = () => {
    * custom selectors would leak into the control.
    */
   const selectorLabel = (selector: string): string => {
-    const model = models.find((m) => `${m.provider}/${m.modelId}` === selector);
+    const model = models.find((m) => formatModelRef(m) === selector);
     if (model) return `${model.name || model.modelId} (${model.provider})`;
     const mode = SESSION_MODE_OPTIONS.find((opt) => opt.value === selector);
     if (mode) return t(mode.labelKey);
@@ -316,7 +326,7 @@ export const DefaultsSettings: React.FC = () => {
     disabled: boolean,
   ): React.ReactNode => {
     const value = roleModel(role);
-    const known = models.some((m) => `${m.provider}/${m.modelId}` === value);
+    const known = models.some((m) => formatModelRef(m) === value);
     return (
       <Select
         value={value || '__inherit__'}
@@ -329,7 +339,7 @@ export const DefaultsSettings: React.FC = () => {
         <SelectContent>
           <SelectItem value="__inherit__">{placeholder}</SelectItem>
           {models.map((m) => {
-            const id = `${m.provider}/${m.modelId}`;
+            const id = formatModelRef(m);
             return (
               <SelectItem key={id} value={id}>
                 {m.name || m.modelId} ({m.provider})
@@ -411,14 +421,14 @@ export const DefaultsSettings: React.FC = () => {
       <SelectContent>
         <SelectItem value="__none__">{t('settings.openchamber.defaults.field.fallbackModelNone')}</SelectItem>
         {models.map((m) => {
-          const id = `${m.provider}/${m.modelId}`;
+          const id = formatModelRef(m);
           return (
             <SelectItem key={id} value={id}>
               {m.name || m.modelId} ({m.provider})
             </SelectItem>
           );
         })}
-        {fallbackRoles.current && !models.some((m) => `${m.provider}/${m.modelId}` === fallbackRoles.current) && (
+        {fallbackRoles.current && !models.some((m) => formatModelRef(m) === fallbackRoles.current) && (
           <SelectItem value={fallbackRoles.current}>
             {fallbackRoles.current} ({t('settings.omp.modelRoles.customModel')})
           </SelectItem>
@@ -462,14 +472,14 @@ export const DefaultsSettings: React.FC = () => {
                   {t('settings.omp.modelRoles.inheritFallback')}
                 </SelectItem>
                 {models.map((m) => {
-                  const id = `${m.provider}/${m.modelId}`;
+                  const id = formatModelRef(m);
                   return (
                     <SelectItem key={id} value={id}>
                       {m.name || m.modelId} ({m.provider})
                     </SelectItem>
                   );
                 })}
-                {selectedModelId && !models.some((m) => `${m.provider}/${m.modelId}` === selectedModelId) && (
+                {selectedModelId && !models.some((m) => formatModelRef(m) === selectedModelId) && (
                   <SelectItem value={selectedModelId}>
                     {selectedModelId} ({t('settings.omp.modelRoles.customModel')})
                   </SelectItem>

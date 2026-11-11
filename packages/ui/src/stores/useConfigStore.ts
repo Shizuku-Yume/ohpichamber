@@ -21,7 +21,7 @@ import { useDirectoryStore } from "@/stores/useDirectoryStore";
 import { useProjectsStore } from "@/stores/useProjectsStore";
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution";
 import { streamDebugEnabled } from "@/stores/utils/streamDebug";
-import { parseModelIdentifier } from "@/lib/modelIdentifier";
+import { modelRefKey, parseModelSelector } from "@openchamber/agent-contract";
 import type { ModelRef } from "@/lib/settings/parsers";
 import { runtimeFetch } from "@/lib/runtime-fetch";
 import { EMPTY_VOICE_API_KEYS, fetchVoiceApiKeys, migrateLegacyVoiceApiKeys, updateVoiceApiKeys, type VoiceApiKeyKind, type VoiceApiKeyState } from "@/lib/voiceKeysApi";
@@ -176,10 +176,6 @@ const requestOpenChamberDefaults = async (context: ConfigRuntimeContext): Promis
     }
 };
 
-const parseModelString = (modelString: string): { providerId: string; modelId: string } | null => {
-    return parseModelIdentifier(modelString);
-};
-
 const normalizeProviderId = (value: string) => value?.toLowerCase?.() ?? '';
 
 type ProviderModel = Model;
@@ -295,7 +291,7 @@ const resolveProviderModelSelection = ({
     }
 
     if (settingsDefaultModel) {
-        const parsed = parseModelString(settingsDefaultModel);
+        const parsed = parseModelSelector(settingsDefaultModel);
         if (parsed && !isStaleAutoSelection(parsed.providerId, parsed.modelId)) {
             return {
                 providerId: parsed.providerId,
@@ -333,7 +329,7 @@ const isModelHidden = (hiddenModels: readonly ModelRef[], providerId: string, mo
 const resolveLastSelectedModel = (
     { hiddenModels, lastSelectedModel }: FallbackModelPrefs,
 ): { providerId: string; modelId: string } | null => {
-    const parsed = lastSelectedModel ? parseModelString(lastSelectedModel) : null;
+    const parsed = lastSelectedModel ? parseModelSelector(lastSelectedModel) : null;
     if (!parsed) return null;
     if (isModelHidden(hiddenModels, parsed.providerId, parsed.modelId)) return null;
     if (isStaleAutoSelection(parsed.providerId, parsed.modelId)) return null;
@@ -418,7 +414,7 @@ const resolveDefaultAgentModelSelection = ({
     const effectiveDefaultModel = projectDefaultModel || settingsDefaultModel;
 
     if (effectiveDefaultModel) {
-        const parsed = parseModelString(effectiveDefaultModel);
+        const parsed = parseModelSelector(effectiveDefaultModel);
         if (parsed && !isStaleAutoSelection(parsed.providerId, parsed.modelId)) {
             providerId = parsed.providerId;
             modelId = parsed.modelId;
@@ -912,7 +908,7 @@ const resolveConfiguredDefaultVariant = (
     modelId: string,
 ): string | undefined => {
     const isThisModel = (model: string | undefined) => {
-        const parsed = model ? parseModelString(model) : null;
+        const parsed = model ? parseModelSelector(model) : null;
         return parsed?.providerId === providerId && parsed.modelId === modelId;
     };
     if (isThisModel(defaults.projectDefaultModel)) return defaults.projectDefaultVariant;
@@ -2080,7 +2076,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             // resolved default until a real catalog replaces it.
                             const keepPreviousDefaults = modelCatalog.models.length === 0 && modelCatalog.defaults.model === null;
                             const ompDefaultModel = modelCatalog.defaults.model
-                                ? `${modelCatalog.defaults.model.providerId}/${modelCatalog.defaults.model.modelId}`
+                                ? modelRefKey(modelCatalog.defaults.model.providerId, modelCatalog.defaults.model.modelId)
                                 : undefined;
                             const ompDefaultReasoningEffort = modelCatalog.defaults.thinkingLevel ?? undefined;
                             const defaults = previousDefaults;
@@ -2277,7 +2273,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             nextState.defaultProviders = previousDefaults;
 
                             if (!state.currentProviderId && !state.currentModelId && state.settingsDefaultModel) {
-                                const parsed = parseModelString(state.settingsDefaultModel);
+                                const parsed = parseModelSelector(state.settingsDefaultModel);
                                 if (parsed) {
                                     const settingsProvider = previousProviders.find((p) => p.providerId === parsed.providerId);
                                     const model = settingsProvider?.models.find((entry) => entry.modelId === parsed.modelId);
@@ -2879,7 +2875,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                         // If the agent has no preferred model, use settings default.
                         if (settingsDefaultModel) {
-                            const parsed = parseModelString(settingsDefaultModel);
+                            const parsed = parseModelSelector(settingsDefaultModel);
                             if (parsed) {
                                 const settingsProvider = providers.find((p) => p.providerId === parsed.providerId);
                                 if (settingsProvider?.models.some((model) => model.modelId === parsed.modelId)) {

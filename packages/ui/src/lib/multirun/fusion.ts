@@ -1,3 +1,4 @@
+import { modelRefKey } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
 import type { ModelSelection, Session } from '@openchamber/agent-contract';
 import { resolveWorkspaceDirectory } from '@/stores/globalSessions';
@@ -70,7 +71,7 @@ export const shouldInlineDiffs = (changedLines: number, contextLimit: number | u
 const laneLabel = (identity: MultiRunIdentity, variantCount: number): string => {
   const variant = variantCount > 1 ? ` · ${multiRunVariantLabel(identity.runGroup)}` : '';
   const index = identity.index && identity.index > 1 ? ` #${identity.index}` : '';
-  return `${identity.providerID}/${identity.modelID}${index}${variant}`;
+  return `${modelRefKey(identity.providerID, identity.modelID)}${index}${variant}`;
 };
 
 /**

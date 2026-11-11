@@ -1,3 +1,4 @@
+import { modelRefKey } from '@openchamber/agent-contract';
 import { useUIStore } from '@/stores/useUIStore';
 
 /**
@@ -12,7 +13,7 @@ type EffortAgentPin = {
   model?: { providerID?: string; id?: string; variant?: string };
 };
 
-export const effortMemoryKey = (providerID: string, modelID: string): string => `${providerID}/${modelID}`;
+export const effortMemoryKey = (providerID: string, modelID: string): string => modelRefKey(providerID, modelID);
 
 const effortRevisions = new Map<string, number>();
 export const readEffortRevision = (providerID: string, modelID: string): number =>

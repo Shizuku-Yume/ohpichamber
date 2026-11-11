@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
-import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, NoticePartSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema } from '@openchamber/agent-contract';
+import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, NoticePartSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema, parseModelString } from '@openchamber/agent-contract';
 import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, StepTiming, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -1236,12 +1236,13 @@ export class WorkerProjection {
     let nativeSelection: ProjectionSeed['selection'] = { model: null, thinkingLevel: null };
     for (const entry of entries) {
       if (entry.type === 'model_change') {
-        const slash = entry.model.indexOf('/');
-        if (slash > 0 && slash < entry.model.length - 1) {
-          nativeSelection = {
-            ...nativeSelection,
-            model: { providerId: entry.model.slice(0, slash), modelId: entry.model.slice(slash + 1) }
-          };
+        // A native persisted `model_change` names `provider/model`, and its
+        // thinking level travels in a separate entry; the selector grammar
+        // reads the pair without mistaking an id's own colon for a suffix.
+        const parsed = parseModelString(entry.model);
+        if (parsed) {
+          nativeSelection = { ...nativeSelection,
+            model: { providerId: parsed.providerId, modelId: parsed.modelId } };
         }
       } else if (entry.type === 'thinking_level_change') {
         nativeSelection = { ...nativeSelection, thinkingLevel: entry.configured ?? entry.thinkingLevel ?? null };

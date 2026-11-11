@@ -33,6 +33,7 @@ import {
  type ProviderConfigureRequest, type ProviderDeleteRequest, type ProviderMutationResult,
  type CompletionRequest, type ImageGenerateRequest, type ImageGenerateResult,
  type ImageModelConfigureRequest, type ImageModelMutationResult,
+ formatModelRef,
 } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 
@@ -814,9 +815,9 @@ export class NativeModels {
   return ProviderMutationResultSchema.parse(await this.commit(state, () => {
    cfgDisabledProviders.set(this.context.settings, cfgDisabledProviders.get(this.context.settings).filter(id => id !== configuration.providerId));
    if (request.models?.some(model => model.enabled !== undefined)) {
-    const selectors = new Set(allowed.filter(row => row.provider !== configuration.providerId).map(row => `${row.provider}/${row.id}`));
+    const selectors = new Set(allowed.filter(row => row.provider !== configuration.providerId).map(row => formatModelRef({ provider: row.provider, modelId: row.id })));
     for (const model of request.models) {
-     if (model.enabled !== false) selectors.add(`${model.provider}/${model.modelId}`);
+     if (model.enabled !== false) selectors.add(formatModelRef({ provider: model.provider, modelId: model.modelId }));
     }
     cfgEnabledModels.set(this.context.settings, enabledModelSelectors(selectors));
    }
@@ -902,8 +903,8 @@ export class NativeModels {
   const selection = { providerId: model.provider, modelId: model.modelId };
   return ModelMutationResultSchema.parse(await this.commit(state, () => {
    if (model.enabled !== undefined) {
-    const selectors = new Set(allowed.filter(row => row.provider !== model.provider || row.id !== model.modelId).map(row => `${row.provider}/${row.id}`));
-    if (model.enabled) selectors.add(`${model.provider}/${model.modelId}`);
+    const selectors = new Set(allowed.filter(row => row.provider !== model.provider || row.id !== model.modelId).map(row => formatModelRef({ provider: row.provider, modelId: row.id })));
+    if (model.enabled) selectors.add(formatModelRef({ provider: model.provider, modelId: model.modelId }));
     cfgEnabledModels.set(this.context.settings, enabledModelSelectors(selectors));
    }
   }, () => {
@@ -954,8 +955,8 @@ export class NativeModels {
   return ImageModelMutationResultSchema.parse(await this.commit(state, () => {
    if (model.enabled !== undefined) {
     const allowed = filterAvailableModelsByEnabledPatterns(this.context.modelRegistry.getAll('all'), cfgEnabledModels.get(this.context.settings), this.context.settings);
-    const selectors = new Set(allowed.filter(row => row.provider !== model.provider || row.id !== model.modelId).map(row => `${row.provider}/${row.id}`));
-    if (model.enabled) selectors.add(`${model.provider}/${model.modelId}`);
+    const selectors = new Set(allowed.filter(row => row.provider !== model.provider || row.id !== model.modelId).map(row => formatModelRef({ provider: row.provider, modelId: row.id })));
+    if (model.enabled) selectors.add(formatModelRef({ provider: model.provider, modelId: model.modelId }));
     cfgEnabledModels.set(this.context.settings, enabledModelSelectors(selectors));
    }
   }, () => {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { toast } from '@/components/ui';
-import { parseModelIdentifier, type ParsedModelIdentifier } from '@/lib/modelIdentifier';
+import { parseModelSelector,
+  modelRefKey } from '@openchamber/agent-contract';
 import { useI18n } from '@/lib/i18n';
 import type { ProjectEntry } from '@/lib/api/types';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -170,10 +171,10 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
     };
   }, [clearPendingUploadIcon]);
 
-  const parsedDefaultModel = React.useMemo((): ParsedModelIdentifier => {
-    const parsed = parseModelIdentifier(defaultModel);
-    return parsed ?? { providerId: '', modelId: '' };
-  }, [defaultModel]);
+  const parsedDefaultModel = React.useMemo(
+    () => parseModelSelector(defaultModel) ?? { providerId: '', modelId: '' },
+    [defaultModel],
+  );
 
   const hasStoredImageIcon = Boolean(project?.iconImage);
   const hasPendingUploadImageIcon = Boolean(pendingUploadIconFile && pendingUploadIconPreviewUrl);
@@ -196,7 +197,7 @@ export const useProjectIdentityForm = (project: EditableProject | null) => {
   );
 
   const handleDefaultModelChange = React.useCallback((providerId: string, modelId: string) => {
-    setDefaultModel(providerId && modelId ? `${providerId}/${modelId}` : undefined);
+    setDefaultModel(modelRefKey(providerId, modelId) || undefined);
     // Variants belong to a model. Carrying the old one over would pin a name
     // the new model may not have.
     setDefaultVariant(undefined);

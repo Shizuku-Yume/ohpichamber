@@ -1,3 +1,4 @@
+import { formatModelRef } from '@openchamber/agent-contract';
 import { openGuestSurface } from '@/lib/guests/open-surface';
 import React from 'react';
 import {
@@ -211,7 +212,7 @@ export const PluginPane: React.FC<PluginPaneProps> = ({
   React.useCallback((state) => {
    if (!currentSessionId) return undefined;
    const selection = state.sessionModelSelections.get(currentSessionId);
-   return selection ? `${selection.providerId}/${selection.modelId}` : undefined;
+   return selection ? formatModelRef(selection) || undefined : undefined;
   }, [currentSessionId]),
  );
  const sessionAgent = useSelectionStore(

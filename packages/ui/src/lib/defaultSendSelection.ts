@@ -1,4 +1,4 @@
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { parseModelSelector } from '@openchamber/agent-contract';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSelectionStore } from '@/sync/selection-store';
 
@@ -17,7 +17,7 @@ const resolveDefaultAgentName = (): string | undefined => {
 };
 
 const resolveDefaultModelSelection = (): { providerID: string; modelID: string } | null => {
-  const parsed = parseModelIdentifier(useConfigStore.getState().settingsDefaultModel);
+  const parsed = parseModelSelector(useConfigStore.getState().settingsDefaultModel);
   if (!parsed) {
     return null;
   }

@@ -1,3 +1,4 @@
+import { modelRefKey } from '@openchamber/agent-contract';
 /* oxlint-disable typescript/no-explicit-any */
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
@@ -166,7 +167,7 @@ export const useContextStore = create<ContextStore>()(
                             modelMap = new Map(modelMap);
                         }
 
-                        const modelKey = `${providerId}/${modelId}`;
+                        const modelKey = modelRefKey(providerId, modelId);
 
                         if (variant === undefined) {
                             modelMap.delete(modelKey);
@@ -199,7 +200,7 @@ export const useContextStore = create<ContextStore>()(
                     if (!agentMap) return undefined;
                     const modelMap = agentMap.get(agentName);
                     if (!modelMap) return undefined;
-                    return modelMap.get(`${providerId}/${modelId}`);
+                    return modelMap.get(modelRefKey(providerId, modelId));
                 },
  
                 getContextUsage: (sessionId: string, contextLimit: number, outputLimit: number, messages: Map<string, { info: Message; parts: Part[] }[]>) => {

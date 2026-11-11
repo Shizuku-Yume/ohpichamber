@@ -1,6 +1,6 @@
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
-import type { ImageModel } from '@openchamber/agent-contract';
+import { formatModelRef, type ImageModel } from '@openchamber/agent-contract';
 import * as React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
@@ -179,7 +179,7 @@ export const OpenChamberToolsSettings: React.FC = () => {
         const options = models
           .filter((model) => model.enabled !== false)
           .map((model) => ({
-            value: `${model.provider}/${model.modelId}`,
+            value: formatModelRef(model),
             name: model.name,
             providerID: model.provider,
           }));

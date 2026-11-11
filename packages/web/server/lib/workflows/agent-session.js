@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseModelSelector, thinkingLevelToReasoningEffort, modelRefKey } from '@openchamber/agent-contract';
 
 // The idle turn is polled: the Host has no push subscription this module may
 // hold, and a workflow agent is one prompt, so a short poll is enough.
@@ -32,12 +33,16 @@ const outcomeOf = (page, turn) => {
   };
 };
 
-/** `provider/model`, optionally with `#variant`, as the workflow script names it. */
+/** `provider/model`, optionally with `[:level]`, `#variant` or `@upstream`. */
 const parseModelRef = (value) => {
-  const [model, variant] = value.split('#');
-  const slash = model.indexOf('/');
-  if (slash <= 0 || slash === model.length - 1) return null;
-  return { providerId: model.slice(0, slash), modelId: model.slice(slash + 1), variant: variant || null };
+  const parsed = parseModelSelector(value);
+  if (!parsed) return null;
+  return {
+    providerId: parsed.providerId,
+    modelId: parsed.modelId,
+    variant: parsed.variant ?? null,
+    thinkingLevel: parsed.thinkingLevel,
+  };
 };
 
 export class WorkflowAgentStopped extends Error {
@@ -76,13 +81,13 @@ export const createWorkflowAgentSessions = ({
 
   const optionsFor = (model, _agent) => {
     const ref = model ? parseModelRef(model) : null;
-    if (model && !ref) throw new Error(`model must be provider/model or provider/model#variant, got ${model}`);
+    if (model && !ref) throw new Error(`model must be provider/model, optionally with :thinkingLevel, #variant or @upstream, got ${model}`);
     return {
       providerId: ref?.providerId ?? null,
       modelId: ref?.modelId ?? null,
       agentId: null,
       variant: ref?.variant ?? null,
-      reasoningEffort: null,
+      reasoningEffort: thinkingLevelToReasoningEffort(ref?.thinkingLevel),
     };
   };
 
@@ -220,7 +225,7 @@ export const createWorkflowAgentSessions = ({
     }).safeParse(message.usage);
     if (!usage.success) return null;
     return {
-      model: message.providerId && message.modelId ? `${message.providerId}/${message.modelId}` : null,
+      model: modelRefKey(message.providerId, message.modelId) || null,
       usage: {
         cost: usage.data.cost.total,
         input: usage.data.input,

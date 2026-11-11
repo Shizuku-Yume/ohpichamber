@@ -17,12 +17,7 @@ import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capabili
 import { resolveCliModel } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgTaskDisabledAgents, cfgTaskAgentModelOverrides } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
-import {
-  AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema,
-  AgentDeleteRequestSchema, AgentMutationResultSchema, PositiveCounterSchema,
-  type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest,
-  type AgentDeleteRequest, type AgentMutationResult,
-} from '@openchamber/agent-contract';
+import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, formatModelRef } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 
 export type NativeAgentsContext = {
@@ -113,9 +108,13 @@ export class NativeAgents {
     const selector = definition.model?.[0];
     const resolved = selector ? resolveCliModel({ cliModel: selector, modelRegistry: this.context.modelRegistry, settings: this.context.settings }).model : undefined;
     let model: Agent['model'] = resolved ? { providerId: resolved.provider, modelId: resolved.id } : null;
-    if (!model && selector && !selector.startsWith('@')) {
-      const slash = selector.indexOf('/');
-      if (slash > 0) model = { providerId: selector.slice(0, slash), modelId: selector.slice(slash + 1) };
+    if (!model && selector) {
+      // A selector the registry did not resolve still names a pair: read it
+      // with the one grammar so `provider/model:high` keeps its level too.
+      const parsed = parseModelSelector(selector);
+      if (parsed && !parseRoleAlias(selector)) {
+        model = { providerId: parsed.providerId, modelId: parsed.modelId };
+      }
     }
     const profile = metadata.openchamber;
     const availableToolNames = this.context.availableToolNames();
@@ -204,7 +203,7 @@ export class NativeAgents {
     }
     const fields: Record<string, unknown> = { name: agent.agentId, description: agent.description, openchamber: agent };
     if (agent.allowedTools !== null) fields.tools = agent.allowedTools;
-    if (agent.model) fields.model = `${agent.model.providerId}/${agent.model.modelId}`;
+    if (agent.model) fields.model = formatModelRef({ providerId: agent.model.providerId, modelId: agent.model.modelId });
     if (agent.thinkingLevel !== undefined) fields.thinkingLevel = agent.thinkingLevel;
     if (agent.spawns !== undefined) fields.spawns = agent.spawns;
     if (agent.blocking !== undefined) fields.blocking = agent.blocking;

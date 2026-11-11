@@ -1,5 +1,5 @@
 import React from 'react';
-import type { PlanReviewResponse, QuestionRequest } from '@openchamber/agent-contract';
+import { formatModelRef, parseModelSelector, type PlanReviewResponse, type QuestionRequest } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -91,14 +91,14 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
                     {t('chat.planReview.executionModel')}:
                 </label>
                 <Select
-                    value={executionModel ? `${executionModel.providerId}:${executionModel.modelId}` : DEFAULT_MODEL_VALUE}
+                    value={executionModel ? formatModelRef(executionModel) : DEFAULT_MODEL_VALUE}
                     onValueChange={(val) => {
                         if (val === DEFAULT_MODEL_VALUE) {
                             setExecutionModel(null);
                             return;
                         }
-                        const [providerId, ...modelParts] = val.split(':');
-                        setExecutionModel({ providerId, modelId: modelParts.join(':') });
+                        const parsed = parseModelSelector(val);
+                        if (parsed) setExecutionModel({ providerId: parsed.providerId, modelId: parsed.modelId });
                     }}
                     disabled={isResponding}
                 >
@@ -112,9 +112,10 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
                                 if (!value || value === DEFAULT_MODEL_VALUE) {
                                     return t('chat.planReview.defaultModel');
                                 }
-                                const [providerId, ...modelParts] = value.split(':');
-                                const modelId = modelParts.join(':');
-                                const provider = providers.find((entry) => entry.providerId === providerId);
+                                const parsed = parseModelSelector(value);
+                                if (!parsed) return value;
+                                const modelId = parsed.modelId;
+                                const provider = providers.find((entry) => entry.providerId === parsed.providerId);
                                 if (!provider) {
                                     return modelId;
                                 }
@@ -125,11 +126,14 @@ export function PlanReviewCard({ form, docked = false, forms }: PlanReviewCardPr
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value={DEFAULT_MODEL_VALUE}>{t('chat.planReview.defaultModel')}</SelectItem>
-                        {providers.flatMap((p) => p.models.map((m) => (
-                            <SelectItem key={`${p.providerId}:${m.modelId}`} value={`${p.providerId}:${m.modelId}`}>
-                                {`${p.name} - ${m.name || m.modelId}`}
-                            </SelectItem>
-                        )))}
+                        {providers.flatMap((p) => p.models.map((m) => {
+                            const ref = formatModelRef({ providerId: p.providerId, modelId: m.modelId });
+                            return (
+                                <SelectItem key={ref} value={ref}>
+                                    {`${p.name} - ${m.name || m.modelId}`}
+                                </SelectItem>
+                            );
+                        }))}
                     </SelectContent>
                 </Select>
             </div>

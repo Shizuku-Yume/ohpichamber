@@ -1,3 +1,4 @@
+import { modelRefInstanceKey } from '@openchamber/agent-contract';
 import React from 'react';
 import {
  DndContext,
@@ -768,7 +769,7 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
  const favoriteSortingEnabled = Boolean(onReorderFavorite) && searchQuery.trim().length === 0 && filteredFavorites.length > 1;
  const providerSortingEnabled = Boolean(onReorderProvider) && searchQuery.trim().length === 0 && !allowedProviderSet && filteredProviders.length > 1;
  const favoriteLookup: Map<string, ModelPickerEntry> = React.useMemo(() => new Map(
-  filteredFavorites.map((entry) => [`${entry.providerId}:${entry.modelId}`, entry] as const),
+  filteredFavorites.map((entry) => [modelRefInstanceKey(entry.providerId, entry.modelId), entry] as const),
  ), [filteredFavorites]);
 
  const selectedModelIndex = searchQuery.trim() || !selectedModel ? 0 : flatModelList.findIndex((item) => {
@@ -1262,11 +1263,11 @@ export const ModelPickerList: React.FC<ModelPickerListProps> = ({
         {renderSectionHeader('favorites', <Icon name="star-fill" className="h-4 w-4 text-primary" />, labels.favorites)}
         {!isSectionCollapsed('favorites') && (favoriteSortingEnabled ? (
          <DndContext sensors={favoriteRowSensors} collisionDetection={closestCenter} onDragEnd={handleFavoriteDragEnd}>
-          <SortableContext items={filteredFavorites.map((entry) => `${entry.providerId}:${entry.modelId}`)} strategy={verticalListSortingStrategy}>
+          <SortableContext items={filteredFavorites.map((entry) => modelRefInstanceKey(entry.providerId, entry.modelId))} strategy={verticalListSortingStrategy}>
            {filteredFavorites.map((entry) => {
             const rowIndex = currentFlatIndex++;
             return (
-             <SortableFavoriteModelRow key={`fav-sortable-${entry.providerId}-${entry.modelId}`} id={`${entry.providerId}:${entry.modelId}`} disabled={disabled}>
+             <SortableFavoriteModelRow key={`fav-sortable-${entry.providerId}-${entry.modelId}`} id={modelRefInstanceKey(entry.providerId, entry.modelId)} disabled={disabled}>
               {(dragHandleProps) => renderRow(entry, 'fav', true, rowIndex, dragHandleProps)}
              </SortableFavoriteModelRow>
             );

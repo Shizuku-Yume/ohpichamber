@@ -931,3 +931,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes (conservative option within the 2026-11-10 merge decision)
 - **Revisit when:** integration carries commits that other branches or releases depend on, which then requires history-preserving updates instead.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - `@upstream` routing is opt-in for the selector grammar
+
+- **Decided:** `parseModelSelector` reads a trailing `@<slug>` as provider routing only when the caller passes `allowUpstreamRouting: true`. By default the `@` and its slug stay part of the model half, and `splitUpstreamRouting` remains exported for callers that check the base first.
+- **Instead of:** reproducing OMP's two-stage behavior (split, then re-resolve only when the base is an OpenRouter or Vercel-Gateway model) inside a grammar module that has no model registry. The alternative would have been to accept an `supportsUpstreamRouting(model)` predicate in the parse options, which doesn't exist without a catalog lookup and would make a pure string grammar depend on live provider state.
+- **Because:** an ungated split rewrites real ids that legitimately contain `@` — `anthropic/claude-opus-4-8@default` becomes provider `anthropic`, id `claude-opus-4-8`, upstream `default` — and those ids are persisted in role settings and project defaults, so a wrong split corrupts stored configuration. Leaving it off is the safe default; a caller that can prove the base is an aggregator turns it on.
+- **Mine:** yes (conservative option inside the 2026-11-10 R7 cutover)
+- **Revisit when:** a layer that parses selectors has the resolved model in hand and needs routing fidelity; it should then pass `allowUpstreamRouting: true` plus its registry check.
+- **Effort:** ux-v270-omp-alignment

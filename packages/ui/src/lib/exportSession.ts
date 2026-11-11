@@ -1,3 +1,4 @@
+import { modelRefKey } from '@openchamber/agent-contract';
 import type { Message } from '@openchamber/agent-contract';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getCurrentIntlLocale } from '@/lib/i18n';
@@ -28,7 +29,7 @@ function formatAssistantModel(record: Message): string {
   if (record.role !== 'assistant') return '';
   const providerId = record.providerId?.trim() ?? '';
   const modelId = record.modelId?.trim() ?? '';
-  const model = providerId && modelId ? `${providerId}/${modelId}` : modelId || providerId;
+  const model = modelRefKey(providerId, modelId) || modelId || providerId;
   const variant = 'variant' in record && typeof record.variant === 'string' ? record.variant.trim() : undefined;
   if (!model || !variant || ['default', 'none'].includes(variant.toLowerCase())) {
     return model;

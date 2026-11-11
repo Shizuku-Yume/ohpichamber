@@ -43,26 +43,24 @@ import os from 'os';
 import path from 'path';
 import { parseMdFile, writeMdFile, getAncestors, findWorktreeRoot } from '../host/shared.js';
 import { MAX_TASK_NAME_LENGTH } from '../projects/project-config.js';
+import { parseModelSelector } from '@openchamber/agent-contract';
 
 const LOOP_DIR_NAME = 'loops';
 const USER_LOOP_ROOT = () => path.join(os.homedir(), '.agents', LOOP_DIR_NAME);
 
 /**
- * Split a `provider/model` string into its two parts. Splits on the first `/`
- * so model ids containing a slash (e.g. `openai/gpt-5`) still resolve.
+ * Split a `provider/model` string into its two parts through the one selector
+ * grammar, which keeps an id's own slashes and any thinking suffix.
  */
 const splitProviderModel = (value) => {
-  const raw = asNonEmptyString(value);
-  if (!raw) {
-    return null;
-  }
-  const separator = raw.indexOf('/');
-  if (separator <= 0 || separator === raw.length - 1) {
+  const parsed = parseModelSelector(asNonEmptyString(value) ?? '');
+  if (!parsed) {
     return null;
   }
   return {
-    providerId: raw.slice(0, separator).trim(),
-    modelId: raw.slice(separator + 1).trim(),
+    providerId: parsed.providerId,
+    modelId: parsed.modelId,
+    thinkingLevel: parsed.thinkingLevel,
   };
 };
 

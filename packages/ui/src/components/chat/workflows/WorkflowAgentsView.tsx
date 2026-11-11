@@ -22,12 +22,13 @@ import {
 } from '@/lib/workflows/model';
 import { WorkflowAnswerBlock } from './WorkflowAnswerBlock';
 import { workflowAgentLook } from './workflowRunPresentation';
+import { parseModelString } from '@openchamber/agent-contract';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 
 type PhaseGroup = ReturnType<typeof groupWorkflowAgentsByPhase>[number];
 
 /** The model id without its provider, the part that tells two agents apart. */
-const shortModel = (model: string): string => model.slice(model.indexOf('/') + 1);
+const shortModel = (model: string): string => parseModelString(model)?.modelId ?? model;
 
 /** A span of time, live while it has no end. Ticks only itself. */
 const Duration: React.FC<{ start: number | undefined; end: number | undefined; className?: string }> = ({ start, end, className }) => {

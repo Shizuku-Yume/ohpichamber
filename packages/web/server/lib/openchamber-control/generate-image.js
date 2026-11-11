@@ -20,6 +20,7 @@ import {
  ImageGenerateRequestSchema,
  ImageGenerateResultSchema,
  ProblemDetailsSchema,
+ parseModelSelector,
 } from '@openchamber/agent-contract';
 
 import { asNonEmptyString } from '../shared/guards.js';
@@ -99,10 +100,8 @@ const targetPath = ({ requested, directory, index, count, mime, now }) => {
 
 /** `provider/model`; the model id may hold slashes of its own. */
 const parseModel = (value) => {
- const text = asNonEmptyString(value);
- const separator = text ? text.indexOf('/') : -1;
- if (separator <= 0 || separator === text.length - 1) return null;
- return { providerID: text.slice(0, separator), id: text.slice(separator + 1) };
+ const parsed = parseModelSelector(asNonEmptyString(value) ?? '');
+ return parsed ? { providerID: parsed.providerId, id: parsed.modelId } : null;
 };
 
 /**

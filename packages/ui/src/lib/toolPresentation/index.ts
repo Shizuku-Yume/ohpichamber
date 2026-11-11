@@ -30,6 +30,10 @@ export const OMP_TOOL_NAMES: readonly string[] = KNOWN_TOOL_NAMES.filter((name) 
 export const describeToolCall = (input: JsonObject, toolName: string | undefined): string | null =>
     toolPresentation(toolName).describeCall(input);
 
+/** One line summarizing a result from the SDK's `details`, or null. */
+export const describeToolResult = (details: JsonValue | undefined, toolName: string | undefined): string | null =>
+    toolPresentation(toolName).describeResult(details);
+
 /** The activity-row grouping class for a tool name. */
 export const toolGrouping = (toolName: string | undefined): ToolGroup => toolPresentation(toolName).group;
 

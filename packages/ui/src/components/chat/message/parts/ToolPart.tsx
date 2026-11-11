@@ -33,7 +33,7 @@ import {
     toolInputPath,
     toolPresentation,
 } from '@/lib/toolHelpers';
-import { describeToolCall } from '@/lib/toolPresentation';
+import { describeToolCall, describeToolResult } from '@/lib/toolPresentation';
 import { TodoCard } from './TodoCard';
 import { extractTodoPhases } from '../../todoData';
 import { toolDisplayStyles } from '@/lib/typography';
@@ -1217,6 +1217,13 @@ const ToolPart: React.FC<ToolPartProps> = ({
         }
         return { text: describeToolCall(call.input, toolName) ?? '', path: null };
     }, [call, currentDirectory, t, toolName]);
+    // The result's own one-line summary (match counts, exit status, diff stats,
+    // todo progress) sits beside the call's target, unless it repeats it.
+    const resultSummary = React.useMemo(() => {
+        if (!result || result.isError) return null;
+        const summary = describeToolResult(resultContent.details, toolName);
+        return summary && summary !== described.text ? summary : null;
+    }, [described.text, result, resultContent.details, toolName]);
     const description = guestHeader?.subtitle ?? described.text;
     const title = guestHeader?.title ?? displayName;
 
@@ -1396,6 +1403,11 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                         {description}
                                     </Text>
                                 )
+                            ) : null}
+                            {resultSummary ? (
+                                <span className="flex-shrink-0 typography-meta text-muted-foreground/70" title={resultSummary}>
+                                    {resultSummary}
+                                </span>
                             ) : null}
                             {diffStats ? (
                                 <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>

@@ -64,7 +64,13 @@ UI (commit `c492c01`, `8582dd0`):
 Check before: `bun --cwd packages/agent-contract test` exit 0 (246 tests) and `bun run lint` exit 0 at
 `eb91091a0`. The vitest leg cannot run at baseline (see the substitution above).
 
-Check after:
+Check after: re-run on the merged tree `9dbde2a68` (`ux-v270-omp-alignment/integration` merged in) —
+`bun --cwd packages/agent-contract test` 249 pass / 0 fail; `bun --cwd packages/agent-service test`
+486 tests / 0 fail (67 files, 10 skip); `VITEST_MAX_WORKERS=2 bun --cwd packages/ui test
+src/components/sections src/lib/i18n` 1332/1332 files passed; `bun run lint` exit 0;
+`bunx tsc --noEmit -p packages/ui/tsconfig.json` clean.
+
+Check after: pre-merge, on the branch before `9dbde2a68` —
 - `bun --cwd packages/agent-contract test` → exit 0, 246 pass, 0 fail (26 files).
 - `bun --cwd packages/agent-service test` → exit 0, 475 pass, 10 skip, 0 fail (485 tests / 67 files),
   including `settings-ui.test.ts` (classification coverage, owner uniqueness, live descriptor read,

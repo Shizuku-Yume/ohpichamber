@@ -10,6 +10,8 @@ import type { ESTree } from "@oxlint/plugins";
 // `toolGrouping`, `toolPresentation`, …).
 
 const REGISTRY_DIR = "packages/ui/src/lib/toolPresentation/";
+/** The registry is a UI module; the Agent Service dispatches on OMP's names at the boundary itself. */
+const UI_SOURCE = "packages/ui/src/";
 
 /** Test fixtures spell the tool name they exercise; that is an assertion, not a second registry. */
 function isTestFile(filename: string): boolean {
@@ -52,7 +54,7 @@ export const noToolNameLiteralRule = defineRule({
   },
   create(context) {
     const filename = (context.filename ?? context.physicalFilename ?? "").split("\\").join("/");
-    if (filename.includes(REGISTRY_DIR) || isTestFile(filename)) {
+    if (!filename.includes(UI_SOURCE) || filename.includes(REGISTRY_DIR) || isTestFile(filename)) {
       return {};
     }
     return {

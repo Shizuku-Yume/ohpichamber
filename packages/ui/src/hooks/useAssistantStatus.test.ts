@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Message, Part, ToolStatus } from '@openchamber/agent-contract';
 
-import { createParsedStatus, getActiveAssistantContext } from './useAssistantStatus';
+import { createParsedStatus, getActiveAssistantContext, retryInfoOf } from './useAssistantStatus';
 
 const userMessage = (messageId: string): Message => ({
     messageId,
@@ -114,74 +114,81 @@ describe('getActiveAssistantContext', () => {
 describe('createParsedStatus', () => {
     const toolState = (status: 'running' | 'pending' | 'completed' | 'failed'): ToolStatus => status === 'pending' ? 'pending_approval' : status;
 
-    const tool = (id: string, name: string, status: 'running' | 'pending' | 'completed' | 'failed' = 'running'): Part => ({
+    const tool = (id: string, name: string, status: 'running' | 'pending' | 'completed' | 'failed' = 'running', input: Part extends never ? never : Record<string, string> = {}): Part => ({
         type: 'tool_call',
         partId: id,
         toolCallId: `call_${id}`,
         toolName: name,
-        input: {},
+        input,
         status: toolState(status),
     });
 
-    const statusOf = (parts: Part[]) => createParsedStatus(parts, 'ses_1:msg_1');
+    const statusOf = (parts: Part[]) => createParsedStatus(parts);
 
-    test('names OMP tools by their work and leaves other names visible', () => {
-        expect(statusOf([tool('1', 'read')]).statusText).toBe('reading a file');
-        expect(statusOf([tool('1', 'edit')]).statusText).toBe('editing a file');
-        expect(statusOf([tool('1', 'bash')]).statusText).toBe('running a command');
-        expect(statusOf([tool('1', 'web_search')]).statusText).toBe('looking things up');
-        expect(statusOf([tool('1', 'task')]).statusText).toBe('handing off a task');
-        expect(statusOf([tool('1', 'ask')]).statusText).toBe('asking a question');
-        expect(statusOf([tool('1', 'find')]).statusText).toBe('searching files');
-        expect(statusOf([tool('1', 'mcp__srv_custom')]).statusText).toBe('using mcp__srv_custom');
+    test('a running call reads as its intent, exactly as the harness wrote it', () => {
+        expect(statusOf([tool('1', 'read', 'running', { i: 'Checking the parser...' })]).status).toEqual({
+            key: 'chat.agentStatus.usingTool',
+            name: 'Read',
+            text: 'Checking the parser',
+        });
     });
 
-    test('maps every OMP native tool to an assistant-status bucket', () => {
-        expect(statusOf([tool('1', 'grep')]).statusText).toBe('searching files');
-        expect(statusOf([tool('1', 'glob')]).statusText).toBe('searching files');
-        expect(statusOf([tool('1', 'ast_grep')]).statusText).toBe('searching files');
-        expect(statusOf([tool('1', 'ast_edit')]).statusText).toBe('editing a file');
-        expect(statusOf([tool('1', 'todo')]).statusText).toBe('updating the plan');
-        expect(statusOf([tool('1', 'eval')]).statusText).toBe('running code');
-        expect(statusOf([tool('1', 'lsp')]).statusText).toBe('looking things up');
-        for (const name of ['bash', 'task', 'ask', 'find', 'grep', 'glob', 'todo']) {
-            const status = statusOf([tool('1', name)]);
-            expect(status.isGenericStatus).toBe(false);
-            expect(status.statusText).not.toBe(`using ${name}`);
-        }
+    test('without an intent the call describes its own target', () => {
+        expect(statusOf([tool('1', 'read', 'running', { path: 'src/main.ts' })]).status).toEqual({
+            key: 'chat.agentStatus.usingTool',
+            name: 'Read',
+            text: 'src/main.ts',
+        });
+        expect(statusOf([tool('1', 'bash', 'running', { command: 'bun test' })]).status).toEqual({
+            key: 'chat.agentStatus.usingTool',
+            name: 'Bash',
+            text: 'bun test',
+        });
     });
 
-    test('counts parallel eval calls and keeps plan updates uncounted', () => {
-        expect(statusOf([tool('1', 'eval'), tool('2', 'eval')]).statusText).toBe('running 2 code samples');
-        expect(statusOf([tool('1', 'todo'), tool('2', 'todo')]).statusText).toBe('updating the plan');
+    test('the newest unfinished call owns the line', () => {
+        expect(statusOf([tool('1', 'read', 'running', { i: 'Reading the index' }), tool('2', 'bash', 'running', { i: 'Running tests' })]).status.text).toBe('Running tests');
+        expect(statusOf([tool('1', 'read', 'running', { i: 'Reading the index' }), tool('2', 'bash', 'completed')]).status.text).toBe('Reading the index');
     });
 
-    test('counts parallel calls in the same native category', () => {
-        expect(statusOf([tool('1', 'read'), tool('2', 'read'), tool('3', 'read')]).statusText).toBe('reading 3 files');
-        expect(statusOf([tool('1', 'write'), tool('2', 'edit')]).statusText).toBe('editing 2 files');
-        expect(statusOf([tool('1', 'bash'), tool('2', 'bash')]).statusText).toBe('running 2 commands');
-        expect(statusOf([tool('1', 'task'), tool('2', 'task')]).statusText).toBe('handing off 2 tasks');
-    });
-
-    test('does not count searches, since one call spans many files', () => {
-        expect(statusOf([tool('1', 'grep'), tool('2', 'glob')]).statusText).toBe('searching files');
-    });
-
-    test('counts only unfinished calls', () => {
-        expect(statusOf([tool('1', 'read'), tool('2', 'read', 'completed')]).statusText).toBe('reading a file');
-    });
-    test('failed and completed calls are not active', () => {
-        expect(statusOf([tool('1', 'read', 'completed')]).activePartType).toBeUndefined();
+    test('finished calls leave the plain working line', () => {
+        expect(statusOf([tool('1', 'read', 'completed')]).status).toEqual({ key: 'chat.agentStatus.working' });
+        expect(statusOf([tool('2', 'bash', 'failed')]).status).toEqual({ key: 'chat.agentStatus.working' });
         expect(statusOf([tool('2', 'bash', 'failed')]).activePartType).toBeUndefined();
     });
 
-    test('canonical text and reasoning parts remain neutral without completion data', () => {
-        expect(statusOf([{ type: 'text', partId: 'text_1', content: 'hello' }]).activePartType).toBeUndefined();
-        expect(statusOf([{ type: 'reasoning', partId: 'reason_1', content: 'thinking' }]).activePartType).toBeUndefined();
+    test('live reasoning with no intent reads as thinking', () => {
+        expect(statusOf([{ type: 'reasoning', partId: 'reason_1', content: 'weighing options' }]).status).toEqual({ key: 'chat.agentStatus.thinking' });
+        expect(statusOf([{ type: 'reasoning', partId: 'reason_1', content: 'weighing options' }]).activePartType).toBe('reasoning');
     });
 
-    test('shows the newest kind when different tools run together', () => {
-        expect(statusOf([tool('1', 'read'), tool('2', 'bash')]).statusText).toBe('running a command');
-        expect(statusOf([tool('1', 'bash'), tool('2', 'read')]).statusText).toBe('reading a file');
+    test('text after reasoning is the answer, not thinking', () => {
+        expect(statusOf([
+            { type: 'reasoning', partId: 'reason_1', content: 'weighing options' },
+            { type: 'text', partId: 'text_1', content: 'Here it is.' },
+        ]).status).toEqual({ key: 'chat.agentStatus.working' });
+    });
+
+    test('an unknown extension tool still names itself', () => {
+        expect(statusOf([tool('1', 'mcp__srv_custom')]).status).toEqual({ key: 'chat.agentStatus.usingTool', name: 'mcp__srv_custom' });
+        expect(statusOf([tool('1', 'mcp__srv_custom')]).isGenericStatus).toBe(false);
+    });
+});
+
+describe('retryInfoOf', () => {
+    const retryNotice = (attempt: number, delayMs: number): Part => ({
+        type: 'notice',
+        partId: `notice_${attempt}`,
+        noticeType: 'auto_retry_start',
+        level: 'warning',
+        details: { attempt, maxAttempts: 5, delayMs, errorMessage: 'overloaded' },
+    });
+
+    test('a trailing retry notice reports its attempt and delay', () => {
+        expect(retryInfoOf([retryNotice(2, 4000)])).toEqual({ attempt: 2, next: 4000 });
+    });
+
+    test('work after the notice means the retry already ran', () => {
+        expect(retryInfoOf([retryNotice(2, 4000), { type: 'text', partId: 'text_1', content: 'back' }])).toBeNull();
     });
 });

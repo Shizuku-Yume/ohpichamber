@@ -2,11 +2,11 @@ import React from 'react';
 import { useChatSessionSelection } from '@/components/chat/chatColumnSession';
 import type { Message, Part, ToolCallPart } from '@openchamber/agent-contract';
 
-import type { MessageStreamPhase } from '@/stores/types/sessionTypes';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectorySync, useSessionMessages, useSessionPermissions, useSessionForms } from '@/sync/sync-context';
 import { useSessionActivity } from './useSessionActivity';
 import type { AgentStatus } from '@/lib/agentStatus';
+import { normalizeIntent, toolPresentation } from '@/lib/toolPresentation';
 
 type AssistantActivity = 'idle' | 'streaming' | 'tooling' | 'cooldown' | 'permission';
 
@@ -17,7 +17,7 @@ interface WorkingSummary {
     isWorking: boolean;
     isStreaming: boolean;
     isCooldown: boolean;
-    lifecyclePhase: MessageStreamPhase | null;
+    lifecyclePhase: 'streaming' | 'cooldown' | null;
     statusText: string | null;
     /** The same activity as a dictionary key, so the pill and status row localize it. */
     status: AgentStatus | null;
@@ -86,244 +86,109 @@ const DEFAULT_WORKING: WorkingSummary = {
 const EMPTY_PARTS: Part[] = [];
 const STATUS_SIGNATURE_SEPARATOR = '\u0000';
 
-type ToolBucket = 'read' | 'search' | 'edit' | 'command' | 'lookup' | 'delegate' | 'question' | 'skill' | 'plan' | 'evaluate';
+const isLiveToolStatus = (status: ToolCallPart['status']): boolean =>
+    status === 'pending_approval' || status === 'approved' || status === 'running';
 
-// OMP builtin tools use their native identities; other names stay visible.
-const TOOL_BUCKETS: Record<string, ToolBucket> = {
-    read: 'read', grep: 'search', glob: 'search', find: 'search', ast_grep: 'search',
-    edit: 'edit', write: 'edit', ast_edit: 'edit',
-    bash: 'command', eval: 'evaluate',
-    lsp: 'lookup', web_search: 'lookup', fetch: 'lookup', github: 'lookup',
-    task: 'delegate', ask: 'question', manage_skill: 'skill', todo: 'plan',
-};
-
-// [one call, several calls]; `{count}` becomes the number of parallel calls in
-// the bucket. A search spans many files in one call, so it is not counted.
-const BUCKET_PHRASES = {
-    read: ['reading a file', 'reading {count} files'],
-    search: ['searching files', 'searching files'],
-    edit: ['editing a file', 'editing {count} files'],
-    command: ['running a command', 'running {count} commands'],
-    evaluate: ['running code', 'running {count} code samples'],
-    lookup: ['looking things up', 'looking things up'],
-    delegate: ['handing off a task', 'handing off {count} tasks'],
-    question: ['asking a question', 'asking a question'],
-    skill: ['picking up a skill', 'picking up {count} skills'],
-    plan: ['updating the plan', 'updating the plan'],
-} satisfies Record<ToolBucket, readonly [string, string]>;
-const WORKING_PHRASES = [
-    'working',
-    'processing',
-    'preparing',
-    'warming up',
-    'gears turning',
-    'computing',
-    'calculating',
-    'analyzing',
-    'wheels spinning',
-    'calibrating',
-    'synthesizing',
-    'connecting dots',
-    'inspecting logic',
-    'weighing options',
-];
-
-type ParsedStatusResult = {
-    activePartType: 'text' | 'tool' | 'reasoning' | 'editing' | undefined;
+export type ParsedStatusResult = {
+    activePartType: 'tool' | 'reasoning' | 'text' | undefined;
     activeToolName: string | undefined;
-    statusText: string;
     status: AgentStatus;
     isGenericStatus: boolean;
 };
 
-// The dictionary keys behind each bucket's phrase; a tool the catalogue has no
-// phrase for reads as its name.
-const BUCKET_STATUS = {
-    read: 'chat.agentStatus.read',
-    search: 'chat.agentStatus.search',
-    edit: 'chat.agentStatus.edit',
-    command: 'chat.agentStatus.command',
-    lookup: 'chat.agentStatus.lookup',
-    delegate: 'chat.agentStatus.delegate',
-    question: 'chat.agentStatus.question',
-    skill: 'chat.agentStatus.skill',
-} as const;
-const COUNTED_STATUS = {
-    read: 'chat.agentStatus.read.count',
-    edit: 'chat.agentStatus.edit.count',
-    command: 'chat.agentStatus.command.count',
-    delegate: 'chat.agentStatus.delegate.count',
-    skill: 'chat.agentStatus.skill.count',
-} as const;
-
-const getToolStatus = (toolName: string, count = 1): AgentStatus => {
-    const bucket = TOOL_BUCKETS[toolName];
-    if (!bucket) return { key: 'chat.agentStatus.usingTool', name: toolName.replace(/[_-]+/g, ' ').trim() };
-    const counted = (COUNTED_STATUS as Record<string, string | undefined>)[bucket];
-    const single = (BUCKET_STATUS as Record<string, string | undefined>)[bucket];
-    if (count > 1 && counted) return { key: counted as AgentStatus['key'], count };
-    if (single) return { key: single as AgentStatus['key'] };
-    // plan and evaluate are OMP's own tools; the catalogue has no phrase for them.
-    return { key: 'chat.agentStatus.usingTool', name: bucket };
-};
-
-/** The generic phrase's dictionary key, picked by the same hash as its text. */
-const WORKING_STATUS_KEYS = [
-    'chat.agentStatus.working',
-    'chat.agentStatus.generic.processing',
-    'chat.agentStatus.generic.preparing',
-    'chat.agentStatus.generic.warmingUp',
-    'chat.agentStatus.generic.gearsTurning',
-    'chat.agentStatus.generic.computing',
-    'chat.agentStatus.generic.calculating',
-    'chat.agentStatus.generic.analyzing',
-    'chat.agentStatus.generic.wheelsSpinning',
-    'chat.agentStatus.generic.calibrating',
-    'chat.agentStatus.generic.synthesizing',
-    'chat.agentStatus.generic.connectingDots',
-    'chat.agentStatus.generic.inspectingLogic',
-    'chat.agentStatus.generic.weighingOptions',
-] as const;
-
-const getStableWorkingStatus = (key: string): AgentStatus => ({
-    key: WORKING_STATUS_KEYS[hashString(key) % WORKING_STATUS_KEYS.length] ?? 'chat.agentStatus.working',
-});
-
-const getToolStatusPhrase = (toolName: string, count = 1): string => {
-    const bucket = TOOL_BUCKETS[toolName];
-    if (!bucket) {
-        return `using ${toolName}`;
-    }
-    const [one, many] = BUCKET_PHRASES[bucket];
-    return (count > 1 ? many : one).replace('{count}', String(count));
-};
-
 /**
- * Parallel commands are counted together; canonical tool calls do not carry
- * nested execute metadata, so the status remains at the declared tool name.
+ * What the run is doing, from the parts of its assistant message. OMP's own
+ * precedence: a running call's intent names the work, an unsealed reasoning
+ * part reads as thinking, and anything else is the plain working line.
  */
-const getRunningToolPhrase = (toolName: string, count: number): string => getToolStatusPhrase(toolName, count);
-
-const hashString = (value: string): number => {
-    let hash = 0;
-    for (let index = 0; index < value.length; index += 1) {
-        hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0;
-    }
-    return Math.abs(hash);
-};
-
-const getStableWorkingPhrase = (key: string): string => {
-    return WORKING_PHRASES[hashString(key) % WORKING_PHRASES.length] ?? 'working';
-};
-
-
-export const createParsedStatus = (parts: Part[], genericKey: string): ParsedStatusResult => {
-    const runningToolCounts = countRunningToolCalls(parts);
-    let activePartType: ParsedStatusResult['activePartType'] = undefined;
-    let activeToolName: string | undefined = undefined;
-    let activeToolPhrase: string | undefined = undefined;
+export const createParsedStatus = (parts: readonly Part[]): ParsedStatusResult => {
+    let activeCall: ToolCallPart | undefined;
+    let reasoning = false;
+    let text = false;
 
     for (let index = parts.length - 1; index >= 0; index -= 1) {
         const part = parts[index];
         if (!part) continue;
-
-        switch (part.type) {
-            case 'reasoning': {
-                // Canonical reasoning parts carry no completion marker. Do not
-                // infer that an otherwise settled part is still streaming.
-                break;
-            }
-            case 'tool_call': {
-                const toolStatus = part.status;
-                if ((toolStatus === 'running' || toolStatus === 'pending_approval' || toolStatus === 'approved') && !activePartType) {
-                    const toolName = part.toolName;
-                    const bucket = TOOL_BUCKETS[toolName];
-                    activePartType = bucket === 'edit' ? 'editing' : 'tool';
-                    activeToolName = toolName;
-                    activeToolPhrase = getRunningToolPhrase(toolName, runningToolCounts.get(bucket ?? toolName) ?? 1);
-                }
-                break;
-            }
-            case 'text': {
-                // Canonical text parts carry no completion marker. Keep the
-                // neutral status rather than inventing streaming state.
-                break;
-            }
-            default:
-                break;
+        if (part.type === 'tool_call' && isLiveToolStatus(part.status)) {
+            activeCall = part;
+            break;
         }
+        if (part.type === 'reasoning' && !reasoning) reasoning = part.content.trim().length > 0;
+        if (part.type === 'text' && !text) text = part.content.trim().length > 0;
     }
 
-    const isGenericStatus = activePartType === undefined;
-    const statusText = (() => {
-        if (activePartType === 'editing') return activeToolPhrase ?? 'editing a file';
-        if (activePartType === 'tool' && activeToolName) return activeToolPhrase ?? getToolStatusPhrase(activeToolName);
-        return getStableWorkingPhrase(genericKey);
-    })();
-    const status: AgentStatus = isGenericStatus
-        ? getStableWorkingStatus(genericKey)
-        : activePartType === 'editing'
-            ? getToolStatus(activeToolName ?? 'edit', runningToolCounts.get(TOOL_BUCKETS[activeToolName ?? 'edit'] ?? 'edit') ?? 1)
-            : activePartType === 'tool' && activeToolName
-                ? getToolStatus(activeToolName, runningToolCounts.get(TOOL_BUCKETS[activeToolName] ?? activeToolName) ?? 1)
-                : { key: 'chat.agentStatus.composing' };
+    if (activeCall) {
+        const presentation = toolPresentation(activeCall.toolName);
+        const intent = normalizeIntent(typeof activeCall.input.i === 'string' ? activeCall.input.i : '');
+        const described = intent ?? presentation.describeCall(activeCall.input);
+        return {
+            activePartType: 'tool',
+            activeToolName: activeCall.toolName,
+            status: described
+                ? { key: 'chat.agentStatus.usingTool', name: presentation.label, text: described }
+                : { key: 'chat.agentStatus.usingTool', name: presentation.label },
+            isGenericStatus: false,
+        };
+    }
 
-    return { activePartType, activeToolName, statusText, status, isGenericStatus };
+    if (reasoning && !text) {
+        return { activePartType: 'reasoning', activeToolName: undefined, status: { key: 'chat.agentStatus.thinking' }, isGenericStatus: false };
+    }
+
+    return {
+        activePartType: text ? 'text' : undefined,
+        activeToolName: undefined,
+        status: { key: 'chat.agentStatus.working' },
+        isGenericStatus: true,
+    };
 };
 
-const encodeParsedStatus = (status: ParsedStatusResult): string => {
-    return [
-        status.activePartType ?? '',
-        status.activeToolName ?? '',
-        status.statusText,
-        status.isGenericStatus ? '1' : '0',
-        // The key is what the pill localizes; its text is only the fallback.
-        JSON.stringify([status.status.key, status.status.count ?? null, status.status.name ?? null]),
-    ].join(STATUS_SIGNATURE_SEPARATOR);
-};
+const encodeParsedStatus = (status: ParsedStatusResult): string => [
+    status.activePartType ?? '',
+    status.activeToolName ?? '',
+    status.isGenericStatus ? '1' : '0',
+    JSON.stringify([status.status.key, status.status.count ?? null, status.status.name ?? null, status.status.text ?? null]),
+].join(STATUS_SIGNATURE_SEPARATOR);
 
 const decodeParsedStatus = (signature: string): ParsedStatusResult => {
-    const [activePartType, activeToolName, statusText = 'working', isGenericStatus, encodedStatus] = signature.split(STATUS_SIGNATURE_SEPARATOR);
+    const [activePartType, activeToolName, isGenericStatus, encodedStatus] = signature.split(STATUS_SIGNATURE_SEPARATOR);
     let status: AgentStatus = { key: 'chat.agentStatus.working' };
     if (encodedStatus) {
         try {
-            const [key, count, name] = JSON.parse(encodedStatus) as [AgentStatus['key'], number | null, string | null];
+            const [key, count, name, text] = JSON.parse(encodedStatus) as [AgentStatus['key'], number | null, string | null, string | null];
             status = { key };
             if (count !== null) status.count = count;
             if (name !== null) status.name = name;
+            if (text !== null) status.text = text;
         } catch {
-            // A signature from an older build carries no key; the text stands in.
+            // A signature from an older build carries no key; the working line stands in.
         }
     }
     return {
-        activePartType: activePartType === 'text' || activePartType === 'tool' || activePartType === 'reasoning' || activePartType === 'editing'
+        activePartType: activePartType === 'text' || activePartType === 'tool' || activePartType === 'reasoning'
             ? activePartType
             : undefined,
         activeToolName: activeToolName || undefined,
-        statusText,
         status,
         isGenericStatus: isGenericStatus === '1',
     };
 };
 
-const getToolDisplayName = (part: ToolCallPart): string => part.toolName;
-
 /**
- * Parallel calls are common (three reads, two shell commands), and the last
- * part alone hides the rest. Count every call that is still running or pending
- * by bucket so the phrase can say "reading 3 files" instead.
+ * The retry the run is waiting on, when the newest notice says so and nothing
+ * has happened since: OMP reports `auto_retry_start` with the delay it will
+ * wait, and the next text or call means the retry already ran.
  */
-const countRunningToolCalls = (parts: readonly Part[]): Map<string, number> => {
-    const counts = new Map<string, number>();
-    for (const part of parts) {
-        if (part.type !== 'tool_call') continue;
-        const status = part.status;
-        if (status !== 'running' && status !== 'pending_approval' && status !== 'approved') continue;
-        const toolName = getToolDisplayName(part);
-        const bucket = TOOL_BUCKETS[toolName] ?? toolName;
-        counts.set(bucket, (counts.get(bucket) ?? 0) + 1);
+export const retryInfoOf = (parts: readonly Part[]): { attempt?: number; next?: number } | null => {
+    for (let index = parts.length - 1; index >= 0; index -= 1) {
+        const part = parts[index];
+        if (!part) continue;
+        if (part.type === 'notice' && part.noticeType === 'auto_retry_start') {
+            return { attempt: part.details.attempt, next: part.details.delayMs };
+        }
+        if (part.type === 'tool_call' || (part.type === 'text' && part.content.trim().length > 0)) return null;
     }
-    return counts;
+    return null;
 };
 
 /** True when a user prompt follows `index`, i.e. a turn is queued or starting. */
@@ -377,13 +242,14 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     );
     const lastAssistantId = activeAssistant.assistantId;
 
-    const lastAssistantStatusSignature = useDirectorySync(
+    const lastAssistantSignature = useDirectorySync(
         React.useCallback((state) => {
-            const genericKey = `${currentSessionId ?? ''}:${lastAssistantId ?? ''}`;
             const parts = lastAssistantId
                 ? state.message[currentSessionId ?? '']?.find((message) => message.messageId === lastAssistantId)?.parts ?? EMPTY_PARTS
                 : EMPTY_PARTS;
-            return encodeParsedStatus(createParsedStatus(parts, genericKey));
+            const parsed = createParsedStatus(parts);
+            const retry = retryInfoOf(parts);
+            return [encodeParsedStatus(parsed), retry?.attempt ?? '', retry?.next ?? ''].join(STATUS_SIGNATURE_SEPARATOR);
         }, [currentSessionId, lastAssistantId]),
         currentSessionDirectory ?? undefined,
     );
@@ -402,10 +268,19 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
     const { phase: activityPhase, isWorking: isPhaseWorking } = useSessionActivity(currentSessionId, currentSessionDirectory ?? undefined);
 
-
     const parsedStatus = React.useMemo<ParsedStatusResult>(() => {
-        return decodeParsedStatus(lastAssistantStatusSignature);
-    }, [lastAssistantStatusSignature]);
+        const [signature] = lastAssistantSignature.split(STATUS_SIGNATURE_SEPARATOR);
+        return decodeParsedStatus(signature ?? '');
+    }, [lastAssistantSignature]);
+
+    const retryInfo = React.useMemo(() => {
+        const [, attempt, next] = lastAssistantSignature.split(STATUS_SIGNATURE_SEPARATOR);
+        if (!attempt) return null;
+        return {
+            attempt: Number(attempt),
+            ...(next ? { next: Number(next) } : {}),
+        };
+    }, [lastAssistantSignature]);
 
     const abortState = React.useMemo(() => {
         const hasActiveAbort = Boolean(sessionAbortRecord && !sessionAbortRecord.acknowledged);
@@ -413,62 +288,35 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     }, [sessionAbortRecord]);
 
     const baseWorking = React.useMemo<WorkingSummary>(() => {
-
         if (abortState.wasAborted) {
             return {
                 ...DEFAULT_WORKING,
                 wasAborted: true,
                 abortActive: abortState.abortActive,
-                activity: 'idle',
-                hasWorkingContext: false,
-                isWorking: false,
-                isStreaming: false,
-                isCooldown: false,
-                statusText: null,
-                canAbort: false,
-                retryInfo: null,
             };
         }
 
         const isWorking = isPhaseWorking;
         const isStreaming = activityPhase === 'busy';
-        const isCooldown = false;
-        // Canonical runtime status does not expose retry timing or attempts.
-
-        let activity: AssistantActivity = 'idle';
-        if (isWorking) {
-            if (parsedStatus.activePartType === 'tool' || parsedStatus.activePartType === 'editing') {
-                activity = 'tooling';
-            } else {
-                activity = isCooldown ? 'cooldown' : 'streaming';
-            }
-        }
-
-        const retryInfo = null;
+        const hasActiveTools = parsedStatus.activePartType === 'tool';
 
         return {
-            activity,
+            ...DEFAULT_WORKING,
+            activity: isWorking ? (hasActiveTools ? 'tooling' : 'streaming') : 'idle',
             hasWorkingContext: isWorking,
-            hasActiveTools: parsedStatus.activePartType === 'tool' || parsedStatus.activePartType === 'editing',
+            hasActiveTools,
             isWorking,
             isStreaming,
-            isCooldown,
-            lifecyclePhase: isStreaming ? 'streaming' : isCooldown ? 'cooldown' : null,
-            statusText: isWorking ? parsedStatus.statusText : null,
+            lifecyclePhase: isStreaming ? 'streaming' : null,
+            statusText: isWorking ? parsedStatus.status.text ?? parsedStatus.status.name ?? null : null,
             status: isWorking ? parsedStatus.status : null,
             isGenericStatus: isWorking ? parsedStatus.isGenericStatus : true,
-            isWaitingForPermission: false,
             canAbort: isWorking,
-            compactionDeadline: null,
             activePartType: isWorking ? parsedStatus.activePartType : undefined,
             activeToolName: isWorking ? parsedStatus.activeToolName : undefined,
-            wasAborted: false,
-            abortActive: false,
-            lastCompletionId: null,
-            isComplete: false,
-            retryInfo,
+            retryInfo: isWorking ? retryInfo : null,
         };
-    }, [activityPhase, isPhaseWorking, parsedStatus, abortState]);
+    }, [activityPhase, isPhaseWorking, parsedStatus, retryInfo, abortState]);
 
     const forming = React.useMemo<FormingSummary>(() => {
         const isActive = isPhaseWorking && parsedStatus.activePartType === 'text';

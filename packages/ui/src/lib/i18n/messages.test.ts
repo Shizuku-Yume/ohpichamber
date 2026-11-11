@@ -159,11 +159,11 @@ describe('i18n dictionaries', () => {
       const missing = ompKeys.filter((key) => !(key in dictionary));
       expect(missing, `${locale} missing OMP keys`).toEqual([]);
       if (locale === 'en') continue;
-      // Some vocabulary is genuinely shared (a `Skills` heading, `%`), so
-      // equality alone is not proof of an untranslated string. The page-level
-      // copy is prose and must differ; every key must at least be present.
+      // Some vocabulary is genuinely shared (`OMP`, a `Skills` heading, `%`),
+      // so equality alone is not proof of an untranslated string: the product
+      // name stays `OMP` in every locale by design. The page-level prose must
+      // differ; every key must at least be present.
       for (const key of [
-        'settings.page.omp.title',
         'settings.page.omp.description',
         'settings.omp.advanced',
         'settings.omp.advancedDescription',

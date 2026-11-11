@@ -931,3 +931,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes (conservative option within the 2026-11-10 merge decision)
 - **Revisit when:** integration carries commits that other branches or releases depend on, which then requires history-preserving updates instead.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - The boot registry owns server-owned reads; freshness compares one clock
+
+- **Decided:** `packages/ui/src/stores/serverStateBoot.ts` is the single reader and resetter of every store that projects the instance's own state (permission policy, Git identities, quota, agent memory, session folders, web search, MCP/skills/catalog reset-only, advisor/cleanse reset-only). Each of those stores declares `unknown | ready | error` (`stores/loadPhase.ts`), and a failed read keeps the held value and says so instead of producing an empty list. Freshness comparisons moved to one clock at a time: suggestions and work hints order against Host turn stamps (`openchamber.workbench.lastIdleAt`, `openchamber.turn.endedAt`, `openchamber.reviewOffer.at`) rather than `session.updatedAt`, and the Host status seed dropped its client-clock age window.
+- **Instead of:** keeping per-page hydrate-on-mount paths beside the registry, letting `resolvePermissionMode` return `ask` for an unread policy, or adding a Host "now" field to every session list read. The first two are the R4 defects themselves; the third would change the session-list contract for a display window that only needs to be honest about which clock it used.
+- **Because:** the permission policy had no production reader at all after `permission-mode-sync.ts` lost its importer, so a restart with default mode `auto` still showed `ask`; and `session.updatedAt` is the native transcript file's mtime, so any comparison against a Host or client stamp measured clock skew — touching a session file purged a suggestion that still applied.
+- **Also recorded:** `getCurrentPermissionMode` returns `null` for "not read" while `getSessionMode` keeps returning a concrete mode (the configured `permissionDefaultMode`) for callers that must act; the composer's new-session draft uses that default too. Two presentation windows in `lib/overview/overviewModel.ts` (14-day followed window, 3-day stalled label) keep a justified `oxlint-disable-next-line openchamber/no-cross-source-time-compare`, since seconds of skew cannot change an answer measured in days.
+- **Mine:** yes (conservative reading of task 22's acceptance)
+- **Revisit when:** the Canonical contract carries a Host-sourced "now" per session list read, or the permission policy gains a server-pushed initial value on connect.
+- **Effort:** ux-v270-omp-alignment

@@ -1,13 +1,5 @@
 import React from 'react';
 import type { Model, OmpSettingsState } from '@openchamber/agent-contract';
-import {
- MAX_THINKING_SUFFIX_OPTIONS,
- formatModelRef,
- formatModelSelector,
- parseConfiguredThinkingLevel,
- parseModelSelector,
- splitSelectorThinking,
-} from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { loadDesktopSettings, reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
@@ -17,48 +9,17 @@ import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/fi
 import { useCommitSettings } from '@/lib/gitCommitSettings';
 import { useI18n } from '@/lib/i18n';
 import {
- Select,
- SelectContent,
- SelectItem,
- SelectTrigger,
- SelectValue,
-} from '@/components/ui/select';
-import {
  SettingsSection,
  SettingsControlGroup,
  SettingsRadioGroup,
  SettingsRadioOption,
  SettingsCheckboxRow,
- SettingsFieldRow,
  SETTINGS_OPTION_STACK_CLASS,
- SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 
 /** The OMP model role commit messages and PR descriptions are generated with. */
 const COMMIT_ROLE = 'commit';
-/** The picker's "no role assigned" choice: OMP falls back to its own default. */
-const INHERIT_VALUE = '__inherit__';
-
-/**
- * `provider/model` role selectors may carry a `:effort` suffix. The picker
- * edits the model half, so the suffix is read once by the one selector
- * grammar and written back unchanged while the chosen model still reasons.
- */
-const splitRoleSelector = (
- selector: string,
- literalModelId: (providerId: string | undefined, modelId: string) => boolean,
-): { model: string; effort: string } => {
- const split = splitSelectorThinking(selector, { ...MAX_THINKING_SUFFIX_OPTIONS, isLiteralModelId: literalModelId });
- return { model: split.model, effort: split.thinkingLevel ?? '' };
-};
-
-/** Write the commit role back as `provider/model[:level]`, keeping its level. */
-const formatCommitSelector = (model: string, effort: string): string => {
- const parsed = parseModelSelector(model);
- const thinkingLevel = parseConfiguredThinkingLevel(effort);
- return parsed ? formatModelSelector({ providerId: parsed.providerId, modelId: parsed.modelId, thinkingLevel }) : model;
-};
-
 /** Only string roles survive; a malformed record must not erase the others. */
 const readRoleRecord = (value: unknown): Record<string, string> => {
  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -154,15 +115,11 @@ export const GitSettings: React.FC = () => {
   () => readRoleRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value),
   [ompState],
  );
- // A catalog model whose own id ends in a suffix keeps it; only an unclaimed
- // suffix is this role's thinking level.
- const literalModelId = React.useCallback(
-  (providerId: string | undefined, modelId: string) => providerId !== undefined && models.some((model) => model.provider === providerId && model.modelId === modelId),
-  [models],
- );
- const { model: commitModelId, effort: commitEffort } = React.useMemo(
-  () => splitRoleSelector(roleRecord[COMMIT_ROLE] ?? '', literalModelId),
-  [roleRecord, literalModelId],
+ // The role record keeps its string selectors, so the shared editor can read
+ // one role out of the same shape Defaults and the OMP page use.
+ const roleSelectors = React.useMemo(
+  () => Object.fromEntries(Object.entries(roleRecord).filter(([, selector]) => selector.length > 0)),
+  [roleRecord],
  );
 
  const handleGitmojiChange = React.useCallback(async (enabled: boolean) => {
@@ -230,18 +187,9 @@ export const GitSettings: React.FC = () => {
   }
  }, [t]);
 
- const handleCommitModelChange = React.useCallback((value: string) => {
-  if (value === INHERIT_VALUE) {
-   void writeCommitRole('');
-   return;
-  }
-  const nextModel = models.find((model) => formatModelRef(model) === value);
-  const effortToKeep = nextModel
-   && (nextModel.reasoningEffortSupported || nextModel.reasoningOptions.length > 0)
-   ? commitEffort
-   : '';
-  void writeCommitRole(formatCommitSelector(value, effortToKeep));
- }, [commitEffort, models, writeCommitRole]);
+ const handleCommitRoleChange = React.useCallback((selector: string) => {
+  void writeCommitRole(selector);
+ }, [writeCommitRole]);
 
  if (isLoading) {
   return null;
@@ -250,53 +198,16 @@ export const GitSettings: React.FC = () => {
  return (
   <SettingsSection title={t('settings.openchamber.git.title')}>
    <div className={SETTINGS_OPTION_STACK_CLASS}>
-    <SettingsFieldRow
+    <ModelRoleEditor
+     role={COMMIT_ROLE}
+     roles={roleSelectors}
+     models={models}
      settingsItem="git.commit-model"
+     disabled={isSavingCommitModel || !ompState}
      label={t('settings.omp.modelRoles.role.commit.label')}
-     info={t('settings.omp.modelRoles.role.commit.desc')}
-    >
-     <Select
-      value={commitModelId || INHERIT_VALUE}
-      onValueChange={handleCommitModelChange}
-      disabled={isSavingCommitModel || !ompState}
-     >
-      <SelectTrigger
-       className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
-       aria-label={t('settings.omp.modelRoles.role.commit.label')}
-      >
-       <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')}>
-        {commitModelId
-         ? (() => {
-           const matched = models.find((model) => formatModelRef(model) === commitModelId);
-           if (!matched) return `${commitModelId} (${t('settings.omp.modelRoles.customModel')})`;
-           const parsed = parseModelSelector(commitModelId);
-           return parsed
-             ? `${matched.name || parsed.modelId} (${parsed.providerId})`
-             : `${commitModelId} (${t('settings.omp.modelRoles.customModel')})`;
-         })()
-         : t('settings.omp.modelRoles.inheritFallback')}
-       </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-       <SelectItem value={INHERIT_VALUE}>
-        {t('settings.omp.modelRoles.inheritFallback')}
-       </SelectItem>
-       {models.map((model) => {
-        const id = formatModelRef(model);
-        return (
-         <SelectItem key={id} value={id}>
-          {model.name || model.modelId} ({model.provider})
-         </SelectItem>
-        );
-       })}
-       {commitModelId && !models.some((model) => formatModelRef(model) === commitModelId) ? (
-        <SelectItem value={commitModelId}>
-         {commitModelId} ({t('settings.omp.modelRoles.customModel')})
-        </SelectItem>
-       ) : null}
-      </SelectContent>
-     </Select>
-    </SettingsFieldRow>
+     description={t('settings.omp.modelRoles.role.commit.desc')}
+     onChange={handleCommitRoleChange}
+    />
     {commitModelError ? (
      <p role="alert" className="typography-meta text-[var(--status-error)]">{commitModelError}</p>
     ) : null}

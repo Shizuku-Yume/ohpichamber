@@ -354,11 +354,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         ? ['off', ...currentCatalogModel.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')]
         : [], [currentCatalogModel]);
     // OMP's configured default is what an untouched draft runs at. `auto` stays
-    // off the wire: the worker resolves it, so the send carries no effort.
-    const ompDefaultReasoningEffort = settingsDefaultReasoningEffort
-        && (settingsDefaultReasoningEffort === 'auto' || effortOptions.includes(settingsDefaultReasoningEffort))
-        ? settingsDefaultReasoningEffort
-        : undefined;
+    // off the wire: the worker resolves it, so the send carries no effort. A
+    // model's own default wins, because that is the level OMP resolves for it.
+    const ompDefaultReasoningEffort = currentCatalogModel?.defaultReasoningEffort
+        ?? (settingsDefaultReasoningEffort
+            && (settingsDefaultReasoningEffort === 'auto' || effortOptions.includes(settingsDefaultReasoningEffort))
+            ? settingsDefaultReasoningEffort
+            : undefined);
     // The native transcript's last thinking-level entry is the session's stored level.
     const persistedThinkingLevel = useDirectorySync(
         React.useCallback((state) => (

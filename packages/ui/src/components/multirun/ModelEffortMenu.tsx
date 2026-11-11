@@ -24,12 +24,17 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
   tooltip?: string;
 }): React.ReactNode {
   const { t } = useI18n();
-  const variants = useConfigStore(React.useCallback((state) => {
+  const { variants, defaultLevel } = useConfigStore(React.useCallback((state) => {
     const model = state.providers.find((provider) => provider.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
-    return listModelVariantIds(model?.variants).join('\n');
+    return {
+      variants: listModelVariantIds(model?.variants).join('\n'),
+      // The label names the level the model runs at, not a synthetic Default.
+      defaultLevel: model?.defaultReasoningEffort ?? model?.variants?.[0]?.reasoningEffort ?? undefined,
+    };
   }, [modelId, providerId]));
   if (!variants) return null;
-  const label = variant ?? t('multirun.modelMultiSelect.variant.default');
+  const defaultLabel = defaultLevel || t('multirun.modelMultiSelect.variant.default');
+  const label = variant ?? defaultLabel;
   const trigger = (
       <DropdownMenuTrigger asChild>
         <button
@@ -52,7 +57,7 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
       <DropdownMenuContent align="start">
         <DropdownMenuItem onSelect={() => onChange(undefined)}>
           {variant === undefined ? <Icon name="check" className="size-4" /> : <span className="size-4" />}
-          {t('multirun.modelMultiSelect.variant.default')}
+          {defaultLabel}
         </DropdownMenuItem>
         {variants.split('\n').map((entry) => (
           <DropdownMenuItem key={entry} onSelect={() => onChange(entry)}>

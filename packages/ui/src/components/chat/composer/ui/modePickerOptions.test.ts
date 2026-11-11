@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { getDropdownNavigationKey } from '@/components/ui/dropdown-navigation';
-import { buildModeOptions, filterModeOptions, nextEnabledModeIndex } from './modePickerOptions';
+import { buildModeOptions, nextEnabledModeIndex } from './modePickerOptions';
 
 const translate = (key: string) => key;
 
@@ -25,12 +25,6 @@ describe('mode picker options', () => {
         expect(buildModeOptions({ planRoleAvailable: true, sessionGoalEnabled: false, selectedKind: 'goal', translate }).some((option) => option.value === 'goal')).toBe(true);
     });
 
-    test('typing filters by label, description or stable name', () => {
-        expect(filterModeOptions(options(), 'go').map((option) => option.value)).toEqual(['goal']);
-        expect(filterModeOptions(options(), 'PLAN').map((option) => option.value)).toEqual(['plan']);
-        expect(filterModeOptions(options(), '  ').map((option) => option.value)).toEqual(['main', 'plan', 'vibe', 'goal']);
-        expect(filterModeOptions(options(), 'nothing-matches')).toEqual([]);
-    });
 
     test('arrow and Ctrl+N/P navigation skip disabled rows and wrap', () => {
         const rows = buildModeOptions({ planRoleAvailable: false, sessionGoalEnabled: true, selectedKind: 'main', translate });

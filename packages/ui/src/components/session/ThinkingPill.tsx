@@ -13,14 +13,21 @@ import { useI18n } from '@/lib/i18n';
 type ThinkingPillProps = {
   value: string;
   options: string[];
+  /**
+   * The level the model runs at when the pill's own value is empty. The
+   * trigger shows it, so the pill names the effort that will actually be
+   * sent instead of a bare "Default".
+   */
+  defaultLevel?: string;
   disabled?: boolean;
   onChange: (value: string) => void;
 };
 
-export const ThinkingPill = ({ value, options, disabled, onChange }: ThinkingPillProps) => {
+export const ThinkingPill = ({ value, options, defaultLevel, disabled, onChange }: ThinkingPillProps) => {
   const { t } = useI18n();
   const { isMobile } = useDeviceInfo();
-  const label = value || t('rightSidebar.contextNotesTodo.sendDialog.variant.default');
+  const defaultLabel = defaultLevel || t('rightSidebar.contextNotesTodo.sendDialog.variant.default');
+  const label = value || defaultLabel;
 
   const trigger = (
     <div
@@ -43,7 +50,7 @@ export const ThinkingPill = ({ value, options, disabled, onChange }: ThinkingPil
       <DropdownMenuContent align="start" className="max-w-[220px]" portalToBody>
         <DropdownMenuItem className="typography-meta" onSelect={() => onChange('')}>
           <span className={cn('font-medium', !value && 'text-primary')}>
-            {t('rightSidebar.contextNotesTodo.sendDialog.variant.default')}
+            {defaultLabel}
           </span>
         </DropdownMenuItem>
         {options.map((option) => (

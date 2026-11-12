@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Message, StepTiming, Turn } from '@openchamber/agent-contract';
 import { formatTelemetryDuration, formatTelemetryTokens, formatThroughputRate, getLatestCompletedTurnStats } from './telemetry';
 
@@ -211,4 +213,24 @@ describe('timing-derived telemetry', () => {
     expect(stats?.responseTokensPerSecond).toBeNull();
     expect(stats?.tokensPerSecond).toBeCloseTo(100, 6);
   });
+});
+
+describe('a real run recorded from the running server', () => {
+    // Captured from a live OMP turn that ran one bash tool call and then
+    // answered. The server records one turn per model step of a run, which is
+    // the shape that broke the first version of this derivation.
+    const history = JSON.parse(readFileSync(join(import.meta.dir, '__fixtures__', 'real-run-history.json'), 'utf8'));
+
+    test('reports model time, tool time, first-token latency and throughput', () => {
+        const stats = getLatestCompletedTurnStats(history.messages, history.turns);
+        expect(stats).not.toBeNull();
+        expect(stats?.stepsCount).toBe(2);
+        expect(stats?.totalLlmDurationMs).toBe(3748);
+        expect(stats?.totalToolDurationMs).toBe(588);
+        expect(stats?.avgTtftMs).toBeCloseTo(1725.5, 1);
+        expect(stats?.tokensPerSecond).toBeCloseTo(25.88, 1);
+        expect(stats?.responseTokensPerSecond).toBeCloseTo(571.43, 1);
+        expect(stats?.elapsedDurationMs).toBe(4345);
+        expect(stats?.outputTokens).toBe(97);
+    });
 });

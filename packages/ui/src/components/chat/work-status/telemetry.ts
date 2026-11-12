@@ -132,13 +132,22 @@ export function getLatestCompletedTurnStats(
   const latestTurn = completedTurns.length > 0 ? completedTurns[completedTurns.length - 1] : null;
 
   if (latestTurn) {
-    const start = latestTurn.startedAt;
-    const end = latestTurn.finishedAt;
+    // One run is several turns, one per model step. The step timings only add
+    // up to a turn's model time and the tool time between steps when the whole
+    // run is read together, so the stats cover every turn of the latest run.
+    const runTurns = latestTurn.runId
+      ? (turns ?? []).filter((turn) => turn.runId === latestTurn.runId)
+      : [latestTurn];
+    const firstTurn = runTurns[0] ?? latestTurn;
+    const lastTurn = runTurns[runTurns.length - 1] ?? latestTurn;
+    const start = firstTurn.startedAt;
+    const end = lastTurn.finishedAt;
     const elapsedDurationMs = Number.isFinite(start) && Number.isFinite(end) && end !== undefined && end >= start ? end - start : null;
 
-    const assistantIds = new Set(latestTurn.assistantMessageIds);
+    const assistantIds = new Set(runTurns.flatMap((turn) => turn.assistantMessageIds));
+    const turnIds = new Set(runTurns.map((turn) => turn.turnId));
     let assistants = messages
-      ? messages.filter((message) => message.role === 'assistant' && (assistantIds.has(message.messageId) || message.turnId === latestTurn.turnId))
+      ? messages.filter((message) => message.role === 'assistant' && (assistantIds.has(message.messageId) || (message.turnId !== undefined && turnIds.has(message.turnId))))
       : [];
     if (assistants.length === 0 && messages) {
       assistants = messages.filter((message) => message.role === 'assistant');
@@ -171,7 +180,7 @@ export function getLatestCompletedTurnStats(
 
     return {
       lastAssistantMessageId,
-      stepsCount: Math.max(assistants.length, latestTurn.assistantMessageIds.length),
+      stepsCount: Math.max(assistants.length, assistantIds.size),
       elapsedDurationMs,
       ...deriveTimingMetrics(assistants, totalGeneratedTokens),
       inputTokens,

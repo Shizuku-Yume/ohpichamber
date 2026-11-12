@@ -94,6 +94,22 @@ export function installHostSession(state: State, incoming: Session): State {
  return next_state
 }
 
+/**
+ * A whole session list read from the Host. A metadata record announced before
+ * the read is newer than the row the list carries, and the list is the first
+ * place its directory is known, so those rows go in through the same installer
+ * an event uses: the buffered record lands on the row and the buffer is
+ * released. Installing the list directly left a stale title and a leaked entry.
+ */
+export function installSessionList(state: State, rows: readonly Session[]): State {
+ const buffered = state.pendingMetadata
+ if (!buffered) return { ...state, session: [...rows], sessionTotal: rows.length }
+ const settled = rows.filter((row) => buffered[row.sessionId] === undefined)
+ let next: State = { ...state, session: settled, sessionTotal: settled.length }
+ for (const row of rows) if (buffered[row.sessionId] !== undefined) next = installHostSession(next, row)
+ return next
+}
+
 const omitPendingMetadata = (record: Record<string, SessionMetadataState>, sessionId: string) => {
  const next = { ...record }
  delete next[sessionId]
@@ -460,6 +476,10 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     kind: "applied", state: {
      ...next, session, sessionTotal: session.length,
      sessionRevision: revision, sessionDeletedRevision,
+     // A metadata record buffered for a session that is now gone would be
+     // applied to a later session with the same id, or leak for the process's
+     // lifetime. The no-snapshot branch above releases them too.
+     pendingMetadata: without(next.pendingMetadata ?? {}),
      snapshot: without(next.snapshot), message: without(next.message), permission: without(next.permission), form: without(next.form),
      queue: without(next.queue), partOwner: without(next.partOwner), session_status: without(next.session_status),
      cleanse: without(next.cleanse), advisor: without(next.advisor),
@@ -593,7 +613,11 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
  if (recover) return { kind: "resnapshot", state }
  updated = {
   ...updated, messages, turns,
-  session: { ...updated.session, epoch: event.epoch, headSequence: event.sequence, updatedAt: Math.max(updated.session.updatedAt, event.timestamp) },
+  // `updatedAt` is the native transcript's mtime as the Agent Service reported
+  // it. Bumping it with the event's wall clock mixed two clocks for a recency
+  // tie-break; the snapshot keeps the service's own value, and the next list
+  // read carries the file's newer mtime.
+  session: { ...updated.session, epoch: event.epoch, headSequence: event.sequence },
   window: turns === snapshot.turns && messages === (state.message[id] ?? snapshot.messages) ? updated.window : { ...updated.window, firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null, firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null },
   branch: event.type === "message.created" ? { ...updated.branch, leafMessageId: messages.at(-1)?.messageId ?? null } : updated.branch,
  }

@@ -13,6 +13,13 @@ import { INITIAL_STATE, type State } from './types';
 
 const EMPTY: State = { ...INITIAL_STATE, session: [], sessionTotal: 0 };
 
+const snapshotRecord = (): State['snapshot'][string] => ({
+  session: runtime(), messages: [], turns: [], approvals: [], questions: [],
+  cursor: 'epoch-1:0', branch: { branchId: 'main', branchVersion: '1' },
+  activeRun: null, requestRecovery: { status: 'idle' },
+  window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
+});
+
 const sessionRecord = (overrides: Partial<import('@openchamber/agent-contract').Session> = {}): import('@openchamber/agent-contract').Session => SessionSchema.parse({
   ...runtime(), metadata: null, metadataRevision: '0', archiveRevision: '0', ...overrides,
 });
@@ -110,6 +117,25 @@ describe('canonical events for sessions no store holds yet', () => {
     expect(installed.session[0]?.metadata).toEqual({ notes: 'Held' });
     expect(installed.session[0]?.metadataRevision).toBe('3');
     expect(installed.pendingMetadata?.['session-1']).toBeUndefined();
+  });
+
+  test('a deletion releases a buffered record instead of leaking it', () => {
+    // The session was announced, then deleted before its row was ever read.
+    // Keeping the buffer would apply it to a later session with the same id.
+    const buffered = installSessionMetadata(EMPTY, { sessionId: 'session-1', revision: '3', metadata: { notes: 'Held' } }, { bufferUnknown: true });
+    // Both shapes matter: a store that already projects the session (snapshot
+    // present) and one that does not.
+    const withSnapshot = { ...buffered, session: [sessionRecord()], snapshot: { 'session-1': snapshotRecord() } };
+    const parsed = CanonicalEventSchema.safeParse({
+      sessionId: 'session-1', epoch: 'epoch-1', sequence: '1', timestamp: 1, type: 'session.deleted',
+      deletedSessionIds: ['session-1'],
+    });
+    if (!parsed.success) throw new Error(parsed.error.message);
+    for (const state of [buffered, withSnapshot]) {
+      const result = applyDirectoryEvent(state, parsed.data as CanonicalEvent);
+      expect(result.kind).toBe('applied');
+      expect(result.state.pendingMetadata?.['session-1']).toBeUndefined();
+    }
   });
 
   test('a buffered record never overrides newer metadata', () => {

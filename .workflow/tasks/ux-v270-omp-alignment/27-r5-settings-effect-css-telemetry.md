@@ -181,3 +181,7 @@ branch; integration's side was taken (builtins are editable now) and the dead
 `typography-body` token the merge reintroduced was removed. The effect test
 then caught a genuine new consumer — `permissionStore` reads
 `permissionDefaultMode` — so that entry now declares `store` too.
+
+Check after: pass — `node scripts/run-isolated-tests.mjs packages/ui/src/lib/settings packages/ui/src/components/chat/work-status` 20/20 files, `node scripts/check-css-classes.mjs` exit 0 (2268 tokens), `bun run lint` exit 0 (six packages), `bunx tsc --noEmit -p packages/ui/tsconfig.json` exit 0, on the merged tree.
+
+Review: pass (base ab047171d642c5077422fab8b4fad6111b70bcd5) — reviewer subagent verdict "clean", no blocking findings.

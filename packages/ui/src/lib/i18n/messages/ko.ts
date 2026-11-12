@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.ko,
   ...selectionApprovalI18n.ko,
   ...agentStatusI18n.ko,
+  ...todoTrayI18n['ko'],
   ...snippetsI18n.ko,
   ...prReviewI18n.ko,
   ...imageToolI18n.ko,
@@ -9410,4 +9412,9 @@ export const dict = {
   ...tooltipsPanelI18n['ko'],
   ...tooltipsChatI18n['ko'],
   ...m4LaneDI18n.ko,
+  "gitIdentities.state.unknown": "Git ID가 아직 로드되지 않았습니다.",
+  "settings.usage.state.unknown": "사용량이 아직 로드되지 않았습니다.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "저장된 메모리가 아직 로드되지 않았습니다.",
+
+  "chat.workStatus.mcp.unknown": "MCP 서버가 아직 로드되지 않았습니다.",
 };

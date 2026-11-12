@@ -4,6 +4,7 @@ import {
   displayedPermissionMode,
   nextPermissionMode,
   resolvePermissionMode,
+  resolvePermissionModeOrDefault,
   type PermissionModeMap,
 } from "./permissionAutoAccept"
 
@@ -29,12 +30,29 @@ function makeSession(sessionId: string, parentSessionId?: string): Session {
 }
 
 describe("resolvePermissionMode", () => {
-  test("is ask when no mode is set", () => {
+  test("is null when the policy has not been read, never ask", () => {
     expect(resolvePermissionMode({
       modes: {},
       sessions: [makeSession("s1")],
       sessionId: "s1",
-    })).toBe("ask")
+    })).toBeNull()
+  })
+
+  test("is null when the read policy holds no entry for this lineage", () => {
+    expect(resolvePermissionMode({
+      modes: { s2: "auto" },
+      sessions: [makeSession("s1")],
+      sessionId: "s1",
+    })).toBeNull()
+  })
+
+  test("takes the configured default only where a concrete mode is required", () => {
+    expect(resolvePermissionModeOrDefault({
+      modes: {},
+      sessions: [makeSession("s1")],
+      sessionId: "s1",
+      defaultMode: "auto",
+    })).toBe("auto")
   })
 
   test("returns the session's own mode", () => {
@@ -82,7 +100,7 @@ describe("resolvePermissionMode", () => {
       modes,
       sessions,
       sessionId: "child",
-    })).toBe("ask")
+    })).toBeNull()
   })
 
   test("a child's own mode overrides its parent", () => {

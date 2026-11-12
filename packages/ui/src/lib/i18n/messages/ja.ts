@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.ja,
   ...selectionApprovalI18n.ja,
   ...agentStatusI18n.ja,
+  ...todoTrayI18n['ja'],
   ...snippetsI18n.ja,
   ...prReviewI18n.ja,
   ...imageToolI18n.ja,
@@ -9410,4 +9412,9 @@ export const dict = {
   ...tooltipsPanelI18n['ja'],
   ...tooltipsChatI18n['ja'],
   ...m4LaneDI18n.ja,
+  "gitIdentities.state.unknown": "Git の ID はまだ読み込まれていません。",
+  "settings.usage.state.unknown": "使用状況はまだ読み込まれていません。",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "保存されたメモリはまだ読み込まれていません。",
+
+  "chat.workStatus.mcp.unknown": "MCP サーバーはまだ読み込まれていません。",
 };

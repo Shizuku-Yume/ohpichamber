@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n['zh-TW'],
   ...selectionApprovalI18n['zh-TW'],
   ...agentStatusI18n['zh-TW'],
+  ...todoTrayI18n['zh-TW'],
   ...snippetsI18n['zh-TW'],
   ...prReviewI18n['zh-TW'],
   ...imageToolI18n['zh-TW'],
@@ -9401,4 +9403,9 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-TW'],
   ...openchamberToolOutputI18n['zh-TW'],
   ...m4LaneDI18n['zh-TW'],
+  "gitIdentities.state.unknown": "Git 身分尚未載入。",
+  "settings.usage.state.unknown": "用量尚未載入。",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "已儲存的記憶尚未載入。",
+
+  "chat.workStatus.mcp.unknown": "MCP 伺服器尚未載入。",
 };

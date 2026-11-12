@@ -244,6 +244,7 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
 export const UsagePage: React.FC = () => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
+  const quotaPhase = useQuotaStore((state) => state.phase);
   useQuotaAutoRefresh(true, true);
 
   // `configured` is the provider's own answer about the credential OMP holds.
@@ -266,10 +267,18 @@ export const UsagePage: React.FC = () => {
 
       {configuredProviderIds.length === 0 ? (
         <SettingsSection title={t('settings.usage.page.section.quotas')} settingsItem="usage.quotas">
-          <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noConfiguredProvidersTitle')}</p>
-          <p className="typography-meta text-muted-foreground mt-1">
-            {t('settings.usage.page.state.noConfiguredProvidersDescription')}
-          </p>
+          {/* An unloaded catalog is not "no providers": while the phase is
+              unknown the page says so instead of claiming there is nothing. */}
+          {quotaPhase === 'unknown' ? (
+            <p className="typography-ui-label text-foreground">{t('settings.usage.state.unknown')}</p>
+          ) : (
+            <>
+              <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noConfiguredProvidersTitle')}</p>
+              <p className="typography-meta text-muted-foreground mt-1">
+                {t('settings.usage.page.state.noConfiguredProvidersDescription')}
+              </p>
+            </>
+          )}
         </SettingsSection>
       ) : configuredProviderIds.map((providerId, index) => (
         <ProviderQuota

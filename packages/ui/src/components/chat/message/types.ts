@@ -1,6 +1,6 @@
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 
-export type StreamPhase = 'streaming' | 'cooldown' | 'completed';
+export type StreamPhase = 'streaming' | 'completed';
 
 export type DiffViewMode = 'side-by-side' | 'unified';
 

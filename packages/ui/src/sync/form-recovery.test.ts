@@ -7,7 +7,7 @@ const message = (role: Message["role"], parts: Part[] = []): Message => ({
 })
 
 const questionTool = (status: "pending_approval" | "running" | "completed"): Part => ({
-  type: "tool_call", partId: `tool-${status}`, toolCallId: `call-${status}`, toolName: "question", input: {}, status,
+  type: "tool_call", partId: `tool-${status}`, toolCallId: `call-${status}`, toolName: "ask", input: {}, status,
 })
 
 describe("hasActiveFormToolInCurrentTurn", () => {

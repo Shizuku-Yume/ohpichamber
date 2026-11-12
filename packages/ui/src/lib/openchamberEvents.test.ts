@@ -244,8 +244,7 @@ describe('openchamber events', () => {
       value: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
       configurable: true,
     });
-    const { subscribePermissionPolicySync } = await import('@/sync/permission-mode-sync');
-    const { getRuntimeKey } = await import('./runtime-switch');
+    const { installServerStateBootEvents } = await import('@/stores/serverStateBoot');
     const { usePermissionStore } = await import('@/stores/permissionStore');
     const waitFor = async (done: () => boolean) => {
       for (let i = 0; i < 50 && !done(); i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
@@ -266,15 +265,7 @@ describe('openchamber events', () => {
       reads += 1;
       return Response.json({ sessions: { ses_1: true }, modes: { ses_1: 'auto' }, revision: 1 });
     }, originalFetch);
-    const applied: Array<{ type: string; permissionId?: string }> = [];
-    const unsubscribe = subscribePermissionPolicySync(getRuntimeKey(), (event) => {
-      applied.push(event.type === 'openchamber.permission-left-for-user'
-        ? { type: event.type, permissionId: event.properties.permissionId }
-        : { type: event.type });
-      if (event.type === 'openchamber.permission-auto-accept') {
-        usePermissionStore.getState().applySnapshot({ modes: event.properties.modes ?? {}, revision: event.properties.revision });
-      }
-    });
+    const unsubscribe = installServerStateBootEvents();
     const source = MockEventSource.instances[0];
     const send = (data: string) => source.onmessage?.({ data });
     try {
@@ -286,12 +277,14 @@ describe('openchamber events', () => {
       send(JSON.stringify({ type: 'openchamber:permission-auto-accept.updated', properties: { sessions: { ses_1: false }, modes: { ses_1: 'ask' }, revision: 2 } }));
       expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('ask');
 
+      // Another window accepted everything again.
+      send(JSON.stringify({ type: 'openchamber:permission-auto-accept.updated', properties: { sessions: { ses_1: true }, modes: { ses_1: 'auto' }, revision: 3 } }));
+      expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('auto');
+
+      // A request left for the user does not change the mode.
       send(JSON.stringify({ type: 'openchamber:permission-auto-accept.left-for-user', properties: { permissionId: 'per_1', sessionId: 'ses_1', directory: '/repo' } }));
       send(JSON.stringify({ type: 'openchamber:permission-auto-accept.left-for-user', properties: { sessionId: 'ses_1', directory: '/repo' } }));
-      expect(applied).toEqual([
-        { type: 'openchamber.permission-auto-accept' },
-        { type: 'openchamber.permission-left-for-user', permissionId: 'per_1' },
-      ]);
+      expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('auto');
 
       // A reconnect reads the modes again: a change made during the gap was never announced here.
       send(JSON.stringify({ type: 'openchamber:event-stream-ready', properties: {} }));
@@ -303,8 +296,58 @@ describe('openchamber events', () => {
       expect(spaceReads).toEqual(['/spaces/0123456789ab']);
 
       unsubscribe();
-      send(JSON.stringify({ type: 'openchamber:permission-auto-accept.left-for-user', properties: { permissionId: 'per_2', sessionId: 'ses_1', directory: '/repo' } }));
-      expect(applied).toHaveLength(2);
+      expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('auto');
+    } finally {
+      unsubscribe();
+      globalThis.fetch = originalFetch;
+      usePermissionStore.getState().reset();
+      Reflect.deleteProperty(globalThis, 'localStorage');
+    }
+  });
+
+  test('the boot installer keeps working after an instance switch without being remounted', async () => {
+    // The phone does not remount its app on a switch: only SyncProvider is
+    // keyed by the endpoint epoch, and the native shell mounts no auth gate.
+    // An installer that captured the key at mount therefore dropped every
+    // control-stream event for the rest of the process's life.
+    const storage = new Map<string, string>();
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) },
+      configurable: true,
+    });
+    const { installServerStateBootEvents } = await import('@/stores/serverStateBoot');
+    const { usePermissionStore } = await import('@/stores/permissionStore');
+    const { switchRuntimeEndpoint } = await import('./runtime-switch');
+    const waitFor = async (done: () => boolean) => {
+      for (let i = 0; i < 50 && !done(); i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(done()).toBe(true);
+    };
+    usePermissionStore.getState().reset();
+    const originalFetch = globalThis.fetch;
+    let reads = 0;
+    let mode = 'auto';
+    globalThis.fetch = Object.assign(async (input: RequestInfo | URL) => {
+      const url = new URL(input instanceof Request ? input.url : String(input), 'http://runtime.test');
+      if (url.pathname !== '/api/permission-auto-accept') return new Response(null, { status: 404 });
+      reads += 1;
+      return Response.json({ sessions: { ses_1: true }, modes: { ses_1: mode }, revision: reads });
+    }, originalFetch);
+    switchRuntimeEndpoint({ apiBaseUrl: 'https://instance-a.test', runtimeKey: 'instance-a' });
+    const unsubscribe = installServerStateBootEvents();
+    try {
+      // The stream reconnects on the new instance and announces itself; the
+      // policy read must happen for the instance in use now.
+      switchRuntimeEndpoint({ apiBaseUrl: 'https://instance-b.test', runtimeKey: 'instance-b' });
+      mode = 'ask';
+      const source = MockEventSource.instances.at(-1);
+      source?.onmessage?.({ data: JSON.stringify({ type: 'openchamber:event-stream-ready', properties: {} }) });
+      await waitFor(() => reads >= 1);
+      expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('ask');
+
+      // The broadcast is applied too, not dropped by a stale key.
+      mode = 'auto';
+      source?.onmessage?.({ data: JSON.stringify({ type: 'openchamber:permission-auto-accept.updated', properties: { sessions: { ses_1: true }, modes: { ses_1: 'auto' }, revision: reads + 1 } }) });
+      expect(usePermissionStore.getState().getSessionMode('ses_1')).toBe('auto');
     } finally {
       unsubscribe();
       globalThis.fetch = originalFetch;

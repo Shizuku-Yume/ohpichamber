@@ -106,7 +106,7 @@ test('native bash calls and results retain separate identities and paired comman
       );
     });
 
-    expect(container.textContent).toContain('bash');
+    expect(container.textContent).toContain('Bash');
     expect(container.textContent).toContain('git status --short');
     expect(container.textContent).toContain('M src/example.ts');
     expect(container.textContent).not.toContain('in progress');

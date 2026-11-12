@@ -138,6 +138,9 @@ describe("native canonical event reducer", () => {
     expect(merged.headSequence).toBe("4")
     const base = state({ session: [prior], queue: { "session-1": { sessionId: "session-1", revision: "10", items: [] } } })
     expect(installSessionMetadata(base, { sessionId: "session-1", revision: "2", metadata: null })).toBe(base)
+    // Default is drop, not buffer: only the caller that cannot know the
+    // record's directory asks for it to be held.
+    expect(installSessionMetadata(base, { sessionId: "session-absent", revision: "1", metadata: null })).toBe(base)
     expect(installQueue(base, { sessionId: "session-1", revision: "2", items: [] })).toBe(base)
     const next = installSessionSnapshot(base, snapshot())
     expect(next.queue).toBe(base.queue)

@@ -1,4 +1,5 @@
 import type { Session, SessionMetadata } from '@openchamber/agent-contract';
+import { hostReviewOfferAt, hostTurnEndedAt } from './sessionSourceClock';
 
 export type SessionWork = NonNullable<NonNullable<SessionMetadata['openchamber']>['work']>;
 
@@ -11,20 +12,26 @@ export function isSessionInWork(session: Session | null | undefined): boolean {
   return getSessionWork(session)?.state === 'open';
 }
 
-/** Whether the server's done hint is newer than the native session update. */
+/** Whether the Host's done hint was written after the last turn ended. */
 export function isDoneSuggested(session: Session | null | undefined): boolean {
   const work = getSessionWork(session);
   return work?.state === 'open' && isHintCurrent(session, work.suggestDoneAt);
 }
 
 export function isReviewSuggested(session: Session | null | undefined): boolean {
-  const offeredAt = session?.metadata?.openchamber?.reviewOffer?.at;
+  const offeredAt = hostReviewOfferAt(session);
   return isHintCurrent(session, offeredAt) && !isDoneSuggested(session);
 }
 
+/**
+ * Hints are written by the Host after a turn settles, so they are current while
+ * no newer Host turn end exists. Comparing them with the native file mtime
+ * compared two clocks and dropped hints on any unrelated touch of the file.
+ */
 function isHintCurrent(session: Session | null | undefined, writtenAt: number | null | undefined): boolean {
-  return session !== null && session !== undefined && writtenAt !== null && writtenAt !== undefined
-    && writtenAt >= session.updatedAt;
+  if (session === null || session === undefined || writtenAt === null || writtenAt === undefined) return false;
+  const endedAt = hostTurnEndedAt(session);
+  return endedAt === undefined || writtenAt >= endedAt;
 }
 
 export function withSessionWorkState(metadata: SessionMetadata, state: SessionWork['state'], now: number): SessionMetadata {

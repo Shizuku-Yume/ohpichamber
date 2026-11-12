@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.de,
   ...selectionApprovalI18n.de,
   ...agentStatusI18n.de,
+  ...todoTrayI18n['de'],
   ...snippetsI18n.de,
   ...prReviewI18n.de,
   ...imageToolI18n.de,
@@ -9410,4 +9412,9 @@ export const dict = {
   ...tooltipsPanelI18n['de'],
   ...tooltipsChatI18n['de'],
   ...m4LaneDI18n.de,
+  "gitIdentities.state.unknown": "Git-Identitäten sind noch nicht geladen.",
+  "settings.usage.state.unknown": "Die Nutzung ist noch nicht geladen.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Gespeicherte Erinnerungen sind noch nicht geladen.",
+
+  "chat.workStatus.mcp.unknown": "MCP-Server sind noch nicht geladen.",
 };

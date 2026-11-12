@@ -72,7 +72,6 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
   const setSelectedSource = useSkillsCatalogStore((s) => s.setSelectedSource);
   const isScanning = useSkillsCatalogStore((s) => s.isScanning);
   const gitIdentityProfiles = useGitIdentitiesStore((s) => s.profiles);
-  const loadGitIdentityProfiles = useGitIdentitiesStore((s) => s.loadProfiles);
 
   const [label, setLabel] = React.useState('');
   const [source, setSource] = React.useState('');
@@ -106,7 +105,6 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
     setScanCount(null);
     setScanOk(false);
     setGitIdentityId(null);
-    void loadGitIdentityProfiles();
 
     setExistingCatalogs(null);
     void (async () => {
@@ -128,7 +126,7 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
       identityLoadRequestIdRef.current += 1;
       scanRequestIdRef.current += 1;
     };
-  }, [open, catalogId, loadGitIdentityProfiles]);
+  }, [open, catalogId]);
 
   const availableIdentities = React.useMemo(
     () => gitIdentityProfiles.filter(signsInOnItsOwn),

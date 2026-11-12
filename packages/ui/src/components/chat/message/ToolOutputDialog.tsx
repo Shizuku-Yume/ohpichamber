@@ -7,7 +7,7 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { toolDisplayStyles } from '@/lib/typography';
-import { isSubagentTool } from '@/lib/toolHelpers';
+import { isGrepTool, isGlobTool, isQuestionTool, isSubagentTool, isWebSearchTool } from '@/lib/toolHelpers';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -1027,7 +1027,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 {t('chat.toolPart.output')}
                             </div>
                             {(() => {
-                                if (popupToolName === 'grep') {
+                                if (popupToolName && isGrepTool(popupToolName)) {
                                     return renderGrepOutput(popup.content, isMobile, t) ?? (
                                         <WorkerHighlightedCode
                                             language={popup.language || 'text'}
@@ -1039,7 +1039,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                     );
                                 }
 
-                                if (popupToolName === 'glob') {
+                                if (popupToolName && isGlobTool(popupToolName)) {
                                     return renderGlobOutput(popup.content, isMobile, t) ?? (
                                         <WorkerHighlightedCode
                                             language={popup.language || 'text'}
@@ -1051,11 +1051,11 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                     );
                                 }
 
-                                if (popupToolName && (isSubagentTool(popupToolName) || popupToolName === 'ask')) {
+                                if (popupToolName && (isSubagentTool(popupToolName) || isQuestionTool(popupToolName))) {
                                     return <SimpleMarkdownRenderer content={popup.content} variant="tool" />;
                                 }
 
-                                if (popupToolName === 'web_search') {
+                                if (popupToolName && isWebSearchTool(popupToolName)) {
                                     return renderWebSearchOutput(popup.toolResult?.output, { unstyled: true });
                                 }
 

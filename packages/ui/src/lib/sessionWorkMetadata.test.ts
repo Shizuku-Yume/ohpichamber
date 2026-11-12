@@ -17,9 +17,14 @@ describe('session work metadata', () => {
     expect(isSessionInWork(null)).toBe(false);
   });
 
+  test('a touched session file does not drop the hint: freshness is same-clock only', () => {
+    expect(isDoneSuggested(session({ openchamber: { work: { state: 'open', suggestDoneAt: 150 }, workbench: { lastIdleAt: 100 } } }, 9_000))).toBe(true);
+    expect(isReviewSuggested(session({ openchamber: { reviewOffer: { at: 150 }, workbench: { lastIdleAt: 100 } } }, 9_000))).toBe(true);
+  });
+
   test('shows the done hint only while it was written after the last turn ended', () => {
     expect(isDoneSuggested(session({ openchamber: { work: { state: 'open', suggestDoneAt: 150 } } }, 100))).toBe(true);
-    expect(isDoneSuggested(session({ openchamber: { work: { state: 'open', suggestDoneAt: 150 } } }, 300))).toBe(false);
+    expect(isDoneSuggested(session({ openchamber: { work: { state: 'open', suggestDoneAt: 150 }, workbench: { lastIdleAt: 300 } } }))).toBe(false);
     expect(isDoneSuggested(session({ openchamber: { work: { state: 'done', suggestDoneAt: 150 } } }, 100))).toBe(false);
     expect(isDoneSuggested(session({ openchamber: { work: { state: 'open' } } }))).toBe(false);
   });
@@ -32,7 +37,7 @@ describe('session work metadata', () => {
 
   test('offers a review under the same freshness rule, in or out of work, and yields to a current done hint', () => {
     expect(isReviewSuggested(session({ openchamber: { reviewOffer: { at: 150 } } }, 100))).toBe(true);
-    expect(isReviewSuggested(session({ openchamber: { reviewOffer: { at: 150 } } }, 300))).toBe(false);
+    expect(isReviewSuggested(session({ openchamber: { reviewOffer: { at: 150 }, workbench: { lastIdleAt: 300 } } }))).toBe(false);
     expect(isReviewSuggested(session({ openchamber: { work: { state: 'done' }, reviewOffer: { at: 150 } } }, 100))).toBe(true);
     expect(isReviewSuggested(session({ openchamber: { work: { state: 'open', suggestDoneAt: 150 }, reviewOffer: { at: 150 } } }, 100))).toBe(false);
   });

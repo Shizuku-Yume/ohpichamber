@@ -307,6 +307,7 @@ export const MemorySection: React.FC<{
     if (scope === 'project' && projectEntries.length === 0 && globalEntries.length > 0) setScope('global');
     if (scope === 'global' && globalEntries.length === 0 && projectEntries.length > 0) setScope('project');
   }, [globalEntries.length, projectEntries.length, scope]);
+  const memoryPhase = useAgentMemoryStore((state) => state.phase);
   const globalFailed = useAgentMemoryStore((state) => state.globalFailed);
   const projectFailed = useAgentMemoryStore((state) => state.projectFailed);
   const deleteEntry = useAgentMemoryStore((state) => state.deleteEntry);
@@ -459,6 +460,12 @@ export const MemorySection: React.FC<{
       {scope === 'project' && !projectPath ? (
         <p className="typography-meta text-muted-foreground">
           {t('rightSidebar.contextNotesTodo.memory.empty.noProject')}
+        </p>
+      ) : memoryPhase === 'unknown' ? (
+        // The panel is not where the read starts; the boot registry is. Until
+        // it answered, an empty list here would read as lost memory.
+        <p className="typography-meta text-muted-foreground">
+          {t('rightSidebar.contextNotesTodo.memory.state.unknown')}
         </p>
       ) : scopeFailed ? (
         // Said plainly rather than shown as an empty list: an empty tab would

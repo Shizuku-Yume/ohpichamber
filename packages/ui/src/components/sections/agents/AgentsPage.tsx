@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { NATIVE_TOOL_NAMES } from '@/lib/toolHelpers';
+import { OMP_TOOL_NAMES } from '@/lib/toolPresentation';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
@@ -108,12 +108,13 @@ export const AgentsPage: React.FC = () => {
   });
   const formRef = React.useRef(form);
   formRef.current = form;
-  // Every tool the agent may be granted: OMP's native registry first, then any
-  // name the agent already carries (extension, MCP or host tool). The grid is
-  // the single editor, so a name outside the registry still needs a control.
+  // Every tool the agent may be granted: the canonical OMP registry first,
+  // then any name the agent already carries (extension, MCP or host tool). The
+  // grid is the single editor, so a name outside the registry still needs a
+  // control.
   const toolChoices: string[] = React.useMemo(() => [
-    ...NATIVE_TOOL_NAMES,
-    ...(source?.allowedTools ?? []).filter((tool) => !(NATIVE_TOOL_NAMES as readonly string[]).includes(tool)),
+    ...OMP_TOOL_NAMES,
+    ...(source?.allowedTools ?? []).filter((tool) => !OMP_TOOL_NAMES.includes(tool)),
   ], [source]);
   const [toolsEditing, setToolsEditing] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
@@ -357,7 +358,7 @@ export const AgentsPage: React.FC = () => {
                   size="xs"
                   onClick={() => {
                     setToolsEditing(true);
-                    setForm((current) => ({ ...current, allowedTools: [...NATIVE_TOOL_NAMES] }));
+                    setForm((current) => ({ ...current, allowedTools: [...OMP_TOOL_NAMES] }));
                     requestSave();
                   }}
                 >
@@ -378,7 +379,7 @@ export const AgentsPage: React.FC = () => {
               </div>
 
               {/* One control per tool: the checkbox grid is the editor. A tool
-                  the agent already names but the native list does not carry
+                  the agent already names but the registry does not carry
                   (an extension or MCP tool) keeps its own checkbox, so the
                   list stays complete and nothing is edited twice. */}
               <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @3xl:grid-cols-4">

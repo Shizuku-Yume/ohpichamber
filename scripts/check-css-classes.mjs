@@ -268,7 +268,10 @@ const tokenize = (source) => {
 // `format(x, 'y')` and object values out, without a heuristic on the text.
 
 const CLASS_HELPERS = new Set(['cn', 'clsx', 'classNames', 'cx', 'cva']);
-const COMPARISON = new Set(['===', '!==', '==', '!=', '<', '>', '<=', '>=']);
+// Only operators that cannot also be JSX syntax. A bare `>` after a string is
+// a tag close (`className="a b"` … `>`), and a bare `<` opens one; a
+// greater-than never separates a mode literal from a class list here.
+const COMPARISON = new Set(['===', '!==', '==', '!=', '<=', '>=']);
 
 /** The operator a run of punctuation tokens spells, e.g. `===` from `= = =`. */
 const operatorAt = (tokens, index, direction) => {

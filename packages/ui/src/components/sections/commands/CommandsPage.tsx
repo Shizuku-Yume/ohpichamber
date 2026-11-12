@@ -113,7 +113,7 @@ export const CommandsPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <Icon name="terminal-box" className="mx-auto mb-3 size-12 opacity-50" />
-          <p className="typography-body">{t('settings.commands.page.empty.title')}</p>
+          <p>{t('settings.commands.page.empty.title')}</p>
           <p className="typography-meta mt-1 opacity-75">{t('settings.commands.page.empty.description')}</p>
         </div>
       </div>
@@ -127,13 +127,13 @@ export const CommandsPage: React.FC = () => {
       >
         <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-3">
           <SettingsStackedField className="py-1.5" label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
-            <p className="typography-body text-foreground leading-relaxed whitespace-pre-wrap">
+            <p className="text-foreground leading-relaxed whitespace-pre-wrap">
               {(entity ? getLocalizedCommandDescription(entity, t) : form.description) || t('settings.commands.page.field.descriptionPlaceholder')}
             </p>
           </SettingsStackedField>
           {form.argumentHint ? (
             <SettingsFieldRow settingsItem="commands.argument-hint" label={t('settings.commands.page.field.argumentHint')}>
-              <code className="typography-mono rounded bg-muted px-2 py-0.5 text-xs text-foreground">
+              <code className="rounded bg-muted px-2 py-0.5 text-xs text-foreground">
                 {form.argumentHint}
               </code>
             </SettingsFieldRow>

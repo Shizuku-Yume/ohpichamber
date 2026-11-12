@@ -476,11 +476,10 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
         <div className="flex items-center gap-2 border-b border-border pb-1">
           <button
             type="button"
-            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-              activeTab === 'output'
+            className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${activeTab === 'output'
                 ? 'border-b-2 border-primary text-foreground font-semibold'
                 : 'text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
             onClick={() => setActiveTab('output')}
           >
             {t('chat.jobsSheet.outputTail')}
@@ -488,15 +487,14 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
           {shell.streams && shell.streams.length > 0 ? (
             <button
               type="button"
-              className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors flex items-center gap-1.5 ${
-                activeTab === 'streams'
+              className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors flex items-center gap-1.5 ${activeTab === 'streams'
                   ? 'border-b-2 border-primary text-foreground font-semibold'
                   : 'text-muted-foreground hover:text-foreground'
-              }`}
+                }`}
               onClick={() => setActiveTab('streams')}
             >
               <span>{t('chat.backgroundShells.pipeStreams')}</span>
-              <span className="inline-flex items-center rounded-full px-1.5 py-0.2 text-[10px] font-mono border border-border">
+              <span className="inline-flex items-center rounded-full px-1.5 text-[10px] font-mono border border-border">
                 {shell.streams.length}
               </span>
             </button>
@@ -526,11 +524,10 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
                   <button
                     key={s.id}
                     type="button"
-                    className={`px-2.5 py-1 rounded text-xs font-mono transition-colors whitespace-nowrap ${
-                      selectedStreamId === s.id
+                    className={`px-2.5 py-1 rounded text-xs font-mono transition-colors whitespace-nowrap ${selectedStreamId === s.id
                         ? 'bg-interactive-selection text-interactive-selection-foreground font-medium'
                         : 'bg-[var(--surface-elevated)] hover:bg-muted text-muted-foreground'
-                    }`}
+                      }`}
                     onClick={() => setSelectedStreamId(s.id)}
                   >
                     pipe:{s.id} ({s.producer} → {s.consumer})

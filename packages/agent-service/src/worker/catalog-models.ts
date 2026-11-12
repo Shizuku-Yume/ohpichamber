@@ -279,7 +279,8 @@ export class NativeModels {
   * composer and every Settings page read them, so the work repeated far more
   * often than the inputs changed. The key covers the four things a catalog
   * depends on: the committed catalog revision (model and provider writes),
-  * the settings revision (enabled models, disabled providers, roles), the
+  * the settings values the catalog reads (enabled models, disabled providers,
+  * default thinking level, default and plan roles, match preferences), the
   * credential generation (auth writes), and the native models file.
   */
  private readonly catalogCache = new Map<'models' | 'providers', { key: string; catalog: ModelCatalog | ProviderCatalog }>();

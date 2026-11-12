@@ -132,10 +132,10 @@ describe('WorkingPlaceholder status text', () => {
 
   test('retry state shows its countdown instead of the status text', async () => {
     const view = await renderPlaceholder(
-      <WorkingPlaceholder isWorking status={{ key: 'chat.agentStatus.usingTool', name: 'bash', text: 'Running the tests' }} retryInfo={{ attempt: 2, next: 30 }} />,
+      <WorkingPlaceholder isWorking status={{ key: 'chat.agentStatus.usingTool', name: 'bash', text: 'Running the tests' }} retryInfo={{ attempt: 2, maxAttempts: 5, next: 30 }} />,
     );
     expect(view.container.textContent).toContain('Retrying');
-    expect(view.container.textContent).toContain('attempt 2');
+    expect(view.container.textContent).toContain('attempt 2 of 5');
     expect(view.container.textContent).not.toContain('Running the tests');
 
     await view.unmount();

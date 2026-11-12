@@ -9,13 +9,13 @@
 **Base commit:** a3883ab4fb8217b1388bf1cc2e7fe7a642f354f7
 **Status:** active
 
-- [ ] Build one OMP-keyed registry: per tool `label`, `icon`, `describeCall(input)` including `input.i`, `describeResult(details)` (match/file counts, line ranges, diff stats, exit status, todo progress), and grouping class. Cover all OMP tools, hidden tools, `vibe_*`, `advise` and host tools.
-- [ ] Status shows OMP's `Working…`, the thinking state, or the active call's intent. Retry, cooldown and permission-wait come from live state.
+- [x] Build one OMP-keyed registry: per tool `label`, `icon`, `describeCall(input)` including `input.i`, `describeResult(details)` (match/file counts, line ranges, diff stats, exit status, todo progress), and grouping class. Cover all OMP tools, hidden tools, `vibe_*`, `advise` and host tools.
+- [x] Status shows OMP's `Working…`, the thinking state, or the active call's intent. Retry, cooldown and permission-wait come from live state.
 - [x] Streaming holds only what OMP holds (an unfinished table row). Thinking streams live when expanded, and the status dwell does not delay intent changes.
 - [x] The todo tray defaults to collapsed, showing the active item (or next pending) with progress, and expands to all phases.
-- [ ] Parse OMP's `ask` result format.
-- [ ] Add guardrails: a coverage test over OMP's tool name lists, an OMP stream replay test, and a lint rule against tool-name literal comparisons outside the registry.
-- [ ] Deletes: `NATIVE_TOOLS` (and its invented `fetch`), `toolDescription`, `TOOL_BUCKETS`, `WORKING_PHRASES` and the hash phrase picker, literal-name branches in `ToolPart`/`ProgressiveGroup`, the 1500/320-character holds, the `out://` reply-write convention, and OpenCode-only status keys.
+- [x] Parse OMP's `ask` result format.
+- [x] Add guardrails: a coverage test over OMP's tool name lists, an OMP stream replay test, and a lint rule against tool-name literal comparisons outside the registry.
+- [x] Deletes: `NATIVE_TOOLS` (and its invented `fetch`), `toolDescription`, `TOOL_BUCKETS`, `WORKING_PHRASES` and the hash phrase picker, literal-name branches in `ToolPart`/`ProgressiveGroup`, the 1500/320-character holds, the `out://` reply-write convention, and OpenCode-only status keys.
 
 ## Progress
 
@@ -38,3 +38,14 @@
   - Docs updated: `message/parts/DOCUMENTATION.md` (the hold paragraph) and `lib/scroll/DOCUMENTATION.md` (the follow glide's premise is now continuous growth, not block landings).
   - Check evidence for this half: `VITEST_MAX_WORKERS=2 node scripts/run-isolated-tests.mjs packages/ui/src/components/chat/lib packages/ui/src/components/chat/hooks packages/ui/src/components/chat/message/parts packages/ui/src/lib/i18n` → 102/102 files passed; the whole `packages/ui/src/components/chat` root → 234/234 files passed; `packages/ui` `tsc -b` → exit 0; `oxlint` on every path this half touched → clean. `ompStreamReplay.test.tsx` also passes under `cd packages/web && bunx vitest run --dir ../ui/src/components/chat ../ui/src/components/chat/ompStreamReplay.test.tsx` (4/4).
   - Not validated by this half: the real-path comparison against OMP TUI (scripted prompts in both), and no runtime/perf measurement of the new cadence — the 100 ms leading-edge claim is covered by the replay test's frame assertion, not by a profiled capture.
+
+- Resumed window (2026-11-12): verified the unchecked boxes against the tree. Two real gaps were still open and are now closed.
+  - Dead OpenCode-era status plumbing deleted (commit `b91c3633d`): `StreamPhase`'s `cooldown` member, `MessageStreamPhase` (no importer), `isCooldown` on `SessionActivityResult`, and the rate-limit `resetsAt` path in `WorkingPlaceholder`/`StatusRow` with its `chat.agentStatus.limit.*` keys in all 15 locales. Nothing produced any of them after the canonical cutover: `sync/streaming.ts` only ever writes `streaming`/`completed`, `SessionRuntimeStatus` has no cooldown, and the only `resetsAt` producer was the removed OpenCode 429-body parser.
+  - Search rows now report what OMP's own headers report (commit `b14ab8ced`): `grep`/`glob`/`find`/`ast_grep`/`ast_edit` read `matchCount`/`fileCount`/`hits` from the result details instead of falling back to `N fields`, with singular/plural agreement. Before this, the live app showed `Grep needle 9 fields` for a one-match search.
+  - Retry row now matches OMP's `Retrying · attempt N of M`: `retryInfoOf` carries `maxAttempts` from the `auto_retry_start` notice through the status signature, and `chat.agentStatus.retry.attempt`/`.retry.inAttempt` take `{max}` in all 15 locales. The old row dropped attempt 1 and never showed the cap.
+- Real path (2026-11-12): Web surface on UI `4124` / API `3924` (`bun run dev` with the operator provider env sourced privately, values never printed), driven with `chrome-devtools` in isolated context `v270-24`; system `omp` 18.18.9 TUI in tmux session `v270-24-omp` in a `mktemp -d` scratch dir holding `notes.md` and `data.txt`. Same two prompts on both sides.
+  - Prompt 1 (todo + read + grep + report) — TUI: `Working…` → `Grepping data.txt for needle` → `Marking Grep data.txt for needle as done`, TODO tray `0/3` → `2/3` → `3/3`. App: the same session rendered `Todo init 0/3`, `Read notes.md 5 lines`, `Grep needle 1 match · 1 file`, `Todo Read notes.md 1/3` → `Grep data.txt for needle 2/3` → `Report findings 3/3`, with the same final prose. Status text and tool summaries match; the app's rows add the result summary OMP prints in its own header.
+  - Prompt 2 (one-sentence answer) — TUI: `Working…` then the answer streams; app: same answer, thinking block collapsed, no status dwell.
+  - Retry observed live in the app (`正在重试` on the status chip) because the provider rate-limited mid-run; that is what exposed the missing attempt/cap, now fixed.
+  - Not observed: a permission-wait row live (the scratch project's tool approvals are `allow`, so no prompt appeared); its state is covered by `useAssistantStatus`'s pending-permission branch and its existing tests, not by this capture.
+- Check after (2026-11-12): `VITEST_MAX_WORKERS=2 node scripts/run-isolated-tests.mjs packages/ui/src/lib/toolPresentation packages/ui/src/components/chat` → 234/234 files passed, exit 0. `bun run lint` → exit 0 (warnings only, all pre-existing in files this task does not own). `packages/ui` `tsc -b` → exit 0. `packages/ui/src/lib/i18n/messages` and `packages/ui/src/hooks` suites → 82/82 files passed.

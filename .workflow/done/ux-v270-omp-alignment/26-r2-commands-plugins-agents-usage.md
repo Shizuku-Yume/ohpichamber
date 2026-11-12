@@ -7,7 +7,6 @@
 **Read first:** `decisions.md: 2026-11-10 - OMP TUI parity…`; `research/ux-v270-systemic-review.md` R2; upstream v2.7.0 counterparts (`git show bc50ba56a:<path>`); `packages/ui/src/components/sections/PATTERNS.md`; skills `locale-ui-patterns`, `enterprise-boundary`
 **Check:** `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/components/sections packages/web/server/lib/quota && bun run lint` → exit 0, with the duplicate-owner test passing; real path: the Commands page creates and edits a prompt template while chat autocomplete still offers OMP built-ins; a plugin installs from the marketplace; an agent's tools are edited in one control; Usage shows token analytics plus quotas for providers configured in OMP
 **Base commit:** ab047171d642c5077422fab8b4fad6111b70bcd5
-**Status:** active
 
 - [x] The Commands page manages prompt templates (`.omp/commands/*.md`, `~/.omp/agent/commands/*.md`); built-in OMP commands appear only in chat autocomplete.
 - [x] The Plugins page follows the Skills catalog layout (installed, marketplace with working install/uninstall). Capability sources are listed only when they have items, and raw worker ids and engine diagnostics are hidden from the main view.
@@ -33,4 +32,6 @@
 - `/api/quota/providers` returns `{"providers":[]}`: no provider credential resolves from OMP's auth store in this environment, so the Usage page correctly renders the no-quota state and no provider card. A populated quota card was **not** observed.
 - The dev servers were closed afterwards (both ports answer 000).
 
-**Review:** one `reviewer` subagent on the diff against `ab047171d`. Two blocking findings, both fixed in `ecf16f2ad`: marketplace installed keys now include the install scope, and the `usage.quotas` settings anchor exists in both the empty and populated states.
+**Review:** pass
+
+One `reviewer` subagent on the diff against `ab047171d`. Two blocking findings, both fixed in `ecf16f2ad`: marketplace installed keys now include the install scope, and the `usage.quotas` settings anchor exists in both the empty and populated states.

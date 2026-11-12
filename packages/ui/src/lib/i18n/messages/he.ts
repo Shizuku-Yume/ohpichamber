@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.he,
   ...selectionApprovalI18n.he,
   ...agentStatusI18n.he,
+  ...todoTrayI18n['he'],
   ...snippetsI18n.he,
   ...prReviewI18n.he,
   ...imageToolI18n.he,
@@ -5490,6 +5492,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "שימוש ב-{provider}",
   "settings.usage.page.header.refreshing": "מרענן נתוני שימוש…",
   "settings.usage.page.header.lastUpdated": "עדכון אחרון: {time}",
+  'settings.usage.page.section.quotas': 'מכסות ספק',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'אין מכסות ספק להצגה',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'מגבלות שימוש מוצגות עבור ספקים ש-OMP כבר מחזיק את פרטי הגישה שלהם. הוסיפו ספק בעמוד הספקים.',
   "settings.usage.page.header.lastUpdatedWithPlan": "תוכנית: {plan} · עדכון אחרון: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "הצג בחלונית מצב העבודה",
   "settings.usage.page.options.showInWorkStatus": "הצג בחלונית מצב העבודה",
@@ -9056,4 +9061,9 @@ export const dict = {
   ...tooltipsPanelI18n['he'],
   ...tooltipsChatI18n['he'],
   ...m4LaneDI18n['he'],
+  "gitIdentities.state.unknown": "זהויות Git טרם נטענו.",
+  "settings.usage.state.unknown": "השימוש טרם נטען.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "הזיכרון השמור טרם נטען.",
+
+  "chat.workStatus.mcp.unknown": "שרתי MCP טרם נטענו.",
 };

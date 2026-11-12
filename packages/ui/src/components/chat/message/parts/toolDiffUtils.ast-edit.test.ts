@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
 import { getToolFileChanges, getPrimaryToolPath } from './toolDiffUtils';
-import { isReplyWrite, toolDescription } from '@/lib/toolHelpers';
+import { describeToolCall } from '@/lib/toolPresentation';
 
 describe('ast_edit multi-file diffs and tool cards parity', () => {
   test('getToolFileChanges parses ast_edit multi-file changes and diff +/- counts', () => {
@@ -65,84 +65,16 @@ describe('ast_edit multi-file diffs and tool cards parity', () => {
     expect(primaryPath).toBe('src/a.ts');
   });
 
-  test('isReplyWrite recognizes out:// target paths and rejects regular file paths', () => {
-    expect(isReplyWrite('write', { path: 'out://', content: 'mid-turn progress' })).toBe(true);
-    expect(isReplyWrite('write', { path: 'out://subpath', content: 'mid-turn answer' })).toBe(true);
-    expect(isReplyWrite('write', { file_path: 'out://', content: 'answer' })).toBe(true);
-    expect(isReplyWrite('write', { path: 'src/file.ts', content: 'code' })).toBe(false);
-    expect(isReplyWrite('read', { path: 'out://' })).toBe(false);
-    expect(isReplyWrite('write', {})).toBe(false);
-  });
+  test('the registry describes each call the way the row reads', () => {
+    const describe = (toolName: string, input: ToolCallPart['input']): string | null =>
+      describeToolCall(input, toolName);
 
-  test('toolDescription renders rich card summaries for new tool kinds', () => {
-    const astEditCall: ToolCallPart = {
-      type: 'tool_call',
-      partId: 'p1',
-      toolCallId: 'c1',
-      toolName: 'ast_edit',
-      input: { ops: [{ pat: 'foo()', out: 'bar()' }], paths: ['src/app.ts'] },
-      status: 'running',
-    };
-    expect(toolDescription(astEditCall)).toEqual({ kind: 'text', value: 'foo() → bar()' });
-
-    const astGrepCall: ToolCallPart = {
-      type: 'tool_call',
-      partId: 'p2',
-      toolCallId: 'c2',
-      toolName: 'ast_grep',
-      input: { pat: 'class $NAME', path: 'src/' },
-      status: 'running',
-    };
-    expect(toolDescription(astGrepCall)).toEqual({ kind: 'text', value: 'class $NAME' });
-
-    const evalCall: ToolCallPart = {
-      type: 'tool_call',
-      partId: 'p3',
-      toolCallId: 'c3',
-      toolName: 'eval',
-      input: { language: 'py', title: 'Calculate checksums', code: 'print(42)' },
-      status: 'running',
-    };
-    expect(toolDescription(evalCall)).toEqual({ kind: 'text', value: 'Calculate checksums' });
-
-    const lspCall: ToolCallPart = {
-      type: 'tool_call',
-      partId: 'p4',
-      toolCallId: 'c4',
-      toolName: 'lsp',
-      input: { action: 'hover', file: 'src/main.ts', line: 42 },
-      status: 'running',
-    };
-    expect(toolDescription(lspCall)).toEqual({ kind: 'text', value: 'hover src/main.ts' });
-
-    const checkpointCall: ToolCallPart = {
-      type: 'tool_call',
-      partId: 'p5',
-      toolCallId: 'c5',
-      toolName: 'checkpoint',
-      input: { goal: 'Investigate leak' },
-      status: 'running',
-    };
-    expect(toolDescription(checkpointCall)).toEqual({ kind: 'text', value: 'checkpoint: Investigate leak' });
-
-    const rewindCall: ToolCallPart = {
-      type: 'tool_call',
-      partId: 'p6',
-      toolCallId: 'c6',
-      toolName: 'rewind',
-      input: { report: 'No leak in worker' },
-      status: 'running',
-    };
-    expect(toolDescription(rewindCall)).toEqual({ kind: 'text', value: 'rewind: No leak in worker' });
-
-    const findCall: ToolCallPart = {
-      type: 'tool_call',
-      partId: 'p7',
-      toolCallId: 'c7',
-      toolName: 'find',
-      input: { query: 'where is token rate calculated' },
-      status: 'running',
-    };
-    expect(toolDescription(findCall)).toEqual({ kind: 'text', value: 'where is token rate calculated' });
+    expect(describe('ast_edit', { ops: [{ pat: 'foo()', out: 'bar()' }], paths: ['src/app.ts'] })).toBe('foo() → bar()');
+    expect(describe('ast_grep', { pat: 'class $NAME', path: 'src/' })).toBe('class $NAME');
+    expect(describe('eval', { language: 'py', title: 'Calculate checksums', code: 'print(42)' })).toBe('Calculate checksums');
+    expect(describe('lsp', { action: 'hover', file: 'src/main.ts', line: 42 })).toBe('hover src/main.ts');
+    expect(describe('checkpoint', { goal: 'Investigate leak' })).toBe('Investigate leak');
+    expect(describe('rewind', { report: 'No leak in worker' })).toBe('No leak in worker');
+    expect(describe('find', { query: 'where is token rate calculated' })).toBe('where is token rate calculated');
   });
 });

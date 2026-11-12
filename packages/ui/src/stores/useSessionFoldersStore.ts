@@ -4,6 +4,7 @@ import { devtools } from 'zustand/middleware';
 import { getDeferredSafeStorage, getSafeStorage } from './utils/safeStorage';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import type { LoadPhase } from './loadPhase';
 import {
   applyFolderChange,
   applyFolderChanges,
@@ -30,6 +31,11 @@ export type SessionFoldersMap = Record<string, SessionFolder[]>;
 interface SessionFoldersState {
   foldersMap: SessionFoldersMap;
   collapsedFolderIds: Set<string>;
+  /**
+   * Whether the server's copy was read. Until it was, the folders shown are
+   * this device's cached copy, which is not the shared answer.
+   */
+  serverPhase: LoadPhase;
 }
 
 interface SessionFoldersActions {
@@ -595,6 +601,9 @@ export const createSessionFoldersStore = (runtime: SessionFoldersRuntime) => {
       const result = await readServerResult(runtime.fetch(SESSION_FOLDERS_API_PATH));
       if (!isCurrent(runtimeKey, generation)) return;
       if (result.kind !== 'snapshot') {
+        // A failed read keeps this device's copy and never claims it is the
+        // server's; the next connection reads again.
+        if (store.getState().serverPhase === 'unknown') store.setState({ serverPhase: 'error' });
         scheduleRetry();
         return;
       }
@@ -603,6 +612,7 @@ export const createSessionFoldersStore = (runtime: SessionFoldersRuntime) => {
       adoptServerSnapshot(result.snapshot);
       serverHydrated = true;
       retryAttempt = 0;
+      store.setState({ serverPhase: 'ready' });
       scheduleFlush();
     } finally {
       if (isCurrent(runtimeKey, generation)) hydrationInFlight = false;
@@ -647,6 +657,7 @@ export const createSessionFoldersStore = (runtime: SessionFoldersRuntime) => {
         return {
           foldersMap: readPersistedFolders(),
           collapsedFolderIds: readPersistedCollapsed(),
+          serverPhase: 'unknown',
 
           resetForRuntimeSwitch: (runtimeKey: string): void => {
             try { flushPendingBrowserPersistence(); } catch { /* deferred storage retains failed writes */ }
@@ -666,6 +677,7 @@ export const createSessionFoldersStore = (runtime: SessionFoldersRuntime) => {
             set({
               foldersMap: readPersistedFolders(runtimeKey),
               collapsedFolderIds: readPersistedCollapsed(runtimeKey),
+              serverPhase: 'unknown',
             });
             queueMicrotask(() => void hydrateFromServer());
           },
@@ -779,7 +791,10 @@ const sessionFolders = createSessionFoldersStore(appRuntime);
 
 export const useSessionFoldersStore = sessionFolders.store;
 
-void sessionFolders.hydrateFromServer();
+// The boot registry (`serverStateBoot.ts`) is the only first reader: a read here
+// as well ran the same request twice per start, and a module-scope request is
+// invisible to the registry's phase. This listener stays because going back
+// online after a failed read is an event, not boot.
 // Back online after the Host was unreachable: flush what was queued and read
 // the folders again. The control stream reaches the same handler when task 25
 // delivers its `session-folders-changed` event type.
@@ -789,3 +804,5 @@ if (typeof window !== 'undefined') {
 
 export const handleSessionFoldersChanged = (updatedAt: number = Date.now()) => sessionFolders.handleSessionFoldersChanged(updatedAt);
 export const handleSessionFoldersStreamReady = () => sessionFolders.handleSessionFoldersStreamReady();
+/** First contact with the server, read by the boot registry. */
+export const hydrateSessionFoldersFromServer = () => sessionFolders.hydrateFromServer();

@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n['pt-BR'],
   ...selectionApprovalI18n['pt-BR'],
   ...agentStatusI18n['pt-BR'],
+  ...todoTrayI18n['pt-BR'],
   ...snippetsI18n['pt-BR'],
   ...prReviewI18n['pt-BR'],
   ...imageToolI18n['pt-BR'],
@@ -1751,6 +1753,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "Uso de {provider}",
   "settings.usage.page.header.refreshing": "Atualizando uso...",
   "settings.usage.page.header.lastUpdated": "Última atualização: {time}",
+  'settings.usage.page.section.quotas': 'Cotas do provedor',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'Nenhuma cota de provedor para mostrar',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Os limites de uso aparecem para provedores cujas credenciais o OMP já tem. Adicione um em Provedores.',
   "settings.usage.page.header.lastUpdatedWithPlan": "Plano: {plan} · Última atualização: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Mostrar no painel de status do trabalho",
   "settings.usage.page.options.showInWorkStatus": "Mostrar no painel de status do trabalho",
@@ -9389,4 +9394,9 @@ export const dict = {
   ...openchamberToolsLayoutI18n['pt-BR'],
   ...openchamberToolOutputI18n['pt-BR'],
   ...m4LaneDI18n['pt-BR'],
+  "gitIdentities.state.unknown": "As identidades do Git ainda não foram carregadas.",
+  "settings.usage.state.unknown": "O uso ainda não foi carregado.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "A memória armazenada ainda não foi carregada.",
+
+  "chat.workStatus.mcp.unknown": "Os servidores MCP ainda não foram carregados.",
 };

@@ -1,10 +1,11 @@
 import type { Message, Part } from "@openchamber/agent-contract"
+import { isQuestionTool } from "@/lib/toolPresentation"
 
 const RECOVERY_DELAYS_MS = [0, 500, 1500] as const
 
 /** A persisted active question tool without a pending QuestionRequest needs cold-start recovery. */
 const isActiveQuestionTool = (part: Part): boolean => {
-  if (part.type !== "tool_call" || part.toolName !== "question") return false
+  if (part.type !== "tool_call" || !isQuestionTool(part.toolName)) return false
   return part.status === "pending_approval" || part.status === "running"
 }
 

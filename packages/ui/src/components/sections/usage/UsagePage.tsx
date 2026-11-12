@@ -1,7 +1,5 @@
 import React from 'react';
 import { UsageCard } from './UsageCard';
-import { QuotaCredentials } from './QuotaCredentials';
-import { ClaudeCodeSignIn } from './ClaudeCodeSignIn';
 import { ConsoleBudgetsSection } from './ConsoleBudgetsSection';
 import { useQuotaAutoRefresh, useQuotaProviders, useQuotaStore } from '@/stores/useQuotaStore';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -13,10 +11,8 @@ import {
 } from '@/components/ui/collapsible';
 import type { UsageWindows, QuotaProviderId } from '@/types';
 import { getAllModelFamilies, getDisplayModelName, sortModelFamilies, groupModelsByFamilyWithGetter } from '@/lib/quota/model-families';
-import { Icon } from "@/components/icon/Icon";
+import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import { useWaitingBlink } from '@/hooks/useDurationTicker';
-import { cn } from '@/lib/utils';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -24,6 +20,7 @@ import {
   SettingsSection,
   SettingsCheckboxRow,
 } from '@/components/sections/shared/SettingsSection';
+import { UsageStatsReport } from '@/components/views/usage/UsageStatsView';
 
 const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPreference) => {
   if (!timestamp) return '-';
@@ -39,15 +36,12 @@ interface ModelInfo {
   windows: UsageWindows;
 }
 
-export const UsagePage: React.FC = () => {
+/** One provider's quota panel: its windows, its models, and the work-status switch. */
+const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: string }> = ({ providerId, settingsItem }) => {
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const results = useQuotaStore((state) => state.results);
-  const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
-  const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
-  const fetchProviderQuota = useQuotaStore((state) => state.fetchProviderQuota);
   const isLoading = useQuotaStore((state) => state.isLoading);
-  const blink = useWaitingBlink(isLoading);
   const lastUpdated = useQuotaStore((state) => state.lastUpdated);
   const refreshErrors = useQuotaStore((state) => state.refreshErrors);
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
@@ -57,46 +51,18 @@ export const UsagePage: React.FC = () => {
   const applyDefaultSelections = useQuotaStore((state) => state.applyDefaultSelections);
   const providers = useQuotaProviders();
 
-  useQuotaAutoRefresh(true, true);
-
-  React.useEffect(() => {
-    if (selectedProviderId) {
-      return;
-    }
-    if (results.length === 0) {
-      return;
-    }
-    const firstConfigured = results.find((entry) => entry.configured)?.providerId;
-    setSelectedProvider(firstConfigured ?? providers[0]?.id ?? null);
-  }, [providers, results, selectedProviderId, setSelectedProvider]);
-
-  const selectedResult = results.find((entry) => entry.providerId === selectedProviderId) ?? null;
-
-  const providerMeta = providers.find((provider) => provider.id === selectedProviderId);
-  const providerName = providerMeta?.name ?? selectedProviderId ?? t('settings.usage.sidebar.title');
-  const usage = selectedResult?.usage;
-  const refreshError = selectedProviderId ? refreshErrors[selectedProviderId] : undefined;
-  const selectedProviderError = refreshError
+  const providerName = providers.find((provider) => provider.id === providerId)?.name ?? providerId;
+  const result = results.find((entry) => entry.providerId === providerId) ?? null;
+  const usage = result?.usage;
+  const refreshError = refreshErrors[providerId];
+  const error = refreshError
     ? usage
       ? t('header.services.usageRefreshFailedStale', { error: refreshError })
       : refreshError
-    // OpenCode Go reports a failed Go read beside the Console budgets it still has.
-    : selectedResult?.configured && selectedResult.error
-      ? selectedResult.error
+    : result?.configured && result.error
+      ? result.error
       : null;
-  const showInDropdown = selectedProviderId ? dropdownProviderIds.includes(selectedProviderId) : false;
-  const credentialProviderId = selectedProviderId === 'exe-dev'
-    || selectedProviderId === 'cursor'
-    || selectedProviderId === 'zenmux'
-    ? selectedProviderId
-    : null;
-  const hasCredentialsForm = credentialProviderId !== null;
-  const handleDropdownToggle = React.useCallback((enabled: boolean) => {
-    if (!selectedProviderId) {
-      return;
-    }
-    void updateDesktopSettings({ usageDropdownProviders: setProviderInDropdown(selectedProviderId, enabled) });
-  }, [selectedProviderId, setProviderInDropdown]);
+  const showInDropdown = dropdownProviderIds.includes(providerId);
 
   const providerModels = React.useMemo((): ModelInfo[] => {
     if (!usage?.models) return [];
@@ -106,263 +72,221 @@ export const UsagePage: React.FC = () => {
   }, [usage?.models]);
 
   React.useEffect(() => {
-    if (selectedProviderId && providerModels.length > 0) {
-      applyDefaultSelections(selectedProviderId, providerModels.map((m) => m.name));
+    if (providerModels.length > 0) {
+      applyDefaultSelections(providerId, providerModels.map((model) => model.name));
     }
-  }, [selectedProviderId, providerModels, applyDefaultSelections]);
+  }, [providerId, providerModels, applyDefaultSelections]);
 
   const modelsByFamily = React.useMemo(() => {
-    if (!selectedProviderId || providerModels.length === 0) {
-      return new Map<string | null, ModelInfo[]>();
-    }
-    return groupModelsByFamilyWithGetter(
-      providerModels,
-      (model) => model.name,
-      selectedProviderId as QuotaProviderId
-    );
-  }, [providerModels, selectedProviderId]);
+    if (providerModels.length === 0) return new Map<string | null, ModelInfo[]>();
+    return groupModelsByFamilyWithGetter(providerModels, (model) => model.name, providerId);
+  }, [providerModels, providerId]);
 
-  const sortedFamilies = React.useMemo(() => {
-    if (!selectedProviderId) return [];
-    const families = getAllModelFamilies(selectedProviderId as QuotaProviderId);
-    return sortModelFamilies(families);
-  }, [selectedProviderId]);
+  const sortedFamilies = React.useMemo(
+    () => sortModelFamilies(getAllModelFamilies(providerId)),
+    [providerId],
+  );
 
-  const [collapsedFamilies, setCollapsedFamilies] = React.useState<Record<string, boolean>>(() => {
-    return {};
-  });
-
+  const [collapsedFamilies, setCollapsedFamilies] = React.useState<Record<string, boolean>>({});
   const toggleFamilyCollapsed = React.useCallback((familyId: string) => {
-    setCollapsedFamilies((prev) => ({
-      ...prev,
-      [familyId]: !prev[familyId],
-    }));
+    setCollapsedFamilies((previous) => ({ ...previous, [familyId]: !previous[familyId] }));
   }, []);
 
+  const providerSelectedModels = React.useMemo(
+    () => selectedModels[providerId] ?? [],
+    [selectedModels, providerId],
+  );
   const handleModelToggle = React.useCallback((modelName: string) => {
-    if (!selectedProviderId) return;
-    toggleModelSelected(selectedProviderId, modelName);
-    const currentSelected = selectedModels[selectedProviderId] ?? [];
-    const isSelected = currentSelected.includes(modelName);
+    toggleModelSelected(providerId, modelName);
+    const isSelected = providerSelectedModels.includes(modelName);
     const nextSelected = isSelected
-      ? currentSelected.filter((m) => m !== modelName)
-      : [...currentSelected, modelName];
-    const nextSettings: Record<string, string[]> = { ...selectedModels, [selectedProviderId]: nextSelected };
-    void updateDesktopSettings({ usageSelectedModels: nextSettings });
-  }, [selectedProviderId, selectedModels, toggleModelSelected]);
+      ? providerSelectedModels.filter((model) => model !== modelName)
+      : [...providerSelectedModels, modelName];
+    void updateDesktopSettings({ usageSelectedModels: { ...selectedModels, [providerId]: nextSelected } });
+  }, [providerId, providerSelectedModels, selectedModels, toggleModelSelected]);
 
-  const providerSelectedModels = selectedProviderId ? (selectedModels[selectedProviderId] ?? []) : [];
-
-  if (!selectedProviderId) {
+  const familyRows = (models: ModelInfo[]) => models.map((model) => {
+    const entries = Object.entries(model.windows.windows);
+    if (entries.length === 0) return null;
+    const [label, window] = entries[0];
     return (
-        <div className="flex h-full items-center justify-center text-muted-foreground">
-        <p className="typography-ui-label">{t('settings.usage.page.empty.selectProvider')}</p>
-      </div>
+      <UsageCard
+        key={model.name}
+        title={label}
+        subtitle={getDisplayModelName(model.name)}
+        window={window}
+        showToggle
+        toggleEnabled={providerSelectedModels.includes(model.name)}
+        onToggle={() => handleModelToggle(model.name)}
+      />
     );
-  }
+  });
+
+  const otherModels = modelsByFamily.get(null) ?? [];
 
   return (
-    <SettingsPageLayout
-      title={t('settings.usage.page.header.providerUsage', { provider: providerName })}
-      titleLeading={<QuotaProviderLogo providerId={selectedProviderId} className="h-5 w-5 shrink-0" />}
-      description={
-        isLoading ? (
-          <span className={cn('typography-settings-description text-muted-foreground', blink)}>{t('settings.usage.page.header.refreshing')}</span>
-        ) : selectedResult?.planLabel ? (
-          t('settings.usage.page.header.lastUpdatedWithPlan', {
-            plan: selectedResult.planLabel,
+    <SettingsSection
+      title={(
+        <span className="flex items-center gap-2">
+          <QuotaProviderLogo providerId={providerId} className="h-4 w-4 shrink-0" />
+          {providerName}
+        </span>
+      )}
+      description={isLoading
+        ? t('settings.usage.page.header.refreshing')
+        : result?.planLabel
+          ? t('settings.usage.page.header.lastUpdatedWithPlan', {
+            plan: result.planLabel,
             time: formatTime(lastUpdated, timeFormatPreference),
           })
-        ) : selectedResult?.accountLabel ? (
-          t('settings.usage.page.header.lastUpdatedWithAccount', {
-            account: selectedResult.accountLabel,
-            time: formatTime(lastUpdated, timeFormatPreference),
-          })
-        ) : (
-          t('settings.usage.page.header.lastUpdated', { time: formatTime(lastUpdated, timeFormatPreference) })
-        )
-      }
-      showSaveStatus
+          : result?.accountLabel
+            ? t('settings.usage.page.header.lastUpdatedWithAccount', {
+              account: result.accountLabel,
+              time: formatTime(lastUpdated, timeFormatPreference),
+            })
+            : t('settings.usage.page.header.lastUpdated', { time: formatTime(lastUpdated, timeFormatPreference) })}
+      settingsItem={settingsItem}
+      contentClassName="space-y-3"
     >
-      <SettingsSection divider={false} settingsItem="usage.work-status-panel">
-        <SettingsCheckboxRow
-          checked={showInDropdown}
-          onChange={handleDropdownToggle}
-          label={t('settings.usage.page.options.showInWorkStatus')}
-          ariaLabel={t('settings.usage.page.options.showInWorkStatusAria')}
-          info={t('settings.usage.page.options.showInWorkStatusTooltip')}
-        />
-      </SettingsSection>
+      <SettingsCheckboxRow
+        checked={showInDropdown}
+        onChange={(enabled) => void updateDesktopSettings({
+          usageDropdownProviders: setProviderInDropdown(providerId, enabled),
+        })}
+        label={t('settings.usage.page.options.showInWorkStatus')}
+        ariaLabel={t('settings.usage.page.options.showInWorkStatusAria')}
+        info={t('settings.usage.page.options.showInWorkStatusTooltip')}
+      />
 
-      {!selectedResult && (
-        <p className="typography-ui-label text-foreground pb-8">{t('settings.usage.page.state.noData')}</p>
-      )}
-
-      {/* Only the selected provider's own failure belongs in its panel. The
-          store's global `error` is whichever provider failed first and has no
-          UI consumer left; shown here it labeled DeepSeek with Claude's
-          rate-limit message. */}
-      {selectedProviderError && (
-        <div className="mb-8 rounded-lg bg-[var(--status-error-background)] px-4 py-3">
+      {error ? (
+        <div className="rounded-lg bg-[var(--status-error-background)] px-4 py-3">
           <p className="typography-ui-label font-medium text-[var(--status-error)]">{t('settings.usage.page.state.refreshFailedTitle')}</p>
-          <p dir="auto" className="typography-meta text-[var(--status-error)]/80 mt-1">{selectedProviderError}</p>
+          <p dir="auto" className="typography-meta text-[var(--status-error)]/80 mt-1">{error}</p>
         </div>
-      )}
+      ) : null}
 
-      {/* Providers with an inline credentials form don't need the "go to Providers" banner — the form IS the fix. */}
-      {selectedResult && !selectedResult.configured && !hasCredentialsForm && (
-        <div className="mb-8 rounded-lg bg-[var(--status-warning-background)] px-4 py-3">
-          {/* Claude usage comes from Claude Code's own login, which Providers cannot add. */}
-          {selectedProviderId === 'claude' ? (
-            <>
-              <p className="typography-ui-label font-medium text-[var(--status-warning)]">{t('settings.usage.page.state.claudeSignedOutTitle')}</p>
-              <ClaudeCodeSignIn onSignedIn={() => void fetchProviderQuota('claude')} />
-            </>
-          ) : (
-            <>
-              <p className="typography-ui-label font-medium text-[var(--status-warning)]">{t('settings.usage.page.state.providerNotConfiguredTitle')}</p>
-              <p className="typography-meta text-[var(--status-warning)]/80 mt-1">
-                {t('settings.usage.page.state.providerNotConfiguredDescription')}
-              </p>
-            </>
-          )}
+      {usage?.windows && Object.keys(usage.windows).length > 0 ? (
+        <div className="divide-y divide-[var(--surface-subtle)]">
+          {Object.entries(usage.windows).map(([label, window]) => (
+            <UsageCard key={label} title={label} window={window} providerId={providerId} />
+          ))}
         </div>
-      )}
+      ) : null}
 
-      {credentialProviderId && (
-        <QuotaCredentials providerId={credentialProviderId} providerName={providerName} />
-      )}
-
-      {usage?.windows && Object.keys(usage.windows).length > 0 && (
-        <SettingsSection settingsItem="usage.model-quotas">
-          <div className="divide-y divide-[var(--surface-subtle)]">
-            {Object.entries(usage.windows).map(([label, window]) => (
-              <UsageCard key={label} title={label} window={window} providerId={selectedProviderId} />
-            ))}
-          </div>
-        </SettingsSection>
-      )}
-
-      {usage?.consoleBudgets && <ConsoleBudgetsSection consoleBudgets={usage.consoleBudgets} />}
-
-      {providerModels.length > 0 && (
-        <SettingsSection
-          title={t('settings.usage.page.section.modelQuotas')}
-          contentClassName="space-y-3"
-        >
+      {providerModels.length > 0 ? (
+        <div className="space-y-2">
+          <p className="typography-micro uppercase tracking-wide text-muted-foreground">
+            {t('settings.usage.page.section.modelQuotas')}
+          </p>
           {sortedFamilies.map((family) => {
             const familyModels = modelsByFamily.get(family.id) ?? [];
             if (familyModels.length === 0) return null;
-
             const isCollapsed = collapsedFamilies[family.id] ?? false;
-
             return (
-              <section key={family.id} className="p-2">
-                <Collapsible
-                  open={!isCollapsed}
-                  onOpenChange={() => toggleFamilyCollapsed(family.id)}
-                >
-                  <CollapsibleTrigger className="flex w-full items-center justify-between py-0.5 group">
-                    <div className="flex items-center gap-1.5 text-start">
-                      <span className="typography-ui-label font-normal text-foreground">{family.labelKey ? t(family.labelKey) : family.label}</span>
-                      <span className="typography-micro text-muted-foreground">
-                        ({familyModels.length})
-                      </span>
-                    </div>
-                    {isCollapsed ? (
-                      <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    ) : (
-                      <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    )}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="divide-y divide-[var(--surface-subtle)] mt-1">
-                      {familyModels.map((model) => {
-                        const entries = Object.entries(model.windows.windows);
-                        if (entries.length === 0) return null;
-                        const [label, window] = entries[0];
-                        const isSelected = providerSelectedModels.includes(model.name);
-
-                        return (
-                          <UsageCard
-                            key={model.name}
-                            title={label}
-                            subtitle={getDisplayModelName(model.name)}
-                            window={window}
-                            showToggle
-                            toggleEnabled={isSelected}
-                            onToggle={() => handleModelToggle(model.name)}
-                          />
-                        );
-                      })}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </section>
+              <Collapsible key={family.id} open={!isCollapsed} onOpenChange={() => toggleFamilyCollapsed(family.id)}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between py-0.5 group">
+                  <span className="flex items-center gap-1.5 text-start">
+                    <span className="typography-ui-label font-normal text-foreground">{family.labelKey ? t(family.labelKey) : family.label}</span>
+                    <span className="typography-micro text-muted-foreground">({familyModels.length})</span>
+                  </span>
+                  <Icon
+                    name={isCollapsed ? 'arrow-right-s' : 'arrow-down-s'}
+                    className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors"
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="divide-y divide-[var(--surface-subtle)] mt-1">{familyRows(familyModels)}</div>
+                </CollapsibleContent>
+              </Collapsible>
             );
           })}
+          {otherModels.length > 0 ? (
+            <Collapsible
+              open={!(collapsedFamilies.other ?? false)}
+              onOpenChange={() => toggleFamilyCollapsed('other')}
+            >
+              <CollapsibleTrigger className="flex w-full items-center justify-between py-0.5 group">
+                <span className="flex items-center gap-1.5 text-start">
+                  <span className="typography-ui-label font-normal text-foreground">{t('settings.usage.page.section.otherModels')}</span>
+                  <span className="typography-micro text-muted-foreground">({otherModels.length})</span>
+                </span>
+                <Icon
+                  name={collapsedFamilies.other ? 'arrow-right-s' : 'arrow-down-s'}
+                  className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors"
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="divide-y divide-[var(--surface-subtle)] mt-1">{familyRows(otherModels)}</div>
+              </CollapsibleContent>
+            </Collapsible>
+          ) : null}
+        </div>
+      ) : null}
 
-          {(() => {
-            const otherModels = modelsByFamily.get(null) ?? [];
-            if (otherModels.length === 0) return null;
+      {usage?.consoleBudgets ? <ConsoleBudgetsSection consoleBudgets={usage.consoleBudgets} /> : null}
 
-            const isCollapsed = collapsedFamilies['other'] ?? false;
-
-            return (
-              <section className="p-2">
-                <Collapsible
-                  open={!isCollapsed}
-                  onOpenChange={() => toggleFamilyCollapsed('other')}
-                >
-                  <CollapsibleTrigger className="flex w-full items-center justify-between py-0.5 group">
-                    <div className="flex items-center gap-1.5 text-start">
-                      <span className="typography-ui-label font-normal text-foreground">{t('settings.usage.page.section.otherModels')}</span>
-                      <span className="typography-micro text-muted-foreground">
-                        ({otherModels.length})
-                      </span>
-                    </div>
-                    {isCollapsed ? (
-                      <Icon name="arrow-right-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    ) : (
-                      <Icon name="arrow-down-s" className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    )}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="divide-y divide-[var(--surface-subtle)] mt-1">
-                      {otherModels.map((model) => {
-                        const entries = Object.entries(model.windows.windows);
-                        if (entries.length === 0) return null;
-                        const [label, window] = entries[0];
-                        const isSelected = providerSelectedModels.includes(model.name);
-
-                        return (
-                          <UsageCard
-                            key={model.name}
-                            title={label}
-                            subtitle={getDisplayModelName(model.name)}
-                            window={window}
-                            showToggle
-                            toggleEnabled={isSelected}
-                            onToggle={() => handleModelToggle(model.name)}
-                          />
-                        );
-                      })}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </section>
-            );
-          })()}
-        </SettingsSection>
-      )}
-
-      {selectedResult?.configured && usage && Object.keys(usage.windows ?? {}).length === 0 &&
-        providerModels.length === 0 && !usage.consoleBudgets && (
-        <div className="pb-8">
+      {Object.keys(usage?.windows ?? {}).length === 0 && providerModels.length === 0 && !usage?.consoleBudgets ? (
+        <div>
           <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noQuotaWindowsTitle')}</p>
           <p className="typography-meta text-muted-foreground mt-1">{t('settings.usage.page.state.noQuotaWindowsDescription')}</p>
         </div>
-      )}
+      ) : null}
+    </SettingsSection>
+  );
+};
+
+/**
+ * Usage: what the agent spent (token analytics from the session store) and
+ * what each configured provider's plan has left. A provider OMP holds no
+ * credential for is not a card — its quota cannot be read, so there is
+ * nothing to show and nothing to configure here.
+ */
+export const UsagePage: React.FC = () => {
+  const { t } = useI18n();
+  const results = useQuotaStore((state) => state.results);
+  const quotaPhase = useQuotaStore((state) => state.phase);
+  useQuotaAutoRefresh(true, true);
+
+  // `configured` is the provider's own answer about the credential OMP holds.
+  // A provider that has none is left out rather than shown as an empty card.
+  const configuredProviderIds = React.useMemo(
+    () => results.filter((entry) => entry.configured).map((entry) => entry.providerId),
+    [results],
+  );
+
+  return (
+    <SettingsPageLayout title={t('settings.page.usage.title')} showSaveStatus>
+      <SettingsSection
+        title={t('usageStats.title')}
+        divider={false}
+        settingsItem="usage.statistics"
+        contentClassName="space-y-0"
+      >
+        <UsageStatsReport />
+      </SettingsSection>
+
+      {configuredProviderIds.length === 0 ? (
+        <SettingsSection title={t('settings.usage.page.section.quotas')} settingsItem="usage.quotas">
+          {/* An unloaded catalog is not "no providers": while the phase is
+              unknown the page says so instead of claiming there is nothing. */}
+          {quotaPhase === 'unknown' ? (
+            <p className="typography-ui-label text-foreground">{t('settings.usage.state.unknown')}</p>
+          ) : (
+            <>
+              <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noConfiguredProvidersTitle')}</p>
+              <p className="typography-meta text-muted-foreground mt-1">
+                {t('settings.usage.page.state.noConfiguredProvidersDescription')}
+              </p>
+            </>
+          )}
+        </SettingsSection>
+      ) : configuredProviderIds.map((providerId, index) => (
+        <ProviderQuota
+          key={providerId}
+          providerId={providerId}
+          settingsItem={index === 0 ? 'usage.quotas' : undefined}
+        />
+      ))}
     </SettingsPageLayout>
   );
 };

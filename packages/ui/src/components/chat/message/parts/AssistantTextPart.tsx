@@ -30,7 +30,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     const textContent = part.type === 'text' || part.type === 'reasoning' ? part.content : '';
     // Canonical text parts have no per-part timing; completion comes from
     // the owning message's stream phase.
-    const isFinalized = streamPhase !== 'streaming' && streamPhase !== 'cooldown';
+    const isFinalized = streamPhase !== 'streaming';
     const isStreaming = resolveAssistantTextStreaming({
         streamPhase,
         chatRenderMode,

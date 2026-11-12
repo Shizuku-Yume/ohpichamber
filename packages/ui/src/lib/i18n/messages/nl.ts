@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.nl,
   ...selectionApprovalI18n.nl,
   ...agentStatusI18n.nl,
+  ...todoTrayI18n['nl'],
   ...snippetsI18n.nl,
   ...prReviewI18n.nl,
   ...imageToolI18n.nl,
@@ -1846,6 +1848,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "Gebruik {provider}",
   "settings.usage.page.header.refreshing": "Gebruik vernieuwen...",
   "settings.usage.page.header.lastUpdated": "Laatst bijgewerkt: {time}",
+  'settings.usage.page.section.quotas': 'Providerquota',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'Geen providerquota om te tonen',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Gebruikslimieten verschijnen voor providers waarvan OMP al inloggegevens heeft. Voeg er een toe bij Providers.',
   "settings.usage.page.header.lastUpdatedWithPlan": "Plan: {plan} · Laatst bijgewerkt: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Tonen in werkstatuspaneel",
   "settings.usage.page.options.showInWorkStatus": "Tonen in werkstatuspaneel",
@@ -9398,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['nl'],
   ...tooltipsChatI18n['nl'],
   ...m4LaneDI18n.nl,
+  "gitIdentities.state.unknown": "Git-identiteiten zijn nog niet geladen.",
+  "settings.usage.state.unknown": "Gebruik is nog niet geladen.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Opgeslagen geheugen is nog niet geladen.",
+
+  "chat.workStatus.mcp.unknown": "MCP-servers zijn nog niet geladen.",
 };

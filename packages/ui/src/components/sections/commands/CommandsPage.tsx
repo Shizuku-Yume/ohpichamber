@@ -5,8 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { selectCommandsForDirectory, useCommandsStore, isCommandBuiltIn, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
-import { getLocalizedCommandDescription } from './commandDescriptions';
+import { selectCommandsForDirectory, useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
 import { ModelSelector } from '../agents/ModelSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Icon } from '@/components/icon/Icon';
@@ -37,10 +36,12 @@ export const CommandsPage: React.FC = () => {
   const selectedName = useCommandsStore(state => state.selectedCommandName);
   const commands = useCommandsStore(state => selectCommandsForDirectory(state, directory));
   const draft = useCommandsStore(state => state.commandDraft);
-  const entity = (selectedId ? commands.find(command => command.commandId === selectedId) : null)
-    ?? commands.find(command => command.name === selectedName);
-  const isNew = Boolean(draft && draft.name === selectedName && (!entity || isCommandBuiltIn(entity)));
-  const readOnly = Boolean(!isNew && entity && !entity.editable);
+  // The page owns prompt-template files only; built-in OMP commands live in
+  // chat autocomplete and are not editable here.
+  const templates = React.useMemo(() => commands.filter(command => command.editable), [commands]);
+  const entity = (selectedId ? templates.find(command => command.commandId === selectedId) : null)
+    ?? templates.find(command => command.name === selectedName);
+  const isNew = Boolean(draft && draft.name === selectedName && !entity);
   const group = isNew ? draft?.group : entity?.group;
   const [form, setForm] = React.useState<CommandForm>({ name: '', scope: 'agent', description: '', content: '', argumentHint: '', modelSelection: null });
   const [creating, setCreating] = React.useState(false);
@@ -71,7 +72,7 @@ export const CommandsPage: React.FC = () => {
     group: isNew ? draft?.group : entity?.group,
   };
   const save = React.useCallback(async (): Promise<AutosaveResult> => {
-    if (isNew || readOnly || !entity || !saved.current || JSON.stringify(saved.current) === JSON.stringify(form)) return AUTOSAVE_UNCHANGED;
+    if (isNew || !entity || !saved.current || JSON.stringify(saved.current) === JSON.stringify(form)) return AUTOSAVE_UNCHANGED;
     if (!form.content.trim()) return autosaveFailed(t('settings.commands.page.toast.templateRequired'));
     const pending = { identity, form };
     echo.current = pending;
@@ -84,14 +85,14 @@ export const CommandsPage: React.FC = () => {
       if (identityRef.current === identity) saved.current = form;
       return AUTOSAVE_SAVED;
     } finally { if (echo.current === pending) echo.current = null; }
-  }, [directory, entity, form, identity, isNew, readOnly, t]);
+  }, [directory, entity, form, identity, isNew, t]);
   const autosave = useAutosave(save);
   const { requestSave } = autosave;
   const create = async () => {
     const commandName = form.name.trim().replace(/\s+/g, '-');
     if (!commandName) { toast.error(t('settings.commands.sidebar.toast.commandNameRequired')); return; }
     if (!form.content.trim()) { toast.error(t('settings.commands.page.toast.templateRequired')); return; }
-    if (commands.some(command => !isCommandBuiltIn(command) && command.name === commandName)) {
+    if (templates.some(command => command.name === commandName)) {
       toast.error(t('settings.commands.sidebar.toast.commandExists'));
       return;
     }
@@ -108,7 +109,9 @@ export const CommandsPage: React.FC = () => {
     useCommandsStore.getState().setCommandDraft(null);
     useCommandsStore.getState().setSelectedCommand(null);
   };
-  if (!selectedName) {
+  // A selection with no template file behind it (a built-in, or a row from a
+  // catalog this directory no longer has) has nothing to edit.
+  if (!selectedName || (!isNew && !entity)) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
@@ -119,33 +122,10 @@ export const CommandsPage: React.FC = () => {
       </div>
     );
   }
-  if (!isNew && entity?.source === 'builtin') {
-    return (
-      <SettingsPageLayout
-        title={`/${selectedName}`}
-        description={t('settings.commands.sidebar.section.builtIn')}
-      >
-        <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-3">
-          <SettingsStackedField className="py-1.5" label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
-            <p className="text-foreground leading-relaxed whitespace-pre-wrap">
-              {(entity ? getLocalizedCommandDescription(entity, t) : form.description) || t('settings.commands.page.field.descriptionPlaceholder')}
-            </p>
-          </SettingsStackedField>
-          {form.argumentHint ? (
-            <SettingsFieldRow settingsItem="commands.argument-hint" label={t('settings.commands.page.field.argumentHint')}>
-              <code className="rounded bg-muted px-2 py-0.5 text-xs text-foreground">
-                {form.argumentHint}
-              </code>
-            </SettingsFieldRow>
-          ) : null}
-        </SettingsSection>
-      </SettingsPageLayout>
-    );
-  }
   return <SettingsPageLayout title={isNew ? t('settings.commands.page.title.new') : `/${selectedName}`}
-    description={isNew ? t('settings.commands.page.subtitle.new') : readOnly ? t('settings.commands.sidebar.section.builtIn') : t('settings.commands.page.subtitle.edit')}
+    description={isNew ? t('settings.commands.page.subtitle.new') : t('settings.commands.page.subtitle.edit')}
     onBlurCapture={autosave.onBlurCapture}>
-    <fieldset disabled={readOnly} className="min-w-0">
+    <fieldset className="min-w-0">
       <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-0">
         {isNew && <SettingsFieldRow settingsItem="commands.name" label={t('settings.commands.page.field.commandName')}>
           <div className="flex items-center">
@@ -191,41 +171,37 @@ export const CommandsPage: React.FC = () => {
           />
         </SettingsFieldRow>
       </SettingsSection>
-      {(!readOnly || form.modelSelection || group) && (
-        <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
-          <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
-            <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
-              directory={directory ?? undefined} onChange={(providerId, modelId) => {
-                setForm({ ...form, modelSelection: providerId && modelId ? { providerId, modelId } : null });
-                requestSave();
-              }} className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
-          </SettingsFieldRow>
-          {group ? <SettingsFieldRow settingsItem="commands.group" label={t('settings.commands.page.field.group')}>
-            <span className="typography-meta text-muted-foreground truncate">{group}</span>
-          </SettingsFieldRow> : null}
-        </SettingsSection>
-      )}
-      {(!readOnly || form.content) && (
-        <SettingsSection title={t('settings.commands.page.section.template')} settingsItem="commands.template">
-          <Textarea value={form.content} onChange={event => setForm({ ...form, content: event.target.value })}
-            placeholder={t('settings.commands.page.field.templatePlaceholder')} rows={12}
-            className="w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
-          <p className="mt-2 typography-meta text-muted-foreground">
-            <code className="text-foreground">$ARGUMENTS</code> {t('settings.commands.page.templateHint.userInput')} &middot;{' '}
-            <code className="text-foreground">!`cmd`</code> {t('settings.commands.page.templateHint.shellOutput')} &middot;{' '}
-            <code className="text-foreground">@file</code> {t('settings.commands.page.templateHint.fileContents')}
-          </p>
-          {isNew && <div className="flex items-center gap-2 pt-3">
-            <Button onClick={() => void create()} disabled={creating || !form.name.trim() || !form.content.trim()}
-              size="xs" >
-              {creating ? t('settings.common.actions.saving') : t('settings.common.actions.create')}
-            </Button>
-            <Button variant="ghost" onClick={cancelCreate} disabled={creating} size="xs" >
-              {t('settings.common.actions.cancel')}
-            </Button>
-          </div>}
-        </SettingsSection>
-      )}
+      <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
+        <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
+          <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
+            directory={directory ?? undefined} onChange={(providerId, modelId) => {
+              setForm({ ...form, modelSelection: providerId && modelId ? { providerId, modelId } : null });
+              requestSave();
+            }} className={SETTINGS_CUSTOM_TRIGGER_CLASS} />
+        </SettingsFieldRow>
+        {group ? <SettingsFieldRow settingsItem="commands.group" label={t('settings.commands.page.field.group')}>
+          <span className="typography-meta text-muted-foreground truncate">{group}</span>
+        </SettingsFieldRow> : null}
+      </SettingsSection>
+      <SettingsSection title={t('settings.commands.page.section.template')} settingsItem="commands.template">
+        <Textarea value={form.content} onChange={event => setForm({ ...form, content: event.target.value })}
+          placeholder={t('settings.commands.page.field.templatePlaceholder')} rows={12}
+          className="w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
+        <p className="mt-2 typography-meta text-muted-foreground">
+          <code className="text-foreground">$ARGUMENTS</code> {t('settings.commands.page.templateHint.userInput')} &middot;{' '}
+          <code className="text-foreground">!`cmd`</code> {t('settings.commands.page.templateHint.shellOutput')} &middot;{' '}
+          <code className="text-foreground">@file</code> {t('settings.commands.page.templateHint.fileContents')}
+        </p>
+        {isNew && <div className="flex items-center gap-2 pt-3">
+          <Button onClick={() => void create()} disabled={creating || !form.name.trim() || !form.content.trim()}
+            size="xs" >
+            {creating ? t('settings.common.actions.saving') : t('settings.common.actions.create')}
+          </Button>
+          <Button variant="ghost" onClick={cancelCreate} disabled={creating} size="xs" >
+            {t('settings.common.actions.cancel')}
+          </Button>
+        </div>}
+      </SettingsSection>
     </fieldset>
   </SettingsPageLayout>;
 };

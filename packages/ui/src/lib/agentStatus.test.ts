@@ -4,8 +4,8 @@ import { applyPlural, formatAgentStatus } from './agentStatus';
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 
 const dictionary = new Map(Object.entries({
-  'chat.agentStatus.read.count': 'читає {count, plural, one {# файл} few {# файли} many {# файлів} other {# файлу}}',
-  'chat.agentStatus.command': 'виконує команду',
+  'chat.agentStatus.retry.in': 'повторна спроба через {time}',
+  'chat.agentStatus.working': 'працює',
   'chat.agentStatus.usingTool': 'використовує {name}',
   'chat.statusRow.modelStatus': '{model} {status}',
 }));
@@ -34,12 +34,19 @@ describe('applyPlural', () => {
 
 describe('formatAgentStatus', () => {
   test('follows the model through the locale\'s template', () => {
-    expect(formatAgentStatus(t, 'uk', { key: 'chat.agentStatus.command' }, 'Opus 5.5')).toBe('Opus 5.5 виконує команду');
+    expect(formatAgentStatus(t, 'uk', { key: 'chat.agentStatus.working' }, 'Opus 5.5')).toBe('Opus 5.5 працює');
   });
 
   test('stands alone with a capital first letter without a model', () => {
-    expect(formatAgentStatus(t, 'uk', { key: 'chat.agentStatus.command' }, null)).toBe('Виконує команду');
-    expect(formatAgentStatus(t, 'uk', { key: 'chat.agentStatus.read.count', count: 3 }, '  ')).toBe('Читає 3 файли');
+    expect(formatAgentStatus(t, 'uk', { key: 'chat.agentStatus.working' }, null)).toBe('Працює');
+    expect(formatAgentStatus(t, 'uk', { key: 'chat.agentStatus.retry.in', text: 'повторна спроба через {time}' }, '  ')).toBe('Повторна спроба через {time}');
+  });
+
+  test('a call\'s own text stands in for the dictionary phrase', () => {
+    expect(formatAgentStatus(t, 'uk', { key: 'chat.agentStatus.usingTool', name: 'Read', text: 'Checking the parser' }, 'Opus 5.5'))
+      .toBe('Opus 5.5 Checking the parser');
+    expect(formatAgentStatus(t, 'uk', { key: 'chat.agentStatus.usingTool', name: 'Read' }, 'Opus 5.5'))
+      .toBe('Opus 5.5 використовує Read');
   });
 
   test('names the tool it does not know', () => {

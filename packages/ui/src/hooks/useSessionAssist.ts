@@ -1,6 +1,7 @@
 import React from 'react';
-import { useSession, useSessionStatus } from '@/sync/sync-context';
+import { useDirectorySync, useSession, useSessionStatus } from '@/sync/sync-context';
 import { getCurrentSessionAssist, type SessionAssistPayload } from '@/lib/sessionAssistMetadata';
+import { selectBoundRunId, sessionActivityPhase } from '@/hooks/useSessionActivity';
 import { useUIStore } from '@/stores/useUIStore';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { SessionRecapListResponseSchema } from '@openchamber/agent-contract';
@@ -53,13 +54,21 @@ function useNativeRecap(sessionId: string, enabled: boolean): string | null {
 export function useSessionAssistState(sessionId: string, directory?: string): SessionAssistState {
   const session = useSession(sessionId, directory);
   const status = useSessionStatus(sessionId, directory);
+  const boundRunId = useDirectorySync(
+    React.useCallback((state) => selectBoundRunId(state, sessionId), [sessionId]),
+    directory,
+  );
   const sessionRecapEnabled = useUIStore((state) => state.sessionRecapEnabled);
   const sessionSuggestionEnabled = useUIStore((state) => state.sessionSuggestionEnabled);
 
-  const isIdle = !status || status === 'idle';
+  // The same settled rule the composer uses for its send/stop button. Accepting
+  // only `idle` dropped a real recap and suggestion after a reload: the Agent
+  // Service reports a session it no longer holds as `unavailable`, and a
+  // session whose event stream has not connected yet has no status at all.
+  const isSettled = sessionActivityPhase(status, boundRunId) === 'idle';
   // Same freshness rule as the sidebar row's recap tooltip: the canonical
   // session update is authoritative, not the last loaded assistant answer.
-  const assist = isIdle ? getCurrentSessionAssist(session) : null;
+  const assist = isSettled ? getCurrentSessionAssist(session) : null;
 
   // A recap the worker just published wins immediately; the journal route covers
   // the frames this client missed (reload, reconnect), and the metadata payload
@@ -68,7 +77,7 @@ export function useSessionAssistState(sessionId: string, directory?: string): Se
   const pushedRecap = useSessionRecapStore(
     React.useCallback((state) => state.recap[sessionId]?.recap ?? null, [sessionId]),
   );
-  const journalledRecap = useNativeRecap(sessionId, sessionRecapEnabled && isIdle);
+  const journalledRecap = useNativeRecap(sessionId, sessionRecapEnabled && isSettled);
   const promoted = pushedRecap ?? journalledRecap ?? (assist && assist.recap ? assist.recap : null);
 
   return {

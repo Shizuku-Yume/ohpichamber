@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { NATIVE_TOOL_NAMES } from '@/lib/toolHelpers';
+import { OMP_TOOL_NAMES } from '@/lib/toolPresentation';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
@@ -22,7 +22,6 @@ import {
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_ICON_BUTTON_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Icon } from '@/components/icon/Icon';
@@ -109,9 +108,15 @@ export const AgentsPage: React.FC = () => {
   });
   const formRef = React.useRef(form);
   formRef.current = form;
-  const [toolDraft, setToolDraft] = React.useState('');
+  // Every tool the agent may be granted: the canonical OMP registry first,
+  // then any name the agent already carries (extension, MCP or host tool). The
+  // grid is the single editor, so a name outside the registry still needs a
+  // control.
+  const toolChoices: string[] = React.useMemo(() => [
+    ...OMP_TOOL_NAMES,
+    ...(source?.allowedTools ?? []).filter((tool) => !OMP_TOOL_NAMES.includes(tool)),
+  ], [source]);
   const [toolsEditing, setToolsEditing] = React.useState(false);
-  const toolDraftSelectionRef = React.useRef(selectionKey);
   const [isCreating, setIsCreating] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -123,8 +128,6 @@ export const AgentsPage: React.FC = () => {
       entityRef.current = null;
       savedRef.current = null;
       revisionRef.current = undefined;
-      toolDraftSelectionRef.current = selectionKey;
-      setToolDraft('');
       setToolsEditing(false);
       setSaveError(null);
       return;
@@ -140,10 +143,6 @@ export const AgentsPage: React.FC = () => {
     hydratedSelectionRef.current = selectionKey;
     setForm(next);
     setToolsEditing(false);
-    if (toolDraftSelectionRef.current !== selectionKey) {
-      toolDraftSelectionRef.current = selectionKey;
-      setToolDraft('');
-    }
     setSaveError(null);
   }, [source, revision, selectionKey]);
 
@@ -204,21 +203,6 @@ export const AgentsPage: React.FC = () => {
   }, [isNewAgent, selectedAgent, selectionKey, form, buildAgent, updateAgent, settingsDirectory, t]);
   const autosave = useAutosave(save);
   const { requestSave } = autosave;
-
-  const addTool = () => {
-    const tool = toolDraft.trim();
-    if (!tool) return;
-    setToolDraft('');
-    const tools = formRef.current.allowedTools ?? [];
-    if (tools.includes(tool)) return;
-    setForm((current) => ({ ...current, allowedTools: [...(current.allowedTools ?? []), tool] }));
-    requestSave();
-  };
-
-  const removeTool = (index: number) => {
-    setForm((current) => ({ ...current, allowedTools: (current.allowedTools ?? []).filter((_, toolIndex) => toolIndex !== index) }));
-    requestSave();
-  };
 
   const handleCreate = async () => {
     const name = form.name.trim().replace(/\s+/g, '-');
@@ -355,7 +339,7 @@ export const AgentsPage: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
                   variant="ghost"
@@ -374,7 +358,7 @@ export const AgentsPage: React.FC = () => {
                   size="xs"
                   onClick={() => {
                     setToolsEditing(true);
-                    setForm((current) => ({ ...current, allowedTools: [...NATIVE_TOOL_NAMES] }));
+                    setForm((current) => ({ ...current, allowedTools: [...OMP_TOOL_NAMES] }));
                     requestSave();
                   }}
                 >
@@ -394,8 +378,12 @@ export const AgentsPage: React.FC = () => {
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {NATIVE_TOOL_NAMES.map((tool) => {
+              {/* One control per tool: the checkbox grid is the editor. A tool
+                  the agent already names but the registry does not carry
+                  (an extension or MCP tool) keeps its own checkbox, so the
+                  list stays complete and nothing is edited twice. */}
+              <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @3xl:grid-cols-4">
+                {toolChoices.map((tool) => {
                   const checked = (form.allowedTools ?? []).includes(tool);
                   return (
                     <label
@@ -421,54 +409,6 @@ export const AgentsPage: React.FC = () => {
                   );
                 })}
               </div>
-
-              {form.allowedTools !== null && form.allowedTools.length > 0 ? (
-                <ul className="w-full">
-                  {form.allowedTools.map((tool, index) => (
-                    <li key={`${tool}-${index}`} className="flex min-h-8 items-center gap-2 border-t border-border/40 py-2">
-                      <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{tool}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        className={SETTINGS_ICON_BUTTON_CLASS}
-                        aria-label={t('settings.environment.editor.removeAria', { name: tool })}
-                        title={t('settings.environment.editor.remove')}
-                        onClick={() => removeTool(index)}
-                      >
-                        <Icon name="close" className="h-3.5 w-3.5" />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-
-              <form
-                className="flex flex-wrap items-center gap-2 border-t border-border/40 pt-3"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  addTool();
-                }}
-              >
-                <Input
-                  value={toolDraft}
-                  onChange={(event) => setToolDraft(event.target.value)}
-                  aria-label={t('settings.agents.page.field.allowedTools')}
-                  className="h-8 w-full max-w-[16rem] font-mono text-xs"
-                />
-                <Button
-                  type="submit"
-                  variant="outline"
-                  size="xs"
-                  disabled={!toolDraft.trim()}
-                  className="!font-normal"
-                  aria-label={t('settings.environment.editor.add')}
-                  title={t('settings.environment.editor.add')}
-                >
-                  <Icon name="add" className="mr-1 h-3.5 w-3.5" />
-                  {t('settings.environment.editor.add')}
-                </Button>
-              </form>
             </div>
           )}
         </SettingsStackedField>

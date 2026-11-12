@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.pl,
   ...selectionApprovalI18n.pl,
   ...agentStatusI18n.pl,
+  ...todoTrayI18n['pl'],
   ...snippetsI18n.pl,
   ...prReviewI18n.pl,
   ...imageToolI18n.pl,
@@ -2665,6 +2667,9 @@ export const dict = {
   "settings.usage.pace.waitSeparator": " · Czekaj ",
   "settings.usage.page.empty.selectProvider": "Wybierz dostawcę, aby wyświetlić szczegóły użycia.",
   "settings.usage.page.header.lastUpdated": "Ostatnio aktualizowano: {time}",
+  'settings.usage.page.section.quotas': 'Limity dostawcy',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'Brak limitów dostawcy do pokazania',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Limity użycia pojawiają się dla dostawców, których dane logowania OMP już ma. Dodaj dostawcę w sekcji Dostawcy.',
   "settings.usage.page.header.lastUpdatedWithPlan": "Plan: {plan} · Ostatnia aktualizacja: {time}",
   "settings.usage.page.header.providerUsage": "Użycie {provider}",
   "settings.usage.page.header.refreshing": "Odświeżanie użycia...",
@@ -9398,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['pl'],
   ...tooltipsChatI18n['pl'],
   ...m4LaneDI18n.pl,
+  "gitIdentities.state.unknown": "Tożsamości Git nie zostały jeszcze wczytane.",
+  "settings.usage.state.unknown": "Użycie nie zostało jeszcze wczytane.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Zapisana pamięć nie została jeszcze wczytana.",
+
+  "chat.workStatus.mcp.unknown": "Serwery MCP nie zostały jeszcze wczytane.",
 };

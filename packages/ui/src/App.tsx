@@ -20,6 +20,7 @@ import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
 import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
+import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
 import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
 import { useBrowserProviderSync } from '@/hooks/useBrowserProviderSync';
@@ -580,6 +581,14 @@ function App({ apis }: AppProps) {
   // useEventStream replaced by SyncProvider + SyncBridge
 
   // Session attention now handled by notification-store via SSE events (session.idle/session.error)
+
+  // Every surface reads the same server-owned stores once, before it can claim
+  // anything about them; the per-page hydrate-on-mount paths are gone.
+  React.useEffect(() => {
+    if (!isInitialized || isSwitchingDirectory) return;
+    void bootServerStateStores();
+  }, [isInitialized, isSwitchingDirectory]);
+  React.useEffect(() => installServerStateBootEvents(), []);
 
   usePushVisibilityBeacon();
   useWebNotificationStream();

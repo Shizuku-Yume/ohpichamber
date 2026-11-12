@@ -92,9 +92,9 @@ async function session(answers: TitleAnswers, firstText: string, onContextReques
    requests.push({ kind, text: user ? textOf(user.content) : '', system });
    if (kind === 'foreground') return streamText('已修复统计聚合，并补上并发读取的回归测试。');
    if ('titlePrompt' in answers) {
-     // A caller may act while the context request is in flight, e.g. rename.
-     if (kind === 'title-context' && onContextRequest && worker) await onContextRequest(worker);
-     return answers.titlePrompt(system);
+    // A caller may act while the context request is in flight, e.g. rename.
+    if (kind === 'title-context' && onContextRequest && worker) await onContextRequest(worker);
+    return answers.titlePrompt(system);
    }
    if (kind === 'title-opening') return streamText(answers.opening);
    // A caller may act while the context request is in flight, e.g. rename.
@@ -111,10 +111,10 @@ async function session(answers: TitleAnswers, firstText: string, onContextReques
   projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'source', cwd: root, agentDirectory,
   mcpConfigPath: join(agentDirectory, 'mcp.json'), sessionsDirectory: join(environmentRoot, 'sessions'),
  }, inputs => {
-   events.push(...inputs);
-   for (const input of inputs) {
-     if (input.event.type === 'session.updated' && input.event.title) titledByProjection.resolve(input.event.title);
-   }
+  events.push(...inputs);
+  for (const input of inputs) {
+   if (input.event.type === 'session.updated' && input.event.title) titledByProjection.resolve(input.event.title);
+  }
  }, () => { throw new Error('No interaction expected'); }, () => { throw new Error('Title work must not fail the worker'); },
   async () => { }, async () => { throw new Error('No Host action expected'); }, () => { });
  const worker = await open();
@@ -199,8 +199,8 @@ test('closing the worker aborts an in-flight deferred title instead of publishin
   { opening: 'none', context: '<title>Late name</title>' },
   '看看统计路由',
   async worker => {
-    // Close while the context request is in flight: no title may land after it.
-    await worker.close();
+   // Close while the context request is in flight: no title may land after it.
+   await worker.close();
   },
  );
  try {
@@ -254,6 +254,60 @@ test('the deferred prompt makes a greeting-exchange model return a title instead
  try {
   expect(result.title).toBe('空工作区问候');
   expect(result.requests.map(entry => entry.kind)).toEqual(['foreground', 'title-opening', 'title-context']);
+ } finally {
+  await result.close();
+ }
+}, 30_000);
+
+test('auto-title re-arm test', async () => {
+ let supersedingSent = false;
+ let workerRef: WorkerSession | undefined;
+ const result = await session(
+  {
+   titlePrompt: system => (
+    system.includes('Answer `<title/>` for greetings')
+     ? streamText('none')
+     : streamText('<title>统计路由修复</title>')
+   ),
+  },
+  '看看统计路由',
+  async worker => {
+   if (supersedingSent) return;
+   supersedingSent = true;
+   workerRef = worker;
+   const supersedingPrompt: PromptRequest = {
+    input: { text: '第二条指令', context: [], attachments: [] },
+    options: { providerId: 'native-fixture', modelId: 'native-model', agentId: null, variant: null, reasoningEffort: null },
+   };
+   await worker.operation({ type: 'prompt', runId: 'superseding-run', request: supersedingPrompt });
+  },
+ );
+ try {
+  expect(result.name).toBe('统计路由修复');
+  expect(result.title).toBe('统计路由修复');
+  const titleEvents = result.events.filter(e => e.event.type === 'session.updated' && 'title' in e.event && e.event.title);
+  expect(titleEvents).toHaveLength(1);
+
+  // A session already titled must not be retitled on subsequent prompts.
+  if (workerRef) {
+   const terminal = Promise.withResolvers<void>();
+   const unsubscribe = workerRef.session.subscribe(event => {
+    if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) terminal.resolve();
+   });
+   try {
+    const thirdPrompt: PromptRequest = {
+     input: { text: '第三条指令', context: [], attachments: [] },
+     options: { providerId: 'native-fixture', modelId: 'native-model', agentId: null, variant: null, reasoningEffort: null },
+    };
+    await workerRef.operation({ type: 'prompt', runId: 'third-run', request: thirdPrompt });
+    await terminal.promise;
+   } finally {
+    unsubscribe();
+   }
+   expect(workerRef.session.sessionManager.getSessionName()).toBe('统计路由修复');
+   const titleEventsAfter = result.events.filter(e => e.event.type === 'session.updated' && 'title' in e.event && e.event.title);
+   expect(titleEventsAfter).toHaveLength(1);
+  }
  } finally {
   await result.close();
  }

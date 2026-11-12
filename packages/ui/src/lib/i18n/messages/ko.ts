@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.ko,
   ...selectionApprovalI18n.ko,
   ...agentStatusI18n.ko,
+  ...todoTrayI18n['ko'],
   ...snippetsI18n.ko,
   ...prReviewI18n.ko,
   ...imageToolI18n.ko,
@@ -1751,6 +1753,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "{provider} 사용량",
   "settings.usage.page.header.refreshing": "사용량 새로고침 중...",
   "settings.usage.page.header.lastUpdated": "마지막 업데이트: {time}",
+  'settings.usage.page.section.quotas': '공급자 할당량',
+  'settings.usage.page.state.noConfiguredProvidersTitle': '표시할 공급자 할당량이 없습니다',
+  'settings.usage.page.state.noConfiguredProvidersDescription': '사용 한도는 OMP에 자격 증명이 이미 있는 공급자에 표시됩니다. 공급자에서 추가하세요.',
   "settings.usage.page.header.lastUpdatedWithPlan": "플랜: {plan} · 마지막 업데이트: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "작업 상태 패널에 표시",
   "settings.usage.page.options.showInWorkStatus": "작업 상태 패널에 표시",
@@ -9398,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['ko'],
   ...tooltipsChatI18n['ko'],
   ...m4LaneDI18n.ko,
+  "gitIdentities.state.unknown": "Git ID가 아직 로드되지 않았습니다.",
+  "settings.usage.state.unknown": "사용량이 아직 로드되지 않았습니다.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "저장된 메모리가 아직 로드되지 않았습니다.",
+
+  "chat.workStatus.mcp.unknown": "MCP 서버가 아직 로드되지 않았습니다.",
 };

@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -231,6 +232,7 @@ export const dict = {
   ...consoleBudgetsI18n.en,
   ...selectionApprovalI18n.en,
   ...agentStatusI18n.en,
+  ...todoTrayI18n['en'],
   ...snippetsI18n.en,
   ...prReviewI18n.en,
   ...imageToolI18n.en,
@@ -1783,6 +1785,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "{provider} usage",
   "settings.usage.page.header.refreshing": "Refreshing usage...",
   "settings.usage.page.header.lastUpdated": "Last updated: {time}",
+  'settings.usage.page.section.quotas': 'Provider quotas',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'No provider quotas to show',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Usage limits appear for providers whose credentials OMP already holds. Add one in Providers.',
   "settings.usage.page.header.lastUpdatedWithPlan": "Plan: {plan} · last updated: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Show in work status panel",
   "settings.usage.page.options.showInWorkStatus": "Show in work status panel",
@@ -9435,6 +9440,11 @@ export const dict = {
   ...tooltipsPanelI18n['en'],
   ...tooltipsChatI18n['en'],
   ...workerRunsI18n.en,
+  "gitIdentities.state.unknown": "Git identities have not loaded yet.",
+  "settings.usage.state.unknown": "Usage has not loaded yet.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Stored memory has not loaded yet.",
+
+  "chat.workStatus.mcp.unknown": "MCP servers have not loaded yet.",
 };
 
 export type I18nKey = keyof typeof dict;

@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.es,
   ...selectionApprovalI18n.es,
   ...agentStatusI18n.es,
+  ...todoTrayI18n['es'],
   ...snippetsI18n.es,
   ...prReviewI18n.es,
   ...imageToolI18n.es,
@@ -1751,6 +1753,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "Uso de {provider}",
   "settings.usage.page.header.refreshing": "Actualizando uso...",
   "settings.usage.page.header.lastUpdated": "Última actualización: {time}",
+  'settings.usage.page.section.quotas': 'Cuotas del proveedor',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'No hay cuotas de proveedor que mostrar',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Los límites de uso aparecen para los proveedores cuyas credenciales ya tiene OMP. Añade uno en Proveedores.',
   "settings.usage.page.header.lastUpdatedWithPlan": "Plan: {plan} · Última actualización: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Mostrar en el panel de estado del trabajo",
   "settings.usage.page.options.showInWorkStatus": "Mostrar en el panel de estado del trabajo",
@@ -9398,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['es'],
   ...tooltipsChatI18n['es'],
   ...m4LaneDI18n.es,
+  "gitIdentities.state.unknown": "Las identidades de Git aún no se han cargado.",
+  "settings.usage.state.unknown": "El uso aún no se ha cargado.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "La memoria almacenada aún no se ha cargado.",
+
+  "chat.workStatus.mcp.unknown": "Los servidores MCP aún no se han cargado.",
 };

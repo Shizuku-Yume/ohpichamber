@@ -12,27 +12,20 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useAutoReviewStore } from '@/stores/useAutoReviewStore';
-import { usePermissionStore } from '@/stores/permissionStore';
+import { resetServerStateStores } from '@/stores/serverStateBoot';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useGitStore } from '@/stores/useGitStore';
-import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { repositoryBindingOwner } from '@/lib/source-control/repository-binding';
 import { useChangeRequestContextStore } from '@/stores/useChangeRequestContextStore';
-import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { fileTreeChanges } from '@/lib/fileTreeChanges';
 import { useTrackerAuthStore } from '@/stores/useTrackerAuthStore';
 import { useSourceControlProviderRegistry } from '@/lib/source-control/providers/registry';
-import { useQuotaStore } from '@/stores/useQuotaStore';
-import { useMcpStore } from '@/stores/useMcpStore';
-import { useSkillsStore } from '@/stores/useSkillsStore';
-import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
-import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useTerminalStore } from '@/stores/useTerminalStore';
@@ -91,20 +84,17 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   // Turn timings belong to the previous instance's sessions, and the reset also
   // restarts the resume window so the switch is treated as a fresh load.
   resetSessionActivityTiming();
-  usePermissionStore.getState().reset();
   useMessageQueueStore.getState().resetForRuntimeSwitch(detail.previousRuntimeKey);
   useFileSearchStore.getState().resetForRuntimeSwitch();
   useGitStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   sessionEvents.cancelPendingGitRefreshes();
   fileTreeChanges.reset();
-  useGitIdentitiesStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   useSourceControlAuthStore.getState().resetForRuntimeSwitch();
   repositoryBindingOwner.reset();
   useChangeRequestContextStore.getState().resetForRuntimeSwitch();
   useGitHubPrStatusStore.getState().resetForRuntimeSwitch();
   useWalkthroughStore.getState().reset();
   usePullRequestSelectionStore.setState({ selections: new Map(), diffRequests: new Map(), diffContexts: new Map(), changesRepositories: new Map() });
-  useSessionFoldersStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   useFilesViewTabsStore.getState().resetForRuntimeSwitch(detail.runtimeKey);
   // Guest rail icons are instance-owned. Keep the previous catalog and the
   // new instance mints icon URLs that 404: an invisible, still-clickable slot.
@@ -123,11 +113,9 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   // Work-status readouts served from the instance: quotas, MCP servers, skills
   // and agent memory. All were cached globally or by directory alone, so they
   // reported the previous instance until something happened to refetch.
-  useQuotaStore.getState().resetForRuntimeSwitch();
-  useMcpStore.getState().resetForRuntimeSwitch();
-  useSkillsStore.getState().resetForRuntimeSwitch();
-  useSkillsCatalogStore.getState().resetForRuntimeSwitch();
-  useAgentMemoryStore.getState().reset();
+  // Every server-owned store drops the instance that just left. The registry
+  // owns that list so a new one cannot be forgotten here.
+  resetServerStateStores(detail.runtimeKey);
   useSessionUIStore.getState().restoreForRuntimeSwitch(detail.runtimeKey, detail.previousRuntimeKey);
   useSessionUIStore.setState({ worktreeDiscoveryByProject: new Map() });
   useUIStore.getState().setOpenGuestPage(null);

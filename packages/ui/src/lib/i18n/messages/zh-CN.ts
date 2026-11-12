@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n['zh-CN'],
   ...selectionApprovalI18n['zh-CN'],
   ...agentStatusI18n['zh-CN'],
+  ...todoTrayI18n['zh-CN'],
   ...snippetsI18n['zh-CN'],
   ...prReviewI18n['zh-CN'],
   ...imageToolI18n['zh-CN'],
@@ -1751,6 +1753,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "{provider} 用量",
   "settings.usage.page.header.refreshing": "正在刷新用量...",
   "settings.usage.page.header.lastUpdated": "最后更新：{time}",
+  'settings.usage.page.section.quotas': '服务商配额',
+  'settings.usage.page.state.noConfiguredProvidersTitle': '没有可显示的服务商配额',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'OMP 已保存凭据的服务商会显示用量上限。请在服务商页面添加。',
   "settings.usage.page.header.lastUpdatedWithPlan": "套餐：{plan} · 最后更新：{time}",
   "settings.usage.page.options.showInWorkStatusAria": "在工作状态面板中显示",
   "settings.usage.page.options.showInWorkStatus": "在工作状态面板中显示",
@@ -9389,4 +9394,9 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-CN'],
   ...openchamberToolOutputI18n['zh-CN'],
   ...m4LaneDI18n['zh-CN'],
+  "gitIdentities.state.unknown": "Git 身份尚未加载。",
+  "settings.usage.state.unknown": "用量尚未加载。",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "已存储的记忆尚未加载。",
+
+  "chat.workStatus.mcp.unknown": "MCP 服务器尚未加载。",
 };

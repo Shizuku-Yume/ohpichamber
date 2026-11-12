@@ -13,12 +13,16 @@ import {
 import { getAllSyncSessionMap } from "@/sync/sync-refs";
 import { runtimeFetch, type RuntimeFetchOptions } from "@/lib/runtime-fetch";
 import { createDeferredSafeJSONStorage } from "./utils/safeStorage";
+import type { LoadPhase } from "./loadPhase";
+import { useUIStore } from "@/stores/useUIStore";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { getRuntimeKey } from "@/lib/runtime-switch";
 
 interface PermissionStore {
     modes: PermissionModeMap;
+    /** `unknown` until the policy has been read; a failed read keeps the last one and says `error`. */
+    phase: LoadPhase;
     loaded: boolean;
     saving: boolean;
     lastAppliedRevision: number;
@@ -28,6 +32,12 @@ interface PermissionStore {
     applySnapshot: (snapshot: PermissionPolicySnapshot, expectedRuntimeKey?: string) => void;
     reset: () => void;
     getSessionMode: (sessionId: string) => PermissionMode;
+    /**
+     * The session's mode, or `null` when the policy has not answered yet.
+     * Callers that act on a mode use `getSessionMode`, which falls back to the
+     * configured default rather than inventing `ask`.
+     */
+    getCurrentPermissionMode: (sessionId: string) => PermissionMode | null;
     setSessionMode: (sessionId: string, mode: PermissionMode) => Promise<void>;
     refreshSpaceModes: (spaceId: string) => Promise<boolean>;
 }
@@ -85,6 +95,7 @@ const persistedV2Schema = z.object({
 
 export const usePermissionStore = create<PermissionStore>()(persist((set, get) => ({
     modes: {},
+    phase: "unknown",
     loaded: false,
     saving: false,
     lastAppliedRevision: -1,
@@ -99,7 +110,13 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
             legacyRuntimeKey = operation.runtimeKey;
             set({ legacyRuntimeKey });
         }
-        let snapshot = await requestSnapshot("/api/permission-auto-accept");
+        let snapshot: PermissionPolicySnapshot;
+        try {
+            snapshot = await requestSnapshot("/api/permission-auto-accept");
+        } catch (error) {
+            if (isCurrentOperation(operation)) set({ phase: "error" });
+            throw error;
+        }
         if (!isCurrentOperation(operation)) return;
         const legacyEntries = legacyRuntimeKey === operation.runtimeKey
             ? Object.entries(legacyCandidate ?? {})
@@ -123,7 +140,7 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
         generation += 1;
         latestStartedSequence = 0;
         pendingSavingOperations.clear();
-        set({ modes: {}, loaded: false, saving: false, lastAppliedRevision: -1 });
+        set({ modes: {}, phase: "unknown", loaded: false, saving: false, lastAppliedRevision: -1 });
     },
 
     applySnapshot: (snapshot, expectedRuntimeKey) => {
@@ -131,17 +148,27 @@ export const usePermissionStore = create<PermissionStore>()(persist((set, get) =
         const { revision } = snapshot;
         set((state) => {
             if (revision === undefined) {
-                return state.lastAppliedRevision >= 0 ? state : { modes: snapshot.modes, loaded: true };
+                return state.lastAppliedRevision >= 0 ? state : { modes: snapshot.modes, phase: "ready", loaded: true };
             }
             if (revision < state.lastAppliedRevision) return state;
-            return { modes: snapshot.modes, loaded: true, lastAppliedRevision: revision };
+            return { modes: snapshot.modes, phase: "ready", loaded: true, lastAppliedRevision: revision };
         });
     },
 
-    getSessionMode: (sessionId) => {
-        if (!sessionId) return "ask";
+    /**
+     * A concrete mode for the composer and for anything else that must act.
+     * Before the policy is read the instance's configured default is the honest
+     * answer — it is what the server gives a new top-level session — so the
+     * shield reflects that instead of claiming Ask.
+     */
+    getSessionMode: (sessionId) => (
+        get().getCurrentPermissionMode(sessionId) ?? useUIStore.getState().permissionDefaultMode
+    ),
+
+    getCurrentPermissionMode: (sessionId) => {
+        if (!sessionId) return null;
         const modes = get().modes;
-        if (Object.keys(modes).length === 0) return "ask";
+        if (get().phase !== "ready" || Object.keys(modes).length === 0) return null;
         return modeOf(modes, getAllSyncSessionMap(), sessionId);
     },
 

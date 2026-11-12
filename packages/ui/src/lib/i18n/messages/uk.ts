@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.uk,
   ...selectionApprovalI18n.uk,
   ...agentStatusI18n.uk,
+  ...todoTrayI18n['uk'],
   ...snippetsI18n.uk,
   ...prReviewI18n.uk,
   ...imageToolI18n.uk,
@@ -1751,6 +1753,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "Використання {provider}",
   "settings.usage.page.header.refreshing": "Оновлення використання...",
   "settings.usage.page.header.lastUpdated": "Останнє оновлення: {time}",
+  'settings.usage.page.section.quotas': 'Квоти постачальника',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'Немає квот постачальників для показу',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Ліміти використання показуються для постачальників, чиї облікові дані OMP уже має. Додайте постачальника в розділі Постачальники.',
   "settings.usage.page.header.lastUpdatedWithPlan": "План: {plan} · Останнє оновлення: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Показувати в панелі статусу роботи",
   "settings.usage.page.options.showInWorkStatus": "Показувати в панелі статусу роботи",
@@ -9398,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['uk'],
   ...tooltipsChatI18n['uk'],
   ...m4LaneDI18n.uk,
+  "gitIdentities.state.unknown": "Ідентичності Git ще не завантажено.",
+  "settings.usage.state.unknown": "Використання ще не завантажено.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Збережена пам'ять ще не завантажена.",
+
+  "chat.workStatus.mcp.unknown": "Сервери MCP ще не завантажено.",
 };

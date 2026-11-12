@@ -179,12 +179,6 @@ export const MobileChangesPane: React.FC<MobileChangesPaneProps> = ({ rootDirect
  const [isApplyingIdentity, setIsApplyingIdentity] = React.useState(false);
  const gitIdentityProfiles = useGitIdentitiesStore((state) => state.profiles);
  const globalGitIdentity = useGitIdentitiesStore((state) => state.globalIdentity);
- const loadGitIdentityProfiles = useGitIdentitiesStore((state) => state.loadProfiles);
- const loadGlobalGitIdentity = useGitIdentitiesStore((state) => state.loadGlobalIdentity);
- React.useEffect(() => {
-  void loadGitIdentityProfiles();
-  void loadGlobalGitIdentity();
- }, [loadGitIdentityProfiles, loadGlobalGitIdentity]);
  const connectedAccountIds = useConnectedAccountIds();
  const refreshIdentityAccounts = useSourceControlAuthStore((state) => state.refreshIdentityAccounts);
  const availableIdentities = React.useMemo(

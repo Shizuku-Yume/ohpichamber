@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.ar,
   ...selectionApprovalI18n.ar,
   ...agentStatusI18n.ar,
+  ...todoTrayI18n['ar'],
   ...snippetsI18n.ar,
   ...prReviewI18n.ar,
   ...imageToolI18n.ar,
@@ -5490,6 +5492,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "استخدام {provider}",
   "settings.usage.page.header.refreshing": "جارٍ تحديث الاستخدام…",
   "settings.usage.page.header.lastUpdated": "آخر تحديث: {time}",
+  'settings.usage.page.section.quotas': 'حصص المزوّد',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'لا توجد حصص مزوّد لعرضها',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'تظهر حدود الاستخدام للمزوّدين الذين يملك OMP بيانات اعتمادهم بالفعل. أضف واحدًا من صفحة المزوّدين.',
   "settings.usage.page.header.lastUpdatedWithPlan": "الخطة: {plan} · آخر تحديث: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "إظهار في لوحة حالة العمل",
   "settings.usage.page.options.showInWorkStatus": "إظهار في لوحة حالة العمل",
@@ -9056,4 +9061,9 @@ export const dict = {
   ...tooltipsPanelI18n['ar'],
   ...tooltipsChatI18n['ar'],
   ...m4LaneDI18n['ar'],
+  "gitIdentities.state.unknown": "لم يتم تحميل هويات Git بعد.",
+  "settings.usage.state.unknown": "لم يتم تحميل الاستخدام بعد.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "لم يتم تحميل الذاكرة المخزنة بعد.",
+
+  "chat.workStatus.mcp.unknown": "لم يتم تحميل خوادم MCP بعد.",
 };

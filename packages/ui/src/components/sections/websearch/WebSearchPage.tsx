@@ -398,12 +398,13 @@ export const WebSearchPage: React.FC = () => {
   const load = useWebSearchStore((store) => store.load);
   const [openId, setOpenId] = React.useState<string | null>(null);
 
-  // Read on open, and again when the page is opened for another project or
-  // runtime (the snapshot is scoped to both).
+  // The boot registry read the snapshot; this only re-reads when the page is
+  // opened for another project or runtime (the snapshot is scoped to both).
   const scope = getWebSearchScopeKey();
   React.useEffect(() => {
+    if (state.kind === 'ready' && state.snapshot.scope === scope) return;
     void load();
-  }, [load, scope]);
+  }, [load, scope, state]);
 
   const snapshot = state.kind === 'ready' && state.snapshot.scope === scope ? state.snapshot : null;
   const failed = state.kind === 'failed';
@@ -466,6 +467,7 @@ export const WebSearchPage: React.FC = () => {
         </>
       ) : failed || error !== null ? null : (
         <SettingsSection divider={false}>
+          {/* Never read yet, or a read is in flight: both are "not answered". */}
           <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.state.loading')}</p>
         </SettingsSection>
       )}

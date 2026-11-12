@@ -13,11 +13,6 @@ describe('resolveAssistantTextStreaming', () => {
             chatRenderMode: 'live',
             isFinalized: false,
         })).toBe(true);
-        expect(resolveAssistantTextStreaming({
-            streamPhase: 'cooldown',
-            chatRenderMode: 'live',
-            isFinalized: false,
-        })).toBe(true);
     });
 
     test('never streams in sorted mode', () => {
@@ -37,22 +32,26 @@ describe('resolveAssistantTextStreaming', () => {
             chatRenderMode: 'live',
             isFinalized: true,
         })).toBe(false);
-        expect(resolveAssistantTextStreaming({
-            streamPhase: 'cooldown',
-            chatRenderMode: 'live',
-            isFinalized: true,
-        })).toBe(false);
     });
 });
 
 describe('resolveAssistantDisplayText', () => {
-    test('holds the unfinished block while streaming', () => {
-        const text = 'line nine, fully written\n\nline ten, still held';
+    test('shows a growing paragraph as it arrives while streaming', () => {
+        const text = 'line nine, fully written\nline ten, still growing';
         expect(resolveAssistantDisplayText({
             textContent: text,
             throttledTextContent: text,
             isStreaming: true,
-        })).toBe('line nine, fully written\n\n');
+        })).toBe(text);
+    });
+
+    test('holds only an unfinished table row while streaming', () => {
+        const table = '| Tool | Status |\n| --- | --- |\n| read | done |';
+        expect(resolveAssistantDisplayText({
+            textContent: `${table}\n| bash | run`,
+            throttledTextContent: `${table}\n| bash | run`,
+            isStreaming: true,
+        })).toBe(`${table}\n`);
     });
 
     test('reveals the full text once the part is not streaming', () => {

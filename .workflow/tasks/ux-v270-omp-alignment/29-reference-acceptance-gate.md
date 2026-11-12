@@ -11,9 +11,13 @@
 
 ## Progress
 
-- Check before: not run (task 29 starts from the tree task 28 landed).
-- Built the v2.7.0 reference at `bc50ba56a` in `/home/shizuku/Project/ohpichamber-worktrees/v270-reference`, served on 4190; app served on 4129. Captured 28 reference pages and 29 app pages over CDP with 0 failures. Evidence under `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-v270-acceptance-2026-11-12/`.
-- Reference chat states are not reproducible: it requires the OpenCode CLI, which is not installed, so it boots without an agent. Compared chat against the OMP TUI instead (`omp 18.18.9 --mode json`); the maintainer's 34 screenshots were not available.
-- Fixed an integrated-tree boot defect owned by task 27: `fba213e13` dropped `@openchamber/agent-contract`, `@openchamber/agent-service` and `@openchamber/sdk` from `packages/web/package.json` while 58 server modules import them, so a fresh install left the Web server unable to start. Restored the three lines (`32014089a`).
-- `bun run electron:build` exited 0 and produced `OpenChamber-3.0.0-linux-x86_64.AppImage` (sha256 `971dc47d…`). Not launched.
-- Check after: not run. The full chain and the reviewer verdicts are outstanding, so W10 is not satisfied and this task is not archived.
+- Check before: `bun run check` failed on the integration branch with 34 type errors and 49 unexplained upstream-drift paths; `bun run test` failed 2 UI files (`infiniteAnimations`, `settings/registry`).
+- Built the v2.7.0 reference at `bc50ba56a` in `/home/shizuku/Project/ohpichamber-worktrees/v270-reference`, served on 4190 beside the app on 4129. Captured 28 reference pages and 29 app pages over CDP with 0 failures into `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-v270-acceptance-2026-11-12/`.
+- Reference chat states are not reproducible: it drives the OpenCode CLI, which is not installed, so it boots without an agent. Chat is compared against OMP 18.18.9 (`--mode json`, real provider); the maintainer's 34 screenshots were not available to this window. Recorded in `matrix/MATRIX.md`.
+- A `reviewer` subagent that implemented nothing judged all 33 pairs (`matrix/VERDICTS.md`), then a second round re-judged the corrected evidence.
+- Fixed, each with a regression test: the workspace packages task 27 dropped from `packages/web/package.json` (`32014089a`); the status signature that made every turn show "Retrying" instead of the call intent (`e4563c2e0`); the Web search load effect that re-ran on its own write and never read the snapshot (`c85300975`); the dead `restart_opencode` shortcut and the missing tool groups (`a5622ad67`); the plugins inspector's inline regex wall (`2ad331e96`).
+- Cleared the gate's own red state: 34 type errors, the 49 unexplained drift paths (decision row added), and two guardrail tests that failed only on a built tree (`2858e16d8`, `e20a5c401`, `dc43a3159`).
+- 22 maintainer items as 25 assertions: Web 25/25 pass; packaged Electron 24/25, the one failure being the spinner probe reading `animationName: none` while a standalone probe on the same running app returns `webkit-spin 1s` (probe order, not a defect). Evidence `regression-web.json`, `regression-electron.json`, `regression-*.png`.
+- Check after: `bun run check` exit 0 (4/4 steps), `bun run type-check` exit 0, `bun run lint` exit 0, `VITEST_MAX_WORKERS=2 bun run test` exit 0 (7/7 suites), `bun run docs:validate` exit 0 (696 pages/58 links), `.workflow/bin/workflow validate` exit 0 (263 task files). `bun run dead-code` is non-blocking and reports fewer findings than the integration base (40/159/106 vs 64/173/110).
+
+

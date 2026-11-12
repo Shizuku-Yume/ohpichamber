@@ -1,7 +1,7 @@
 import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { JsonObjectSchema, formatModelRef } from '@openchamber/agent-contract';
-import type { JsonValue, Model, OmpSettingsChange, OmpSettingsState } from '@openchamber/agent-contract';
+import type { JsonValue, OmpSettingsChange, OmpSettingsState } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsSection,
@@ -23,6 +23,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
 
 
 type SessionModeValue = 'main' | 'plan' | 'vibe' | 'goal';
@@ -72,7 +73,9 @@ export const DefaultsSettings: React.FC = () => {
   const defaultSessionMode = useUIStore((state) => state.defaultSessionMode);
   const setDefaultSessionMode = useUIStore((state) => state.setDefaultSessionMode);
   const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
-  const [models, setModels] = React.useState<Model[]>([]);
+  // The catalog loader already read this directory's models; a second fetch
+  // here duplicated the slowest request the Settings page made.
+  const models = useSettingsModels(directory);
   const [isSavingOmp, setIsSavingOmp] = React.useState(false);
 
 
@@ -82,7 +85,6 @@ export const DefaultsSettings: React.FC = () => {
   React.useEffect(() => {
     if (!directory) {
       setOmpState(null);
-      setModels([]);
       return;
     }
 
@@ -93,15 +95,9 @@ export const DefaultsSettings: React.FC = () => {
       try {
         const workspace = await canonicalClient.resolveWorkspace(directory);
         if (cancelled || abort.signal.aborted) return;
-        const [snapshot, modelCatalog] = await Promise.all([
-          canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal),
-          canonicalClient.getModels(workspace.workspaceId).catch(() => null),
-        ]);
+        const snapshot = await canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal);
         if (cancelled || abort.signal.aborted) return;
         setOmpState(snapshot);
-        if (modelCatalog?.models) {
-          setModels(modelCatalog.models);
-        }
       } catch (err) {
         if (!cancelled && !(err instanceof Error && err.name === 'AbortError')) {
           setOmpState(null);

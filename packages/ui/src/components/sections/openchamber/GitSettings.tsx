@@ -1,9 +1,10 @@
 import React from 'react';
-import type { Model, OmpSettingsState } from '@openchamber/agent-contract';
+import type { OmpSettingsState } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { loadDesktopSettings, reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { useUIStore } from '@/stores/useUIStore';
 import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { useCommitSettings } from '@/lib/gitCommitSettings';
@@ -40,7 +41,9 @@ export const GitSettings: React.FC = () => {
 
  const [isLoading, setIsLoading] = React.useState(true);
  const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
- const [models, setModels] = React.useState<Model[]>([]);
+ // The catalog loader already read this directory's models; a second fetch
+ // here duplicated the slowest request the page made.
+ const models = useSettingsModels(settingsDirectory);
  const [isSavingCommitModel, setIsSavingCommitModel] = React.useState(false);
  const [commitModelError, setCommitModelError] = React.useState<string | null>(null);
  const ompStateRef = React.useRef<OmpSettingsState | null>(null);
@@ -82,7 +85,6 @@ export const GitSettings: React.FC = () => {
  React.useEffect(() => {
   if (!settingsDirectory) {
    setOmpState(null);
-   setModels([]);
    return;
   }
   const abort = new AbortController();
@@ -90,19 +92,14 @@ export const GitSettings: React.FC = () => {
   void (async () => {
    try {
     const workspace = await canonicalClient.resolveWorkspace(settingsDirectory, { signal: abort.signal });
-    const [snapshot, modelCatalog] = await Promise.all([
-     canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal),
-     canonicalClient.getModels(workspace.workspaceId).catch(() => null),
-    ]);
+    const snapshot = await canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal);
     if (!active || abort.signal.aborted) return;
     setOmpState(snapshot);
-    setModels(modelCatalog?.models ?? []);
     setCommitModelError(null);
    } catch (error) {
     if (!active || abort.signal.aborted) return;
     console.warn('Failed to load the commit message model:', error);
     setOmpState(null);
-    setModels([]);
    }
   })();
   return () => {

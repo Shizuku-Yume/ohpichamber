@@ -759,11 +759,11 @@ const fromDirectoryKey = (key: string): string | null => (key === DIRECTORY_KEY_
  * smoke test that prepopulates storage sees the picker filled on the first
  * render instead of one loading frame.
  */
-const readInitialCatalogSnapshot = (directoryKey: string): Pick<ConfigStore, 'providers' | 'providersLoaded'> => {
+const readInitialCatalogSnapshot = (directoryKey: string): Pick<ConfigStore, 'providers' | 'models' | 'providersLoaded'> => {
     const snapshot = readLocalCatalogSnapshot(getRuntimeKey(), directoryKey);
     const providers = snapshot?.providers as ProviderWithModelList[] | undefined;
-    if (!providers?.length) return { providers: [], providersLoaded: false };
-    return { providers, providersLoaded: true };
+    if (!providers?.length) return { providers: [], models: [], providersLoaded: false };
+    return { providers, models: [], providersLoaded: true };
 };
 
 const resolveInitialDirectoryKey = (): string => {
@@ -1025,6 +1025,7 @@ subscribeRuntimeEndpointChanged((detail) => {
         directoryScoped: {},
         lastInitFailure: null,
         providers: [],
+        models: [],
         providersLoaded: false,
         workspaceId: '',
         currentProviderId: '',
@@ -1057,6 +1058,13 @@ interface DirectoryScopedConfig {
     providersLoaded?: boolean;
 
     providers: ProviderWithModelList[];
+    /**
+     * The full canonical model catalog for this directory, including models a
+     * provider disabled. Settings pages assign model roles and commit-message
+     * models from the whole catalog, so they read it here instead of fetching
+     * a second copy of the same catalog the loader already read.
+     */
+    models: Model[];
     currentProviderId: string;
     currentModelId: string;
     currentVariant?: string | undefined;
@@ -1228,8 +1236,10 @@ const variantResetForModelChange = (
 
 const createEmptyDirectoryScopedConfig = (
     providers: ProviderWithModelList[] = [],
+    models: Model[] = [],
 ): DirectoryScopedConfig => ({
     providers,
+    models,
     currentProviderId: "",
     currentModelId: "",
     currentVariant: undefined,
@@ -1248,6 +1258,8 @@ interface ConfigStore {
     configRuntimeKey: string;
 
     providers: ProviderWithModelList[];
+    /** The active directory's full canonical model catalog; see `DirectoryScopedConfig.models`. */
+    models: Model[];
     providersLoaded: boolean;
     /** Workspace whose catalogs `providers` describes; empty before the first live load. */
     workspaceId: string;
@@ -1480,7 +1492,23 @@ export const selectProvidersForDirectory = (
     return state.directoryScoped[directoryKey]?.providers ?? EMPTY_PROVIDERS;
 };
 
+/**
+ * The whole canonical model catalog for a directory, including models their
+ * provider disabled. Settings pages that assign a model role or a commit
+ * message model need the full catalog, and the loader already read it.
+ */
+export const selectModelsForDirectory = (
+    state: Pick<ConfigStore, "models" | "directoryScoped" | "activeDirectoryKey">,
+    directory?: string | null,
+): Model[] => {
+    if (directory == null) return state.models;
+    const directoryKey = toConfigDirectoryKey(directory);
+    if (directoryKey === state.activeDirectoryKey) return state.models;
+    return state.directoryScoped[directoryKey]?.models ?? EMPTY_MODELS;
+};
+
 const EMPTY_PROVIDERS: ProviderWithModelList[] = [];
+const EMPTY_MODELS: Model[] = [];
 
 /**
  * A model as any loaded catalog lists it: the active directory's first, then
@@ -2141,6 +2169,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                 const nextSnapshot: DirectoryScopedConfig = {
                                     ...baseSnapshot,
                                     providers: nextProviders,
+                                    models: modelCatalog.models,
                                     providersLoaded: true,
                                     defaultProviders: nextDefaults,
                                     currentProviderId: resolvedModel?.providerId ?? "",
@@ -2155,6 +2184,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                                 if (
                                     baseSnapshot.providers === nextSnapshot.providers
+                                    && baseSnapshot.models === nextSnapshot.models
                                     && baseSnapshot.providersLoaded === true
                                     && baseSnapshot.defaultProviders === nextSnapshot.defaultProviders
                                     && baseSnapshot.currentProviderId === nextSnapshot.currentProviderId
@@ -2163,6 +2193,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                                     && baseSnapshot.selectedProviderId === nextSnapshot.selectedProviderId
                                     && (state.activeDirectoryKey !== directoryKey || (
                                         state.providers === nextSnapshot.providers
+                                        && state.models === nextSnapshot.models
                                         && state.providersLoaded
                                         && state.defaultProviders === nextSnapshot.defaultProviders
                                         && state.currentProviderId === nextSnapshot.currentProviderId
@@ -2186,6 +2217,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                                 if (state.activeDirectoryKey === directoryKey) {
                                     nextState.providers = nextProviders;
+                                    nextState.models = modelCatalog.models;
                                     nextState.providersLoaded = true;
                                     nextState.workspaceId = workspace.workspaceId;
                                     void get().loadOmpSettings(workspace.workspaceId);

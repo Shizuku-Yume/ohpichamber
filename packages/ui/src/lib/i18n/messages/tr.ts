@@ -9409,4 +9409,9 @@ export const dict = {
   ...tooltipsPanelI18n['tr'],
   ...tooltipsChatI18n['tr'],
   ...m4LaneDI18n.tr,
+  "gitIdentities.state.unknown": "Git kimlikleri henüz yüklenmedi.",
+  "settings.usage.state.unknown": "Kullanım henüz yüklenmedi.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Kayıtlı bellek henüz yüklenmedi.",
+
+  "chat.workStatus.mcp.unknown": "MCP sunucuları henüz yüklenmedi.",
 };

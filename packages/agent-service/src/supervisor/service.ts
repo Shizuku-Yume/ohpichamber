@@ -166,7 +166,7 @@ export class AgentService {
       prepareBootstrap: async input => {
         this.sessions.assertBootstrapWritable(input);
         if (!this.ready) return input;
-        if (!this.workspaceCatalogs.matches(input)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        if (!this.workspaceCatalogs.matches(input)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The session bootstrap does not match the admitted workspace');
         const workspace = this.workspaceCatalogs.get(input.workspaceId);
         const agentDirectoryId = input.agentDirectoryId ?? workspace.agentDirectoryId;
         return { ...input, agentDirectoryId, catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId), observationEpoch: this.observationEpoch };
@@ -188,13 +188,13 @@ export class AgentService {
       readMcpConfiguration: async workspaceId => {
         const root = await this.workspaceCatalogs.stateless(workspaceId);
         const result = await this.workers.request(root, { type: 'mcp.configuration.read' });
-        if (result.type !== 'mcp.configuration') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (result.type !== 'mcp.configuration') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.configuration operation.');
         return result.configuration;
       },
       commitMcp: async (workspaceId, request, configuration) => {
         const root = await this.workspaceCatalogs.stateless(workspaceId);
         const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'persist', request, configuration } });
-        if (result.type !== 'mcp' || result.result.type !== 'persisted' || result.result.configuration.persistedRevision !== configuration.persistedRevision) throw new WorkerOperationError(503, 'MCP_CONFIG_WRITE_FAILED');
+        if (result.type !== 'mcp' || result.result.type !== 'persisted' || result.result.configuration.persistedRevision !== configuration.persistedRevision) throw new WorkerOperationError(503, 'MCP_CONFIG_WRITE_FAILED', 'The persisted MCP configuration revision did not match the request');
       },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad, options.permissionAuthority);
@@ -205,14 +205,14 @@ export class AgentService {
         const outcomes = await this.sessions.restartIdleSessions(targets, (input, launch) => this.admit(input, launch, admission));
         return outcomes.map((outcome, index) => {
           const target = targets[index];
-          if (!target || target.rootSessionId !== outcome.rootSessionId) throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (!target || target.rootSessionId !== outcome.rootSessionId) throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The restarted worker identity did not match the requested target');
           if (outcome.outcome === 'failed') return {
             worker: target, outcome: 'failed' as const, appliedRevision: null,
             error: { code: outcome.error.code, detail: 'The native session could not restart with the persisted plugin configuration.', retryable: outcome.error.status >= 500 }
           };
           const worker = { ...target, workerGeneration: outcome.workerGeneration };
           const appliedRevision = this.workers.bootstrap(outcome.rootSessionId)?.pluginRevision;
-          if (appliedRevision === undefined || appliedRevision !== revision) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+          if (appliedRevision === undefined || appliedRevision !== revision) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker did not apply the requested plugin revision');
           this.catalog.publishPluginRuntime(worker, appliedRevision);
           return { worker, outcome: 'applied' as const, appliedRevision };
         });
@@ -229,7 +229,7 @@ export class AgentService {
   private assertAdmissionScope(input: WorkerBootstrap): WorkerBootstrap | undefined {
     this.sessions.assertBootstrapWritable(input);
     const captured = this.workers.bootstrap(input.rootSessionId);
-    if (captured && (captured.workspaceId !== input.workspaceId || captured.projectId !== input.projectId || captured.cwd !== input.cwd || captured.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && captured.agentDirectoryId !== input.agentDirectoryId))) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    if (captured && (captured.workspaceId !== input.workspaceId || captured.projectId !== input.projectId || captured.cwd !== input.cwd || captured.agentDirectory !== input.agentDirectory || (input.agentDirectoryId !== undefined && captured.agentDirectoryId !== input.agentDirectoryId))) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The captured admission scope does not match the requested bootstrap');
     return captured;
   }
   private async admit<T>(input: WorkerBootstrap, launch: (bootstrap: WorkerBootstrap) => Promise<T>, capturedAdmission?: CatalogAdmission): Promise<T> {
@@ -237,7 +237,7 @@ export class AgentService {
     // Fast refusal before any catalog work; `launch` checks again before spawn.
     this.workers.assertWorktreeLeaseAllows(input.cwd);
     if (capturedAdmission && (!captured || input.agentDirectoryId === undefined || !this.workspaceCatalogs.matches(input)))
-      throw new WorkerOperationError(403, 'UNAUTHORIZED');
+      throw new WorkerOperationError(403, 'UNAUTHORIZED', 'A captured admission requires a matching agent directory');
     const agentDirectoryId = await this.workspaceCatalogs.registerRoot(input);
     if (!capturedAdmission) await this.catalog.registerWorkspace(input.workspaceId, agentDirectoryId);
     const load = async (authority: CatalogBootstrap): Promise<T> => this.webSearch.admit(agentDirectoryId, async () => {
@@ -249,7 +249,7 @@ export class AgentService {
       const result = await launch(bootstrap);
       try {
         const scope = this.workers.authorizationScope(bootstrap.rootSessionId);
-        if (!scope || scope.agentDirectoryId !== agentDirectoryId) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        if (!scope || scope.agentDirectoryId !== agentDirectoryId) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The launched worker was not admitted under the expected agent directory');
         await this.registerCatalogWorker(bootstrap, scope.workerGeneration);
         return result;
       } catch (error) {
@@ -265,64 +265,64 @@ export class AgentService {
     const result = HostSkillSourceResultSchema.parse(await this.options.hostSkillSource(operation));
     if (result.status === 'failed') {
       const status = result.code === 'INVALID_REQUEST' ? 400 : result.code === 'UNAUTHORIZED' ? 403 : result.code === 'NOT_FOUND' ? 404 : result.code === 'CATALOG_CONFLICT' ? 409 : 503;
-      throw new WorkerOperationError(status, result.code === 'NOT_FOUND' ? 'SESSION_NOT_FOUND' : result.code, result.currentRevision === undefined ? undefined : { currentRevision: result.currentRevision });
+      throw new WorkerOperationError(status, result.code === 'NOT_FOUND' ? 'SESSION_NOT_FOUND' : result.code, 'The Host skill source operation failed', result.currentRevision === undefined ? undefined : { currentRevision: result.currentRevision });
     }
     return result;
   }
   private async reconcileHostSkillSources(workspaceId: string, agentDirectoryId: string): Promise<SkillSourceRevisions> {
     const workspace = this.workspaceCatalogs.get(workspaceId);
-    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The agent directory is not registered with this workspace');
     const result = await this.invokeHostSkillSource({ action: 'reconcile', projectId: workspace.projectId, workspaceId, agentDirectoryId });
-    if (result.status !== 'reconciled') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+    if (result.status !== 'reconciled') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The Host did not reconcile the skill sources');
     return result.sources;
   }
   private async registerCatalogWorker(input: WorkerBootstrap, generation: string): Promise<void> {
     const root = input.rootSessionId;
-    if (input.agentDirectoryId === undefined) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+    if (input.agentDirectoryId === undefined) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'A catalog worker requires an agent directory id');
     await this.catalog.register({
       identity: { rootSessionId: root, workspaceId: input.workspaceId, agentDirectoryId: input.agentDirectoryId, workerGeneration: generation },
       isLive: () => this.workers.authorizationScope(root)?.workerGeneration === generation,
       mcp: {
         read: async configuration => {
           const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'read', configuration } }, generation);
-          if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.catalog operation.');
           return result.result.catalog;
         },
         apply: async (request, configuration) => {
           const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'apply', request, configuration } }, generation);
-          if (result.type !== 'mcp' || result.result.type !== 'applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (result.type !== 'mcp' || result.result.type !== 'applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.applied operation.');
           return result.result.result;
         },
         reconnect: async (serverId, request, configuration) => {
           const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'reconnect', serverId, request, configuration } }, generation);
-          if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (result.type !== 'mcp' || result.result.type !== 'catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.catalog operation.');
           return result.result.catalog;
         },
         oauthStatus: async (serverId, configuration) => {
           const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'oauth.status', serverId, configuration } }, generation);
-          if (result.type !== 'mcp' || result.result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (result.type !== 'mcp' || result.result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.oauth operation.');
           return result.result.result;
         },
         oauth: async (serverId, request, configuration) => {
           const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'oauth', serverId, request, configuration } }, generation);
-          if (result.type !== 'mcp' || result.result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (result.type !== 'mcp' || result.result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp.oauth operation.');
           return result.result.result;
         },
       },
       skills: {
         read: async persistedSources => {
           const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.read', persistedSources } }, generation);
-          if (result.type !== 'catalog' || result.result.type !== 'skills.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (result.type !== 'catalog' || result.result.type !== 'skills.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested skills.catalog operation.');
           return result.result.catalog;
         },
         apply: async (sources, catalogRevision) => {
           const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.apply', request: { scope: 'workspace', sourceRevision: sources.workspace }, sources, catalogRevision } }, generation);
-          if (result.type !== 'catalog' || result.result.type !== 'skills.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (result.type !== 'catalog' || result.result.type !== 'skills.applied') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested skills.applied operation.');
           return result.result.result;
         },
         expand: async request => {
           const result = await this.workers.request(root, { type: 'catalog', revision: this.workspaceCatalogs.revision(input.workspaceId, input.agentDirectoryId), operation: { type: 'skills.expand', request } }, generation);
-          if (result.type !== 'catalog' || result.result.type !== 'skills.expanded') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+          if (result.type !== 'catalog' || result.result.type !== 'skills.expanded') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested skills.expanded operation.');
           return result.result.result;
         },
       },
@@ -458,7 +458,7 @@ export class AgentService {
       const authorization = /^\/internal\/authorizations\/([^/]+)$/.exec(url.pathname);
       if (authorization && request.method === 'GET') {
         const scope = this.authorizationScope(identity(authorization[1]));
-        if (!scope) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        if (!scope) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The session authorization scope is unavailable');
         respondJson(response, 200, scope); return;
       }
       const nativePolicy = /^\/internal\/workspaces\/([^/]+)\/authorization-policy$/.exec(url.pathname);
@@ -467,7 +467,7 @@ export class AgentService {
         const workspace = this.workspaceCatalogs.get(workspaceId);
         const selectedAgentDirectoryId = url.searchParams.get('agentDirectoryId');
         const agentDirectoryId = selectedAgentDirectoryId === null ? workspace.agentDirectoryId : identity(selectedAgentDirectoryId);
-        if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        if (!workspace.agentDirectoryIds.includes(agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The agent directory is not registered with this workspace');
         const selectedRoot = url.searchParams.get('rootSessionId');
         respondJson(response, 200, this.workers.authorizationPolicy(workspaceId, agentDirectoryId, selectedRoot === null ? undefined : identity(selectedRoot))); return;
       }
@@ -484,7 +484,7 @@ export class AgentService {
         const workspaceId = identity(skillSources[1]);
         const input = await readBody(request, HostSkillSourcePublicationSchema);
         const owner = this.workspaceCatalogs.get(workspaceId);
-        if (input.agentDirectoryId !== undefined && !owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        if (input.agentDirectoryId !== undefined && !owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The skill source agent directory does not belong to the workspace');
         respondJson(response, 200, await this.catalog.publishSources(workspaceId, input)); return;
       }
       const skillFilesCommit = /^\/internal\/workspaces\/([^/]+)\/skill-files\/(commit|reconcile)$/.exec(url.pathname);
@@ -493,17 +493,17 @@ export class AgentService {
         const workspace = this.workspaceCatalogs.get(workspaceId);
         if (skillFilesCommit[2] === 'reconcile') {
           const input = await readBody(request, HostSkillSourceReconcileSchema);
-          if (!workspace.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+          if (!workspace.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The skill source agent directory does not belong to the workspace');
           const sources = await this.catalog.reconcileSkillSources(workspaceId, input.agentDirectoryId, () => this.reconcileHostSkillSources(workspaceId, input.agentDirectoryId));
           respondJson(response, 200, { sources }); return;
         }
         const input = await readBody(request, HostSkillSourceCommitSchema);
-        if (!workspace.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        if (!workspace.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The skill source agent directory does not belong to the workspace');
         const result = await this.catalog.commitSkillFiles(workspaceId, input, {
           reconcile: (workspaceId, agentDirectoryId) => this.reconcileHostSkillSources(workspaceId, agentDirectoryId),
           commit: async () => {
             const result = await this.invokeHostSkillSource({ action: 'commit', projectId: workspace.projectId, workspaceId, ...input });
-            if (result.status !== 'committed') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+            if (result.status !== 'committed') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The Host did not commit the skill files');
             return result.sourceRevision;
           },
         });
@@ -514,7 +514,7 @@ export class AgentService {
         const workspaceId = identity(skillFilesApply[1]);
         const input = await readBody(request, HostSkillFilesApplySchema);
         const owner = this.workspaceCatalogs.get(workspaceId);
-        if (!owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        if (!owner.agentDirectoryIds.includes(input.agentDirectoryId)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The skill file agent directory does not belong to the workspace');
         respondJson(response, 200, await this.catalog.applySkillsWorkspace(workspaceId, input.agentDirectoryId, { scope: input.scope, sourceRevision: input.sourceRevision }, (workspaceId, agentDirectoryId) => this.reconcileHostSkillSources(workspaceId, agentDirectoryId))); return;
       }
       const privateBranch = /^\/internal\/sessions\/([^/]+)\/branch$/.exec(url.pathname);
@@ -724,7 +724,7 @@ export class AgentService {
         respondJson(response, 200, await this.admit(input, async bootstrap => {
           if (!await this.sessions.restart(bootstrap)) return this.workers.start(bootstrap, true);
           const info = this.workers.info(bootstrap.rootSessionId);
-          if (!info || info.state !== 'ready') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+          if (!info || info.state !== 'ready') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker was not ready to restart');
           return info;
         })); return;
       }
@@ -735,10 +735,10 @@ export class AgentService {
       if (response.destroyed || response.writableEnded) return;
       if (response.headersSent) { response.destroy(); return; }
       if (error instanceof CatalogCoordinatorError) {
-        respondProblem(response, error.status, error.code, 'Catalog operation failed', JsonObjectSchema.parse(error.details));
+        respondProblem(response, error.status, error.code, error.message, JsonObjectSchema.parse(error.details));
       } else if (error instanceof RequestError || error instanceof ProjectionError || error instanceof SessionReferenceError || error instanceof WorkerOperationError) {
         respondProblem(response, error.status, error.code, error.message, error instanceof WorkerOperationError || error instanceof ProjectionError ? error.details : undefined);
-      } else respondProblem(response, 503, 'SERVICE_UNAVAILABLE', 'Session operation failed');
+      } else respondProblem(response, 503, 'SERVICE_UNAVAILABLE', error instanceof Error && error.message ? error.message : 'The session request failed without a reported cause');
     }
   }
 }

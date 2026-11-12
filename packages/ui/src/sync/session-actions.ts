@@ -119,9 +119,16 @@ export function applyCanonicalMetadataEvent(metadata: SessionMetadataState): voi
   )
   useGlobalSessionsStore.getState().upsertSession(updated)
  }
+ // No child holds it yet: the record's directory is unknown here, so it is
+ // buffered in one store and released when that directory's list names the
+ // session. Buffering it in every open store would accumulate copies that
+ // belong to a directory whose list never changes.
+ let buffered = false
  for (const store of _childStores?.children.values() ?? []) {
+  const holdsSession = store.getState().session.some((candidate) => candidate.sessionId === metadata.sessionId)
   store.setState((state) => {
-   const next = installSessionMetadata(state, metadata)
+   const next = installSessionMetadata(state, metadata, { bufferUnknown: !buffered && !holdsSession })
+   if (next !== state) buffered = true
    return next === state ? state : { ...next, ...sessionMutationPatch(state, metadata.sessionId, false) }
   })
  }

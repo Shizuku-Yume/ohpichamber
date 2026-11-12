@@ -5,7 +5,7 @@ import type { NativePolicyContext } from '../native-policy-protocol.ts';
 
 export type WorkerAuthorize = (request: WorkerPolicyRequest, nativeContext?: NativePolicyContext) => Promise<void>;
 export class NativeApprovalRequired extends ProjectionError {
-  constructor() { super(403, 'UNAUTHORIZED', 'Host policy requires approval for this exact native command'); }
+  constructor(detail: string) { super(403, 'UNAUTHORIZED', detail); }
 }
 
 /** Policy decisions belong to the Host; worker identity is supplied by the supervisor. */
@@ -29,7 +29,7 @@ export class WorkerPolicy {
     if (!pending) return;
     this.pending.delete(requestId);
     if (result.allowed) pending.resolve();
-    else pending.reject(result.approvalRequired ? new NativeApprovalRequired() : new ProjectionError(result.status, result.code, 'Host policy refused the operation'));
+    else pending.reject(result.approvalRequired ? new NativeApprovalRequired(result.detail) : new ProjectionError(result.status, result.code, result.detail));
   }
 
   close(): void {

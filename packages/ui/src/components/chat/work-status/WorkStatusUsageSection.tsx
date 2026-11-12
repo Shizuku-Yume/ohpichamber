@@ -44,7 +44,7 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
   const groups = useUsageProviderGroups();
   const displayMode = useQuotaStore((state) => state.displayMode);
   const isLoading = useQuotaStore((state) => state.isLoading);
-  const loadedRuntimeKey = useQuotaStore((state) => state.loadedRuntimeKey);
+  const quotaPhase = useQuotaStore((state) => state.phase);
   const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
   const fetchQuotas = useQuotaStore((state) => state.fetchQuotas);
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
@@ -52,7 +52,9 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
 
   // Bootstrap once to discover providers. Confirmed absence renders no readout
   // and creates no ongoing refresh demand; credential changes invalidate it.
-  useQuotaAutoRefresh(visible && (groups.length > 0 || loadedRuntimeKey === null));
+  // Demand exists while rows are shown, or while the first read has not
+  // answered; a read that failed is not demand, so it is not retried forever.
+  useQuotaAutoRefresh(visible && (groups.length > 0 || quotaPhase === 'unknown'));
 
   React.useEffect(() => {
     if (groups.length === 0) return;
@@ -62,7 +64,14 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
 
   useReportWorkStatusPresence('usage', groups.length > 0);
 
-  if (groups.length === 0) return null;
+  // Unread is not "nothing configured": say so rather than showing no readout.
+  // A plain line, not a section, so the panel does not claim an empty provider
+  // list and no icon/sprite work happens for a row that never had data.
+  if (groups.length === 0) {
+    return quotaPhase === 'unknown'
+      ? <p className="typography-meta text-muted-foreground">{t('settings.usage.state.unknown')}</p>
+      : null;
+  }
 
   const modeLabel = displayMode === 'remaining'
     ? t('header.services.remaining')

@@ -104,6 +104,7 @@ import { remoteTraits, identityDisplayName } from '@/lib/source-control/identity
 import { activeAuthor, offeredAuthors } from './git/gitAuthors';
 import { dirtySwitchPushTarget } from './git/dirtySwitchPushTarget';
 import { mapWithConcurrency } from '@/lib/concurrency';
+import { problemMessage } from '@/lib/problemMessage';
 
 type SyncAction = 'fetch' | 'pull' | 'sync' | 'publish' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -277,14 +278,11 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   return undefined;
  }, [currentSessionId, inferredWorktreeMetadata, newSessionDraft?.open, worktreeMap]);
 
- const { profiles, globalIdentity, defaultGitIdentityId, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId } =
+ const { profiles, globalIdentity, defaultGitIdentityId } =
   useGitIdentitiesStore(useShallow((s) => ({
    profiles: s.profiles,
    globalIdentity: s.globalIdentity,
    defaultGitIdentityId: s.defaultGitIdentityId,
-   loadProfiles: s.loadProfiles,
-   loadGlobalIdentity: s.loadGlobalIdentity,
-   loadDefaultGitIdentityId: s.loadDefaultGitIdentityId,
   })));
 
  // The root the view is anchored to (session/worktree context stays keyed on
@@ -981,12 +979,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   });
  }, [commitMessage, gitDirectory, generatedHighlights]);
 
- React.useEffect(() => {
-  if (!isActive) return;
-  loadProfiles();
-  loadGlobalIdentity();
-  loadDefaultGitIdentityId();
- }, [isActive, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId]);
 
  const refreshRemotes = React.useCallback(async () => {
   if (!gitDirectory || !git?.getRemotes || isGitRepo !== true) {
@@ -2824,7 +2816,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
        // cancelled: the user must see the failed push on the branch it
        // belongs to instead of discovering it later from elsewhere.
        console.error('Push after commit failed:', error);
-       toast.error(t('gitView.dirtySwitch.pushFailed'));
+       toast.error(problemMessage(error, t('gitView.dirtySwitch.pushFailed')));
        await refreshStatusAndBranches();
        await refreshLog();
        setPendingDirtySwitchBranch(null);

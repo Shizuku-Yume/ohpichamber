@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { getClientPlatform } from '@/lib/platform';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 import {
   SettingsSection,
   SettingsTwoColumn,
@@ -141,7 +142,7 @@ export const NotificationSettings: React.FC = () => {
         }
       } catch (error) {
         console.error('Failed to request notification permission:', error);
-        toast.error(t('settings.notifications.page.toast.requestPermissionFailed'));
+        toast.error(problemMessage(error, t('settings.notifications.page.toast.requestPermissionFailed')));
       }
     } else if (checked && notificationPermission === 'granted') {
       setNativeNotificationsEnabled(true);
@@ -328,7 +329,7 @@ export const NotificationSettings: React.FC = () => {
       }
     } catch (error) {
       console.error('Test notification failed:', error);
-      toast.error(t('settings.notifications.page.toast.testNotificationFailed'));
+      toast.error(problemMessage(error, t('settings.notifications.page.toast.testNotificationFailed')));
     }
   };
 

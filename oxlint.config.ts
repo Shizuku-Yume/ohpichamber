@@ -115,6 +115,10 @@ export default defineConfig({
         // findings the RTL conversion owns. Task 20 of the upstream refresh
         // converts the layout and flips this to the upstream setting.
         "openchamber/no-physical-sides": "off",
+        // Freshness must compare one clock with itself. The rule landed with
+        // the fixes that removed the last cross-clock comparison; keep it on so
+        // a new `>= session.updatedAt` cannot return silently.
+        "openchamber/no-cross-source-time-compare": "error",
       },
     },
   ],

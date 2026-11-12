@@ -4,6 +4,7 @@ import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import * as sessionActions from '@/sync/session-actions';
 import { deliverQuestionAnswer, type QuestionAnswerPayload } from './questionRequest';
+import { problemMessage } from '@/lib/problemMessage';
 
 /**
  * Submits one native question or plan review reply and cancels the request.
@@ -60,8 +61,8 @@ export function useQuestionResponse(form: QuestionRequest) {
             await sessionActions.cancelForm(form.sessionId, form.questionId);
             setHasResponded(true);
             return true;
-        } catch {
-            toast.error(t('chat.questionCard.dismissFailed'), { description: t('chat.formCard.tryAgain') });
+        } catch (error) {
+            toast.error(problemMessage(error, t('chat.questionCard.dismissFailed')), { description: t('chat.formCard.tryAgain') });
             recoverPending();
             return false;
         } finally {

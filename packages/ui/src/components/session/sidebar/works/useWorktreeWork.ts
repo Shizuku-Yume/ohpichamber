@@ -24,6 +24,7 @@ import type { Session } from '@openchamber/agent-contract';
 import { formatProjectLabel, isPathWithinProject, normalizePath } from '../utils';
 import type { CollapsedActivityState } from '../sessions/collapsedActivityState';
 import { collectWorkSessions, finishSpaceWork, finishWorktreeWork, isWorkInWork, pickWorkSessionToOpen, trackWork } from './workActions';
+import { problemMessage } from '@/lib/problemMessage';
 
 const CURRENT_SESSION = '\u0000session';
 
@@ -224,7 +225,7 @@ export function useWorktreeWork({ group, projectId, collapsed, onNavigate }: Arg
     }
     const session = sessionToOpen;
     if (!session) return;
-    void trackWork(session).catch(() => toast.error(t('sessions.sidebar.work.track.failed')));
+    void trackWork(session).catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.work.track.failed'))));
   };
 
   // Its sessions' live state, as a session row shows its own, with the

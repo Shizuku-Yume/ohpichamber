@@ -13,6 +13,7 @@ import { getRuntimeKey } from "@/lib/runtime-switch";
 import { waitForAgentServiceConnection } from "./waitForAgentServiceConnection";
 import { isRetryableBootstrapError } from "@/sync/retry";
 import { readAgentSelection, registerAgentReadinessListener, type AgentReadinessState } from "./agentConfigBridge";
+import { problemMessage } from '@/lib/problemMessage';
 
 /**
  * Directory a call operates on. Settings can browse another project without
@@ -118,7 +119,7 @@ export const selectAgentCatalogStatus = (
 
 export const useAgentsStore: UseBoundStore<StoreApi<AgentsStore>> = create<AgentsStore>()(devtools(persist((set, get) => {
   const fail = (key: string, error: unknown): AgentMutationResult => {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = problemMessage(error, 'The agent catalog operation failed.');
     set((state) => ({ errorsByDirectory: { ...state.errorsByDirectory, [key]: message } }));
     return { ok: false, error: message };
   };

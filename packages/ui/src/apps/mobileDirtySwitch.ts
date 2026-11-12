@@ -1,5 +1,6 @@
 import type { GitAPI, GitNetworkOperation } from '@/lib/api/types';
 import type { I18nKey, I18nParams } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 
 /** What committing before a dirty branch switch reads and drives on the mobile Changes surface. */
 type DirtySwitchCommitScope = {
@@ -28,8 +29,8 @@ export const commitAndSwitchBranch = async (message: string, pushAfter: boolean,
     try {
       const executePush = await publishChooser.prepare('push');
       await executePush();
-    } catch {
-      toast.error(t('gitView.dirtySwitch.pushFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('gitView.dirtySwitch.pushFailed')));
       await scope.refreshStatusAndBranches();
       scope.closeDialog();
       return;

@@ -194,6 +194,13 @@ export function publicModel(native: NativeCatalogModel, configured?: Model, enab
    cacheReadPerMillionTokens: cost.cacheRead, cacheWritePerMillionTokens: cost.cacheWrite,
   } : null,
  };
+ // OMP's per-model default is what a selection with no level resolves to, so
+ // an effort picker can show the level that actually runs instead of a
+ // synthetic "default" row.
+ const defaultLevel = native.thinking?.defaultLevel;
+ if (defaultLevel !== undefined && efforts.includes(defaultLevel)) {
+  candidate.defaultReasoningEffort = defaultLevel;
+ }
  if (native.supportsTools !== undefined) candidate.toolsSupported = native.supportsTools;
  if (enabled !== undefined) candidate.enabled = enabled;
  if (configured?.status) candidate.status = configured.status;

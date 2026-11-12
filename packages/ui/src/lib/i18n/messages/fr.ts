@@ -9409,4 +9409,9 @@ export const dict = {
   ...tooltipsPanelI18n['fr'],
   ...tooltipsChatI18n['fr'],
   ...m4LaneDI18n.fr,
+  "gitIdentities.state.unknown": "Les identités Git ne sont pas encore chargées.",
+  "settings.usage.state.unknown": "L'utilisation n'est pas encore chargée.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "La mémoire enregistrée n'est pas encore chargée.",
+
+  "chat.workStatus.mcp.unknown": "Les serveurs MCP ne sont pas encore chargés.",
 };

@@ -78,6 +78,7 @@ type ProjectActionsRunnerLike = {
 const useProjectActions = (): ProjectActionsRunnerLike | null => null;
 const useObserveProjectActionRuns = (_enabled: boolean) => {};
 import { resolveProjectActionIconName } from '@/lib/projectActions';
+import { problemMessage } from '@/lib/problemMessage';
 
 type CommandEntry = {
   id: string;
@@ -391,7 +392,7 @@ export const CommandPalette: React.FC = () => {
               }
               toast.error(t('sessions.sidebar.session.copyId.error'));
             })
-            .catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
+            .catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.copyId.error'))));
         }),
       },
       {

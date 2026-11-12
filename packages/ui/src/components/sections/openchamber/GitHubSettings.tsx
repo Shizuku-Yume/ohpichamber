@@ -11,6 +11,7 @@ import { GITHUB_SOURCE_CONTROL_IDENTITY } from '@/lib/source-control/identity';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { SourceControlAccountList } from './SourceControlAccountList';
 import { DeviceFlowCode } from './DeviceFlowCode';
+import { problemMessage } from '@/lib/problemMessage';
 
 /**
  * Body of the GitHub card in Settings → Integrations. The card row already
@@ -109,7 +110,7 @@ export const GitHubSettings: React.FC<GitHubSettingsProps> = () => {
     } catch (error) {
       if (isCurrentRuntime()) {
         console.error('Failed to start GitHub connect:', error);
-        toast.error(t('settings.github.page.toast.startConnectFailed'));
+        toast.error(problemMessage(error, t('settings.github.page.toast.startConnectFailed')));
       }
     } finally {
       if (isCurrentRuntime()) setIsBusy(false);
@@ -187,7 +188,7 @@ export const GitHubSettings: React.FC<GitHubSettingsProps> = () => {
     } catch (error) {
       if (isCurrentRuntime()) {
         console.error('Failed to update gh CLI setting:', error);
-        toast.error(t('settings.github.page.toast.ghCliUpdateFailed'));
+        toast.error(problemMessage(error, t('settings.github.page.toast.ghCliUpdateFailed')));
       }
     } finally {
       if (isCurrentRuntime()) setIsBusy(false);
@@ -210,7 +211,7 @@ export const GitHubSettings: React.FC<GitHubSettingsProps> = () => {
     } catch (error) {
       if (isCurrentRuntime()) {
         console.error('Failed to remove GitHub account:', error);
-        toast.error(t('settings.github.page.toast.disconnectFailed'));
+        toast.error(problemMessage(error, t('settings.github.page.toast.disconnectFailed')));
       }
     } finally {
       if (isCurrentRuntime()) setIsBusy(false);

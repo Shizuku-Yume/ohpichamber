@@ -902,7 +902,9 @@ const sendServiceError = (res, error, fallback) => {
   const status = controlError.statusCode >= 400 && controlError.statusCode <= 599 ? controlError.statusCode : 500;
   const codeResult = ProblemCodeSchema.safeParse(error?.code);
   const code = codeResult.success ? codeResult.data : status === 404 ? 'SESSION_NOT_FOUND' : status === 400 ? 'INVALID_REQUEST' : status === 401 || status === 403 ? 'UNAUTHORIZED' : status === 503 ? 'SERVICE_UNAVAILABLE' : 'INTERNAL_ERROR';
-  const problem = ProblemDetailsSchema.parse({ type: `urn:ohpichamber:problem:${code}`, title: 'Session operation failed', status, detail: controlError.message || fallback || 'Session operation failed', code, retryable: error?.retryable ?? status >= 500 });
+  // Each caller names the operation it attempted; that sentence is the cause a
+  // reader acts on, and it is the only fallback when the error carried none.
+  const problem = ProblemDetailsSchema.parse({ type: `urn:ohpichamber:problem:${code}`, title: fallback, status, detail: controlError.message || fallback, code, retryable: error?.retryable ?? status >= 500 });
   return res.status(status).type('application/problem+json').json(problem);
 };
 

@@ -20,7 +20,7 @@ async function scenario(invoke) {
     isCurrentChild: candidate => candidate === child && current,
     capturedScope: () => captured,
     readLiveScope: async () => live,
-    authorizeWorkerOperation: async () => ({ allowed: false, code: 'UNAUTHORIZED', status: 403 }),
+    authorizeWorkerOperation: async () => ({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The fixture refuses this operation' }),
     invokeHostAction: (scope, request, signal) => invoke({ scope, request, signal, root }),
   }); channels.push(channel);
   const request = { type: 'worker.action.request', requestId: 'request', scope: live, request: { toolName: 'web', action: 'browser.capture', input: {}, sessionId: 'root' } };

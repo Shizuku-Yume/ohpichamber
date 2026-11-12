@@ -1,4 +1,5 @@
 import type { I18nKey, I18nParams } from '@/lib/i18n/store';
+import { problemMessage } from '@/lib/problemMessage';
 
 /**
  * Where a dirty branch switch publishes the commit it just made. A tracked
@@ -56,8 +57,8 @@ export const commitAndSwitchDirtyBranch = async (
     try {
       const executePush = await deps.preparePush();
       await executePush();
-    } catch {
-      toast.error(t('gitView.dirtySwitch.pushFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('gitView.dirtySwitch.pushFailed')));
       await deps.refresh();
       deps.close();
       return;

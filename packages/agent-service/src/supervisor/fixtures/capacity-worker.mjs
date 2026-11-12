@@ -41,7 +41,7 @@ process.on('message', message => {
       setTimeout(() => send({ type: 'result', workerGeneration: message.workerGeneration, commandId: message.commandId, result }), delay);
       return;
     }
-    send({ type: 'operation.error', workerGeneration: message.workerGeneration, commandId: message.commandId, code: 'NOT_IMPLEMENTED', status: 501 });
+    send({ type: 'operation.error', workerGeneration: message.workerGeneration, commandId: message.commandId, code: 'NOT_IMPLEMENTED', status: 501, detail: 'The fixture worker does not implement this operation' });
     return;
   }
   if (message.type === 'stop') process.exit(0);

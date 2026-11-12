@@ -11,6 +11,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { SessionDirectoryMissingError, setSessionWorkState } from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { getSessionDirectory } from '../mobileSessionFields';
+import { problemMessage } from '@/lib/problemMessage';
 
 type Translate = (key: I18nKey, params?: I18nParams) => string;
 
@@ -72,13 +73,13 @@ export const toggleMobileSessionPin = (session: Session, pinned: boolean, t: Tra
  const directory = getSessionDirectory(session);
  if (!directory) return;
  const failedKey = pinned ? 'sessions.sidebar.session.pin.unpinFailed' : 'sessions.sidebar.session.pin.pinFailed';
- toggleSessionPin({ directory, sessionId: session.sessionId }).catch(() => toast.error(t(failedKey)));
+ toggleSessionPin({ directory, sessionId: session.sessionId }).catch((error) => toast.error(problemMessage(error, t(failedKey))));
 };
 
 export const renameMobileSession = async (sessionId: string, title: string, t: Translate): Promise<void> => {
  try {
   await useSessionUIStore.getState().updateSessionTitle(sessionId, title);
- } catch {
-  toast.error(t('mobile.sessions.renameError'));
+ } catch (error) {
+  toast.error(problemMessage(error, t('mobile.sessions.renameError')));
  }
 };

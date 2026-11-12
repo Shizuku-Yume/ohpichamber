@@ -1,8 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
 import { CapturedHostBootstrapScopeSchema, HostAuthorizationScopeSchema, HostWorkerAuthorizationCancelSchema, HostWorkerAuthorizationRequestSchema, HostWorkerAuthorizationReplySchema, HostWorkerActionRequestSchema, HostWorkerActionReplySchema, HostWorkerActionCancelSchema, HostActionResultSchema, WorkerPolicyResultSchema } from '@openchamber/agent-service/private-protocol';
 
-const unavailable = { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503 };
-const unauthorized = { allowed: false, code: 'UNAUTHORIZED', status: 403 };
+const unavailable = { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The Host authorization channel is unavailable' };
+const unauthorized = { allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The worker authorization request is not valid for this Host child' };
 const actionUnavailable = { ok: false, code: 'SERVICE_UNAVAILABLE', status: 503 };
 const actionUnauthorized = { ok: false, code: 'UNAUTHORIZED', status: 403 };
 

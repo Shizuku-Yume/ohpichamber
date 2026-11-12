@@ -7,6 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { listModelVariantIds } from '@/lib/modelVariants';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { levelLabel } from '@/components/sections/shared/modelRoleSelectors';
 
 /**
  * Thinking effort (model variant) picker for one model; renders nothing for
@@ -24,12 +25,22 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
   tooltip?: string;
 }): React.ReactNode {
   const { t } = useI18n();
-  const variants = useConfigStore(React.useCallback((state) => {
+  const { variants, modelDefaultLevel, globalDefaultLevel } = useConfigStore(React.useCallback((state) => {
     const model = state.providers.find((provider) => provider.providerId === providerId)?.models.find((entry) => entry.modelId === modelId);
-    return listModelVariantIds(model?.variants).join('\n');
+    return {
+      variants: listModelVariantIds(model?.variants).join('\n'),
+      // Only published defaults name the level an unset selection runs at. A
+      // variant's position in the list is ordering, not a default.
+      modelDefaultLevel: model?.defaultReasoningEffort,
+      globalDefaultLevel: state.settingsDefaultReasoningEffort,
+    };
   }, [modelId, providerId]));
   if (!variants) return null;
-  const label = variant ?? t('multirun.modelMultiSelect.variant.default');
+  const defaultLevel = modelDefaultLevel ?? globalDefaultLevel;
+  const defaultLabel = defaultLevel
+    ? levelLabel(t, defaultLevel)
+    : t('multirun.modelMultiSelect.variant.default');
+  const label = variant ?? defaultLabel;
   const trigger = (
       <DropdownMenuTrigger asChild>
         <button
@@ -52,7 +63,7 @@ export function ModelEffortMenu({ providerId, modelId, variant, onChange, appear
       <DropdownMenuContent align="start">
         <DropdownMenuItem onSelect={() => onChange(undefined)}>
           {variant === undefined ? <Icon name="check" className="size-4" /> : <span className="size-4" />}
-          {t('multirun.modelMultiSelect.variant.default')}
+          {defaultLabel}
         </DropdownMenuItem>
         {variants.split('\n').map((entry) => (
           <DropdownMenuItem key={entry} onSelect={() => onChange(entry)}>

@@ -9409,4 +9409,9 @@ export const dict = {
   ...tooltipsPanelI18n['uk'],
   ...tooltipsChatI18n['uk'],
   ...m4LaneDI18n.uk,
+  "gitIdentities.state.unknown": "Ідентичності Git ще не завантажено.",
+  "settings.usage.state.unknown": "Використання ще не завантажено.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Збережена пам'ять ще не завантажена.",
+
+  "chat.workStatus.mcp.unknown": "Сервери MCP ще не завантажено.",
 };

@@ -27,6 +27,7 @@ import { ProviderIcon } from '@/components/sourceControl/ProviderIcon';
 import type { GitIdentityTransport } from '@/lib/api/types';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 
 /** Select value for an identity that answers to no connected account. */
 const NO_ACCOUNT = '__none__';
@@ -236,7 +237,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
       }
     } catch (error) {
       console.error('Error saving profile:', error);
-      toast.error(t('settings.gitIdentities.editor.toast.saveUnexpectedError'));
+      toast.error(problemMessage(error, t('settings.gitIdentities.editor.toast.saveUnexpectedError')));
     } finally {
       setIsSaving(false);
     }
@@ -256,7 +257,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
       }
     } catch (error) {
       console.error('Error deleting profile:', error);
-      toast.error(t('settings.gitIdentities.editor.toast.deleteUnexpectedError'));
+      toast.error(problemMessage(error, t('settings.gitIdentities.editor.toast.deleteUnexpectedError')));
     } finally {
       setIsDeleting(false);
     }

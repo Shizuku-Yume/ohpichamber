@@ -40,10 +40,10 @@ const UsageRequestSchema = z.strictObject({ query: UsageQuerySchema, authorizedS
 
 function id(value: string): string {
   try { return EntityIdSchema.parse(decodeURIComponent(value)); }
-  catch { throw new WorkerOperationError(400, 'INVALID_REQUEST'); }
+  catch { throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The workspace route does not match a known shape'); }
 }
 function match(actual: string, expected: string): void {
-  if (actual !== expected) throw new WorkerOperationError(400, 'INVALID_REQUEST');
+  if (actual !== expected) throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The request does not address the captured workspace');
 }
 function unwrap(result: CatalogResult) {
   switch (result.type) {
@@ -52,7 +52,7 @@ function unwrap(result: CatalogResult) {
     case 'catalog.provider.mutated': case 'catalog.model.mutated': case 'catalog.credential.mutated': case 'catalog.agent.mutated': return result.result;
     case 'catalog.provider.accounts': case 'catalog.provider.oauth.methods': case 'catalog.provider.oauth':
     case 'catalog.provider.models.discovered': case 'catalog.provider.configuration': return result.result;
-    default: throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+    default: throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The catalog operation returned an unknown result');
   }
 }
 
@@ -71,7 +71,7 @@ export class WorkspaceRoutes {
       else if (request.method === 'PATCH') operation = { type: 'extensions.toggle', request: await readBody(request, ExtensionToggleRequestSchema) };
       else return null;
       const result = await this.catalogs.operation(workspaceId, operation);
-      if (result.type !== 'extensions.inventory') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      if (result.type !== 'extensions.inventory') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested extensions.inventory operation.');
       return { status: 200, body: result.state };
     }
     const plugins = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/plugins(?:\/(.*))?$/.exec(url.pathname);
@@ -95,11 +95,11 @@ export class WorkspaceRoutes {
       else if (request.method === 'POST' && action === 'install') operation = { type: 'plugins.install', request: await readBody(request, PluginInstallRequestSchema) };
       else if (request.method === 'POST' && action === 'uninstall') operation = { type: 'plugins.uninstall', request: await readBody(request, PluginUninstallRequestSchema) };
       else if (request.method === 'POST' && action === 'apply') {
-        if (!this.applyPlugins) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+        if (!this.applyPlugins) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The plugin application owner is unavailable');
         return { status: 200, body: await this.applyPlugins(workspaceId, await readBody(request, PluginApplyRequestSchema)) };
       } else {
         let decoded: string;
-        try { decoded = decodeURIComponent(action); } catch { throw new WorkerOperationError(400, 'INVALID_REQUEST'); }
+        try { decoded = decodeURIComponent(action); } catch { throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The workspace action is not a valid path segment'); }
         if (action.startsWith('local/') && action.slice(6).length > 0 && !action.slice(6).includes('/')) {
           const extensionId = decoded.slice(6);
           if (request.method === 'GET') operation = { type: 'plugins.local.read', extensionId };
@@ -136,19 +136,19 @@ export class WorkspaceRoutes {
         || result.type === 'plugins.marketplace' || result.type === 'plugins.updateCheck' || result.type === 'plugins.upgradePreview') {
         return { status: 200, body: result.result };
       }
-      throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The plugin route does not support this request');
     }
     const resource = await fileResourceRoute(this.catalogs, request, url, readBody);
     if (resource) return resource;
     if ((url.pathname === '/internal/usage' || url.pathname === '/internal/usage/tools') && request.method === 'POST') {
-      if (url.search) throw new WorkerOperationError(400, 'INVALID_REQUEST');
+      if (url.search) throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The plugin route does not accept query parameters');
       const { query, authorizedScopes } = await readBody(request, UsageRequestSchema);
       const projects = new Map(authorizedScopes.map(scope => [scope.workspaceId, scope.projectId]));
       if ((query.workspaceId !== undefined && !projects.has(query.workspaceId))
         || (query.projectId !== undefined && authorizedScopes.length > 0 && !authorizedScopes.some(scope => scope.projectId === query.projectId
-          && (query.workspaceId === undefined || scope.workspaceId === query.workspaceId)))) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+          && (query.workspaceId === undefined || scope.workspaceId === query.workspaceId)))) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The requested usage scope is not authorized for this session');
       for (const scope of authorizedScopes) {
-        if (this.catalogs.get(scope.workspaceId).projectId !== scope.projectId) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+        if (this.catalogs.get(scope.workspaceId).projectId !== scope.projectId) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The session workspace does not match its catalog project');
       }
       const references = this.sessions.usageReferences(authorizedScopes, query);
       await mkdir(this.stateDirectory, { recursive: true, mode: 0o700 });
@@ -158,11 +158,11 @@ export class WorkspaceRoutes {
       });
       if (url.pathname === '/internal/usage/tools') {
         const result = await this.workers.request(this.usageWorkerId, { type: 'usage.tools', query, references });
-        if (result.type !== 'usage.tools') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (result.type !== 'usage.tools') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.tools operation.');
         return { status: 200, body: UsageToolsResponseSchema.parse(result.result) };
       }
       const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query, references });
-      if (result.type !== 'usage.stats') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      if (result.type !== 'usage.stats') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.stats operation.');
       return { status: 200, body: UsageStatsSchema.parse(result.result) };
     }
     const searchRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/web-search(?:\/credentials\/([^/]+))?$/.exec(url.pathname);
@@ -175,7 +175,7 @@ export class WorkspaceRoutes {
       } else {
         let providerId: string;
         try { providerId = z.string().min(1).parse(decodeURIComponent(searchRoute[2])); }
-        catch { throw new WorkerOperationError(400, 'INVALID_REQUEST'); }
+        catch { throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The completion request body is invalid'); }
         if (request.method === 'PUT') {
           const body = await readBody(request, WebSearchCredentialWriteRequestSchema);
           match(body.providerId, providerId);
@@ -205,14 +205,14 @@ export class WorkspaceRoutes {
       this.catalogs.get(workspaceId);
       if (request.method === 'GET') {
         const result = await this.catalogs.operation(workspaceId, { type: 'catalog.settings.read' });
-        if (result.type !== 'catalog.settings') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (result.type !== 'catalog.settings') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog.settings operation.');
         return { status: 200, body: result.state };
       }
       if (request.method === 'PUT' || request.method === 'PATCH') {
         const result = await this.catalogs.operation(workspaceId, {
           type: 'catalog.settings.write', request: await readBody(request, OmpSettingsUpdateRequestSchema),
         });
-        if (result.type !== 'catalog.settings.mutated') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (result.type !== 'catalog.settings.mutated') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog.settings mutation operation.');
         return { status: 200, body: result.state };
       }
       return null;
@@ -224,7 +224,7 @@ export class WorkspaceRoutes {
       const execute = async (operation: McpOperation) => {
         const root = await this.catalogs.stateless(workspaceId);
         const result = await this.workers.request(root, { type: 'mcp', operation });
-        if (result.type !== 'mcp') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (result.type !== 'mcp') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp workspace read operation.');
         return result.result;
       };
       if (mcpRoute[2] === 'config' && request.method === 'GET') return { status: 200, body: await this.mcp.readWorkspaceMcpConfig(workspaceId) };
@@ -238,7 +238,7 @@ export class WorkspaceRoutes {
         return {
           status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body, async configuration => {
             const result = await execute({ type: 'test', serverId, configuration });
-            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp connection test operation.');
             return result.result;
           })
         };
@@ -248,7 +248,7 @@ export class WorkspaceRoutes {
         return {
           status: 200, body: await this.mcp.withWorkspaceMcp(workspaceId, body.persistedRevision, async configuration => {
             const result = await execute({ type: 'test', serverId, configuration });
-            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp connection test operation.');
             return result.result;
           })
         };
@@ -258,7 +258,7 @@ export class WorkspaceRoutes {
         return {
           status: 200, body: await this.mcp.workspaceOAuth(serverId, workspaceId, body?.persistedRevision, body?.workerGeneration, async configuration => {
             const result = await execute(body ? { type: 'oauth', serverId, request: body, configuration } : { type: 'oauth.status', serverId, configuration });
-            if (result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+            if (result.type !== 'oauth') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp oauth operation.');
             return result.result;
           })
         };
@@ -268,7 +268,7 @@ export class WorkspaceRoutes {
         return {
           status: 200, body: await this.mcp.withWorkspaceMcp(workspaceId, body.persistedRevision, async configuration => {
             const result = await execute({ type: 'secret.write', serverId, request: body, configuration });
-            if (result.type !== 'secret.written') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+            if (result.type !== 'secret.written') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp secret write operation.');
             return result.result;
           })
         };
@@ -284,12 +284,12 @@ export class WorkspaceRoutes {
       match(requestBody.workspaceId, workspaceId);
       const workspace = this.catalogs.get(workspaceId);
       // Private callers cannot redirect the stateless owner to a sibling agent directory.
-      if (requestBody.agentDirectoryId !== workspace.agentDirectoryId) throw new WorkerOperationError(403, 'UNAUTHORIZED');
+      if (requestBody.agentDirectoryId !== workspace.agentDirectoryId) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The credential request addresses a different agent directory');
       const result = 'purpose' in requestBody
         ? await this.catalogs.operation(workspaceId, { type: 'catalog.credential.resolve', request: requestBody })
         : await this.catalogs.operation(workspaceId, { type: 'catalog.credential.handoff', request: requestBody });
       if (result.type !== 'catalog.credential.resolved' && result.type !== 'catalog.credential.handed-off')
-        throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested catalog credential operation.');
       return { status: 200, body: result.result };
     }
     const completion = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/completions(?:\/([^/]+)\/cancel)?$/.exec(url.pathname);
@@ -300,13 +300,13 @@ export class WorkspaceRoutes {
         const body = await readBody(request, CompletionCancelRequestSchema);
         match(body.completionId, id(completion[2]));
         const result = await this.workers.request(rootSessionId, { type: 'completion', operation: { type: 'completion.cancel', request: body } });
-        if (result.type !== 'completion' || result.result.type !== 'completion.cancelled') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+        if (result.type !== 'completion' || result.result.type !== 'completion.cancelled') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested completion cancel operation.');
         return { status: 200, body: result.result.result };
       }
       const body = await readBody(request, CompletionRequestSchema);
       match(body.workspaceId, workspaceId);
       const result = await this.workers.request(rootSessionId, { type: 'completion', operation: { type: 'completion.start', request: body } });
-      if (result.type !== 'completion' || result.result.type !== 'completion.result') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+      if (result.type !== 'completion' || result.result.type !== 'completion.result') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested completion operation.');
       return { status: 200, body: result.result.result };
     }
     const imageRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/images\/(generate|config)$/.exec(url.pathname);

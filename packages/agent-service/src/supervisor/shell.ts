@@ -24,7 +24,7 @@ function identity(value: string): string {
 }
 
 function unavailable(): WorkerOperationError {
-  return new WorkerOperationError(503, 'SERVICE_UNAVAILABLE');
+  return new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'No shell owner is available for the session');
 }
 
 function resync(): ProjectionError {

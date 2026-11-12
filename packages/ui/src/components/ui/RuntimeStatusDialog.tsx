@@ -11,6 +11,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { downloadDiagnosticLog } from '@/lib/diagnostics/export';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 
 export const RuntimeStatusDialog: React.FC = () => {
   const { t } = useI18n();
@@ -42,7 +43,7 @@ export const RuntimeStatusDialog: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to build the diagnostic timeline:', error);
-      toast.error(t('runtimeStatusDialog.toast.downloadFailed'));
+      toast.error(problemMessage(error, t('runtimeStatusDialog.toast.downloadFailed')));
     } finally {
       setDownloading(false);
     }

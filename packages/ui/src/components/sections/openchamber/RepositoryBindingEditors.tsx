@@ -200,8 +200,6 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
   const requestRef = React.useRef(0);
   const gitIdentityProfiles = useGitIdentitiesStore((state) => state.profiles);
   const globalGitIdentity = useGitIdentitiesStore((state) => state.globalIdentity);
-  const loadGitIdentityProfiles = useGitIdentitiesStore((state) => state.loadProfiles);
-  const loadGlobalGitIdentity = useGitIdentitiesStore((state) => state.loadGlobalIdentity);
   const connectedAccountIds = useConnectedAccountIds();
   const refreshIdentityAccounts = useSourceControlAuthStore((state) => state.refreshIdentityAccounts);
   const sourceControlIdentities = useSourceControlAuthStore((state) => state.identities);
@@ -229,12 +227,6 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
 
   React.useLayoutEffect(() => {
   }, [selected?.endpoint.fingerprint]);
-
-  React.useEffect(() => {
-    if (!open) return;
-    void loadGitIdentityProfiles();
-    void loadGlobalGitIdentity();
-  }, [loadGitIdentityProfiles, loadGlobalGitIdentity, open]);
 
   // A submodule or LFS server is authenticated the same way a remote is, so it
   // is answered with an identity rather than with a transport and a credential

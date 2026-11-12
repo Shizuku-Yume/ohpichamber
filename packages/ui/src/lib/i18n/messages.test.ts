@@ -138,16 +138,45 @@ describe('i18n dictionaries', () => {
     for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
       if (locale === 'ar' || locale === 'he') {
         const extra = Object.keys(dictionary).filter((k) => !(k in enDict));
-        expect(extra).toEqual([]);
-        continue;
-      }
-      // OMP settings keys provide complete en + zh-CN coverage with runtime English fallback
-      // for remaining locales per the fork specification.
-      if (locale === 'zh-CN') {
-        expect(Object.keys(dictionary).sort()).toEqual(allEnglishKeys);
+        expect(extra, `${locale} extra keys`).toEqual([]);
+      } else if (locale === 'zh-CN') {
+        expect(Object.keys(dictionary).sort(), `${locale} keys`).toEqual(allEnglishKeys);
       } else {
-        expect(Object.keys(dictionary).filter((k) => !k.startsWith('settings.omp.')).sort()).toEqual(sharedEnglishKeys);
+        expect(Object.keys(dictionary).filter((k) => !k.startsWith('settings.omp.')).sort(), `${locale} keys`)
+          .toEqual(sharedEnglishKeys);
       }
+    }
+  });
+
+  test('the OMP settings page is translated in every locale, not just English', () => {
+    // The page renders only curated rows, so its copy is ordinary vocabulary
+    // now: each locale carries every OMP key, translated, with the same
+    // placeholders. A missing key would otherwise fall back to its raw id or
+    // to English at runtime.
+    const ompKeys = Object.keys(enDict).filter((k) => k.startsWith('settings.omp.')).sort();
+    expect(ompKeys.length).toBeGreaterThan(0);
+    for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
+      const missing = ompKeys.filter((key) => !(key in dictionary));
+      expect(missing, `${locale} missing OMP keys`).toEqual([]);
+      if (locale === 'en') continue;
+      // Some vocabulary is genuinely shared (`OMP`, a `Skills` heading, `%`),
+      // so equality alone is not proof of an untranslated string: the product
+      // name stays `OMP` in every locale by design. The page-level prose must
+      // differ; every key must at least be present.
+      for (const key of [
+        'settings.page.omp.description',
+        'settings.omp.advanced',
+        'settings.omp.advancedDescription',
+        'settings.omp.modelRoles.description',
+        'settings.omp.section.retry.description',
+      ]) {
+        expect(dictionary[key], `${locale} ${key}`).not.toBe(enDict[key]);
+      }
+      const placeholderDrift = ompKeys.filter((key) => {
+        const pattern = /\{\w+\}/g;
+        return (enDict[key].match(pattern) ?? []).join() !== (dictionary[key].match(pattern) ?? []).join();
+      });
+      expect(placeholderDrift, `${locale} OMP placeholder drift`).toEqual([]);
     }
   });
 

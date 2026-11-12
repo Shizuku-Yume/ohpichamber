@@ -5,6 +5,7 @@ import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import type { ClientAuthAPI } from '@/lib/api/types';
+import { problemMessage } from '@/lib/problemMessage';
 
 // The relay status is read only for this notice, so it polls slowly: the
 // server reports a conflict after two evictions within ten minutes.
@@ -49,8 +50,8 @@ export function RelayConflictNotice({ clientAuth }: { clientAuth: ClientAuthAPI 
       const status = await clientAuth.resetRelayIdentity();
       setConflict(status.identityConflict);
       toast.success(t('settings.remoteInstances.clientAuth.relayConflict.toast.success'));
-    } catch {
-      toast.error(t('settings.remoteInstances.clientAuth.relayConflict.toast.failed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('settings.remoteInstances.clientAuth.relayConflict.toast.failed')));
     } finally {
       setBusy(false);
     }

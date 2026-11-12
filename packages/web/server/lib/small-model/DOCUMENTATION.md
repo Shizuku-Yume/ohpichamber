@@ -33,11 +33,12 @@ retired; UI utilities use the canonical client, while Guest and session-assist r
 
 Every operation requires an authorized `workspaceId`. The private Host resolves
 that identity to a filesystem scope; public completion bodies carry only opaque
-identities. Selection order is an explicit request model, the effective
-OpenChamber profile override read by `readMergedSettingsSync`, then a small model
-within the caller's preferred provider, then that provider's exact preferred
-model. Without a preferred provider, workspace catalog small-family discovery
-is permitted. A named provider never falls through to another subscription.
+identities. Selection order is an explicit request model, then the OMP
+`modelRoles` entry for the requested role (falling back to `default`), then a
+small model within the caller's preferred provider, then that provider's exact
+preferred model. Without a preferred provider, workspace catalog small-family
+discovery is permitted. A named provider never falls through to another
+subscription.
 
 UI generation loads profile settings through `loadDesktopSettings`, preserving
 runtime and surface scoping and pending settings-write reconciliation. An
@@ -45,6 +46,14 @@ explicit canonical selection is exact; a preferred selection permits the
 profile override or provider-local small-family choice. Models must be enabled,
 active/non-deprecated text models. Unavailable explicit intent is a failure,
 never a request to a different engine or provider.
+
+OMP stores each `modelRoles` entry as a selector, not a bare model:
+`provider/model` optionally followed by a known thinking level
+(`:minimal`, `:low`, `:medium`, `:high`, `:xhigh`, `:max`, `:auto`). That level
+describes the next turn, so resolution strips it before matching the catalog;
+a colon that is not one of those levels stays part of the model ID. Reading the
+whole selector as a model ID made every levelled role unresolvable, which
+silently disabled session-assist on a real instance.
 
 Session rename availability and completion use the prepared target workspace
 and the final completed assistant's native provider/model selection, never the

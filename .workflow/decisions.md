@@ -801,6 +801,16 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** a concrete GUI user need appears for a hidden OMP setting.
 - **Effort:** ux-v270-omp-alignment
 
+## 2026-11-12 - Classify every OMP setting by GUI surface and let one role editor own model assignment
+
+- **Decided:** `OmpSettingSchema` states where each allowlisted OMP setting belongs — `gui`, `tui-only`, `duplicate` (naming the settings-item id that owns the concept) or `advanced` — and carries OMP's own `ui.condition` with whether it holds. The Agent Service owns one explicit per-id table; an unplaced id fails its classification test rather than falling into a default. The OMP page draws only `gui` rows from a declarative registry, offers the real `config.yml` path for the rest, and one `ModelRoleEditor` now serves Defaults, Git and OMP with the model's concrete effort level instead of a synthetic `default`.
+- **Instead of:** a prefix rule in the page (e.g. "everything `tui.*` is terminal-only"), a second defaults editor per surface, and an effort picker whose first row was a sentinel the user could not inspect.
+- **Because:** prefixes each span several surfaces (`task.`, `skills.`, `compaction.`), so a prefix rule decides for ids nobody examined; and the page's 157-row type switch had already grown a per-page copy of the role editor, the effort vocabulary and three sentinel conventions.
+- **Also decided:** the UI Check leg runs `bun --cwd packages/ui test …` instead of `bunx vitest run packages/ui/…`. `packages/ui` suites are `bun:test` files run one process per file by `scripts/run-isolated-tests.mjs`; no vitest configuration covers that root, so the vitest invocation fails at baseline with `Cannot find package 'bun:test'` (task 20 recorded the same).
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** a vitest configuration lands under `packages/ui`, or a prefix rule becomes a reliable classifier for its whole namespace.
+- **Effort:** ux-v270-omp-alignment
+
 ## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge
 
 - **Decided:** the lane 12 work modules (`openchamber-sessions`, `openchamber-control`, `quota`, `small-model`, `routing`, `session-assist`, `session-work`, `scheduled-tasks`, `workflows`, `tts`, `package-manager.js`) keep the fork's Host/Canonical API shape; upstream v2.7.0 engine code is not adopted there.
@@ -932,6 +942,40 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** integration carries commits that other branches or releases depend on, which then requires history-preserving updates instead.
 - **Effort:** ux-v270-omp-alignment
 
+## 2026-11-12 - The boot registry owns server-owned reads; freshness compares one clock
+
+- **Decided:** `packages/ui/src/stores/serverStateBoot.ts` is the single reader and resetter of every store that projects the instance's own state (permission policy, Git identities, quota, agent memory, session folders, web search, MCP/skills/catalog reset-only, advisor/cleanse reset-only). Each of those stores declares `unknown | ready | error` (`stores/loadPhase.ts`), and a failed read keeps the held value and says so instead of producing an empty list. Freshness comparisons moved to one clock at a time: suggestions and work hints order against Host turn stamps (`openchamber.workbench.lastIdleAt`, `openchamber.turn.endedAt`, `openchamber.reviewOffer.at`) rather than `session.updatedAt`, and the Host status seed dropped its client-clock age window.
+- **Instead of:** keeping per-page hydrate-on-mount paths beside the registry, letting `resolvePermissionMode` return `ask` for an unread policy, or adding a Host "now" field to every session list read. The first two are the R4 defects themselves; the third would change the session-list contract for a display window that only needs to be honest about which clock it used.
+- **Because:** the permission policy had no production reader at all after `permission-mode-sync.ts` lost its importer, so a restart with default mode `auto` still showed `ask`; and `session.updatedAt` is the native transcript file's mtime, so any comparison against a Host or client stamp measured clock skew — touching a session file purged a suggestion that still applied.
+- **Also recorded:** `getCurrentPermissionMode` returns `null` for "not read" while `getSessionMode` keeps returning a concrete mode (the configured `permissionDefaultMode`) for callers that must act; the composer's new-session draft uses that default too. Two presentation windows in `lib/overview/overviewModel.ts` (14-day followed window, 3-day stalled label) keep a justified `oxlint-disable-next-line openchamber/no-cross-source-time-compare`, since seconds of skew cannot change an answer measured in days.
+- **Mine:** yes (conservative reading of task 22's acceptance)
+- **Revisit when:** the Canonical contract carries a Host-sourced "now" per session list read, or the permission policy gains a server-pushed initial value on connect.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - A settled session is not only `idle`, and a role level is not a model
+
+- **Decided:** the assist surfaces (composer suggestion, done hint, review offer) settle by the composer's own rule — live status is busy, `idle` is idle, `unavailable` or missing with no native run binding is idle — instead of accepting only `runtimeStatus === 'idle'`. On the server, a `modelRoles` selector's trailing thinking level is stripped when it is one of `minimal|low|medium|high|xhigh|max|auto` before catalog lookup.
+- **Instead of:** a second `unavailable`-aware predicate per surface, which keeps four copies of one rule, or a server fallback to provider-local discovery when a role does not resolve, which would silently answer with a model the user did not choose.
+- **Because:** a session the Agent Service no longer holds (after a reload or Host restart) is projected as `unavailable`, so the strict gate suppressed a real recap and suggestion; and OMP writes roles as `provider/model:effort`, so reading the level as part of the model ID made every levelled role unresolvable and session-assist never generated anything. Both were observed directly: `describeSmallModel` returned null (`described null`) until the suffix was stripped, then returned `CLIProxyAPI/claude-haiku-5-5` and the runtime wrote a real suggestion.
+- **Also recorded:** `sessionActivityPhase` is the single owner of that settled rule; `SessionDoneHintRow` and `SessionReviewHintRow` had the same duplicated predicate. An empty suggestion stays a successful outcome (the prompt rules return `""` when the request is satisfied or the next move is the user's), so the observation used a request with genuinely unfinished agent work.
+- **Mine:** yes (the alternative — adding a second `unavailable`-aware predicate per surface — would keep four copies of one rule)
+- **Revisit when:** the projection stops reporting unheld sessions as `unavailable` (e.g. a separate "not loaded" status), or OMP changes the role selector syntax.
+## 2026-11-12 - UI error suites run under bun test, Host suites under the web vitest config
+
+- **Decided:** task 21's Check runs `bun test` for `packages/ui/src/lib/problemMessage*` and `bunx vitest run server/lib/host` from `packages/web`.
+- **Instead of:** the single root `bunx vitest run packages/web/server/lib/host packages/ui/src/api packages/ui/src/lib/problemMessage.test.ts` the task originally named.
+- **Because:** `packages/ui` tests import `bun:test`, and the repo has no root `vitest.config.ts` (upstream `bc50ba56a` has none either), so a root vitest run fails to resolve `bun:test` for UI paths before running a single test. `packages/web/vitest.config.ts` is the only config that aliases `bun:test` and `@/`, and it resolves `server/lib/host` correctly.
+- **Mine:** yes (agent decision, confirmed by the maintainer's dispatch note).
+- **Revisit when:** a root vitest config appears, or the UI suites migrate off `bun:test`.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - Upstream UI error displays carry the fork problem cause in the v2.7.0 merge
+
+- **Decided:** the nine upstream UI files that task 21 touched keep the fork's `problemMessage(error, …)` display and are recorded as `fork-differs` decision rows in the drift ledger.
+- **Instead of:** leaving them `unexplained` in the ledger, or reverting them to upstream's translation-only toasts to avoid the divergence.
+- **Because:** the R6 fix is a deliberate fork change: a caught failure must show the cause the Agent Service wrote. Reverting those nine files would restore the defect the task exists to remove, and an unexplained row would fail `bun run check`.
+- **Mine:** yes (agent decision, within the task's stated scope).
+- **Revisit when:** upstream adopts an equivalent cause-carrying display, at which point the rows collapse into `identical`.
 ## 2026-11-12 - A tool result is a part of its call's message; a failure keeps a kind beside its detail
 
 - **Decided:** the canonical projection publishes a `tool_result` part inside the assistant message that authored its `tool_call`, at part id `<call-part>:result`, and streams OMP's partial result frames as `part.updated` on that same part. `ToolResultPart` keeps `error: string` and gains `errorKind`. A assistant step carries `timing: { startedAt, firstTokenAt?, completedAt? }` derived only from the native message. A run OMP prompts itself opens a turn with no authored user message, and the client joins its steps to the previous turn.

@@ -66,6 +66,7 @@ const blockedReason = (prs: readonly PrVisualSummary[]): { reason: 'checks' | 'c
  * every old session nobody reopened would wait on the user forever.
  */
 export const isOverviewFollowed = (session: Session, context: { workEnabled: boolean; now: number }): boolean => (
+ // oxlint-disable-next-line openchamber/no-cross-source-time-compare -- a two-week display window, where clock skew in seconds cannot change the answer and no Host-sourced clock spans the whole list
  context.workEnabled ? isSessionInWork(session) : context.now - session.updatedAt < OVERVIEW_UNTRACKED_WINDOW_MS
 );
 
@@ -120,6 +121,7 @@ export function classifyOverviewSession(
  const signal = doneSignalOf(facts);
  const veto = vetoOf(facts);
  if (signal && !veto) return { section: 'done', session, signal };
+ // oxlint-disable-next-line openchamber/no-cross-source-time-compare -- a three-day "nothing happened" label; seconds of skew are immaterial
  return { section: 'working', session, signal, veto, stalled: context.now - session.updatedAt >= OVERVIEW_STALLED_AFTER_MS };
 }
 

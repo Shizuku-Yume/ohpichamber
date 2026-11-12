@@ -250,6 +250,20 @@ test('explicitly free token pricing remains zero rather than unknown', () => {
   expect(publicModel(native).pricing).toEqual({ inputPerMillionTokens: 0, outputPerMillionTokens: 0, cacheReadPerMillionTokens: 0, cacheWritePerMillionTokens: 0 });
 });
 
+test('a model publishes its own default effort only when it advertises that level', () => {
+  const opportunities = { ...routed, thinking: { efforts: ['low', 'high'] as const, defaultLevel: 'high' } };
+  expect(publicModel(opportunities as NativeCatalogModel).defaultReasoningEffort).toBe('high');
+
+  // OMP resolves a level the model does not advertise to its own resolution,
+  // so publishing it would make a picker claim a level a send never carries.
+  const unadvertised = { ...routed, thinking: { efforts: ['low', 'high'] as const, defaultLevel: 'max' } };
+  expect(publicModel(unadvertised as NativeCatalogModel).defaultReasoningEffort).toBeUndefined();
+
+  // No published default is not the same as "off": a picker must fall back.
+  const noDefault = { ...routed, thinking: { efforts: ['low', 'high'] as const } };
+  expect(publicModel(noDefault as NativeCatalogModel).defaultReasoningEffort).toBeUndefined();
+});
+
 test('fixed native pricing preserves each published token rate', () => {
   const native: NativeCatalogModel = { ...routed, cost: { input: 1, output: 2, cacheRead: 0.25, cacheWrite: 1.5 }, pricingStatus: undefined };
   expect(publicModel(native).pricing).toEqual({ inputPerMillionTokens: 1, outputPerMillionTokens: 2, cacheReadPerMillionTokens: 0.25, cacheWritePerMillionTokens: 1.5 });

@@ -9409,4 +9409,9 @@ export const dict = {
   ...tooltipsPanelI18n['ja'],
   ...tooltipsChatI18n['ja'],
   ...m4LaneDI18n.ja,
+  "gitIdentities.state.unknown": "Git の ID はまだ読み込まれていません。",
+  "settings.usage.state.unknown": "使用状況はまだ読み込まれていません。",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "保存されたメモリはまだ読み込まれていません。",
+
+  "chat.workStatus.mcp.unknown": "MCP サーバーはまだ読み込まれていません。",
 };

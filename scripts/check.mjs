@@ -48,6 +48,13 @@ const steps = [
     command: bun,
     args: ['scripts/upstream-drift.mjs', '--markers', '--check'],
   },
+  {
+    // A failure shown only as a translated sentence loses its cause, and a
+    // policy refusal must name the check that refused it.
+    name: 'error-cause',
+    command: 'node',
+    args: ['scripts/error-cause-guard.mjs'],
+  },
 ];
 
 const failed = [];

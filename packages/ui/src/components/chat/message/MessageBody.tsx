@@ -76,6 +76,7 @@ import { isCapacitorMobileApp } from '@/apps/mobileNativeChrome';
 import { shareFileFromNativeApp } from '@/lib/nativeFileShare';
 import { WorktreeRequiresGitRepositoryError } from '@/lib/worktrees/worktreeCreate';
 import { cloneMessageImageExportSource } from './imageExport';
+import { problemMessage } from '@/lib/problemMessage';
 
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
@@ -1663,7 +1664,7 @@ const AssistantMessageBody = React.memo(({
                 toast.success(t('chat.messageBody.toast.imageSaved'));
             } catch (error) {
                 console.error('Failed to generate image:', error);
-                toast.error(t('chat.messageBody.toast.generateImageFailed'));
+                toast.error(problemMessage(error, t('chat.messageBody.toast.generateImageFailed')));
             } finally {
                 if (wrapper && wrapper.parentNode) {
                     wrapper.parentNode.removeChild(wrapper);

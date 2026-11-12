@@ -642,13 +642,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => ctx.isMobile,
   },
   {
-    id: 'chat.save-pasted-images',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.savePastedImagesAsFiles',
-    descriptionKey: 'settings.openchamber.visual.field.savePastedImagesAsFilesInfo',
-    keywords: ['paste', 'image', 'file', 'asset', 'screenshot', 'composer'],
-  },
-  {
     id: 'sessions.default-model',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.defaultModel',

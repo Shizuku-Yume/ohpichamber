@@ -145,11 +145,8 @@ const resetModelPrefsState = (): void => {
   useUIStore.setState({
     favoriteModels: [],
     hiddenModels: [],
-    collapsedModelProviders: [],
     recentModels: [],
-    recentAgents: [],
     favoriteAgents: [],
-    recentEfforts: {},
     lastUsedEfforts: {},
   });
 };
@@ -829,10 +826,7 @@ describe('updateDesktopSettings', () => {
     const settings = {
       favoriteModels: [{ providerID: 'anthropic', modelID: 'claude-haiku-4' }],
       hiddenModels: [{ providerID: 'openai', modelID: 'gpt-5' }],
-      collapsedModelProviders: ['anthropic', 'openai'],
       recentModels: [{ providerID: 'google', modelID: 'gemini-pro' }],
-      recentAgents: ['build', 'plan'],
-      recentEfforts: { 'anthropic/claude-haiku-4': ['high', 'default'] },
       lastUsedEfforts: { 'anthropic/claude-haiku-4': 'high', 'openai/gpt-5': null },
       draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true,
     } satisfies SettingsPayload;
@@ -843,10 +837,7 @@ describe('updateDesktopSettings', () => {
     const state = useUIStore.getState();
     expect(state.favoriteModels).toEqual(settings.favoriteModels);
     expect(state.hiddenModels).toEqual(settings.hiddenModels);
-    expect(state.collapsedModelProviders).toEqual(settings.collapsedModelProviders);
     expect(state.recentModels).toEqual(settings.recentModels);
-    expect(state.recentAgents).toEqual(settings.recentAgents);
-    expect(state.recentEfforts).toEqual(settings.recentEfforts);
     expect(state.lastUsedEfforts).toEqual(settings.lastUsedEfforts);
   });
 
@@ -880,11 +871,8 @@ describe('updateDesktopSettings', () => {
       await delay(20);
       useUIStore.setState({
         hiddenModels: [{ providerID: 'openai', modelID: 'gpt-5' }],
-        collapsedModelProviders: ['openai'],
         recentModels: [{ providerID: 'google', modelID: 'gemini-pro' }],
-        recentAgents: ['build'],
         favoriteAgents: ['plan'],
-        recentEfforts: { 'openai/gpt-5': ['low'] },
         lastUsedEfforts: { 'openai/gpt-5': 'low', 'openai/gpt-5-mini': null },
       });
 
@@ -894,11 +882,8 @@ describe('updateDesktopSettings', () => {
       expect(saveCalls[0]).toEqual({
         favoriteModels: [{ providerID: 'anthropic', modelID: 'claude-haiku-4' }],
         hiddenModels: [{ providerID: 'openai', modelID: 'gpt-5' }],
-        collapsedModelProviders: ['openai'],
         recentModels: [{ providerID: 'google', modelID: 'gemini-pro' }],
-        recentAgents: ['build'],
         favoriteAgents: ['plan'],
-        recentEfforts: { 'openai/gpt-5': ['low'] },
         lastUsedEfforts: { 'openai/gpt-5': 'low', 'openai/gpt-5-mini': null },
         customProviderIcons: {},
       });
@@ -923,11 +908,8 @@ describe('updateDesktopSettings', () => {
       expect(saveCalls).toEqual([{
         favoriteModels: [{ providerID: 'anthropic', modelID: 'claude-haiku-4' }],
         hiddenModels: [],
-        collapsedModelProviders: [],
         recentModels: [],
-        recentAgents: [],
         favoriteAgents: [],
-        recentEfforts: {},
         lastUsedEfforts: {},
         customProviderIcons: {},
       }]);
@@ -1529,11 +1511,8 @@ describe('unload lifecycle flush (#2197)', () => {
       expect(saveCalls).toEqual([{
         favoriteModels: [{ providerID: 'anthropic', modelID: 'claude-haiku-4' }],
         hiddenModels: [],
-        collapsedModelProviders: [],
         recentModels: [],
-        recentAgents: [],
         favoriteAgents: [],
-        recentEfforts: {},
         lastUsedEfforts: {},
         customProviderIcons: {},
       }]);

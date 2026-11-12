@@ -367,8 +367,6 @@ const ComposerTab: React.FC = () => {
   const setAllowPromptingSubagentSessions = useUIStore((state) => state.setAllowPromptingSubagentSessions);
   const mobileReturnKeySends = useUIStore((state) => state.mobileReturnKeySends);
   const setMobileReturnKeySends = useUIStore((state) => state.setMobileReturnKeySends);
-  const savePastedImagesAsFiles = useUIStore((state) => state.savePastedImagesAsFiles);
-  const setSavePastedImagesAsFiles = useUIStore((state) => state.setSavePastedImagesAsFiles);
   const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
   const setInputSpellcheckEnabled = useUIStore((state) => state.setInputSpellcheckEnabled);
   const inputHistoryScope = useInputHistoryStore((state) => state.scope);
@@ -467,17 +465,6 @@ const ComposerTab: React.FC = () => {
             label={t('settings.openchamber.visual.field.allowPromptingSubagentSessions')}
             ariaLabel={t('settings.openchamber.visual.field.allowPromptingSubagentSessionsAria')}
             settingsItem="chat.subagent-read-only-banner"
-          />
-          <SettingsCheckboxRow
-            checked={savePastedImagesAsFiles}
-            onChange={(enabled) => {
-              setSavePastedImagesAsFiles(enabled);
-              void updateDesktopSettings({ savePastedImagesAsFiles: enabled });
-            }}
-            label={t('settings.openchamber.visual.field.savePastedImagesAsFiles')}
-            ariaLabel={t('settings.openchamber.visual.field.savePastedImagesAsFiles')}
-            info={t('settings.openchamber.visual.field.savePastedImagesAsFilesInfo')}
-            settingsItem="chat.save-pasted-images"
           />
         </div>
       </SettingsSection>

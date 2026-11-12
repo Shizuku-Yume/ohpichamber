@@ -2,7 +2,6 @@ import { modelRefKey } from '@openchamber/agent-contract';
 import { create } from 'zustand';
 import { z } from 'zod';
 import { devtools, persist } from 'zustand/middleware';
-import type { SidebarSection } from '@/constants/sidebar';
 import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey } from '@/lib/typography';
 import type { ShortcutCombo } from '@/lib/shortcuts';
@@ -11,7 +10,7 @@ import type { CustomProviderIcon } from '@/lib/customProviderIcons';
 import type { CustomProviderLogo } from '@/lib/customProviderLogos';
 import { DEFAULT_MONO_FONT, DEFAULT_UI_FONT, DEFAULT_UI_FONT_WEIGHT, type MonoFontOption, type UiFontOption, type UiFontWeight } from '@/lib/fontOptions';
 import {
-  DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, type SessionGoalChecker,
+ DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS, SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, type SessionGoalChecker,
 } from '@/lib/sessionGoalTurnLimit';
 import type { PermissionMode } from '@/stores/utils/permissionAutoAccept';
 import { getStoredMobileKeyboardMode, type MobileKeyboardMode } from '@/lib/mobileKeyboardMode';
@@ -974,7 +973,6 @@ interface UIStore {
  runtimeStatusText: string;
  isOpenCodeStatusDialogOpen: boolean;
  openCodeStatusText: string;
- isSessionCreateDialogOpen: boolean;
  isScheduledTasksDialogOpen: boolean;
  isArchivePageOpen: boolean;
  /** The full-screen integrations catalog page, opened from the sidebar header. */
@@ -994,7 +992,6 @@ interface UIStore {
  isSettingsDialogOpen: boolean;
  isNewWorktreeDialogOpen: boolean;
  isModelSelectorOpen: boolean;
- sidebarSection: SidebarSection;
 
  // Settings IA (new shell)
  settingsPage: string;
@@ -1030,8 +1027,6 @@ interface UIStore {
  persistChatDraft: boolean;
  showExpandedBashTools: boolean;
  showExpandedEditTools: boolean;
- notesPanelHeight: number;
- projectContextSidebarWidth: number;
  sessionWorkAutoOpen: boolean;
  sessionWorkKeepInGroup: boolean;
  streamingAutoFollowEnabled: boolean;
@@ -1077,7 +1072,6 @@ interface UIStore {
  /** Done on a worktree in work also archives it. Off by default: Done then only takes it out of In work. */
  worktreeArchiveOnDoneEnabled: boolean;
  autoDeleteLastRunAt: number | null;
- messageLimit: number;
  fontSize: number;
  /** Chat text size in percent of the interface size, so the chat can grow without the sidebar. */
  chatFontSize: number;
@@ -1096,24 +1090,20 @@ interface UIStore {
  /** Weight of regular interface text. */
  uiFontWeight: UiFontWeight;
  padding: number;
- cornerRadius: number;
  inputBarOffset: number;
  mobileKeyboardMode: MobileKeyboardMode;
 
  favoriteModels: Array<{ providerID: string; modelID: string }>;
  hiddenModels: Array<{ providerID: string; modelID: string }>;
  providerOrder: string[];
- collapsedModelProviders: string[];
  customProviderIcons: Record<string, CustomProviderIcon>;
  /** Uploaded logos by provider ID; the server writes them with the image. */
  customProviderLogos: Record<string, CustomProviderLogo>;
  recentModels: Array<{ providerID: string; modelID: string }>;
  /** `provider/model` last picked in a chat composer; a new session starts on it when nothing is configured. */
  lastSelectedModel: string | undefined;
- recentAgents: string[];
  /** Agents starred in the agent menu. While any of them is available, agent cycling (Tab) goes through those only. */
  favoriteAgents: string[];
- recentEfforts: Record<string, string[]>;
  /**
   * The last chosen thinking level per `provider/model`.
   * `null` is an explicit Default; a missing key is no preference.
@@ -1156,10 +1146,6 @@ interface UIStore {
   subtask: { title: string; message: string };
  };
 
- // Summarization settings
- summarizeLastMessage: boolean;
- summaryThreshold: number;   // chars — messages longer than this get summarized
- summaryLength: number;      // chars — target length for summary
  maxLastMessageLength: number; // chars — truncate {last_message} when summarization is off
 
  showTerminalQuickKeysOnDesktop: boolean;
@@ -1167,9 +1153,7 @@ interface UIStore {
  sessionTabsEnabled: boolean;
  /** Separate header tabs for each project root, worktree and space (`lib/sessionTabs.ts`). */
  sessionTabsPerWorkspace: boolean;
- showOpenCodeUpdateNotifications: boolean;
  agentControlToolEnabled: boolean;
- agentScheduleToolEnabled: boolean;
  agentWebToolEnabled: boolean;
  /** Full-text message search (server index). Opt-in: off keeps every part of it idle. */
  messageSearchEnabled: boolean;
@@ -1194,9 +1178,6 @@ interface UIStore {
  agentImageToolEnabled: boolean;
  /** `provider/model` the image tool draws with; empty until the user picks one. */
  agentImageModel: string;
- agentSecretToolEnabled: boolean;
- /** Whether OpenChamber's agent tools sit behind a code mode instead of being direct tools. */
- agentToolsCodeMode: boolean;
  agentWorkflowToolEnabled: boolean;
  /** The isolated-spaces switch as saved; the server applies it at its next start. */
  isolatedSpacesEnabled: boolean;
@@ -1253,7 +1234,6 @@ interface UIStore {
  promptNavigatorEnabled: boolean;
  showSplitAssistantMessageActions: boolean;
  allowPromptingSubagentSessions: boolean;
- savePastedImagesAsFiles: boolean;
  isExpandedInput: boolean;
  reportUsage: boolean;
  shortcutOverrides: Record<string, ShortcutCombo>;
@@ -1350,15 +1330,12 @@ interface UIStore {
  setAboutDialogOpen: (open: boolean) => void;
  setRuntimeStatusDialogOpen: (open: boolean) => void;
  setRuntimeStatusText: (text: string) => void;
- setNotesPanelHeight: (height: number) => void;
- setProjectContextSidebarWidth: (width: number) => void;
  setSessionWorkAutoOpen: (value: boolean) => void;
  setSessionWorkKeepInGroup: (value: boolean) => void;
  setShowExpandedBashTools: (value: boolean) => void;
  setShowExpandedEditTools: (value: boolean) => void;
  setOpenCodeStatusDialogOpen: (open: boolean) => void;
  setOpenCodeStatusText: (text: string) => void;
- setSessionCreateDialogOpen: (open: boolean) => void;
  setScheduledTasksDialogOpen: (open: boolean) => void;
  /** `search` fills the page's search field, for a sidebar search that found nothing. */
  setArchivePageOpen: (open: boolean, search?: string) => void;
@@ -1375,7 +1352,6 @@ interface UIStore {
  setNewWorktreeDialogOpen: (open: boolean) => void;
  setModelSelectorOpen: (open: boolean) => void;
  applyTheme: () => void;
- setSidebarSection: (section: SidebarSection) => void;
  setSettingsPage: (slug: string) => void;
  setSettingsProjectsSelectedId: (projectId: string | null) => void;
  setSettingsProjectPath: (path: string | null) => void;
@@ -1414,7 +1390,6 @@ interface UIStore {
  setSessionRetentionOnlyArchived: (value: boolean) => void;
  setSessionRetentionIncludeInWork: (value: boolean) => void;
  setAutoDeleteLastRunAt: (timestamp: number | null) => void;
- setMessageLimit: (value: number) => void;
  setFontSize: (size: number) => void;
  setChatFontSize: (size: number) => void;
  setGlobalDraftStarters: (refs: DraftStarterRef[]) => void;
@@ -1429,7 +1404,6 @@ interface UIStore {
  setUiFontWeight: (weight: UiFontWeight) => void;
  setCustomMonoFont: (family: string) => void;
  setPadding: (size: number) => void;
- setCornerRadius: (radius: number) => void;
  setInputBarOffset: (offset: number) => void;
  setMobileKeyboardMode: (mode: MobileKeyboardMode) => void;
  applyTypography: () => void;
@@ -1447,14 +1421,10 @@ interface UIStore {
  isHiddenModel: (providerID: string, modelID: string) => boolean;
  hideAllModels: (providerID: string, modelIDs: string[]) => void;
  showAllModels: (providerID: string) => void;
- toggleModelProviderCollapsed: (providerID: string) => void;
- setModelProvidersCollapsed: (providerIDs: string[], collapsed: boolean) => void;
  isFavoriteModel: (providerID: string, modelID: string) => boolean;
  addRecentModel: (providerID: string, modelID: string) => void;
  setLastSelectedModel: (providerID: string, modelID: string) => void;
- addRecentAgent: (agentName: string) => void;
  toggleFavoriteAgent: (agentName: string) => void;
- addRecentEffort: (providerID: string, modelID: string, variant: string | undefined) => void;
  setDiffLayoutPreference: (mode: 'dynamic' | 'inline' | 'side-by-side') => void;
  /** The layout setting for every diff, dropping the per-file choices (the Changes header toggle). */
  setDiffLayoutForAllFiles: (mode: 'inline' | 'side-by-side') => void;
@@ -1485,13 +1455,8 @@ interface UIStore {
  setNotificationTemplates: (
   templates: UIStore['notificationTemplates'] | ((current: UIStore['notificationTemplates']) => UIStore['notificationTemplates']),
  ) => void;
- setSummarizeLastMessage: (value: boolean) => void;
- setSummaryThreshold: (value: number) => void;
- setSummaryLength: (value: number) => void;
  setMaxLastMessageLength: (value: number) => void;
- setShowOpenCodeUpdateNotifications: (value: boolean) => void;
  setAgentControlToolEnabled: (value: boolean) => void;
- setAgentScheduleToolEnabled: (value: boolean) => void;
  setAgentWebToolEnabled: (value: boolean) => void;
  setMessageSearchEnabled: (value: boolean) => void;
  setMessageSearchReasoningEnabled: (value: boolean) => void;
@@ -1507,8 +1472,6 @@ interface UIStore {
  setPlanModeAllowAgents: (value: boolean) => void;
  setAgentImageToolEnabled: (value: boolean) => void;
  setAgentImageModel: (value: string) => void;
- setAgentSecretToolEnabled: (value: boolean) => void;
- setAgentToolsCodeMode: (value: boolean) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
  setAgentMemoryFeatureAvailable: (value: boolean) => void;
@@ -1544,7 +1507,6 @@ interface UIStore {
  setPromptNavigatorEnabled: (value: boolean) => void;
  setShowSplitAssistantMessageActions: (value: boolean) => void;
  setAllowPromptingSubagentSessions: (value: boolean) => void;
- setSavePastedImagesAsFiles: (value: boolean) => void;
  viewPagerPage: 'left' | 'center' | 'right';
  setViewPagerPage: (page: 'left' | 'center' | 'right') => void;
  toggleExpandedInput: () => void;
@@ -1624,7 +1586,6 @@ export const useUIStore = create<UIStore>()(
     runtimeStatusText: '',
     isOpenCodeStatusDialogOpen: false,
     openCodeStatusText: '',
-    isSessionCreateDialogOpen: false,
     isScheduledTasksDialogOpen: false,
     isArchivePageOpen: false,
     isIntegrationsCatalogOpen: false,
@@ -1639,7 +1600,6 @@ export const useUIStore = create<UIStore>()(
     isSettingsDialogOpen: false,
     isNewWorktreeDialogOpen: false,
     isModelSelectorOpen: false,
-    sidebarSection: 'sessions',
     settingsPage: 'home',
     settingsHasOpenedOnce: false,
     settingsProjectsSelectedId: null,
@@ -1656,8 +1616,6 @@ export const useUIStore = create<UIStore>()(
     persistChatDraft: true,
     showExpandedBashTools: false,
     showExpandedEditTools: false,
-    notesPanelHeight: 112,
-    projectContextSidebarWidth: 168,
     sessionWorkAutoOpen: true,
     sessionWorkKeepInGroup: false,
     streamingAutoFollowEnabled: true,
@@ -1687,7 +1645,6 @@ export const useUIStore = create<UIStore>()(
     mergedWorktreeCleanupEnabled: false,
     worktreeArchiveOnDoneEnabled: false,
     autoDeleteLastRunAt: null,
-    messageLimit: 200,
     fontSize: 100,
     chatFontSize: 100,
     globalDraftStarters: null,
@@ -1701,20 +1658,16 @@ export const useUIStore = create<UIStore>()(
     customMonoFont: '',
     uiFontWeight: DEFAULT_UI_FONT_WEIGHT,
     padding: 100,
-    cornerRadius: 18,
     inputBarOffset: 0,
     mobileKeyboardMode: getStoredMobileKeyboardMode(),
     favoriteModels: [],
     hiddenModels: [],
     providerOrder: [],
-    collapsedModelProviders: [],
     customProviderIcons: {},
     customProviderLogos: {},
     recentModels: [],
     lastSelectedModel: undefined,
-    recentAgents: [],
     favoriteAgents: [],
-    recentEfforts: {},
     lastUsedEfforts: {},
     diffLayoutPreference: 'inline',
     diffFileLayout: {},
@@ -1746,18 +1699,12 @@ export const useUIStore = create<UIStore>()(
      subtask: { ...EMPTY_NOTIFICATION_TEMPLATES.subtask },
     },
 
-    // Summarization settings
-    summarizeLastMessage: false,
-    summaryThreshold: 200,
-    summaryLength: 100,
     maxLastMessageLength: 250,
 
     showTerminalQuickKeysOnDesktop: false,
     sessionTabsEnabled: false,
     sessionTabsPerWorkspace: false,
-    showOpenCodeUpdateNotifications: true,
     agentControlToolEnabled: true,
-    agentScheduleToolEnabled: true,
     agentWebToolEnabled: true,
     messageSearchEnabled: false,
     messageSearchReasoningEnabled: false,
@@ -1773,8 +1720,6 @@ export const useUIStore = create<UIStore>()(
     planModeAllowAgents: false,
     agentImageToolEnabled: false,
     agentImageModel: '',
-    agentSecretToolEnabled: true,
-    agentToolsCodeMode: false,
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
     agentMemoryFeatureAvailable: false,
@@ -1807,7 +1752,6 @@ export const useUIStore = create<UIStore>()(
     promptNavigatorEnabled: true,
     showSplitAssistantMessageActions: false,
     allowPromptingSubagentSessions: false,
-    savePastedImagesAsFiles: false,
     draftStartersVisible: true,
     isExpandedInput: false,
     reportUsage: true,
@@ -2601,14 +2545,6 @@ export const useUIStore = create<UIStore>()(
      set({ runtimeStatusText: text });
     },
 
-    setNotesPanelHeight: (height) => {
-     set({ notesPanelHeight: height });
-    },
-
-    setProjectContextSidebarWidth: (width) => {
-     set({ projectContextSidebarWidth: width });
-    },
-
     setSessionWorkAutoOpen: (value) => {
      set({ sessionWorkAutoOpen: value });
     },
@@ -2631,10 +2567,6 @@ export const useUIStore = create<UIStore>()(
 
     setOpenCodeStatusText: (text) => {
      set({ openCodeStatusText: text });
-    },
-
-    setSessionCreateDialogOpen: (open) => {
-     set({ isSessionCreateDialogOpen: open });
     },
 
     setScheduledTasksDialogOpen: (open) => {
@@ -2729,10 +2661,6 @@ export const useUIStore = create<UIStore>()(
 
     setModelSelectorOpen: (open) => {
      set({ isModelSelectorOpen: open });
-    },
-
-    setSidebarSection: (section) => {
-     set({ sidebarSection: section });
     },
 
     setSettingsPage: (slug) => {
@@ -2903,11 +2831,6 @@ export const useUIStore = create<UIStore>()(
      set({ autoDeleteLastRunAt: timestamp });
     },
 
-    setMessageLimit: (value) => {
-     const clamped = Math.max(10, Math.min(500, Math.round(value)));
-     set({ messageLimit: clamped });
-    },
-
     setFontSize: (size) => {
      // Clamp between 50% and 200%
      const clampedSize = Math.max(50, Math.min(200, size));
@@ -2970,10 +2893,6 @@ export const useUIStore = create<UIStore>()(
      const clampedSize = Math.max(50, Math.min(200, size));
      set({ padding: clampedSize });
      get().applyPadding();
-    },
-
-    setCornerRadius: (radius) => {
-     set({ cornerRadius: radius });
     },
 
     applyTypography: () => {
@@ -3195,50 +3114,6 @@ export const useUIStore = create<UIStore>()(
      }));
     },
 
-    toggleModelProviderCollapsed: (providerID) => {
-     const normalizedProviderID = typeof providerID === 'string' ? providerID.trim() : '';
-     if (!normalizedProviderID) {
-      return;
-     }
-
-     set((state) => {
-      const isCollapsed = state.collapsedModelProviders.includes(normalizedProviderID);
-      if (isCollapsed) {
-       return {
-        collapsedModelProviders: state.collapsedModelProviders.filter((id) => id !== normalizedProviderID),
-       };
-      }
-
-      return {
-       collapsedModelProviders: [...state.collapsedModelProviders, normalizedProviderID],
-      };
-     });
-    },
-
-    setModelProvidersCollapsed: (providerIDs, collapsed) => {
-     const normalizedProviderIDs = Array.from(new Set(
-      providerIDs
-       .filter((providerID): providerID is string => typeof providerID === 'string')
-       .map((providerID) => providerID.trim())
-       .filter(Boolean)
-     ));
-
-     if (normalizedProviderIDs.length === 0) {
-      return;
-     }
-
-     set((state) => {
-      const scopedProviderIDs = new Set(normalizedProviderIDs);
-      const untouchedProviders = state.collapsedModelProviders.filter((providerID) => !scopedProviderIDs.has(providerID));
-
-      return {
-       collapsedModelProviders: collapsed
-        ? [...untouchedProviders, ...normalizedProviderIDs]
-        : untouchedProviders,
-      };
-     });
-    },
-
     isFavoriteModel: (providerID, modelID) => {
      const { favoriteModels } = get();
      return favoriteModels.some(
@@ -3275,44 +3150,6 @@ export const useUIStore = create<UIStore>()(
      }));
     },
 
-    addRecentAgent: (agentName) => {
-     const normalized = typeof agentName === 'string' ? agentName.trim() : '';
-     if (!normalized) {
-      return;
-     }
-     set((state) => {
-      if (state.recentAgents.includes(normalized)) {
-       return state;
-      }
-      const filtered = state.recentAgents;
-      return {
-       recentAgents: [normalized, ...filtered].slice(0, 5),
-      };
-     });
-    },
-
-    addRecentEffort: (providerID, modelID, variant) => {
-     const provider = typeof providerID === 'string' ? providerID.trim() : '';
-     const model = typeof modelID === 'string' ? modelID.trim() : '';
-     if (!provider || !model) {
-      return;
-     }
-     const key = modelRefKey(provider, model);
-     const normalizedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant.trim() : 'default';
-     set((state) => {
-      const current = state.recentEfforts[key] ?? [];
-      if (current.includes(normalizedVariant)) {
-       return state;
-      }
-      const filtered = current;
-      return {
-       recentEfforts: {
-        ...state.recentEfforts,
-        [key]: [normalizedVariant, ...filtered].slice(0, 5),
-       },
-      };
-     });
-    },
     rememberLastUsedEffort: (provider, model, variant) => {
      if (!provider || !model) return;
      const key = modelRefKey(provider, model);
@@ -3417,18 +3254,9 @@ export const useUIStore = create<UIStore>()(
        : templates,
      }));
     },
-    setSummarizeLastMessage: (value) => { set({ summarizeLastMessage: value }); },
-    setSummaryThreshold: (value) => { set({ summaryThreshold: value }); },
-    setSummaryLength: (value) => { set({ summaryLength: value }); },
     setMaxLastMessageLength: (value) => { set({ maxLastMessageLength: value }); },
-    setShowOpenCodeUpdateNotifications: (value) => {
-     set({ showOpenCodeUpdateNotifications: value });
-    },
     setAgentControlToolEnabled: (value) => {
      set({ agentControlToolEnabled: value });
-    },
-    setAgentScheduleToolEnabled: (value) => {
-     set({ agentScheduleToolEnabled: value });
     },
     setAgentWebToolEnabled: (value) => {
      set({ agentWebToolEnabled: value });
@@ -3458,23 +3286,23 @@ export const useUIStore = create<UIStore>()(
      set({ agentRenderToolEnabled: value });
     },
     setSessionGoalChecker: (value) => {
-      set({ sessionGoalChecker: value });
+     set({ sessionGoalChecker: value });
     },
 
     setSessionGoalMaxAutoTurns: (value) => {
-      set({ sessionGoalMaxAutoTurns: Math.min(SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, Math.max(1, Math.floor(value))) });
+     set({ sessionGoalMaxAutoTurns: Math.min(SESSION_GOAL_MAX_AUTO_TURNS_LIMIT, Math.max(1, Math.floor(value))) });
     },
 
     setPermissionDefaultMode: (value) => {
-      set({ permissionDefaultMode: value });
+     set({ permissionDefaultMode: value });
     },
 
     setAutoApplyAgentModel: (value) => {
-      set({ autoApplyAgentModel: value });
+     set({ autoApplyAgentModel: value });
     },
 
     setPlanModeAllowAgents: (value) => {
-      set({ planModeAllowAgents: value });
+     set({ planModeAllowAgents: value });
     },
 
     setAgentImageToolEnabled: (value) => {
@@ -3482,12 +3310,6 @@ export const useUIStore = create<UIStore>()(
     },
     setAgentImageModel: (value) => {
      set({ agentImageModel: value });
-    },
-    setAgentSecretToolEnabled: (value) => {
-     set({ agentSecretToolEnabled: value });
-    },
-    setAgentToolsCodeMode: (value) => {
-     set({ agentToolsCodeMode: value });
     },
     setAgentWorkflowToolEnabled: (value) => {
      set({ agentWorkflowToolEnabled: value });
@@ -3600,9 +3422,6 @@ export const useUIStore = create<UIStore>()(
     },
     setAllowPromptingSubagentSessions: (value) => {
      set({ allowPromptingSubagentSessions: value });
-    },
-    setSavePastedImagesAsFiles: (value) => {
-     set({ savePastedImagesAsFiles: value });
     },
     setReportUsage: (value) => {
      set({ reportUsage: value });
@@ -3823,26 +3642,11 @@ export const useUIStore = create<UIStore>()(
       }
      }
 
-     // v2 -> v3: collapse 3 memory-limit fields into single messageLimit.
-     // Pick the best user-customised value (prefer historical, fall back to active).
-     // Discard old defaults (90/120/180) — they become the new single default (200).
-     if (version < 3) {
-      const OLD_DEFAULTS = new Set([90, 120, 180, 220]);
-      const hist = state.memoryLimitHistorical as number | undefined;
-      const active = state.memoryLimitActiveSession as number | undefined;
-
-      // If user had a non-default custom value, keep it as the new messageLimit.
-      if (typeof hist === 'number' && !OLD_DEFAULTS.has(hist)) {
-       state.messageLimit = hist;
-      } else if (typeof active === 'number' && !OLD_DEFAULTS.has(active)) {
-       state.messageLimit = active;
-      }
-      // Otherwise leave undefined → Zustand uses the initial default (200).
-
-      delete state.memoryLimitHistorical;
-      delete state.memoryLimitViewport;
-      delete state.memoryLimitActiveSession;
-     }
+     // The three message-window limits left with `messageLimit`; drop the
+     // stale persisted fields old builds wrote.
+     delete state.memoryLimitHistorical;
+     delete state.memoryLimitViewport;
+     delete state.memoryLimitActiveSession;
 
      // Right-sidebar state was removed with the sidebar itself; drop
      // stale persisted fields.
@@ -3977,12 +3781,10 @@ export const useUIStore = create<UIStore>()(
      workStatusSectionOrder: state.workStatusSectionOrder,
      workStatusHiddenSectionsExplicit: state.workStatusHiddenSectionsExplicit,
      isSessionSwitcherOpen: state.isSessionSwitcherOpen,
-     sidebarSection: state.sidebarSection,
      settingsPage: state.settingsPage,
      settingsHasOpenedOnce: state.settingsHasOpenedOnce,
      settingsProjectsSelectedId: state.settingsProjectsSelectedId,
      settingsRemoteInstancesSelectedId: state.settingsRemoteInstancesSelectedId,
-     isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
      // Note: isSettingsDialogOpen intentionally NOT persisted
      showReasoningTraces: state.showReasoningTraces,
      streamingAutoFollowEnabled: state.streamingAutoFollowEnabled,
@@ -4012,7 +3814,6 @@ export const useUIStore = create<UIStore>()(
      mergedWorktreeCleanupEnabled: state.mergedWorktreeCleanupEnabled,
      worktreeArchiveOnDoneEnabled: state.worktreeArchiveOnDoneEnabled,
      autoDeleteLastRunAt: state.autoDeleteLastRunAt,
-     messageLimit: state.messageLimit,
      fontSize: state.fontSize,
      chatFontSize: state.chatFontSize,
      globalDraftStarters: state.globalDraftStarters,
@@ -4026,18 +3827,14 @@ export const useUIStore = create<UIStore>()(
      customMonoFont: state.customMonoFont,
      uiFontWeight: state.uiFontWeight,
      padding: state.padding,
-     cornerRadius: state.cornerRadius,
      favoriteModels: state.favoriteModels,
      hiddenModels: state.hiddenModels,
      providerOrder: state.providerOrder,
-     collapsedModelProviders: state.collapsedModelProviders,
      customProviderIcons: state.customProviderIcons,
      customProviderLogos: state.customProviderLogos,
      recentModels: state.recentModels,
      lastSelectedModel: state.lastSelectedModel,
-     recentAgents: state.recentAgents,
      favoriteAgents: state.favoriteAgents,
-     recentEfforts: state.recentEfforts,
      lastUsedEfforts: state.lastUsedEfforts,
      diffLayoutPreference: state.diffLayoutPreference,
      diffWrapLines: state.diffWrapLines,
@@ -4060,13 +3857,8 @@ export const useUIStore = create<UIStore>()(
      notifyOnQuestion: state.notifyOnQuestion,
      notifyOnPullRequests: state.notifyOnPullRequests,
      notificationTemplates: state.notificationTemplates,
-     summarizeLastMessage: state.summarizeLastMessage,
-     summaryThreshold: state.summaryThreshold,
-     summaryLength: state.summaryLength,
      maxLastMessageLength: state.maxLastMessageLength,
-     showOpenCodeUpdateNotifications: state.showOpenCodeUpdateNotifications,
      agentControlToolEnabled: state.agentControlToolEnabled,
-     agentScheduleToolEnabled: state.agentScheduleToolEnabled,
      agentWebToolEnabled: state.agentWebToolEnabled,
      messageSearchEnabled: state.messageSearchEnabled,
      messageSearchReasoningEnabled: state.messageSearchReasoningEnabled,
@@ -4077,8 +3869,6 @@ export const useUIStore = create<UIStore>()(
      agentRenderToolEnabled: state.agentRenderToolEnabled,
      agentImageToolEnabled: state.agentImageToolEnabled,
      agentImageModel: state.agentImageModel,
-     agentSecretToolEnabled: state.agentSecretToolEnabled,
-     agentToolsCodeMode: state.agentToolsCodeMode,
      agentWorkflowToolEnabled: state.agentWorkflowToolEnabled,
      isolatedSpacesEnabled: state.isolatedSpacesEnabled,
      agentMemoryViewedAt: state.agentMemoryViewedAt,
@@ -4106,7 +3896,6 @@ export const useUIStore = create<UIStore>()(
      promptNavigatorEnabled: state.promptNavigatorEnabled,
      showSplitAssistantMessageActions: state.showSplitAssistantMessageActions,
      allowPromptingSubagentSessions: state.allowPromptingSubagentSessions,
-     savePastedImagesAsFiles: state.savePastedImagesAsFiles,
      draftStartersVisible: state.draftStartersVisible,
      shortcutOverrides: state.shortcutOverrides,
      fileEditorKeymap: state.fileEditorKeymap,

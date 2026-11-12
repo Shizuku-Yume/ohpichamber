@@ -30,7 +30,7 @@ beforeEach(() => {
   const settingsMock = spyOn(canonicalClient, 'getOmpSettings').mockImplementation(async (workspaceId) => ({
     workspaceId,
     revision: '0',
-    settings: [{ id: 'modelRoles', type: 'record', value: ompSettingsRoles, default: null, configured: true }],
+    settings: [{ id: 'modelRoles', type: 'record', value: ompSettingsRoles, default: null, configured: true, surface: 'gui' }],
   }));
   restorers = [() => scope.mockRestore(), () => catalog.mockRestore(), () => settingsMock.mockRestore()];
 });

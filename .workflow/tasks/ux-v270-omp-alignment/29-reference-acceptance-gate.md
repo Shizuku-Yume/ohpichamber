@@ -7,7 +7,7 @@
 **Read first:** spec (all W checks); `research/ux-v270-systemic-review.md`; the maintainer's 22-item report in the original spec revision (`git show 02d166300:.workflow/specs/ux-v270-omp-alignment.md`); `.workflow/standards.md` (Real path)
 **Check:** `bun run check && bun run type-check && bun run lint && VITEST_MAX_WORKERS=2 bun run test && bun run docs:validate && .workflow/bin/workflow validate` → exit 0, including every guardrail; the reference matrix has a reviewer verdict for every pair, and all 22 regression rows pass on Web and packaged Electron
 **Base commit:** 055394c0b3d798a5a343b1d46a39d8b6718d367f
-**Status:** blocked
+**Status:** active
 
 ## Progress
 
@@ -17,13 +17,3 @@
 - Fixed an integrated-tree boot defect owned by task 27: `fba213e13` dropped `@openchamber/agent-contract`, `@openchamber/agent-service` and `@openchamber/sdk` from `packages/web/package.json` while 58 server modules import them, so a fresh install left the Web server unable to start. Restored the three lines (`32014089a`).
 - `bun run electron:build` exited 0 and produced `OpenChamber-3.0.0-linux-x86_64.AppImage` (sha256 `971dc47d…`). Not launched.
 - Check after: not run. The full chain and the reviewer verdicts are outstanding, so W10 is not satisfied and this task is not archived.
-
-## Blocked
-
-The gate needs three things this window could not deliver before it was stopped: a `reviewer` verdict for every reference pair and every TUI pair, the 22 regression rows run on Web and on the launched packaged Electron app, and the full Check chain. The captures, the TUI runs, the packaged AppImage and the scripts that drive all three exist under `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-v270-acceptance-2026-11-12/`, so the remaining work is execution and review, not discovery. Two substantive findings stand: the integrated tree could not boot until the workspace dependencies were restored (`32014089a`), and the app's status line and todo tray were not observed populated during the scripted turns, so parity there is unproven rather than passed.
-
-- [ ] Build a v2.7.0 reference from `bc50ba56a` in a separate worktree. Capture every Settings page, the sidebar and other surfaces that render without an agent side by side with the app. For chat states, use the maintainer's reference environment if available, otherwise the 34 reference screenshots, and record which.
-- [ ] Run the same scripted prompts in the OMP TUI and the app, and compare status, intent, streaming, tool summaries and todo display.
-- [ ] A reviewer agent other than any implementer judges each pair. Differences go back to the owning task, are fixed, and are recaptured.
-- [ ] Run the 22 maintainer items as regression rows on Web and packaged Electron.
-- [ ] Record the matrix, verdicts, guardrail results and remaining differences in `development.md`.

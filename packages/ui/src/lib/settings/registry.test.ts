@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
@@ -412,7 +413,7 @@ describe('custom stt endpoint path setting', () => {
  * there is stored and never used.
  */
 describe('settings registry effects', () => {
-  const repoRoot = join(import.meta.dir, '../../../../..');
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
   /** Files that move settings rather than consume them; see the doc comment. */
   const PLUMBING = new Set([
@@ -516,7 +517,7 @@ describe('settings registry effects', () => {
 
   /** Classes of code reading a key: the key itself or the store field it binds. */
   const effectClassesOf = (key: string): Set<string> => {
-    const storeField = SETTINGS_REGISTRY[key].ui?.field;
+    const storeField = (SETTINGS_REGISTRY as Record<string, { ui?: { field?: string } }>)[key]?.ui?.field;
     const classes = new Set(consumers.get(key) ?? []);
     if (storeField && storeField !== key) {
       for (const consumerClass of consumers.get(storeField) ?? []) classes.add(consumerClass);

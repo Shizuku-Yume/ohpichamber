@@ -169,12 +169,14 @@ describe('i18n dictionaries', () => {
         'settings.omp.advancedDescription',
         'settings.omp.modelRoles.description',
         'settings.omp.section.retry.description',
-      ]) {
+      ] as const) {
         expect(dictionary[key], `${locale} ${key}`).not.toBe(enDict[key]);
       }
       const placeholderDrift = ompKeys.filter((key) => {
         const pattern = /\{\w+\}/g;
-        return (enDict[key].match(pattern) ?? []).join() !== (dictionary[key].match(pattern) ?? []).join();
+        const english = (enDict as Record<string, string>)[key] ?? '';
+        const translated = (dictionary as Record<string, string>)[key] ?? '';
+        return (english.match(pattern) ?? []).join() !== (translated.match(pattern) ?? []).join();
       });
       expect(placeholderDrift, `${locale} OMP placeholder drift`).toEqual([]);
     }

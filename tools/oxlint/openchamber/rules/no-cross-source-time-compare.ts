@@ -57,6 +57,12 @@ const hasForeignClock = (node: ESTree.Node): boolean => (
   anyNode(node, (candidate) => !isUpdatedAtMember(candidate) && (isHostMoment(candidate) || isLocalClock(candidate)))
 );
 
+const isMathExtremum = (node: ESTree.Node): boolean => (
+  node.type === "MemberExpression" && !node.computed
+  && node.object.type === "Identifier" && node.object.name === "Math"
+  && node.property.type === "Identifier" && (node.property.name === "max" || node.property.name === "min")
+);
+
 /** Flag a comparison between the native session mtime and any other clock. */
 export const noCrossSourceTimeCompareRule = defineRule({
   meta: {
@@ -83,8 +89,7 @@ export const noCrossSourceTimeCompareRule = defineRule({
         if (leftMixes || rightMixes || crosses) context.report({ node, messageId: "crossSource" });
       },
       CallExpression(node) {
-        const callee = node.callee;
-        if (callee.type !== "Identifier" || callee.name !== "Math.max" && callee.name !== "Math.min") return;
+        if (!isMathExtremum(node.callee)) return;
         const arguments_ = node.arguments.filter((argument) => argument.type !== "SpreadElement");
         if (arguments_.some(hasUpdatedAt) && arguments_.some(hasForeignClock)) {
           context.report({ node, messageId: "crossSource" });

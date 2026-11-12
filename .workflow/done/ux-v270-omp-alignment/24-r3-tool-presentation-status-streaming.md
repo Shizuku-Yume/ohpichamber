@@ -7,7 +7,6 @@
 **Read first:** `research/ux-v270-systemic-review.md` R3 (tool coverage table, holds inventory); OMP `pi-tui` tool renderers, `event-controller` status, `components/markdown.ts`; skills `performance-engineering`, `locale-ui-patterns`
 **Check:** `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/lib/toolPresentation packages/ui/src/components/chat && bun run lint` → exit 0, with the coverage test resolving every OMP 18.18.0 model-facing and host tool and the replay test passing (status = `input.i` intent, first prose token visible within one 100 ms frame, todo tray collapsed to active item + progress); real path: the same scripted prompts in OMP TUI and the app show matching status, intents and tool summaries
 **Base commit:** a3883ab4fb8217b1388bf1cc2e7fe7a642f354f7
-**Status:** active
 
 - [x] Build one OMP-keyed registry: per tool `label`, `icon`, `describeCall(input)` including `input.i`, `describeResult(details)` (match/file counts, line ranges, diff stats, exit status, todo progress), and grouping class. Cover all OMP tools, hidden tools, `vibe_*`, `advise` and host tools.
 - [x] Status shows OMP's `Working…`, the thinking state, or the active call's intent. Retry, cooldown and permission-wait come from live state.

@@ -1,6 +1,6 @@
 # Upstream v2.7.0 merge and systemic UX/runtime remediation
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** ux-v270-omp-alignment/integration
 

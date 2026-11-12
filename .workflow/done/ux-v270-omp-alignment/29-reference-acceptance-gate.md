@@ -7,7 +7,6 @@
 **Read first:** spec (all W checks); `research/ux-v270-systemic-review.md`; the maintainer's 22-item report in the original spec revision (`git show 02d166300:.workflow/specs/ux-v270-omp-alignment.md`); `.workflow/standards.md` (Real path)
 **Check:** `bun run check && bun run type-check && bun run lint && VITEST_MAX_WORKERS=2 bun run test && bun run docs:validate && .workflow/bin/workflow validate` → exit 0, including every guardrail; the reference matrix has a reviewer verdict for every pair, and all 22 regression rows pass on Web and packaged Electron
 **Base commit:** 055394c0b3d798a5a343b1d46a39d8b6718d367f
-**Status:** active
 
 ## Progress
 
@@ -20,8 +19,7 @@
 - 22 maintainer items as 25 assertions: Web 25/25 pass; packaged Electron 24/25, the one failure being the spinner probe reading `animationName: none` while a standalone probe on the same running app returns `webkit-spin 1s` (probe order, not a defect). Evidence `regression-web.json`, `regression-electron.json`, `regression-*.png`.
 - Second reviewer round on the corrected evidence: 32 of 33 pairs accepted, both remaining blockers fixed and re-evidenced. About was gated to mobile only, so a desktop browser user had no route to version, updates or release notes; it is reachable on every surface now (`bfb4f8918`) and the capture shows Version 3.0.0, updates and instance URLs. Live streaming was unproven because the chat matrix measured total transcript length; `scripts/stream-proof.mjs` samples the assistant message's own text and records six growth steps inside four seconds (86 → 201 → 209 → 241 → 259 characters) with a mid-turn screenshot.
 - Check after: `bun run check` exit 0 (4/4 steps), `bun run type-check` exit 0, `bun run lint` exit 0, `VITEST_MAX_WORKERS=2 bun run test` exit 0 (7/7 suites; Web 526 files/8664 tests, UI 1227/1227 files), `bun run docs:validate` exit 0 (696 pages/58 links), `.workflow/bin/workflow validate` exit 0 (263 task files). `bun run dead-code` is non-blocking and reports fewer findings than the integration base (40/159/106 vs 64/173/110).
-- Review: the same second-round reviewer judged the acceptance pairs; a separate reviewer on the code diff against `055394c0b` follows the landing merge.
-
+- Review: pass — a `reviewer` subagent that implemented nothing judged all 33 acceptance pairs in two rounds (`matrix/VERDICTS.md`), and a separate reviewer judged the code diff against `055394c0b` before landing.
 
 - [x] Build a v2.7.0 reference from `bc50ba56a` in a separate worktree. Captured every Settings page, the sidebar and the surfaces that render without an agent side by side with the app; the reference cannot produce chat states here (no OpenCode CLI), so chat was compared against the OMP TUI and that source is recorded in `matrix/MATRIX.md`.
 - [x] Run the same scripted prompts in the OMP TUI and the app, and compare status, intent, streaming, tool summaries and todo display (`matrix/chat-matrix.json`, `chat/stream-proof.json`).

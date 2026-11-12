@@ -91,15 +91,15 @@ bun run profile:omp -- --url http://127.0.0.1:4128 --dir <probe project> --model
 ```
 
 ```
-catalog models:    first 29.32 ms, warm median 13.10 ms, max 15.01 ms   (budget 20 ms)   PASS
-catalog providers: first 17.70 ms, warm median 14.50 ms, max 15.21 ms   (budget 20 ms)   PASS
-dispatch:          new session 123.71 ms, warm 100.87 ms, overhead 22.84 ms (budget 150 ms) PASS
-settings tab switch: 51.84, 51.83, 51.83, 51.56, 51.67 ms              (budget 100 ms)  PASS
+catalog models:    first 29.05 ms, warm median 12.91 ms, max 13.71 ms   (budget 20 ms)   PASS
+catalog providers: first 18.20 ms, warm median 14.66 ms, max 15.36 ms   (budget 20 ms)   PASS
+dispatch:          new session 120.60 ms, warm 112.87 ms, overhead 7.73 ms (budget 150 ms) PASS
+settings tab switch: 51.90, 51.55, 51.72, 51.95, 51.60 ms              (budget 100 ms)  PASS
 ```
 
-Before → after: models 435.34 → 13.10 ms, providers 474.98 → 14.50 ms, dispatch
-overhead 15.07 → 22.84 ms (already inside its budget; the new-session path it
-describes is the one that changed), tab switch unmeasured → 51.8 ms.
+Before → after: models 435.34 → 12.91 ms, providers 474.98 → 14.66 ms, dispatch
+overhead 15.07 → 7.73 ms (both inside its budget; the new-session path it
+describes is the one that changed), tab switch unmeasured → 51.7 ms.
 
 The tab-switch number is the navigation into Settings → OMP, measured in Chrome
 over CDP against the built Web surface. The page is one route with one scroll,

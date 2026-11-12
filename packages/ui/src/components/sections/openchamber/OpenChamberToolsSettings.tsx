@@ -36,6 +36,19 @@ interface ToolRowProps {
   settingsItem: string;
 }
 
+/**
+ * A task-oriented group heading inside the tools card, matching the reference
+ * page's split: what runs work, what shows up in the chat, and what the agent
+ * remembers. The rows keep their own labels; the group says when a user would
+ * reach for them.
+ */
+const ToolGroup: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div>
+    <div className="px-4 pt-3 pb-1 typography-ui-label font-medium text-muted-foreground">{title}</div>
+    {children}
+  </div>
+);
+
 /** Icon column width plus gap, so a nested row lines up with the tool text. */
 const TOOL_ROW_TEXT_INSET_CLASS = 'ps-[3.75rem]';
 
@@ -230,6 +243,7 @@ export const OpenChamberToolsSettings: React.FC = () => {
   return (
     <SettingsSection title={t('settings.openchamber.tools.title')}>
       <div className="max-w-[44rem] oc-tile divide-y divide-[var(--interactive-border)] rounded-xl">
+        <ToolGroup title={t('settings.openchamber.tools.group.runningWork')}>
         <ToolRow
           icon="node-tree"
           settingsItem="sessions.agent-control-tool"
@@ -293,6 +307,9 @@ export const OpenChamberToolsSettings: React.FC = () => {
           </div>
         </div>
 
+        </ToolGroup>
+
+        <ToolGroup title={t('settings.openchamber.tools.group.inTheChat')}>
         <ToolRow
           icon="notification-3"
           settingsItem="sessions.agent-notify-tool"
@@ -376,6 +393,9 @@ export const OpenChamberToolsSettings: React.FC = () => {
           </div>
         </div>
 
+        </ToolGroup>
+
+        <ToolGroup title={t('settings.openchamber.tools.group.whatAgentsKnow')}>
         <ToolRow
           icon="sticky-note"
           settingsItem="sessions.agent-knowledge-tool"
@@ -412,6 +432,7 @@ export const OpenChamberToolsSettings: React.FC = () => {
             ariaLabel={t('settings.openchamber.tools.field.agentWorkflowToolAria')}
           />
         ) : null}
+        </ToolGroup>
       </div>
     </SettingsSection>
   );

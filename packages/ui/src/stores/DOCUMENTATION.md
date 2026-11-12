@@ -126,10 +126,10 @@ Concurrent refreshes share one request per provider. Runtime reset aborts those
 requests, and generation checks prevent their completions from changing the
 next runtime. `lib/quota/fetchQuota.ts` validates response payloads and bounds
 the complete request, including JSON body delivery. Compact usage cards and
-Settings display refresh errors alongside retained data. The Usage page resolves
-the selected provider through `components/sections/usage/usagePageState.ts`: an
-unconfigured provider shows the normal empty state, while a configured provider
-keeps its visible error and marks retained data as stale. The mobile popover
+Settings display refresh errors alongside retained data. The Usage page renders
+one card per provider whose result reports `configured`, so a provider without
+a stored credential has no card at all; a configured provider keeps its visible
+error and marks retained data as stale. The mobile popover
 makes at most one refresh attempt per opening, so a failed first load cannot
 create a retry loop.
 

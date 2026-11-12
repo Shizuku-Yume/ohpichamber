@@ -13,7 +13,6 @@ import type { UsageWindows, QuotaProviderId } from '@/types';
 import { getAllModelFamilies, getDisplayModelName, sortModelFamilies, groupModelsByFamilyWithGetter } from '@/lib/quota/model-families';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
-import { cn } from '@/lib/utils';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
@@ -93,7 +92,10 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId }> = ({ providerId }
     setCollapsedFamilies((previous) => ({ ...previous, [familyId]: !previous[familyId] }));
   }, []);
 
-  const providerSelectedModels = selectedModels[providerId] ?? [];
+  const providerSelectedModels = React.useMemo(
+    () => selectedModels[providerId] ?? [],
+    [selectedModels, providerId],
+  );
   const handleModelToggle = React.useCallback((modelName: string) => {
     toggleModelSelected(providerId, modelName);
     const isSelected = providerSelectedModels.includes(modelName);

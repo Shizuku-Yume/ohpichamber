@@ -6,7 +6,6 @@ import {
   type LocalExtensionEntry,
   type MarketplaceEntry,
   type MarketplacePluginDetails,
-  type PluginCatalogState,
   type PluginMutationResult,
   type PluginUpdateCheckEntry,
 } from '@openchamber/agent-contract';

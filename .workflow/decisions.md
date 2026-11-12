@@ -62,6 +62,15 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 
 ## Entries
 
+## 2026-11-12 - The R3/R5/R6 cutovers own the UI files they rewrote in the v2.7.0 merge
+
+- **Decided:** the 49 `fork-differs` UI paths the drift report still listed without a reason belong to this effort's own class cutovers and keep the fork blob: the status line (`StatusRow`, `WorkingPlaceholder`, `agentStatus`, `useAgentStatusLabel`, `ThinkingPill`, the `agent-status` i18n test), live streaming (`useStreamingTextThrottle`, `streamTextCommit` and its test), the easter-egg thinking lines and their copy, the usage and quota reads (`UsagePage`, `UsageSidebar`, `useQuotaStore`), agent memory and git identities, the shared `content-state`/`text`/preview primitives, `AppStartupOverlay`, `NewWorktreeBranchPicker`, `MagicPromptsPage`, `modelPrefsAutoSave`, `index.css` and `design-system.css`.
+- **Instead of:** taking upstream's copy of those files, which still renders hashed whimsical status phrases, buffers prose behind the block hold, keys a joke off the reasoning part, reads `/api/quota/*` without OMP credentials, and carries the OpenCode-shaped store fields.
+- **Because:** each file is the surviving half of a cutover whose whole point was to remove that behavior; upstream's version reintroduces the defect the effort exists to fix, and the fork blob is what the class guardrails and the reference comparison were run against. The drift report's job is to force this listing, not to prefer upstream.
+- **Mine:** yes (conservative option inside the 2026-11-10 merge decision and the R3/R5/R6 cutovers)
+- **Revisit when:** upstream rewrites one of these surfaces on a contract the fork also accepts, so its blob no longer carries the retired behavior.
+- **Effort:** ux-v270-omp-alignment
+
 ## 2026-11-12 - A dead settings row is deleted, not kept for later
 
 - **Decided:** a persisted settings key with no consumer outside the settings plumbing is deleted through its whole chain (registry row, store field and setter, page control, search entry, translations, server sanitizer, snapshot, fixture). Each surviving entry declares its effect as `ui`, `store`, `server` or `shell`, and a test fails on a key with no consumer or a declaration the code contradicts.

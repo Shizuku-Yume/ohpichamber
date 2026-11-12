@@ -1486,7 +1486,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label': 'Nieuwe worktree…',
   'settings.openchamber.keyboardShortcuts.action.add_project.label': 'Project toevoegen',
   'settings.openchamber.keyboardShortcuts.action.reload_ui.label': 'Interface herladen',
-  'settings.openchamber.keyboardShortcuts.action.restart_opencode.label': 'OpenCode herstarten',
   'settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label': 'Chatsectie tonen',
   'settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label': 'Sectie Vastgezet tonen',
   'settings.openchamber.keyboardShortcuts.action.toggle_work_section.label': 'Sectie In bewerking tonen',

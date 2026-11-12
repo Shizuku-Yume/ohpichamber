@@ -263,7 +263,7 @@ test('renders every page row translated in zh-CN with no raw setting id on scree
       'settings.omp.group.lsp.label',
       'settings.omp.group.modes.label',
       'settings.omp.group.commands_skills.label',
-    ]) {
+    ] as const) {
       expect(container.textContent, key).toContain(ompSettingsI18n['zh-CN'][key]);
     }
     expect(container.textContent).not.toContain('settings.omp.group.');

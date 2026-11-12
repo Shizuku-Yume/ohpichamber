@@ -400,11 +400,29 @@ export const WebSearchPage: React.FC = () => {
 
   // The boot registry read the snapshot; this only re-reads when the page is
   // opened for another project or runtime (the snapshot is scoped to both).
+  //
+  // The dependency is the scope string and the state's KIND, never the state
+  // object: `load()` publishes a fresh `{ kind: 'loading' }` on every call, so
+  // depending on the object re-ran this effect for its own write and the page
+  // resolved the workspace thousands of times without ever reading the
+  // snapshot. A kind that is already loading or failed is left alone; the
+  // store's own retry button owns the failed case.
   const scope = getWebSearchScopeKey();
+  const stateKind = state.kind;
+  // A read is only "already running" for the scope it started in. A scope
+  // change mid-read abandons the old request, so the page must start the new
+  // one rather than wait for a reply that will be discarded.
+  const loadingScope = state.kind === 'loading' ? state.scope : null;
+  const readyScope = state.kind === 'ready' ? state.snapshot.scope : null;
   React.useEffect(() => {
-    if (state.kind === 'ready' && state.snapshot.scope === scope) return;
+    if (stateKind === 'ready' && readyScope === scope) return;
+    if (stateKind === 'loading' && loadingScope !== scope) {
+      void load();
+      return;
+    }
+    if (stateKind === 'loading' || stateKind === 'failed') return;
     void load();
-  }, [load, scope, state]);
+  }, [load, scope, stateKind, loadingScope, readyScope]);
 
   const snapshot = state.kind === 'ready' && state.snapshot.scope === scope ? state.snapshot : null;
   const failed = state.kind === 'failed';

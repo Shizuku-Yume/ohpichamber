@@ -104,26 +104,41 @@ export const createParsedStatus = (parts: readonly Part[]): ParsedStatusResult =
     return { status: { key: 'chat.agentStatus.working' }, isAnswering: text };
 };
 
-const encodeParsedStatus = (status: ParsedStatusResult): string => [
-    status.isAnswering ? '1' : '0',
-    JSON.stringify([status.status.key, status.status.count ?? null, status.status.name ?? null, status.status.text ?? null]),
-].join(STATUS_SIGNATURE_SEPARATOR);
+/**
+ * One field, so the value can be joined with the retry fields beside it without
+ * its own payload splitting again. The status is JSON and the answering flag
+ * rides inside it.
+ */
+export const encodeParsedStatus = (status: ParsedStatusResult): string => JSON.stringify({
+    answering: status.isAnswering,
+    key: status.status.key,
+    count: status.status.count ?? null,
+    name: status.status.name ?? null,
+    text: status.status.text ?? null,
+});
 
-const decodeParsedStatus = (signature: string): ParsedStatusResult => {
-    const [isAnswering, encodedStatus] = signature.split(STATUS_SIGNATURE_SEPARATOR);
+export const decodeParsedStatus = (signature: string): ParsedStatusResult => {
     let status: AgentStatus = { key: 'chat.agentStatus.working' };
-    if (encodedStatus) {
+    let isAnswering = false;
+    if (signature) {
         try {
-            const [key, count, name, text] = JSON.parse(encodedStatus) as [AgentStatus['key'], number | null, string | null, string | null];
-            status = { key };
-            if (count !== null) status.count = count;
-            if (name !== null) status.name = name;
-            if (text !== null) status.text = text;
+            const parsed = JSON.parse(signature) as {
+                answering?: boolean;
+                key: AgentStatus['key'];
+                count: number | null;
+                name: string | null;
+                text: string | null;
+            };
+            status = { key: parsed.key };
+            if (parsed.count !== null && parsed.count !== undefined) status.count = parsed.count;
+            if (parsed.name !== null && parsed.name !== undefined) status.name = parsed.name;
+            if (parsed.text !== null && parsed.text !== undefined) status.text = parsed.text;
+            isAnswering = parsed.answering === true;
         } catch {
             // A signature from an older build carries no key; the working line stands in.
         }
     }
-    return { status, isAnswering: isAnswering === '1' };
+    return { status, isAnswering };
 };
 
 /**
@@ -227,11 +242,12 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
     const retryInfo = React.useMemo(() => {
         const [, attempt, next, maxAttempts] = lastAssistantSignature.split(STATUS_SIGNATURE_SEPARATOR);
-        if (!attempt) return null;
+        // Only a real retry notice fills these; an empty field means no retry.
+        if (!attempt || !Number.isFinite(Number(attempt))) return null;
         return {
             attempt: Number(attempt),
-            ...(next ? { next: Number(next) } : {}),
-            ...(maxAttempts ? { maxAttempts: Number(maxAttempts) } : {}),
+            ...(next && Number.isFinite(Number(next)) ? { next: Number(next) } : {}),
+            ...(maxAttempts && Number.isFinite(Number(maxAttempts)) ? { maxAttempts: Number(maxAttempts) } : {}),
         };
     }, [lastAssistantSignature]);
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
@@ -412,7 +413,7 @@ describe('custom stt endpoint path setting', () => {
  * there is stored and never used.
  */
 describe('settings registry effects', () => {
-  const repoRoot = join(import.meta.dir, '../../../../..');
+  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
   /** Files that move settings rather than consume them; see the doc comment. */
   const PLUMBING = new Set([
@@ -438,7 +439,10 @@ describe('settings registry effects', () => {
     'packages/agent-service',
   ];
   const SOURCE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
-  const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-bundle', 'build', 'out', '.git', 'ios', 'android']);
+  // Build outputs are not source. `resources/web-dist` and the staged agent
+  // runtime are produced by `electron:build` and are gitignored, so scanning
+  // them would make this test's result depend on whether Electron was built.
+  const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-bundle', 'build', 'out', '.git', 'ios', 'android', 'web-dist', 'agent-runtime']);
 
   const isPlumbing = (relativePath: string): boolean =>
     PLUMBING.has(relativePath)
@@ -516,7 +520,7 @@ describe('settings registry effects', () => {
 
   /** Classes of code reading a key: the key itself or the store field it binds. */
   const effectClassesOf = (key: string): Set<string> => {
-    const storeField = SETTINGS_REGISTRY[key].ui?.field;
+    const storeField = (SETTINGS_REGISTRY as Record<string, { ui?: { field?: string } }>)[key]?.ui?.field;
     const classes = new Set(consumers.get(key) ?? []);
     if (storeField && storeField !== key) {
       for (const consumerClass of consumers.get(storeField) ?? []) classes.add(consumerClass);

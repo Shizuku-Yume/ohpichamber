@@ -609,6 +609,7 @@ describe('useConfigStore provider persistence', () => {
         activeDirectoryKey: DIRECTORY,
         directoryScoped: {
           [DIRECTORY]: {
+            models: [],
             providers: [provider('stale')],
             agents: [testAgent('build')],
             currentProviderId: 'stale',
@@ -619,6 +620,7 @@ describe('useConfigStore provider persistence', () => {
             defaultProviders: { default: 'stale' },
           },
           [OTHER_DIRECTORY]: {
+            models: [],
             providers: [provider('other-stale')],
             agents: [testAgent('review')],
             currentProviderId: 'other-stale',
@@ -711,6 +713,7 @@ describe('useConfigStore provider persistence', () => {
         activeDirectoryKey: OTHER_DIRECTORY,
         directoryScoped: {
           [OTHER_DIRECTORY]: {
+            models: [],
             currentProviderId: 'cached-merged',
             currentModelId: 'cached-merged-model',
             currentAgentName: undefined,
@@ -774,6 +777,7 @@ describe('useConfigStore provider persistence', () => {
         settingsDefaultModel: 'legacy/legacy-model',
         directoryScoped: {
           [DIRECTORY]: {
+            models: [],
             providers: [legacyProvider],
             providersLoaded: true,
             agents: [testAgent('build')],
@@ -786,6 +790,7 @@ describe('useConfigStore provider persistence', () => {
             defaultProviders: { legacy: 'legacy-model' },
           },
           [OTHER_DIRECTORY]: {
+            models: [],
             providers: [validProvider],
             agents: [],
             currentProviderId: 'valid',
@@ -846,6 +851,7 @@ describe('useConfigStore provider persistence', () => {
       selectedProviderId: 'active-stale',
       directoryScoped: {
         [DIRECTORY]: {
+          models: [],
           providers: [provider('active-stale')],
           
           currentProviderId: 'active-stale',
@@ -856,6 +862,7 @@ describe('useConfigStore provider persistence', () => {
           defaultProviders: { default: 'active-stale' },
         },
         [OTHER_DIRECTORY]: {
+          models: [],
           providers: [provider('inactive-cached')],
           
           currentProviderId: 'inactive-cached',
@@ -983,6 +990,7 @@ describe('useConfigStore provider persistence', () => {
       selectedProviderId: '__add_provider__',
       directoryScoped: {
         [DIRECTORY]: {
+          models: [],
           providers: [provider('live')],
           
           currentProviderId: 'live',
@@ -2151,6 +2159,7 @@ describe('useConfigStore provider persistence', () => {
       selectionSource: 'auto',
       directoryScoped: {
         [DIRECTORY]: {
+          models: [],
           providers: [provider('manual'), provider('default')],
           
           currentProviderId: 'default',
@@ -2234,6 +2243,7 @@ describe('useConfigStore provider persistence', () => {
       selectionSource: 'auto',
       directoryScoped: {
         [DIRECTORY]: {
+          models: [],
           providers: [provider('openai', 'gpt-5.5'), provider('anthropic', 'claude')],
           
           currentProviderId: 'anthropic',
@@ -2275,6 +2285,7 @@ describe('useConfigStore provider persistence', () => {
       currentAgentName: 'build',
       directoryScoped: {
         [DIRECTORY]: {
+          models: [],
           providersLoaded: true,
           
           providers: [provider('live')],
@@ -2287,6 +2298,7 @@ describe('useConfigStore provider persistence', () => {
           defaultProviders: { live: 'live-model' },
         },
         [OTHER_DIRECTORY]: {
+          models: [],
           providersLoaded: true,
           
           providers: [provider('other')],
@@ -2334,6 +2346,7 @@ describe('useConfigStore provider persistence', () => {
         activeDirectoryKey: DIRECTORY,
         directoryScoped: {
           [DIRECTORY]: {
+            models: [],
             currentProviderId: 'stale',
             currentModelId: 'stale-model',
             currentAgentName: 'build',
@@ -2342,6 +2355,7 @@ describe('useConfigStore provider persistence', () => {
             defaultProviders: { stale: 'stale-model' },
           },
           [OTHER_DIRECTORY]: {
+            models: [],
             currentProviderId: 'other-stale',
             currentModelId: 'other-stale-model',
             currentAgentName: 'review',
@@ -2405,6 +2419,7 @@ describe('useConfigStore provider persistence', () => {
         selectionSource: 'manual',
         directoryScoped: {
           [DIRECTORY]: {
+            models: [],
             providers: [provider('live')],
             
             currentProviderId: 'live',
@@ -2450,6 +2465,7 @@ describe('useConfigStore provider persistence', () => {
         selectionSource: 'auto',
         currentVariantSelection: { override: undefined, inherited: undefined },
         directoryScoped: { [DIRECTORY]: { ...state.directoryScoped[DIRECTORY], selectionSource: 'auto' } },
+          models: [],
       }));
       counting.configWrites = 0;
       useConfigStore.getState().setAgent('build');
@@ -2485,6 +2501,7 @@ describe('useConfigStore provider persistence', () => {
       const counting = settledSelection();
       useConfigStore.setState((state) => ({
         directoryScoped: { [DIRECTORY]: { ...state.directoryScoped[DIRECTORY], currentModelId: 'old-model' } },
+          models: [],
       }));
       counting.configWrites = 0;
       useConfigStore.getState().setModel('live-model');
@@ -2512,8 +2529,8 @@ describe('useConfigStore provider persistence', () => {
       providers: [provider('live')],
       
       directoryScoped: {
-        [DIRECTORY]: { providers: [provider('live')],  currentProviderId: 'live', currentModelId: 'live-model', currentAgentName: undefined, selectedProviderId: 'live', agentModelSelections: {}, defaultProviders: {} },
-        [OTHER_DIRECTORY]: { providersLoaded: true,  providers: [provider('other')],  currentProviderId: 'other', currentModelId: 'other-model', currentAgentName: 'review', selectedProviderId: 'other', agentModelSelections: {}, defaultProviders: {} },
+        [DIRECTORY]: { providers: [provider('live')], models: [], currentProviderId: 'live', currentModelId: 'live-model', currentAgentName: undefined, selectedProviderId: 'live', agentModelSelections: {}, defaultProviders: {} },
+        [OTHER_DIRECTORY]: { providersLoaded: true,  providers: [provider('other')], models: [], currentProviderId: 'other', currentModelId: 'other-model', currentAgentName: 'review', selectedProviderId: 'other', agentModelSelections: {}, defaultProviders: {} },
       },
     });
     useConfigStore.getState().setModel('live-model');

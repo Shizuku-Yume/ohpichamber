@@ -1453,7 +1453,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label': '새 worktree…',
   'settings.openchamber.keyboardShortcuts.action.add_project.label': '프로젝트 추가',
   'settings.openchamber.keyboardShortcuts.action.reload_ui.label': 'UI 새로고침',
-  'settings.openchamber.keyboardShortcuts.action.restart_opencode.label': 'OpenCode 다시 시작',
   'settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label': '채팅 섹션 표시',
   'settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label': '고정됨 섹션 표시',
   'settings.openchamber.keyboardShortcuts.action.toggle_work_section.label': '작업 중 섹션 표시',

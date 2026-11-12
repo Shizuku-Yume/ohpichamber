@@ -74,14 +74,22 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
     </SettingsCardPill>
     <ScopeChip scope={item.scope} />
    </div>
+   {/* The triggers are regex source. The row already says which triggers an
+       item answers to; the inspector keeps the full patterns behind a
+       disclosure so the catalog stays readable. */}
    {item.triggers.length === 0 ? null : (
-    <div className="flex min-w-0 flex-wrap items-center gap-1 pt-0.5">
-     {item.triggers.map(trigger => (
-      <SettingsCardChip key={trigger} title={trigger} className="max-w-full whitespace-normal break-all">
-       {trigger}
-      </SettingsCardChip>
-     ))}
-    </div>
+    <details className="min-w-0">
+     <summary className="cursor-pointer typography-micro text-muted-foreground">
+      {t('settings.plugins.capabilities.triggers', { count: item.triggers.length })}
+     </summary>
+     <div className="flex min-w-0 flex-wrap items-center gap-1 pt-1">
+      {item.triggers.map(trigger => (
+       <SettingsCardChip key={trigger} title={trigger} className="max-w-full whitespace-normal break-all">
+        {trigger}
+       </SettingsCardChip>
+      ))}
+     </div>
+    </details>
    )}
    {item.shadowedBy === undefined ? null : (
     <div className="flex min-w-0 items-baseline gap-2">
@@ -101,10 +109,12 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
     <p className="typography-micro text-muted-foreground">{facts.join(' · ')}</p>
    )}
    {item.content === undefined ? null : (
-    <div className="min-w-0 space-y-1">
-     <p className="typography-micro text-muted-foreground">{t('settings.skills.page.section.instructions')}</p>
-     <pre className="oc-tile-inset max-h-64 overflow-auto whitespace-pre-wrap break-words p-2 typography-micro text-muted-foreground">{item.content}</pre>
-    </div>
+    <details className="min-w-0">
+     <summary className="cursor-pointer typography-micro text-muted-foreground">
+      {t('settings.skills.page.section.instructions')}
+     </summary>
+     <pre className="oc-tile-inset mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words p-2 typography-micro text-muted-foreground">{item.content}</pre>
+    </details>
    )}
   </div>
  );

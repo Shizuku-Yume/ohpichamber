@@ -87,6 +87,11 @@ interface ModelRoleEditorProps {
   layout?: 'row' | 'stacked';
   /** '' clears the role, which is OMP's explicit inherit state. */
   onChange: (selector: string) => void;
+  /**
+   * The effort level the role inherits when its selector omits one, so the
+   * effort control can name what an unset suffix means instead of guessing.
+   */
+  globalLevel?: string;
 }
 
 /**

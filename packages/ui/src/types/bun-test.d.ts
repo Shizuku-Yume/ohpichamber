@@ -67,7 +67,7 @@ declare module "bun:test" {
   export interface AsymmetricMatcher {
     readonly __asymmetric: true;
   }
-  export function expect(value: unknown): ExpectResult;
+  export function expect(value: unknown, message?: string): ExpectResult;
   export namespace expect {
     function objectContaining(expected: Record<string, unknown>): AsymmetricMatcher;
     function arrayContaining(expected: readonly unknown[]): AsymmetricMatcher;

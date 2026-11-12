@@ -1922,7 +1922,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             directoryScoped: carried ? {
                                 ...state.directoryScoped,
                                 [directoryKey]: {
-                                    providers: [], agentModelSelections: {}, defaultProviders: {},
+                                    providers: [], models: [], agentModelSelections: {}, defaultProviders: {},
                                     selectedProviderId: '', currentAgentName: undefined,
                                     currentProviderId: '', currentModelId: '', ...carried,
                                 },

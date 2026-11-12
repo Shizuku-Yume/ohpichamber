@@ -2,6 +2,7 @@
 export const pluginsMarketplaceI18n = {
   en: {
     'settings.plugins.capabilities.title': 'Capabilities',
+    'settings.plugins.capabilities.triggers': 'Show {count} trigger patterns',
     'settings.plugins.capabilities.info': 'Files OMP discovered in this workspace: rules, agents, skills, MCP servers and local extensions. Turn one off without deleting it.',
     'settings.plugins.marketplace.allCategories': 'All categories',
     'settings.plugins.section.installed': 'Installed',
@@ -48,6 +49,7 @@ export const pluginsMarketplaceI18n = {
   },
   nl: {
     'settings.plugins.capabilities.title': 'Mogelijkheden',
+    'settings.plugins.capabilities.triggers': '{count} triggerpatronen tonen',
     'settings.plugins.capabilities.info': 'Bestanden die OMP in deze werkruimte heeft gevonden: regels, agents, skills, MCP-servers en lokale extensies. Zet er een uit zonder hem te verwijderen.',
     'settings.plugins.marketplace.allCategories': 'Alle categorieën',
     'settings.plugins.section.installed': 'Geïnstalleerd',
@@ -94,6 +96,7 @@ export const pluginsMarketplaceI18n = {
   },
   uk: {
     'settings.plugins.capabilities.title': 'Можливості',
+    'settings.plugins.capabilities.triggers': 'Показати {count} шаблонів тригерів',
     'settings.plugins.capabilities.info': 'Файли, які OMP знайшов у цьому робочому просторі: правила, агенти, скіли, сервери MCP і локальні розширення. Вимкніть потрібне, не видаляючи його.',
     'settings.plugins.marketplace.allCategories': 'Усі категорії',
     'settings.plugins.section.installed': 'Встановлено',
@@ -140,6 +143,7 @@ export const pluginsMarketplaceI18n = {
   },
   de: {
     'settings.plugins.capabilities.title': 'Fähigkeiten',
+    'settings.plugins.capabilities.triggers': '{count} Auslöser-Muster anzeigen',
     'settings.plugins.capabilities.info': 'Dateien, die OMP in diesem Arbeitsbereich gefunden hat: Regeln, Agenten, Skills, MCP-Server und lokale Erweiterungen. Schalte eine ab, ohne sie zu löschen.',
     'settings.plugins.marketplace.allCategories': 'Alle Kategorien',
     'settings.plugins.section.installed': 'Installiert',
@@ -186,6 +190,7 @@ export const pluginsMarketplaceI18n = {
   },
   es: {
     'settings.plugins.capabilities.title': 'Capacidades',
+    'settings.plugins.capabilities.triggers': 'Mostrar {count} patrones de activación',
     'settings.plugins.capabilities.info': 'Archivos que OMP encontró en este espacio de trabajo: reglas, agentes, skills, servidores MCP y extensiones locales. Desactiva uno sin borrarlo.',
     'settings.plugins.marketplace.allCategories': 'Todas las categorías',
     'settings.plugins.section.installed': 'Instalados',
@@ -232,6 +237,7 @@ export const pluginsMarketplaceI18n = {
   },
   fr: {
     'settings.plugins.capabilities.title': 'Capacités',
+    'settings.plugins.capabilities.triggers': 'Afficher {count} motifs de déclenchement',
     'settings.plugins.capabilities.info': 'Fichiers qu’OMP a trouvés dans cet espace de travail : règles, agents, skills, serveurs MCP et extensions locales. Désactivez-en un sans le supprimer.',
     'settings.plugins.marketplace.allCategories': 'Toutes les catégories',
     'settings.plugins.section.installed': 'Installés',
@@ -278,6 +284,7 @@ export const pluginsMarketplaceI18n = {
   },
   ja: {
     'settings.plugins.capabilities.title': '機能',
+    'settings.plugins.capabilities.triggers': '{count} 件のトリガーパターンを表示',
     'settings.plugins.capabilities.info': 'OMP がこのワークスペースで見つけたファイル: ルール、エージェント、スキル、MCP サーバー、ローカル拡張。削除せずに無効にできます。',
     'settings.plugins.marketplace.allCategories': 'すべてのカテゴリ',
     'settings.plugins.section.installed': 'インストール済み',
@@ -324,6 +331,7 @@ export const pluginsMarketplaceI18n = {
   },
   ko: {
     'settings.plugins.capabilities.title': '기능',
+    'settings.plugins.capabilities.triggers': '트리거 패턴 {count}개 표시',
     'settings.plugins.capabilities.info': 'OMP가 이 작업 공간에서 찾은 파일입니다: 규칙, 에이전트, 스킬, MCP 서버, 로컬 확장. 삭제하지 않고 끌 수 있습니다.',
     'settings.plugins.marketplace.allCategories': '모든 카테고리',
     'settings.plugins.section.installed': '설치됨',
@@ -370,6 +378,7 @@ export const pluginsMarketplaceI18n = {
   },
   pl: {
     'settings.plugins.capabilities.title': 'Możliwości',
+    'settings.plugins.capabilities.triggers': 'Pokaż wzorce wyzwalaczy ({count})',
     'settings.plugins.capabilities.info': 'Pliki, które OMP znalazł w tej przestrzeni roboczej: reguły, agenci, skille, serwery MCP i lokalne rozszerzenia. Wyłącz je bez usuwania.',
     'settings.plugins.marketplace.allCategories': 'Wszystkie kategorie',
     'settings.plugins.section.installed': 'Zainstalowane',
@@ -416,6 +425,7 @@ export const pluginsMarketplaceI18n = {
   },
   tr: {
     'settings.plugins.capabilities.title': 'Yetenekler',
+    'settings.plugins.capabilities.triggers': '{count} tetikleyici desenini göster',
     'settings.plugins.capabilities.info': 'OMP\'nin bu çalışma alanında bulduğu dosyalar: kurallar, ajanlar, beceriler, MCP sunucuları ve yerel uzantılar. Silmeden kapatabilirsiniz.',
     'settings.plugins.marketplace.allCategories': 'Tüm kategoriler',
     'settings.plugins.section.installed': 'Kurulu',
@@ -462,6 +472,7 @@ export const pluginsMarketplaceI18n = {
   },
   ar: {
     'settings.plugins.capabilities.title': 'القدرات',
+    'settings.plugins.capabilities.triggers': 'عرض {count} من أنماط المشغلات',
     'settings.plugins.capabilities.info': 'الملفات التي عثر عليها OMP في مساحة العمل هذه: القواعد والوكلاء والمهارات وخوادم MCP والامتدادات المحلية. أوقف أيًا منها دون حذفه.',
     'settings.plugins.marketplace.allCategories': 'كل الفئات',
     'settings.plugins.section.installed': 'المثبّتة',
@@ -508,6 +519,7 @@ export const pluginsMarketplaceI18n = {
   },
   he: {
     'settings.plugins.capabilities.title': 'יכולות',
+    'settings.plugins.capabilities.triggers': 'הצג {count} תבניות טריגר',
     'settings.plugins.capabilities.info': 'קבצים ש-OMP מצא בסביבת העבודה הזו: כללים, סוכנים, מיומנויות, שרתי MCP והרחבות מקומיות. אפשר לכבות בלי למחוק.',
     'settings.plugins.marketplace.allCategories': 'כל הקטגוריות',
     'settings.plugins.section.installed': 'מותקנים',
@@ -554,6 +566,7 @@ export const pluginsMarketplaceI18n = {
   },
   'pt-BR': {
     'settings.plugins.capabilities.title': 'Capacidades',
+    'settings.plugins.capabilities.triggers': 'Mostrar {count} padrões de gatilho',
     'settings.plugins.capabilities.info': 'Arquivos que o OMP encontrou neste espaço de trabalho: regras, agentes, skills, servidores MCP e extensões locais. Desative um sem excluí-lo.',
     'settings.plugins.marketplace.allCategories': 'Todas as categorias',
     'settings.plugins.section.installed': 'Instalados',
@@ -600,6 +613,7 @@ export const pluginsMarketplaceI18n = {
   },
   'zh-CN': {
     'settings.plugins.capabilities.title': '能力',
+    'settings.plugins.capabilities.triggers': '显示 {count} 个触发模式',
     'settings.plugins.capabilities.info': 'OMP 在此工作区发现的文件：规则、代理、技能、MCP 服务器和本地扩展。可以关闭而不删除。',
     'settings.plugins.marketplace.allCategories': '所有类别',
     'settings.plugins.section.installed': '已安装',
@@ -646,6 +660,7 @@ export const pluginsMarketplaceI18n = {
   },
   'zh-TW': {
     'settings.plugins.capabilities.title': '能力',
+    'settings.plugins.capabilities.triggers': '顯示 {count} 個觸發模式',
     'settings.plugins.capabilities.info': 'OMP 在此工作區發現的檔案：規則、代理、技能、MCP 伺服器和本機擴充。可以關閉而不刪除。',
     'settings.plugins.marketplace.allCategories': '所有類別',
     'settings.plugins.section.installed': '已安裝',

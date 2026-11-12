@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { Message, StepTiming, Turn } from '@openchamber/agent-contract';
 import { formatTelemetryDuration, formatTelemetryTokens, formatThroughputRate, getLatestCompletedTurnStats } from './telemetry';
 
@@ -219,7 +220,7 @@ describe('a real run recorded from the running server', () => {
     // Captured from a live OMP turn that ran one bash tool call and then
     // answered. The server records one turn per model step of a run, which is
     // the shape that broke the first version of this derivation.
-    const history = JSON.parse(readFileSync(join(import.meta.dir, '__fixtures__', 'real-run-history.json'), 'utf8'));
+    const history = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '__fixtures__', 'real-run-history.json'), 'utf8'));
 
     test('reports model time, tool time, first-token latency and throughput', () => {
         const stats = getLatestCompletedTurnStats(history.messages, history.turns);

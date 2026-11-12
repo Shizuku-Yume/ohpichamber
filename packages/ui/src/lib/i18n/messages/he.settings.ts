@@ -1485,7 +1485,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label': 'עץ עבודה (worktree) חדש…',
   'settings.openchamber.keyboardShortcuts.action.add_project.label': 'הוסף פרויקט',
   'settings.openchamber.keyboardShortcuts.action.reload_ui.label': 'טען מחדש את הממשק',
-  'settings.openchamber.keyboardShortcuts.action.restart_opencode.label': 'הפעל מחדש את OpenCode',
   'settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label': 'הצג את מקטע הצ\'אטים',
   'settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label': 'הצג את קטע המוצמדות',
   'settings.openchamber.keyboardShortcuts.action.toggle_work_section.label': 'הצג את קטע בעבודה',

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { Message, Part, ToolStatus } from '@openchamber/agent-contract';
 
-import { createParsedStatus, getActiveAssistantContext, retryInfoOf } from './useAssistantStatus';
+import { createParsedStatus, decodeParsedStatus, encodeParsedStatus, getActiveAssistantContext, retryInfoOf } from './useAssistantStatus';
 
 const userMessage = (messageId: string): Message => ({
     messageId,
@@ -189,5 +189,50 @@ describe('retryInfoOf', () => {
 
     test('work after the notice means the retry already ran', () => {
         expect(retryInfoOf([retryNotice(2, 4000), { type: 'text', partId: 'text_1', content: 'back' }])).toBeNull();
+    });
+});
+
+describe('the status signature', () => {
+    // The hook joins the encoded status with the retry fields using one
+    // separator. When the encoding carried that separator itself, the retry
+    // fields read the status JSON as an attempt, so every turn showed
+    // "Retrying" and the call's intent never reached the row.
+    const SEPARATOR = '\u0000';
+    const signatureOf = (parts: readonly Part[]) => {
+        const retry = retryInfoOf(parts);
+        return [encodeParsedStatus(createParsedStatus(parts)), retry?.attempt ?? '', retry?.next ?? '', retry?.maxAttempts ?? ''].join(SEPARATOR);
+    };
+
+    test('a running call keeps its intent and reports no retry', () => {
+        const parts: Part[] = [{
+            type: 'tool_call',
+            partId: 'call_1',
+            toolCallId: 'call_1',
+            toolName: 'bash',
+            input: { command: 'echo hi', i: 'Running echo command' },
+            status: 'running',
+        }];
+        const signature = signatureOf(parts);
+        const [statusField, attempt] = signature.split(SEPARATOR);
+        expect(attempt).toBe('');
+        const decoded = decodeParsedStatus(statusField ?? '');
+        expect(decoded.status.text).toBe('Running echo command');
+        expect(decoded.isAnswering).toBe(false);
+    });
+
+    test('a retry notice reports the attempt beside the status', () => {
+        const parts: Part[] = [{
+            type: 'notice',
+            partId: 'notice_1',
+            noticeType: 'auto_retry_start',
+            level: 'warning',
+            details: { attempt: 2, maxAttempts: 5, delayMs: 4000, errorMessage: 'overloaded' },
+        }];
+        const signature = signatureOf(parts);
+        const fields = signature.split(SEPARATOR);
+        expect(fields).toHaveLength(4);
+        expect(fields[1]).toBe('2');
+        expect(fields[2]).toBe('4000');
+        expect(fields[3]).toBe('5');
     });
 });

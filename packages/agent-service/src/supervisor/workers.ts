@@ -53,6 +53,8 @@ type WorkerEntry = WorkerInput & {
   lastActivityAt: number;
 };
 type ActionHandle = { entry: WorkerEntry; controller: AbortController };
+/** A worker process booted ahead of a session, waiting for a bootstrap. */
+type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; adopted: boolean };
 
 /** The Task17 measurement fixes these production values; tests may override them. */
 export const WORKER_CAPACITY_POLICY = {
@@ -239,7 +241,7 @@ export class WorkerRegistry {
    * ever adopted by a session launch in the same workspace and agent
    * directory, and a spare that dies or ages out is simply dropped.
    */
-  private readonly spareWorkers: { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean }[] = [];
+  private readonly spareWorkers: SpareWorker[] = [];
   private readonly spareLifetimeMs = 120_000;
   private spareRefill: Promise<void> | undefined;
 
@@ -866,17 +868,18 @@ export class WorkerRegistry {
           cwd: input.cwd, env: environment, detached: process.platform !== 'win32',
           windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
         });
-        const spare = { child, environment, cwd: input.cwd, createdAt: Date.now(), loaded: false };
+        const spare: SpareWorker = { child, environment, cwd: input.cwd, createdAt: Date.now(), loaded: false, adopted: false };
         const drop = () => {
           const index = this.spareWorkers.indexOf(spare);
           if (index >= 0) this.spareWorkers.splice(index, 1);
         };
         child.once('close', drop);
         child.once('error', drop);
-        // The worker reports `idle` once its module graph is loaded. Until
-        // then it is a process, not a warm worker, so it stays out of the pool.
+        // The worker reports `idle` once its module graph is loaded. Until then
+        // it is a process, not a warm worker, so it stays out of the pool, and
+        // a spare that has already been adopted never returns to it.
         child.on('message', raw => {
-          if (WorkerReplySchema.safeParse(raw).data?.type !== 'idle') return;
+          if (spare.adopted || WorkerReplySchema.safeParse(raw).data?.type !== 'idle') return;
           spare.loaded = true;
           if (!this.spareWorkers.includes(spare) && child.connected) this.spareWorkers.push(spare);
         });
@@ -896,7 +899,12 @@ export class WorkerRegistry {
         && spare.child.exitCode === null && spare.child.signalCode === null
         && isDeepStrictEqual(spare.environment, environment);
       this.spareWorkers.splice(index, 1);
-      if (usable) return spare.child;
+      if (usable) {
+        // From here the process is a session worker; the pool must never see
+        // it again even if a late `idle` reply is still in flight.
+        spare.adopted = true;
+        return spare.child;
+      }
       if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
     }
     return undefined;

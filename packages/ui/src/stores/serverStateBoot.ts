@@ -21,7 +21,6 @@
 
 import { subscribeOpenchamberEvents, type PermissionPolicySyncEvent } from '@/lib/openchamberEvents';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
-import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useAdvisorStore } from './useAdvisorStore';
 import { useAgentMemoryStore } from './useAgentMemoryStore';
 import { useCleanseStore } from './useCleanseStore';
@@ -197,10 +196,15 @@ export const resetServerStateStores = (runtimeKey: string): void => {
  * does the host's announcement that it follows a space's modes again. The
  * policy broadcast itself is applied here too, since the store is the one place
  * a mode lives.
+ *
+ * The endpoint is read at event time, not captured at install time. A surface
+ * that is not remounted on an instance switch (the phone: only `SyncProvider`
+ * is keyed by the endpoint epoch, and the native shell mounts no auth gate)
+ * would otherwise drop every event forever after the switch, because the
+ * captured key no longer matches.
  */
-export const installServerStateBootEvents = (runtimeKey: string = getRuntimeKey()): (() => void) => {
+export const installServerStateBootEvents = (): (() => void) => {
   const readSpaceModes = (spaceIds: Iterable<string>, onlyNew = false) => {
-    if (runtimeKey !== getRuntimeKey()) return;
     for (const spaceId of spaceIds) {
       if (onlyNew && readSpaceIds.has(spaceId)) continue;
       readSpaceIds.add(spaceId);
@@ -215,7 +219,6 @@ export const installServerStateBootEvents = (runtimeKey: string = getRuntimeKey(
     if (state.spaces !== previous.spaces) readSpaceModes(state.spaces.keys(), true);
   });
   const unsubscribeEvents = subscribeOpenchamberEvents((event) => {
-    if (runtimeKey !== getRuntimeKey()) return;
     if (event.type === 'event-stream-ready') {
       void bootServerStateStores();
       readSpaceModes(useSpacesStore.getState().spaces.keys());

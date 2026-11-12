@@ -15,8 +15,8 @@ const EMPTY: State = { ...INITIAL_STATE, session: [], sessionTotal: 0 };
 
 const snapshotRecord = (): State['snapshot'][string] => ({
   session: runtime(), messages: [], turns: [], approvals: [], questions: [],
-  cursor: 'epoch-1:0', branch: { branchId: 'main', branchVersion: '1' },
-  activeRun: null, requestRecovery: { status: 'idle' },
+  cursor: 'epoch-1:0', branch: { branchId: 'main', branchVersion: '1', leafMessageId: null },
+  activeRun: null, requestRecovery: { pendingSet: 'replace', priorEpochs: 'expired' },
   window: { firstTurnId: null, lastTurnId: null, firstMessageId: null, lastMessageId: null, hasEarlier: false },
 });
 

@@ -73,7 +73,6 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
       : t(status === 'active' ? 'settings.extensions.status.enabled' : 'settings.extensions.status.disabled')}
     </SettingsCardPill>
     <ScopeChip scope={item.scope} />
-    <SettingsCardChip>{item.providerName}</SettingsCardChip>
    </div>
    {item.triggers.length === 0 ? null : (
     <div className="flex min-w-0 flex-wrap items-center gap-1 pt-0.5">
@@ -93,19 +92,8 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
    {item.disabledReason === undefined ? null : (
     <p className="typography-micro text-muted-foreground">
      {t(item.disabledReason === 'provider-disabled' ? 'settings.plugins.status.disabled' : 'settings.extensions.status.disabled')}
-     {' · '}
-     {item.providerName}
     </p>
    )}
-   <p className="typography-micro text-muted-foreground">{t('settings.extensions.detail.section.details')}</p>
-   <div className="flex min-w-0 items-baseline gap-2">
-    <span className="shrink-0 typography-micro text-muted-foreground">{t('settings.extensions.detail.field.source')}</span>
-    <span className="min-w-0 break-words typography-meta text-foreground">{item.providerName}</span>
-   </div>
-   <div className="flex min-w-0 items-baseline gap-2">
-    <span className="shrink-0 typography-micro text-muted-foreground">{t('settings.extensions.detail.field.location')}</span>
-    <span className="min-w-0 break-all font-mono typography-micro text-foreground">{item.path}</span>
-   </div>
    {item.description === undefined ? null : (
     <p className="typography-meta text-foreground">{item.description}</p>
    )}
@@ -152,10 +140,13 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
  const countFor = (id: string): number => id === 'all'
   ? inventory.items.length
   : inventory.providers.find(provider => provider.id === id)?.itemCount ?? 0;
+ // A source that discovered nothing is not a source a reader can act on.
+ const providers = inventory.providers.filter(provider => provider.itemCount > 0);
 
  return (
   <SettingsSection
-   title={t('settings.page.plugins.title')}
+   title={t('settings.plugins.capabilities.title')}
+   info={t('settings.plugins.capabilities.info')}
    divider={false}
    headerAction={(
     <Input
@@ -175,7 +166,7 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
     <Button variant="chip" size="xs" aria-pressed={providerId === 'all'} onClick={() => setProviderId('all')}>
      {t('settings.agents.page.mode.all')} ({countFor('all')})
     </Button>
-    {inventory.providers.map(provider => (
+    {providers.map(provider => (
      <div key={provider.id} className="flex min-w-0 items-center gap-1.5">
       <Button
        variant="chip"

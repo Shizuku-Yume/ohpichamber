@@ -284,16 +284,19 @@ The Integrations catalog also offers sign-in for connected entries with
 `auth: 'oauth'`, labeled Authorize. Its view is mounted by `MainLayout` on web
 and desktop, not by mobile or VS Code; those use the shared MCP Settings page.
 
-### Claude sign-in on Usage
+### Usage: what was spent and what is left
 
-Claude usage reads Claude Code's own login on the server machine, which the
-Providers page cannot add. When Claude reports not configured, the Usage page
-shows `usage/ClaudeCodeSignIn.tsx` in its warning instead of the "go to
-Providers" text. With the opencode-claude plugin installed it mounts the
-plugin's `claude-code` integration sign-in through the shared
-`providers/ProviderOAuthMethods.tsx` and re-reads Claude usage once it
-finishes. Without the plugin, or when the integration list cannot be read, it
-shows the `claude auth login` command, which works in both cases.
+The Usage page has two halves. The token report comes from the session store
+(`components/views/usage/UsageStatsView.tsx`, exported as `UsageStatsReport`
+so the page can place it above the quota cards). The quota cards come from the
+quota service, which reads each provider's credential from OMP's auth store.
+
+A provider OMP holds no credential for is not a card. It has no readable quota,
+so the page lists nothing for it and offers no inline credential form: adding a
+provider belongs to Providers. `usagePageState.ts` and the per-provider
+credential forms (`QuotaCredentials.tsx`, `ClaudeCodeSignIn.tsx`) are gone with
+that loop; a configured provider that fails keeps its visible error and its
+retained sample.
 
 ### Policy-blocked MCP servers and skills
 
@@ -564,14 +567,18 @@ own `dir="ltr"` element so an RTL sentence never reorders them.
 
 The page is hidden in VS Code (`metadata.ts`).
 
-## Plugin duplicate sources
+## Plugins: installed list, marketplace, capabilities
 
-`plugins/PluginsGrid.tsx` keeps every catalog entry and its editing target.
-A discovered package card is hidden when its normalized target is already
-represented by a declaration or another discovery record. Distinct declarations
-and their options remain separate, including declarations of the same target.
-Editable local files always keep their own cards and file edit/delete actions,
-including files declared in config.
+The Plugins page follows the Skills catalog layout: an installed list of rows
+(plugins and local extension files), a marketplace section that installs and
+uninstalls in place, and the capability inventory below them.
+
+`plugins/ExtensionControlCenter.tsx` lists the capability sources OMP
+discovered in the workspace. A source that found nothing is not listed, and
+rows carry the user-facing name, scope and triggers only: worker identities and
+engine diagnostics stay out of this view. The mutation outcome is reported in
+the page's own vocabulary ("Applied", "Partially applied", …) rather than as a
+worker list.
 
 ### Why paths determine discovery duplicates
 

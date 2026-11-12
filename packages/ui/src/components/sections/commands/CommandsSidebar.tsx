@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
-import { selectCommandsForDirectory, useCommandsStore, isCommandBuiltIn, type Command } from '@/stores/useCommandsStore';
+import { selectCommandsForDirectory, useCommandsStore, type Command } from '@/stores/useCommandsStore';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useShallow } from 'zustand/react/shallow';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -28,7 +28,6 @@ import { SettingsSidebarNoMatches, SettingsSidebarSearch } from '@/components/se
 import { matchesRankQuery } from '@/lib/search/fuzzySearch';
 import { Icon } from "@/components/icon/Icon";
 import { useI18n } from '@/lib/i18n';
-import { getLocalizedCommandDescription } from './commandDescriptions';
 import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
 
 
@@ -69,7 +68,9 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const settingsDirectory = useSettingsDirectory();
   const commands = useCommandsStore((state) => selectCommandsForDirectory(state, settingsDirectory));
   React.useEffect(() => { void loadCommands(settingsDirectory); }, [loadCommands, settingsDirectory]);
-  const commandOnlyItems = commands;
+  // Built-in OMP commands are chat autocomplete's; this page authors the
+  // template files, so it lists only the entries a file owns.
+  const templateItems = React.useMemo(() => commands.filter((command) => command.editable), [commands]);
 
   const bgClass = 'bg-background';
 
@@ -78,7 +79,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     const baseName = 'new-command';
     let newName = baseName;
     let counter = 1;
-    while (commands.some((c) => c.name === newName)) {
+    while (templateItems.some((c) => c.name === newName)) {
       newName = `${baseName}-${counter}`;
       counter++;
     }
@@ -91,11 +92,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   };
 
   const handleDeleteCommand = async (command: Command) => {
-    if (isCommandBuiltIn(command)) {
-      toast.error(t('settings.commands.sidebar.toast.builtInCannotDelete'));
-      return;
-    }
-
     setConfirmActionCommand(command);
   };
 
@@ -126,7 +122,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     let copyNumber = 1;
     let newName = `${baseName}-copy`;
 
-    while (commands.some((c) => c.name === newName)) {
+    while (templateItems.some((c) => c.name === newName)) {
       copyNumber++;
       newName = `${baseName}-copy-${copyNumber}`;
     }
@@ -166,7 +162,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
-    if (commands.some((cmd) => !isCommandBuiltIn(cmd) && cmd.name === sanitizedName)) {
+    if (templateItems.some((cmd) => cmd.name === sanitizedName)) {
       toast.error(t('settings.commands.sidebar.toast.commandExists'));
       return;
     }
@@ -183,9 +179,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     setRenameDialogCommand(null);
   };
 
-  const shownCommands = commandOnlyItems.filter((command) => matchesRankQuery([command.name, command.description], query));
-  const builtInCommands = shownCommands.filter(isCommandBuiltIn);
-  const customCommands = shownCommands.filter((cmd) => !isCommandBuiltIn(cmd));
+  const shownCommands = templateItems.filter((command) => matchesRankQuery([command.name, command.description], query));
 
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
@@ -193,7 +187,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
         <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.commands.sidebar.title')}</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('settings.commands.sidebar.total', { count: commandOnlyItems.length })}</span>
+          <span className="typography-meta text-muted-foreground">{t('settings.commands.sidebar.total', { count: templateItems.length })}</span>
           <Button size="sm"
             data-settings-item="commands.create"
             variant="ghost"
@@ -204,11 +198,11 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
             <Icon name="add" className="h-3.5 w-3.5" />
           </Button>
         </div>
-        {commandOnlyItems.length > 0 ? <SettingsSidebarSearch value={query} onChange={setQuery} /> : null}
+        {templateItems.length > 0 ? <SettingsSidebarSearch value={query} onChange={setQuery} /> : null}
       </div>
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2">
-        {commandOnlyItems.length === 0 ? (
+        {templateItems.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <Icon name="terminal-box" className="mx-auto mb-3 h-10 w-10 opacity-50" />
             <p className="typography-ui-label font-medium">{t('settings.commands.sidebar.empty.title')}</p>
@@ -217,53 +211,22 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
         ) : shownCommands.length === 0 ? (
           <SettingsSidebarNoMatches query={query} />
         ) : (
-          <>
-            {builtInCommands.length > 0 && (
-              <>
-                <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {t('settings.commands.sidebar.section.builtIn')}
-                </div>
-                {[...builtInCommands].sort((a, b) => a.name.localeCompare(b.name)).map((command) => (
-                  <CommandListItem
-                    key={command.commandId}
-                    command={command}
-                    isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
-                    onSelect={() => {
-                      setSelectedCommandId(command.commandId);
-                      onItemSelect?.();
-                    }}
-                    onDuplicate={() => handleDuplicateCommand(command)}
-                    isMenuOpen={openMenuCommand === command.commandId}
-                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.commandId : null)}
-                  />
-                ))}
-              </>
-            )}
-
-            {customCommands.length > 0 && (
-              <>
-                <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {t('settings.commands.sidebar.section.custom')}
-                </div>
-                {[...customCommands].sort((a, b) => a.name.localeCompare(b.name)).map((command) => (
-                  <CommandListItem
-                    key={command.commandId}
-                    command={command}
-                    isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
-                    onSelect={() => {
-                      setSelectedCommandId(command.commandId);
-                      onItemSelect?.();
-                    }}
-                    onRename={() => handleOpenRenameDialog(command)}
-                    onDelete={() => handleDeleteCommand(command)}
-                    onDuplicate={() => handleDuplicateCommand(command)}
-                    isMenuOpen={openMenuCommand === command.commandId}
-                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.commandId : null)}
-                  />
-                ))}
-              </>
-            )}
-          </>
+          [...shownCommands].sort((a, b) => a.name.localeCompare(b.name)).map((command) => (
+            <CommandListItem
+              key={command.commandId}
+              command={command}
+              isSelected={selectedCommandId ? selectedCommandId === command.commandId : selectedCommandName === command.name}
+              onSelect={() => {
+                setSelectedCommandId(command.commandId);
+                onItemSelect?.();
+              }}
+              onRename={() => handleOpenRenameDialog(command)}
+              onDelete={() => handleDeleteCommand(command)}
+              onDuplicate={() => handleDuplicateCommand(command)}
+              isMenuOpen={openMenuCommand === command.commandId}
+              onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.commandId : null)}
+            />
+          ))
         )}
       </ScrollableOverlay>
 
@@ -396,16 +359,14 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
                 /{command.name}
               </span>
               <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
-                {isCommandBuiltIn(command)
-                  ? t('settings.agents.sidebar.badge.system')
-                  : t(command.scope === 'workspace' ? 'settings.common.scope.project' : 'settings.common.scope.global')}
+                {t(command.scope === 'workspace' ? 'settings.common.scope.project' : 'settings.common.scope.global')}
                 {command.group ? ` / ${command.group}` : ''}
               </span>
             </div>
 
-            {getLocalizedCommandDescription(command, t) && (
+            {command.description && (
               <div className="typography-micro text-muted-foreground truncate leading-tight">
-                {getLocalizedCommandDescription(command, t)}
+                {command.description}
               </div>
             )}
           </button>

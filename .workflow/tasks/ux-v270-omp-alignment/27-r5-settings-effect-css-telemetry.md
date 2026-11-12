@@ -110,11 +110,25 @@ lines ~420-500) onto this fork's `TurnRecord`, wiring `MessageSliceContext`,
 
 `Check before:` not recorded (the window started from a lost session; the CSS
 leg was red at 104 unresolved tokens, now 0).
-`Check after:` `node scripts/check-css-classes.mjs` → exit 0, 2013 tokens
-resolve. `bun test packages/ui/src/components/chat/work-status/telemetry.test.ts`
-→ 14 pass, 0 fail. The task's `Check` line cannot run as written:
-`bunx vitest run packages/ui/...` fails at baseline with
-`Cannot find package 'bun:test'` (recorded in `.workflow/decisions.md` by task
-25); the substitute is `bun --cwd packages/ui test <paths>`. `bun run lint` and
-the settings-effect test were not run because criterion 1 is unfinished.
+`Check after:`
+- `node scripts/check-css-classes.mjs` → exit 0, `2013 class tokens resolve to a
+  rule, a utility or a marker` (run three times, stable).
+- `node scripts/run-isolated-tests.mjs packages/ui/src/lib/settings` → 4/4 files
+  passed. `… packages/ui/src/components/chat/work-status` → 16/16 files passed.
+  These are the task's two Check paths under the repo's own runner.
+- `bun run lint` → exit 0, all six packages, pre-existing warnings only.
+- `bunx oxlint scripts/check-css-classes.mjs` and both telemetry files → clean.
+- `bunx tsc --noEmit -p packages/ui/tsconfig.json` → no error in any file this
+  task touched (pre-existing errors remain in `DefaultsSettings`,
+  `GitSettings`, `OmpSettingsPage`, `ModelRoleEditor`, `messages.test.ts`,
+  `smallModelRequest.test.ts`).
+- The task's Check line cannot run as written: `bunx vitest run packages/ui/...`
+  fails at baseline with `Cannot find package 'bun:test'` (recorded in
+  `.workflow/decisions.md` by task 25). A bulk `bun --cwd packages/ui test
+  src/lib/settings src/components/chat/work-status` reports 1244/1245 files and
+  one failure — `WorkStatusSectionsDialog.test.tsx`, the known cross-file DOM
+  pollution: it passes alone (5/5) and under the isolated runner, and fails
+  identically without this task's files.
+- The settings-effect test was not written because criterion 1 is unfinished.
+- Real path not attempted: the window ended first.
 Real path not attempted: the window ended before it.

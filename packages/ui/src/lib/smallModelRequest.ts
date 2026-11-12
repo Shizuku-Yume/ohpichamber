@@ -60,19 +60,24 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
     check();
     const targetRole = input.role ?? 'smol';
     // The config loader already read this directory's catalog and the OMP
-    // settings it resolves roles from; asking again made every background
-    // completion pay two catalog reads for data the app already held.
+    // settings roles resolve from; asking again made every background
+    // completion pay two catalog reads for data the app already held. A cold
+    // store (a background job that ran before the first load settled) still
+    // reads them, so the resolver never depends on load order.
     const store = useConfigStore.getState();
-    if (selectModelsForDirectory(store, directory).length === 0 || store.ompSettings === null) {
-      await Promise.all([
-        store.loadProviders({ directory, source: 'smallModelRequest' }),
-        store.loadOmpSettings(workspace.workspaceId),
+    const cachedModels = selectModelsForDirectory(store, directory);
+    const cachedSettings = store.ompSettings;
+    let models = cachedModels;
+    let ompSettings = cachedSettings;
+    if (cachedModels.length === 0 || cachedSettings === null) {
+      const [catalog, settings] = await Promise.all([
+        cachedModels.length === 0 ? canonicalClient.getModels(workspace.workspaceId) : Promise.resolve(null),
+        cachedSettings === null ? canonicalClient.getOmpSettings(workspace.workspaceId).catch(() => null) : Promise.resolve(null),
       ]);
       check();
+      if (catalog !== null) models = catalog.models;
+      if (settings !== null) ompSettings = settings;
     }
-    const loaded = useConfigStore.getState();
-    const models = selectModelsForDirectory(loaded, directory);
-    const ompSettings = loaded.ompSettings;
     // The catalog entry travels with the selection: a reasoning-enabled request
     // must ask only for an effort the model actually advertises.
     const catalogModel = (selection: ModelSelection | null): Model | null => (

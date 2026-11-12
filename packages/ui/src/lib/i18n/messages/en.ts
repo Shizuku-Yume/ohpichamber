@@ -9444,6 +9444,11 @@ export const dict = {
   ...tooltipsPanelI18n['en'],
   ...tooltipsChatI18n['en'],
   ...workerRunsI18n.en,
+  "gitIdentities.state.unknown": "Git identities have not loaded yet.",
+  "settings.usage.state.unknown": "Usage has not loaded yet.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Stored memory has not loaded yet.",
+
+  "chat.workStatus.mcp.unknown": "MCP servers have not loaded yet.",
 };
 
 export type I18nKey = keyof typeof dict;

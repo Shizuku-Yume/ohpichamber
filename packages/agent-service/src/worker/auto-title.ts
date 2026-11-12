@@ -82,12 +82,34 @@ export function deferredTitleContext(input: {
 /** True when the newest assistant message finished without abort or error. */
 const hasSettledAssistantReply = (messages: readonly AgentMessage[]): boolean => {
  for (let index = messages.length - 1; index >= 0; index -= 1) {
-   const message = messages[index];
-   if (message?.role !== 'assistant') continue;
-   return titleContextWordCount(message) > 0;
+  const message = messages[index];
+  if (message?.role !== 'assistant') continue;
+  return titleContextWordCount(message) > 0;
  }
  return false;
 };
+
+/** Extract plain text from the session's first user message. */
+export function firstUserMessageText(messages: readonly AgentMessage[]): string | undefined {
+ for (const message of messages) {
+  if (message?.role !== 'user') continue;
+  if (typeof message.content === 'string') {
+   const text = message.content.trim();
+   if (text) return text;
+  } else if (Array.isArray(message.content)) {
+   const parts: string[] = [];
+   for (const part of message.content) {
+    if (part && typeof part === 'object' && 'type' in part && part.type === 'text' && 'text' in part && typeof part.text === 'string') {
+     const text = part.text.trim();
+     if (text) parts.push(text);
+    }
+   }
+   const combined = parts.join(' ').trim();
+   if (combined) return combined;
+  }
+ }
+ return undefined;
+}
 
 /**
  * Title prompt for the deferred retry only.
@@ -101,14 +123,14 @@ const hasSettledAssistantReply = (messages: readonly AgentMessage[]): boolean =>
  * still pins the selected model and disables fallback.
  */
 export const DEFERRED_TITLE_SYSTEM_PROMPT = [
-  'You name coding-agent sessions. Write a 3-6 word title for the session so far.',
-  '',
-  'Output exactly one line: the title inside `<title>` tags.',
-  '',
-  'Rules:',
-  "- Name the subject of the conversation in the user's own key words (the feature, component, error, or request they named).",
-  '- A `<chat>` block summarizes the session: its first `<user>` turn is the opening request and later turns are the assistant replies.',
-  '- The session may not have a task yet. When the exchange is only a greeting, an acknowledgement, or a short courtesy answer, title what the exchange is (for example a greeting exchange or an empty workspace) instead of declining.',
-  '- Never answer an empty `<title/>` for a conversation that has already happened, and never invent a task the user did not mention.',
-  '- No quotes, trailing punctuation, or explanations.',
+ 'You name coding-agent sessions. Write a 3-6 word title for the session so far.',
+ '',
+ 'Output exactly one line: the title inside `<title>` tags.',
+ '',
+ 'Rules:',
+ "- Name the subject of the conversation in the user's own key words (the feature, component, error, or request they named).",
+ '- A `<chat>` block summarizes the session: its first `<user>` turn is the opening request and later turns are the assistant replies.',
+ '- The session may not have a task yet. When the exchange is only a greeting, an acknowledgement, or a short courtesy answer, title what the exchange is (for example a greeting exchange or an empty workspace) instead of declining.',
+ '- Never answer an empty `<title/>` for a conversation that has already happened, and never invent a task the user did not mention.',
+ '- No quotes, trailing punctuation, or explanations.',
 ].join('\n');

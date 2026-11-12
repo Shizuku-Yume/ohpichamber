@@ -54,6 +54,7 @@ export const McpDropdownContent: React.FC<{
   const { t } = useI18n();
   const directory = useMcpDirectory(active);
   const status = useMcpStore((state) => directory ? state.getStatusForDirectory(directory) : null);
+  const phase = useMcpStore((state) => directory ? state.getPhaseForDirectory(directory) : 'unknown');
   const refresh = useMcpStore((state) => state.refresh);
   const ensureFresh = useMcpStore((state) => state.ensureFresh);
   const connect = useMcpStore((state) => state.connect);
@@ -184,7 +185,7 @@ export const McpDropdownContent: React.FC<{
 
         {directory && sortedNames.length === 0 && (
           <div className="px-4 py-5 typography-ui-label text-muted-foreground text-center">
-            {t('mcpDropdown.empty.configureInConfig')}
+            {phase === 'unknown' ? t('chat.workStatus.mcp.unknown') : t('mcpDropdown.empty.configureInConfig')}
           </div>
         )}
         </div>
@@ -203,6 +204,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
   const directory = useMcpDirectory(isMobile && open);
 
   const status = useMcpStore((state) => directory ? state.getStatusForDirectory(directory) : null);
+  const phase = useMcpStore((state) => directory ? state.getPhaseForDirectory(directory) : 'unknown');
   const refresh = useMcpStore((state) => state.refresh);
   const ensureFresh = useMcpStore((state) => state.ensureFresh);
   const connect = useMcpStore((state) => state.connect);
@@ -337,7 +339,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
 
       {directory && sortedNames.length === 0 && (
         <div className="px-2 py-3 typography-ui-label text-muted-foreground text-center">
-          {t('mcpDropdown.empty.configureInConfig')}
+          {phase === 'unknown' ? t('chat.workStatus.mcp.unknown') : t('mcpDropdown.empty.configureInConfig')}
         </div>
       )}
     </>

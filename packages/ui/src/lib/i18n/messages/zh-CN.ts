@@ -9398,4 +9398,9 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-CN'],
   ...openchamberToolOutputI18n['zh-CN'],
   ...m4LaneDI18n['zh-CN'],
+  "gitIdentities.state.unknown": "Git 身份尚未加载。",
+  "settings.usage.state.unknown": "用量尚未加载。",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "已存储的记忆尚未加载。",
+
+  "chat.workStatus.mcp.unknown": "MCP 服务器尚未加载。",
 };

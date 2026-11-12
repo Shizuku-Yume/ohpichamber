@@ -69,6 +69,16 @@ describe('Host canonical utility completion owner', () => {
     expect(await describeSmallModel({ workspaceId: 'workspace-a', preferredProviderID: 'selected', preferredModelID: 'large' })).toBeNull();
     expect(calls.some(call => call.pathname.endsWith('/completions'))).toBe(false);
   });
+  test('a role selector carrying a thinking level resolves its model', async () => {
+    // OMP stores `provider/model:effort`; the suffix names the next turn's
+    // thinking level and is not part of the model ID.
+    settingsModelRoles = { smol: 'other/haiku:high', commit: 'selected/large:medium' };
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'smol' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'modelRoles' });
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'commit' })).toMatchObject({ providerID: 'selected', modelID: 'large', source: 'modelRoles' });
+    // A colon that is not a known level stays part of the model ID.
+    settingsModelRoles = { smol: 'other/haiku:2026' };
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'smol' })).toBeNull();
+  });
   test('OMP modelRoles resolve smol, commit, and default roles without cross-provider fallback', async () => {
     settingsModelRoles = { smol: 'other/haiku', commit: 'selected/large' };
     expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'smol' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'modelRoles' });

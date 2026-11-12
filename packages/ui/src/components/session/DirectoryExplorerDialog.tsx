@@ -196,11 +196,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const setSessionSwitcherOpen = useUIStore((s) => s.setSessionSwitcherOpen);
   const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
   const gitIdentityProfiles = useGitIdentitiesStore((s) => s.profiles);
+  const gitIdentityPhase = useGitIdentitiesStore((s) => s.phase);
   const globalGitIdentity = useGitIdentitiesStore((s) => s.globalIdentity);
   const defaultGitIdentityId = useGitIdentitiesStore((s) => s.defaultGitIdentityId);
-  const loadGitIdentityProfiles = useGitIdentitiesStore((s) => s.loadProfiles);
-  const loadGlobalGitIdentity = useGitIdentitiesStore((s) => s.loadGlobalIdentity);
-  const loadDefaultGitIdentityId = useGitIdentitiesStore((s) => s.loadDefaultGitIdentityId);
   const { canRequestAccess, requestAccess, startAccessing } = useFileSystemAccess();
   const { isMobile } = useDeviceInfo();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -271,12 +269,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   }, [open, isCloneMode, refreshAccounts, sourceControl, runtimeKey]);
 
 
-  React.useEffect(() => {
-    if (!open) return;
-    void loadGitIdentityProfiles();
-    void loadGlobalGitIdentity();
-    void loadDefaultGitIdentityId();
-  }, [loadDefaultGitIdentityId, loadGitIdentityProfiles, loadGlobalGitIdentity, open]);
 
   const connectedAccountIds = useConnectedAccountIds();
   const availableGitIdentities = React.useMemo(
@@ -812,7 +804,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.clone.identityMismatch')}</p>
       ) : null}
     </>
-  ) : null;
+  ) : gitIdentityPhase === 'ready' ? null : (
+    <p className="typography-micro text-muted-foreground">{t('gitIdentities.state.unknown')}</p>
+  );
 
   const inputSection = (
     <div className="px-2.5 py-1.5">

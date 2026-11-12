@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
 import { isReviewSuggested } from '@/lib/sessionWorkMetadata';
-import { useSession, useSessionStatus } from '@/sync/sync-context';
+import { useDirectorySync, useSession, useSessionStatus } from '@/sync/sync-context';
+import { selectBoundRunId, sessionActivityPhase } from '@/hooks/useSessionActivity';
 import { useUIStore } from '@/stores/useUIStore';
 import { useWalkthroughStore } from '@/stores/useWalkthroughStore';
 
@@ -27,7 +28,13 @@ export const SessionReviewHintRow: React.FC<SessionReviewHintRowProps> = React.m
   const reviewOfferEnabled = useUIStore((state) => state.sessionReviewOfferEnabled);
   const openContextSurface = useUIStore((state) => state.openContextSurface);
   const requestWalkthroughTarget = useWalkthroughStore((state) => state.requestTarget);
-  const isIdle = !status || status === 'idle';
+  const boundRunId = useDirectorySync(
+    React.useCallback((state) => selectBoundRunId(state, sessionId ?? ''), [sessionId]),
+    directory,
+  );
+  // A settled session, by the same rule the send/stop control uses: `unavailable`
+  // is what a reloaded session the Agent Service does not hold reports.
+  const isIdle = sessionActivityPhase(status, boundRunId) === 'idle';
 
   if (!sessionId || !directory || !reviewOfferEnabled || !isIdle || !isReviewSuggested(session)) return null;
 

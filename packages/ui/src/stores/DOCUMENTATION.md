@@ -557,6 +557,43 @@ Important properties:
 
 `useWalkthroughStore.ts` keys entries, model and language choices, active requests, and progress pollers by runtime plus the full walkthrough target. Working-tree and branch targets need only their Git source. A pull-request target also carries the immutable `SourceControlReadContext` that discovered it, so equal PR numbers under different accounts, repositories, bindings, or provider instances cannot share client state. The client sends that context on every PR walkthrough operation and rejects successful read or generation responses unless they echo the exact authority tuple. Runtime reset aborts active requests, stops pollers, and clears pending entry-point targets before the new endpoint can reuse them.
 
+## Boot hydration and load phases
+
+Every store whose content is the instance's answer (permission policy, Git
+identities, quota settings and samples, agent memory, session folders, web
+search, MCP, skills and the skills catalog) is registered in
+`serverStateBoot.ts`. The registry owns two things the app used to keep by
+hand:
+
+- `bootServerStateStores()` runs each hydrator once on every app root (web,
+mobile, mini-chat) after the instance reports itself initialised, and again
+when the control stream (re)connects. A store is no longer read by whichever
+page happened to mount first; the permission policy in particular had no
+production reader at all, so a restart with default mode `auto` still showed
+`ask` in the composer.
+- `resetServerStateStores(runtimeKey)` is what `apps/runtimeEndpointReset.ts`
+calls on a runtime switch. A store that projects the instance joins the
+registry instead of being added to that function's list, so a switch cannot
+leave one behind.
+
+Each store declares a `phase` (`stores/loadPhase.ts`) with the same three
+values: `unknown`, `ready` and `error`. `unknown` means the value was never
+read and must never be rendered as the answer; `error` means the read failed,
+in which case the previous value stays and the surface says it could not load.
+Consumers therefore render a neutral affordance while `unknown` rather than
+`ask`, `0` or `false`, and a failed read never produces an empty list.
+Event-only projections (`useAdvisorStore`, `useCleanseStore`) are reset by the
+registry without a hydrator: they have nothing to read until the server
+announces something.
+
+`usePermissionStore.getSessionMode` keeps returning a concrete mode for callers
+that must act (the composer, review inheritance) by falling back to the
+instance's configured `permissionDefaultMode` while the policy is unread;
+`getCurrentPermissionMode` returns `null` in that case, and
+`resolvePermissionMode` returns `null` instead of inventing `ask`.
+`resolvePermissionModeOrDefault` is the variant for callers that need the
+configured default. The composer's new-session draft takes that default too.
+
 ## Ownership Rules
 
 These rules are important. Breaking them tends to reintroduce idle CPU churn, stale UI, or rerender fanout.

@@ -7,25 +7,26 @@ import { seedGlobalBlockingRequests } from './global-blocking-requests';
 
 // All retained surfaces use the active Host's canonical discovery. This seed is
 // additive, never proof that a missing session settled, and never a live event.
-export const HOST_STATUS_SEED_MAX_AGE_MS = 30 * 60_000;
-
+//
+// No age window: `session.updatedAt` is the native transcript file's mtime, and
+// comparing it with this client's `Date.now()` measured clock skew and timezone
+// between two machines, not staleness. A running session the Host still lists is
+// running; the live stream corrects it if it is not.
 type SeedDependencies = {
   isKnown: (sessionId: string) => boolean;
   resolveDirectory: (workspaceId: string) => string | null;
-  now: number;
 };
 
-/** Keep native activity only for fresh, readable, admitted, unobserved owners. */
+/** Keep native activity only for readable, admitted, unobserved owners. */
 export const buildHostStatusSeedSnapshots = (
   listed: SessionList,
   deps: SeedDependencies,
-  maxAgeMs = HOST_STATUS_SEED_MAX_AGE_MS,
 ): Map<string, Session[]> => {
   const byDirectory = new Map<string, Session[]>();
   for (const session of listed.items) {
     if (session.runtimeStatus === 'idle' || session.runtimeStatus === 'unavailable') continue;
     if (session.archivedAt !== undefined || isSessionDiscoveryFailed(session, listed.errors)) continue;
-    if (deps.now - session.updatedAt > maxAgeMs || deps.isKnown(session.sessionId)) continue;
+    if (deps.isKnown(session.sessionId)) continue;
     const directory = deps.resolveDirectory(session.workspaceId);
     if (!directory) continue;
     const sessions = byDirectory.get(directory) ?? [];
@@ -55,7 +56,7 @@ export const seedGlobalSessionStatusFromHost = (): Promise<void> => {
     let listed: SessionList;
     try { listed = await canonicalClient.listSessions(); } catch { return; }
     if (!isCurrent()) return;
-    const seeds = buildHostStatusSeedSnapshots(listed, { isKnown, resolveDirectory: resolveWorkspaceDirectory, now: Date.now() });
+    const seeds = buildHostStatusSeedSnapshots(listed, { isKnown, resolveDirectory: resolveWorkspaceDirectory });
     const pending: Promise<void>[] = [];
     for (const [directory, sessions] of seeds) {
       for (const session of sessions) {

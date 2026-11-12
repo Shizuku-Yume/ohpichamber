@@ -4082,9 +4082,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
     const permissionScopeSessionId = currentSessionId ?? currentManagementSessionId;
     const safetyNetAvailable = useRoutingStore(selectSafetyNetAvailable);
+    // A draft takes the instance's configured default, which is what the
+    // server gives the session it creates; `ask` here claimed a choice the
+    // user never made.
+    const configuredPermissionDefault = useUIStore((state) => state.permissionDefaultMode);
     const permissionMode = usePermissionStore((state) => permissionScopeSessionId
         ? state.getSessionMode(permissionScopeSessionId)
-        : draftPermissionMode ?? 'ask');
+        : draftPermissionMode ?? configuredPermissionDefault);
     const shownPermissionMode = displayedPermissionMode(permissionMode, safetyNetAvailable);
     const isPermissionAutoAcceptInteractive = Boolean(permissionScopeSessionId || newSessionDraftOpen);
 

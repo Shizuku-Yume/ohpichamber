@@ -15,6 +15,7 @@ mock.module('@/lib/host-filesystem', () => ({
 }));
 
 const { usePermissionStore } = await import('./permissionStore');
+const { useUIStore } = await import('@/stores/useUIStore');
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
 
 describe('permission store server policy', () => {
@@ -24,10 +25,25 @@ describe('permission store server policy', () => {
     fetchImpl = async () => json({ sessions: {} });
   });
 
-  test('hydrates the authoritative server snapshot', async () => {
+  test('hydrates the authoritative server snapshot and marks the policy read', async () => {
+    expect(usePermissionStore.getState().phase).toBe('unknown');
     fetchImpl = async () => json({ sessions: { root: true } });
     await usePermissionStore.getState().hydrate();
     expect(usePermissionStore.getState().modes).toEqual({ root: 'auto' });
+    expect(usePermissionStore.getState().phase).toBe('ready');
+  });
+
+  test('an unread policy answers the configured default instead of claiming Ask', () => {
+    // The store cannot know a mode it has not read; `ask` would claim a choice.
+    expect(usePermissionStore.getState().getCurrentPermissionMode('root')).toBeNull();
+    expect(usePermissionStore.getState().getSessionMode('root')).toBe(useUIStore.getState().permissionDefaultMode);
+  });
+
+  test('a failed read is an error phase, not a read policy with no modes', async () => {
+    fetchImpl = async () => json({}, 503);
+    await expect(usePermissionStore.getState().hydrate()).rejects.toThrow();
+    expect(usePermissionStore.getState().phase).toBe('error');
+    expect(usePermissionStore.getState().getCurrentPermissionMode('root')).toBeNull();
   });
 
   test('reads modes when the server has them and on/off as auto/ask when it does not', async () => {

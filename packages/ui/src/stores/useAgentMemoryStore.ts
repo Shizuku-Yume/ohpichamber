@@ -11,6 +11,8 @@
 
 import { create } from 'zustand';
 
+import { getRuntimeKey } from '@/lib/runtime-switch';
+import type { LoadPhase } from './loadPhase';
 import {
   AgentMemoryDisabledError,
   deleteAgentMemory,
@@ -21,6 +23,12 @@ import {
 } from '@/lib/agentMemoryApi';
 
 interface AgentMemoryState {
+  /**
+   * Whether either scope has been read. `unknown` means the held lists are
+   * empty because nothing was read — a failed read is `error` with the old
+   * entries kept, never an empty list claiming the agent forgot everything.
+   */
+  phase: LoadPhase;
   global: AgentMemoryEntry[];
   project: AgentMemoryEntry[];
   /** The project path the held `project` entries belong to. */
@@ -57,6 +65,7 @@ interface AgentMemoryState {
 }
 
 const EMPTY_STATE = {
+  phase: 'unknown' as LoadPhase,
   global: [] as AgentMemoryEntry[],
   project: [] as AgentMemoryEntry[],
   projectPath: null as string | null,
@@ -82,6 +91,11 @@ export const selectProjectMemoryForPath = (
  * fires a load before the setting has finished being written, so an older
  * "disabled" answer can arrive after a newer successful one and latch the
  * feature off again.
+ *
+ * `reset()` bumps this too: an instance switch must not let a read that was
+ * already in flight land afterwards and present the previous instance's memory
+ * as this one's answer. The runtime key is captured as well, because a reset
+ * can happen without a new load being started yet.
  */
 let loadSequence = 0;
 
@@ -124,6 +138,7 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
       return;
     }
     const requestId = ++loadSequence;
+    const runtimeKey = getRuntimeKey();
     if (ownerChanged) {
       set({ loading: true, projectPath, project: [], projectFailed: false });
     } else {
@@ -131,7 +146,7 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
     }
     try {
       const snapshot = await fetchAgentMemory(projectPath);
-      if (requestId !== loadSequence) return;
+      if (requestId !== loadSequence || runtimeKey !== getRuntimeKey()) return;
       const current = get();
       set({
         global: snapshot.globalFailed ? current.global : snapshot.global,
@@ -141,27 +156,29 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
         projectFailed: snapshot.projectFailed,
         loading: false,
         loaded: true,
+        phase: 'ready',
         loadedAt: Date.now(),
         disabled: false,
         error: null,
       });
     } catch (error) {
-      if (requestId !== loadSequence) return;
+      if (requestId !== loadSequence || runtimeKey !== getRuntimeKey()) return;
       if (error instanceof AgentMemoryDisabledError) {
         // Switched off is not a failure. Clearing the lists is right here and
         // only here: with the feature off there is nothing for the user to act
         // on, and the tab that would show them is gone too. The path is kept so
         // a later refresh knows which store to re-read.
-        set({ ...EMPTY_STATE, projectPath, disabled: true, loaded: true });
+        set({ ...EMPTY_STATE, projectPath, disabled: true, loaded: true, phase: 'ready' });
         return;
       }
       // Whatever was loaded before stays. Only the error is new.
-      set({
+      set((state) => ({
         loading: false,
         globalFailed: true,
         projectFailed: true,
+        phase: state.phase === 'ready' ? 'ready' : 'error',
         error: errorMessage(error, 'Failed to load agent memory'),
-      });
+      }));
     }
   },
 
@@ -197,6 +214,8 @@ export const useAgentMemoryStore = create<AgentMemoryState>((set, get) => ({
   }),
 
   reset: () => {
+    // Invalidate every read that started before the switch.
+    loadSequence += 1;
     set({ ...EMPTY_STATE });
   },
 }));

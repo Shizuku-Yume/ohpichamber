@@ -17,6 +17,7 @@ import {
 } from '@/lib/api/git-identity';
 import { loadDesktopSettings, reportSettingsSaveState, updateDesktopSettings } from '@/lib/persistence';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import type { LoadPhase } from './loadPhase';
 
 export type { GitIdentityProfile } from '@/lib/api/types';
 
@@ -25,6 +26,11 @@ interface GitIdentitiesStore {
   defaultGitIdentityId: string | null;
   profiles: GitIdentityProfile[];
   globalIdentity: GitIdentityProfile | null;
+  /**
+   * Whether the instance's identities have been read. `unknown` means the lists
+   * are empty because nothing was read, not because the instance has none.
+   */
+  phase: LoadPhase;
   isLoading: boolean;
 
   setSelectedProfile: (id: string | null) => void;
@@ -52,6 +58,20 @@ let globalIdentityLoadGeneration = 0;
 let defaultIdentityLoadGeneration = 0;
 let defaultIdentityMutationGeneration = 0;
 const profileMutationGenerations = new Map<string, number>();
+
+/**
+ * The three reads that together answer "what identities does this instance
+ * have". `phase` is `ready` only when all of them answered: a profiles read
+ * that failed while the global identity read succeeded must not present an
+ * empty profile list as the instance's answer.
+ */
+type IdentityRead = 'profiles' | 'global' | 'default';
+const answeredReads = new Set<IdentityRead>();
+
+const markIdentityReadAnswered = (read: IdentityRead, set: (partial: { phase: LoadPhase }) => void): void => {
+  answeredReads.add(read);
+  if (answeredReads.size === 3) set({ phase: 'ready' });
+};
 
 const captureRuntime = (): RuntimeToken => ({
   runtimeKey: getRuntimeKey(),
@@ -87,6 +107,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
       defaultGitIdentityId: null,
       profiles: [],
       globalIdentity: null,
+      phase: 'unknown',
       isLoading: false,
 
       setSelectedProfile: (id) => set({ selectedProfileId: id }),
@@ -101,11 +122,14 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           if (!isRuntimeCurrent(runtime) || loadGeneration !== profilesLoadGeneration) return false;
           if (mutationRevision === profilesMutationRevision) set({ profiles, isLoading: false });
           else set({ isLoading: false });
+          markIdentityReadAnswered('profiles', set);
           return true;
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== profilesLoadGeneration) return false;
           console.error('Failed to load git identity profiles:', error);
-          set({ isLoading: false });
+          // A failed read keeps whatever was held and says so; it never claims
+          // the instance has no profiles.
+          set((state) => ({ isLoading: false, ...(state.phase === 'unknown' ? { phase: 'error' as const } : {}) }));
           return false;
         }
       },
@@ -132,10 +156,12 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
               icon: 'fingerprint',
             },
           });
+          markIdentityReadAnswered('global', set);
           return true;
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== globalIdentityLoadGeneration) return false;
           console.error('Failed to load global git identity:', error);
+          set((state) => (state.phase === 'unknown' ? { phase: 'error' } : {}));
           return false;
         }
       },
@@ -154,10 +180,12 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           if (loadGeneration !== defaultIdentityLoadGeneration
             || mutationGeneration !== defaultIdentityMutationGeneration) return false;
           set({ defaultGitIdentityId: defaultId });
+          markIdentityReadAnswered('default', set);
           return true;
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== defaultIdentityLoadGeneration) return false;
           console.error('Failed to load default git identity setting:', error);
+          set((state) => (state.phase === 'unknown' ? { phase: 'error' } : {}));
           return false;
         }
       },
@@ -257,12 +285,14 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
         defaultIdentityMutationGeneration += 1;
         profilesMutationRevision += 1;
         profileMutationGenerations.clear();
+        answeredReads.clear();
         reportSettingsSaveState('saved');
         set({
           selectedProfileId: null,
           defaultGitIdentityId: null,
           profiles: [],
           globalIdentity: null,
+          phase: 'unknown',
           isLoading: false,
         });
       },

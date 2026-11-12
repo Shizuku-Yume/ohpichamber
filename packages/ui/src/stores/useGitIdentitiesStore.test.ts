@@ -73,6 +73,37 @@ describe('author profile storage', () => {
     savedProfiles = JSON.stringify([{ ...author, sshKey: '/private/key' }]);
     expect(await useGitIdentitiesStore.getState().loadProfiles()).toBe(false);
     expect(useGitIdentitiesStore.getState().profiles).toEqual([]);
+    // A rejected read is never a ready empty list of identities.
+    expect(useGitIdentitiesStore.getState().phase).toBe('error');
+  });
+
+  test('starts unknown until the instance answers', () => {
+    useGitIdentitiesStore.getState().resetForRuntimeSwitch('runtime-test');
+    expect(useGitIdentitiesStore.getState().phase).toBe('unknown');
+  });
+
+  test('a failed profiles read is not masked by a global identity that answered', async () => {
+    // The boot registry asks all three reads at once. If the profiles read is
+    // rejected while the global one succeeds, the page must keep saying the
+    // list has not loaded; an empty profile list is not the instance's answer.
+    savedProfiles = JSON.stringify([{ ...author, sshKey: '/private/key' }]);
+    await Promise.all([
+      useGitIdentitiesStore.getState().loadProfiles(),
+      useGitIdentitiesStore.getState().loadGlobalIdentity(),
+      useGitIdentitiesStore.getState().loadDefaultGitIdentityId(),
+    ]);
+    expect(useGitIdentitiesStore.getState().globalIdentity?.id).toBe('global');
+    expect(useGitIdentitiesStore.getState().phase).toBe('error');
+
+    // The reads that did answer still count: once the profiles read succeeds
+    // the instance has answered, so the page stops waiting.
+    savedProfiles = '[]';
+    await Promise.all([
+      useGitIdentitiesStore.getState().loadProfiles(),
+      useGitIdentitiesStore.getState().loadGlobalIdentity(),
+      useGitIdentitiesStore.getState().loadDefaultGitIdentityId(),
+    ]);
+    expect(useGitIdentitiesStore.getState().phase).toBe('ready');
   });
 
   test('a rejected edit preserves the stored public profile', async () => {
@@ -85,6 +116,9 @@ describe('author profile storage', () => {
 
   test('global Git configuration becomes author data only', async () => {
     expect(await useGitIdentitiesStore.getState().loadGlobalIdentity()).toBe(true);
+    // The global read alone does not answer what identities exist: the profile
+    // list is still unread, and an empty one must not read as the answer.
+    expect(useGitIdentitiesStore.getState().phase).toBe('unknown');
     useGitIdentitiesStore.getState().setSelectedProfile('global');
 
     expect(useGitIdentitiesStore.getState().getProfileById('global')).toEqual({

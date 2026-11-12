@@ -5,7 +5,7 @@ import { getRuntimeApiBaseUrl, getRuntimeKey, switchRuntimeEndpoint } from '@/li
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { applyGlobalSessionStatusEvent, replaceGlobalSessionStatusById, useGlobalSessionStatusStore } from './global-session-status';
 import { resetGlobalBlockingRequests, useGlobalBlockingRequestsStore } from './global-blocking-requests';
-import { HOST_STATUS_SEED_MAX_AGE_MS, buildHostStatusSeedSnapshots, seedGlobalSessionStatusFromHost } from './host-session-status-seed';
+import { buildHostStatusSeedSnapshots, seedGlobalSessionStatusFromHost } from './host-session-status-seed';
 import { deferred, nativeApproval, nativeQuestion, nativeSnapshot } from './session-message-loader-test-fixtures';
 import { resetSessionOrdering } from './session-ordering';
 import { resetSessionActivityTiming } from './session-activity-timing';
@@ -53,20 +53,22 @@ describe('native host status seed projection', () => {
     const approval = session('approval', 'awaiting_approval', { workspaceId: 'workspace-b' });
     const input = session('input', 'awaiting_input');
     const result = buildHostStatusSeedSnapshots({ items: [running, approval, input, session('idle', 'idle'), session('offline', 'unavailable')], errors: {} }, {
-      isKnown: () => false, now: NOW, resolveDirectory: (id) => id === 'workspace-b' ? '/other' : '/repo',
+      isKnown: () => false, resolveDirectory: (id) => id === 'workspace-b' ? '/other' : '/repo',
     });
     expect(result.get('/repo')).toEqual([running, input]);
     expect(result.get('/other')).toEqual([approval]);
   });
 
-  test('preserves readable siblings but excludes errors, observed, stale, archived and unresolved sessions', () => {
-    const fresh = session('fresh', 'running', { updatedAt: NOW - HOST_STATUS_SEED_MAX_AGE_MS });
+  test('preserves readable siblings but excludes errors, observed, archived and unresolved sessions', () => {
+    // No client-clock age window: `updatedAt` is the native file mtime, so an
+    // old-looking record is not evidence that the native run stopped.
+    const fresh = session('fresh', 'running', { updatedAt: NOW - 30 * 60_000 });
     const result = buildHostStatusSeedSnapshots({ items: [
-      fresh, session('known'), session('stale', 'running', { updatedAt: fresh.updatedAt - 1 }),
+      fresh, session('known'),
       session('failed'), session('scope-failed', 'running', { workspaceId: 'failed-workspace' }),
       session('unplaced', 'running', { workspaceId: 'unknown' }), session('archived', 'running', { archivedAt: 0 }),
     ], errors: { failed: 'SESSION_UNAVAILABLE', 'failed-workspace': 'WORKSPACE_UNAVAILABLE' } }, {
-      isKnown: (id) => id === 'known', now: NOW, resolveDirectory: (id) => id === 'unknown' ? null : '/repo',
+      isKnown: (id) => id === 'known', resolveDirectory: (id) => id === 'unknown' ? null : '/repo',
     });
     expect(result.get('/repo')).toEqual([fresh]);
   });

@@ -7,7 +7,6 @@
 **Read first:** `research/ux-v270-systemic-review.md` R5; `packages/ui/src/lib/theme/STYLING.md`; skills `performance-engineering`, `locale-ui-patterns`
 **Check:** `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/lib/settings packages/ui/src/components/chat/work-status && bun scripts/check-css-classes.mjs && bun run lint` → exit 0, with the settings-effect test finding zero keys without a consumer and the CSS check finding zero unresolved classes; real path: a real turn shows model time, tool time, first-token latency and tok/s; the running-session spinner rotates when enabled; transcript content does not show through the composer
 **Base commit:** ab047171d642c5077422fab8b4fad6111b70bcd5
-**Status:** active
 
 - [x] Settings registry entries declare their effect; each of the 19 dead keys is wired to a real consumer or deleted together with its row and translations.
 - [x] Add `scripts/check-css-classes.mjs` to `bun run check`: every class token in UI TSX resolves to a CSS rule, an `@utility`, or a documented marker.

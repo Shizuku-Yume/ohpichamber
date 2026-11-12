@@ -439,7 +439,10 @@ describe('settings registry effects', () => {
     'packages/agent-service',
   ];
   const SOURCE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
-  const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-bundle', 'build', 'out', '.git', 'ios', 'android']);
+  // Build outputs are not source. `resources/web-dist` and the staged agent
+  // runtime are produced by `electron:build` and are gitignored, so scanning
+  // them would make this test's result depend on whether Electron was built.
+  const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-bundle', 'build', 'out', '.git', 'ios', 'android', 'web-dist', 'agent-runtime']);
 
   const isPlumbing = (relativePath: string): boolean =>
     PLUMBING.has(relativePath)

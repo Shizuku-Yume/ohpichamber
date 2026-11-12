@@ -229,7 +229,7 @@ export const MobileDeleteWorktreeDialog: React.FC<MobileDeleteWorktreeDialogProp
       }
     >
       <div className="flex flex-col gap-4 px-1 py-1">
-        <p className="typography-ui-body text-foreground">
+        <p className="text-foreground">
           {t('mobile.projectEdit.deleteWorktreeConfirm', { name: worktreeName })}
         </p>
 

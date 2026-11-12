@@ -44,7 +44,7 @@ export const MobileConnectionDebugPanel: React.FC<{ onClose: () => void }> = ({ 
       </div>
       <ScrollableOverlay outerClassName="min-h-0 flex-1" className="px-4 py-3" disableHorizontal>
         {entries.length === 0 ? (
-          <p className="typography-small text-muted-foreground">{t('mobile.connectionDebug.empty')}</p>
+          <p className="text-muted-foreground">{t('mobile.connectionDebug.empty')}</p>
         ) : (
           // The trail is generated Latin machine text; keep it LTR under RTL locales.
           <pre dir="ltr" className="whitespace-pre-wrap break-words typography-code text-muted-foreground text-start">

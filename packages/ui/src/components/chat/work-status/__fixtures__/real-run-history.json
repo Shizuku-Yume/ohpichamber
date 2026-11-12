@@ -1,0 +1,279 @@
+{
+ "turns": [
+  {
+   "turnId": "fd3385af-889e-4e70-9e6a-fd81e6f3ae85",
+   "sessionId": "c8de43aa-b076-4fc1-89ac-e4e9ad38a83a",
+   "runId": "836c48ca-b537-460f-a897-23ef7244f937",
+   "status": "completed",
+   "userMessageId": "5ca1ca07-42a5-4a64-9892-0ef062ccdd97",
+   "assistantMessageIds": [
+    "50d98bdf-8cf1-461c-b166-31c9a86db90e"
+   ],
+   "startedAt": 1794447954879,
+   "finishedAt": 1794447958417
+  },
+  {
+   "turnId": "38266cf5-a9d4-43cb-aff8-b67774c4a784",
+   "sessionId": "c8de43aa-b076-4fc1-89ac-e4e9ad38a83a",
+   "runId": "836c48ca-b537-460f-a897-23ef7244f937",
+   "status": "completed",
+   "userMessageId": "449f8d06-1baf-44cc-b9a4-e2b0a65f2d17",
+   "assistantMessageIds": [
+    "fbfd38d3-3f31-430a-8071-350b326dbbd0"
+   ],
+   "startedAt": 1794447959217,
+   "finishedAt": 1794447959224
+  }
+ ],
+ "messages": [
+  {
+   "messageId": "5ca1ca07-42a5-4a64-9892-0ef062ccdd97",
+   "role": "user",
+   "turnId": "fd3385af-889e-4e70-9e6a-fd81e6f3ae85",
+   "parts": [
+    {
+     "type": "text",
+     "partId": "5ca1ca07-42a5-4a64-9892-0ef062ccdd97:0",
+     "content": "Run the bash tool once with the command: echo hello-from-turn. Then reply with exactly: done."
+    }
+   ]
+  },
+  {
+   "messageId": "50d98bdf-8cf1-461c-b166-31c9a86db90e",
+   "role": "assistant",
+   "turnId": "fd3385af-889e-4e70-9e6a-fd81e6f3ae85",
+   "parts": [
+    {
+     "type": "tool_call",
+     "partId": "50d98bdf-8cf1-461c-b166-31c9a86db90e:0",
+     "toolCallId": "toolu_016Rp7qVz2B6Km8qtyvucgV8",
+     "toolName": "bash",
+     "input": {
+      "command": "echo hello-from-turn",
+      "i": "Running echo command"
+     },
+     "status": "completed"
+    },
+    {
+     "type": "tool_result",
+     "partId": "50d98bdf-8cf1-461c-b166-31c9a86db90e:0:result",
+     "toolCallId": "toolu_016Rp7qVz2B6Km8qtyvucgV8",
+     "toolName": "bash",
+     "output": {
+      "content": [
+       {
+        "type": "text",
+        "text": "hello-from-turn\n"
+       }
+      ],
+      "details": {
+       "wallTimeNoticeEmitted": false,
+       "timeoutSeconds": 300,
+       "wallTimeMs": 118.55483200000162,
+       "trace": {
+        "v": 1,
+        "seq": 7,
+        "status": 0,
+        "rootVpid": 1073741824,
+        "t_ns": 76634,
+        "script": "echo hello-from-turn",
+        "units": [
+         {
+          "at": 0,
+          "line": 1,
+          "bytes": 20,
+          "nodes": [
+           {
+            "k": "and_or",
+            "lo": 0,
+            "hi": 20,
+            "state": "ok"
+           },
+           {
+            "k": "pipeline",
+            "lo": 0,
+            "hi": 20,
+            "p": 0,
+            "state": "ok"
+           },
+           {
+            "k": "simple",
+            "lo": 0,
+            "hi": 20,
+            "p": 1,
+            "state": "ok",
+            "runs": 1,
+            "st": 0,
+            "ns": 26149,
+            "at": 43793,
+            "argv": [
+             "echo",
+             "hello-from-turn"
+            ],
+            "res": "intrinsic",
+            "end_ns": 69942,
+            "end_seq": 6
+           },
+           {
+            "k": "word",
+            "lo": 0,
+            "hi": 4,
+            "p": 2,
+            "state": "skipped"
+           },
+           {
+            "k": "word",
+            "lo": 5,
+            "hi": 20,
+            "p": 2,
+            "state": "skipped"
+           }
+          ],
+          "syntax": "AQAAAAAAAAEAABQBABQAAAECABQAAAIDAAQBAARlY2hvBAUUAQAPaGVsbG8tZnJvbS10dXJuAAAAAAI="
+         }
+        ],
+        "history": [
+         {
+          "seq": 1,
+          "t_ns": 0,
+          "event_seq": 0,
+          "vpid": 1073741824,
+          "kind": "RunStart"
+         },
+         {
+          "seq": 3,
+          "t_ns": 43793,
+          "event_seq": 2,
+          "u": 0,
+          "n": 2,
+          "command": {
+           "run": 3,
+           "vpid": 1073741824,
+           "seq": 78
+          },
+          "vpid": 1073741824,
+          "kind": "CmdStart"
+         },
+         {
+          "seq": 4,
+          "t_ns": 43793,
+          "event_seq": 3,
+          "u": 0,
+          "n": 2,
+          "command": {
+           "run": 3,
+           "vpid": 1073741824,
+           "seq": 78
+          },
+          "vpid": 1073741824,
+          "kind": "CmdExpanded",
+          "argv": [
+           "echo",
+           "hello-from-turn"
+          ],
+          "assigns": [],
+          "resolved": "intrinsic",
+          "redirs": []
+         },
+         {
+          "seq": 5,
+          "t_ns": 68569,
+          "u": 0,
+          "n": 2,
+          "command": {
+           "run": 3,
+           "vpid": 1073741824,
+           "seq": 78
+          },
+          "vpid": 1073741824,
+          "kind": "Output",
+          "text": "hello-from-turn\n",
+          "fd": 1
+         },
+         {
+          "seq": 6,
+          "t_ns": 69942,
+          "event_seq": 4,
+          "u": 0,
+          "n": 2,
+          "command": {
+           "run": 3,
+           "vpid": 1073741824,
+           "seq": 78
+          },
+          "vpid": 1073741824,
+          "kind": "CmdEnd",
+          "status": 0,
+          "dur_ns": 26149,
+          "pipestatus": []
+         },
+         {
+          "seq": 7,
+          "t_ns": 76634,
+          "event_seq": 5,
+          "vpid": 1073741824,
+          "kind": "RunEnd",
+          "status": 0
+         }
+        ]
+       }
+      }
+     },
+     "isError": false
+    }
+   ],
+   "usage": {
+    "input": 2,
+    "output": 93,
+    "cacheRead": 0,
+    "cacheWrite": 17604,
+    "totalTokens": 17699,
+    "cost": {
+     "input": 6e-06,
+     "output": 0.001395,
+     "cacheRead": 0,
+     "cacheWrite": 0.10562400000000001,
+     "total": 0.10702500000000001
+    },
+    "reasoning": 0
+   },
+   "timing": {
+    "startedAt": 1794447954887,
+    "firstTokenAt": 1794447957547,
+    "completedAt": 1794447957837
+   }
+  },
+  {
+   "messageId": "fbfd38d3-3f31-430a-8071-350b326dbbd0",
+   "role": "assistant",
+   "turnId": "38266cf5-a9d4-43cb-aff8-b67774c4a784",
+   "parts": [
+    {
+     "type": "text",
+     "partId": "fbfd38d3-3f31-430a-8071-350b326dbbd0:0",
+     "content": "done."
+    }
+   ],
+   "usage": {
+    "input": 2,
+    "output": 4,
+    "cacheRead": 17604,
+    "cacheWrite": 106,
+    "totalTokens": 17716,
+    "cost": {
+     "input": 6e-06,
+     "output": 6e-05,
+     "cacheRead": 0.0052812,
+     "cacheWrite": 0.0006360000000000001,
+     "total": 0.0059832
+    },
+    "reasoning": 0
+   },
+   "timing": {
+    "startedAt": 1794447958425,
+    "firstTokenAt": 1794447959216,
+    "completedAt": 1794447959223
+   }
+  }
+ ]
+}

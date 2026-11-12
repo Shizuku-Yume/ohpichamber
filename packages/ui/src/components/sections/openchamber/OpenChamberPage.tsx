@@ -87,7 +87,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
             title={pageTitle}
             namedBySidebar
             showSaveStatus
-            className="openchamber-page-body"
         >
             {renderSectionContent()}
         </SettingsPageLayout>

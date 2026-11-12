@@ -188,7 +188,7 @@ export function NewWorktreeBranchPicker({
                 <CommandGroup heading={section.heading}>
                   {section.branches.map((branch) => (
                     <CommandItem key={branch.value} value={branch.value} onSelect={() => choose(branch)}>
-                      <span className="typography-small break-all">{branch.label}</span>
+                      <span className="break-all">{branch.label}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>

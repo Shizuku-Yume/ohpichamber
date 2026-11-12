@@ -405,7 +405,7 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
         <div className="flex flex-col items-center text-center">
           <AboutLogo size={72} />
           <h2 className={`mt-4 ${SETTINGS_BRAND_TITLE_CLASS}`}>OpenChamber</h2>
-          <div className="mt-2 space-y-1 typography-ui text-muted-foreground">
+          <div className="mt-2 space-y-1 text-muted-foreground">
             {isNativeApp ? (
               <>
                 <p>{t('settings.openchamber.about.native.serverOpenChamberVersion', { version: currentVersion })}</p>
@@ -509,7 +509,7 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
           </a>
         </div>
 
-        <p className="text-center typography-ui text-muted-foreground">
+        <p className="text-center text-muted-foreground">
           {t('aboutDialog.footerNote')}
         </p>
 

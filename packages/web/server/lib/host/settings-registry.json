@@ -31,25 +31,37 @@
     "worktreeArchiveOnDoneEnabled": {
       "scope": "instance"
     },
-    "showOpenCodeUpdateNotifications": {
-      "scope": "profile"
-    },
-    "agentScheduleToolEnabled": {
-      "scope": "instance"
-    },
     "agentKnowledgeToolEnabled": {
       "scope": "instance"
     },
     "agentRenderToolEnabled": {
       "scope": "instance"
     },
+    "agentImageToolEnabled": {
+      "scope": "instance"
+    },
+    "permissionDefaultMode": {
+      "scope": "profile"
+    },
+    "sessionGoalChecker": {
+      "scope": "profile"
+    },
+    "sessionGoalMaxAutoTurns": {
+      "scope": "profile"
+    },
+    "autoApplyAgentModel": {
+      "scope": "profile"
+    },
+    "planModeAllowAgents": {
+      "scope": "profile"
+    },
+    "agentImageModel": {
+      "scope": "instance"
+    },
     "agentWorkflowToolEnabled": {
       "scope": "instance"
     },
     "mobileReturnKeySends": {
-      "scope": "profile"
-    },
-    "savePastedImagesAsFiles": {
       "scope": "profile"
     },
     "themeId": {
@@ -88,12 +100,6 @@
     "activeProjectId": {
       "scope": "instance",
       "adopt": "bootstrap-only"
-    },
-    "securityScopedBookmarks": {
-      "scope": "instance",
-      "surfaces": [
-        "desktop"
-      ]
     },
     "pinnedDirectories": {
       "scope": "instance"
@@ -171,21 +177,6 @@
     "defaultGitIdentityId": {
       "scope": "instance"
     },
-    "permissionDefaultMode": {
-      "scope": "profile"
-    },
-    "sessionGoalChecker": {
-      "scope": "profile"
-    },
-    "sessionGoalMaxAutoTurns": {
-      "scope": "profile"
-    },
-    "autoApplyAgentModel": {
-      "scope": "profile"
-    },
-    "planModeAllowAgents": {
-      "scope": "profile"
-    },
     "messageSearchEnabled": {
       "scope": "instance",
       "surfaces": [
@@ -248,6 +239,9 @@
     "sessionRetentionOnlyArchived": {
       "scope": "instance"
     },
+    "sessionRetentionIncludeInWork": {
+      "scope": "instance"
+    },
     "sessionRetentionAction": {
       "scope": "instance"
     },
@@ -266,10 +260,16 @@
     "dictationEnabled": {
       "scope": "profile"
     },
+    "dictationAutoSend": {
+      "scope": "profile"
+    },
     "sttProvider": {
       "scope": "instance"
     },
     "sttServerUrl": {
+      "scope": "instance"
+    },
+    "sttEndpointPath": {
       "scope": "instance"
     },
     "sttModel": {
@@ -279,6 +279,9 @@
       "scope": "instance"
     },
     "sttLanguage": {
+      "scope": "profile"
+    },
+    "sttCorrectTranscript": {
       "scope": "profile"
     },
     "tunnelProvider": {
@@ -311,9 +314,6 @@
       "computed": true
     },
     "managedRemoteTunnelPresets": {
-      "scope": "instance"
-    },
-    "managedRemoteTunnelSelectedPresetId": {
       "scope": "instance"
     },
     "managedRemoteTunnelPresetTokens": {
@@ -351,6 +351,16 @@
       "perSurface": true
     },
     "sidebarDetailedZoneRows": {
+      "scope": "profile",
+      "perSurface": true
+    },
+    "sidebarSections": {
+      "scope": "profile"
+    },
+    "sidebarPinLists": {
+      "scope": "profile"
+    },
+    "sidebarHiddenSections": {
       "scope": "profile",
       "perSurface": true
     },
@@ -503,6 +513,13 @@
         "desktop"
       ]
     },
+    "sessionTabsPerWorkspace": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop"
+      ]
+    },
     "allowPromptingSubagentSessions": {
       "scope": "profile"
     },
@@ -519,6 +536,9 @@
       "scope": "profile"
     },
     "largeTextPasteBehavior": {
+      "scope": "profile"
+    },
+    "selectionApprovalText": {
       "scope": "profile"
     },
     "followUpBehavior": {
@@ -580,10 +600,6 @@
       "scope": "profile",
       "perSurface": true
     },
-    "cornerRadius": {
-      "scope": "profile",
-      "perSurface": true
-    },
     "shortcutOverrides": {
       "scope": "profile"
     },
@@ -599,10 +615,10 @@
     "hiddenModels": {
       "scope": "profile"
     },
-    "collapsedModelProviders": {
+    "customProviderIcons": {
       "scope": "profile"
     },
-    "customProviderIcons": {
+    "customProviderLogos": {
       "scope": "profile"
     },
     "recentModels": {
@@ -611,13 +627,10 @@
     "lastSelectedModel": {
       "scope": "profile"
     },
-    "recentAgents": {
-      "scope": "profile"
-    },
     "favoriteAgents": {
       "scope": "profile"
     },
-    "recentEfforts": {
+    "lastUsedEfforts": {
       "scope": "profile"
     },
     "providerOrder": {
@@ -658,15 +671,6 @@
       "scope": "profile"
     },
     "sessionGoalDefaultBudget": {
-      "scope": "profile"
-    },
-    "summarizeLastMessage": {
-      "scope": "profile"
-    },
-    "summaryThreshold": {
-      "scope": "profile"
-    },
-    "summaryLength": {
       "scope": "profile"
     },
     "maxLastMessageLength": {
@@ -714,13 +718,7 @@
     "usageSelectedModels": {
       "scope": "profile"
     },
-    "usageCollapsedFamilies": {
-      "scope": "profile"
-    },
     "usageExpandedFamilies": {
-      "scope": "profile"
-    },
-    "usageModelGroups": {
       "scope": "profile"
     },
     "responseStyleInstruction": {
@@ -820,10 +818,6 @@
       "scope": "device",
       "local": true
     },
-    "notesPanelHeight": {
-      "scope": "device",
-      "local": true
-    },
     "workStatusExpandedSections": {
       "scope": "device",
       "local": true
@@ -837,10 +831,6 @@
       "local": true
     },
     "isSessionSwitcherOpen": {
-      "scope": "device",
-      "local": true
-    },
-    "sidebarSection": {
       "scope": "device",
       "local": true
     },
@@ -860,15 +850,7 @@
       "scope": "device",
       "local": true
     },
-    "isSessionCreateDialogOpen": {
-      "scope": "device",
-      "local": true
-    },
     "autoDeleteLastRunAt": {
-      "scope": "device",
-      "local": true
-    },
-    "messageLimit": {
       "scope": "device",
       "local": true
     },
@@ -900,10 +882,6 @@
       "scope": "device",
       "local": true
     },
-    "projectContextSidebarWidth": {
-      "scope": "device",
-      "local": true
-    },
     "sidebarFoldedForExpandedZone": {
       "scope": "device",
       "local": true
@@ -917,6 +895,10 @@
       "local": true
     },
     "contextZoneSizes": {
+      "scope": "device",
+      "local": true
+    },
+    "contextZoneExpandedChatSizes": {
       "scope": "device",
       "local": true
     },

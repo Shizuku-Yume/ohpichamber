@@ -52,8 +52,7 @@ const lastSelectedModelSchema = z.string().trim().min(1).max(512);
 // Boolean settings the registry lists; each is accepted as a plain boolean.
 const REGISTRY_BOOLEAN_SETTINGS = Object.freeze([
   'layoutAnimations', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard', 'worktreeArchiveOnDoneEnabled',
-  'showOpenCodeUpdateNotifications', 'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled',
-  'agentRenderToolEnabled', 'agentWorkflowToolEnabled', 'mobileReturnKeySends', 'savePastedImagesAsFiles',
+  'agentKnowledgeToolEnabled', 'agentRenderToolEnabled', 'agentWorkflowToolEnabled', 'mobileReturnKeySends',
   // Commit-message controls. `lib/gitCommitSettings.ts` owns their defaults;
   // the server only records what the user chose, so an absent key stays absent.
   'generateCommitMessages', 'commitMessageReasoning', 'commitMessageNotes', 'commitMessageChangeId',
@@ -116,8 +115,6 @@ export const createSettingsHelpers = (dependencies) => {
   const UI_LOCALE_VALUES = new Set(['en', 'de', 'fr', 'nl', 'zh-CN', 'zh-TW', 'uk', 'es', 'pt-BR', 'ko', 'pl', 'ja', 'tr', 'ar', 'he']);
   const SIDEBAR_PROJECT_SORT_ORDER_VALUES = new Set(['manual', 'a-z', 'z-a', 'date-added', 'recent']);
   const HIDDEN_MODELS_MAX = 1024;
-  const RECENT_EFFORTS_MAX_KEYS = 128;
-  const RECENT_EFFORTS_MAX_VARIANTS_PER_KEY = 5;
 
   const sanitizeShortcutOverrides = (value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -131,35 +128,6 @@ export const createSettingsHelpers = (dependencies) => {
       result[key.slice(0, SHORTCUT_OVERRIDE_KEY_MAX_LENGTH)] = combo.slice(0, SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH);
     }
     return result;
-  };
-
-  const sanitizeRecentEfforts = (value) => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return null;
-    }
-    const result = {};
-    const seenKeys = new Set();
-    let count = 0;
-    for (const [rawKey, rawVariants] of Object.entries(value)) {
-      const key = typeof rawKey === 'string' ? rawKey.trim() : '';
-      if (!key || seenKeys.has(key)) continue;
-      if (!Array.isArray(rawVariants)) continue;
-      const variants = [];
-      const seenVariants = new Set();
-      for (const rawVariant of rawVariants) {
-        const variant = typeof rawVariant === 'string' ? rawVariant.trim() : '';
-        if (!variant || seenVariants.has(variant)) continue;
-        seenVariants.add(variant);
-        variants.push(variant);
-        if (variants.length >= RECENT_EFFORTS_MAX_VARIANTS_PER_KEY) break;
-      }
-      if (variants.length === 0) continue;
-      seenKeys.add(key);
-      result[key] = variants;
-      count += 1;
-      if (count >= RECENT_EFFORTS_MAX_KEYS) break;
-    }
-    return count > 0 ? result : null;
   };
 
   const normalizePwaAppName = (value, fallback = '') => {
@@ -388,9 +356,6 @@ export const createSettingsHelpers = (dependencies) => {
       result.sidebarDetailedZoneRows = candidate.sidebarDetailedZoneRows;
     }
 
-    if (Array.isArray(candidate.securityScopedBookmarks)) {
-      result.securityScopedBookmarks = normalizeStringArray(candidate.securityScopedBookmarks);
-    }
     if (Array.isArray(candidate.pinnedDirectories)) {
       result.pinnedDirectories = normalizeStringArray(
         candidate.pinnedDirectories
@@ -594,15 +559,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (candidate.notificationTemplates && typeof candidate.notificationTemplates === 'object') {
       result.notificationTemplates = candidate.notificationTemplates;
     }
-    if (typeof candidate.summarizeLastMessage === 'boolean') {
-      result.summarizeLastMessage = candidate.summarizeLastMessage;
-    }
-    if (typeof candidate.summaryThreshold === 'number' && Number.isFinite(candidate.summaryThreshold)) {
-      result.summaryThreshold = Math.max(0, Math.round(candidate.summaryThreshold));
-    }
-    if (typeof candidate.summaryLength === 'number' && Number.isFinite(candidate.summaryLength)) {
-      result.summaryLength = Math.max(10, Math.round(candidate.summaryLength));
-    }
     if (typeof candidate.maxLastMessageLength === 'number' && Number.isFinite(candidate.maxLastMessageLength)) {
       result.maxLastMessageLength = Math.max(10, Math.round(candidate.maxLastMessageLength));
     }
@@ -670,10 +626,6 @@ export const createSettingsHelpers = (dependencies) => {
     const managedRemoteTunnelPresetTokens = normalizeManagedRemoteTunnelPresetTokens(candidate.managedRemoteTunnelPresetTokens);
     if (managedRemoteTunnelPresetTokens) {
       result.managedRemoteTunnelPresetTokens = managedRemoteTunnelPresetTokens;
-    }
-    if (typeof candidate.managedRemoteTunnelSelectedPresetId === 'string') {
-      const id = candidate.managedRemoteTunnelSelectedPresetId.trim();
-      result.managedRemoteTunnelSelectedPresetId = id || undefined;
     }
 
     const lastSelectedModel = lastSelectedModelSchema.safeParse(candidate.lastSelectedModel);
@@ -748,18 +700,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
       result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
     }
-    // Settings the client registry persists; each was missing here, so the
-    // registry and this sanitizer disagreed and the value never reached disk.
-    for (const key of [
-      'agentScheduleToolEnabled', 'agentKnowledgeToolEnabled', 'agentRenderToolEnabled',
-      'agentWorkflowToolEnabled', 'openLinksInBrowserPanel', 'openTrackerLinksOnBoard',
-      'worktreeArchiveOnDoneEnabled', 'showOpenCodeUpdateNotifications', 'mobileReturnKeySends',
-      'savePastedImagesAsFiles', 'layoutAnimations',
-    ]) {
-      if (typeof candidate[key] === 'boolean') result[key] = candidate[key];
-    }
-    // The live browser tab limit is clamped to the same 1..20 range as the UI
-    // parser (`src/lib/browser/liveTabs.ts`).
     if (typeof candidate.liveBrowserTabLimit === 'number' && Number.isFinite(candidate.liveBrowserTabLimit)) {
       result.liveBrowserTabLimit = Math.max(1, Math.min(20, Math.round(candidate.liveBrowserTabLimit)));
     }
@@ -867,9 +807,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.padding === 'number' && Number.isFinite(candidate.padding)) {
       result.padding = Math.max(50, Math.min(200, Math.round(candidate.padding)));
     }
-    if (typeof candidate.cornerRadius === 'number' && Number.isFinite(candidate.cornerRadius)) {
-      result.cornerRadius = Math.max(0, Math.min(32, Math.round(candidate.cornerRadius)));
-    }
     if (typeof candidate.inputBarOffset === 'number' && Number.isFinite(candidate.inputBarOffset)) {
       result.inputBarOffset = Math.max(0, Math.min(100, Math.round(candidate.inputBarOffset)));
     }
@@ -898,9 +835,6 @@ export const createSettingsHelpers = (dependencies) => {
       result.hiddenModels = hiddenModels;
     }
 
-    if (Array.isArray(candidate.collapsedModelProviders)) {
-      result.collapsedModelProviders = normalizeStringArray(candidate.collapsedModelProviders);
-    }
 
     const customProviderIcons = sanitizeCustomProviderIcons(candidate.customProviderIcons);
     if (customProviderIcons) {
@@ -920,17 +854,10 @@ export const createSettingsHelpers = (dependencies) => {
       result.smallModelVariant = candidate.smallModelVariant.trim();
     }
 
-    if (Array.isArray(candidate.recentAgents)) {
-      result.recentAgents = normalizeStringArray(candidate.recentAgents);
-    }
     if (Array.isArray(candidate.favoriteAgents)) {
       result.favoriteAgents = normalizeStringArray(candidate.favoriteAgents);
     }
 
-    const recentEfforts = sanitizeRecentEfforts(candidate.recentEfforts);
-    if (recentEfforts) {
-      result.recentEfforts = recentEfforts;
-    }
     if (typeof candidate.diffLayoutPreference === 'string') {
       const mode = candidate.diffLayoutPreference.trim();
       if (mode === 'dynamic' || mode === 'inline' || mode === 'side-by-side') {
@@ -983,22 +910,6 @@ export const createSettingsHelpers = (dependencies) => {
       }
     }
 
-    // Usage page collapsed families - for "Other Models" section
-    if (candidate.usageCollapsedFamilies && typeof candidate.usageCollapsedFamilies === 'object') {
-      const sanitized = {};
-      for (const [providerId, families] of Object.entries(candidate.usageCollapsedFamilies)) {
-        if (typeof providerId === 'string' && Array.isArray(families)) {
-          const validFamilies = families.filter((f) => typeof f === 'string' && f.length > 0);
-          if (validFamilies.length > 0) {
-            sanitized[providerId] = validFamilies;
-          }
-        }
-      }
-      if (Object.keys(sanitized).length > 0) {
-        result.usageCollapsedFamilies = sanitized;
-      }
-    }
-
     // Header dropdown expanded families (inverted - stores EXPANDED, default all collapsed)
     if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === 'object') {
       const sanitized = {};
@@ -1012,66 +923,6 @@ export const createSettingsHelpers = (dependencies) => {
       }
       if (Object.keys(sanitized).length > 0) {
         result.usageExpandedFamilies = sanitized;
-      }
-    }
-
-    // Custom model groups configuration
-    if (candidate.usageModelGroups && typeof candidate.usageModelGroups === 'object') {
-      const sanitized = {};
-      for (const [providerId, config] of Object.entries(candidate.usageModelGroups)) {
-        if (typeof providerId !== 'string') continue;
-
-        const providerConfig = {};
-
-        // customGroups: array of {id, label, models, order}
-        if (Array.isArray(config.customGroups)) {
-          const validGroups = config.customGroups
-            .filter((g) => g && typeof g.id === 'string' && typeof g.label === 'string')
-            .map((g) => ({
-              id: g.id.slice(0, 64),
-              label: g.label.slice(0, 128),
-              models: Array.isArray(g.models)
-                ? g.models.filter((m) => typeof m === 'string').slice(0, 500)
-                : [],
-              order: typeof g.order === 'number' ? g.order : 0,
-            }));
-          if (validGroups.length > 0) {
-            providerConfig.customGroups = validGroups;
-          }
-        }
-
-        // modelAssignments: Record<modelName, groupId>
-        if (config.modelAssignments && typeof config.modelAssignments === 'object') {
-          const assignments = {};
-          for (const [model, groupId] of Object.entries(config.modelAssignments)) {
-            if (typeof model === 'string' && typeof groupId === 'string') {
-              assignments[model] = groupId;
-            }
-          }
-          if (Object.keys(assignments).length > 0) {
-            providerConfig.modelAssignments = assignments;
-          }
-        }
-
-        // renamedGroups: Record<groupId, label>
-        if (config.renamedGroups && typeof config.renamedGroups === 'object') {
-          const renamed = {};
-          for (const [groupId, label] of Object.entries(config.renamedGroups)) {
-            if (typeof groupId === 'string' && typeof label === 'string') {
-              renamed[groupId] = label.slice(0, 128);
-            }
-          }
-          if (Object.keys(renamed).length > 0) {
-            providerConfig.renamedGroups = renamed;
-          }
-        }
-
-        if (Object.keys(providerConfig).length > 0) {
-          sanitized[providerId] = providerConfig;
-        }
-      }
-      if (Object.keys(sanitized).length > 0) {
-        result.usageModelGroups = sanitized;
       }
     }
 
@@ -1135,6 +986,20 @@ export const createSettingsHelpers = (dependencies) => {
       }
     }
 
+    // Keys the registry lists whose sanitizer branch is a shape check the
+    // registry parser already enforces. They are recorded as sent: the
+    // registry is the authority on what a client may persist, and the client
+    // parses the same document on the way back in.
+    for (const key of [
+      'agentImageToolEnabled', 'agentImageModel', 'sessionRetentionIncludeInWork',
+      'dictationAutoSend', 'sttEndpointPath', 'sttCorrectTranscript',
+      'sidebarSections', 'sidebarPinLists', 'sidebarHiddenSections',
+      'sessionTabsPerWorkspace', 'selectionApprovalText', 'customProviderLogos',
+      'lastUsedEfforts',
+    ]) {
+      if (candidate[key] !== undefined) result[key] = candidate[key];
+    }
+
     // The registry is the last word on what a client may persist: a key the
     // code above still names but the registry no longer lists is dropped here,
     // so the two cannot drift apart silently (settings-helpers.test.js checks
@@ -1148,32 +1013,13 @@ export const createSettingsHelpers = (dependencies) => {
     return result;
   };
 
-  const mergePersistedSettings = (current, changes) => {
-    const baseBookmarks = Array.isArray(changes.securityScopedBookmarks)
-      ? changes.securityScopedBookmarks
-      : Array.isArray(current.securityScopedBookmarks)
-        ? current.securityScopedBookmarks
-        : [];
-
-    const next = {
-      ...current,
-      ...changes,
-      securityScopedBookmarks: Array.from(
-        new Set(
-          baseBookmarks.filter((entry) => typeof entry === 'string' && entry.length > 0)
-        )
-      ),
-    };
-
-    return next;
-  };
+  const mergePersistedSettings = (current, changes) => ({ ...current, ...changes });
 
   const formatSettingsResponse = (settings) => {
     const sanitized = sanitizeSettingsUpdate(settings);
     for (const key of SECRET_SETTINGS_KEYS) {
       delete sanitized[key];
     }
-    const bookmarks = normalizeStringArray(settings.securityScopedBookmarks);
     const hasManagedRemoteTunnelToken = typeof settings?.managedRemoteTunnelToken === 'string' && settings.managedRemoteTunnelToken.trim().length > 0;
     const hasDesktopUiPassword = typeof settings?.desktopUiPassword === 'string' && settings.desktopUiPassword.trim().length > 0;
     const pwaAppName = normalizePwaAppName(settings?.pwaAppName, '');
@@ -1199,17 +1045,16 @@ export const createSettingsHelpers = (dependencies) => {
       mobileKeyboardMode,
       inputHistoryScope,
       inputHistoryLimit,
-      securityScopedBookmarks: bookmarks,
       pinnedDirectories: normalizeStringArray(settings.pinnedDirectories),
       ...(process.env.OPENCHAMBER_RUNTIME === 'desktop'
         ? {
-            desktopLanAccessActive: process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_ACTIVE === 'true',
-            desktopLanAccessBlockedReason:
-              process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'missing-password'
-                || process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'enterprise-mode'
-                ? process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON
-                : null,
-          }
+          desktopLanAccessActive: process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_ACTIVE === 'true',
+          desktopLanAccessBlockedReason:
+            process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'missing-password'
+              || process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON === 'enterprise-mode'
+              ? process.env.OPENCHAMBER_DESKTOP_LAN_ACCESS_BLOCKED_REASON
+              : null,
+        }
         : {}),
       showReasoningTraces:
         typeof settings.showReasoningTraces === 'boolean'

@@ -206,7 +206,7 @@ export const MobileSessionSwitcher: React.FC<{
       >
         <div className="oc-hide-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain">
           {items.length === 0 ? (
-            <p className="px-3 py-6 text-center typography-small text-muted-foreground">
+            <p className="px-3 py-6 text-center text-muted-foreground">
               {t('sessions.switcher.empty')}
             </p>
           ) : (

@@ -690,7 +690,7 @@ export const ComposerEditor = React.memo(React.forwardRef<ComposerEditorHandle, 
                     data-chat-input={props.dataChatInput ?? 'true'}
                     onMouseDown={handleHostMouseDown}
                     className={cn(
-                        'composer-editor w-full',
+                        'w-full',
                         // The editor fills the host so its content box can cover
                         // the whole clickable area rather than just the text.
                         '[&_.cm-editor]:h-full',

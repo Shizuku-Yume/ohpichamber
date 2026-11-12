@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { z } from 'zod';
 
 import { useUIStore } from '@/stores/useUIStore';
@@ -393,5 +395,163 @@ describe('custom stt endpoint path setting', () => {
     expect(SETTINGS_REGISTRY.sttEndpointPath.scope).toBe('instance');
     expect(parseSettingsDocument({ sttEndpointPath: ' /speech_to_text ' })).toEqual({ sttEndpointPath: '/speech_to_text' });
     expect(parseSettingsDocument({ sttEndpointPath: `/${'a'.repeat(1024)}` })).toEqual({});
+  });
+});
+
+/**
+ * The registry decides what persists, so every row must also name something
+ * that reads the value back. A row whose reader was deleted keeps writing a
+ * preference no code path honours, and nothing else in the suite notices.
+ *
+ * The search is deliberately mechanical: it looks for the key's name (or its
+ * `ui` binding's store field name) as a whole word in every source file, and
+ * fails when only plumbing mentions it. Plumbing is the code whose whole job
+ * is moving settings around — the registry, the stores' own field/setter
+ * declarations, persistence, the auto-savers, the server's sanitizer and
+ * runtime, the generated snapshot, i18n, and tests. A key that appears only
+ * there is stored and never used.
+ */
+describe('settings registry effects', () => {
+  const repoRoot = join(import.meta.dir, '../../../../..');
+
+  /** Files that move settings rather than consume them; see the doc comment. */
+  const PLUMBING = new Set([
+    'packages/ui/src/lib/settings/registry.ts',
+    'packages/ui/src/lib/settings/registry.test.ts',
+    'packages/ui/src/lib/settings/registry-snapshot.ts',
+    'packages/ui/src/lib/settings/search.ts',
+    'packages/ui/src/lib/persistence.ts',
+    'packages/ui/src/lib/persistence.test.ts',
+    'packages/ui/src/lib/appearanceAutoSave.ts',
+    'packages/ui/src/lib/modelPrefsAutoSave.ts',
+    'packages/web/server/lib/host/settings-helpers.js',
+    'packages/web/server/lib/host/settings-helpers.test.js',
+    'packages/web/server/lib/host/settings-runtime.js',
+    'packages/web/server/lib/host/settings-files.js',
+  ]);
+
+  const SOURCE_ROOTS = [
+    'packages/ui/src',
+    'packages/web/server',
+    'packages/electron',
+    'packages/mobile',
+    'packages/agent-service',
+  ];
+  const SOURCE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs)$/;
+  const SKIP_DIRS = new Set(['node_modules', 'dist', 'dist-bundle', 'build', 'out', '.git', 'ios', 'android']);
+
+  const isPlumbing = (relativePath: string): boolean =>
+    PLUMBING.has(relativePath)
+    || relativePath.startsWith('packages/ui/src/lib/i18n/messages/')
+    || /\.(test|spec)\.(ts|tsx|js|jsx)$/.test(relativePath)
+    || relativePath.endsWith('settings-registry.json');
+
+  const sourceFiles = (): string[] => {
+    const found: string[] = [];
+    const walk = (directory: string): void => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (entry.isDirectory()) {
+          if (!SKIP_DIRS.has(entry.name)) walk(join(directory, entry.name));
+        } else if (SOURCE_FILE.test(entry.name)) {
+          found.push(join(directory, entry.name));
+        }
+      }
+    };
+    for (const root of SOURCE_ROOTS) walk(join(repoRoot, root));
+    return found;
+  };
+
+  const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  /**
+   * The store's own bookkeeping for a field: its declaration, its setter's
+   * declaration, its projection into the persisted slice, the `set({...})`
+   * that writes it, and the migration lines that assign or delete it. Those
+   * lines exist because the field is persisted, not because anything reads it.
+   */
+  const storePlumbingLine = (line: string, name: string): boolean => {
+    const escaped = escapeRegExp(name);
+    return new RegExp(`^\\s*(readonly\\s+)?${escaped}\\??\\s*:`).test(line)
+      || new RegExp(`^\\s*set[A-Z]\\w*\\??\\s*:`).test(line)
+      || new RegExp(`${escaped}\\s*:\\s*state\\.${escaped}\\b`).test(line)
+      || new RegExp(`set\\(\\{[^}]*\\b${escaped}\\s*:`).test(line)
+      || new RegExp(`\\b${escaped}\\s*=(?!=)`).test(line)
+      || new RegExp(`delete\\s+state\\.${escaped}\\b`).test(line);
+  };
+
+  const consumerClassOf = (relativePath: string): 'ui' | 'store' | 'server' | 'shell' => {
+    if (relativePath.startsWith('packages/ui/src/stores/')) return 'store';
+    if (relativePath.startsWith('packages/ui/src/')) return 'ui';
+    if (relativePath.startsWith('packages/electron')) return 'shell';
+    return 'server';
+  };
+
+  /**
+   * Every identifier that appears outside plumbing, mapped to the classes of
+   * file that mention it. Built once: the per-key scan over ~4700 files would
+   * take minutes.
+   */
+  const consumersByIdentifier = (): Map<string, Set<string>> => {
+    const index = new Map<string, Set<string>>();
+    for (const file of sourceFiles()) {
+      const relativePath = relative(repoRoot, file).replaceAll('\\', '/');
+      if (isPlumbing(relativePath)) continue;
+      const consumerClass = consumerClassOf(relativePath);
+      const isStore = relativePath.startsWith('packages/ui/src/stores/');
+      for (const line of readFileSync(file, 'utf8').split('\n')) {
+        const identifiers = line.match(/[A-Za-z_$][\w$]*/g);
+        if (!identifiers) continue;
+        for (const identifier of new Set(identifiers)) {
+          if (isStore && storePlumbingLine(line, identifier)) continue;
+          const classes = index.get(identifier) ?? new Set<string>();
+          classes.add(consumerClass);
+          index.set(identifier, classes);
+        }
+      }
+    }
+    return index;
+  };
+
+  const consumers = consumersByIdentifier();
+
+  /** Classes of code reading a key: the key itself or the store field it binds. */
+  const effectClassesOf = (key: string): Set<string> => {
+    const storeField = SETTINGS_REGISTRY[key].ui?.field;
+    const classes = new Set(consumers.get(key) ?? []);
+    if (storeField && storeField !== key) {
+      for (const consumerClass of consumers.get(storeField) ?? []) classes.add(consumerClass);
+    }
+    return classes;
+  };
+
+  test('every key has a consumer outside the settings plumbing', () => {
+    const withoutConsumer = [...SETTINGS_KEYS, ...LOCAL_DEVICE_KEYS].filter((key) => {
+      // Device keys have no registry spec, so only their own name can match.
+      const storeField = SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.ui?.field;
+      const names = storeField && storeField !== key ? [key, storeField] : [key];
+      return names.every((name) => (consumers.get(name)?.size ?? 0) === 0);
+    });
+    expect(withoutConsumer).toEqual([]);
+  });
+
+  test('every key declares an effect, and the declaration matches its consumers', () => {
+    const mismatches: string[] = [];
+    for (const key of SETTINGS_KEYS) {
+      const declared = SETTINGS_REGISTRY[key].effect;
+      if (!Array.isArray(declared) || declared.length === 0) {
+        mismatches.push(`${key}: no effect declared`);
+        continue;
+      }
+      const actual = effectClassesOf(key);
+      // A declared effect with no consumer is a claim the code does not
+      // support; a consumer class not declared is the same drift, reversed.
+      for (const effect of declared) {
+        if (!actual.has(effect)) mismatches.push(`${key}: declares '${effect}' but nothing outside plumbing reads it there`);
+      }
+      for (const consumerClass of actual) {
+        if (!declared.includes(consumerClass)) mismatches.push(`${key}: read by '${consumerClass}' but does not declare it`);
+      }
+    }
+    expect(mismatches).toEqual([]);
   });
 });

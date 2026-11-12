@@ -239,7 +239,7 @@ export const AgentsPage: React.FC = () => {
       <div className="text-center text-muted-foreground">
         <Icon name="robot-2" className="mx-auto mb-3 h-12 w-12 opacity-50" />
         {error ? <p role="alert">{error}</p> : <>
-          <p className="typography-body">{t('settings.agents.page.empty.title')}</p>
+          <p>{t('settings.agents.page.empty.title')}</p>
           <p className="typography-meta mt-1 opacity-75">{t('settings.agents.page.empty.description')}</p>
         </>}
       </div>

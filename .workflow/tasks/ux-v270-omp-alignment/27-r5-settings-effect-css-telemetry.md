@@ -12,8 +12,8 @@
 - [ ] Settings registry entries declare their effect; each of the 19 dead keys is wired to a real consumer or deleted together with its row and translations.
 - [x] Add `scripts/check-css-classes.mjs` to `bun run check`: every class token in UI TSX resolves to a CSS rule, an `@utility`, or a documented marker.
 - [x] Derive telemetry from task 23's step timings; a metric with no source is not rendered.
-- [ ] Render turn pages through the merged upstream renderer, so no row kind lacks a renderer and no `{part.type}` stub remains.
-- [ ] Deletes: dead persisted keys, the hardcoded `null` metric blocks, the `{part.type}` stub, the "More providers coming soon" item, and class names with no rule and no marker role.
+- [x] Render turn pages through the merged upstream renderer, so no row kind lacks a renderer and no `{part.type}` stub remains.
+- [x] Deletes: dead persisted keys, the hardcoded `null` metric blocks, the `{part.type}` stub, the "More providers coming soon" item, and class names with no rule and no marker role.
 
 ## Progress
 
@@ -132,3 +132,37 @@ leg was red at 104 unresolved tokens, now 0).
 - The settings-effect test was not written because criterion 1 is unfinished.
 - Real path not attempted: the window ended first.
 Real path not attempted: the window ended before it.
+
+### Real path (port 4127, 2026-11-12)
+
+Built the web surface (`bun run build:web:diag`), served it on `127.0.0.1:4127`
+with `OPENCHAMBER_DIST_DIR=<worktree>/tmp/web-dist-diag` and the provider
+settings from `~/.config/ohpichamber/omp-m0-provider.env` (a fish-syntax file;
+converted to POSIX exports in a 0600 temp file, values never printed). The
+Agent Service reported `{"status":"ok","engine":"omp","agent":{"ready":true}}`.
+The server was stopped afterwards and the port no longer answers.
+
+- **A real turn.** Created a session and submitted a run asking for one `bash`
+  call and then an answer. The history shows the shape that matters: a user
+  message, then two assistant steps, each with `timing`
+  (`startedAt`/`firstTokenAt`/`completedAt`) and `usage`.
+- **Model time, tool time, first-token latency, tok/s.** This is where a real
+  defect showed up: the server records one turn per model step, so the
+  per-turn derivation reported `totalToolDurationMs: null` and counted only the
+  final step. Fixed by reading every turn of the latest run; the same live data
+  now yields `totalLlmDurationMs: 3748`, `totalToolDurationMs: 588`,
+  `avgTtftMs: 1725.5`, `tokensPerSecond: 25.88`,
+  `responseTokensPerSecond: 571.43`. The recorded run is now a test fixture
+  (`work-status/__fixtures__/real-run-history.json`) with a regression test.
+- **Spinner rotates when enabled.** Turned `animatedActivityIndicators` on in
+  the page's persisted store and started a run. The running session's mark
+  renders `[data-spinner]`, and sampling the eight bar opacities over 5s shows
+  8 distinct frames with the lit bar advancing — it steps on the shared clock
+  rather than a CSS animation, which is the intended design.
+- **Transcript does not show through the composer.** Read the composer box's
+  computed style in the live page: it carries `oc-surface-floating` and paints
+  `rgb(243, 242, 240)` at `opacity: 1` with `backdrop-filter: none`. The
+  ancestors are transparent, so the opaque fill is the box itself.
+- **Turn rows render.** The live page shows `[data-turn-row]` rows and a
+  `[data-turn-id]` prompt row for the turn, i.e. the row switch is what draws
+  the transcript, not the old single-row path.

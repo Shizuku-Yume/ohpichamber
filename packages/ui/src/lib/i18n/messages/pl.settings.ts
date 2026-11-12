@@ -1011,7 +1011,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label': 'Nowy worktree…',
   'settings.openchamber.keyboardShortcuts.action.add_project.label': 'Dodaj projekt',
   'settings.openchamber.keyboardShortcuts.action.reload_ui.label': 'Przeładuj interfejs',
-  'settings.openchamber.keyboardShortcuts.action.restart_opencode.label': 'Uruchom ponownie OpenCode',
   'settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label': 'Pokaż sekcję czatów',
   'settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label': 'Pokaż sekcję Przypięte',
   'settings.openchamber.keyboardShortcuts.action.toggle_work_section.label': 'Pokaż sekcję W toku',

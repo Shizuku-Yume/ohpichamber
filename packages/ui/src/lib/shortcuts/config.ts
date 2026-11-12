@@ -530,12 +530,6 @@ const SHORTCUT_GROUPS = {
       settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.reload_ui.label',
     },
     {
-      id: 'restart_opencode',
-      defaultBinding: UNASSIGNED_SHORTCUT,
-      customizable: true,
-      settingsLabelKey: 'settings.openchamber.keyboardShortcuts.action.restart_opencode.label',
-    },
-    {
       id: 'pin_current_session',
       defaultBinding: UNASSIGNED_SHORTCUT,
       customizable: true,

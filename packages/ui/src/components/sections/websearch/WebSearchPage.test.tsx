@@ -105,4 +105,41 @@ describe('WebSearchPage', () => {
       expect(timeoutInput.value).toBe('30');
     }
   });
+
+  // The page's load effect must fire once for an unanswered scope. It used to
+  // depend on the whole state object, and `load()` publishes a fresh
+  // `{ kind: 'loading' }` on every call, so the effect re-ran for its own write
+  // and the page resolved the workspace thousands of times without ever
+  // reading the snapshot.
+  test('an unanswered scope triggers one load, not a loop', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let loads = 0;
+    const pending = new Promise<void>(() => { });
+    useWebSearchStore.setState({
+      state: { kind: 'idle' },
+      error: null,
+      outcome: null,
+      busy: false,
+      load: async () => {
+        loads += 1;
+        // Publish the same shape the real store does, then stay in flight.
+        useWebSearchStore.setState({ state: { kind: 'loading', scope: getWebSearchScopeKey() } });
+        await pending;
+      },
+    });
+
+    await act(async () => {
+      root?.render(
+        <I18nProvider>
+          <WebSearchPage />
+        </I18nProvider>,
+      );
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(loads).toBe(1);
+  });
 });

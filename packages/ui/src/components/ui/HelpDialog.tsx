@@ -333,11 +333,6 @@ export const HelpDialog: React.FC = () => {
           keys: '',
         },
         {
-          id: 'restart_opencode',
-          icon: 'restart',
-          keys: '',
-        },
-        {
           id: 'toggle_list_grouping',
           icon: 'layout-right',
           keys: '',

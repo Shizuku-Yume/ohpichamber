@@ -1486,7 +1486,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label': '新しいワークツリー…',
   'settings.openchamber.keyboardShortcuts.action.add_project.label': 'プロジェクトを追加',
   'settings.openchamber.keyboardShortcuts.action.reload_ui.label': 'UI を再読み込み',
-  'settings.openchamber.keyboardShortcuts.action.restart_opencode.label': 'OpenCode を再起動',
   'settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label': 'チャットセクションを表示',
   'settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label': 'ピン留めセクションを表示',
   'settings.openchamber.keyboardShortcuts.action.toggle_work_section.label': '作業中セクションを表示',

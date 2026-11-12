@@ -1453,7 +1453,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label': '新建工作树…',
   'settings.openchamber.keyboardShortcuts.action.add_project.label': '添加项目',
   'settings.openchamber.keyboardShortcuts.action.reload_ui.label': '重新加载界面',
-  'settings.openchamber.keyboardShortcuts.action.restart_opencode.label': '重启 OpenCode',
   'settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label': '显示聊天分区',
   'settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label': '显示已置顶部分',
   'settings.openchamber.keyboardShortcuts.action.toggle_work_section.label': '显示进行中部分',

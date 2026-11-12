@@ -1485,7 +1485,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label': 'شجرة عمل (worktree) جديدة…',
   'settings.openchamber.keyboardShortcuts.action.add_project.label': 'إضافة مشروع',
   'settings.openchamber.keyboardShortcuts.action.reload_ui.label': 'إعادة تحميل الواجهة',
-  'settings.openchamber.keyboardShortcuts.action.restart_opencode.label': 'إعادة تشغيل OpenCode',
   'settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label': 'إظهار قسم المحادثات',
   'settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label': 'إظهار قسم المثبّتة',
   'settings.openchamber.keyboardShortcuts.action.toggle_work_section.label': 'إظهار قسم قيد العمل',

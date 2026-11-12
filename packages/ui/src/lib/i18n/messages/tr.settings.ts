@@ -2601,7 +2601,6 @@ export const settingsDict = {
   'settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label': 'Yeni worktree…',
   'settings.openchamber.keyboardShortcuts.action.add_project.label': 'Proje Ekle',
   'settings.openchamber.keyboardShortcuts.action.reload_ui.label': 'Arayüzü yeniden yükle',
-  'settings.openchamber.keyboardShortcuts.action.restart_opencode.label': 'OpenCode\'u yeniden başlat',
   'settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label': 'Sohbetler bölümünü göster',
   'settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label': 'Sabitlenenler bölümünü göster',
   'settings.openchamber.keyboardShortcuts.action.toggle_work_section.label': 'Devam eden bölümünü göster',

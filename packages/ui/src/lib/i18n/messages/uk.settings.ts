@@ -1453,7 +1453,6 @@ export const settingsDict = {
   "settings.openchamber.keyboardShortcuts.action.open_new_worktree_dialog.label": "Новий worktree…",
   "settings.openchamber.keyboardShortcuts.action.add_project.label": "Додати проєкт",
   "settings.openchamber.keyboardShortcuts.action.reload_ui.label": "Перезавантажити інтерфейс",
-  "settings.openchamber.keyboardShortcuts.action.restart_opencode.label": "Перезапустити OpenCode",
   "settings.openchamber.keyboardShortcuts.action.toggle_chats_section.label": "Показувати розділ чатів",
   "settings.openchamber.keyboardShortcuts.action.toggle_pinned_section.label": "Показувати «Закріплені»",
   "settings.openchamber.keyboardShortcuts.action.toggle_work_section.label": "Показувати «В роботі»",

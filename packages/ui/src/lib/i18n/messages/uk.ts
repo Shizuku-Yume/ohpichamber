@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.uk,
   ...selectionApprovalI18n.uk,
   ...agentStatusI18n.uk,
+  ...todoTrayI18n['uk'],
   ...snippetsI18n.uk,
   ...prReviewI18n.uk,
   ...imageToolI18n.uk,
@@ -1522,10 +1524,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentControlToolAria": "Увімкнути інструмент керування для агентів",
   "settings.openchamber.tools.field.agentControlToolInfo": "Агенти також можуть передавати промпти іншим сесіям, запускати їх у worktree і планувати задачі. Видаляти сесії та worktree можете лише ви.",
   "settings.openchamber.tools.field.agentControlToolSummary": "Створювати й вести сесії, worktree та заплановані задачі.",
-  "settings.openchamber.tools.field.agentScheduleTool": "Інструмент розкладу для агентів",
-  "settings.openchamber.tools.field.agentScheduleToolAria": "Увімкнути інструмент розкладу для агентів",
-  "settings.openchamber.tools.field.agentScheduleToolInfo": "Агенти можуть запланувати промпт щодня, щотижня, один раз або за cron, а також змінити, запустити, призупинити чи видалити задачу.",
-  "settings.openchamber.tools.field.agentScheduleToolSummary": "Створювати й запускати заплановані задачі.",
   "settings.openchamber.tools.field.agentWebTool": "Інструмент OpenChamber Web",
   "settings.openchamber.tools.field.agentWebToolAria": "Увімкнути інструмент OpenChamber Web",
   "settings.openchamber.tools.field.agentWebToolInfo": "Зручно, щоб перевіряти UI у запущеному застосунку. Агенти можуть переходити сторінками, переглядати їх і робити скриншоти.",
@@ -1547,9 +1545,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentKnowledgeToolAria": "Інструмент знань проєкту",
   "settings.openchamber.tools.field.agentKnowledgeToolInfo": "Агенти працюють із тими самими записами, що й на панелі «Знання проєкту».",
   "settings.openchamber.tools.field.agentKnowledgeToolSummary": "Агенти читають і оновлюють нотатки, завдання та плани проєкту.",
-  "settings.openchamber.tools.field.agentToolsCodeMode": "Запускати через Code Mode",
-  "settings.openchamber.tools.field.agentToolsCodeModeAria": "Запускати інструменти OpenChamber через Code Mode",
-  "settings.openchamber.tools.field.agentToolsCodeModeInfo": "Вимкнено: модель бачить кожен інструмент напряму. Увімкнено: вони ховаються за одним інструментом, що запускає короткий скрипт. Трохи економить контекст, але модель може їх пропустити, особливо слабша.",
   "settings.openchamber.opencodeCli.tooltipPrefix": "Додатковий абсолютний шлях до",
   "settings.openchamber.opencodeCli.tooltipSuffix": "бінарного файлу.",
   "settings.openchamber.opencodeCli.field.binaryPath": "Шлях до бінарного файлу OpenCode",
@@ -1758,6 +1753,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "Використання {provider}",
   "settings.usage.page.header.refreshing": "Оновлення використання...",
   "settings.usage.page.header.lastUpdated": "Останнє оновлення: {time}",
+  'settings.usage.page.section.quotas': 'Квоти постачальника',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'Немає квот постачальників для показу',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Ліміти використання показуються для постачальників, чиї облікові дані OMP уже має. Додайте постачальника в розділі Постачальники.',
   "settings.usage.page.header.lastUpdatedWithPlan": "План: {plan} · Останнє оновлення: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Показувати в панелі статусу роботи",
   "settings.usage.page.options.showInWorkStatus": "Показувати в панелі статусу роботи",
@@ -2658,8 +2656,6 @@ export const dict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Показує «Скопіювати відповідь», «Зберегти як зображення» та озвучення для текстових блоків асистента, які з’являються перед пізнішими викликами інструментів у тій самій відповіді.",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "Дозволити надсилати запити в сесії субагентів",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "Дозволити запити в сесіях субагентів",
-  "settings.openchamber.visual.field.savePastedImagesAsFiles": "Зберігати вставлені зображення як файли",
-  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "Вставлене чи вкладене зображення зберігається на машині, де працює OpenCode, а його шлях потрапляє в повідомлення, щоб агент міг його відкрити, надіслати чи змінити.",
   "settings.openchamber.visual.field.draftStartersVisible": "Показувати стартери на екрані нової сесії",
   "settings.openchamber.visual.field.draftStartersVisibleAria": "Показувати стартери на екрані нової сесії",
   "settings.openchamber.visual.field.showToolFileIconsAria": "Показати значки файлів інструментів",
@@ -9407,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['uk'],
   ...tooltipsChatI18n['uk'],
   ...m4LaneDI18n.uk,
+  "gitIdentities.state.unknown": "Ідентичності Git ще не завантажено.",
+  "settings.usage.state.unknown": "Використання ще не завантажено.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Збережена пам'ять ще не завантажена.",
+
+  "chat.workStatus.mcp.unknown": "Сервери MCP ще не завантажено.",
 };

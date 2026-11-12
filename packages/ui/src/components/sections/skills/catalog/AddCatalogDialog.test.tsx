@@ -101,6 +101,11 @@ describe('AddCatalogDialog Git identity', () => {
   });
 
   const render = async (catalogId?: string) => {
+    // The boot registry reads identities for every surface; the dialog no
+    // longer reads them itself, so the test primes the store the same way.
+    await useGitIdentitiesStore.getState().loadProfiles();
+    await useGitIdentitiesStore.getState().loadGlobalIdentity();
+    await useGitIdentitiesStore.getState().loadDefaultGitIdentityId();
     const { createRoot } = await import('react-dom/client');
     const { AddCatalogDialog } = await import('./AddCatalogDialog');
     const { I18nProvider } = await import('@/lib/i18n');

@@ -29,6 +29,7 @@ import { useUpdatePolling } from '@/hooks/useUpdatePolling';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
 import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
+import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
 import { hostFilesystem } from '@/lib/host-filesystem';
 import type { RuntimeAPIs } from '@/lib/api/types';
@@ -1320,6 +1321,13 @@ function MobileAppContent({ apis }: MobileAppProps) {
   useWindowTitle();
   useRoutingSync();
   useEnterprisePolicySync();
+  // The phone mounts the same server-owned stores as the desktop app; without
+  // this it read the previous instance's values until a page happened to load.
+  React.useEffect(() => {
+    if (!isInitialized) return;
+    void bootServerStateStores();
+  }, [isInitialized]);
+  React.useEffect(() => installServerStateBootEvents(), []);
   // Same as App.tsx: the session's memory index and the Memory tab both read
   // this snapshot, and without it the phone showed no memory at all.
   useAgentMemorySync(currentDirectory || null);
@@ -1374,7 +1382,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
                   <h1 className="typography-h3 text-foreground">{t('sessionAuth.error.networkTitle')}</h1>
                   {/* Native copy — the browser-oriented sessionAuth description
                       (Desktop Network Access etc.) reads as noise here. */}
-                  <p className="typography-body text-muted-foreground">{t('mobile.connect.recovery.description')}</p>
+                  <p className="text-muted-foreground">{t('mobile.connect.recovery.description')}</p>
                 </div>
                 <Button
                   type="button"
@@ -1403,8 +1411,8 @@ function MobileAppContent({ apis }: MobileAppProps) {
               the text never pushes it up. 50% + half the 120px logo + a gap. */}
           {autoConnectLabel ? (
             <div className="absolute inset-x-0 top-[calc(50%+84px)] flex flex-col items-center gap-0.5 px-6 text-center">
-              <p className="typography-small text-muted-foreground">{t('mobile.connect.splash.connectingTo')}</p>
-              <p className="typography-small text-foreground">
+              <p className="text-muted-foreground">{t('mobile.connect.splash.connectingTo')}</p>
+              <p className="text-foreground">
                 {autoConnectLabel}
                 <BusyDots />
               </p>
@@ -1438,7 +1446,7 @@ function MobileAppContent({ apis }: MobileAppProps) {
       <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-center text-foreground">
         <div className="max-w-sm space-y-3">
           <h1 className="typography-h3 text-foreground">{t('sessionAuth.error.networkTitle')}</h1>
-          <p className="typography-body text-muted-foreground">{t('sessionAuth.error.networkDescription')}</p>
+          <p className="text-muted-foreground">{t('sessionAuth.error.networkDescription')}</p>
         </div>
       </main>
     );

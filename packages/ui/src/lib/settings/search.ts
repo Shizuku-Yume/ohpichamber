@@ -642,13 +642,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => ctx.isMobile,
   },
   {
-    id: 'chat.save-pasted-images',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.savePastedImagesAsFiles',
-    descriptionKey: 'settings.openchamber.visual.field.savePastedImagesAsFilesInfo',
-    keywords: ['paste', 'image', 'file', 'asset', 'screenshot', 'composer'],
-  },
-  {
     id: 'sessions.default-model',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.defaultModel',
@@ -1014,17 +1007,17 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['ignored', 'files', 'gitignore'],
   },
   {
-    id: 'usage.work-status-panel',
+    id: 'usage.statistics',
     page: 'usage',
-    titleKey: 'settings.usage.page.options.showInWorkStatus',
+    titleKey: 'usageStats.title',
     descriptionKey: 'settings.usage.page.options.showInWorkStatusTooltip',
-    keywords: ['quota', 'work', 'status', 'panel'],
+    keywords: ['quota', 'tokens', 'sessions', 'cost', 'models', 'activity'],
   },
   {
-    id: 'usage.model-quotas',
+    id: 'usage.quotas',
     page: 'usage',
-    titleKey: 'settings.usage.page.section.modelQuotas',
-    keywords: ['models', 'quota', 'limits', 'tokens'],
+    titleKey: 'settings.usage.page.section.quotas',
+    keywords: ['quota', 'limits', 'plan', 'provider'],
   },
   {
     id: 'projects.name',

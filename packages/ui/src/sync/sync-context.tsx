@@ -14,7 +14,7 @@ import { bootstrapDirectory, bootstrapGlobal } from "./bootstrap"
 import { BootstrapFailureError } from "./retry"
 import { notifyFirstCanonicalBootstrap } from "./first-server-connect"
 import { useGlobalSyncStore } from "./global-sync-store"
-import { applyDirectoryEvent, compareCounters, mergeHostSession } from "./event-reducer"
+import { applyDirectoryEvent, compareCounters, installSessionList, mergeHostSession } from "./event-reducer"
 import { useBtwStore } from "@/stores/useBtwStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { useSessionRecapStore } from "@/stores/useSessionRecapStore"
@@ -261,9 +261,13 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
         byId.set(session.sessionId, (prior.sessionEventRevision?.[session.sessionId] ?? 0) > revision && previous ? previous : mergeHostSession(session, previous))
       }
       for (const previous of prior.session) if ((prior.sessionEventRevision?.[previous.sessionId] ?? 0) > revision || previous.sessionId in listed.errors || workspace.workspaceId in listed.errors || workspace.projectId in listed.errors) byId.set(previous.sessionId, previous)
-      const session = [...byId.values()].filter((item) => item.archivedAt === undefined)
+      const rows = [...byId.values()].filter((item) => item.archivedAt === undefined)
+      // A metadata record announced before this read is newer than the row the
+      // list carries, and this is the first place its directory is known.
+      const listedState = installSessionList(prior, rows)
+      const session = listedState.session
       const unchanged = session.length === prior.session.length && session.every((item, index) => item === prior.session[index])
-      store.setState({ session: unchanged ? prior.session : session, sessionTotal: session.length, limit: Math.max(prior.limit, session.length), sessionListSource: Object.keys(listed.errors).length ? "live" : "authoritative", discoveryErrors: listed.errors })
+      store.setState({ ...listedState, session: unchanged ? prior.session : session, sessionTotal: session.length, limit: Math.max(prior.limit, session.length), sessionListSource: Object.keys(listed.errors).length ? "live" : "authoritative", discoveryErrors: listed.errors })
       useGlobalSessionsStore.getState().upsertSessions([...byId.values()])
       const live = session.filter((item) => item.runtimeStatus === "running" || item.runtimeStatus === "awaiting_approval" || item.runtimeStatus === "awaiting_input")
       const newChildParents = new Set(session.filter((item) => item.parentSessionId && !previousById.has(item.sessionId)).map((item) => item.parentSessionId!))

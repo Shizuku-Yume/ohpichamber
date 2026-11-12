@@ -5,15 +5,20 @@ import ChatMessage from './ChatMessage';
 import { filterVisibleParts, isEmptyTextPart } from './message/partUtils';
 import { areOptionalRenderRelevantMessagesEqual, areRelevantTurnGroupingContextsEqual, areRenderRelevantMessagesEqual } from './message/renderCompare';
 import TurnItem from './components/TurnItem';
-import { LiveTurnActivity } from './components/LiveTurnActivity';
-import { getTurnsWithLaterAssistant, hasLiveActivity } from './lib/turns/liveActivity';
+import { TurnFold, TurnPagesRow } from './components/LiveTurnActivity';
+import { getTurnsWithLaterAssistant } from './lib/turns/liveActivity';
 import type { ChatMessageEntry, TurnRecord, TurnGroupingContext } from './lib/turns/types';
 import { useTurnRecords } from './hooks/useTurnRecords';
 import { buildHistoryEntries, type TimelineEntry } from './lib/turns/timelineEntries';
+import { buildTimelineRows, type TimelineRow } from './lib/turns/timelineRows';
+import { LiveFinalActivityContext, LiveTurnHoistedPagesContext } from './components/liveActivityContext';
+import { MessageSliceContext } from './message/messageSliceContext';
+import { useTurnFoldContexts } from './components/useTurnFold';
 import { buildLiveStreamingEntry } from './lib/turns/streamingTailEntry';
 import { FULL_MESSAGE_WINDOW, TurnMessageWindowContext, createTurnMessageWindowStore } from './lib/turns/turnMessageWindow';
 import { getNormalizedMessageForDisplay } from './lib/messageDisplayNormalization';
 import { useUIStore } from '@/stores/useUIStore';
+import { cn } from '@/lib/utils';
 import { turnHeaderCanStick as canStickPrompt } from './lib/turns/stickyPrompt';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
 import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
@@ -509,23 +514,152 @@ export const TurnBlock = React.memo(({
         };
     }, [turn, visibleAssistantMessages]);
 
+    // A turn is several rows (`timelineRows.ts`): its prompt, the fold's
+    // header in the collapsed activity mode, the pages a turn without an answer
+    // showed, and its messages. Every row kind has a renderer here; the list
+    // entry keeps the turn's identity for navigation and scroll.
+    const rows = React.useMemo(() => buildTimelineRows(
+        [{
+            kind: 'turn',
+            key: `turn:${renderableTurn.turnId}`,
+            turn: renderableTurn,
+            isLastTurn,
+            hasLaterAssistant,
+            nextEntryFirstMessage,
+        }],
+        {
+            collapsedActivity: chatRenderMode === 'live' && !defaultActivityExpanded,
+            expandedTurns: new Map([[renderableTurn.turnId, turnUiState.isLiveExpanded === true]]),
+            showReasoningTraces,
+        },
+        [],
+    ), [
+        chatRenderMode,
+        defaultActivityExpanded,
+        hasLaterAssistant,
+        isLastTurn,
+        nextEntryFirstMessage,
+        renderableTurn,
+        showReasoningTraces,
+        turnUiState.isLiveExpanded,
+    ]);
+
+    const sticky = stickyUserHeader && turnHeaderCanStick;
     return (
-        <TurnItem
-            turn={renderableTurn}
-            stickyUserHeader={stickyUserHeader && turnHeaderCanStick}
-            renderMessage={renderMessage}
-            assistantContent={chatRenderMode === 'live' && !defaultActivityExpanded && hasLiveActivity(turn, showReasoningTraces) ? (
-                <LiveTurnActivity
+        <>
+            {rows.map((row) => (
+                <TurnRowView
+                    key={row.key}
+                    row={row}
                     turn={renderableTurn}
                     hasLaterAssistant={hasLaterAssistant}
                     expanded={turnUiState.isLiveExpanded === true}
-                    onToggle={handleToggleLiveActivity}
+                    onToggleActivity={handleToggleLiveActivity}
+                    renderMessage={renderMessage}
+                    stickyUserHeader={sticky}
+                />
+            ))}
+        </>
+    );
+});
+
+
+/**
+ * One row of a turn, drawn by its kind (`timelineRows.ts`): the prompt row, the
+ * fold's header, the pages a turn showed, or one slice of a message. Every kind
+ * has a case here, so no row can reach the list without a renderer.
+ */
+const TurnRowView = React.memo(({
+    row,
+    turn,
+    hasLaterAssistant,
+    expanded,
+    onToggleActivity,
+    renderMessage,
+    stickyUserHeader,
+}: {
+    row: TimelineRow;
+    turn: TurnRecord;
+    hasLaterAssistant: boolean;
+    expanded: boolean;
+    onToggleActivity: () => void;
+    renderMessage: (message: ChatMessageEntry) => React.ReactNode;
+    stickyUserHeader: boolean;
+}) => {
+    if (row.kind === 'ungrouped') return null;
+    if (row.kind === 'turn-head') {
+        return <TurnItem turn={turn} stickyUserHeader={stickyUserHeader} renderMessage={renderMessage} gapBelow={row.gapBelow} />;
+    }
+    if (row.kind === 'turn-fold') {
+        return (
+            <div className={cn('relative w-full', row.gapBelow && 'pb-2')} data-turn-row={turn.turnId}>
+                <TurnFold
+                    turn={turn}
+                    hasLaterAssistant={hasLaterAssistant}
+                    expanded={expanded}
+                    finalMessageId={row.finalMessageId}
+                    onToggle={onToggleActivity}
                     renderMessage={renderMessage}
                 />
-            ) : undefined}
+            </div>
+        );
+    }
+    if (row.kind === 'turn-pages') {
+        return (
+            <div className={cn('relative w-full', row.gapBelow && 'pb-2')} data-turn-row={turn.turnId}>
+                <TurnPagesRow turn={turn} />
+            </div>
+        );
+    }
+    return (
+        <TurnMessageRow
+            row={row}
+            turn={turn}
+            hasLaterAssistant={hasLaterAssistant}
+            expanded={expanded}
+            renderMessage={renderMessage}
         />
     );
 });
+
+/** One slice of a turn's message, under the fold contexts its row needs. */
+const TurnMessageRow = React.memo(({
+    row,
+    turn,
+    hasLaterAssistant,
+    expanded,
+    renderMessage,
+}: {
+    row: Extract<TimelineRow, { kind: 'turn-message' }>;
+    turn: TurnRecord;
+    hasLaterAssistant: boolean;
+    expanded: boolean;
+    renderMessage: (message: ChatMessageEntry) => React.ReactNode;
+}) => {
+    const foldContexts = useTurnFoldContexts(turn, hasLaterAssistant, expanded, row.finalMessageId);
+    const message = turn.assistantMessages.find((candidate) => candidate.messageId === row.messageId);
+    if (!message) return null;
+    const content = (
+        <MessageSliceContext.Provider value={row.slice}>
+            {row.final && foldContexts.finalContext ? (
+                <LiveFinalActivityContext.Provider value={foldContexts.finalContext}>
+                    {renderMessage(message)}
+                </LiveFinalActivityContext.Provider>
+            ) : renderMessage(message)}
+        </MessageSliceContext.Provider>
+    );
+    return (
+        <div className={cn('relative w-full', row.gapBelow && 'pb-2')} data-turn-row={turn.turnId}>
+            {row.underFold ? (
+                <LiveTurnHoistedPagesContext.Provider value={foldContexts.hoistedPages}>{content}</LiveTurnHoistedPagesContext.Provider>
+            ) : content}
+        </div>
+    );
+});
+
+TurnMessageRow.displayName = 'TurnMessageRow';
+
+TurnRowView.displayName = 'TurnRowView';
 
 TurnBlock.displayName = 'TurnBlock';
 

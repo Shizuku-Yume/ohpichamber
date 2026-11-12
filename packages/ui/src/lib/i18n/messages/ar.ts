@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.ar,
   ...selectionApprovalI18n.ar,
   ...agentStatusI18n.ar,
+  ...todoTrayI18n['ar'],
   ...snippetsI18n.ar,
   ...prReviewI18n.ar,
   ...imageToolI18n.ar,
@@ -5261,10 +5263,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentControlToolAria": "تفعيل أداة التحكم بالوكيل",
   "settings.openchamber.tools.field.agentControlToolInfo": "يمكن للوكلاء أيضًا تمرير الطلبات إلى جلسات أخرى وتشغيلها في أشجار عمل. يبقى حذف الجلسات وأشجار العمل بيدك.",
   "settings.openchamber.tools.field.agentControlToolSummary": "إنشاء الجلسات وأشجار العمل وتوجيهها.",
-  "settings.openchamber.tools.field.agentScheduleTool": "أداة الجدولة للوكيل",
-  "settings.openchamber.tools.field.agentScheduleToolAria": "تفعيل أداة الجدولة للوكيل",
-  "settings.openchamber.tools.field.agentScheduleToolInfo": "يمكن للوكلاء ضبط طلب ليعمل يوميًا أو أسبوعيًا أو مرة واحدة أو وفق جدول cron، وتعديل المهمة أو تشغيلها أو إيقافها مؤقتًا أو حذفها.",
-  "settings.openchamber.tools.field.agentScheduleToolSummary": "إنشاء المهام المجدولة وتشغيلها.",
   "settings.openchamber.tools.field.agentWebTool": "أداة OpenChamber Web",
   "settings.openchamber.tools.field.agentWebToolAria": "تفعيل أداة OpenChamber Web",
   "settings.openchamber.tools.field.agentWebToolInfo": "مفيدة لفحص أعمال الواجهة في التطبيق قيد التشغيل. يمكن للوكلاء التنقل ومراجعة الصفحات والتقاط لقطات شاشة.",
@@ -5286,9 +5284,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentKnowledgeToolAria": "أداة معرفة المشروع",
   "settings.openchamber.tools.field.agentKnowledgeToolInfo": "يعمل الوكلاء على العناصر نفسها التي تراها في لوحة معرفة المشروع.",
   "settings.openchamber.tools.field.agentKnowledgeToolSummary": "السماح للوكلاء بقراءة ملاحظات المشروع ومهامه وخططه وتحديثها.",
-  "settings.openchamber.tools.field.agentToolsCodeMode": "التشغيل عبر Code Mode",
-  "settings.openchamber.tools.field.agentToolsCodeModeAria": "تشغيل أدوات OpenChamber عبر Code Mode",
-  "settings.openchamber.tools.field.agentToolsCodeModeInfo": "عند الإيقاف: يرى النموذج كل أداة مباشرة. عند التفعيل: توضع خلف أداة واحدة تشغّل نصًا برمجيًا قصيرًا يستدعيها. يوفر قليلًا من السياق، لكن قد يغفل النموذج عنها، خاصة النماذج الأصغر. تبقى أداة العرض مباشرة دائمًا، لأن المحادثة ترسم صفحتها من استدعائها الخاص.",
   "settings.openchamber.opencodeCli.tooltipPrefix": "مسار مطلق اختياري إلى",
   "settings.openchamber.opencodeCli.tooltipSuffix": "الملف التنفيذي.",
   "settings.openchamber.opencodeCli.field.binaryPath": "مسار الملف التنفيذي لـ OpenCode",
@@ -5497,6 +5492,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "استخدام {provider}",
   "settings.usage.page.header.refreshing": "جارٍ تحديث الاستخدام…",
   "settings.usage.page.header.lastUpdated": "آخر تحديث: {time}",
+  'settings.usage.page.section.quotas': 'حصص المزوّد',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'لا توجد حصص مزوّد لعرضها',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'تظهر حدود الاستخدام للمزوّدين الذين يملك OMP بيانات اعتمادهم بالفعل. أضف واحدًا من صفحة المزوّدين.',
   "settings.usage.page.header.lastUpdatedWithPlan": "الخطة: {plan} · آخر تحديث: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "إظهار في لوحة حالة العمل",
   "settings.usage.page.options.showInWorkStatus": "إظهار في لوحة حالة العمل",
@@ -6405,8 +6403,6 @@ export const dict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "إظهار «نسخ الإجابة» و«حفظ كصورة» و«القراءة بصوت عالٍ» على كتل نص المساعد التي تظهر قبل استدعاءات أدوات لاحقة في الرد نفسه.",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "السماح بإرسال طلبات إلى جلسات الوكلاء الفرعيين",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "السماح بإرسال طلبات إلى جلسات الوكلاء الفرعيين",
-  "settings.openchamber.visual.field.savePastedImagesAsFiles": "حفظ الصور الملصقة كملفات",
-  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "تُحفظ الصورة الملصقة أو المرفقة على الجهاز الذي يعمل عليه OpenCode، ويُضاف مسارها إلى الرسالة ليتمكن الوكيل من فتحها أو إرسالها أو تعديلها.",
   "settings.openchamber.visual.field.draftStartersVisible": "إظهار المقترحات الافتتاحية في شاشة الجلسة الجديدة",
   "settings.openchamber.visual.field.draftStartersVisibleAria": "إظهار المقترحات الافتتاحية في شاشة الجلسة الجديدة",
   "settings.openchamber.visual.field.showToolFileIconsAria": "إظهار أيقونات الملفات في الأدوات",
@@ -9065,4 +9061,9 @@ export const dict = {
   ...tooltipsPanelI18n['ar'],
   ...tooltipsChatI18n['ar'],
   ...m4LaneDI18n['ar'],
+  "gitIdentities.state.unknown": "لم يتم تحميل هويات Git بعد.",
+  "settings.usage.state.unknown": "لم يتم تحميل الاستخدام بعد.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "لم يتم تحميل الذاكرة المخزنة بعد.",
+
+  "chat.workStatus.mcp.unknown": "لم يتم تحميل خوادم MCP بعد.",
 };

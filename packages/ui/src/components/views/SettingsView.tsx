@@ -599,7 +599,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       <div className="flex h-full items-center justify-center px-6">
         <div className="max-w-md text-center">
           <div className={SETTINGS_SECTION_TITLE_CLASS}>{t('settings.view.unavailable.title')}</div>
-          <p className="typography-ui text-muted-foreground mt-1">{t('settings.view.unavailable.description')}</p>
+          <p className="text-muted-foreground mt-1">{t('settings.view.unavailable.description')}</p>
         </div>
       </div>
     );
@@ -855,7 +855,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               placeholder={t('settings.view.search.placeholder')}
               aria-label={t('settings.view.search.aria')}
               data-settings-search=""
-              className={cn(isMobile ? 'typography-meta' : 'typography-ui', 'min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground')}
+              className={cn(isMobile && 'typography-meta', 'min-w-0 flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground')}
             />
             {hasSearchQuery && (
               <button
@@ -914,7 +914,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   </div>
                 ));
               })() : (
-                <div className="px-2 py-6 text-center typography-ui text-muted-foreground">
+                <div className="px-2 py-6 text-center text-muted-foreground">
                   {t('settings.view.search.noResults')}
                 </div>
               )

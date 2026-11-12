@@ -1,7 +1,7 @@
 /** Native tool mutations invalidate Host file listings independently of mounted chat parts. */
 import type { Part } from '@openchamber/agent-contract';
 import { getNormalizedParentDirectory, normalizePath } from '@/lib/pathNormalization';
-import { isExplorationTool, isWebTool } from '@/lib/toolHelpers';
+import { isExplorationTool, isWebTool, isWriteTool } from '@/lib/toolHelpers';
 
 /**
  * `paths` are absolute, normalized files whose parent listings changed.
@@ -71,7 +71,7 @@ export const fileTreeChanges = {
       : previousPart?.type === 'tool_call' && previousPart.toolCallId === nextPart.toolCallId ? previousPart : undefined;
     // write has one native path. edit's grammar depends on the worker's editMode;
     // do not guess its rename/delete targets from a legacy patch or metadata shape.
-    if (nextPart.toolName === 'write' && typeof call?.input.path === 'string') {
+    if (isWriteTool(nextPart.toolName) && typeof call?.input.path === 'string') {
       const rawPath = call.input.path.replace(/^\[(.*)#[0-9a-fA-F]+\]$/, '$1');
       const path = resolveAgainst(root, rawPath);
       if (path) notifyFileTreeChanged({ directory: root, paths: [path] });

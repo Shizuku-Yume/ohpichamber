@@ -62,6 +62,33 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 
 ## Entries
 
+## 2026-11-12 - A dead settings row is deleted, not kept for later
+
+- **Decided:** a persisted settings key with no consumer outside the settings plumbing is deleted through its whole chain (registry row, store field and setter, page control, search entry, translations, server sanitizer, snapshot, fixture). Each surviving entry declares its effect as `ui`, `store`, `server` or `shell`, and a test fails on a key with no consumer or a declaration the code contradicts.
+- **Instead of:** keeping the rows and wiring each to something plausible, or leaving the declaration out and relying on review.
+- **Because:** 25 keys had no reader at all — the control moved, nothing happened, and nothing failed. A declaration alone is a claim; deriving it from the same scan the test runs makes it evidence. The four effect classes are the boundaries the repo already separates, so the truth is mechanical.
+- **Mine:** yes
+- **Revisit when:** a key legitimately has no reader yet (a staged rollout) — then the registry needs an explicit `pending` effect with an expiry, not a silent exception.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - Turn telemetry reads a run, because a turn is one step
+
+- **Decided:** `getLatestCompletedTurnStats` gathers every turn of the latest run and derives model time, tool time, TTFT and throughput from their `Message.timing`. A metric with no source is `null` and its row is not rendered.
+- **Instead of:** deriving per turn, which is what the field name suggests.
+- **Because:** the server records one turn per model step, so a turn holds exactly one step: tool time (the gaps between steps) was always `null` and model time covered only the final step. A live run proved it — 3748 ms of model time and 588 ms of tool time only appear when the run is read as a whole.
+- **Mine:** yes
+- **Revisit when:** the agent service starts recording one turn per run instead of per step; then the run grouping is redundant and should collapse back to the turn.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - A class name must resolve to something, and the check enforces it
+
+- **Decided:** `scripts/check-css-classes.mjs` runs in `bun run check` and fails on any class token in UI TSX that is neither a stylesheet rule, a Tailwind utility, a class the runtime kit injects, nor a documented marker naming who queries it.
+- **Instead of:** a lint rule per stylesheet, or trusting review to notice an unstyled element.
+- **Because:** a class that resolves to nothing renders unstyled and no other check fails. Writing it found a dropped animation the component and its test still expected, four colour tokens utilities already referenced, and ~30 dead typography names. It also found its own blind spot: a `className` string closed by a JSX `>` was read as a comparison, hiding 257 tokens.
+- **Mine:** yes
+- **Revisit when:** the kit stops injecting CSS as a string, or a second runtime-injected source appears — the declared-class scan must learn it or the check will report false positives.
+- **Effort:** ux-v270-omp-alignment
+
 ## 2026-10-10 - Workflow owns development routing and records
 
 - **Decided:** use `.workflow` as the default conversation process and home for development records, migration design and inherited sandbox design.
@@ -942,6 +969,24 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** integration carries commits that other branches or releases depend on, which then requires history-preserving updates instead.
 - **Effort:** ux-v270-omp-alignment
 
+## 2026-11-12 - The boot registry owns server-owned reads; freshness compares one clock
+
+- **Decided:** `packages/ui/src/stores/serverStateBoot.ts` is the single reader and resetter of every store that projects the instance's own state (permission policy, Git identities, quota, agent memory, session folders, web search, MCP/skills/catalog reset-only, advisor/cleanse reset-only). Each of those stores declares `unknown | ready | error` (`stores/loadPhase.ts`), and a failed read keeps the held value and says so instead of producing an empty list. Freshness comparisons moved to one clock at a time: suggestions and work hints order against Host turn stamps (`openchamber.workbench.lastIdleAt`, `openchamber.turn.endedAt`, `openchamber.reviewOffer.at`) rather than `session.updatedAt`, and the Host status seed dropped its client-clock age window.
+- **Instead of:** keeping per-page hydrate-on-mount paths beside the registry, letting `resolvePermissionMode` return `ask` for an unread policy, or adding a Host "now" field to every session list read. The first two are the R4 defects themselves; the third would change the session-list contract for a display window that only needs to be honest about which clock it used.
+- **Because:** the permission policy had no production reader at all after `permission-mode-sync.ts` lost its importer, so a restart with default mode `auto` still showed `ask`; and `session.updatedAt` is the native transcript file's mtime, so any comparison against a Host or client stamp measured clock skew — touching a session file purged a suggestion that still applied.
+- **Also recorded:** `getCurrentPermissionMode` returns `null` for "not read" while `getSessionMode` keeps returning a concrete mode (the configured `permissionDefaultMode`) for callers that must act; the composer's new-session draft uses that default too. Two presentation windows in `lib/overview/overviewModel.ts` (14-day followed window, 3-day stalled label) keep a justified `oxlint-disable-next-line openchamber/no-cross-source-time-compare`, since seconds of skew cannot change an answer measured in days.
+- **Mine:** yes (conservative reading of task 22's acceptance)
+- **Revisit when:** the Canonical contract carries a Host-sourced "now" per session list read, or the permission policy gains a server-pushed initial value on connect.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - A settled session is not only `idle`, and a role level is not a model
+
+- **Decided:** the assist surfaces (composer suggestion, done hint, review offer) settle by the composer's own rule — live status is busy, `idle` is idle, `unavailable` or missing with no native run binding is idle — instead of accepting only `runtimeStatus === 'idle'`. On the server, a `modelRoles` selector's trailing thinking level is stripped when it is one of `minimal|low|medium|high|xhigh|max|auto` before catalog lookup.
+- **Instead of:** a second `unavailable`-aware predicate per surface, which keeps four copies of one rule, or a server fallback to provider-local discovery when a role does not resolve, which would silently answer with a model the user did not choose.
+- **Because:** a session the Agent Service no longer holds (after a reload or Host restart) is projected as `unavailable`, so the strict gate suppressed a real recap and suggestion; and OMP writes roles as `provider/model:effort`, so reading the level as part of the model ID made every levelled role unresolvable and session-assist never generated anything. Both were observed directly: `describeSmallModel` returned null (`described null`) until the suffix was stripped, then returned `CLIProxyAPI/claude-haiku-5-5` and the runtime wrote a real suggestion.
+- **Also recorded:** `sessionActivityPhase` is the single owner of that settled rule; `SessionDoneHintRow` and `SessionReviewHintRow` had the same duplicated predicate. An empty suggestion stays a successful outcome (the prompt rules return `""` when the request is satisfied or the next move is the user's), so the observation used a request with genuinely unfinished agent work.
+- **Mine:** yes (the alternative — adding a second `unavailable`-aware predicate per surface — would keep four copies of one rule)
+- **Revisit when:** the projection stops reporting unheld sessions as `unavailable` (e.g. a separate "not loaded" status), or OMP changes the role selector syntax.
 ## 2026-11-12 - UI error suites run under bun test, Host suites under the web vitest config
 
 - **Decided:** task 21's Check runs `bun test` for `packages/ui/src/lib/problemMessage*` and `bunx vitest run server/lib/host` from `packages/web`.

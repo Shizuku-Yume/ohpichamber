@@ -385,8 +385,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
     const addRecentModel = useUIStore((state) => state.addRecentModel);
     const setLastSelectedModel = useUIStore((state) => state.setLastSelectedModel);
-    const addRecentAgent = useUIStore((state) => state.addRecentAgent);
-    const addRecentEffort = useUIStore((state) => state.addRecentEffort);
     const globalModelSelectorOpen = useUIStore((state) => !selection && state.isModelSelectorOpen);
     const [localModelSelectorOpen, setLocalModelSelectorOpen] = React.useState(false);
     const isModelSelectorOpen = selection ? localModelSelectorOpen : globalModelSelectorOpen;
@@ -773,14 +771,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             variant,
             resolveInheritedVariantForModel(providerId, modelId),
         );
-        addRecentEffort(providerId, modelId, variant ?? undefined);
 
         const effectiveAgentName = agentNameOverride ?? resolveLiveAgentName();
         if (currentSessionId && effectiveAgentName) {
             saveAgentModelVariantForSession(currentSessionId, effectiveAgentName, providerId, modelId, variant);
         }
     }, [
-        addRecentEffort,
         currentSessionId,
         getModelVariantOptions,
         resolveInheritedVariantForModel,
@@ -1211,7 +1207,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             if (model) {
                 saveSessionModelSelection(controlledSessionId, model.providerId, model.modelId);
             }
-            addRecentAgent(agentName);
             if (options?.closeModelSelector ?? true) {
                 setAgentMenuOpen(false);
             }
@@ -1219,7 +1214,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         }
         try {
             setAgent(agentName);
-            addRecentAgent(agentName);
             if (options?.closeModelSelector ?? true) {
                 setAgentMenuOpen(false);
             }
@@ -1234,7 +1228,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             console.error('[ModelControls] Handle agent change error:', error);
         }
     }, [
-        addRecentAgent,
         agentSelectable,
         agents,
         getAgentModelForSession,

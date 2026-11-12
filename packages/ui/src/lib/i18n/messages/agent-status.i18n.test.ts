@@ -16,7 +16,7 @@ describe('agent status translations', () => {
         if (locale !== 'en') {
           expect(`${locale} ${key}: ${text}`).not.toBe(`${locale} ${key}: ${englishText}`);
         }
-        for (const placeholder of englishText.match(/\{(?:name|time|attempt|date)\}/g) ?? []) {
+        for (const placeholder of englishText.match(/\{(?:name|time|attempt|max|date)\}/g) ?? []) {
           expect(`${locale} ${key}: ${text}`).toContain(placeholder);
         }
       }

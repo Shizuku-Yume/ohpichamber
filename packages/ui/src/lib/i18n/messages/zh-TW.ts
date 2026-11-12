@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n['zh-TW'],
   ...selectionApprovalI18n['zh-TW'],
   ...agentStatusI18n['zh-TW'],
+  ...todoTrayI18n['zh-TW'],
   ...snippetsI18n['zh-TW'],
   ...prReviewI18n['zh-TW'],
   ...imageToolI18n['zh-TW'],
@@ -1480,10 +1482,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentControlToolAria": "啟用智慧代理控制工具",
   "settings.openchamber.tools.field.agentControlToolInfo": "智慧代理也可以把提示交給其他工作階段、在工作樹中啟動工作階段並排程任務。刪除工作階段和工作樹只能由你來做。",
   "settings.openchamber.tools.field.agentControlToolSummary": "建立並驅動工作階段、工作樹和排程任務。",
-  "settings.openchamber.tools.field.agentScheduleTool": "智慧代理排程工具",
-  "settings.openchamber.tools.field.agentScheduleToolAria": "啟用智慧代理排程工具",
-  "settings.openchamber.tools.field.agentScheduleToolInfo": "智慧代理可以安排提示每天、每週、僅一次或依 cron 執行，並修改、執行、暫停或刪除任務。",
-  "settings.openchamber.tools.field.agentScheduleToolSummary": "建立並執行排程任務。",
   "settings.openchamber.tools.field.agentWebTool": "OpenChamber Web 工具",
   "settings.openchamber.tools.field.agentWebToolAria": "啟用 OpenChamber Web 工具",
   "settings.openchamber.tools.field.agentWebToolInfo": "方便在執行中的應用程式裡檢查 UI 工作。智慧代理可以瀏覽頁面、檢視頁面並截圖。",
@@ -1505,9 +1503,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentKnowledgeToolAria": "專案知識工具",
   "settings.openchamber.tools.field.agentKnowledgeToolInfo": "代理使用的就是你在專案知識面板中看到的這些項目。",
   "settings.openchamber.tools.field.agentKnowledgeToolSummary": "讓代理讀取並更新專案的筆記、待辦事項和計畫。",
-  "settings.openchamber.tools.field.agentToolsCodeMode": "透過 Code Mode 執行",
-  "settings.openchamber.tools.field.agentToolsCodeModeAria": "透過 Code Mode 執行 OpenChamber 工具",
-  "settings.openchamber.tools.field.agentToolsCodeModeInfo": "關閉：模型直接看到每個工具。開啟：工具放在一個執行短腳本的工具後面。能省一點上下文，但模型可能漏掉它們，較小的模型尤其如此。",
   "settings.openchamber.opencodeCli.tooltipPrefix": "可選的",
   "settings.openchamber.opencodeCli.tooltipSuffix": "二進位檔絕對路徑。",
   "settings.openchamber.opencodeCli.field.binaryPath": "OpenCode 可執行檔路徑",
@@ -1645,6 +1640,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "{provider} 用量",
   "settings.usage.page.header.refreshing": "正在重新整理用量...",
   "settings.usage.page.header.lastUpdated": "最後更新：{time}",
+  'settings.usage.page.section.quotas': '供應商配額',
+  'settings.usage.page.state.noConfiguredProvidersTitle': '沒有可顯示的供應商配額',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'OMP 已保存憑證的供應商會顯示用量上限。請在供應商頁面新增。',
   "settings.usage.page.header.lastUpdatedWithPlan": "方案：{plan} · 最後更新：{time}",
   "settings.usage.page.options.showInWorkStatusAria": "在工作狀態面板中顯示",
   "settings.usage.page.options.showInWorkStatus": "在工作狀態面板中顯示",
@@ -2545,8 +2543,6 @@ export const dict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "在同一則回覆中，如果助理文字區塊後方還有工具呼叫，則顯示「複製回答」「儲存為圖片」和「朗讀」操作。",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "允許向子 Agent 工作階段傳送提示",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "允許向子 Agent 工作階段傳送提示",
-  "settings.openchamber.visual.field.savePastedImagesAsFiles": "將貼上的圖片儲存為檔案",
-  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "貼上或附加的圖片會儲存到執行 OpenCode 的機器上，並把路徑放進訊息，Agent 可以開啟、傳送或編輯該檔案。",
   "settings.openchamber.visual.field.draftStartersVisible": "在新工作階段畫面顯示快速啟動項目",
   "settings.openchamber.visual.field.draftStartersVisibleAria": "在新工作階段畫面顯示快速啟動項目",
   "settings.openchamber.visual.field.showToolFileIconsAria": "顯示工具檔案圖示",
@@ -9398,4 +9394,9 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-TW'],
   ...openchamberToolOutputI18n['zh-TW'],
   ...m4LaneDI18n['zh-TW'],
+  "gitIdentities.state.unknown": "Git 身分尚未載入。",
+  "settings.usage.state.unknown": "用量尚未載入。",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "已儲存的記憶尚未載入。",
+
+  "chat.workStatus.mcp.unknown": "MCP 伺服器尚未載入。",
 };

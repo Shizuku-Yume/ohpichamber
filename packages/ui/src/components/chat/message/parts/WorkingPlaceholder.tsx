@@ -1,21 +1,18 @@
 import React from 'react';
 import { useI18n, type Locale } from '@/lib/i18n';
-import { agentStatusSignature, type AgentStatus } from '@/lib/agentStatus';
+import type { AgentStatus } from '@/lib/agentStatus';
 import { useAgentStatusLabel } from '@/hooks/useAgentStatusLabel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 
 interface WorkingPlaceholderProps {
   isWorking: boolean;
   status: AgentStatus | null;
-  isGenericStatus?: boolean;
   isWaitingForPermission?: boolean;
-  retryInfo?: { attempt?: number; next?: number; resetsAt?: number } | null;
+  retryInfo?: { attempt?: number; maxAttempts?: number; next?: number } | null;
   agentName?: string;
   modelName?: string | null;
   providerId?: string | null;
 }
-
-const STATUS_DISPLAY_TIME_MS = 1200;
 
 const EPOCH_SECONDS_THRESHOLD = 1_000_000_000;
 const EPOCH_MILLISECONDS_THRESHOLD = 1_000_000_000_000;
@@ -47,35 +44,25 @@ const formatRetryCountdown = (seconds: number, locale: Locale): string => {
     .join(' ');
 };
 
-/** "Limit resets at 3:20 PM" today, "Limit resets Oct 20, 3:20 PM" on another day. */
-const formatLimitReset = (t: ReturnType<typeof useI18n>['t'], locale: Locale, at: number): string => {
-  const date = new Date(at);
-  const time = date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  if (date.toDateString() === new Date().toDateString()) return t('chat.agentStatus.limit.today', { time });
-  return t('chat.agentStatus.limit.later', { date: date.toLocaleDateString(locale, { month: 'short', day: 'numeric' }), time });
-};
-
 export function WorkingPlaceholder({
   isWorking,
   status,
-  isGenericStatus,
   isWaitingForPermission,
   retryInfo,
   modelName,
   providerId,
 }: WorkingPlaceholderProps) {
   const { t, locale } = useI18n();
-  const [displayedText, setDisplayedText] = React.useState<AgentStatus | null>(null);
-  const [displayedPermission, setDisplayedPermission] = React.useState<boolean>(false);
-  const displayedTextRef = React.useRef(displayedText);
-  const displayedPermissionRef = React.useRef(displayedPermission);
-  displayedTextRef.current = displayedText;
-  const displayedLabel = useAgentStatusLabel(displayedText, modelName);
-  displayedPermissionRef.current = displayedPermission;
 
-  const statusShownAtRef = React.useRef<number>(0);
-  const queuedStatusRef = React.useRef<{ text: AgentStatus; permission: boolean } | null>(null);
-  const processQueueTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The label follows the live status directly. A dwell here used to hold
+  // every change for 1.2s, which made the row lag behind the call the agent
+  // was actually making; the status source already keeps the text stable
+  // between real changes.
+  const displayedText: AgentStatus | null = isWorking
+    ? (isWaitingForPermission ? { key: 'chat.agentStatus.waitingPermission' } : status)
+    : null;
+  const displayedPermission = isWorking && Boolean(isWaitingForPermission);
+  const displayedLabel = useAgentStatusLabel(displayedText, modelName);
 
   // Countdown state for retry mode
   const [retryCountdown, setRetryCountdown] = React.useState<number | null>(null);
@@ -99,95 +86,6 @@ export function WorkingPlaceholder({
     return () => clearInterval(id);
   }, [retryInfo?.next, retryInfo?.attempt]);
 
-  const clearTimers = React.useCallback(() => {
-    if (processQueueTimerRef.current) {
-      clearTimeout(processQueueTimerRef.current);
-      processQueueTimerRef.current = null;
-    }
-  }, []);
-
-  const showStatus = React.useCallback((text: AgentStatus, permission: boolean) => {
-    clearTimers();
-    queuedStatusRef.current = null;
-    setDisplayedText(text);
-    setDisplayedPermission(permission);
-    statusShownAtRef.current = Date.now();
-  }, [clearTimers]);
-
-  const scheduleQueueProcess = React.useCallback(() => {
-    if (processQueueTimerRef.current) return;
-    const elapsed = Date.now() - statusShownAtRef.current;
-    const remaining = Math.max(0, STATUS_DISPLAY_TIME_MS - elapsed);
-    processQueueTimerRef.current = setTimeout(() => {
-      processQueueTimerRef.current = null;
-
-      const queued = queuedStatusRef.current;
-      if (queued) {
-        showStatus(queued.text, queued.permission);
-      }
-    }, remaining);
-  }, [showStatus]);
-
-  React.useEffect(() => {
-    if (!isWorking) {
-      clearTimers();
-      queuedStatusRef.current = null;
-      setDisplayedText(null);
-      setDisplayedPermission(false);
-      return;
-    }
-
-    // Retry state has its own display — skip the normal queue
-    if (retryInfo) {
-      clearTimers();
-      queuedStatusRef.current = null;
-      return;
-    }
-
-    const incomingText: AgentStatus | null = isWaitingForPermission ? { key: 'chat.agentStatus.waitingPermission' } : status;
-    const incomingPermission = Boolean(isWaitingForPermission);
-    const incomingGeneric = Boolean(isGenericStatus) && !incomingPermission;
-
-    if (!incomingText) {
-      return;
-    }
-
-    if (!displayedTextRef.current) {
-      showStatus(incomingText, incomingPermission);
-      return;
-    }
-
-    const shown = displayedTextRef.current;
-    if (shown && agentStatusSignature(incomingText) === agentStatusSignature(shown) && incomingPermission === displayedPermissionRef.current) {
-      return;
-    }
-
-    // Ignore generic churn.
-    if (incomingGeneric) {
-      return;
-    }
-
-    const elapsed = Date.now() - statusShownAtRef.current;
-    if (elapsed >= STATUS_DISPLAY_TIME_MS) {
-      showStatus(incomingText, incomingPermission);
-      return;
-    }
-
-    queuedStatusRef.current = { text: incomingText, permission: incomingPermission };
-    scheduleQueueProcess();
-  }, [
-    isWorking,
-    status,
-    isGenericStatus,
-    isWaitingForPermission,
-    retryInfo,
-    clearTimers,
-    showStatus,
-    scheduleQueueProcess,
-  ]);
-
-  React.useEffect(() => () => clearTimers(), [clearTimers]);
-
   if (!isWorking) {
     return null;
   }
@@ -202,31 +100,25 @@ export function WorkingPlaceholder({
     <ProviderLogo providerId={providerId} alt="" fallback={null} className="h-4 w-4 shrink-0 p-[1.3px] me-1.5" />
   ) : null;
 
-  // Retry state: show countdown and attempt info
+  // Retry state: OMP names the attempt and the cap ("Retrying · attempt 1 of 3")
+  // and counts the wait down, so the row does the same.
   if (retryInfo) {
-    const attempt = retryInfo.attempt && retryInfo.attempt > 1 ? retryInfo.attempt : null;
+    const attempt = retryInfo.attempt ?? null;
+    const max = retryInfo.maxAttempts ?? null;
     const time = retryCountdown !== null && retryCountdown > 0 ? formatRetryCountdown(retryCountdown, locale) : null;
-    const retrying = time && attempt ? t('chat.agentStatus.retry.inAttempt', { time, attempt })
+    const retrying = time && attempt && max ? t('chat.agentStatus.retry.inAttempt', { time, attempt, max })
       : time ? t('chat.agentStatus.retry.in', { time })
-        : attempt ? t('chat.agentStatus.retry.attempt', { attempt })
+        : attempt && max ? t('chat.agentStatus.retry.attempt', { attempt, max })
           : t('chat.agentStatus.retry');
-    // A rate limit that lifts after the next retry: say when, since the
-    // retry itself will most likely hit the limit again.
-    const resetsAt = retryInfo.resetsAt;
-    const retryTargetAt = retryInfo.next ? toRetryTargetTimestamp(retryInfo.next) : Date.now();
-    const retryText = resetsAt !== undefined && resetsAt > retryTargetAt
-      ? `${formatLimitReset(t, locale, resetsAt)} · ${retrying}`
-      : retrying;
-
     return (
       <div
         className="flex h-full items-center text-muted-foreground"
         role="status"
         aria-live="polite"
-        aria-label={retryText}
+        aria-label={retrying}
       >
         {providerLogo}
-        <span className="typography-ui-header">{retryText}</span>
+        <span className="typography-ui-header">{retrying}</span>
       </div>
     );
   }

@@ -283,7 +283,7 @@ const LocalModelPicker = ({
                             ) : state?.downloading ? (
                                 <span className="flex items-center gap-1.5">
                                     <Spinner className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className="typography-ui-compact tabular-nums text-muted-foreground">
+                                    <span className="tabular-nums text-muted-foreground">
                                         {typeof state.downloadProgress === 'number' ? `${state.downloadProgress}%` : ''}
                                     </span>
                                 </span>
@@ -500,7 +500,7 @@ const LocalTtsModelRow = ({
         ) : model.downloading ? (
             <span className="flex items-center gap-1.5">
                 <Spinner className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="typography-ui-compact tabular-nums text-muted-foreground">
+                <span className="tabular-nums text-muted-foreground">
                     {typeof model.downloadProgress === 'number' ? `${model.downloadProgress}%` : ''}
                 </span>
             </span>

@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.ko,
   ...selectionApprovalI18n.ko,
   ...agentStatusI18n.ko,
+  ...todoTrayI18n['ko'],
   ...snippetsI18n.ko,
   ...prReviewI18n.ko,
   ...imageToolI18n.ko,
@@ -1522,10 +1524,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentControlToolAria": "에이전트 제어 도구 활성화",
   "settings.openchamber.tools.field.agentControlToolInfo": "에이전트가 다른 세션에 프롬프트를 넘기고, 워크트리에서 세션을 시작하고, 작업을 예약할 수도 있습니다. 세션과 워크트리 삭제는 직접만 할 수 있습니다.",
   "settings.openchamber.tools.field.agentControlToolSummary": "세션, 워크트리, 예약 작업을 만들고 조종합니다.",
-  "settings.openchamber.tools.field.agentScheduleTool": "에이전트 예약 도구",
-  "settings.openchamber.tools.field.agentScheduleToolAria": "에이전트 예약 도구 활성화",
-  "settings.openchamber.tools.field.agentScheduleToolInfo": "에이전트가 프롬프트를 매일, 매주, 한 번 또는 cron 일정으로 실행하도록 예약하고, 작업을 변경, 실행, 일시 중지, 삭제할 수 있습니다.",
-  "settings.openchamber.tools.field.agentScheduleToolSummary": "예약 작업을 만들고 실행합니다.",
   "settings.openchamber.tools.field.agentWebTool": "OpenChamber Web 도구",
   "settings.openchamber.tools.field.agentWebToolAria": "OpenChamber Web 도구 활성화",
   "settings.openchamber.tools.field.agentWebToolInfo": "실행 중인 앱에서 UI 작업을 확인할 때 유용합니다. 에이전트가 페이지를 이동하고 검토하고 스크린샷을 찍을 수 있습니다.",
@@ -1547,9 +1545,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentKnowledgeToolAria": "프로젝트 지식 도구",
   "settings.openchamber.tools.field.agentKnowledgeToolInfo": "에이전트는 프로젝트 지식 패널에 보이는 것과 같은 항목을 다룹니다.",
   "settings.openchamber.tools.field.agentKnowledgeToolSummary": "에이전트가 프로젝트의 메모, 할 일, 계획을 읽고 업데이트합니다.",
-  "settings.openchamber.tools.field.agentToolsCodeMode": "Code Mode로 실행",
-  "settings.openchamber.tools.field.agentToolsCodeModeAria": "OpenChamber 도구를 Code Mode로 실행",
-  "settings.openchamber.tools.field.agentToolsCodeModeInfo": "끔: 모델이 각 도구를 직접 봅니다. 켬: 짧은 스크립트를 실행하는 도구 하나 뒤에 놓입니다. 컨텍스트를 조금 아끼지만, 특히 작은 모델은 도구를 놓칠 수 있습니다.",
   "settings.openchamber.opencodeCli.tooltipPrefix": "선택적 절대 경로:",
   "settings.openchamber.opencodeCli.tooltipSuffix": "binary.",
   "settings.openchamber.opencodeCli.field.binaryPath": "OpenCode binary 경로",
@@ -1758,6 +1753,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "{provider} 사용량",
   "settings.usage.page.header.refreshing": "사용량 새로고침 중...",
   "settings.usage.page.header.lastUpdated": "마지막 업데이트: {time}",
+  'settings.usage.page.section.quotas': '공급자 할당량',
+  'settings.usage.page.state.noConfiguredProvidersTitle': '표시할 공급자 할당량이 없습니다',
+  'settings.usage.page.state.noConfiguredProvidersDescription': '사용 한도는 OMP에 자격 증명이 이미 있는 공급자에 표시됩니다. 공급자에서 추가하세요.',
   "settings.usage.page.header.lastUpdatedWithPlan": "플랜: {plan} · 마지막 업데이트: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "작업 상태 패널에 표시",
   "settings.usage.page.options.showInWorkStatus": "작업 상태 패널에 표시",
@@ -2658,8 +2656,6 @@ export const dict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "같은 응답에서 이후 도구 호출 앞에 나타나는 어시스턴트 텍스트 블록에 답변 복사, 이미지로 저장, 소리 내어 읽기 작업을 표시합니다.",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "하위 에이전트 세션에 프롬프트 허용",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "하위 에이전트 세션에 프롬프트 허용",
-  "settings.openchamber.visual.field.savePastedImagesAsFiles": "붙여넣은 이미지를 파일로 저장",
-  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "붙여넣거나 첨부한 이미지를 OpenCode가 실행되는 컴퓨터에 저장하고 메시지에 경로를 넣어, 에이전트가 파일을 열고, 보내고, 편집할 수 있게 합니다.",
   "settings.openchamber.visual.field.draftStartersVisible": "새 세션 화면에 시작 항목 표시",
   "settings.openchamber.visual.field.draftStartersVisibleAria": "새 세션 화면에 시작 항목 표시",
   "settings.openchamber.visual.field.showToolFileIconsAria": "도구 파일 아이콘 표시",
@@ -9407,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['ko'],
   ...tooltipsChatI18n['ko'],
   ...m4LaneDI18n.ko,
+  "gitIdentities.state.unknown": "Git ID가 아직 로드되지 않았습니다.",
+  "settings.usage.state.unknown": "사용량이 아직 로드되지 않았습니다.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "저장된 메모리가 아직 로드되지 않았습니다.",
+
+  "chat.workStatus.mcp.unknown": "MCP 서버가 아직 로드되지 않았습니다.",
 };

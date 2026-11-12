@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n['zh-CN'],
   ...selectionApprovalI18n['zh-CN'],
   ...agentStatusI18n['zh-CN'],
+  ...todoTrayI18n['zh-CN'],
   ...snippetsI18n['zh-CN'],
   ...prReviewI18n['zh-CN'],
   ...imageToolI18n['zh-CN'],
@@ -1522,10 +1524,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentControlToolAria": "启用智能体控制工具",
   "settings.openchamber.tools.field.agentControlToolInfo": "智能体还可以把提示交给其他会话、在工作树中启动会话并安排计划任务。删除会话和工作树只能由你来做。",
   "settings.openchamber.tools.field.agentControlToolSummary": "创建并驱动会话、工作树和计划任务。",
-  "settings.openchamber.tools.field.agentScheduleTool": "智能体计划工具",
-  "settings.openchamber.tools.field.agentScheduleToolAria": "启用智能体计划工具",
-  "settings.openchamber.tools.field.agentScheduleToolInfo": "智能体可以安排提示每天、每周、仅一次或按 cron 运行，并修改、运行、暂停或删除任务。",
-  "settings.openchamber.tools.field.agentScheduleToolSummary": "创建并运行计划任务。",
   "settings.openchamber.tools.field.agentWebTool": "OpenChamber Web 工具",
   "settings.openchamber.tools.field.agentWebToolAria": "启用 OpenChamber Web 工具",
   "settings.openchamber.tools.field.agentWebToolInfo": "便于在运行中的应用里检查 UI 工作。智能体可以浏览页面、查看页面并截图。",
@@ -1547,9 +1545,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentKnowledgeToolAria": "项目知识工具",
   "settings.openchamber.tools.field.agentKnowledgeToolInfo": "智能体使用的就是你在项目知识面板中看到的这些条目。",
   "settings.openchamber.tools.field.agentKnowledgeToolSummary": "让智能体读取并更新项目的笔记、待办和计划。",
-  "settings.openchamber.tools.field.agentToolsCodeMode": "通过 Code Mode 运行",
-  "settings.openchamber.tools.field.agentToolsCodeModeAria": "通过 Code Mode 运行 OpenChamber 工具",
-  "settings.openchamber.tools.field.agentToolsCodeModeInfo": "关闭：模型直接看到每个工具。开启：工具放在一个执行短脚本的工具后面。能省一点上下文，但模型可能漏掉它们，较小的模型尤其如此。",
   "settings.openchamber.opencodeCli.tooltipPrefix": "可选的",
   "settings.openchamber.opencodeCli.tooltipSuffix": "二进制绝对路径。",
   "settings.openchamber.opencodeCli.field.binaryPath": "OpenCode 可执行文件路径",
@@ -1758,6 +1753,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "{provider} 用量",
   "settings.usage.page.header.refreshing": "正在刷新用量...",
   "settings.usage.page.header.lastUpdated": "最后更新：{time}",
+  'settings.usage.page.section.quotas': '服务商配额',
+  'settings.usage.page.state.noConfiguredProvidersTitle': '没有可显示的服务商配额',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'OMP 已保存凭据的服务商会显示用量上限。请在服务商页面添加。',
   "settings.usage.page.header.lastUpdatedWithPlan": "套餐：{plan} · 最后更新：{time}",
   "settings.usage.page.options.showInWorkStatusAria": "在工作状态面板中显示",
   "settings.usage.page.options.showInWorkStatus": "在工作状态面板中显示",
@@ -2658,8 +2656,6 @@ export const dict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "在同一条回复中，如果助手文本块后面还有工具调用，则显示“复制回答”“保存为图片”和“朗读”操作。",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "允许向子智能体会话发送提示",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "允许向子智能体会话发送提示",
-  "settings.openchamber.visual.field.savePastedImagesAsFiles": "将粘贴的图像保存为文件",
-  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "粘贴或附加的图像会保存到运行 OpenCode 的机器上，并把路径放进消息，智能体可以打开、发送或编辑该文件。",
   "settings.openchamber.visual.field.draftStartersVisible": "在新会话页面显示快捷入口",
   "settings.openchamber.visual.field.draftStartersVisibleAria": "在新会话页面显示快捷入口",
   "settings.openchamber.visual.field.showToolFileIconsAria": "显示工具文件图标",
@@ -9398,4 +9394,9 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-CN'],
   ...openchamberToolOutputI18n['zh-CN'],
   ...m4LaneDI18n['zh-CN'],
+  "gitIdentities.state.unknown": "Git 身份尚未加载。",
+  "settings.usage.state.unknown": "用量尚未加载。",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "已存储的记忆尚未加载。",
+
+  "chat.workStatus.mcp.unknown": "MCP 服务器尚未加载。",
 };

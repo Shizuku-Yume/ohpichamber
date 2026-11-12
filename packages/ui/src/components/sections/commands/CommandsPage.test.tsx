@@ -141,7 +141,7 @@ test('a command refresh during save preserves the newer draft for the queued sav
   expect(writes).toHaveLength(7);
 });
 
-test('shows clean read-only built-in command detail without form chrome', async () => {
+test('a built-in command is not editable here and the page keeps only template files', async () => {
   const builtin: CommandEntry = {
     commandId: 'command_compact',
     name: 'compact',
@@ -152,12 +152,21 @@ test('shows clean read-only built-in command detail without form chrome', async 
     source: 'builtin',
     editable: false,
   };
+  const template: CommandEntry = {
+    commandId: 'command_deploy',
+    name: 'deploy',
+    content: 'Ship it',
+    description: 'Deploy the app',
+    scope: 'workspace',
+    source: 'workspace',
+    editable: true,
+  };
   useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
   useCommandsStore.setState({
     selectedCommandName: builtin.name,
     selectedCommandId: builtin.commandId,
-    commands: [builtin],
-    commandsByDirectory: { '/project': [builtin] },
+    commands: [builtin, template],
+    commandsByDirectory: { '/project': [builtin, template] },
   });
 
   await act(async () => {
@@ -170,13 +179,9 @@ test('shows clean read-only built-in command detail without form chrome', async 
     );
   });
 
-  expect(container.textContent).toContain('/compact');
-  expect(container.textContent).toContain('Built-in commands');
-  expect(container.textContent).toContain('Compress session history using AI to reduce context size');
-  expect(container.textContent).toContain('[soft|remote|snapcompact] [focus]');
+  // A built-in has no template file, so the page offers no editor for it.
+  expect(container.textContent).toContain('Select a command from the sidebar');
   expect(container.querySelector('textarea')).toBeNull();
-  expect(container.querySelector('input')).toBeNull();
-  expect(container.querySelector('fieldset')).toBeNull();
 });
 
 test('locale switch preserves unsaved custom command draft without rehydrating', async () => {

@@ -14,6 +14,7 @@
 import React from 'react';
 
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
+import { getRuntimeKey } from '@/lib/runtime-switch';
 import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectContextOwner } from '@/hooks/useProjectContextOwner';
@@ -32,6 +33,10 @@ export const useAgentMemorySync = (directory: string | null): void => {
   const load = useAgentMemoryStore((state) => state.load);
   const owner = useProjectContextOwner(directory);
   const projectPath = owner?.path ?? null;
+  // The store's contents belong to one instance. Without the key in the deps a
+  // switch left the previous instance's memory in place until some other
+  // dependency happened to change.
+  const runtimeKey = getRuntimeKey();
 
   // The owner re-resolves on every directory switch; entries loaded moments
   // ago for the same project are still current, and the change event below
@@ -41,7 +46,7 @@ export const useAgentMemorySync = (directory: string | null): void => {
       return;
     }
     void load(projectPath, { maxAgeMs: AGENT_MEMORY_FRESH_MS });
-  }, [enabled, load, projectPath]);
+  }, [enabled, load, projectPath, runtimeKey]);
 
   // The agent writes memory mid-turn through its own tool, so the index for the
   // next message has to come from a fresh read rather than the snapshot taken
@@ -55,5 +60,5 @@ export const useAgentMemorySync = (directory: string | null): void => {
         void load(projectPath);
       }
     });
-  }, [enabled, load, projectPath]);
+  }, [enabled, load, projectPath, runtimeKey]);
 };

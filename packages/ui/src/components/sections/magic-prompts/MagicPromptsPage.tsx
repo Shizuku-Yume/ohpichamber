@@ -312,7 +312,7 @@ const MagicPromptsLoading: React.FC = () => {
   return (
     <div className="flex items-center gap-2 text-muted-foreground">
       <span className={cn('inline-block h-1.5 w-1.5 rounded-full bg-current', blink)} aria-label={t('settings.magicPrompts.page.loading.aria')} />
-      <span className="typography-ui">{t('settings.magicPrompts.page.loading.text')}</span>
+      <span>{t('settings.magicPrompts.page.loading.text')}</span>
     </div>
   );
 };

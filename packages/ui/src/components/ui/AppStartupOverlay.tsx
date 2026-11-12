@@ -42,7 +42,7 @@ export const AppStartupOverlay: React.FC<{ ready: boolean; animated?: boolean }>
       {/* Absolutely positioned below the (still perfectly centered) logo so
           the text never pushes it up. 50% + half the 120px logo + a gap. */}
       {slow ? (
-        <p role="status" className="absolute inset-x-0 top-[calc(50%+84px)] px-6 text-center typography-small text-muted-foreground">
+        <p role="status" className="absolute inset-x-0 top-[calc(50%+84px)] px-6 text-center text-muted-foreground">
           {t('startup.overlay.slow')}
         </p>
       ) : null}

@@ -50,7 +50,7 @@ export const LegacyDataNotice: React.FC<LegacyDataNoticeProps> = ({ onOpenSettin
   return (
     <aside role="status" className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-lg rounded-lg border bg-background p-4 shadow-lg">
       <h2 className="typography-ui-header">{t('startup.legacyNotice.title')}</h2>
-      <p className="mt-2 typography-body text-muted-foreground">{t('startup.legacyNotice.descriptionGeneric')}</p>
+      <p className="mt-2 text-muted-foreground">{t('startup.legacyNotice.descriptionGeneric')}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <Button onClick={configureProviders}>{t('startup.legacyNotice.action')}</Button>
         <Button variant="outline" onClick={dismiss}>{t('startup.legacyNotice.dismiss')}</Button>

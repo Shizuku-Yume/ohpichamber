@@ -36,12 +36,6 @@ export type NotificationTemplates = {
   subtask: { title: string; message: string };
 };
 
-export type UsageModelGroups = Record<string, {
-  customGroups?: Array<{ id: string; label: string; models: string[]; order: number }>;
-  modelAssignments?: Record<string, string>;
-  renamedGroups?: Record<string, string>;
-}>;
-
 export type ManagedRemoteTunnelPreset = { id: string; name: string; hostname: string };
 
 export type SkillCatalogConfig = {
@@ -173,20 +167,6 @@ export const parseModelRefs = (limit: number): SettingsParser<ModelRef[]> => fro
   }),
 );
 
-export const parseRecentEfforts = fromSchema(
-  looseObject.transform((record) => {
-    const result: Record<string, string[]> = {};
-    for (const [key, variants] of Object.entries(record)) {
-      if (!key) continue;
-      const parsed = stringEntries.safeParse(variants);
-      if (!parsed.success) continue;
-      const unique = Array.from(new Set(parsed.data.map(String)));
-      if (unique.length > 0) result[key] = unique.slice(0, 5);
-    }
-    return result;
-  }).refine((record) => Object.keys(record).length > 0),
-);
-
 export const parseLastUsedEfforts = fromSchema(
   looseObject.transform((record) => {
     const result: Record<string, string | null> = {};
@@ -247,44 +227,6 @@ export const parseNotificationTemplates = fromSchema(
       subtask: subtask ?? DEFAULT_NOTIFICATION_TEMPLATES.subtask,
     };
   }).pipe(z.custom<NotificationTemplates>((value) => value !== undefined)),
-);
-
-const stringMap = looseObject.transform((record) => Object.fromEntries(
-  Object.entries(record).flatMap(([key, value]) => {
-    const parsed = z.string().safeParse(value);
-    return parsed.success ? [[key, parsed.data] as const] : [];
-  }),
-));
-
-const customGroupSchema = z.object({
-  id: z.unknown().transform((value) => String(value ?? '')),
-  label: z.unknown().transform((value) => String(value ?? '')),
-  models: z.array(z.unknown()).transform((models) => models.filter((model) => z.string().safeParse(model).success).map(String)).catch([]),
-  order: z.number().catch(0),
-});
-
-export const parseUsageModelGroups = fromSchema(
-  looseObject.transform((record) => {
-    const result: UsageModelGroups = {};
-    for (const [providerId, config] of Object.entries(record)) {
-      const parsedConfig = looseObject.safeParse(config);
-      if (!parsedConfig.success) continue;
-      const providerConfig: UsageModelGroups[string] = {};
-      const customGroups = z.array(z.unknown()).safeParse(parsedConfig.data.customGroups);
-      if (customGroups.success) {
-        providerConfig.customGroups = customGroups.data.flatMap((group) => {
-          const parsed = customGroupSchema.safeParse(group);
-          return parsed.success ? [parsed.data] : [];
-        });
-      }
-      const modelAssignments = stringMap.safeParse(parsedConfig.data.modelAssignments);
-      if (modelAssignments.success) providerConfig.modelAssignments = modelAssignments.data;
-      const renamedGroups = stringMap.safeParse(parsedConfig.data.renamedGroups);
-      if (renamedGroups.success) providerConfig.renamedGroups = renamedGroups.data;
-      if (Object.keys(providerConfig).length > 0) result[providerId] = providerConfig;
-    }
-    return result;
-  }).refine((record) => Object.keys(record).length > 0),
 );
 
 const managedRemoteTunnelPresetSchema = z.object({

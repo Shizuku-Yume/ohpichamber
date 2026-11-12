@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.tr,
   ...selectionApprovalI18n.tr,
   ...agentStatusI18n.tr,
+  ...todoTrayI18n['tr'],
   ...snippetsI18n.tr,
   ...prReviewI18n.tr,
   ...imageToolI18n.tr,
@@ -1531,10 +1533,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentControlToolAria": "Agent kontrol aracını etkinleştir",
   "settings.openchamber.tools.field.agentControlToolInfo": "Agent'lar istemleri başka oturumlara devredebilir, onları worktree'lerde başlatabilir ve görev zamanlayabilir. Oturumları ve worktree'leri yalnızca siz silebilirsiniz.",
   "settings.openchamber.tools.field.agentControlToolSummary": "Oturumları, worktree'leri ve zamanlanmış görevleri oluşturup yönetir.",
-  "settings.openchamber.tools.field.agentScheduleTool": "Agent zamanlama aracı",
-  "settings.openchamber.tools.field.agentScheduleToolAria": "Agent zamanlama aracını etkinleştir",
-  "settings.openchamber.tools.field.agentScheduleToolInfo": "Agent'lar bir istemi her gün, her hafta, bir kez ya da cron ile çalışacak şekilde zamanlayabilir; bir görevi değiştirebilir, çalıştırabilir, duraklatabilir veya silebilir.",
-  "settings.openchamber.tools.field.agentScheduleToolSummary": "Zamanlanmış görevleri oluşturur ve çalıştırır.",
   "settings.openchamber.tools.field.agentWebTool": "OpenChamber Web aracı",
   "settings.openchamber.tools.field.agentWebToolAria": "OpenChamber Web aracını etkinleştir",
   "settings.openchamber.tools.field.agentWebToolInfo": "Çalışan uygulamada UI işini kontrol etmek için kullanışlı. Agent'lar sayfalarda gezinebilir, sayfaları inceleyebilir ve ekran görüntüsü alabilir.",
@@ -1556,9 +1554,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentKnowledgeToolAria": "Proje bilgisi aracı",
   "settings.openchamber.tools.field.agentKnowledgeToolInfo": "Ajanlar, Proje bilgisi panelinde gördüğünüz öğelerin aynısıyla çalışır.",
   "settings.openchamber.tools.field.agentKnowledgeToolSummary": "Ajanlar projenin notlarını, yapılacaklarını ve planlarını okuyup günceller.",
-  "settings.openchamber.tools.field.agentToolsCodeMode": "Code Mode üzerinden çalıştır",
-  "settings.openchamber.tools.field.agentToolsCodeModeAria": "OpenChamber araçlarını Code Mode üzerinden çalıştır",
-  "settings.openchamber.tools.field.agentToolsCodeModeInfo": "Kapalı: model her aracı doğrudan görür. Açık: araçlar kısa bir betik çalıştıran tek bir aracın arkasına geçer. Biraz bağlam kazandırır ama model, özellikle küçük modeller, araçları gözden kaçırabilir.",
   "settings.openchamber.opencodeCli.tooltipPrefix": "İsteğe bağlı mutlak dosya yolu: ",
   "settings.openchamber.opencodeCli.tooltipSuffix": "binary dosyası.",
   "settings.openchamber.opencodeCli.field.binaryPath": "OpenCode Binary Yolu",
@@ -1728,6 +1723,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "{provider} Kullanımı",
   "settings.usage.page.header.refreshing": "Kullanım yenileniyor...",
   "settings.usage.page.header.lastUpdated": "Son güncelleme: {time}",
+  'settings.usage.page.section.quotas': 'Sağlayıcı kotaları',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'Gösterilecek sağlayıcı kotası yok',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Kullanım limitleri, OMP\'nin kimlik bilgilerine zaten sahip olduğu sağlayıcılar için görünür. Sağlayıcılar bölümünden bir tane ekleyin.',
   "settings.usage.page.header.lastUpdatedWithPlan": "Plan: {plan} · Son güncelleme: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Çalışma durumu panelinde göster",
   "settings.usage.page.options.showInWorkStatus": "Çalışma Durumu Panelinde Göster",
@@ -2604,8 +2602,6 @@ export const dict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Aynı yanıtta sonraki araç çağrılarından önce görünen asistan metin bloklarında Yanıtı Kopyala, Görsel olarak kaydet ve Sesli oku seçeneklerini göster.",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "Subagent session'lara prompt göndermeye izin ver",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "Subagent session'lara prompt göndermeye izin ver",
-  "settings.openchamber.visual.field.savePastedImagesAsFiles": "Yapıştırılan görselleri dosya olarak kaydet",
-  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "Yapıştırılan veya eklenen görsel, OpenCode'un çalıştığı makineye kaydedilir ve yolu mesaja eklenir; böylece ajan onu açabilir, gönderebilir veya düzenleyebilir.",
   "settings.openchamber.visual.field.draftStartersVisible": "Yeni session ekranında starter'ları göster",
   "settings.openchamber.visual.field.draftStartersVisibleAria": "Yeni session ekranında starter'ları göster",
   "settings.openchamber.visual.field.showToolFileIconsAria": "Araç dosyası simgelerini göster",
@@ -9407,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['tr'],
   ...tooltipsChatI18n['tr'],
   ...m4LaneDI18n.tr,
+  "gitIdentities.state.unknown": "Git kimlikleri henüz yüklenmedi.",
+  "settings.usage.state.unknown": "Kullanım henüz yüklenmedi.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Kayıtlı bellek henüz yüklenmedi.",
+
+  "chat.workStatus.mcp.unknown": "MCP sunucuları henüz yüklenmedi.",
 };

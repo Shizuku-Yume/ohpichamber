@@ -319,7 +319,7 @@ export const SourceBoardActions: React.FC<{
         <>
             {waitingMerge ? (
                 <>
-                    <span className="text-muted-foreground typography-small">{waitingLabel}</span>
+                    <span className="text-muted-foreground">{waitingLabel}</span>
                     <ActionButton icon="close" label={t('sourceBoard.merge.cancel')} tooltip={t('contextTooltips.tracker.cancelMerge')} onClick={() => void cancelMerge()} busy={busy === 'merge'} />
                 </>
             ) : openPull && !openPull.draft && mergeMethod ? (

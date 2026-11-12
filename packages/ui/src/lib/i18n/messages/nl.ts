@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.nl,
   ...selectionApprovalI18n.nl,
   ...agentStatusI18n.nl,
+  ...todoTrayI18n['nl'],
   ...snippetsI18n.nl,
   ...prReviewI18n.nl,
   ...imageToolI18n.nl,
@@ -1617,10 +1619,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentControlToolAria": "Besturingstool voor agents aanzetten",
   "settings.openchamber.tools.field.agentControlToolInfo": "Agents kunnen prompts ook aan andere sessies doorgeven, ze in worktrees starten en taken plannen. Sessies en worktrees verwijderen blijft aan u.",
   "settings.openchamber.tools.field.agentControlToolSummary": "Sessies, worktrees en geplande taken maken en sturen.",
-  "settings.openchamber.tools.field.agentScheduleTool": "Planningstool voor agents",
-  "settings.openchamber.tools.field.agentScheduleToolAria": "Planningstool voor agents aanzetten",
-  "settings.openchamber.tools.field.agentScheduleToolInfo": "Agents kunnen een prompt dagelijks, wekelijks, eenmalig of via cron inplannen en een taak wijzigen, uitvoeren, pauzeren of verwijderen.",
-  "settings.openchamber.tools.field.agentScheduleToolSummary": "Geplande taken maken en uitvoeren.",
   "settings.openchamber.tools.field.agentWebTool": "OpenChamber Web-tool",
   "settings.openchamber.tools.field.agentWebToolAria": "OpenChamber Web-tool aanzetten",
   "settings.openchamber.tools.field.agentWebToolInfo": "Handig om UI-werk in de draaiende app te controleren. Agents kunnen navigeren, pagina's bekijken en screenshots maken.",
@@ -1642,9 +1640,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentKnowledgeToolAria": "Projectkennis-tool",
   "settings.openchamber.tools.field.agentKnowledgeToolInfo": "Agents werken met dezelfde items die u in het paneel Projectkennis ziet.",
   "settings.openchamber.tools.field.agentKnowledgeToolSummary": "Agents lezen en werken de notities, taken en plannen van het project bij.",
-  "settings.openchamber.tools.field.agentToolsCodeMode": "Via Code Mode uitvoeren",
-  "settings.openchamber.tools.field.agentToolsCodeModeAria": "OpenChamber-tools via Code Mode uitvoeren",
-  "settings.openchamber.tools.field.agentToolsCodeModeInfo": "Uit: het model ziet elke tool direct. Aan: ze zitten achter één tool die een kort script uitvoert. Scheelt wat context, maar het model kan ze missen, vooral kleinere modellen.",
   "settings.openchamber.opencodeCli.tooltipPrefix": "Optioneel absoluut pad naar het",
   "settings.openchamber.opencodeCli.tooltipSuffix": "programma.",
   "settings.openchamber.opencodeCli.field.binaryPath": "Pad naar de OpenCode-binary",
@@ -1853,6 +1848,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "Gebruik {provider}",
   "settings.usage.page.header.refreshing": "Gebruik vernieuwen...",
   "settings.usage.page.header.lastUpdated": "Laatst bijgewerkt: {time}",
+  'settings.usage.page.section.quotas': 'Providerquota',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'Geen providerquota om te tonen',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Gebruikslimieten verschijnen voor providers waarvan OMP al inloggegevens heeft. Voeg er een toe bij Providers.',
   "settings.usage.page.header.lastUpdatedWithPlan": "Plan: {plan} · Laatst bijgewerkt: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Tonen in werkstatuspaneel",
   "settings.usage.page.options.showInWorkStatus": "Tonen in werkstatuspaneel",
@@ -2760,8 +2758,6 @@ export const dict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Toon Antwoord kopiëren, Opslaan als afbeelding en Voorlezen bij assistenttekstblokken die vóór latere toolaanroepen in hetzelfde antwoord verschijnen.",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "Prompten van subagentsessies toestaan",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "Prompten van subagentsessies toestaan",
-  "settings.openchamber.visual.field.savePastedImagesAsFiles": "Geplakte afbeeldingen als bestanden opslaan",
-  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "Een geplakte of bijgevoegde afbeelding wordt opgeslagen op de machine waar OpenCode draait, en het pad komt in het bericht, zodat de agent hem kan openen, versturen of bewerken.",
   "settings.openchamber.visual.field.draftStartersVisible": "Starters tonen op het scherm voor een nieuwe sessie",
   "settings.openchamber.visual.field.draftStartersVisibleAria": "Toon starters op het scherm voor een nieuwe sessie",
   "settings.openchamber.visual.field.showToolFileIconsAria": "Toon bestandspictogrammen van tools",
@@ -9407,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['nl'],
   ...tooltipsChatI18n['nl'],
   ...m4LaneDI18n.nl,
+  "gitIdentities.state.unknown": "Git-identiteiten zijn nog niet geladen.",
+  "settings.usage.state.unknown": "Gebruik is nog niet geladen.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Opgeslagen geheugen is nog niet geladen.",
+
+  "chat.workStatus.mcp.unknown": "MCP-servers zijn nog niet geladen.",
 };

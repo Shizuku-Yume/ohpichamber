@@ -1,5 +1,5 @@
 import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
-import { NATIVE_TOOLS, parseNativeReadPath } from '@/lib/toolHelpers';
+import { isAstEditTool, isEditTool, isReadTool, isWriteTool, parseNativeReadPath } from '@/lib/toolHelpers';
 import { z } from 'zod';
 
 const editFileSchema = z.object({
@@ -227,17 +227,17 @@ function parseAstEditOutput(output: unknown): ToolFileChange[] {
 export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): ToolFileChange[] {
     if (part.type !== 'tool_result' || part.isError) return [];
     const call = pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
-    if (part.toolName === 'write') {
+    if (isWriteTool(part.toolName)) {
         const resolved = writeResultSchema.safeParse(part.output).data?.details.resolvedPath;
         const inputPath = pathValueSchema.safeParse(call?.input.path).data;
         // Writes to tool devices/coordination URLs do not mutate project files.
         const path = resolved ?? (inputPath && !/^[a-z][a-z0-9+.-]*:\/\//i.test(inputPath) ? inputPath : undefined);
         return path && workspaceRelativePath(path) !== null ? [{ path: normalizeWorkspaceToolPath(path) }] : [];
     }
-    if (part.toolName === 'ast_edit') {
+    if (isAstEditTool(part.toolName)) {
         return parseAstEditOutput(part.output);
     }
-    if (part.toolName !== 'edit') return [];
+    if (!isEditTool(part.toolName)) return [];
     const details = editResultSchema.safeParse(part.output).data?.details;
     if (!details) return [];
     const files = details.perFileResults ?? (details.path ? [{ ...details, path: details.path }] : []);
@@ -265,9 +265,9 @@ export function getToolDiffs(part: ToolPart, pairedCall?: ToolCallPart): ToolDif
 export function getPrimaryToolPath(part: ToolPart, pairedCall?: ToolCallPart): string | null {
     if (part.type === 'tool_result') return getToolFileChanges(part, pairedCall).find((file) => file.op !== 'delete')?.path ?? null;
     const path = pathValueSchema.safeParse(part.input.path).data;
-    if ((part.toolName === 'edit' || part.toolName === 'write') && path && workspaceRelativePath(path) !== null)
+    if ((isEditTool(part.toolName) || isWriteTool(part.toolName)) && path && workspaceRelativePath(path) !== null)
         return normalizeWorkspaceToolPath(path);
-    if (part.toolName === 'ast_edit') {
+    if (isAstEditTool(part.toolName)) {
         if (path && workspaceRelativePath(path) !== null) return normalizeWorkspaceToolPath(path);
         const paths = Array.isArray(part.input.paths) && typeof part.input.paths[0] === 'string'
             ? part.input.paths[0] : null;
@@ -295,7 +295,7 @@ export function extractFirstChangedLineFromDiff(diff: string): number | undefine
 export function resolveToolQuickOpenTarget(part: ToolPart, pairedCall?: ToolCallPart): { filePath: string; line?: number } | null {
     const call = part.type === 'tool_call' ? part : pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
     const readPath = pathValueSchema.safeParse(call?.input.path).data;
-    if (call?.toolName === NATIVE_TOOLS.read && readPath) {
+    if (call && isReadTool(call.toolName) && readPath) {
         const parsed = parseNativeReadPath(readPath);
         if (!parsed.path || workspaceRelativePath(parsed.path) === null) return null;
         return { filePath: normalizeWorkspaceToolPath(parsed.path), line: parsed.line };

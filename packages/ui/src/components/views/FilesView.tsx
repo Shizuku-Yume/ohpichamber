@@ -5012,7 +5012,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       </div>
 
       {suggestExcalidrawExtension ? (
-        <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/40 bg-[var(--surface-muted)] px-3 py-1.5 typography-ui text-muted-foreground">
+        <div className="flex flex-shrink-0 items-center gap-2 border-b border-border/40 bg-[var(--surface-muted)] px-3 py-1.5 text-muted-foreground">
           <Icon name="information" className="size-4 shrink-0" />
           <span className="min-w-0 flex-1 truncate">{t('filesView.excalidraw.installHint')}</span>
           <Button type="button" size="xs" variant="outline" onClick={openExcalidrawExtensionCard}>
@@ -5023,18 +5023,18 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
       <div className="flex-1 min-h-0 min-w-0 relative">
         <ScrollableOverlay ref={setMainPreviewScroller} outerClassName="h-full min-w-0" className={cn('h-full min-w-0', isLargeFile && '[overflow-anchor:none]')}>
           {!selectedFile ? (
-            <div className="p-3 typography-ui text-muted-foreground">{t('filesView.editor.pickFileFromTree')}</div>
+            <div className="p-3 text-muted-foreground">{t('filesView.editor.pickFileFromTree')}</div>
           ) : (fileLoading || isPdfAssetAuthLoading) ? (
             suppressFileLoadingIndicator
               ? <div className="p-3" />
               : (
-                <div className="p-3 flex items-center gap-2 typography-ui text-muted-foreground">
+                <div className="p-3 flex items-center gap-2 text-muted-foreground">
                   <Icon name="loader-4" className="size-4 animate-spin" />
                   {t('filesView.state.loading')}
                 </div>
               )
           ) : fileError ? (
-            <div className="p-3 typography-ui text-[color:var(--status-error)]">{fileError}</div>
+            <div className="p-3 text-[color:var(--status-error)]">{fileError}</div>
 ) : showCanvas ? (
             // Ahead of the built-in previews: a binary editor may claim an image or PDF.
             // Shown fullscreen instead while the overlay is open: one canvas instance.
@@ -5197,7 +5197,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
               </div>
               {shouldMaskEditorForPendingNavigation && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background">
-                  <div className="flex items-center gap-2 typography-ui text-muted-foreground">
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <Icon name="loader-4" className="size-4 animate-spin" />
                     {t('filesView.state.openingFileAtChange')}
                   </div>
@@ -5377,13 +5377,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
             suppressFileLoadingIndicator
               ? <div className="p-4" />
               : (
-                <div className="p-4 flex items-center gap-2 typography-ui text-muted-foreground">
+                <div className="p-4 flex items-center gap-2 text-muted-foreground">
                   <Icon name="loader-4" className="size-4 animate-spin" />
                   Loading…
                 </div>
               )
           ) : fileError ? (
-            <div className="p-4 typography-ui text-[color:var(--status-error)]">{fileError}</div>
+            <div className="p-4 text-[color:var(--status-error)]">{fileError}</div>
 ) : showCanvas ? (
             canvasElement
           ) : artifactPreview ? (
@@ -5472,7 +5472,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full', visible = t
               </div>
               {shouldMaskEditorForPendingNavigation && (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-background">
-                  <div className="flex items-center gap-2 typography-ui text-muted-foreground">
+                  <div className="flex items-center gap-2 text-muted-foreground">
                     <Icon name="loader-4" className="size-4 animate-spin" />
                     {t('filesView.state.openingFileAtChange')}
                   </div>

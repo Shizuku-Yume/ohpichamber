@@ -655,29 +655,11 @@ describe('settings helpers', () => {
       })).toEqual({ customProviderIcons: { 'campus-llm': 'cloud', local: 'ai' } });
     });
 
-    it('round-trips collapsedModelProviders and recentAgents as string arrays', () => {
+    it('round-trips favoriteAgents as a string array', () => {
       const helpers = createTestHelpersWithRealSanitizers();
 
-      expect(helpers.sanitizeSettingsUpdate({ collapsedModelProviders: ['anthropic', 'openai'] })).toEqual({
-        collapsedModelProviders: ['anthropic', 'openai'],
-      });
-      expect(helpers.sanitizeSettingsUpdate({ recentAgents: ['build', 'plan'] })).toEqual({
-        recentAgents: ['build', 'plan'],
-      });
       expect(helpers.sanitizeSettingsUpdate({ favoriteAgents: ['build', 'incident'] })).toEqual({
         favoriteAgents: ['build', 'incident'],
-      });
-    });
-
-    it('round-trips recentEfforts as a Record<string, string[]>', () => {
-      const helpers = createTestHelpersWithRealSanitizers();
-      const input = {
-        'anthropic/claude-opus-4': ['high', 'default'],
-        'openai/gpt-5': ['low'],
-      };
-
-      expect(helpers.sanitizeSettingsUpdate({ recentEfforts: input })).toEqual({
-        recentEfforts: input,
       });
     });
 
@@ -701,33 +683,12 @@ describe('settings helpers', () => {
       ).toEqual({ hiddenModels: [] });
     });
 
-    it('rejects garbage collapsedModelProviders and recentAgents input', () => {
-      const helpers = createTestHelpersWithRealSanitizers();
-
-      expect(helpers.sanitizeSettingsUpdate({ collapsedModelProviders: 'anthropic' })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ collapsedModelProviders: null })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ recentAgents: 42 })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ recentAgents: { build: 1 } })).toEqual({});
-    });
-
-    it('rejects garbage recentEfforts input', () => {
-      const helpers = createTestHelpersWithRealSanitizers();
-
-      expect(helpers.sanitizeSettingsUpdate({ recentEfforts: 'not-an-object' })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ recentEfforts: [] })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ recentEfforts: null })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ recentEfforts: { 'anthropic/claude-opus-4': 'high' } })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ recentEfforts: { '': ['high'] } })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ recentEfforts: { 'anthropic/claude-opus-4': [] } })).toEqual({});
-      expect(helpers.sanitizeSettingsUpdate({ recentEfforts: { 'anthropic/claude-opus-4': [123, ''] } })).toEqual({});
-    });
-
     it('persists only boolean system prompt optimization values', () => {
       const helpers = createTestHelpersWithRealSanitizers();
 
     });
 
-    it('survives a full settings.json payload containing all four previously-dropped fields (regression)', () => {
+    it('survives a full settings.json payload containing the model selector fields (regression)', () => {
       const helpers = createTestHelpersWithRealSanitizers();
       const payload = {
         themeId: 'default',
@@ -735,12 +696,6 @@ describe('settings helpers', () => {
           { providerID: 'anthropic', modelID: 'claude-opus-4' },
           { providerID: 'openai', modelID: 'gpt-5' },
         ],
-        collapsedModelProviders: ['anthropic', 'openai'],
-        recentAgents: ['build', 'plan'],
-        recentEfforts: {
-          'anthropic/claude-opus-4': ['high', 'default'],
-          'openai/gpt-5': ['low'],
-        },
         favoriteModels: [{ providerID: 'anthropic', modelID: 'claude-haiku-4' }],
         recentModels: [{ providerID: 'openai', modelID: 'gpt-5' }],
       };
@@ -748,9 +703,6 @@ describe('settings helpers', () => {
       const sanitized = helpers.sanitizeSettingsUpdate(payload);
 
       expect(sanitized.hiddenModels).toEqual(payload.hiddenModels);
-      expect(sanitized.collapsedModelProviders).toEqual(payload.collapsedModelProviders);
-      expect(sanitized.recentAgents).toEqual(payload.recentAgents);
-      expect(sanitized.recentEfforts).toEqual(payload.recentEfforts);
       expect(sanitized.favoriteModels).toEqual(payload.favoriteModels);
       expect(sanitized.recentModels).toEqual(payload.recentModels);
     });
@@ -832,7 +784,7 @@ describe('settings registry gate', () => {
     splashBgLight: '#fff', splashFgLight: '#000', splashBgDark: '#000', splashFgDark: '#fff',
     lastDirectory: '/home/testuser/project', homeDirectory: '/home/testuser',
     projects: [{ id: 'p', path: '/home/testuser/project' }], activeProjectId: 'p',
-    securityScopedBookmarks: ['bookmark'], pinnedDirectories: ['/home/testuser/project'],
+    pinnedDirectories: ['/home/testuser/project'],
     desktopLanAccessEnabled: true, desktopKeepAwakeEnabled: true, desktopMinimizeToTrayEnabled: true, desktopMacMenuBarEnabled: true, desktopLinuxNativeFrame: true, sidebarShowChatsSection: false,
     desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', gitlabClientId: 'gitlab-client', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
     defaultGitIdentityId: 'global', permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
@@ -842,15 +794,15 @@ describe('settings registry gate', () => {
     // Registry keys the settings-registry regeneration added; the gate fails
     // without a fixture line for each, and these are their real shapes.
     openLinksInBrowserPanel: true, liveBrowserTabLimit: 4, openTrackerLinksOnBoard: true, layoutAnimations: true,
-    worktreeArchiveOnDoneEnabled: true, showOpenCodeUpdateNotifications: false,
-    agentScheduleToolEnabled: true, agentKnowledgeToolEnabled: true, agentRenderToolEnabled: true,
-    agentWorkflowToolEnabled: true, mobileReturnKeySends: true, savePastedImagesAsFiles: true,
+    worktreeArchiveOnDoneEnabled: true,
+    agentKnowledgeToolEnabled: true, agentRenderToolEnabled: true,
+    agentWorkflowToolEnabled: true, mobileReturnKeySends: true,
     smallModelVariant: 'high',
     autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionOnlyArchived: false, sessionRetentionAction: 'archive', mergedWorktreeCleanupEnabled: true, terminalShell: 'zsh', terminalLoginShells: ['zsh'],
     openInAppId: 'vscode', dictationEnabled: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en',
     tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelHttpsPort: 8443, tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
     managedRemoteTunnelHostname: 'x.example', managedRemoteTunnelToken: 'token', managedRemoteTunnelPresets: [{ id: 'a', name: 'A', hostname: 'a.example' }],
-    managedRemoteTunnelSelectedPresetId: 'a', managedRemoteTunnelPresetTokens: { a: 'token' },
+    managedRemoteTunnelPresetTokens: { a: 'token' },
     sidebarProjectDisplayMode: 'all', sidebarListSessionGrouping: 'project', sidebarGrouping: 'time', sidebarKeepWorkInPlace: true, sidebarProjectSortOrder: 'manual', sidebarShowWorkSection: true, sidebarShowPinnedSection: true, sidebarDetailedZoneRows: true,
     workStatusPanelEnabled: true, workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true, workStatusSectionOrder: ['mcp', 'session'],
     showReasoningTraces: true, streamingAutoFollowEnabled: true, collapsibleThinkingBlocks: true, expandReasoningWhileStreaming: true, showTextJustificationActivity: true,
@@ -864,27 +816,35 @@ describe('settings registry gate', () => {
     allowPromptingSubagentSessions: true, inputSpellcheckEnabled: true, enterToSend: true, enterToSendConfigured: true, persistChatDraft: true,
     largeTextPasteBehavior: 'attach', followUpBehavior: 'steer', queueModeEnabled: true, inputHistoryScope: 'global', inputHistoryLimit: 40,
     draftStarters: [{ type: 'command', name: 'plan-feature' }], draftStartersVisible: true, draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true,
-    fontSize: 100, chatFontSize: 100, terminalFontSize: 14, editorFontSize: 14, uiFont: 'inter', monoFont: 'jetbrains-mono', customUiFont: 'Maple Mono NF CN', customMonoFont: 'Maple Mono', uiFontWeight: 'regular', padding: 100, cornerRadius: 8,
+    fontSize: 100, chatFontSize: 100, terminalFontSize: 14, editorFontSize: 14, uiFont: 'inter', monoFont: 'jetbrains-mono', customUiFont: 'Maple Mono NF CN', customMonoFont: 'Maple Mono', uiFontWeight: 'regular', padding: 100,
     shortcutOverrides: { 'chat.send': 'mod+enter' },
     defaultModel: 'anthropic/claude', defaultVariant: 'high', defaultAgent: 'build', zenModel: 'zen/model',
     defaultSessionMode: 'main',
-    favoriteModels: [{ providerID: 'anthropic', modelID: 'claude' }], hiddenModels: [{ providerID: 'openai', modelID: 'gpt' }], collapsedModelProviders: ['openai'],
-    recentModels: [{ providerID: 'anthropic', modelID: 'claude' }], lastSelectedModel: 'anthropic/claude', recentAgents: ['build'], favoriteAgents: ['build'], recentEfforts: { 'anthropic/claude': ['high'] }, providerOrder: ['anthropic'],
+    favoriteModels: [{ providerID: 'anthropic', modelID: 'claude' }], hiddenModels: [{ providerID: 'openai', modelID: 'gpt' }],
+    recentModels: [{ providerID: 'anthropic', modelID: 'claude' }], lastSelectedModel: 'anthropic/claude', favoriteAgents: ['build'], providerOrder: ['anthropic'],
     sessionRecapEnabled: true, sessionSuggestionEnabled: true, sessionWorkEnabled: true, sessionWorkAutoOpen: true, sessionReviewOfferEnabled: true, sessionWorkKeepInGroup: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
-    summarizeLastMessage: true, summaryThreshold: 100, summaryLength: 50, maxLastMessageLength: 200, showDeletionDialog: true,
+    maxLastMessageLength: 200, showDeletionDialog: true,
     nativeNotificationsEnabled: true, notificationMode: 'always', notifyOnSubtasks: true, notifyOnCompletion: true, notifyOnError: true, notifyOnQuestion: true, notifyOnPullRequests: true,
     notificationTemplates: { completion: { title: 't', message: 'm' } }, reportUsage: true,
-    usageDisplayMode: 'usage', usageDropdownProviders: ['anthropic'], usageSelectedModels: { anthropic: ['claude'] }, usageCollapsedFamilies: { anthropic: ['f'] },
-    usageExpandedFamilies: { anthropic: ['f'] }, usageModelGroups: { anthropic: { customGroups: [{ id: 'g', label: 'G', models: ['claude'], order: 0 }] } },
+    usageDisplayMode: 'usage', usageDropdownProviders: ['anthropic'], usageSelectedModels: { anthropic: ['claude'] },
+    usageExpandedFamilies: { anthropic: ['f'] },
     pwaAppName: 'OpenChamber', pwaOrientation: 'portrait', mobileKeyboardMode: 'native', desktopWindowControlsPosition: 'left', desktopWindowControlsStyle: 'classic',
     inputBarOffset: 10,
     customProviderIcons: { 'campus-llm': 'cloud' },
     layoutAnimations: true, openLinksInBrowserPanel: false, liveBrowserTabLimit: 8,
-    openTrackerLinksOnBoard: true, worktreeArchiveOnDoneEnabled: false, showOpenCodeUpdateNotifications: true,
-    agentScheduleToolEnabled: true, agentKnowledgeToolEnabled: false, agentRenderToolEnabled: false, agentWorkflowToolEnabled: false,
-    mobileReturnKeySends: true, savePastedImagesAsFiles: true,
+    openTrackerLinksOnBoard: true, worktreeArchiveOnDoneEnabled: false,
+    agentKnowledgeToolEnabled: false, agentRenderToolEnabled: false, agentWorkflowToolEnabled: false,
+    mobileReturnKeySends: true,
     responseStyleInstruction: 'Keep replies short.',
     responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'Be brief.',
+    // Registry keys whose server branch is a pass-through: the registry parser
+    // owns their shape, so the fixture is the client's own write shape.
+    agentImageToolEnabled: true, agentImageModel: 'anthropic/claude', sessionRetentionIncludeInWork: true,
+    dictationAutoSend: true, sttEndpointPath: '/speech_to_text', sttCorrectTranscript: true,
+    sidebarSections: [{ kind: 'custom', id: 'g', name: 'Clients', grouping: 'project', links: [] }],
+    sidebarPinLists: [{ id: 'pinned', name: 'Pinned' }], sidebarHiddenSections: ['work'],
+    sessionTabsPerWorkspace: true, selectionApprovalText: 'Looks good.', customProviderLogos: { acme: { mime: 'image/png', updatedAt: 1 } },
+    lastUsedEfforts: { 'anthropic/claude': 'high' },
   };
 
   it('accepts a valid value for every persistable registry key (no server-side drift)', () => {
@@ -927,7 +887,7 @@ describe('settings registry gate', () => {
       typographySizes: { base: 14 },
       gitProviderId: 'anthropic',
       gitModelId: 'claude',
-      messageLimit: 200,
+      memoryLimitHistorical: 200,
       agentMemoryFeatureAvailable: true,
       desktopHosts: [],
       notARealKey: 1,

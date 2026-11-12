@@ -5,10 +5,7 @@ import * as React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
-import {
-  SettingsSection,
-  SettingsCheckboxRow,
-} from '@/components/sections/shared/SettingsSection';
+import { SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -72,17 +69,13 @@ const ToolRow: React.FC<ToolRowProps> = ({ icon, title, summary, info, ariaLabel
  *
  * Each tool is a list row with a switch because each one adds or removes a
  * whole capability, and the one-line summary says what without opening the
- * hint. A setting of one tool alone is a nested row under it. The Code Mode
- * checkbox is an option on how the enabled ones are offered, so it sits below
- * the list rather than in it.
+ * hint. A setting of one tool alone is a nested row under it.
  */
 export const OpenChamberToolsSettings: React.FC = () => {
   const { t } = useI18n();
   const workspaceId = useConfigStore((state) => state.workspaceId);
   const agentControlToolEnabled = useUIStore((state) => state.agentControlToolEnabled);
   const setAgentControlToolEnabled = useUIStore((state) => state.setAgentControlToolEnabled);
-  const agentScheduleToolEnabled = useUIStore((state) => state.agentScheduleToolEnabled);
-  const setAgentScheduleToolEnabled = useUIStore((state) => state.setAgentScheduleToolEnabled);
   const agentWebToolEnabled = useUIStore((state) => state.agentWebToolEnabled);
   const setAgentWebToolEnabled = useUIStore((state) => state.setAgentWebToolEnabled);
   const browserProvider = useUIStore((state) => state.browserProvider);
@@ -102,24 +95,15 @@ export const OpenChamberToolsSettings: React.FC = () => {
   const setAgentImageToolEnabled = useUIStore((state) => state.setAgentImageToolEnabled);
   const agentImageModel = useUIStore((state) => state.agentImageModel);
   const setAgentImageModel = useUIStore((state) => state.setAgentImageModel);
-  const agentSecretToolEnabled = useUIStore((state) => state.agentSecretToolEnabled);
-  const setAgentSecretToolEnabled = useUIStore((state) => state.setAgentSecretToolEnabled);
   // Absent without an OpenChamber server, like memory.
   const agentWorkflowAvailable = useUIStore((state) => state.agentWorkflowFeatureAvailable);
   const agentWorkflowToolEnabled = useUIStore((state) => state.agentWorkflowToolEnabled);
   const setAgentWorkflowToolEnabled = useUIStore((state) => state.setAgentWorkflowToolEnabled);
-  const agentToolsCodeMode = useUIStore((state) => state.agentToolsCodeMode);
-  const setAgentToolsCodeMode = useUIStore((state) => state.setAgentToolsCodeMode);
 
   const handleAgentControlToolChange = React.useCallback((enabled: boolean) => {
     setAgentControlToolEnabled(enabled);
     void updateDesktopSettings({ agentControlToolEnabled: enabled });
   }, [setAgentControlToolEnabled]);
-
-  const handleAgentScheduleToolChange = React.useCallback((enabled: boolean) => {
-    setAgentScheduleToolEnabled(enabled);
-    void updateDesktopSettings({ agentScheduleToolEnabled: enabled });
-  }, [setAgentScheduleToolEnabled]);
 
   const handleAgentWebToolChange = React.useCallback((enabled: boolean) => {
     setAgentWebToolEnabled(enabled);
@@ -195,13 +179,8 @@ export const OpenChamberToolsSettings: React.FC = () => {
       cancelled = true;
     };
   }, [workspaceId, runtimeKey]);
-    const imageModelOptions = imageModels.status === 'ready' ? imageModels.models : [];
+  const imageModelOptions = imageModels.status === 'ready' ? imageModels.models : [];
   const imageModelKnown = imageModelOptions.some((model) => model.value === agentImageModel);
-
-  const handleAgentSecretToolChange = React.useCallback((enabled: boolean) => {
-    setAgentSecretToolEnabled(enabled);
-    void updateDesktopSettings({ agentSecretToolEnabled: enabled });
-  }, [setAgentSecretToolEnabled]);
 
   const handleAgentKnowledgeToolChange = React.useCallback((enabled: boolean) => {
     setAgentKnowledgeToolEnabled(enabled);
@@ -212,11 +191,6 @@ export const OpenChamberToolsSettings: React.FC = () => {
     setAgentWorkflowToolEnabled(enabled);
     void updateDesktopSettings({ agentWorkflowToolEnabled: enabled });
   }, [setAgentWorkflowToolEnabled]);
-
-  const handleAgentToolsCodeModeChange = React.useCallback((enabled: boolean) => {
-    setAgentToolsCodeMode(enabled);
-    void updateDesktopSettings({ agentToolsCodeMode: enabled });
-  }, [setAgentToolsCodeMode]);
 
   // The dropdown lists installed extensions, so the catalog has to be loaded
   // here too: this page can be the first thing opened after a fresh start.
@@ -265,17 +239,6 @@ export const OpenChamberToolsSettings: React.FC = () => {
           summary={t('settings.openchamber.tools.field.agentControlToolSummary')}
           info={t('settings.openchamber.tools.field.agentControlToolInfo')}
           ariaLabel={t('settings.openchamber.tools.field.agentControlToolAria')}
-        />
-
-        <ToolRow
-          icon="calendar-schedule"
-          settingsItem="sessions.agent-schedule-tool"
-          checked={agentScheduleToolEnabled}
-          onChange={handleAgentScheduleToolChange}
-          title={t('settings.openchamber.tools.field.agentScheduleTool')}
-          summary={t('settings.openchamber.tools.field.agentScheduleToolSummary')}
-          info={t('settings.openchamber.tools.field.agentScheduleToolInfo')}
-          ariaLabel={t('settings.openchamber.tools.field.agentScheduleToolAria')}
         />
 
         {/* One group, so no divider separates the web tool from its own setting. */}
@@ -414,17 +377,6 @@ export const OpenChamberToolsSettings: React.FC = () => {
         </div>
 
         <ToolRow
-          icon="shield-keyhole"
-          settingsItem="sessions.agent-secret-tool"
-          checked={agentSecretToolEnabled}
-          onChange={handleAgentSecretToolChange}
-          title={t('settings.openchamber.tools.field.agentSecretTool')}
-          summary={t('settings.openchamber.tools.field.agentSecretToolSummary')}
-          info={t('settings.openchamber.tools.field.agentSecretToolInfo')}
-          ariaLabel={t('settings.openchamber.tools.field.agentSecretToolAria')}
-        />
-
-        <ToolRow
           icon="sticky-note"
           settingsItem="sessions.agent-knowledge-tool"
           checked={agentKnowledgeToolEnabled}
@@ -461,16 +413,6 @@ export const OpenChamberToolsSettings: React.FC = () => {
           />
         ) : null}
       </div>
-
-      <SettingsCheckboxRow
-        className="mt-4"
-        settingsItem="sessions.agent-tools-code-mode"
-        checked={agentToolsCodeMode}
-        onChange={handleAgentToolsCodeModeChange}
-        label={t('settings.openchamber.tools.field.agentToolsCodeMode')}
-        ariaLabel={t('settings.openchamber.tools.field.agentToolsCodeModeAria')}
-        info={t('settings.openchamber.tools.field.agentToolsCodeModeInfo')}
-      />
     </SettingsSection>
   );
 };

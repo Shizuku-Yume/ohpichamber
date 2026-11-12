@@ -250,7 +250,6 @@ export const useKeyboardShortcuts = () => {
       const next = getCycledAgentId(agents, config.currentAgentName, direction, state.favoriteAgents);
       if (!next) return false;
       config.setAgent(next);
-      state.addRecentAgent(next);
       const sessionId = useSessionUIStore.getState().currentSessionId;
       if (sessionId) {
         useSelectionStore.getState().saveSessionAgentSelection(sessionId, next);

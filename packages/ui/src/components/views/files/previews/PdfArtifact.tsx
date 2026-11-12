@@ -153,11 +153,11 @@ const PdfPages: React.FC<{
       <ArtifactMetaBar items={[pages, formatArtifactSize(sizeBytes)]} />
       {state.status === 'failed' ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-          <div className="max-w-md typography-ui text-muted-foreground">{t(state.unreadable ? 'filesView.artifact.pdf.loadFailed' : 'filesView.error.readFileFailed')}</div>
+          <div className="max-w-md text-muted-foreground">{t(state.unreadable ? 'filesView.artifact.pdf.loadFailed' : 'filesView.error.readFileFailed')}</div>
           {download}
         </div>
       ) : state.status === 'loading' ? (
-        <div className="flex items-center gap-2 p-3 typography-ui text-muted-foreground">
+        <div className="flex items-center gap-2 p-3 text-muted-foreground">
           <Icon name="loader-4" className="size-4 animate-spin" />
           {t('common.loading')}
         </div>

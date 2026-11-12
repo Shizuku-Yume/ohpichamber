@@ -520,14 +520,10 @@ export const useTraySync = (): void => {
 
     // Usage: push to the tray whenever the quota store changes, and do one
     // initial fetch for enabled providers so the submenu isn't empty on launch.
+    // Settings and quotas are read by the boot registry, not by a tray mount:
+    // a tray-only read was the second reader that kept the store's settings
+    // disagreement alive. Opening the tray asks for fresh numbers instead.
     const unsubscribeQuota = useQuotaStore.subscribe(() => scheduleFlush());
-    void useQuotaStore.getState().loadSettings().then(() => {
-      if (disposed) return;
-      const { dropdownProviderIds, results } = useQuotaStore.getState();
-      const needsFetch = dropdownProviderIds.length > 0
-        && dropdownProviderIds.some((id) => !results.some((r) => r.providerId === id));
-      if (needsFetch) void useQuotaStore.getState().fetchQuotas(dropdownProviderIds);
-    });
 
     // Safety net: catches anything the event subscriptions miss (e.g. a store
     // that existed before the registry subscription was attached).

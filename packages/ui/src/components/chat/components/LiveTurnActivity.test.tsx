@@ -37,7 +37,11 @@ plugin({
 });
 
 // Loaded after the plugin above, so the worker URL resolves through its stub.
-const { LiveTurnActivity } = await import('./LiveTurnActivity');
+const { TurnFold, TurnPagesRow } = await import('./LiveTurnActivity');
+const { buildTimelineRows } = await import('../lib/turns/timelineRows');
+const { useTurnFoldContexts } = await import('./useTurnFold');
+const { LiveFinalActivityContext, LiveTurnHoistedPagesContext } = await import('./liveActivityContext');
+const { MessageSliceContext } = await import('../message/messageSliceContext');
 
 const unavailable = (): never => { throw new Error('Activity rendering must not call runtime APIs'); };
 const runtimeApis: RuntimeAPIs = {
@@ -84,6 +88,36 @@ function turn(messages: ChatMessageEntry[]): TurnRecord {
     }, ...messages], { showTurnChangedFiles: true }).turns[0];
 }
 
+// The rows a turn under a fold becomes in the list, drawn the way MessageList draws them.
+function TurnRows({ record, retired, expanded, onToggle, renderMessage }: {
+    record: TurnRecord;
+    retired: boolean;
+    expanded: boolean;
+    onToggle: () => void;
+    renderMessage: (message: ChatMessageEntry) => React.ReactNode;
+}) {
+    const rows = buildTimelineRows([{ kind: 'turn', key: 'turn', turn: record, isLastTurn: true, hasLaterAssistant: retired }], {
+        collapsedActivity: true, expandedTurns: new Map([[record.turnId, expanded]]), showReasoningTraces: true,
+    }, []);
+    const finalMessageId = rows.find((row) => row.kind === 'turn-fold')?.finalMessageId;
+    const { hoistedPages, finalContext } = useTurnFoldContexts(record, retired, expanded, finalMessageId);
+    return <LiveTurnHoistedPagesContext.Provider value={hoistedPages}>
+        {rows.map((row) => {
+            if (row.kind === 'turn-fold') {
+                return <TurnFold key={row.key} turn={record} hasLaterAssistant={retired} expanded={expanded}
+                    finalMessageId={row.finalMessageId} onToggle={onToggle} renderMessage={renderMessage} />;
+            }
+            if (row.kind === 'turn-pages') return <TurnPagesRow key={row.key} turn={record} />;
+            if (row.kind !== 'turn-message') return null;
+            const message = record.assistantMessages.find((candidate) => candidate.messageId === row.messageId);
+            if (!message) return null;
+            return <MessageSliceContext.Provider key={row.key} value={row.slice}>
+                {row.final ? <LiveFinalActivityContext.Provider value={finalContext}>{renderMessage(message)}</LiveFinalActivityContext.Provider> : renderMessage(message)}
+            </MessageSliceContext.Provider>;
+        })}
+    </LiveTurnHoistedPagesContext.Provider>;
+}
+
 function Harness({ record, retired = false, changedFiles, isLatestTurn = true, mobileActions = null }: {
     record: TurnRecord;
     retired?: boolean;
@@ -110,7 +144,7 @@ function Harness({ record, retired = false, changedFiles, isLatestTurn = true, m
     const content = <RuntimeAPIContext.Provider value={runtimeApis}>
         <SyncProvider client={client} directory="/project">
             <I18nProvider>
-                <LiveTurnActivity turn={record} hasLaterAssistant={retired} expanded={expanded}
+                <TurnRows record={record} retired={retired} expanded={expanded}
                     onToggle={() => setExpanded((value) => !value)} renderMessage={renderMessage} />
             </I18nProvider>
         </SyncProvider>

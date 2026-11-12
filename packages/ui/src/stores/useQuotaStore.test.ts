@@ -7,6 +7,8 @@ const fetched: string[] = []
 
 type StubPayload = { usageDropdownProviders: string[] } | { extensions: never[] } | ProviderResult
 let quotaRequestsFail = false
+// The saved "show in Work Status" list; an empty array is every provider unchecked.
+let savedDropdown: string[] = ["claude"]
 let quotaFails = false;
 // What `/api/quota/providers` names; null answers 500, as a restarting OpenCode does.
 let configuredProviders: string[] | null = []
@@ -30,7 +32,7 @@ mock.module("@/lib/runtime-fetch", () => ({
   runtimeFetch: async (path: string) => {
     fetched.push(path)
     if (quotaRequestsFail) throw new Error("network down")
-    if (path.startsWith("/api/config/settings")) return json({ usageDropdownProviders: ["claude"] })
+    if (path.startsWith("/api/config/settings")) return json({ usageDropdownProviders: savedDropdown })
     // The extensions' usage providers, read beside the settings; none installed here.
     if (path === "/api/quota/extensions") return json({ extensions: [] })
     if (path === "/api/quota/providers" && listGate) await listGate
@@ -50,6 +52,9 @@ mock.module("@/stores/useConfigStore", () => ({
 }))
 
 const { useQuotaStore } = await import("./useQuotaStore")
+// The store's own loaders, restored after a test that stubs them.
+const realLoadSettings = useQuotaStore.getState().loadSettings
+const realLoadExtensionProviders = useQuotaStore.getState().loadExtensionProviders
 
 describe("Usage quotas are loaded once per ready instance", () => {
   beforeEach(() => {
@@ -57,6 +62,7 @@ describe("Usage quotas are loaded once per ready instance", () => {
     isInitialized = true
     fetched.length = 0
     quotaRequestsFail = false
+    savedDropdown = ["claude"]
     configuredProviders = ["claude"]
     useQuotaStore.getState().resetForRuntimeSwitch()
   })
@@ -75,6 +81,32 @@ describe("Usage quotas are loaded once per ready instance", () => {
 
     expect(fetched.length).toBeGreaterThan(0)
     expect(useQuotaStore.getState().results.length).toBeGreaterThan(0)
+  })
+
+  test("an authoritatively empty provider selection is an answered read, not an unread one", async () => {
+    // Every provider unchecked in the usage dropdown. Returning before the
+    // phase write left the panel saying "usage has not loaded" forever.
+    // The instance's saved list is empty. The settings read is stubbed so the
+    // test does not depend on the shared settings cache; what it checks is the
+    // phase write for a selection that is authoritatively empty.
+    useQuotaStore.setState({
+      savedDropdownProviderIds: [],
+      dropdownProviderIds: [],
+      loadSettings: async () => undefined,
+      loadExtensionProviders: async () => undefined,
+    })
+    try {
+      await useQuotaStore.getState().ensureLoadedForRuntime()
+    } finally {
+      useQuotaStore.setState({ loadSettings: realLoadSettings, loadExtensionProviders: realLoadExtensionProviders })
+    }
+
+    const state = useQuotaStore.getState()
+    expect(state.phase).toBe("ready")
+    expect(state.loadedRuntimeKey).toBe(runtimeKey)
+    expect(state.results).toEqual([])
+    // Nothing to ask for means no provider was asked about.
+    expect(fetched.some((path) => path === "/api/quota/claude")).toBe(false)
   })
 
   test("a second ask for the same instance does not refetch", async () => {

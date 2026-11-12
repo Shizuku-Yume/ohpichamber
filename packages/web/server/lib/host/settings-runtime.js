@@ -983,17 +983,6 @@ export const createSettingsRuntime = (deps) => {
       changed = true;
     }
 
-    if (!Object.prototype.hasOwnProperty.call(next, 'managedRemoteTunnelSelectedPresetId')
-      && Object.prototype.hasOwnProperty.call(next, 'namedTunnelSelectedPresetId')) {
-      const selectedPresetId = typeof next.namedTunnelSelectedPresetId === 'string'
-        ? next.namedTunnelSelectedPresetId.trim()
-        : '';
-      if (selectedPresetId) {
-        next.managedRemoteTunnelSelectedPresetId = selectedPresetId;
-      }
-      changed = true;
-    }
-
     const legacyKeys = [
       'namedTunnelHostname',
       'namedTunnelToken',

@@ -1264,7 +1264,6 @@ export const TunnelSettings: React.FC = () => {
                       <ProviderOptionLabel provider="cloudflare" />
                     </SelectItem>
                   )}
-                <SelectItem value="__more-soon" disabled>{t('settings.openchamber.tunnel.option.moreProvidersSoon')}</SelectItem>
               </SelectContent>
             </Select>
           </SettingsFieldRow>

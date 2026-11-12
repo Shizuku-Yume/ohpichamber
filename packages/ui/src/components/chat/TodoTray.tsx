@@ -3,8 +3,11 @@ import { useSessionMessageLoadState, useSessionMessageLoader, useSessionMessages
 import { TodoCard } from './message/parts/TodoCard';
 import { latestTodoPhases } from './todoHistory';
 
-
-
+/**
+ * The composer's todo row. It shows the plan's current task and progress in
+ * one folded line and expands to every phase; the checklist itself lives in
+ * `TodoCard`, which the todo tool's result body also uses.
+ */
 export const TodoTray: React.FC<{ sessionId: string | null; directory?: string | null }> = React.memo(({ sessionId, directory }) => {
   const activeDirectory = directory ?? undefined;
   const messages = useSessionMessages(sessionId ?? '', activeDirectory);

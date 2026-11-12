@@ -395,7 +395,7 @@ const TimelineDialogBody: React.FC<TimelineDialogBodyProps> = ({
                                             {messageTime}
                                         </span>
                                         <p className={cn(
-                                            "flex-1 min-w-0 typography-small truncate",
+                                            "flex-1 min-w-0 truncate",
                                             isSelected ? "text-interactive-selection-foreground" : "text-foreground"
                                         )}>
                                             {snippet ?? (preview || t('chat.timeline.noTextContent'))}

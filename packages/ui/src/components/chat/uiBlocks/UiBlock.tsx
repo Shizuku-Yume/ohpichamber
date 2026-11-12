@@ -164,7 +164,7 @@ function useBlockProps<S extends z.ZodType>(schema: S, props: BlockValue): z.inf
 function Markdown({ source, className }: { source?: string; className?: string }) {
  const directory = useEffectiveDirectory() ?? '';
  if (!source) return null;
- return <MarkdownContent content={source} mode="static" settled directory={directory} className={cn('oc-ui-block-text', className)} />;
+ return <MarkdownContent content={source} mode="static" settled directory={directory} className={className} />;
 }
 
 const isButtonNode = (value: BlockValue) => blockNode.safeParse(value).data?.typeName === 'Button';
@@ -244,7 +244,7 @@ const isBadgeNode = (value: BlockValue) => blockNode.safeParse(value).data?.type
 
 /** A card's title takes inline Markdown, so an issue or a pull request in it can be a link. */
 function CardTitle({ title, className }: { title: string; className?: string }) {
- return <Markdown source={title} className={cn('oc-ui-block-title font-medium', className)} />;
+ return <Markdown source={title} className={cn('font-medium', className)} />;
 }
 
 /** The title of the card a node sits in; it names the decision of the card's buttons (`decisionOf`). */
@@ -1401,7 +1401,7 @@ function Details({ props }: NodeProps) {
     className="flex w-fit items-center gap-1 text-start font-medium text-foreground/80 transition-colors hover:text-foreground"
    >
     <Icon name="arrow-right-s" className={cn('size-4 shrink-0 text-muted-foreground transition-transform duration-150', open && 'rotate-90 rtl:-rotate-90')} />
-    <Markdown source={value.title} className="oc-ui-block-title" />
+    <Markdown source={value.title} />
    </button>
    {/* Kept mounted while closed, so a field inside keeps what the user typed. */}
    <div id={panelId} hidden={!open} className="flex flex-col gap-3 ps-5">
@@ -1769,7 +1769,7 @@ export function UiBlock({ source, complete, host = noHost, onNotDrawn, actions }
  if (parsed.kind === 'empty') return null;
  // A block that fails to draw falls back to its source; the rest of the reply stays.
  return (
-  <div ref={blockRef} data-oc-ui-block="" className="oc-ui-block my-3">
+  <div ref={blockRef} data-oc-ui-block="" className="my-3">
    <BlockErrorBoundary source={source} fallback={fallback} onFailed={onNotDrawn}>
     <FormContext.Provider value={form}>
      <SlotContext.Provider value={slot}>

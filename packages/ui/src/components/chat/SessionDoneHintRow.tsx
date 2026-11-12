@@ -7,7 +7,8 @@ import { useI18n } from '@/lib/i18n';
 import { leaveFinishedSessions } from '@/lib/sessionTabs';
 import { isDoneSuggested } from '@/lib/sessionWorkMetadata';
 import { setSessionWorkState } from '@/sync/session-actions';
-import { useSession, useSessionStatus } from '@/sync/sync-context';
+import { useDirectorySync, useSession, useSessionStatus } from '@/sync/sync-context';
+import { selectBoundRunId, sessionActivityPhase } from '@/hooks/useSessionActivity';
 import { useUIStore } from '@/stores/useUIStore';
 import { problemMessage } from '@/lib/problemMessage';
 
@@ -29,7 +30,13 @@ export const SessionDoneHintRow: React.FC<SessionDoneHintRowProps> = React.memo(
   const status = useSessionStatus(sessionId ?? '', directory);
   const sessionWorkEnabled = useUIStore((state) => state.sessionWorkEnabled);
   const [pending, setPending] = React.useState(false);
-  const isIdle = !status || status === 'idle';
+  const boundRunId = useDirectorySync(
+    React.useCallback((state) => selectBoundRunId(state, sessionId ?? ''), [sessionId]),
+    directory,
+  );
+  // A settled session, by the same rule the send/stop control uses: `unavailable`
+  // is what a reloaded session the Agent Service does not hold reports.
+  const isIdle = sessionActivityPhase(status, boundRunId) === 'idle';
 
   if (!sessionId || !session || !sessionWorkEnabled || !isIdle || !isDoneSuggested(session)) return null;
 

@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -232,6 +233,7 @@ export const dict = {
   ...consoleBudgetsI18n.de,
   ...selectionApprovalI18n.de,
   ...agentStatusI18n.de,
+  ...todoTrayI18n['de'],
   ...snippetsI18n.de,
   ...prReviewI18n.de,
   ...imageToolI18n.de,
@@ -1496,10 +1498,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentControlToolAria": "Das Agenten-Steuerungswerkzeug aktivieren",
   "settings.openchamber.tools.field.agentControlToolInfo": "Agenten können Prompts auch an andere Sitzungen übergeben, sie in Worktrees starten und Aufgaben planen. Sitzungen und Worktrees löschen nur Sie.",
   "settings.openchamber.tools.field.agentControlToolSummary": "Sitzungen, Worktrees und geplante Aufgaben anlegen und steuern.",
-  "settings.openchamber.tools.field.agentScheduleTool": "Agenten-Planungswerkzeug",
-  "settings.openchamber.tools.field.agentScheduleToolAria": "Das Agenten-Planungswerkzeug aktivieren",
-  "settings.openchamber.tools.field.agentScheduleToolInfo": "Agenten können einen Prompt täglich, wöchentlich, einmalig oder per Cron einplanen und eine Aufgabe ändern, ausführen, pausieren oder löschen.",
-  "settings.openchamber.tools.field.agentScheduleToolSummary": "Geplante Aufgaben anlegen und ausführen.",
   "settings.openchamber.tools.field.agentWebTool": "OpenChamber-Web-Werkzeug",
   "settings.openchamber.tools.field.agentWebToolAria": "Das OpenChamber-Web-Werkzeug aktivieren",
   "settings.openchamber.tools.field.agentWebToolInfo": "Praktisch, um UI-Arbeit in der laufenden App zu prüfen. Agenten können navigieren, Seiten prüfen und Screenshots machen.",
@@ -1521,9 +1519,6 @@ export const dict = {
   "settings.openchamber.tools.field.agentKnowledgeToolAria": "Projektwissen-Werkzeug",
   "settings.openchamber.tools.field.agentKnowledgeToolInfo": "Agenten arbeiten mit denselben Einträgen, die Sie im Bereich Projektwissen sehen.",
   "settings.openchamber.tools.field.agentKnowledgeToolSummary": "Agenten lesen und pflegen Notizen, Todos und Pläne des Projekts.",
-  "settings.openchamber.tools.field.agentToolsCodeMode": "Über Code Mode ausführen",
-  "settings.openchamber.tools.field.agentToolsCodeModeAria": "OpenChamber-Werkzeuge über Code Mode ausführen",
-  "settings.openchamber.tools.field.agentToolsCodeModeInfo": "Aus: Das Modell sieht jedes Werkzeug direkt. An: Sie liegen hinter einem Werkzeug, das ein kurzes Skript ausführt. Spart etwas Kontext, aber das Modell kann sie übersehen, besonders kleinere Modelle.",
   "settings.openchamber.opencodeCli.tooltipPrefix": "Optionaler absoluter Pfad zur",
   "settings.openchamber.opencodeCli.tooltipSuffix": "Binary.",
   "settings.openchamber.opencodeCli.field.binaryPath": "OpenCode Binary-Pfad",
@@ -1732,6 +1727,9 @@ export const dict = {
   "settings.usage.page.header.providerUsage": "{provider} Nutzung",
   "settings.usage.page.header.refreshing": "Aktualisiere Nutzung...",
   "settings.usage.page.header.lastUpdated": "Zuletzt aktualisiert: {time}",
+  'settings.usage.page.section.quotas': 'Anbieter-Kontingente',
+  'settings.usage.page.state.noConfiguredProvidersTitle': 'Keine Anbieter-Kontingente anzuzeigen',
+  'settings.usage.page.state.noConfiguredProvidersDescription': 'Nutzungslimits erscheinen für Anbieter, deren Zugangsdaten OMP bereits hat. Füge einen unter Anbieter hinzu.',
   "settings.usage.page.header.lastUpdatedWithPlan": "Tarif: {plan} · Zuletzt aktualisiert: {time}",
   "settings.usage.page.options.showInWorkStatusAria": "Im Arbeitsstatusbereich anzeigen",
   "settings.usage.page.options.showInWorkStatus": "Im Arbeitsstatusbereich anzeigen",
@@ -2610,8 +2608,6 @@ export const dict = {
   "settings.openchamber.visual.field.showSplitAssistantMessageActionsTooltip": "Kopieren Sie Antwort, Speichern als Bild und Vorlesen in Assistant-Textblöcken anzeigen, die vor späteren Tool-Aufrufen in derselben Antwort erscheinen.",
   "settings.openchamber.visual.field.allowPromptingSubagentSessionsAria": "Erlaube Prompting von Subagent-Sitzungen",
   "settings.openchamber.visual.field.allowPromptingSubagentSessions": "Erlaube Prompting von Subagent-Sitzungen",
-  "settings.openchamber.visual.field.savePastedImagesAsFiles": "Eingefügte Bilder als Dateien speichern",
-  "settings.openchamber.visual.field.savePastedImagesAsFilesInfo": "Ein eingefügtes oder angehängtes Bild wird auf dem Rechner gespeichert, auf dem OpenCode läuft, und sein Pfad kommt in die Nachricht, damit der Agent es öffnen, senden oder bearbeiten kann.",
   "settings.openchamber.visual.field.showToolFileIconsAria": "Tool-Datei-Symbole anzeigen",
   "settings.openchamber.visual.field.showToolFileIcons": "Tool-Datei-Symbole anzeigen",
   "settings.openchamber.visual.field.showTurnChangedFilesAria": "Geänderte Dateien für abgeschlossene Züge anzeigen",
@@ -9407,4 +9403,9 @@ export const dict = {
   ...tooltipsPanelI18n['de'],
   ...tooltipsChatI18n['de'],
   ...m4LaneDI18n.de,
+  "gitIdentities.state.unknown": "Git-Identitäten sind noch nicht geladen.",
+  "settings.usage.state.unknown": "Die Nutzung ist noch nicht geladen.",
+  "rightSidebar.contextNotesTodo.memory.state.unknown": "Gespeicherte Erinnerungen sind noch nicht geladen.",
+
+  "chat.workStatus.mcp.unknown": "MCP-Server sind noch nicht geladen.",
 };

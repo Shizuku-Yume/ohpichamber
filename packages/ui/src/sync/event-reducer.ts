@@ -70,18 +70,89 @@ export function mergeHostSession(incoming: Session, previous?: Session): Session
 export function installHostSession(state: State, incoming: Session): State {
  const index = state.session.findIndex((item) => item.sessionId === incoming.sessionId)
  const previous = state.session[index]
- const next = mergeHostSession(incoming, previous)
- if (next === previous) return state
+ const pending = index < 0 ? state.pendingMetadata?.[incoming.sessionId] : undefined
+ const next = mergeHostSession(
+  pending && compareCounters(pending.revision, incoming.metadataRevision) >= 0
+   ? { ...incoming, metadata: pending.metadata, metadataRevision: pending.revision }
+   : incoming,
+  previous,
+ )
+ if (next === previous && !pending) return state
  const session = [...state.session]
  if (index < 0) session.push(next)
  else session[index] = next
  const revision = (state.sessionRevision ?? 0) + 1
- return { ...state, session, sessionTotal: session.length, sessionRevision: revision, sessionEventRevision: { ...state.sessionEventRevision, [incoming.sessionId]: revision } }
+ const released = index < 0 && state.pendingMetadata?.[incoming.sessionId] !== undefined
+ const pendingMetadata = released && state.pendingMetadata
+  ? omitPendingMetadata(state.pendingMetadata, incoming.sessionId)
+  : state.pendingMetadata
+ const next_state = {
+  ...state, session, sessionTotal: session.length, sessionRevision: revision,
+  sessionEventRevision: { ...state.sessionEventRevision, [incoming.sessionId]: revision },
+ }
+ if (pendingMetadata !== undefined) next_state.pendingMetadata = pendingMetadata
+ return next_state
 }
 
-export function installSessionMetadata(state: State, metadata: SessionMetadataState): State {
+/**
+ * A whole session list read from the Host. A metadata record announced before
+ * the read is newer than the row the list carries, and the list is the first
+ * place its directory is known, so those rows go in through the same installer
+ * an event uses: the buffered record lands on the row and the buffer is
+ * released. Installing the list directly left a stale title and a leaked entry.
+ */
+export function installSessionList(state: State, rows: readonly Session[]): State {
+ const buffered = state.pendingMetadata
+ if (!buffered) return { ...state, session: [...rows], sessionTotal: rows.length }
+ const settled = rows.filter((row) => buffered[row.sessionId] === undefined)
+ let next: State = { ...state, session: settled, sessionTotal: settled.length }
+ for (const row of rows) if (buffered[row.sessionId] !== undefined) next = installHostSession(next, row)
+ return next
+}
+
+const omitPendingMetadata = (record: Record<string, SessionMetadataState>, sessionId: string) => {
+ const next = { ...record }
+ delete next[sessionId]
+ return next
+}
+
+/**
+ * The most metadata records one directory's store holds for sessions it has
+ * not seen. The buffer bridges an announcement that arrives before the list
+ * read, so it only ever holds the handful of sessions created since that read;
+ * a record whose session never arrives must not accumulate forever.
+ */
+const MAX_PENDING_METADATA = 256;
+
+/**
+ * `bufferUnknown` holds a metadata record for a session this directory does not
+ * project yet. Callers enable it only where the record's own directory is not
+ * known, so every child store of a live workspace does not accumulate copies of
+ * metadata that belongs to another directory.
+ */
+export function installSessionMetadata(
+ state: State,
+ metadata: SessionMetadataState,
+ options: { bufferUnknown?: boolean } = {},
+): State {
  const current = state.session.find((item) => item.sessionId === metadata.sessionId)
- if (!current || compareCounters(metadata.revision, current.metadataRevision) < 0) return state
+ if (!current) {
+  if (!options.bufferUnknown) return state
+  // Metadata arrives before the session list does: an auto-generated title is
+  // announced for a session created moments ago. Dropping it left the sidebar
+  // stale until a reload, so it is held until a session record arrives.
+  const pending = state.pendingMetadata?.[metadata.sessionId]
+  if (pending && (compareCounters(metadata.revision, pending.revision) < 0 || same(pending, metadata))) return state
+  const buffered = { ...state.pendingMetadata, [metadata.sessionId]: metadata }
+  if (pending === undefined) {
+   // Oldest first: object keys keep insertion order, so the records dropped
+   // here are the ones that have waited longest for a session that never came.
+   const overflow = Object.keys(buffered).length - MAX_PENDING_METADATA
+   if (overflow > 0) for (const sessionId of Object.keys(buffered).slice(0, overflow)) delete buffered[sessionId]
+  }
+  return { ...state, pendingMetadata: buffered }
+ }
+ if (compareCounters(metadata.revision, current.metadataRevision) < 0) return state
  return installHostSession(state, { ...current, metadata: metadata.metadata, metadataRevision: metadata.revision })
 }
 
@@ -290,7 +361,50 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
  }
  const id = event.sessionId
  const snapshot = state.snapshot[id]
- if (!snapshot || event.epoch !== snapshot.session.epoch) return { kind: "resnapshot", state }
+ if (!snapshot) {
+  // A session this directory does not project yet. Deletion and a Host session
+  // record are authoritative on their own: an auto-generated title or a
+  // deletion announced before the list was read must not be dropped and
+  // recovered later. Everything else still needs the epoch and head the
+  // snapshot carries, so it asks for a resnapshot.
+  if (event.type === 'session.deleted') {
+   const released = state.pendingMetadata
+    ? event.deletedSessionIds.filter((sessionId) => state.pendingMetadata?.[sessionId] !== undefined)
+    : []
+   if (released.length === 0) return { kind: 'applied', state }
+   const pendingMetadata = { ...state.pendingMetadata }
+   for (const sessionId of released) delete pendingMetadata[sessionId]
+   return { kind: 'applied', state: { ...state, pendingMetadata } }
+  }
+  if (event.type === 'session.updated' && event.session) {
+   if (event.session.sessionId !== id || event.session.epoch !== event.epoch || compareCounters(event.session.headSequence, event.sequence) > 0) {
+    return { kind: 'resnapshot', state }
+   }
+   const pending = state.pendingMetadata?.[id]
+   let session: Session = {
+    ...event.session, metadata: event.metadata ?? null,
+    metadataRevision: event.metadataRevision ?? '0',
+    archiveRevision: event.archiveRevision ?? '0',
+   }
+   if (event.mode) session.mode = event.mode
+   if (event.continuationPending !== undefined) session.continuationPending = event.continuationPending
+   if (event.title !== undefined) session.title = event.title
+   if (event.loop !== undefined) session.loop = event.loop
+   // A metadata record announced before the list was read is newer than the
+   // projection this event carries; keep the announced one.
+   if (pending && compareCounters(pending.revision, session.metadataRevision) >= 0) {
+    session = { ...session, metadata: pending.metadata, metadataRevision: pending.revision }
+   }
+   if (event.archiveRevision !== undefined) {
+    session = { ...session, archiveRevision: event.archiveRevision }
+    if (event.archivedAt === null) delete session.archivedAt
+    else if (event.archivedAt !== undefined) session.archivedAt = event.archivedAt
+   }
+   return { kind: 'applied', state: installHostSession(state, session) }
+  }
+  return { kind: "resnapshot", state }
+ }
+ if (event.epoch !== snapshot.session.epoch) return { kind: "resnapshot", state }
  const comparison = compareCounters(event.sequence, snapshot.session.headSequence)
  if (comparison <= 0) return { kind: "duplicate", state }
  if (BigInt(event.sequence) !== BigInt(snapshot.session.headSequence) + 1n) return { kind: "resnapshot", state }
@@ -377,6 +491,10 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
     kind: "applied", state: {
      ...next, session, sessionTotal: session.length,
      sessionRevision: revision, sessionDeletedRevision,
+     // A metadata record buffered for a session that is now gone would be
+     // applied to a later session with the same id, or leak for the process's
+     // lifetime. The no-snapshot branch above releases them too.
+     pendingMetadata: without(next.pendingMetadata ?? {}),
      snapshot: without(next.snapshot), message: without(next.message), permission: without(next.permission), form: without(next.form),
      queue: without(next.queue), partOwner: without(next.partOwner), session_status: without(next.session_status),
      cleanse: without(next.cleanse), advisor: without(next.advisor),
@@ -511,7 +629,11 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
  if (recover) return { kind: "resnapshot", state }
  updated = {
   ...updated, messages, turns,
-  session: { ...updated.session, epoch: event.epoch, headSequence: event.sequence, updatedAt: Math.max(updated.session.updatedAt, event.timestamp) },
+  // `updatedAt` is the native transcript's mtime as the Agent Service reported
+  // it. Bumping it with the event's wall clock mixed two clocks for a recency
+  // tie-break; the snapshot keeps the service's own value, and the next list
+  // read carries the file's newer mtime.
+  session: { ...updated.session, epoch: event.epoch, headSequence: event.sequence },
   window: turns === snapshot.turns && messages === (state.message[id] ?? snapshot.messages) ? updated.window : { ...updated.window, firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null, firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null },
   branch: event.type === "message.created" ? { ...updated.branch, leafMessageId: messages.at(-1)?.messageId ?? null } : updated.branch,
  }

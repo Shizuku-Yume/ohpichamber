@@ -5,12 +5,10 @@ import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 import { turnHeaderCanStick } from '../lib/turns/stickyPrompt';
 import type { ChatMessageEntry, Turn } from '../lib/turns/types';
-import TurnAssistantBlock from './TurnAssistantBlock';
 
 interface TurnItemProps {
  turn: Turn;
  renderMessage: (message: ChatMessageEntry) => React.ReactNode;
- assistantContent?: React.ReactNode;
  /** The list's own sticky-header decision for this turn; the stored setting when absent. */
  stickyUserHeader?: boolean;
  /** Keeps the gap between the turn and the row after it, when the turn is nothing but its prompt. */
@@ -18,6 +16,10 @@ interface TurnItemProps {
 }
 
 /**
+ * A turn's first list row: its prompt. The turn's work and answer are the rows
+ * after it (`timelineRows.ts`); this row alone names the turn in the DOM, and
+ * it is the one the list keeps on top while the turn scrolls under it.
+ *
  * The sticky user header paints the chat background so assistant content scrolling
  * underneath disappears behind it. The soft edge lives in the header's own background
  * instead of an overlay below it: the bottom strip of the header box fades the
@@ -42,7 +44,7 @@ const stickyHeaderBackground = (fadeRem: string): React.CSSProperties => ({
 const STICKY_HEADER_BACKGROUND_DESKTOP = stickyHeaderBackground('2.25rem');
 const STICKY_HEADER_BACKGROUND_MOBILE = stickyHeaderBackground('0.75rem');
 
-const TurnItem: React.FC<TurnItemProps> = ({ turn, renderMessage, assistantContent, stickyUserHeader: stickyOverride, gapBelow = false }) => {
+const TurnItem: React.FC<TurnItemProps> = ({ turn, renderMessage, stickyUserHeader: stickyOverride, gapBelow = false }) => {
  const { isMobile } = useDeviceInfo();
  const stickySetting = useUIStore((state) => state.stickyUserHeader);
  const headerSticks = React.useMemo(
@@ -76,7 +78,6 @@ const TurnItem: React.FC<TurnItemProps> = ({ turn, renderMessage, assistantConte
     renderMessage(turn.userMessage)
    )}
 
-   {assistantContent ?? <TurnAssistantBlock turnId={turn.turnId} assistantMessages={turn.assistantMessages} renderMessage={renderMessage} />}
   </section>
  );
 };

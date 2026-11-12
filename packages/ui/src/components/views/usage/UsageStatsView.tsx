@@ -99,6 +99,18 @@ function useUsageStats(range: UsageRange, projectDirectory: string | null) {
 }
 
 export function UsageStatsView({ className }: { className?: string }): React.ReactNode {
+  return (
+    <ScrollableOverlay outerClassName={cn('h-full', className)} disableHorizontal>
+      <UsageStatsReport />
+    </ScrollableOverlay>
+  );
+}
+
+/**
+ * The token report itself, without a scroll container: the standalone Stats
+ * surface wraps it, and the Usage page places it above the quota cards.
+ */
+export function UsageStatsReport(): React.ReactNode {
   const { t } = useI18n();
   // Read during render: a locale change re-renders through useI18n.
   const intlLocale = getCurrentIntlLocale();
@@ -128,88 +140,86 @@ export function UsageStatsView({ className }: { className?: string }): React.Rea
   }, [intlLocale]);
 
   return (
-    <ScrollableOverlay outerClassName={cn('h-full', className)} disableHorizontal>
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-4 sm:px-6">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <SettingsChipGroup
-            value={range}
-            onChange={setRange}
-            aria-label={t('usageStats.range.label')}
-            options={USAGE_RANGES.map((option) => ({ value: option, label: t(RANGE_LABEL_KEYS[option]) }))}
-          />
-          <Select value={selectedProject ? selectedProject.id : ALL_PROJECTS} onValueChange={setProjectChoice}>
-            <SelectTrigger className="w-fit min-w-[140px] max-w-64" aria-label={t('usageStats.scope.label')}>
-              <SelectValue>
-                {() => (selectedProject ? projectDisplayName(selectedProject) : t('usageStats.scope.all'))}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent align="start">
-              <SelectItem value={ALL_PROJECTS}>{t('usageStats.scope.all')}</SelectItem>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  <span className="truncate" title={project.path}>{projectDisplayName(project)}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="ms-auto flex min-w-0 items-center gap-1.5">
-            {stats && entry?.fetchedAt ? (
-              <span
-                className="truncate typography-micro text-muted-foreground"
-                title={entry.error ?? undefined}
-                role={entry.error ? 'status' : undefined}
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-4 sm:px-6">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <SettingsChipGroup
+          value={range}
+          onChange={setRange}
+          aria-label={t('usageStats.range.label')}
+          options={USAGE_RANGES.map((option) => ({ value: option, label: t(RANGE_LABEL_KEYS[option]) }))}
+        />
+        <Select value={selectedProject ? selectedProject.id : ALL_PROJECTS} onValueChange={setProjectChoice}>
+          <SelectTrigger className="w-fit min-w-[140px] max-w-64" aria-label={t('usageStats.scope.label')}>
+            <SelectValue>
+              {() => (selectedProject ? projectDisplayName(selectedProject) : t('usageStats.scope.all'))}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent align="start">
+            <SelectItem value={ALL_PROJECTS}>{t('usageStats.scope.all')}</SelectItem>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                <span className="truncate" title={project.path}>{projectDisplayName(project)}</span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="ms-auto flex min-w-0 items-center gap-1.5">
+          {stats && entry?.fetchedAt ? (
+            <span
+              className="truncate typography-micro text-muted-foreground"
+              title={entry.error ?? undefined}
+              role={entry.error ? 'status' : undefined}
+            >
+              {t(entry.error ? 'usageStats.refresh.failed' : 'usageStats.refresh.updated', {
+                time: formatUpdatedAt(entry.fetchedAt, timeFormatPreference),
+              })}
+            </span>
+          ) : null}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground"
+                onClick={refresh}
+                disabled={loading}
+                aria-label={t('usageStats.refresh.action')}
               >
-                {t(entry.error ? 'usageStats.refresh.failed' : 'usageStats.refresh.updated', {
-                  time: formatUpdatedAt(entry.fetchedAt, timeFormatPreference),
-                })}
-              </span>
-            ) : null}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-muted-foreground"
-                  onClick={refresh}
-                  disabled={loading}
-                  aria-label={t('usageStats.refresh.action')}
-                >
-                  <Icon name="refresh" className={cn('size-4', loading && 'animate-spin')} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}>{t('usageStats.refresh.action')}</TooltipContent>
-            </Tooltip>
-          </div>
+                <Icon name="refresh" className={cn('size-4', loading && 'animate-spin')} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>{t('usageStats.refresh.action')}</TooltipContent>
+          </Tooltip>
         </div>
+      </div>
 
-        {stats?.partial ? <PartialUsageNotice errors={stats.errors} /> : null}
+      {stats?.partial ? <PartialUsageNotice errors={stats.errors} /> : null}
 
-        {stats ? (
-          isEmptyReport(stats) ? (
-            <div className="flex flex-col items-center gap-1 py-16 text-center">
-              <p className="typography-ui-label font-semibold text-foreground">{t('usageStats.empty.title')}</p>
-              <p className="typography-micro text-muted-foreground">{t('usageStats.empty.description')}</p>
-            </div>
-          ) : (
-            <UsageReport stats={stats} range={range} formats={formats} tools={tools} />
-          )
-        ) : loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground" role="status">
-            <Icon name="loader-4" className="size-4 animate-spin" />
-            <span className="typography-ui-label">{t('usageStats.loading')}</span>
+      {stats ? (
+        isEmptyReport(stats) ? (
+          <div className="flex flex-col items-center gap-1 py-16 text-center">
+            <p className="typography-ui-label font-semibold text-foreground">{t('usageStats.empty.title')}</p>
+            <p className="typography-micro text-muted-foreground">{t('usageStats.empty.description')}</p>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-3 py-16 text-center" role="alert">
-            <p className="typography-ui-label font-semibold text-foreground">{t('usageStats.error.title')}</p>
-            <p className="max-w-md break-words typography-micro text-muted-foreground">{entry?.error}</p>
-            <Button type="button" variant="outline" size="sm" onClick={refresh}>
-              {t('usageStats.error.retry')}
-            </Button>
-          </div>
-        )}
-      </div>
-    </ScrollableOverlay>
+          <UsageReport stats={stats} range={range} formats={formats} tools={tools} />
+        )
+      ) : loading ? (
+        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground" role="status">
+          <Icon name="loader-4" className="size-4 animate-spin" />
+          <span className="typography-ui-label">{t('usageStats.loading')}</span>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-3 py-16 text-center" role="alert">
+          <p className="typography-ui-label font-semibold text-foreground">{t('usageStats.error.title')}</p>
+          <p className="max-w-md break-words typography-micro text-muted-foreground">{entry?.error}</p>
+          <Button type="button" variant="outline" size="sm" onClick={refresh}>
+            {t('usageStats.error.retry')}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -559,9 +569,9 @@ function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats 
                 <span className="shrink-0 typography-micro tabular-nums text-muted-foreground">
                   {tool.durationP50 !== null
                     ? t('usageStats.tools.rowStats', {
-                        count: formats.integer.format(tool.calls),
-                        duration: formatDuration(tool.durationP50, formats),
-                      })
+                      count: formats.integer.format(tool.calls),
+                      duration: formatDuration(tool.durationP50, formats),
+                    })
                     : t('usageStats.tools.rowStatsNoDuration', { count: formats.integer.format(tool.calls) })}
                 </span>
               </div>
@@ -599,7 +609,7 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
   const [dimension, setDimension] = React.useState<ModelDimension>('tokens');
   const valueOf = React.useCallback(
     (model: UsageModel): number =>
-      (dimension === 'tokens' ? model.tokens.total : dimension === 'cost' ? model.cost : model.steps),
+    (dimension === 'tokens' ? model.tokens.total : dimension === 'cost' ? model.cost : model.steps),
     [dimension],
   );
   // Ranked by the compared value, so the chart reads top (busiest) to bottom.

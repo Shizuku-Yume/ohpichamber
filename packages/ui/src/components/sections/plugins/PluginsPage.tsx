@@ -8,6 +8,7 @@ import {
   type MarketplacePluginDetails,
   type PluginCatalogState,
   type PluginMutationResult,
+  type PluginUpdateCheckEntry,
 } from '@openchamber/agent-contract';
 import { CanonicalApiError } from '@/api/canonicalClient';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Icon } from '@/components/icon/Icon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsBackButton, SettingsCardChip, SettingsCardPill, SettingsCardSearch } from '@/components/sections/shared/SettingsCards';
+import { SettingsBackButton, SettingsCardChip, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
 import {
   SETTINGS_SELECT_TRIGGER_CLASS,
   SettingsFieldRow,
@@ -33,11 +34,12 @@ import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn } from '@/lib/utils';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 import { AddPluginDialog } from './AddPluginDialog';
-import { PluginsGrid, pluginUpdateFor, type PluginDeleteTarget, type PluginSelection } from './PluginsGrid';
 import { MarketplaceSourcesDialog } from './MarketplaceSourcesDialog';
 import { ExtensionControlCenter } from './ExtensionControlCenter';
-import { PluginStatusBanner } from './PluginStatusBanner';
 import { problemMessage } from '@/lib/problemMessage';
+
+type PluginSelection = { kind: 'plugin'; id: string } | { kind: 'local'; extensionId: string };
+type DeleteTarget = { kind: 'plugin'; plugin: InstalledPluginEntry } | { kind: 'local'; extension: LocalExtensionEntry };
 
 const parseSettings = (text: string) => {
   try {
@@ -46,7 +48,6 @@ const parseSettings = (text: string) => {
     return JsonObjectSchema.safeParse(null);
   }
 };
-
 
 /** Counts a declared capability without expanding its shape: a string is one item, a list/map is its length. */
 const capabilityCount = (value: MarketplacePluginDetails[keyof MarketplacePluginDetails]): number => {
@@ -59,6 +60,19 @@ const detailList = (value: unknown): string[] => {
   if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
   return [];
+};
+
+/** Native scopes (`user`/`project`) and contract scopes (`global`/`workspace`) name the same install. */
+const updateFor = (
+  updates: readonly PluginUpdateCheckEntry[],
+  plugin: InstalledPluginEntry,
+): PluginUpdateCheckEntry | undefined => {
+  if (plugin.target.kind !== 'marketplace') return undefined;
+  const target = plugin.target;
+  const nativeScope = plugin.scope === 'global' ? 'user' : 'project';
+  return updates.find((update): update is PluginUpdateCheckEntry => update.target.kind === 'marketplace'
+    && update.target.name === target.name && update.target.marketplace === target.marketplace
+    && update.target.scope === nativeScope);
 };
 
 const ExternalDetailLink: React.FC<{ href: string; label: string }> = ({ href, label }) => (
@@ -95,6 +109,8 @@ const MarketplaceDetailsSection: React.FC<{ entry: MarketplaceEntry | undefined 
     );
   }
   const categories = [details.category, ...(details.tags ?? [])].filter((value): value is string => Boolean(value));
+  // A capability the manifest does not declare is not a row: the list states
+  // what the plugin carries, not what it lacks.
   const capabilities = ([
     ['commands', details.commands], ['agents', details.agents], ['hooks', details.hooks],
     ['mcpServers', details.mcpServers], ['lspServers', details.lspServers], ['dapAdapters', details.dapAdapters],
@@ -381,38 +397,37 @@ const LocalExtensionEditor: React.FC<{ extension: LocalExtensionEntry; revision:
   );
 };
 
-const RuntimeSection: React.FC<{ catalog: PluginCatalogState; disabled: boolean; onApply: () => void }> = ({ catalog, disabled, onApply }) => {
-  const { t } = useI18n();
-  return (
-    <SettingsSection title={t('settings.plugins.runtime.title')} contentClassName="space-y-4">
-      {catalog.workers.length === 0 ? (
-        <p className="typography-meta text-muted-foreground">{t('settings.plugins.apply.noActiveWorkers')}</p>
-      ) : (
-        <div className="divide-y divide-[var(--surface-subtle)]">
-          {catalog.workers.map(worker => (
-            <div key={`${worker.worker.rootSessionId}:${worker.worker.workerGeneration}`} className="flex items-start justify-between gap-3 py-2">
-              <div className="min-w-0 typography-meta">
-                <p className="truncate font-mono text-foreground">{worker.worker.rootSessionId}</p>
-                <p className="text-muted-foreground">
-                  {t('settings.plugins.runtime.appliedRevision', { revision: worker.appliedRevision ?? '—' })}
-                </p>
-                {worker.error ? (
-                  <p className="mt-1 font-mono text-[var(--status-error)] whitespace-pre-wrap break-words">{worker.error.detail}</p>
-                ) : null}
-              </div>
-              <SettingsCardPill tone={worker.status === 'ready' ? 'success' : 'error'}>
-                {t(worker.status === 'ready' ? 'settings.plugins.status.ready' : 'settings.plugins.status.unavailable')}
-              </SettingsCardPill>
-            </div>
-          ))}
-        </div>
-      )}
-      <Button variant="outline" disabled={disabled || catalog.workers.length === 0} onClick={onApply}>
-        {t('settings.plugins.action.apply')}
-      </Button>
-    </SettingsSection>
-  );
-};
+/**
+ * One installed entry in the catalog list: what it is, where it came from,
+ * and the actions a user takes on it. The Skills catalog uses the same row
+ * shape, so both content pages read the same way.
+ */
+const InstalledRow: React.FC<{
+  title: string;
+  subtitle?: string;
+  description?: string;
+  badges?: React.ReactNode;
+  footer?: React.ReactNode;
+  onOpen: () => void;
+  actions: React.ReactNode;
+}> = ({ title, subtitle, description, badges, footer, onOpen, actions }) => (
+  <div className="flex min-w-0 flex-col gap-2 py-3 @xl:flex-row @xl:items-start @xl:gap-4">
+    <button
+      type="button"
+      onClick={onOpen}
+      className="min-w-0 flex-1 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <span className="flex min-w-0 flex-wrap items-center gap-2">
+        <span className="truncate typography-ui-label text-foreground">{title}</span>
+        {subtitle ? <span className="shrink-0 font-mono typography-micro text-muted-foreground">{subtitle}</span> : null}
+        {badges}
+      </span>
+      {description ? <span className="mt-0.5 block line-clamp-2 typography-micro text-muted-foreground">{description}</span> : null}
+      {footer ? <span className="mt-1 flex flex-wrap items-center gap-2 typography-micro text-muted-foreground">{footer}</span> : null}
+    </button>
+    <div className="flex shrink-0 flex-wrap items-center gap-1.5">{actions}</div>
+  </div>
+);
 
 const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }) => {
   const { t } = useI18n();
@@ -423,19 +438,16 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   const loadError = usePluginsStore(state => state.error);
   const isMutating = usePluginsStore(state => state.isMutating);
   const lastMutation = usePluginsStore(state => state.lastMutation);
-  const doctor = usePluginsStore(state => state.doctor);
   const extensions = usePluginsStore(state => state.extensions);
   const [selection, setSelection] = React.useState<PluginSelection | null>(null);
   const [addOpen, setAddOpen] = React.useState(false);
-  const [deleteTarget, setDeleteTarget] = React.useState<PluginDeleteTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<DeleteTarget | null>(null);
   const [applyOpen, setApplyOpen] = React.useState(false);
   const [pending, setPending] = React.useState(false);
   const [operationError, setOperationError] = React.useState<string | null>(null);
   const [marketplaceRefreshing, setMarketplaceRefreshing] = React.useState(false);
-  const [doctorRefreshing, setDoctorRefreshing] = React.useState(false);
   const [marketplaceScope, setMarketplaceScope] = React.useState<'user' | 'project'>('project');
   const [marketplaceQuery, setMarketplaceQuery] = React.useState('');
-  const [marketplaceFacet, setMarketplaceFacet] = React.useState<string | null>(null);
   const [upgradingAll, setUpgradingAll] = React.useState(false);
   const [sourcesOpen, setSourcesOpen] = React.useState(false);
 
@@ -469,32 +481,26 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     : undefined;
   const deleteName = deleteTarget?.kind === 'plugin' ? deleteTarget.plugin.name : deleteTarget?.extension.extensionId ?? '';
 
-  /** Categories and keywords the configured catalogs actually publish, deduplicated across marketplaces. */
-  const marketplaceFacets = React.useMemo(() => {
-    const facets = new Set<string>();
-    for (const entry of catalog?.marketplace ?? []) {
-      if (entry.details?.category) facets.add(entry.details.category);
-      for (const keyword of entry.details?.keywords ?? []) facets.add(keyword);
-    }
-    return [...facets].sort((left, right) => left.localeCompare(right));
-  }, [catalog]);
-  const marketplaceEntries = React.useMemo(() => {
-    const scoped = marketplaceFacet === null ? catalog?.marketplace ?? []
-      : (catalog?.marketplace ?? []).filter(entry => entry.details?.category === marketplaceFacet
-        || (entry.details?.keywords ?? []).includes(marketplaceFacet));
-    return rankByQuery(scoped, marketplaceQuery, entry => [entry.name, entry.description, entry.marketplace,
-    entry.details?.category ?? '', ...(entry.details?.keywords ?? []), entry.details?.author?.name ?? '']);
-  }, [catalog, marketplaceFacet, marketplaceQuery]);
+  const marketplaceEntries = React.useMemo(
+    () => rankByQuery(catalog?.marketplace ?? [], marketplaceQuery, entry => [
+      entry.name, entry.description, entry.marketplace,
+      entry.details?.category ?? '', ...(entry.details?.keywords ?? []), entry.details?.author?.name ?? '',
+    ]),
+    [catalog, marketplaceQuery],
+  );
+  const installedMarketplaceKeys = React.useMemo(() => new Set((catalog?.plugins ?? []).flatMap(entry => (
+    entry.target.kind === 'marketplace' ? [`${entry.target.name}@${entry.target.marketplace}`] : []
+  ))), [catalog]);
 
-  const requestDelete = (target: PluginDeleteTarget) => {
+  const requestDelete = (target: DeleteTarget) => {
     setOperationError(null);
     setDeleteTarget(target);
   };
 
   /**
-    * Extension switches live in native settings, so a refused revision has to
-    * surface as an operation error instead of quietly re-reading a new one.
-    */
+   * Extension switches live in native settings, so a refused revision has to
+   * surface as an operation error instead of quietly re-reading a new one.
+   */
   const toggleExtensionProvider = (providerId: string, enabled: boolean) => run(async () => {
     await usePluginsStore.getState().toggleExtensionProvider(providerId, enabled);
   });
@@ -520,15 +526,26 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
       toast.success(t('settings.plugins.sidebar.toast.deleted', { name }));
     });
   };
+  const installFromMarketplace = (entry: MarketplaceEntry) => {
+    void run(async () => {
+      await usePluginsStore.getState().installPlugin({
+        kind: 'marketplace',
+        name: entry.name,
+        marketplace: entry.marketplace,
+        scope: marketplaceScope,
+      });
+      toast.success(t('settings.plugins.marketplace.toast.installed', { name: entry.name }));
+    });
+  };
   const refreshMarketplace = async () => {
     setMarketplaceRefreshing(true);
     await run(() => usePluginsStore.getState().loadMarketplace());
     setMarketplaceRefreshing(false);
   };
-  const updatePlugin = async (plugin: InstalledPluginEntry) => {
+  const updatePlugin = async (entry: InstalledPluginEntry) => {
     await run(async () => {
-      await usePluginsStore.getState().updatePlugin(plugin.target);
-      toast.success(t('settings.plugins.update.toast.done', { name: plugin.name }));
+      await usePluginsStore.getState().updatePlugin(entry.target);
+      toast.success(t('settings.plugins.update.toast.done', { name: entry.name }));
     });
   };
   const upgradeAll = async () => {
@@ -541,11 +558,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
       return result;
     });
     setUpgradingAll(false);
-  };
-  const refreshDoctor = async () => {
-    setDoctorRefreshing(true);
-    await run(() => usePluginsStore.getState().loadDoctor());
-    setDoctorRefreshing(false);
   };
 
   const dialogs = (
@@ -637,7 +649,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   }
 
   const backButton = <SettingsBackButton label={t('settings.plugins.page.back')} onClick={() => setSelection(null)} />;
-  const deleteButton = (target: PluginDeleteTarget) => (
+  const deleteButton = (target: DeleteTarget) => (
     <Button
       variant="ghost"
       size="xs"
@@ -652,7 +664,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
 
   if (plugin) {
     const details = [plugin.description, ...(plugin.enabledFeatures ?? [])].filter(Boolean).join(' · ');
-    const update = pluginUpdateFor(catalog.availableUpdates, plugin);
+    const update = updateFor(catalog.availableUpdates, plugin);
     const marketplaceTarget = plugin.target.kind === 'marketplace' ? plugin.target : undefined;
     const marketplaceEntry = marketplaceTarget === undefined ? undefined
       : catalog.marketplace.find(entry => entry.name === marketplaceTarget.name && entry.marketplace === marketplaceTarget.marketplace);
@@ -666,7 +678,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
         >
           <SettingsSection divider={false} contentClassName="space-y-3">
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
-            {lastMutation ? <PluginStatusBanner result={lastMutation} /> : null}
             {update ? (
               <p className="typography-meta text-[var(--status-info)]">
                 {t('settings.plugins.update.badge', { from: update.from, to: update.to })}
@@ -720,8 +731,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           >
             <PluginSettingsEditor key={plugin.id} plugin={plugin} disabled={disabled} />
           </SettingsSection>
-
-          <RuntimeSection catalog={catalog} disabled={disabled} onApply={requestApply} />
         </SettingsPageLayout>
         {dialogs}
       </>
@@ -744,7 +753,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
         >
           <SettingsSection divider={false} contentClassName="space-y-3">
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
-            {lastMutation ? <PluginStatusBanner result={lastMutation} /> : null}
           </SettingsSection>
 
           <SettingsSection
@@ -768,46 +776,157 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     );
   }
 
+  const installedCount = catalog.plugins.length + catalog.localExtensions.length;
+  const updates = catalog.availableUpdates;
+
   return (
     <>
-      <PluginsGrid
-        catalog={catalog}
-        refreshing={isLoading || isMutating}
-        upgradingAll={upgradingAll}
-        onRefresh={() => void usePluginsStore.getState().loadPlugins({ directory, force: true })}
-        onAdd={() => setAddOpen(true)}
-        onSelect={setSelection}
-        onDelete={requestDelete}
-        onUpdate={plugin => void updatePlugin(plugin)}
-        onUpgradeAll={() => void upgradeAll()}
-        notices={(
-          <div className="mb-4 space-y-3">
-            {loadError ? (
-              <p role="alert" className="typography-meta text-[var(--status-error)]">
-                {loadError instanceof CanonicalApiError ? loadError.message : t('settings.plugins.error.operation')}
-              </p>
+      <SettingsPageLayout
+        title={t('settings.page.plugins.title')}
+        description={t('settings.plugins.grid.description')}
+        headerEnd={(
+          <div className="flex items-center gap-2">
+            {updates.length > 0 ? (
+              <Button variant="outline" size="sm" onClick={() => void upgradeAll()} disabled={upgradingAll || disabled}>
+                <Icon name="refresh" className={cn('size-3.5', upgradingAll && 'animate-spin')} />
+                {upgradingAll ? t('settings.plugins.upgradeAll.running') : t('settings.plugins.action.upgradeAll')}
+              </Button>
             ) : null}
-            {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
-            {lastMutation ? <PluginStatusBanner result={lastMutation} /> : null}
-            {extensions === null ? (
-              <p role="status" className="flex items-center gap-2 typography-meta text-muted-foreground">
-                <Icon name="loader-4" className="size-4 animate-spin" />
-                {t('settings.plugins.status.loading')}
-              </p>
-            ) : (
-              <ExtensionControlCenter
-                inventory={extensions}
-                disabled={disabled}
-                onToggleProvider={(providerId, enabled) => void toggleExtensionProvider(providerId, enabled)}
-                onToggleUserSource={(providerId, enabled) => void toggleExtensionUserSource(providerId, enabled)}
-                onToggleItem={(providerId, extensionId, enabled) => void toggleExtensionItem(providerId, extensionId, enabled)}
-              />
-            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 shrink-0 text-muted-foreground"
+              onClick={() => void usePluginsStore.getState().loadPlugins({ directory, force: true })}
+              disabled={isLoading || isMutating}
+              aria-label={t('settings.plugins.action.refresh')}
+              title={t('settings.plugins.action.refresh')}
+            >
+              <Icon name="refresh" className={cn('size-4', (isLoading || isMutating) && 'animate-spin')} />
+            </Button>
           </div>
         )}
       >
+        {operationError ? <p role="alert" className="mb-4 typography-meta text-[var(--status-error)]">{operationError}</p> : null}
+        {/* A mutation's own outcome, in the vocabulary of the thing the user
+            did. Worker identities and engine checks stay out of this view. */}
+        {lastMutation ? (
+          <p role="status" className="mb-4 typography-meta text-muted-foreground">
+            {t(lastMutation.status === 'applied'
+              ? 'settings.plugins.apply.applied'
+              : lastMutation.status === 'partial'
+                ? 'settings.plugins.apply.partial'
+                : lastMutation.status === 'failed'
+                  ? 'settings.plugins.apply.failed'
+                  : 'settings.plugins.apply.noActiveWorkers', { failedCount: lastMutation.workers.filter(worker => worker.outcome === 'failed').length })}
+          </p>
+        ) : null}
+
+        <SettingsSection
+          title={t('settings.plugins.section.installed')}
+          divider={false}
+          settingsItem="plugins.installed"
+          headerAction={(
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setAddOpen(true)}>
+                <Icon name="add" className="size-3.5" />
+                {t('settings.plugins.sidebar.actions.addTitle')}
+              </Button>
+              <Button variant="ghost" size="sm" disabled={disabled || catalog.workers.length === 0} onClick={requestApply}>
+                {t('settings.plugins.action.apply')}
+              </Button>
+            </div>
+          )}
+          contentClassName="space-y-0"
+        >
+          {installedCount === 0 ? (
+            <p className="py-4 typography-meta text-muted-foreground">{t('settings.plugins.section.installedEmpty')}</p>
+          ) : (
+            <div className="divide-y divide-[var(--surface-subtle)]">
+              {catalog.plugins.map(entry => {
+                const update = updateFor(updates, entry);
+                return (
+                  <InstalledRow
+                    key={entry.id}
+                    title={entry.name}
+                    subtitle={entry.version || undefined}
+                    description={entry.description || undefined}
+                    onOpen={() => setSelection({ kind: 'plugin', id: entry.id })}
+                    badges={(
+                      <>
+                        <SettingsCardPill tone={entry.enabled ? 'success' : 'neutral'}>
+                          {t(entry.enabled ? 'settings.plugins.status.enabled' : 'settings.plugins.status.disabled')}
+                        </SettingsCardPill>
+                        {update ? (
+                          <SettingsCardPill tone="info">
+                            {t('settings.plugins.update.badge', { from: update.from, to: update.to })}
+                          </SettingsCardPill>
+                        ) : null}
+                      </>
+                    )}
+                    footer={(
+                      <>
+                        <ScopeChip scope={entry.scope} />
+                        {entry.target.kind === 'marketplace' ? (
+                          <span className="font-mono">{entry.target.marketplace}</span>
+                        ) : null}
+                      </>
+                    )}
+                    actions={(
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={disabled}
+                          onClick={() => void run(() => usePluginsStore.getState().configurePlugin({ target: entry.target, enabled: !entry.enabled }))}
+                        >
+                          {t(entry.enabled ? 'settings.plugins.action.disable' : 'settings.plugins.action.enable')}
+                        </Button>
+                        {update ? (
+                          <Button variant="outline" size="sm" disabled={disabled} onClick={() => void updatePlugin(entry)}>
+                            {t('settings.plugins.action.update')}
+                          </Button>
+                        ) : null}
+                        <Button variant="ghost" size="sm" className="text-[var(--status-error)] hover:text-[var(--status-error)]" disabled={disabled} onClick={() => requestDelete({ kind: 'plugin', plugin: entry })}>
+                          {t('settings.plugins.action.uninstall')}
+                        </Button>
+                      </>
+                    )}
+                  />
+                );
+              })}
+              {catalog.localExtensions.map(entry => (
+                <InstalledRow
+                  key={entry.extensionId}
+                  title={entry.extensionId}
+                  description={t('settings.plugins.local.title')}
+                  onOpen={() => setSelection({ kind: 'local', extensionId: entry.extensionId })}
+                  footer={<span className="truncate font-mono">{entry.relativePath}</span>}
+                  actions={(
+                    <Button variant="ghost" size="sm" className="text-[var(--status-error)] hover:text-[var(--status-error)]" disabled={disabled} onClick={() => requestDelete({ kind: 'local', extension: entry })}>
+                      {t('settings.common.actions.delete')}
+                    </Button>
+                  )}
+                />
+              ))}
+            </div>
+          )}
+        </SettingsSection>
+
+        {/* Capability sources are the extension inventory's own view of the
+            workspace; with nothing discovered there is nothing to list. */}
+        {extensions !== null && extensions.items.length > 0 ? (
+          <ExtensionControlCenter
+            inventory={extensions}
+            disabled={disabled}
+            onToggleProvider={(providerId, enabled) => void toggleExtensionProvider(providerId, enabled)}
+            onToggleUserSource={(providerId, enabled) => void toggleExtensionUserSource(providerId, enabled)}
+            onToggleItem={(providerId, extensionId, enabled) => void toggleExtensionItem(providerId, extensionId, enabled)}
+          />
+        ) : null}
+
         <SettingsSection
           title={t('settings.plugins.marketplace.title')}
+          settingsItem="plugins.marketplace"
           headerAction={(
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void refreshMarketplace()}>
@@ -820,7 +939,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               </Button>
             </div>
           )}
-          contentClassName="space-y-4"
+          contentClassName="space-y-3"
         >
           {catalog.marketplaceSources.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -829,12 +948,17 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               ))}
             </div>
           ) : null}
-          <SettingsCardSearch
-            value={marketplaceQuery}
-            onChange={setMarketplaceQuery}
-            placeholder={t('settings.plugins.grid.searchPlaceholder')}
-          />
-          <SettingsFieldRow label={t('settings.plugins.page.field.scope')} settingsItem="plugins.marketplace.scope">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Icon name="search" className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input
+                value={marketplaceQuery}
+                onChange={event => setMarketplaceQuery(event.target.value)}
+                placeholder={t('settings.plugins.grid.searchPlaceholder')}
+                aria-label={t('settings.plugins.grid.searchPlaceholder')}
+                className="ps-8"
+              />
+            </div>
             <Select
               value={marketplaceScope}
               onValueChange={value => {
@@ -851,31 +975,10 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                 <SelectItem value="user">{t('settings.plugins.scope.user')}</SelectItem>
               </SelectContent>
             </Select>
-          </SettingsFieldRow>
-
-          {marketplaceFacets.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1">
-              <Button
-                variant="chip"
-                size="xs"
-                aria-pressed={marketplaceFacet === null}
-                onClick={() => setMarketplaceFacet(null)}
-              >
-                {t('settings.plugins.marketplace.allCategories')}
-              </Button>
-              {marketplaceFacets.map(facet => (
-                <Button
-                  key={facet}
-                  variant="chip"
-                  size="xs"
-                  aria-pressed={marketplaceFacet === facet}
-                  onClick={() => setMarketplaceFacet(current => current === facet ? null : facet)}
-                >
-                  {facet}
-                </Button>
-              ))}
-            </div>
-          ) : null}
+            <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setSourcesOpen(true)}>
+              {t('settings.plugins.marketplace.sourcesButton')}
+            </Button>
+          </div>
 
           {catalog.marketplace.length === 0 ? (
             <p className="py-2 typography-meta text-muted-foreground">{t('settings.plugins.marketplace.empty')}</p>
@@ -886,78 +989,46 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           ) : null}
 
           <div className="divide-y divide-[var(--surface-subtle)]">
-            {marketplaceEntries.map(entry => (
-              <div key={`${entry.marketplace}:${entry.name}`} className="flex min-w-0 flex-col gap-2 py-3 @xl:flex-row @xl:items-start @xl:gap-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <p className="truncate typography-ui-label text-foreground">{entry.name}</p>
-                    <span className="shrink-0 font-mono typography-micro text-muted-foreground">{entry.version ?? '—'}</span>
-                    <SettingsCardChip>{entry.marketplace}</SettingsCardChip>
-                  </div>
-                  {entry.description ? <p className="line-clamp-2 typography-micro text-muted-foreground">{entry.description}</p> : null}
-                  {[entry.details?.category, ...(entry.details?.keywords ?? [])].filter((value): value is string => Boolean(value)).length > 0 ? (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {[entry.details?.category, ...(entry.details?.keywords ?? [])].filter((value): value is string => Boolean(value)).slice(0, 6).map(badge => (
-                        <span key={badge} className="oc-tile-inset rounded-full px-2 py-px text-[0.625rem] text-muted-foreground">{badge}</span>
-                      ))}
+            {marketplaceEntries.map(entry => {
+              const installed = installedMarketplaceKeys.has(`${entry.name}@${entry.marketplace}`);
+              const badges = [entry.details?.category, ...(entry.details?.keywords ?? [])]
+                .filter((value): value is string => Boolean(value))
+                .slice(0, 6);
+              return (
+                <div key={`${entry.marketplace}:${entry.name}`} className="flex min-w-0 flex-col gap-2 py-3 @xl:flex-row @xl:items-start @xl:gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <p className="truncate typography-ui-label text-foreground">{entry.name}</p>
+                      <span className="shrink-0 font-mono typography-micro text-muted-foreground">{entry.version ?? '—'}</span>
+                      <SettingsCardChip>{entry.marketplace}</SettingsCardChip>
+                      {installed ? (
+                        <SettingsCardPill tone="success">{t('settings.plugins.marketplace.installed')}</SettingsCardPill>
+                      ) : null}
                     </div>
-                  ) : null}
+                    {entry.description ? <p className="line-clamp-2 typography-micro text-muted-foreground">{entry.description}</p> : null}
+                    {badges.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {badges.map(badge => (
+                          <span key={badge} className="oc-tile-inset rounded-full px-2 py-px text-[0.625rem] text-muted-foreground">{badge}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant={installed ? 'ghost' : 'outline'}
+                    size="sm"
+                    className="shrink-0"
+                    disabled={disabled || installed}
+                    onClick={() => installFromMarketplace(entry)}
+                  >
+                    {installed ? t('settings.plugins.marketplace.installed') : t('settings.plugins.action.install')}
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  disabled={disabled}
-                  onClick={() => {
-                    void run(async () => {
-                      await usePluginsStore.getState().installPlugin({
-                        kind: 'marketplace',
-                        name: entry.name,
-                        marketplace: entry.marketplace,
-                        scope: marketplaceScope,
-                      });
-                      toast.success(t('settings.plugins.marketplace.toast.installed', { name: entry.name }));
-                    });
-                  }}
-                >
-                  {t('settings.plugins.action.install')}
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </SettingsSection>
-
-        <SettingsSection
-          title={t('settings.plugins.doctor.title')}
-          headerAction={(
-            <Button variant="ghost" size="sm" disabled={disabled} onClick={() => void refreshDoctor()}>
-              <Icon name={doctorRefreshing ? 'loader-4' : 'play'} className={cn('size-3.5', doctorRefreshing && 'animate-spin')} />
-              {t('settings.plugins.doctor.run')}
-            </Button>
-          )}
-          contentClassName="space-y-2"
-        >
-          <div className="divide-y divide-[var(--surface-subtle)]">
-            {doctor?.checks.map((check, index) => (
-              <div key={`${check.name}:${index}`} className="flex items-start justify-between gap-3 py-2">
-                <div className="min-w-0">
-                  <p className="typography-ui-label text-foreground">{check.name}</p>
-                  <p className="typography-micro text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">{check.message}</p>
-                </div>
-                <SettingsCardPill tone={check.status === 'ok' ? 'success' : check.status === 'warning' ? 'warning' : 'error'}>
-                  {t(check.status === 'ok'
-                    ? 'settings.plugins.doctor.status.ok'
-                    : check.status === 'warning'
-                      ? 'settings.plugins.doctor.status.warning'
-                      : 'settings.plugins.doctor.status.error')}
-                </SettingsCardPill>
-              </div>
-            ))}
-          </div>
-        </SettingsSection>
-
-        <RuntimeSection catalog={catalog} disabled={disabled} onApply={requestApply} />
-      </PluginsGrid>
+      </SettingsPageLayout>
       {dialogs}
     </>
   );

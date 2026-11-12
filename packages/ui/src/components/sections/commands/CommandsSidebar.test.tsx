@@ -144,14 +144,12 @@ test('failed delete keeps the named command and an actionable dialog', async () 
   expect(container!.textContent).toContain('/custom');
 });
 
-test('a built-in command exposes no delete action', async () => {
+test('only template files are listed, so a built-in command never appears', async () => {
   const builtin: CommandEntry = { ...command, commandId: 'command_builtin', name: 'builtin', editable: false, source: 'builtin' };
-  await render(async () => true, [builtin]);
-  const trigger = container!.querySelector<HTMLButtonElement>('button svg use[href="#oc-more-2"]')?.closest('button');
-  if (!trigger) throw new Error('Missing built-in command menu trigger');
-  await act(async () => { trigger.click(); });
-  expect([...document.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemradio"]')]
-    .some((item) => item.textContent?.trim() === 'Delete')).toBe(false);
+  await render(async () => true, [builtin, command]);
+  expect(container!.textContent).toContain('/custom');
+  expect(container!.textContent).not.toContain('/builtin');
+  expect(container!.textContent).not.toContain('Built-in commands');
 });
 
 test('icon-only command actions carry accessible names', async () => {
@@ -162,26 +160,26 @@ test('icon-only command actions carry accessible names', async () => {
   expect(trigger?.getAttribute('aria-label')).toBe('custom');
 });
 
-test('built-in and custom commands have independent selection by id and built-in exposes no delete or rename actions', async () => {
-  const builtin: CommandEntry = { ...command, commandId: 'command_builtin_compact', name: 'compact', description: 'Compact context', editable: false, source: 'builtin' };
-  const custom: CommandEntry = { ...command, commandId: 'command_custom_compact', name: 'compact', description: 'Custom compact', editable: true, scope: 'workspace', source: 'workspace' };
-  await render(async () => true, [builtin, custom]);
+test('each template row selects by id and offers rename, duplicate and delete', async () => {
+  const first: CommandEntry = { ...command, commandId: 'command_first', name: 'first', description: 'First template', editable: true, scope: 'workspace', source: 'workspace' };
+  const second: CommandEntry = { ...command, commandId: 'command_second', name: 'second', description: 'Second template', editable: true, scope: 'agent', source: 'agent' };
+  await render(async () => true, [first, second]);
 
   const rows = container!.querySelectorAll<HTMLButtonElement>('.group.relative button.flex-col');
   expect(rows).toHaveLength(2);
 
   await act(async () => { rows[0].click(); });
-  expect(useCommandsStore.getState().selectedCommandId).toBe('command_builtin_compact');
+  expect(useCommandsStore.getState().selectedCommandId).toBe('command_first');
 
   const rowContainers = container!.querySelectorAll('.group.relative.flex.items-center');
   expect(rowContainers[0].className).toContain('bg-interactive-selection');
   expect(rowContainers[1].className).not.toContain('bg-interactive-selection');
 
-  const triggers = container!.querySelectorAll<HTMLButtonElement>('button[aria-label="compact"]');
-  expect(triggers).toHaveLength(2);
+  const triggers = container!.querySelectorAll<HTMLButtonElement>('button[aria-label="first"]');
+  expect(triggers).toHaveLength(1);
   await act(async () => { triggers[0].click(); });
   const menuItems = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(item => item.textContent?.trim());
   expect(menuItems).toContain('Duplicate');
-  expect(menuItems).not.toContain('Delete');
-  expect(menuItems).not.toContain('Rename');
+  expect(menuItems).toContain('Delete');
+  expect(menuItems).toContain('Rename');
 });

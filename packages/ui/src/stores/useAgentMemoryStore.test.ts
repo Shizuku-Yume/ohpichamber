@@ -74,6 +74,26 @@ afterEach(() => {
 });
 
 describe('load', () => {
+  test('a read that was in flight when the instance switched never lands', async () => {
+    // The registry resets this store on a switch. Without invalidation the old
+    // instance's answer arrives afterwards, passes the request guard, and is
+    // presented as the new instance's memory.
+    const pending: PendingMemoryRead = {};
+    readImpl = () => new Promise((resolve) => {
+      pending.resolve = resolve;
+    });
+    const loading = useAgentMemoryStore.getState().load('/tmp/project');
+
+    useAgentMemoryStore.getState().reset();
+    pending.resolve?.({ global: [entry({ id: 'old-instance' })], project: [], globalFailed: false, projectFailed: false });
+    await loading;
+
+    const state = useAgentMemoryStore.getState();
+    expect(state.global).toEqual([]);
+    expect(state.loaded).toBe(false);
+    expect(state.phase).toBe('unknown');
+  });
+
   test('holds both scopes', async () => {
     await useAgentMemoryStore.getState().load('/tmp/project');
 

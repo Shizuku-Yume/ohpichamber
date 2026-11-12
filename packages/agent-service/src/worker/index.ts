@@ -181,6 +181,10 @@ process.on('message', raw => {
     void stop(1);
   });
 });
+// The module graph is loaded and this process is waiting for a bootstrap.
+// A supervisor that pre-warms a worker adopts it only after this reply, so
+// the adoption cannot claim a process that has not finished loading.
+if (process.connected) send({ type: 'idle' });
 process.once('disconnect', () => { void stop(0); });
 process.once('SIGTERM', () => { void stop(0); });
 process.once('SIGINT', () => { void stop(0); });

@@ -89,6 +89,9 @@ export class WorkspaceCatalogs {
       // models/providers read does not pay worker startup. A failure is
       // reported to the next real read, never to workspace registration.
       this.prewarmStateless(workspaceId);
+      // A session start pays the worker module load before it can run a
+      // prompt. Boot one process now so the next new session adopts it.
+      this.prewarmSession(input);
       return { workspaceId, projectId: workspace.projectId, agentDirectoryId: workspace.agentDirectoryId, authorizationRootId: workspace.authorizationRootId, catalogRevision: this.revision(workspaceId) };
     });
   }
@@ -144,6 +147,15 @@ export class WorkspaceCatalogs {
     // beside other reads instead of behind the mutation queue.
     if (isStatelessCatalogRead(operation)) return this.operationNow(workspaceId, operation);
     return this.serial(workspace.agentDirectoryId, () => this.operationNow(workspaceId, operation));
+  }
+
+  /**
+   * Boots a spare session worker for this workspace. It is an optimization:
+   * a failed or unused spare only means the next session starts as it did
+   * before, so nothing here reports an error.
+   */
+  private prewarmSession(input: { cwd: string; agentDirectory: string; env?: Record<string, string> }): void {
+    this.workers.warmSessionWorker({ cwd: input.cwd, agentDirectory: input.agentDirectory, env: input.env });
   }
 
   /** Starts the workspace's stateless worker once, without surfacing its failure. */

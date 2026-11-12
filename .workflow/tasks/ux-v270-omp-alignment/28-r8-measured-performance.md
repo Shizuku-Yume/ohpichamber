@@ -7,7 +7,7 @@
 **Read first:** `scripts/perf/DOCUMENTATION.md`; skill `performance-engineering`; spec W9
 **Check:** `scripts/perf` scenarios for OMP Settings tab switch, prompt dispatch on a new versus warm session, and repeated model/provider catalog reads → before/after numbers recorded, meeting ≤ 100 ms, ≤ 150 ms over warm, and ≤ 20 ms; `bun --cwd packages/agent-service test && VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/stores` → exit 0
 **Base commit:** ab047171d642c5077422fab8b4fad6111b70bcd5
-**Status:** blocked
+**Status:** active
 
 - [ ] Measure the three scenarios on the merged tree before changing anything, and record the numbers.
 - [ ] Mount only the active Settings tab; keep a pre-warmed session worker that a new session adopts; cache model/provider catalogs in the service, invalidated by model, provider, auth and settings writes. UI readers use the warm config store instead of duplicate fetches.
@@ -81,25 +81,3 @@ Worker spawn measured in isolation: bootstrap sent at 8 ms reaches ready at 1638
 sent at 3004 ms reaches ready at 3731 ms (bootstrap→ready 727 ms). So ~900 ms of the
 spawn is Bun module load that a pre-spawned worker would already have paid, and
 `pluginRevision` costs another ~1.1 s on every create.
-
-### Not done
-
-The three optimizations (active-tab-only Settings mounting, pre-warmed session worker
-adoption, service-side catalog caching) are not implemented. Baseline numbers and the
-harness are recorded; the change work and its after-numbers remain.
-
-## Blocked
-
-The run ended before the three optimizations were implemented. Landed on the branch:
-`scripts/perf/omp-performance.mjs` and the baseline record above. Remaining work, with
-the measured targets already known:
-
-- Service-side model/provider catalog cache, invalidated by model, provider, auth and
-  settings writes — must take the warm read from 435/475 ms to ≤ 20 ms.
-- Pre-warmed session worker that a new session adopts — removes the ~900 ms Bun module
-  load from `POST /sessions`; `pluginRevision` (~1.1 s per create) is the next target.
-- Active-tab-only mounting in `OmpSettingsPage.tsx`, measured through the CDP scenario
-  that is already written but was never exercised against a built Web surface.
-- Duplicate catalog fetches in UI readers, replaced by the warm config store.
-- After-numbers for all three scenarios, then `bun --cwd packages/agent-service test`
-  and `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/stores`.

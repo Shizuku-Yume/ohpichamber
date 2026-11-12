@@ -55,6 +55,14 @@ const steps = [
     command: 'node',
     args: ['scripts/error-cause-guard.mjs'],
   },
+  {
+    // Every class name the UI puts on an element must resolve to a rule, a
+    // utility, a runtime-injected kit class or a documented marker; a token
+    // that resolves to nothing renders unstyled and nothing else fails.
+    name: 'css-classes',
+    command: 'node',
+    args: ['scripts/check-css-classes.mjs'],
+  },
 ];
 
 const failed = [];

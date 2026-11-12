@@ -461,7 +461,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
           onBlur={() => void handleRename(renaming)}
           onKeyDown={(event) => { if (event.key === 'Escape') setRenaming(null); }}
           aria-label={t('multirun.overview.rename.aria')}
-          className="w-full rounded-md border border-border bg-transparent px-1.5 py-0.5 typography-heading-lg text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="w-full rounded-md border border-border bg-transparent px-1.5 py-0.5 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
          />
         </form>
        ) : (
@@ -469,7 +469,7 @@ function RunOverviewContent({ runKey }: { runKey: string }): React.ReactNode {
          type="button"
          onClick={() => setRenaming(run.title)}
          dir="auto"
-         className="max-w-full truncate oc-ui-start-align typography-heading-lg text-foreground hover:underline decoration-dotted underline-offset-4"
+         className="max-w-full truncate oc-ui-start-align text-foreground hover:underline decoration-dotted underline-offset-4"
          title={t('multirun.overview.rename.aria')}
         >
          {run.title}

@@ -812,7 +812,7 @@ export const TableGrid: React.FC<{
         />
       ) : null}
       {columnCount === 0 ? (
-        <div className="p-3 typography-ui text-muted-foreground">{t('filesView.artifact.table.empty')}</div>
+        <div className="p-3 text-muted-foreground">{t('filesView.artifact.table.empty')}</div>
       ) : (
         <div ref={gridRef} tabIndex={0} role="grid" onMouseDownCapture={(event) => { if (event.button === 0) setPressing(true); }} aria-rowcount={rows.length} className="flex min-h-0 flex-1 flex-col outline-none" onKeyDown={onGridKey} onPaste={pasteAt}>
           <ScrollableOverlay ref={scrollRef} outerClassName="min-h-0 flex-1">

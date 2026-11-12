@@ -1,25 +1,31 @@
 import { describe, expect, test } from 'bun:test';
-import type { Message, Turn } from '@openchamber/agent-contract';
-import { formatTelemetryDuration, formatTelemetryTokens, formatThroughputRate, getLatestCompletedTurnStats, mergeTimeIntervals, sumIntervalsDuration } from './telemetry';
+import type { Message, StepTiming, Turn } from '@openchamber/agent-contract';
+import { formatTelemetryDuration, formatTelemetryTokens, formatThroughputRate, getLatestCompletedTurnStats } from './telemetry';
 
 const user = (id = 'u1', createdAt = 0): Message => ({ messageId: id, sessionId: 'session', turnId: id, role: 'user', createdAt, parts: [] });
-const assistant = (id = 'a1', createdAt = 5000, usage?: NonNullable<Message['usage']>): Message => ({
+const assistant = (id = 'a1', createdAt = 5000, usage?: NonNullable<Message['usage']>, timing?: StepTiming): Message => ({
   messageId: id, sessionId: 'session', turnId: id, role: 'assistant', createdAt, parts: [],
   ...(usage === undefined ? {} : { usage }),
+  ...(timing === undefined ? {} : { timing }),
 });
 const usage = (input: number, output: number, cacheRead = 0, cacheWrite = 0): NonNullable<Message['usage']> => ({
   input, output, cacheRead, cacheWrite, totalTokens: input + output + cacheRead + cacheWrite,
   cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 });
 const turn = (reply = assistant('a1', 5000, usage(100, 100))): Message[] => [user(), reply];
+const toolCallPart = (id: string): Message['parts'][number] => ({
+  type: 'tool_call', partId: `p-${id}`, toolCallId: `t-${id}`, toolName: 'read', input: {}, status: 'completed',
+});
+const completedTurn = (assistantMessageIds: string[], startedAt = 1000, finishedAt = 8000): Turn => ({
+  turnId: 'turn-1', sessionId: 'session', runId: 'run-1', status: 'completed',
+  userMessageId: 'u1', assistantMessageIds, startedAt, finishedAt,
+});
+const step = (id: string, timing: StepTiming, output: number, parts: Message['parts'] = []): Message => ({
+  messageId: id, sessionId: 'session', turnId: 'turn-1', role: 'assistant', createdAt: timing.startedAt,
+  parts, usage: usage(100, output), timing,
+});
 
 describe('turn telemetry', () => {
-  test('merges intervals and sums their duration', () => {
-    expect(mergeTimeIntervals([])).toEqual([]);
-    const merged = mergeTimeIntervals([[3000, 4000], [1000, 3000], [1500, 2500], [6000, 7000], [Number.NaN, 1], [9, 8]]);
-    expect(merged).toEqual([[1000, 4000], [6000, 7000]]);
-    expect(sumIntervalsDuration(merged)).toBe(4000);
-  });
   test('formats durations, token counts and rates', () => {
     expect(formatTelemetryDuration(0)).toBe('0.0s');
     expect(formatTelemetryDuration(1234)).toBe('1.2s');
@@ -128,5 +134,81 @@ describe('turn telemetry', () => {
     const stats = getLatestCompletedTurnStats([userPrompt, assistantStep1, virtualUserStep, assistantStep2]);
     expect(stats?.elapsedDurationMs).toBe(3500);
     expect(formatTelemetryDuration(stats!.elapsedDurationMs!)).toBe('3.5s');
+  });
+});
+
+describe('timing-derived telemetry', () => {
+  test('derives model time, tool time, TTFT and throughput from step timings', () => {
+    const messages = [
+      user(),
+      step('a1', { startedAt: 1000, firstTokenAt: 1200, completedAt: 3000 }, 50, [toolCallPart('a1')]),
+      step('a2', { startedAt: 5000, firstTokenAt: 5100, completedAt: 7000 }, 150),
+    ];
+    const stats = getLatestCompletedTurnStats(messages, [completedTurn(['a1', 'a2'])]);
+    expect(stats).toMatchObject({
+      totalLlmDurationMs: 4000,
+      totalToolDurationMs: 2000,
+      avgTtftMs: 150,
+      totalGeneratedTokens: 200,
+    });
+    // 200 generated tokens over 4s of model time.
+    expect(stats?.tokensPerSecond).toBeCloseTo(50, 6);
+    // Final step: 150 tokens over the 1.9s between its first token and completion.
+    expect(stats?.responseTokensPerSecond).toBeCloseTo(150 / 1.9, 6);
+  });
+  test('a step without timing leaves timing-derived metrics unavailable while usage still reports', () => {
+    const messages = [user(), step('a1', { startedAt: 1000, firstTokenAt: 1200, completedAt: 3000 }, 50), assistant('a2', 4000, usage(200, 150))];
+    const stats = getLatestCompletedTurnStats(messages, [completedTurn(['a1', 'a2'])]);
+    expect(stats).toMatchObject({
+      totalLlmDurationMs: 2000,
+      totalToolDurationMs: null,
+      avgTtftMs: 200,
+      inputTokens: 300,
+      outputTokens: 200,
+      totalGeneratedTokens: 200,
+    });
+    expect(stats?.tokensPerSecond).toBeCloseTo(100, 6);
+    // The final step carries no timing, so its response rate has no source.
+    expect(stats?.responseTokensPerSecond).toBeNull();
+  });
+  test('a turn with no step timing reports usage but no timing-derived metrics', () => {
+    const stats = getLatestCompletedTurnStats([user(), assistant('a1', 5000, usage(100, 300))], [completedTurn(['a1'])]);
+    expect(stats).toMatchObject({
+      totalLlmDurationMs: null,
+      totalToolDurationMs: null,
+      avgTtftMs: null,
+      tokensPerSecond: null,
+      responseTokensPerSecond: null,
+      inputTokens: 100,
+      outputTokens: 300,
+    });
+  });
+  test('a single-step turn has no tool time', () => {
+    const stats = getLatestCompletedTurnStats(
+      [user(), step('a1', { startedAt: 1000, firstTokenAt: 1500, completedAt: 4000 }, 100)],
+      [completedTurn(['a1'])],
+    );
+    expect(stats?.totalToolDurationMs).toBeNull();
+    expect(stats?.totalLlmDurationMs).toBe(3000);
+    expect(stats?.avgTtftMs).toBe(500);
+    expect(stats?.tokensPerSecond).toBeCloseTo(100 / 3, 6);
+    expect(stats?.responseTokensPerSecond).toBeCloseTo(100 / 2.5, 6);
+  });
+  test('an implausible rate is unavailable rather than reported', () => {
+    const stats = getLatestCompletedTurnStats(
+      [user(), step('a1', { startedAt: 1000, firstTokenAt: 1000, completedAt: 2000 }, 10_000_000)],
+      [completedTurn(['a1'])],
+    );
+    expect(stats?.totalLlmDurationMs).toBe(1000);
+    expect(stats?.tokensPerSecond).toBeNull();
+    expect(stats?.responseTokensPerSecond).toBeNull();
+  });
+  test('a final step with tool calls has no response rate while the turn rate still reports', () => {
+    const stats = getLatestCompletedTurnStats(
+      [user(), step('a1', { startedAt: 1000, firstTokenAt: 1100, completedAt: 2000 }, 100, [toolCallPart('a1')])],
+      [completedTurn(['a1'])],
+    );
+    expect(stats?.responseTokensPerSecond).toBeNull();
+    expect(stats?.tokensPerSecond).toBeCloseTo(100, 6);
   });
 });

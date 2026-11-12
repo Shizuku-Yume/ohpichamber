@@ -1403,8 +1403,8 @@ function MobileAppContent({ apis }: MobileAppProps) {
               the text never pushes it up. 50% + half the 120px logo + a gap. */}
           {autoConnectLabel ? (
             <div className="absolute inset-x-0 top-[calc(50%+84px)] flex flex-col items-center gap-0.5 px-6 text-center">
-              <p className="typography-small text-muted-foreground">{t('mobile.connect.splash.connectingTo')}</p>
-              <p className="typography-small text-foreground">
+              <p className="text-muted-foreground">{t('mobile.connect.splash.connectingTo')}</p>
+              <p className="text-foreground">
                 {autoConnectLabel}
                 <BusyDots />
               </p>

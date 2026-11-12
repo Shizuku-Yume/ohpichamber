@@ -16,7 +16,7 @@ export const ContentState: React.FC<{
     {icon}
     <div className="flex max-w-md flex-col items-center gap-1">
       <div className="max-w-full break-words typography-ui-header text-foreground">{title}</div>
-      {description ? <div className="max-w-full break-words typography-ui text-muted-foreground">{description}</div> : null}
+      {description ? <div className="max-w-full break-words text-muted-foreground">{description}</div> : null}
     </div>
     {actions ? <div className="flex flex-wrap items-center justify-center gap-2">{actions}</div> : null}
   </div>
@@ -38,7 +38,7 @@ export const ContentLoadingState: React.FC<{ label: string; className?: string }
       {shown ? (
         <>
           <Spinner className="size-5" aria-hidden />
-          <span className="typography-ui">{label}</span>
+          <span>{label}</span>
         </>
       ) : null}
     </div>

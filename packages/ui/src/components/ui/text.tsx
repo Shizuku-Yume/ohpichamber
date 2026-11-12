@@ -130,17 +130,6 @@ const variants = [
     },
   },
   {
-    variant: "shake",
-    component: ({ children, className, ...props }) => (
-      <span
-        {...props}
-        className={cn("text-primary-muted hover:animate-text-shake", className)}
-      >
-        {children}
-      </span>
-    ),
-  },
-  {
     variant: "hover-decoration",
     component: ({ children, className, ...props }) => (
       <div

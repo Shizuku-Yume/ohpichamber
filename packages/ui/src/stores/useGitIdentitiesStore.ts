@@ -59,6 +59,20 @@ let defaultIdentityLoadGeneration = 0;
 let defaultIdentityMutationGeneration = 0;
 const profileMutationGenerations = new Map<string, number>();
 
+/**
+ * The three reads that together answer "what identities does this instance
+ * have". `phase` is `ready` only when all of them answered: a profiles read
+ * that failed while the global identity read succeeded must not present an
+ * empty profile list as the instance's answer.
+ */
+type IdentityRead = 'profiles' | 'global' | 'default';
+const answeredReads = new Set<IdentityRead>();
+
+const markIdentityReadAnswered = (read: IdentityRead, set: (partial: { phase: LoadPhase }) => void): void => {
+  answeredReads.add(read);
+  if (answeredReads.size === 3) set({ phase: 'ready' });
+};
+
 const captureRuntime = (): RuntimeToken => ({
   runtimeKey: getRuntimeKey(),
   generation: identityRuntimeGeneration,
@@ -106,8 +120,9 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
         try {
           const profiles = gitIdentityProfilesSchema.parse(await getGitIdentities());
           if (!isRuntimeCurrent(runtime) || loadGeneration !== profilesLoadGeneration) return false;
-          if (mutationRevision === profilesMutationRevision) set({ profiles, isLoading: false, phase: 'ready' });
-          else set({ isLoading: false, phase: 'ready' });
+          if (mutationRevision === profilesMutationRevision) set({ profiles, isLoading: false });
+          else set({ isLoading: false });
+          markIdentityReadAnswered('profiles', set);
           return true;
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== profilesLoadGeneration) return false;
@@ -130,7 +145,6 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           // author configured: it is how a person says no override applies
           // here, and a machine with no author still has to be able to clone.
           set({
-            phase: 'ready',
             globalIdentity: {
               id: 'global',
               // The display name is the product's word for it, resolved where
@@ -142,6 +156,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
               icon: 'fingerprint',
             },
           });
+          markIdentityReadAnswered('global', set);
           return true;
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== globalIdentityLoadGeneration) return false;
@@ -165,6 +180,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           if (loadGeneration !== defaultIdentityLoadGeneration
             || mutationGeneration !== defaultIdentityMutationGeneration) return false;
           set({ defaultGitIdentityId: defaultId });
+          markIdentityReadAnswered('default', set);
           return true;
         } catch (error) {
           if (!isRuntimeCurrent(runtime) || loadGeneration !== defaultIdentityLoadGeneration) return false;
@@ -269,6 +285,7 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
         defaultIdentityMutationGeneration += 1;
         profilesMutationRevision += 1;
         profileMutationGenerations.clear();
+        answeredReads.clear();
         reportSettingsSaveState('saved');
         set({
           selectedProfileId: null,

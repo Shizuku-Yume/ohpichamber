@@ -144,4 +144,18 @@ describe('canonical events for sessions no store holds yet', () => {
     expect(installed.session[0]?.metadata).toEqual({ notes: 'Newest' });
     expect(installed.session[0]?.metadataRevision).toBe('5');
   });
+
+  test('the buffer is bounded, dropping the record that waited longest', () => {
+    // A record whose session never arrives must not accumulate for the
+    // process's lifetime. The oldest entry goes first, so a session created
+    // moments ago (the reason the buffer exists) is the one that survives.
+    let state = EMPTY;
+    for (let index = 0; index < 300; index += 1) {
+      state = installSessionMetadata(state, { sessionId: `session-${index}`, revision: '1', metadata: { notes: String(index) } }, { bufferUnknown: true });
+    }
+    const buffered = Object.keys(state.pendingMetadata ?? {});
+    expect(buffered).toHaveLength(256);
+    expect(buffered[0]).toBe('session-44');
+    expect(buffered.at(-1)).toBe('session-299');
+  });
 });

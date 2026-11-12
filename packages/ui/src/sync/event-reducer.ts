@@ -117,6 +117,14 @@ const omitPendingMetadata = (record: Record<string, SessionMetadataState>, sessi
 }
 
 /**
+ * The most metadata records one directory's store holds for sessions it has
+ * not seen. The buffer bridges an announcement that arrives before the list
+ * read, so it only ever holds the handful of sessions created since that read;
+ * a record whose session never arrives must not accumulate forever.
+ */
+const MAX_PENDING_METADATA = 256;
+
+/**
  * `bufferUnknown` holds a metadata record for a session this directory does not
  * project yet. Callers enable it only where the record's own directory is not
  * known, so every child store of a live workspace does not accumulate copies of
@@ -135,7 +143,14 @@ export function installSessionMetadata(
   // stale until a reload, so it is held until a session record arrives.
   const pending = state.pendingMetadata?.[metadata.sessionId]
   if (pending && (compareCounters(metadata.revision, pending.revision) < 0 || same(pending, metadata))) return state
-  return { ...state, pendingMetadata: { ...state.pendingMetadata, [metadata.sessionId]: metadata } }
+  const buffered = { ...state.pendingMetadata, [metadata.sessionId]: metadata }
+  if (pending === undefined) {
+   // Oldest first: object keys keep insertion order, so the records dropped
+   // here are the ones that have waited longest for a session that never came.
+   const overflow = Object.keys(buffered).length - MAX_PENDING_METADATA
+   if (overflow > 0) for (const sessionId of Object.keys(buffered).slice(0, overflow)) delete buffered[sessionId]
+  }
+  return { ...state, pendingMetadata: buffered }
  }
  if (compareCounters(metadata.revision, current.metadataRevision) < 0) return state
  return installHostSession(state, { ...current, metadata: metadata.metadata, metadataRevision: metadata.revision })

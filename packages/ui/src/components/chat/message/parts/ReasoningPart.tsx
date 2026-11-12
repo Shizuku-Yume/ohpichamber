@@ -524,7 +524,7 @@ const ReasoningPart = React.memo(({
     const rawText = part.type === 'reasoning' ? part.content : '';
     const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
     // Canonical reasoning parts have no persisted timing data.
-    const isLiveStreamPhase = streamPhase === 'streaming' || streamPhase === 'cooldown';
+    const isLiveStreamPhase = streamPhase === 'streaming';
     const isStreaming = part.type === 'reasoning' && chatRenderMode === 'live' && isLiveStreamPhase;
     const throttledTextRaw = useStreamingTextThrottle({
         text: textContent,

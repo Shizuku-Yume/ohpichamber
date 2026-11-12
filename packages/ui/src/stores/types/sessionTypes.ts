@@ -28,8 +28,6 @@ export interface AttachedFile {
 
 export type EditPermissionMode = 'allow' | 'ask' | 'deny' | 'full';
 
-export type MessageStreamPhase = 'streaming' | 'cooldown' | 'completed';
-
 export interface SessionHistoryMeta {
  limit: number;
  complete: boolean;

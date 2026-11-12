@@ -17,7 +17,7 @@ interface StatusRowProps {
   status?: AgentStatus | null;
   isWaitingForPermission?: boolean;
   abortActive?: boolean;
-  retryInfo?: { attempt?: number; next?: number; resetsAt?: number } | null;
+  retryInfo?: { attempt?: number; next?: number } | null;
   agentName?: string;
   modelName?: string | null;
   providerId?: string | null;

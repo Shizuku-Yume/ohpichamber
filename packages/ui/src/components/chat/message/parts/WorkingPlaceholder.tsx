@@ -8,7 +8,7 @@ interface WorkingPlaceholderProps {
   isWorking: boolean;
   status: AgentStatus | null;
   isWaitingForPermission?: boolean;
-  retryInfo?: { attempt?: number; next?: number; resetsAt?: number } | null;
+  retryInfo?: { attempt?: number; next?: number } | null;
   agentName?: string;
   modelName?: string | null;
   providerId?: string | null;
@@ -42,14 +42,6 @@ const formatRetryCountdown = (seconds: number, locale: Locale): string => {
     .filter(([, value], index) => index === 0 || value > 0)
     .map(([unit, value]) => new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'narrow' }).format(value))
     .join(' ');
-};
-
-/** "Limit resets at 3:20 PM" today, "Limit resets Oct 20, 3:20 PM" on another day. */
-const formatLimitReset = (t: ReturnType<typeof useI18n>['t'], locale: Locale, at: number): string => {
-  const date = new Date(at);
-  const time = date.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
-  if (date.toDateString() === new Date().toDateString()) return t('chat.agentStatus.limit.today', { time });
-  return t('chat.agentStatus.limit.later', { date: date.toLocaleDateString(locale, { month: 'short', day: 'numeric' }), time });
 };
 
 export function WorkingPlaceholder({
@@ -116,23 +108,15 @@ export function WorkingPlaceholder({
       : time ? t('chat.agentStatus.retry.in', { time })
         : attempt ? t('chat.agentStatus.retry.attempt', { attempt })
           : t('chat.agentStatus.retry');
-    // A rate limit that lifts after the next retry: say when, since the
-    // retry itself will most likely hit the limit again.
-    const resetsAt = retryInfo.resetsAt;
-    const retryTargetAt = retryInfo.next ? toRetryTargetTimestamp(retryInfo.next) : Date.now();
-    const retryText = resetsAt !== undefined && resetsAt > retryTargetAt
-      ? `${formatLimitReset(t, locale, resetsAt)} · ${retrying}`
-      : retrying;
-
     return (
       <div
         className="flex h-full items-center text-muted-foreground"
         role="status"
         aria-live="polite"
-        aria-label={retryText}
+        aria-label={retrying}
       >
         {providerLogo}
-        <span className="typography-ui-header">{retryText}</span>
+        <span className="typography-ui-header">{retrying}</span>
       </div>
     );
   }

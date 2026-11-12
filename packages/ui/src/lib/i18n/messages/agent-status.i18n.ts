@@ -21,8 +21,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'Retrying in {time}',
     'chat.agentStatus.retry.attempt': 'Retrying (attempt {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Retrying in {time} (attempt {attempt})',
-    'chat.agentStatus.limit.today': 'Limit resets at {time}',
-    'chat.agentStatus.limit.later': 'Limit resets {date}, {time}',
   },
   de: {
     'chat.agentStatus.working': 'arbeitet',
@@ -33,8 +31,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'Neuer Versuch in {time}',
     'chat.agentStatus.retry.attempt': 'Neuer Versuch (Versuch {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Neuer Versuch in {time} (Versuch {attempt})',
-    'chat.agentStatus.limit.today': 'Limit wird um {time} zurückgesetzt',
-    'chat.agentStatus.limit.later': 'Limit wird am {date} um {time} zurückgesetzt',
   },
   fr: {
     'chat.agentStatus.working': 'travaille',
@@ -45,8 +41,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'Nouvelle tentative dans {time}',
     'chat.agentStatus.retry.attempt': 'Nouvelle tentative (essai {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Nouvelle tentative dans {time} (essai {attempt})',
-    'chat.agentStatus.limit.today': 'Limite réinitialisée à {time}',
-    'chat.agentStatus.limit.later': 'Limite réinitialisée le {date} à {time}',
   },
   nl: {
     'chat.agentStatus.working': 'werkt',
@@ -57,8 +51,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'Opnieuw proberen over {time}',
     'chat.agentStatus.retry.attempt': 'Opnieuw proberen (poging {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Opnieuw proberen over {time} (poging {attempt})',
-    'chat.agentStatus.limit.today': 'Limiet wordt om {time} gereset',
-    'chat.agentStatus.limit.later': 'Limiet wordt op {date} om {time} gereset',
   },
   es: {
     'chat.agentStatus.working': 'trabaja',
@@ -69,8 +61,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'Reintentando en {time}',
     'chat.agentStatus.retry.attempt': 'Reintentando (intento {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Reintentando en {time} (intento {attempt})',
-    'chat.agentStatus.limit.today': 'El límite se restablece a las {time}',
-    'chat.agentStatus.limit.later': 'El límite se restablece el {date} a las {time}',
   },
   ja: {
     'chat.agentStatus.working': '作業中',
@@ -81,8 +71,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': '{time}後に再試行',
     'chat.agentStatus.retry.attempt': '再試行中（{attempt}回目）',
     'chat.agentStatus.retry.inAttempt': '{time}後に再試行（{attempt}回目）',
-    'chat.agentStatus.limit.today': '{time}に利用制限がリセットされます',
-    'chat.agentStatus.limit.later': '{date} {time}に利用制限がリセットされます',
   },
   'pt-BR': {
     'chat.agentStatus.working': 'trabalha',
@@ -93,8 +81,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'Tentando novamente em {time}',
     'chat.agentStatus.retry.attempt': 'Tentando novamente (tentativa {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Tentando novamente em {time} (tentativa {attempt})',
-    'chat.agentStatus.limit.today': 'O limite é redefinido às {time}',
-    'chat.agentStatus.limit.later': 'O limite é redefinido em {date}, às {time}',
   },
   uk: {
     'chat.agentStatus.working': 'працює',
@@ -105,8 +91,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'Повторна спроба через {time}',
     'chat.agentStatus.retry.attempt': 'Повторна спроба (спроба {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Повторна спроба через {time} (спроба {attempt})',
-    'chat.agentStatus.limit.today': 'Ліміт скинеться о {time}',
-    'chat.agentStatus.limit.later': 'Ліміт скинеться {date} о {time}',
   },
   ko: {
     'chat.agentStatus.working': '작업 중',
@@ -117,8 +101,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': '{time} 후 다시 시도',
     'chat.agentStatus.retry.attempt': '다시 시도 중 ({attempt}번째 시도)',
     'chat.agentStatus.retry.inAttempt': '{time} 후 다시 시도 ({attempt}번째 시도)',
-    'chat.agentStatus.limit.today': '{time}에 한도가 초기화됩니다',
-    'chat.agentStatus.limit.later': '{date} {time}에 한도가 초기화됩니다',
   },
   pl: {
     'chat.agentStatus.working': 'pracuje',
@@ -129,8 +111,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'Ponowna próba za {time}',
     'chat.agentStatus.retry.attempt': 'Ponawianie (próba {attempt})',
     'chat.agentStatus.retry.inAttempt': 'Ponowna próba za {time} (próba {attempt})',
-    'chat.agentStatus.limit.today': 'Limit odnawia się o {time}',
-    'chat.agentStatus.limit.later': 'Limit odnawia się {date} o {time}',
   },
   'zh-CN': {
     'chat.agentStatus.working': '正在工作',
@@ -141,8 +121,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': '将在{time}后重试',
     'chat.agentStatus.retry.attempt': '正在重试（第{attempt}次尝试）',
     'chat.agentStatus.retry.inAttempt': '将在{time}后重试（第{attempt}次尝试）',
-    'chat.agentStatus.limit.today': '额度将在{time}重置',
-    'chat.agentStatus.limit.later': '额度将在{date} {time}重置',
   },
   'zh-TW': {
     'chat.agentStatus.working': '正在工作',
@@ -153,8 +131,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': '將在{time}後重試',
     'chat.agentStatus.retry.attempt': '正在重試（第{attempt}次嘗試）',
     'chat.agentStatus.retry.inAttempt': '將在{time}後重試（第{attempt}次嘗試）',
-    'chat.agentStatus.limit.today': '額度將於{time}重設',
-    'chat.agentStatus.limit.later': '額度將於{date} {time}重設',
   },
   tr: {
     'chat.agentStatus.working': 'çalışıyor',
@@ -165,8 +141,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': '{time} sonra yeniden denenecek',
     'chat.agentStatus.retry.attempt': 'Yeniden deneniyor (deneme {attempt})',
     'chat.agentStatus.retry.inAttempt': '{time} sonra yeniden denenecek (deneme {attempt})',
-    'chat.agentStatus.limit.today': 'Limit {time} saatinde sıfırlanır',
-    'chat.agentStatus.limit.later': 'Limit {date}, {time} tarihinde sıfırlanır',
   },
   ar: {
     'chat.agentStatus.working': 'يعمل',
@@ -177,8 +151,6 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'إعادة المحاولة بعد {time}',
     'chat.agentStatus.retry.attempt': 'جار إعادة المحاولة (المحاولة {attempt})',
     'chat.agentStatus.retry.inAttempt': 'إعادة المحاولة بعد {time} (المحاولة {attempt})',
-    'chat.agentStatus.limit.today': 'يتجدد الحد عند {time}',
-    'chat.agentStatus.limit.later': 'يتجدد الحد في {date} عند {time}',
   },
   he: {
     'chat.agentStatus.working': 'עובד',
@@ -189,7 +161,5 @@ export const agentStatusI18n = {
     'chat.agentStatus.retry.in': 'ניסיון נוסף בעוד {time}',
     'chat.agentStatus.retry.attempt': 'מנסה שוב (ניסיון {attempt})',
     'chat.agentStatus.retry.inAttempt': 'ניסיון נוסף בעוד {time} (ניסיון {attempt})',
-    'chat.agentStatus.limit.today': 'המכסה מתאפסת בשעה {time}',
-    'chat.agentStatus.limit.later': 'המכסה מתאפסת בתאריך {date}, בשעה {time}',
   },
 };

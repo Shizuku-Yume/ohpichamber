@@ -13,11 +13,6 @@ describe('resolveAssistantTextStreaming', () => {
             chatRenderMode: 'live',
             isFinalized: false,
         })).toBe(true);
-        expect(resolveAssistantTextStreaming({
-            streamPhase: 'cooldown',
-            chatRenderMode: 'live',
-            isFinalized: false,
-        })).toBe(true);
     });
 
     test('never streams in sorted mode', () => {
@@ -34,11 +29,6 @@ describe('resolveAssistantTextStreaming', () => {
         // moment the model moves on to the question) and must render in full.
         expect(resolveAssistantTextStreaming({
             streamPhase: 'streaming',
-            chatRenderMode: 'live',
-            isFinalized: true,
-        })).toBe(false);
-        expect(resolveAssistantTextStreaming({
-            streamPhase: 'cooldown',
             chatRenderMode: 'live',
             isFinalized: true,
         })).toBe(false);

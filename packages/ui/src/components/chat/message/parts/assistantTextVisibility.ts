@@ -16,8 +16,7 @@ export const resolveAssistantTextStreaming = (input: {
     if (input.isFinalized) {
         return false;
     }
-    return input.chatRenderMode === 'live'
-        && (input.streamPhase === 'streaming' || input.streamPhase === 'cooldown');
+    return input.chatRenderMode === 'live' && input.streamPhase === 'streaming';
 };
 
 export const resolveAssistantDisplayText = (input: {

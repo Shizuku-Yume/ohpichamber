@@ -1191,8 +1191,11 @@ const hydrateActiveDirectorySnapshot = <T extends Partial<ConfigStore>>(merged: 
 
 /** A directory snapshot as persisted: its selections, without the catalogs. */
 const toPersistedDirectorySnapshot = (snapshot: DirectoryScopedConfig) => {
-    const { providers: _providers, providersLoaded: _providersLoaded, ...selection } = snapshot;
+    // Catalogs are derived from the workspace and re-read on every start, so
+    // they stay out of the persisted blob exactly as `providers` does.
+    const { providers: _providers, models: _models, providersLoaded: _providersLoaded, ...selection } = snapshot;
     void _providers;
+    void _models;
     void _providersLoaded;
     return {
         ...selection,

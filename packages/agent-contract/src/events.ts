@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, EpochSchema, JsonObjectSchema, JsonValueSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { SessionMetadataSchema } from './metadata.ts';
 import { LoopStateSchema, RunOriginSchema, RuntimeSessionSchema, SessionModeSchema, SessionRuntimeStatusSchema, SubagentSchema } from './session.ts';
-import { PartSchema, TokenUsageSchema, ToolStatusSchema } from './messages.ts';
+import { PartSchema, StepTimingSchema, TokenUsageSchema, ToolStatusSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 import { QueueStateSchema } from './queue.ts';
 import { CatalogUpdateSchema } from './catalogs.ts';
@@ -93,7 +93,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({ type: z.literal('run.cancelled'), runId: EntityIdSchema, finishedAt: TimestampSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('turn.started'), turnId: EntityIdSchema, runId: EntityIdSchema, userMessageId: EntityIdSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('turn.completed'), turnId: EntityIdSchema, runId: EntityIdSchema }),
-  DataEventEnvelopeSchema.extend({ type: z.literal('message.created'), messageId: EntityIdSchema, turnId: EntityIdSchema, role: z.enum(['user', 'assistant', 'system']), providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('message.created'), messageId: EntityIdSchema, turnId: EntityIdSchema, role: z.enum(['user', 'assistant', 'system']), providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional(), timing: StepTimingSchema.optional() }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.started'), messageId: EntityIdSchema, part: PartSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.updated'), part: PartSchema }),
   DataEventEnvelopeSchema.extend({ type: z.literal('part.delta'), partId: EntityIdSchema, delta: z.string() }),
@@ -102,7 +102,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({
     type: z.literal('tool.completed'), toolCallId: EntityIdSchema,
     status: ToolStatusSchema.extract(['completed', 'failed', 'denied', 'cancelled']),
-    isError: z.boolean(), output: JsonValueSchema.optional(), error: z.string().optional(),
+    isError: z.boolean(), output: JsonValueSchema.optional(), error: z.string().optional(), errorKind: z.string().min(1).optional(),
   }),
   DataEventEnvelopeSchema.extend({
     type: z.literal('approval.requested'), approval: ApprovalRequestSchema.refine((request) => request.status === 'pending', { message: 'Requested approval must be pending' }),
@@ -131,7 +131,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
     warning: z.string().optional(),
     completedAt: TimestampSchema,
   }),
-  DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional() }),
+  DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional(), timing: StepTimingSchema.optional() }),
   SubagentUpdatedEventSchema,
   SessionRecapEventSchema,
   AdvisorYieldedEventSchema,

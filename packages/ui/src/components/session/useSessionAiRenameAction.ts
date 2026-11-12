@@ -5,6 +5,7 @@ import { subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { useIsSessionAiRenamePending, useSessionAiRename } from '@/sync/use-session-ai-rename';
 import { useSmallModelAvailability } from '@/hooks/useSmallModelAvailability';
 import type { SmallModelAvailabilityScope } from '@/stores/useSmallModelStore';
+import { problemMessage } from '@/lib/problemMessage';
 
 /** Menus and mobile swipe actions check history only while their controls are open. */
 export function useSessionAiRenameAction(sessionID: string, directory: string | null | undefined, open: boolean) {
@@ -45,7 +46,7 @@ export function useSessionAiRenameAction(sessionID: string, directory: string | 
           : availability === 'empty' ? t('sessions.aiRename.noCompletedTurns')
             : t('sessions.sidebar.session.menuHint.aiRename');
   const run = useCallback(() => {
-    void rename().catch(() => toast.error(t('sessions.aiRename.failed')));
+    void rename().catch((error) => toast.error(problemMessage(error, t('sessions.aiRename.failed'))));
   }, [rename, t]);
 
   return { pending, disabled, hint, run };

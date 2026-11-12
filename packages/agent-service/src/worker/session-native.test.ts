@@ -72,7 +72,7 @@ function instructionMessages(request: ProviderRequest): Array<{ role: string; co
  return request.messages.filter(message => message.role === 'system' || message.role === 'developer')
   .map(message => ({ role: message.role, content: message.content }));
 }
-const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify', 'openchamber_image'] as const;
+const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify', 'openchamber_image', 'openchamber_render'] as const;
 // The worker bypasses generic tool authorization for every registered Host
 // tool: their capability owners authorize the inner call. The list is derived
 // from the registry so a newly registered Host tool cannot silently fall to the
@@ -223,7 +223,7 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   if (machineCommands.includes(command)) return;
   const grant = request.approvalId && request.toolCallId
    ? interactions.consumeApprovalGrant(rootSessionId, generation, request.approvalId, request.toolCallId, request.toolName, request.input) : undefined;
-  if (!grant) throw new NativeApprovalRequired();
+  if (!grant) throw new NativeApprovalRequired('Host policy requires approval for this exact native command');
   grants.push(grant.approvalId);
  }, async (request, signal) => {
   if (!invoke) throw new Error('Host action was not part of this scenario');

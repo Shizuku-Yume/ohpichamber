@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseModelSelector } from '@openchamber/agent-contract';
 
 import { asNonEmptyString } from '../shared/guards.js';
 
@@ -99,14 +100,13 @@ export const classifyLimitFailure = (report, now) => {
 
 /**
  * `provider/model` as the settings store it, with its thinking level when one
- * is set; the model id may itself contain slashes.
+ * is set; the model id may itself contain slashes. The suffix grammar is the
+ * selector grammar's, so `:max` on a literal id is not read as a level.
  */
 export const parseModelSetting = (value, variantValue) => {
-  const text = asNonEmptyString(value);
-  if (!text) return null;
-  const slash = text.indexOf('/');
-  if (slash <= 0 || slash === text.length - 1) return null;
-  const model = { providerID: text.slice(0, slash), id: text.slice(slash + 1) };
+  const parsed = parseModelSelector(asNonEmptyString(value) ?? '');
+  if (!parsed) return null;
+  const model = { providerID: parsed.providerId, id: parsed.modelId };
   const variant = asNonEmptyString(variantValue);
   return variant ? { ...model, variant } : model;
 };

@@ -1,3 +1,4 @@
+import { formatModelRef, modelRefInstanceKey } from '@openchamber/agent-contract';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
@@ -35,7 +36,7 @@ const ModelChip: React.FC<{
   totalSameModel: number;
   onRemove: () => void;
 }> = ({ model, instanceIndex, totalSameModel, onRemove }) => {
-  const displayName = model.displayName || `${model.providerId}/${model.modelId}`;
+  const displayName = model.displayName || formatModelRef(model);
   const label = totalSameModel > 1 ? `${displayName} (${instanceIndex})` : displayName;
 
   return (
@@ -131,7 +132,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
   const modelCounts = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const m of selectedModels) {
-      const key = `${m.providerId}:${m.modelId}`;
+      const key = modelRefInstanceKey(m.providerId, m.modelId);
       counts.set(key, (counts.get(key) || 0) + 1);
     }
     return counts;
@@ -311,7 +312,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                 onSearchQueryChange={setSearchQuery}
                 onSelect={handleSelectModel}
                 labels={labels}
-                selectionCount={(entry) => modelCounts.get(`${entry.providerId}:${entry.modelId}`) || 0}
+                selectionCount={(entry) => modelCounts.get(modelRefInstanceKey(entry.providerId, entry.modelId)) || 0}
                 disabled={!canAddModel}
                 maxHeightClassName="flex-1"
                 maxHeightStyle={{ maxHeight: availableHeight ? `${availableHeight}px` : '300px' }}
@@ -332,7 +333,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
         {showChips && selectedModels.length > 0 && (
           <div className="flex flex-col gap-2 w-full">
             {selectedModels.map((model, index) => {
-              const key = `${model.providerId}:${model.modelId}`;
+              const key = modelRefInstanceKey(model.providerId, model.modelId);
               const totalSameModel = modelCounts.get(key) || 1;
               const instanceIndex = getInstanceIndex(model);
 

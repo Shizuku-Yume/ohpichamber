@@ -21,3 +21,4 @@ export * from './provider-management.ts';
 export * from './usage.ts';
 export * from './websearch.ts';
 export * from './settings.ts';
+export * from './modelSelector.ts';

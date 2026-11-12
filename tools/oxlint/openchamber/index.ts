@@ -1,5 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { noModelRefSplittingRule } from "./rules/no-model-ref-splitting.ts";
 import { noPhysicalSidesRule } from "./rules/no-physical-sides.ts";
 import { noCrossSourceTimeCompareRule } from "./rules/no-cross-source-time-compare.ts";
 
@@ -7,6 +8,7 @@ import { noCrossSourceTimeCompareRule } from "./rules/no-cross-source-time-compa
 const openchamberPlugin = eslintCompatPlugin({
   meta: { name: "openchamber" },
   rules: {
+    "no-model-ref-splitting": noModelRefSplittingRule,
     "no-physical-sides": noPhysicalSidesRule,
     "no-cross-source-time-compare": noCrossSourceTimeCompareRule,
   },

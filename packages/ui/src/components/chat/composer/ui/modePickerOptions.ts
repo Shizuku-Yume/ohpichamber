@@ -46,13 +46,6 @@ export function buildModeOptions(input: {
         }));
 }
 
-/** Case-insensitive filter over the visible label, description and stable mode name. */
-export function filterModeOptions(options: readonly ModeOption[], query: string): ModeOption[] {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (normalizedQuery.length === 0) return [...options];
-    return options.filter((option) => `${option.label} ${option.description} ${option.value}`.toLowerCase().includes(normalizedQuery));
-}
-
 /** Next selectable row in `direction`, wrapping and skipping disabled rows. */
 export function nextEnabledModeIndex(
     options: readonly ModeOption[],

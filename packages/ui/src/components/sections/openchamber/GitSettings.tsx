@@ -9,46 +9,17 @@ import { setFilesViewShowGitignored, useFilesViewShowGitignored } from '@/lib/fi
 import { useCommitSettings } from '@/lib/gitCommitSettings';
 import { useI18n } from '@/lib/i18n';
 import {
- Select,
- SelectContent,
- SelectItem,
- SelectTrigger,
- SelectValue,
-} from '@/components/ui/select';
-import {
  SettingsSection,
  SettingsControlGroup,
  SettingsRadioGroup,
  SettingsRadioOption,
  SettingsCheckboxRow,
- SettingsFieldRow,
  SETTINGS_OPTION_STACK_CLASS,
- SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 
 /** The OMP model role commit messages and PR descriptions are generated with. */
 const COMMIT_ROLE = 'commit';
-/** The picker's "no role assigned" choice: OMP falls back to its own default. */
-const INHERIT_VALUE = '__inherit__';
-const KNOWN_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'] as const;
-
-/**
- * `provider/model` role selectors may carry a `:effort` suffix. The picker
- * edits the model half, so the suffix is read once and written back unchanged
- * while the chosen model still supports reasoning.
- */
-const splitRoleSelector = (selector: string): { model: string; effort: string } => {
- const trimmed = selector.trim();
- const colon = trimmed.lastIndexOf(':');
- if (colon > 0) {
-  const suffix = trimmed.slice(colon + 1);
-  if ((KNOWN_EFFORTS as readonly string[]).includes(suffix.toLowerCase())) {
-   return { model: trimmed.slice(0, colon), effort: suffix };
-  }
- }
- return { model: trimmed, effort: '' };
-};
-
 /** Only string roles survive; a malformed record must not erase the others. */
 const readRoleRecord = (value: unknown): Record<string, string> => {
  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
@@ -144,10 +115,17 @@ export const GitSettings: React.FC = () => {
   () => readRoleRecord(ompState?.settings.find((setting) => setting.id === 'modelRoles')?.value),
   [ompState],
  );
- const { model: commitModelId, effort: commitEffort } = React.useMemo(
-  () => splitRoleSelector(roleRecord[COMMIT_ROLE] ?? ''),
+ // The role record keeps its string selectors, so the shared editor can read
+ // one role out of the same shape Defaults and the OMP page use.
+ const roleSelectors = React.useMemo(
+  () => Object.fromEntries(Object.entries(roleRecord).filter(([, selector]) => selector.length > 0)),
   [roleRecord],
  );
+ /** What the commit role runs at when its selector names no level of its own. */
+ const globalThinkingLevel = React.useMemo(() => {
+  const value = ompState?.settings.find((setting) => setting.id === 'defaultThinkingLevel')?.value;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+ }, [ompState]);
 
  const handleGitmojiChange = React.useCallback(async (enabled: boolean) => {
   setSettingsGitmojiEnabled(enabled);
@@ -214,18 +192,9 @@ export const GitSettings: React.FC = () => {
   }
  }, [t]);
 
- const handleCommitModelChange = React.useCallback((value: string) => {
-  if (value === INHERIT_VALUE) {
-   void writeCommitRole('');
-   return;
-  }
-  const nextModel = models.find((model) => `${model.provider}/${model.modelId}` === value);
-  const effortToKeep = nextModel
-   && (nextModel.reasoningEffortSupported || nextModel.reasoningOptions.length > 0)
-   ? commitEffort
-   : '';
-  void writeCommitRole(effortToKeep ? `${value}:${effortToKeep}` : value);
- }, [commitEffort, models, writeCommitRole]);
+ const handleCommitRoleChange = React.useCallback((selector: string) => {
+  void writeCommitRole(selector);
+ }, [writeCommitRole]);
 
  if (isLoading) {
   return null;
@@ -234,48 +203,18 @@ export const GitSettings: React.FC = () => {
  return (
   <SettingsSection title={t('settings.openchamber.git.title')}>
    <div className={SETTINGS_OPTION_STACK_CLASS}>
-    <SettingsFieldRow
+    <ModelRoleEditor
+     role={COMMIT_ROLE}
+     roles={roleSelectors}
+     models={models}
+     directory={settingsDirectory ?? undefined}
+     globalLevel={globalThinkingLevel}
      settingsItem="git.commit-model"
+     disabled={isSavingCommitModel || !ompState}
      label={t('settings.omp.modelRoles.role.commit.label')}
-     info={t('settings.omp.modelRoles.role.commit.desc')}
-    >
-     <Select
-      value={commitModelId || INHERIT_VALUE}
-      onValueChange={handleCommitModelChange}
-      disabled={isSavingCommitModel || !ompState}
-     >
-      <SelectTrigger
-       className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
-       aria-label={t('settings.omp.modelRoles.role.commit.label')}
-      >
-       <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')}>
-        {commitModelId
-         ? (models.find((model) => `${model.provider}/${model.modelId}` === commitModelId)
-          ? `${models.find((model) => `${model.provider}/${model.modelId}` === commitModelId)?.name || commitModelId.split('/').pop()} (${commitModelId.split('/')[0]})`
-          : `${commitModelId} (${t('settings.omp.modelRoles.customModel')})`)
-         : t('settings.omp.modelRoles.inheritFallback')}
-       </SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-       <SelectItem value={INHERIT_VALUE}>
-        {t('settings.omp.modelRoles.inheritFallback')}
-       </SelectItem>
-       {models.map((model) => {
-        const id = `${model.provider}/${model.modelId}`;
-        return (
-         <SelectItem key={id} value={id}>
-          {model.name || model.modelId} ({model.provider})
-         </SelectItem>
-        );
-       })}
-       {commitModelId && !models.some((model) => `${model.provider}/${model.modelId}` === commitModelId) ? (
-        <SelectItem value={commitModelId}>
-         {commitModelId} ({t('settings.omp.modelRoles.customModel')})
-        </SelectItem>
-       ) : null}
-      </SelectContent>
-     </Select>
-    </SettingsFieldRow>
+     description={t('settings.omp.modelRoles.role.commit.desc')}
+     onChange={handleCommitRoleChange}
+    />
     {commitModelError ? (
      <p role="alert" className="typography-meta text-[var(--status-error)]">{commitModelError}</p>
     ) : null}

@@ -10,6 +10,7 @@ import { MAX_THEME_IMPORT_BYTES, ThemeImportError } from '@/lib/theme/importErro
 import { SettingsInfoHint } from '../shared/SettingsInfoHint';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { ThemeCatalogDialog } from './ThemeCatalogDialog';
+import { problemMessage } from '@/lib/problemMessage';
 
 export function ThemeImportButton() {
   const { t } = useI18n();
@@ -56,7 +57,7 @@ export function ThemeImportButton() {
         return;
       }
       inputRef.current?.click();
-    } catch { toast.error(t('settings.themeImport.error.invalid')); }
+    } catch (error) { toast.error(problemMessage(error, t('settings.themeImport.error.invalid'))); }
     finally { setBusy(false); }
   };
 

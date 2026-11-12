@@ -15,7 +15,7 @@ import { HostRequestError, clampPromptRequest, clampStartSessionRequest } from '
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';
 import { buildLinkedGuestIssue, type LinkedGuestIssue } from '@/lib/linkedIssues';
-import { parseModelIdentifier } from '@/lib/modelIdentifier';
+import { parseModelSelector } from '@openchamber/agent-contract';
 import { resolveProjectRef } from '@/lib/worktreeSessionCreator';
 import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { waitForWorktreeBootstrap } from '@/lib/worktrees/worktreeBootstrap';
@@ -146,7 +146,7 @@ const resolveDefaultAgentName = (): string | undefined => {
 };
 
 const resolveDefaultModelSelection = (): { providerId: string; modelId: string } | null => {
-  const parsed = parseModelIdentifier(useConfigStore.getState().settingsDefaultModel);
+  const parsed = parseModelSelector(useConfigStore.getState().settingsDefaultModel);
   if (!parsed) {
     return null;
   }

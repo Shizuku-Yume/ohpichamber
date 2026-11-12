@@ -20,7 +20,7 @@ export async function fileResourceRoute(
   let workspaceId: string;
   let item: string | undefined;
   try { workspaceId = EntityIdSchema.parse(decodeURIComponent(route[1])); item = route[3] === undefined ? undefined : EntityIdSchema.parse(decodeURIComponent(route[3])); }
-  catch { throw new WorkerOperationError(400, 'INVALID_REQUEST'); }
+  catch { throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The workspace or item id is not a valid entity id'); }
   let operation: FileResourceOperation;
   let status = 200;
   if (route[2] === 'skills') {
@@ -34,11 +34,11 @@ export async function fileResourceRoute(
     else if (item === 'expand-text' && request.method === 'POST') operation = { action: 'input.expand', request: await readBody(request, FileResourceExpandTextRequestSchema) };
     else if (item !== undefined && request.method === 'PATCH') {
       const body = await readBody(request, CommandUpdateRequestSchema);
-      if (body.commandId !== item) throw new WorkerOperationError(400, 'INVALID_REQUEST');
+      if (body.commandId !== item) throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The command id does not match the addressed command');
       operation = { action: 'commands.update', request: body };
     } else if (item !== undefined && request.method === 'DELETE') {
       const body = await readBody(request, CommandDeleteRequestSchema);
-      if (body.commandId !== item) throw new WorkerOperationError(400, 'INVALID_REQUEST');
+      if (body.commandId !== item) throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The command id does not match the addressed command');
       operation = { action: 'commands.delete', request: body };
     } else return null;
   } else {
@@ -48,15 +48,15 @@ export async function fileResourceRoute(
     else if (item === 'expand-text' && request.method === 'POST') operation = { action: 'templates.expand-text', request: await readBody(request, FileResourceExpandTextRequestSchema) };
     else if (item !== undefined && request.method === 'PATCH') {
       const body = await readBody(request, PromptTemplateUpdateRequestSchema);
-      if (body.templateId !== item) throw new WorkerOperationError(400, 'INVALID_REQUEST');
+      if (body.templateId !== item) throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The template id does not match the addressed template');
       operation = { action: 'templates.update', request: body };
     } else if (item !== undefined && request.method === 'DELETE') {
       const body = await readBody(request, PromptTemplateDeleteRequestSchema);
-      if (body.templateId !== item) throw new WorkerOperationError(400, 'INVALID_REQUEST');
+      if (body.templateId !== item) throw new WorkerOperationError(400, 'INVALID_REQUEST', 'The template id does not match the addressed template');
       operation = { action: 'templates.delete', request: body };
     } else return null;
   }
   const result = await catalogs.operation(workspaceId, { type: 'fileResources', operation });
-  if (result.type !== 'fileResources') throw new WorkerOperationError(503, 'INTERNAL_ERROR');
+  if (result.type !== 'fileResources') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested file-resources operation.');
   return { status, body: result.result.kind === 'expanded' || result.result.kind === 'prompt-input' ? result.result.result : result.result.catalog };
 }

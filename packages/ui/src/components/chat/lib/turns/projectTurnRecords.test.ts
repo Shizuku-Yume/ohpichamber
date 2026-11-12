@@ -35,9 +35,10 @@ describe('projectTurnRecords', () => {
         expect(projection.ungroupedMessageIds.size).toBe(0);
     });
 
-    test('does not render an assistant reply that arrives before any user turn', () => {
+    test('renders an assistant reply that arrives before any user turn as its own row', () => {
         // A page loaded from the middle of a session can start on an assistant
-        // message; it has no turn to belong to and must not invent one.
+        // message. It has no turn to belong to, so it stands alone rather than
+        // disappearing.
         const orphan = createMessageEntry({ id: 'a0', role: 'assistant', createdAt: 1 });
         const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 2 });
         const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 3, turnId: 'u1' });
@@ -47,17 +48,34 @@ describe('projectTurnRecords', () => {
         expect(projection.turns).toHaveLength(1);
         expect(projection.turns[0]?.turnId).toBe('u1');
         expect(projection.turns[0]?.assistantMessageIds).toEqual(['a1']);
-        expect(projection.ungroupedMessageIds.has('a0')).toBe(false);
+        expect(projection.ungroupedMessageIds.has('a0')).toBe(true);
         expect(projection.indexes.messageToTurnId.has('a0')).toBe(false);
     });
 
-    test('does not render orphan assistant messages as standalone ungrouped entries', () => {
+    test('joins a run without its own prompt to the conversation already above it', () => {
+        // A plan or goal continuation opens a turn OMP prompted itself; its
+        // steps continue the turn the user is reading instead of vanishing for
+        // lacking a prompt row.
+        const user1 = createMessageEntry({ id: 'u1', role: 'user', createdAt: 1 });
+        user1.parts = [{ type: 'text', partId: 'p1', content: 'approve the plan' }];
+        const assistant1 = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 2, turnId: 'u1' });
+        const continuationA = createMessageEntry({ id: 'a2', role: 'assistant', createdAt: 3, turnId: 'u2' });
+        const continuationB = createMessageEntry({ id: 'a3', role: 'assistant', createdAt: 4, turnId: 'u2' });
+
+        const projection = projectTurnRecords([user1, assistant1, continuationA, continuationB]);
+
+        expect(projection.turns).toHaveLength(1);
+        expect(projection.turns[0]?.assistantMessageIds).toEqual(['a1', 'a2', 'a3']);
+        expect(projection.ungroupedMessageIds.size).toBe(0);
+    });
+
+    test('renders an orphan assistant message as a standalone ungrouped entry', () => {
         const assistant = createMessageEntry({ id: 'a1', role: 'assistant', createdAt: 1 });
 
         const projection = projectTurnRecords([assistant]);
 
         expect(projection.turns).toHaveLength(0);
-        expect(projection.ungroupedMessageIds.has('a1')).toBe(false);
+        expect(projection.ungroupedMessageIds.has('a1')).toBe(true);
         expect(projection.indexes.messageToTurnId.has('a1')).toBe(false);
     });
 

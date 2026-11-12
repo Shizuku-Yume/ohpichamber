@@ -87,6 +87,7 @@ import {
   type FileTreeEntry,
 } from './fileTreeMoveDrag';
 import { buildFileTreeRows, withPinnedRowIndexes, type FileTreeRow } from './fileTreeRows';
+import { problemMessage } from '@/lib/problemMessage';
 
 type FileNode = {
   name: string;
@@ -1409,7 +1410,7 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean; currentDirectory: st
           }
           closeDialog();
         })
-        .catch(() => toast.error(t('sidebarFilesTree.toast.operationFailed')))
+        .catch((error) => toast.error(problemMessage(error, t('sidebarFilesTree.toast.operationFailed'))))
         .finally(done);
       return;
     }
@@ -1433,7 +1434,7 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean; currentDirectory: st
           }
           closeDialog();
         })
-        .catch(() => toast.error(t('sidebarFilesTree.toast.operationFailed')))
+        .catch((error) => toast.error(problemMessage(error, t('sidebarFilesTree.toast.operationFailed'))))
         .finally(done);
       return;
     }
@@ -1468,8 +1469,8 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean; currentDirectory: st
         } else {
           toast.error(t('sidebarFilesTree.toast.operationFailed'));
         }
-      } catch {
-        toast.error(t('sidebarFilesTree.toast.operationFailed'));
+      } catch (error) {
+        toast.error(problemMessage(error, t('sidebarFilesTree.toast.operationFailed')));
       } finally {
         done();
       }
@@ -1499,7 +1500,7 @@ const SidebarFilesTreeContent: React.FC<{ visible: boolean; currentDirectory: st
           }
           closeDialog();
         })
-        .catch(() => toast.error(t('sidebarFilesTree.toast.operationFailed')))
+        .catch((error) => toast.error(problemMessage(error, t('sidebarFilesTree.toast.operationFailed'))))
         .finally(done);
       return;
     }

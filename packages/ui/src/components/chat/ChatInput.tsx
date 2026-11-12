@@ -260,6 +260,7 @@ import {
 } from './inputHistory';
 import { useScopedBlockingForms, useScopedBlockingPermissions, useUserMessageHistory } from '@/sync/sync-context';
 import { changeRequestCopy } from '@/lib/source-control/changeRequestCopy';
+import { problemMessage } from '@/lib/problemMessage';
 
 // Lazy like in ChatMessage: a static import would pull the @pierre/diffs and
 // Shiki stacks into the eager startup graph for a dialog opened on demand.
@@ -2066,7 +2067,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 queuedMessagesToSend = await takeForSend(capturedTarget, queuedMessageId);
             } catch (error) {
                 console.warn('[queue] failed to take queued messages for sending:', error);
-                toast.error(t('chat.queuedMessage.toast.takeFailed'));
+                toast.error(problemMessage(error, t('chat.queuedMessage.toast.takeFailed')));
                 return;
             }
             if (queuedOnly && queuedMessagesToSend.length === 0) return;

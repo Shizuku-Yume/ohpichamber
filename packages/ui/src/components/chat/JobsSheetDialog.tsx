@@ -20,6 +20,7 @@ import type {
   JobWidgetView,
 } from '@openchamber/agent-contract';
 import type { EndedShell, TrackedShell } from '@/sync/background-shells';
+import { problemMessage } from '@/lib/problemMessage';
 
 export interface JobsSheetDialogProps {
   open: boolean;
@@ -402,8 +403,8 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
       });
       setStdinInput((prev) => (prev.startsWith(sentText) ? prev.slice(sentText.length) : ''));
       toast.success(t('chat.backgroundShells.stdinSent'));
-    } catch {
-      toast.error(t('chat.backgroundShells.stdinFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('chat.backgroundShells.stdinFailed')));
     } finally {
       setSendingStdin(false);
     }
@@ -422,8 +423,8 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
         },
       });
       toast.success(t('chat.backgroundShells.stopped'));
-    } catch {
-      toast.error(t('chat.toolPart.background.stopFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('chat.toolPart.background.stopFailed')));
     } finally {
       setStopping(false);
     }

@@ -14,6 +14,7 @@ import { useI18n } from '@/lib/i18n';
 import type { TerminalChunk } from '@/stores/useTerminalStore';
 
 import { selectTerminalChunkReplay } from './terminalChunkReplay';
+import { problemMessage } from '@/lib/problemMessage';
 
 // The libghostty-vt adapter (WASM VT + canvas renderer) loads on demand so the
 // bottom dock can import TerminalView eagerly without pulling the emulator
@@ -317,8 +318,8 @@ const TerminalViewport = React.forwardRef<TerminalController, Props>(({
     try {
       const result = await copyTextToClipboard(menuSelection);
       if (!result.ok) toast.error(t('terminalView.toast.copyFailed'));
-    } catch {
-      toast.error(t('terminalView.toast.copyFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('terminalView.toast.copyFailed')));
     }
   };
 

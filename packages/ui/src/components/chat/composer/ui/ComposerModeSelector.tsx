@@ -6,7 +6,6 @@ import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { SessionGoalDialog } from '@/components/chat/SessionGoalDialog';
 import { DraftGoalDialog } from '@/components/chat/composer/ui/DraftGoalDialog';
-import { Input } from '@/components/ui/input';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -25,7 +24,6 @@ import {
     MODE_DESCRIPTION_KEYS,
     MODE_LABEL_KEYS,
     buildModeOptions,
-    filterModeOptions,
     nextEnabledModeIndex,
     type ComposerModeValue,
     type ModeOption,
@@ -61,9 +59,10 @@ const MODE_ICONS = {
 } satisfies Record<ComposerModeValue, IconName>;
 
 /**
- * One searchable mode picker in the old agent-picker slot. Main/Plan/Vibe use
- * the canonical mode control; Goal owns its objective through the native goal
- * control. A draft keeps its choice until the session exists.
+ * The mode picker in the old agent-picker slot. Four modes fit one short menu,
+ * so it lists them directly: no search field, no filter state. Main/Plan/Vibe
+ * use the canonical mode control; Goal owns its objective through the native
+ * goal control. A draft keeps its choice until the session exists.
  */
 export const ComposerModeSelector = React.memo(function ComposerModeSelector({
     sessionId,
@@ -81,12 +80,9 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
 }: ComposerModeSelectorProps) {
     const { t } = useI18n();
     const [open, setOpen] = React.useState(defaultOpen);
-    const [query, setQuery] = React.useState('');
     const [pending, setPending] = React.useState(false);
-    const [activeIndex, setActiveIndex] = React.useState(-1);
     const [goalDialogOpen, setGoalDialogOpen] = React.useState(false);
     const [draftGoalDialogOpen, setDraftGoalDialogOpen] = React.useState(false);
-    const searchRef = React.useRef<HTMLInputElement>(null);
     const itemRefs = React.useRef<Array<HTMLElement | null>>([]);
 
     const selectedKind: ComposerModeValue = sessionId ? mode?.kind ?? 'main' : draftMode ?? 'main';
@@ -94,30 +90,12 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
     const selectedLabel = t(MODE_LABEL_KEYS[selectedKind]);
     const selectedDescription = t(MODE_DESCRIPTION_KEYS[selectedKind]);
 
-    const options = React.useMemo(() => filterModeOptions(buildModeOptions({
+    const options = React.useMemo(() => buildModeOptions({
         planRoleAvailable,
         sessionGoalEnabled,
         selectedKind,
         translate: (key) => t(key),
-    }), query), [planRoleAvailable, query, selectedKind, sessionGoalEnabled, t]);
-
-    React.useEffect(() => {
-        if (!open) return;
-        setQuery('');
-        // The menu focuses its first item when it mounts; take focus back for
-        // typing to filter on the next task.
-        const timer = setTimeout(() => searchRef.current?.focus(), 0);
-        return () => clearTimeout(timer);
-    }, [open]);
-
-    React.useEffect(() => {
-        if (!open) {
-            setActiveIndex(-1);
-            return;
-        }
-        const selectedIndex = options.findIndex((option) => option.value === selectedKind && !option.disabledReason);
-        setActiveIndex(selectedIndex >= 0 ? selectedIndex : options.findIndex((option) => !option.disabledReason));
-    }, [open, options, selectedKind]);
+    }), [planRoleAvailable, selectedKind, sessionGoalEnabled, t]);
 
     const choose = React.useCallback((value: ComposerModeValue) => {
         if (value === 'goal') {
@@ -144,17 +122,10 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
         onDraftModeChange(value, null);
     }, [draftOpen, mode, onDraftModeChange, pending, runActive, selectedKind, sessionId, t]);
 
-    const chooseActive = React.useCallback(() => {
-        const option = options[activeIndex] ?? options.find((candidate) => !candidate.disabledReason);
-        if (!option || option.disabledReason) return;
-        choose(option.value);
-    }, [activeIndex, choose, options]);
-
     const moveFrom = React.useCallback((from: number, direction: NavigationDirection) => {
         const index = nextEnabledModeIndex(options, from, direction);
         if (index < 0) return;
         itemRefs.current[index]?.focus();
-        setActiveIndex(index);
     }, [options]);
 
     const handleNavigation = React.useCallback((event: React.KeyboardEvent, from: number): boolean => {
@@ -167,18 +138,6 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
         moveFrom(from, navigation === 'ArrowDown' ? 1 : -1);
         return true;
     }, [moveFrom]);
-
-    const handleSearchKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
-        if (handleNavigation(event, activeIndex)) return;
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            chooseActive();
-            return;
-        }
-        // Keep menu typeahead out of the search field; Tab and Escape still
-        // reach their normal focus and close behavior.
-        if (event.key !== 'Escape' && event.key !== 'Tab') event.stopPropagation();
-    }, [activeIndex, chooseActive, handleNavigation]);
 
     const handleItemKeyDown = React.useCallback((event: React.KeyboardEvent, index: number) => {
         if (handleNavigation(event, index)) return;
@@ -219,27 +178,6 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
         triggerDisabled ? 'cursor-not-allowed opacity-60' : isMobile ? 'text-foreground/80 hover:bg-[var(--interactive-hover)]' : 'cursor-pointer hover:opacity-70',
     );
 
-    const searchField = (id: string) => (
-        <div className="relative">
-            <Icon name="search" className="absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-                id={id}
-                ref={searchRef}
-                type="text"
-                aria-label={t('chat.chatInput.mode.search')}
-                autoComplete="off"
-                placeholder={t('chat.chatInput.mode.search')}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                className="h-8 ps-8 typography-meta"
-            />
-        </div>
-    );
-
-    const emptyState = options.length === 0
-        ? <div role="status" className="px-2 py-4 text-center typography-meta text-muted-foreground">{t('chat.chatInput.mode.empty')}</div>
-        : null;
 
     const goalDialogs = (
         <>
@@ -272,10 +210,8 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
                 </Tooltip>
                 {open ? (
                     <MobileOverlayPanel open title={t('chat.chatInput.mode.label')} onClose={() => setOpen(false)} contentMaxHeightClassName="max-h-[min(52dvh,360px)]">
-                        <div className="p-2">{searchField('composer-mode-search-mobile')}</div>
                         <ScrollableOverlay outerClassName="min-h-0 flex-1">
                             <div id="composer-mode-options-mobile" role="listbox" aria-label={t('chat.chatInput.mode.label')} className="flex flex-col gap-1 p-1">
-                                {emptyState}
                                 {options.map((option, index) => {
                                     const row = (
                                         <button
@@ -346,10 +282,8 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
                         collisionAvoidance={{ side: 'none', align: 'shift' }}
                         className="flex w-[min(300px,calc(100vw-2rem))] flex-col overflow-hidden p-0"
                     >
-                        <div className="border-b border-border/40 p-2">{searchField('composer-mode-search')}</div>
                         <ScrollableOverlay outerClassName="max-h-[min(400px,calc(var(--available-height)-4rem))] flex-1">
                             <div id="composer-mode-options" className="flex flex-col gap-1 p-1">
-                                {emptyState}
                                 {options.map((option, index) => {
                                     const item = (
                                         <DropdownMenuItem
@@ -366,7 +300,6 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
                                                 if (option.disabledReason) { event.preventDefault(); return; }
                                                 choose(option.value);
                                             }}
-                                            onFocus={() => setActiveIndex(index)}
                                             onKeyDown={(event) => handleItemKeyDown(event, index)}
                                         >
                                             {optionRow(option)}

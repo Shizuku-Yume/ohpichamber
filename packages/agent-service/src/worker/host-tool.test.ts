@@ -65,3 +65,40 @@ describe('createHostToolExtension', () => {
     });
   });
 });
+
+test('openchamber_render is registered and carries its call id and answer envelope', async () => {
+  const registeredTools = new Map<string, RegisteredToolStub>();
+  const mockApi = {
+    typebox: {
+      Type: {
+        Object: (props: unknown) => ({ type: 'object', properties: props }),
+        String: () => ({ type: 'string' }),
+        Record: () => ({ type: 'object' }),
+        Unknown: () => ({}),
+      },
+    },
+    registerTool: (tool: RegisteredToolStub) => { registeredTools.set(tool.name, tool); },
+  };
+  const invocations: HostToolInvocation[] = [];
+  const extension = createHostToolExtension({
+    scope: { sessionId: 'session-123', rootSessionId: 'root-123', workspaceId: 'ws-123' },
+    invoke: async (invocation) => {
+      invocations.push(invocation);
+      return { title: 'Fixture page', answer: { answered: true, summary: 'Chose the first', data: { choice: 1 } } };
+    },
+  });
+  extension(mockApi as never);
+  expect(registeredTools.has('openchamber_render')).toBe(true);
+  const result = await registeredTools.get('openchamber_render')!.execute('call-render', {
+    action: 'render.page',
+    input: { html: '<h1>Fixture</h1>', title: 'Fixture page', awaitAnswer: true },
+  });
+  expect(invocations[0]?.request).toEqual({
+    sessionId: 'session-123', toolName: 'openchamber_render', action: 'render.page',
+    input: { html: '<h1>Fixture</h1>', title: 'Fixture page', awaitAnswer: true }, toolCallId: 'call-render',
+  });
+  expect(result.details).toMatchObject({
+    ok: true, action: 'render.page',
+    openchamber: { schemaVersion: 1, ok: true, action: 'render.page', answer: { answered: true, summary: 'Chose the first' } },
+  });
+});

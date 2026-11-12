@@ -1,16 +1,19 @@
 import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
-import { JsonObjectSchema } from '@openchamber/agent-contract';
-import type { JsonValue, Model, OmpSettingsState } from '@openchamber/agent-contract';
+import { JsonObjectSchema, formatModelRef } from '@openchamber/agent-contract';
+import type { JsonValue, Model, OmpSettingsChange, OmpSettingsState } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsSection,
   SettingsFieldRow,
   SettingsCheckboxRow,
   SettingsInset,
+  SettingsChipGroup,
   SETTINGS_OPTION_STACK_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
+import { formatRoleSelector, modelForSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { AgentSelector } from '@/components/sections/agents/AgentSelector';
@@ -31,38 +34,6 @@ const SESSION_MODE_OPTIONS: readonly { value: SessionModeValue; labelKey: I18nKe
   { value: 'goal', labelKey: 'chat.chatInput.mode.goal' },
 ] as const;
 
-
-const DEFAULT_EFFORT_OPTIONS: readonly { value: string; labelKey: I18nKey }[] = [
-  { value: 'minimal', labelKey: 'settings.omp.modelRoles.effort.minimal' },
-  { value: 'low', labelKey: 'settings.omp.modelRoles.effort.low' },
-  { value: 'medium', labelKey: 'settings.omp.modelRoles.effort.medium' },
-  { value: 'high', labelKey: 'settings.omp.modelRoles.effort.high' },
-  { value: 'max', labelKey: 'settings.omp.modelRoles.effort.max' },
-] as const;
-
-function parseRoleSelector(selector: unknown): { model: string; effort: string } {
-  if (typeof selector !== 'string') return { model: '', effort: '' };
-  const trimmed = selector.trim();
-  if (!trimmed) return { model: '', effort: '' };
-  const colonIndex = trimmed.lastIndexOf(':');
-  if (colonIndex > 0) {
-    const base = trimmed.slice(0, colonIndex);
-    const suffix = trimmed.slice(colonIndex + 1);
-    const knownEfforts = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'];
-    if (knownEfforts.includes(suffix.toLowerCase())) {
-      return { model: base, effort: suffix };
-    }
-  }
-  return { model: trimmed, effort: '' };
-}
-
-function formatRoleSelector(model: string, effort: string): string {
-  const trimmedModel = model.trim();
-  if (!trimmedModel) return '';
-  const trimmedEffort = effort.trim();
-  if (!trimmedEffort || trimmedEffort === 'default' || trimmedEffort === '__default__') return trimmedModel;
-  return `${trimmedModel}:${trimmedEffort}`;
-}
 
 /** Every entry the native `modelRoles` record holds, arrays and objects included. */
 function parseRolesRecord(val: unknown): Record<string, JsonValue> {
@@ -98,8 +69,6 @@ export const DefaultsSettings: React.FC = () => {
 
   const showChatsSection = useSessionDisplayStore((state) => state.showChatsSection);
   const setShowChatsSection = useSessionDisplayStore((state) => state.setShowChatsSection);
-  const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
-  const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
   const defaultSessionMode = useUIStore((state) => state.defaultSessionMode);
   const setDefaultSessionMode = useUIStore((state) => state.setDefaultSessionMode);
   const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
@@ -158,39 +127,32 @@ export const DefaultsSettings: React.FC = () => {
   );
 
   const { model: selectedModelId, effort: selectedEffort } = React.useMemo(
-    () => parseRoleSelector(roleSelectors.default),
-    [roleSelectors.default],
+    () => splitRoleSelector(roleSelectors.default, models),
+    [roleSelectors.default, models],
   );
 
   const matchedModel = React.useMemo(
-    () => models.find((m) => `${m.provider}/${m.modelId}` === selectedModelId),
+    () => modelForSelector(models, selectedModelId),
     [models, selectedModelId],
   );
 
-  const supportsReasoning = Boolean(
-    matchedModel?.reasoningEffortSupported ||
-    (matchedModel?.reasoningOptions && matchedModel.reasoningOptions.length > 0),
-  );
+  /**
+   * OMP's session-wide thinking level, which is what a model with no level of
+   * its own resolves to. The page shows it as the default model's effort
+   * control, so a user picks one level rather than two competing defaults.
+   */
+  const configuredThinkingLevel = React.useMemo(() => {
+    const value = ompState?.settings.find((s) => s.id === 'defaultThinkingLevel')?.value;
+    return typeof value === 'string' ? value : '';
+  }, [ompState]);
 
-  // The trigger shows the option's label, as the list does, not the raw value.
-  const defaultModelLabel = React.useMemo(() => {
-    if (!selectedModelId) return t('settings.omp.modelRoles.inheritFallback');
-    if (!matchedModel) return `${selectedModelId} (${t('settings.omp.modelRoles.customModel')})`;
-    return `${matchedModel.name || matchedModel.modelId} (${matchedModel.provider})`;
-  }, [matchedModel, selectedModelId, t]);
-
-  const effortOptions = React.useMemo(() => (
-    matchedModel?.reasoningOptions && matchedModel.reasoningOptions.length > 0
-      ? matchedModel.reasoningOptions.map((opt) => ({ value: opt.reasoningEffort, label: opt.label }))
-      : DEFAULT_EFFORT_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) }))
-  ), [matchedModel, t]);
-
-  const defaultEffortLabel = selectedEffort
-    ? effortOptions.find((opt) => opt.value === selectedEffort)?.label ?? selectedEffort
-    : t('settings.omp.modelRoles.thinkingDefault');
-
+  /**
+   * Write the role record, plus any settings that must land with it. Two writes
+   * from one user action would race the same revision: the first moves it and
+   * the second conflicts, so the value the user picked halfway never persists.
+   */
   const updateRolesOnServer = React.useCallback(
-    async (nextRoles: Record<string, JsonValue>) => {
+    async (nextRoles: Record<string, JsonValue>, also: OmpSettingsChange[] = []) => {
       const currentState = ompStateRef.current;
       if (!currentState) return;
       // The snapshot this write was computed against, so a 409 re-applies only
@@ -202,7 +164,7 @@ export const DefaultsSettings: React.FC = () => {
         try {
           next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
             expectedRevision: currentState.revision,
-            changes: [{ id: 'modelRoles', value: nextRoles }],
+            changes: [{ id: 'modelRoles', value: nextRoles }, ...also],
           });
         } catch (error) {
           if (error instanceof CanonicalApiError && error.problem.status === 409) {
@@ -216,7 +178,9 @@ export const DefaultsSettings: React.FC = () => {
             for (const role of changed.removed) delete merged[role];
             next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
               expectedRevision: latest.revision,
-              changes: [{ id: 'modelRoles', value: merged }],
+              // The accompanying values are this action's own: the newer
+              // snapshot's value for them was never the user's choice.
+              changes: [{ id: 'modelRoles', value: merged }, ...also],
             });
           } else {
             throw error;
@@ -233,30 +197,24 @@ export const DefaultsSettings: React.FC = () => {
   );
 
   const handleDefaultModelChange = React.useCallback(
-    (val: string) => {
+    (selector: string) => {
       const nextRoles = { ...rolesMap };
-      if (val === '__inherit__') {
-        delete nextRoles.default;
-      } else {
-        const nextModel = models.find((m) => `${m.provider}/${m.modelId}` === val);
-        const nextSupportsReasoning = Boolean(
-          nextModel?.reasoningEffortSupported ||
-          (nextModel?.reasoningOptions && nextModel.reasoningOptions.length > 0),
-        );
-        const effortToKeep = nextSupportsReasoning ? selectedEffort : '';
-        nextRoles.default = formatRoleSelector(val, effortToKeep);
-      }
+      if (selector) nextRoles.default = selector;
+      else delete nextRoles.default;
       void updateRolesOnServer(nextRoles);
     },
-    [models, rolesMap, selectedEffort, updateRolesOnServer],
+    [rolesMap, updateRolesOnServer],
   );
 
   const handleDefaultEffortChange = React.useCallback(
-    (val: string) => {
+    (level: string) => {
       const nextRoles = { ...rolesMap };
-      const effort = val === '__default__' ? '' : val;
-      nextRoles.default = formatRoleSelector(selectedModelId, effort);
-      void updateRolesOnServer(nextRoles);
+      const selector = formatRoleSelector(selectedModelId, level);
+      if (selector) nextRoles.default = selector;
+      else delete nextRoles.default;
+      // Keep the session-wide level in step: a model with no configured role
+      // level inherits it, so the one picker sets both in one write.
+      void updateRolesOnServer(nextRoles, [{ id: 'defaultThinkingLevel', value: level || null }]);
     },
     [rolesMap, selectedModelId, updateRolesOnServer],
   );
@@ -267,10 +225,10 @@ export const DefaultsSettings: React.FC = () => {
    * written separately through `retry.fallbackChains`.
    */
   const setRole = React.useCallback(
-    (role: string, value: string) => {
+    (role: string, selector: string) => {
       const nextRoles: Record<string, JsonValue> = { ...rolesMap };
-      if (!value || value === '__inherit__') delete nextRoles[role];
-      else nextRoles[role] = value;
+      if (selector) nextRoles[role] = selector;
+      else delete nextRoles[role];
       void updateRolesOnServer(nextRoles);
     },
     [rolesMap, updateRolesOnServer],
@@ -282,16 +240,13 @@ export const DefaultsSettings: React.FC = () => {
     [setRole],
   );
 
-  /** The stored selector for a role, custom values included; '' means unset. */
-  const roleModel = (role: string): string => roleSelectors[role] ?? '';
-
   /**
    * What a closed trigger shows for a selector. `SelectValue` otherwise prints
    * the raw value, so sentinels (`__inherit__`, `__none__`), raw mode ids and
    * custom selectors would leak into the control.
    */
   const selectorLabel = (selector: string): string => {
-    const model = models.find((m) => `${m.provider}/${m.modelId}` === selector);
+    const model = models.find((m) => formatModelRef(m) === selector);
     if (model) return `${model.name || model.modelId} (${model.provider})`;
     const mode = SESSION_MODE_OPTIONS.find((opt) => opt.value === selector);
     if (mode) return t(mode.labelKey);
@@ -307,45 +262,6 @@ export const DefaultsSettings: React.FC = () => {
   const usesOwnSmallModel = Boolean(roleSelectors.smol) || smallModelChoice !== undefined;
   const [walkthroughChoice, setWalkthroughChoice] = React.useState<string | undefined>(undefined);
   const usesOwnWalkthroughModel = Boolean(roleSelectors.slow) || walkthroughChoice !== undefined;
-
-  /** A role is set only when a "use default" toggle is off. */
-  const roleSelect = (
-    role: string,
-    ariaLabel: string,
-    placeholder: string,
-    disabled: boolean,
-  ): React.ReactNode => {
-    const value = roleModel(role);
-    const known = models.some((m) => `${m.provider}/${m.modelId}` === value);
-    return (
-      <Select
-        value={value || '__inherit__'}
-        onValueChange={(val) => setRole(role, val)}
-        disabled={disabled || isSavingOmp || !ompState}
-      >
-        <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={ariaLabel}>
-          <SelectValue placeholder={placeholder}>{value ? selectorLabel(value) : placeholder}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__inherit__">{placeholder}</SelectItem>
-          {models.map((m) => {
-            const id = `${m.provider}/${m.modelId}`;
-            return (
-              <SelectItem key={id} value={id}>
-                {m.name || m.modelId} ({m.provider})
-              </SelectItem>
-            );
-          })}
-          {/* A configured value the catalog does not list stays visible, once. */}
-          {value && !known && (
-            <SelectItem value={value}>
-              {value} ({t('settings.omp.modelRoles.customModel')})
-            </SelectItem>
-          )}
-        </SelectContent>
-      </Select>
-    );
-  };
 
   /**
    * The native retry fallback chain for the `default` selector, which is what
@@ -411,14 +327,14 @@ export const DefaultsSettings: React.FC = () => {
       <SelectContent>
         <SelectItem value="__none__">{t('settings.openchamber.defaults.field.fallbackModelNone')}</SelectItem>
         {models.map((m) => {
-          const id = `${m.provider}/${m.modelId}`;
+          const id = formatModelRef(m);
           return (
             <SelectItem key={id} value={id}>
               {m.name || m.modelId} ({m.provider})
             </SelectItem>
           );
         })}
-        {fallbackRoles.current && !models.some((m) => `${m.provider}/${m.modelId}` === fallbackRoles.current) && (
+        {fallbackRoles.current && !models.some((m) => formatModelRef(m) === fallbackRoles.current) && (
           <SelectItem value={fallbackRoles.current}>
             {fallbackRoles.current} ({t('settings.omp.modelRoles.customModel')})
           </SelectItem>
@@ -439,71 +355,41 @@ export const DefaultsSettings: React.FC = () => {
     <>
     <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
       <div className="space-y-4">
-        <SettingsFieldRow
+        <ModelRoleEditor
+          role="default"
+          roles={roleSelectors}
+          models={models}
+          directory={directory ?? undefined}
+          globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.default-model"
+          disabled={isSavingOmp || !ompState}
           label={t('settings.openchamber.defaults.field.defaultModel')}
+          onChange={handleDefaultModelChange}
+        />
+        <SettingsFieldRow
+          settingsItem="sessions.default-thinking"
+          label={t('settings.openchamber.defaults.field.defaultThinking')}
+          info={t('settings.omp.modelRoles.thinkingDefaultInfo')}
         >
-          <div className="flex flex-col @xl:flex-row gap-2 items-start @xl:items-center">
-            <Select
-              value={selectedModelId || '__inherit__'}
-              onValueChange={handleDefaultModelChange}
+          {matchedModel ? (
+            <ModelEffortPicker
+              model={matchedModel}
+              effort={selectedEffort || configuredThinkingLevel}
+              ariaLabel={t('settings.openchamber.defaults.field.defaultThinking')}
               disabled={isSavingOmp || !ompState}
-            >
-              <SelectTrigger
-                className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
-                aria-label={t('settings.openchamber.defaults.field.defaultModel')}
-              >
-                <SelectValue placeholder={t('settings.omp.modelRoles.inheritFallback')}>
-                  {defaultModelLabel}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__inherit__">
-                  {t('settings.omp.modelRoles.inheritFallback')}
-                </SelectItem>
-                {models.map((m) => {
-                  const id = `${m.provider}/${m.modelId}`;
-                  return (
-                    <SelectItem key={id} value={id}>
-                      {m.name || m.modelId} ({m.provider})
-                    </SelectItem>
-                  );
-                })}
-                {selectedModelId && !models.some((m) => `${m.provider}/${m.modelId}` === selectedModelId) && (
-                  <SelectItem value={selectedModelId}>
-                    {selectedModelId} ({t('settings.omp.modelRoles.customModel')})
-                  </SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-
-            {supportsReasoning && (
-              <Select
-                value={selectedEffort || '__default__'}
-                onValueChange={handleDefaultEffortChange}
-                disabled={isSavingOmp || !ompState}
-              >
-                <SelectTrigger
-                  className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
-                  aria-label={t('settings.openchamber.defaults.field.defaultThinking')}
-                >
-                  <SelectValue placeholder={t('settings.omp.modelRoles.thinkingDefault')}>
-                    {defaultEffortLabel}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__default__">
-                    {t('settings.omp.modelRoles.thinkingDefault')}
-                  </SelectItem>
-                  {effortOptions.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+              onChange={handleDefaultEffortChange}
+            />
+          ) : (
+            <SettingsChipGroup
+              value={configuredThinkingLevel || 'off'}
+              aria-label={t('settings.openchamber.defaults.field.defaultThinking')}
+              options={['off', 'low', 'medium', 'high'].map((level) => ({
+                value: level,
+                label: t(`settings.omp.modelRoles.effort.${level}` as I18nKey),
+              }))}
+              onChange={handleDefaultEffortChange}
+            />
+          )}
         </SettingsFieldRow>
 
         <SettingsFieldRow
@@ -573,9 +459,17 @@ export const DefaultsSettings: React.FC = () => {
           ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
           info={t('settings.openchamber.defaults.smallModel.description')}
         />
-        <SettingsFieldRow label={t('settings.openchamber.defaults.smallModel.title')}>
-          {roleSelect('smol', t('settings.openchamber.defaults.smallModel.title'), t('settings.openchamber.defaults.smallModel.useDefault'), !usesOwnSmallModel)}
-        </SettingsFieldRow>
+        <ModelRoleEditor
+          role="smol"
+          roles={roleSelectors}
+          models={models}
+          directory={directory ?? undefined}
+          globalLevel={configuredThinkingLevel || undefined}
+          settingsItem="sessions.small-model"
+          disabled={!usesOwnSmallModel || isSavingOmp || !ompState}
+          label={t('settings.openchamber.defaults.smallModel.title')}
+          onChange={(selector) => setRole('smol', selector)}
+        />
         <SettingsCheckboxRow
           settingsItem="sessions.walkthrough-use-default"
           checked={!usesOwnWalkthroughModel}
@@ -587,13 +481,18 @@ export const DefaultsSettings: React.FC = () => {
           label={t('settings.openchamber.defaults.smallModel.useDefault')}
           ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
         />
-        <SettingsFieldRow
+        <ModelRoleEditor
+          role="slow"
+          roles={roleSelectors}
+          models={models}
+          directory={directory ?? undefined}
+          globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.walkthrough-model"
+          disabled={!usesOwnWalkthroughModel || isSavingOmp || !ompState}
           label={t('settings.openchamber.defaults.walkthroughModel.title')}
-          info={t('settings.openchamber.defaults.walkthroughModel.description')}
-        >
-          {roleSelect('slow', t('settings.openchamber.defaults.walkthroughModel.title'), t('settings.openchamber.defaults.walkthroughModel.usesSmallModel'), !usesOwnWalkthroughModel)}
-        </SettingsFieldRow>
+          description={t('settings.openchamber.defaults.walkthroughModel.description')}
+          onChange={(selector) => setWalkthroughModel(selector)}
+        />
       </SettingsSection>
 
       <SettingsSection title={t('settings.sessions.permissions.defaultMode')} contentClassName="space-y-1">
@@ -624,16 +523,8 @@ export const DefaultsSettings: React.FC = () => {
             ariaLabel={t('settings.openchamber.defaults.field.planModeAllowAgentsAria')}
             description={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
           />
-          <SettingsCheckboxRow
-            settingsItem="sessions.deletion-dialog"
-            checked={showDeletionDialog}
-            onChange={(checked) => {
-              setShowDeletionDialog(checked);
-              void updateDesktopSettings({ showDeletionDialog: checked });
-            }}
-            label={t('settings.openchamber.defaults.field.showDeletionDialog')}
-            ariaLabel={t('settings.openchamber.defaults.field.showDeletionDialogAria')}
-          />
+          {/* Deletion confirmation is configured with deletion itself, on the
+              retention section; this page keeps only session-display switches. */}
           <SessionWarmingCheckbox />
           <SettingsCheckboxRow
             settingsItem="sessions.show-chats"

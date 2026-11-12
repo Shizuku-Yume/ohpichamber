@@ -801,6 +801,16 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** a concrete GUI user need appears for a hidden OMP setting.
 - **Effort:** ux-v270-omp-alignment
 
+## 2026-11-12 - Classify every OMP setting by GUI surface and let one role editor own model assignment
+
+- **Decided:** `OmpSettingSchema` states where each allowlisted OMP setting belongs — `gui`, `tui-only`, `duplicate` (naming the settings-item id that owns the concept) or `advanced` — and carries OMP's own `ui.condition` with whether it holds. The Agent Service owns one explicit per-id table; an unplaced id fails its classification test rather than falling into a default. The OMP page draws only `gui` rows from a declarative registry, offers the real `config.yml` path for the rest, and one `ModelRoleEditor` now serves Defaults, Git and OMP with the model's concrete effort level instead of a synthetic `default`.
+- **Instead of:** a prefix rule in the page (e.g. "everything `tui.*` is terminal-only"), a second defaults editor per surface, and an effort picker whose first row was a sentinel the user could not inspect.
+- **Because:** prefixes each span several surfaces (`task.`, `skills.`, `compaction.`), so a prefix rule decides for ids nobody examined; and the page's 157-row type switch had already grown a per-page copy of the role editor, the effort vocabulary and three sentinel conventions.
+- **Also decided:** the UI Check leg runs `bun --cwd packages/ui test …` instead of `bunx vitest run packages/ui/…`. `packages/ui` suites are `bun:test` files run one process per file by `scripts/run-isolated-tests.mjs`; no vitest configuration covers that root, so the vitest invocation fails at baseline with `Cannot find package 'bun:test'` (task 20 recorded the same).
+- **Mine:** yes (conservative option; no maintainer question)
+- **Revisit when:** a vitest configuration lands under `packages/ui`, or a prefix rule becomes a reliable classifier for its whole namespace.
+- **Effort:** ux-v270-omp-alignment
+
 ## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge
 
 - **Decided:** the lane 12 work modules (`openchamber-sessions`, `openchamber-control`, `quota`, `small-model`, `routing`, `session-assist`, `session-work`, `scheduled-tasks`, `workflows`, `tts`, `package-manager.js`) keep the fork's Host/Canonical API shape; upstream v2.7.0 engine code is not adopted there.
@@ -950,4 +960,34 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Also recorded:** `sessionActivityPhase` is the single owner of that settled rule; `SessionDoneHintRow` and `SessionReviewHintRow` had the same duplicated predicate. An empty suggestion stays a successful outcome (the prompt rules return `""` when the request is satisfied or the next move is the user's), so the observation used a request with genuinely unfinished agent work.
 - **Mine:** yes (the alternative — adding a second `unavailable`-aware predicate per surface — would keep four copies of one rule)
 - **Revisit when:** the projection stops reporting unheld sessions as `unavailable` (e.g. a separate "not loaded" status), or OMP changes the role selector syntax.
+## 2026-11-12 - UI error suites run under bun test, Host suites under the web vitest config
+
+- **Decided:** task 21's Check runs `bun test` for `packages/ui/src/lib/problemMessage*` and `bunx vitest run server/lib/host` from `packages/web`.
+- **Instead of:** the single root `bunx vitest run packages/web/server/lib/host packages/ui/src/api packages/ui/src/lib/problemMessage.test.ts` the task originally named.
+- **Because:** `packages/ui` tests import `bun:test`, and the repo has no root `vitest.config.ts` (upstream `bc50ba56a` has none either), so a root vitest run fails to resolve `bun:test` for UI paths before running a single test. `packages/web/vitest.config.ts` is the only config that aliases `bun:test` and `@/`, and it resolves `server/lib/host` correctly.
+- **Mine:** yes (agent decision, confirmed by the maintainer's dispatch note).
+- **Revisit when:** a root vitest config appears, or the UI suites migrate off `bun:test`.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - Upstream UI error displays carry the fork problem cause in the v2.7.0 merge
+
+- **Decided:** the nine upstream UI files that task 21 touched keep the fork's `problemMessage(error, …)` display and are recorded as `fork-differs` decision rows in the drift ledger.
+- **Instead of:** leaving them `unexplained` in the ledger, or reverting them to upstream's translation-only toasts to avoid the divergence.
+- **Because:** the R6 fix is a deliberate fork change: a caught failure must show the cause the Agent Service wrote. Reverting those nine files would restore the defect the task exists to remove, and an unexplained row would fail `bun run check`.
+- **Mine:** yes (agent decision, within the task's stated scope).
+- **Revisit when:** upstream adopts an equivalent cause-carrying display, at which point the rows collapse into `identical`.
+## 2026-11-12 - A tool result is a part of its call's message; a failure keeps a kind beside its detail
+
+- **Decided:** the canonical projection publishes a `tool_result` part inside the assistant message that authored its `tool_call`, at part id `<call-part>:result`, and streams OMP's partial result frames as `part.updated` on that same part. `ToolResultPart` keeps `error: string` and gains `errorKind`. A assistant step carries `timing: { startedAt, firstTokenAt?, completedAt? }` derived only from the native message. A run OMP prompts itself opens a turn with no authored user message, and the client joins its steps to the previous turn.
+- **Instead of:** a separate `role: 'system'` result message paired by the client, an object-valued `error`, or a `tool_result`-only turn role.
+- **Because:** the journal and reducer already key parts by partId and already flip call status from `tool.started`/`tool.completed`, so one message makes the live stream and the restored transcript identical and lets the client delete every heuristic it used to re-join them. `error` is read as text in cards the effort does not own, and absolute epochs survive both live emission and history replay without a second clock.
+- **Mine:** yes (settled inside task 23's design; maintainer approved the user-less-turn rule as an out-of-list edit)
+- **Revisit when:** the contract gains a first-class result message or `error` becomes a structured value with every card migrated.
+## 2026-11-12 - `@upstream` routing is opt-in for the selector grammar
+
+- **Decided:** `parseModelSelector` reads a trailing `@<slug>` as provider routing only when the caller passes `allowUpstreamRouting: true`. By default the `@` and its slug stay part of the model half, and `splitUpstreamRouting` remains exported for callers that check the base first.
+- **Instead of:** reproducing OMP's two-stage behavior (split, then re-resolve only when the base is an OpenRouter or Vercel-Gateway model) inside a grammar module that has no model registry. The alternative would have been to accept an `supportsUpstreamRouting(model)` predicate in the parse options, which doesn't exist without a catalog lookup and would make a pure string grammar depend on live provider state.
+- **Because:** an ungated split rewrites real ids that legitimately contain `@` — `anthropic/claude-opus-4-8@default` becomes provider `anthropic`, id `claude-opus-4-8`, upstream `default` — and those ids are persisted in role settings and project defaults, so a wrong split corrupts stored configuration. Leaving it off is the safe default; a caller that can prove the base is an aggregator turns it on.
+- **Mine:** yes (conservative option inside the 2026-11-10 R7 cutover)
+- **Revisit when:** a layer that parses selectors has the resolved model in hand and needs routing fidelity; it should then pass `allowUpstreamRouting: true` plus its registry check.
 - **Effort:** ux-v270-omp-alignment

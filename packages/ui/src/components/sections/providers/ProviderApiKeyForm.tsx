@@ -7,6 +7,7 @@ import {
   SETTINGS_HELPER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useI18n } from '@/lib/i18n';
+import { problemMessage } from '@/lib/problemMessage';
 
 interface ProviderApiKeyFormProps {
   /** Stores the credential through the native canonical write; never retained here. */
@@ -45,7 +46,7 @@ export const ProviderApiKeyForm: React.FC<ProviderApiKeyFormProps> = ({
     } catch (error) {
       console.error('Failed to save API key:', error);
       setFailed(true);
-      toast.error(t('settings.providers.page.toast.apiKeySaveFailed'));
+      toast.error(problemMessage(error, t('settings.providers.page.toast.apiKeySaveFailed')));
     } finally {
       setSaving(false);
     }

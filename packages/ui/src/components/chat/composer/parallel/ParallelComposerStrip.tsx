@@ -1,3 +1,4 @@
+import { modelRefInstanceKey } from '@openchamber/agent-contract';
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -57,7 +58,7 @@ function LaunchSettingsDialog({
   const judge = state.fuse ?? (firstModel
     ? { providerId: firstModel.providerId, modelId: firstModel.modelId, variant: firstModel.variant, displayName: firstModel.displayName }
     : null);
-  const judgeSelection: ModelSelectionWithId[] = judge ? [{ ...judge, instanceId: `${judge.providerId}:${judge.modelId}` }] : [];
+  const judgeSelection: ModelSelectionWithId[] = judge ? [{ ...judge, instanceId: modelRefInstanceKey(judge.providerId, judge.modelId) }] : [];
   const close = () => {
     if (state.isolate) parallel.setSetupCommands(setupDraft.split('\n').map((line) => line.trim()).filter(Boolean));
     onOpenChange(false);
@@ -286,7 +287,7 @@ export function ParallelComposerStrip({
       <div className="flex flex-wrap items-center gap-1.5">
         {active.models.map((model, index) => (
           <span
-            key={`${model.providerId}:${model.modelId}:${model.variant ?? ''}`}
+            key={`${modelRefInstanceKey(model.providerId, model.modelId)}:${model.variant ?? ''}`}
             className="group/chip inline-flex h-6 items-center gap-1 rounded-md border border-border bg-[var(--surface-elevated)] ps-1.5 pe-0.5 typography-micro text-foreground"
           >
             <ProviderLogo providerId={model.providerId} className="size-3.5" />

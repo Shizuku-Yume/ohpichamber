@@ -12,7 +12,7 @@ import { useTurnRecords } from './hooks/useTurnRecords';
 import { buildHistoryEntries, type TimelineEntry } from './lib/turns/timelineEntries';
 import { buildLiveStreamingEntry } from './lib/turns/streamingTailEntry';
 import { FULL_MESSAGE_WINDOW, TurnMessageWindowContext, createTurnMessageWindowStore } from './lib/turns/turnMessageWindow';
-import { attachToolResultsForDisplay, getNormalizedMessageForDisplay } from './lib/messageDisplayNormalization';
+import { getNormalizedMessageForDisplay } from './lib/messageDisplayNormalization';
 import { useUIStore } from '@/stores/useUIStore';
 import { turnHeaderCanStick as canStickPrompt } from './lib/turns/stickyPrompt';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
@@ -920,6 +920,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         const latestById = new Map<string, ChatMessageEntry>();
         const dedupedMessages: ChatMessageEntry[] = [];
         for (const message of messages) {
+            // A notice row (rewind, compaction) is its own row; every other
+            // message, tool results included, belongs to a turn.
             if (message.role === 'system') {
                 continue;
             }
@@ -940,7 +942,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             dedupedMessages.push(getNormalizedMessageForDisplay(latestById.get(messageId) ?? message));
         }
 
-        return attachToolResultsForDisplay(dedupedMessages, messages);
+        return dedupedMessages;
     }), [messages]);
 
     const { projection, staticTurns, streamingTurn } = useTurnRecords(baseDisplayMessages, {

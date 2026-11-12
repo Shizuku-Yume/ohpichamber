@@ -10,6 +10,7 @@ import { setSessionWorkState } from '@/sync/session-actions';
 import { useDirectorySync, useSession, useSessionStatus } from '@/sync/sync-context';
 import { selectBoundRunId, sessionActivityPhase } from '@/hooks/useSessionActivity';
 import { useUIStore } from '@/stores/useUIStore';
+import { problemMessage } from '@/lib/problemMessage';
 
 interface SessionDoneHintRowProps {
   sessionId: string | null;
@@ -47,8 +48,8 @@ export const SessionDoneHintRow: React.FC<SessionDoneHintRowProps> = React.memo(
       // Done work leaves the working set: its header tab closes and the
       // neighbouring tab, or a new draft, takes over.
       leaveFinishedSessions([sessionId]);
-    } catch {
-      toast.error(t('sessions.sidebar.session.work.updateFailed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('sessions.sidebar.session.work.updateFailed')));
     } finally {
       setPending(false);
     }

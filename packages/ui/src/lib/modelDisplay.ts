@@ -77,6 +77,8 @@ const titleCaseToken = (token: string): string => {
   return token[0].toUpperCase() + token.slice(1).toLowerCase();
 };
 
+import { MAX_THINKING_SUFFIX_OPTIONS, splitThinkingSuffix } from '@openchamber/agent-contract';
+
 const stripProviderPrefix = (value: string): string => {
   const withoutAliasMarker = value.startsWith('~') ? value.slice(1) : value;
   const slashIndex = withoutAliasMarker.lastIndexOf('/');
@@ -210,7 +212,14 @@ export const humanizeModelId = (modelId: string | null | undefined): string => {
     return '';
   }
 
-  const { base, suffix } = splitColonSuffix(stripProviderPrefix(normalized));
+  // A display id may be `provider/model:<tag>`. A recognized thinking level
+  // renders as its own tag; anything else (`:free`, `:thinking`) is a literal
+  // id suffix the selector grammar deliberately does not own, and renders too.
+  const bare = stripProviderPrefix(normalized);
+  const thinking = splitThinkingSuffix(bare, -1, MAX_THINKING_SUFFIX_OPTIONS);
+  const { base, suffix } = thinking.level !== undefined
+    ? { base: thinking.base, suffix: thinking.level }
+    : splitColonSuffix(bare);
   const formattedTokens = combineModelTokens(tokenizeModelId(base).map(formatModelToken));
 
   if (formattedTokens.length >= 2) {

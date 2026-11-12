@@ -31,6 +31,8 @@ export type ToolCallPart = z.infer<typeof ToolCallPartSchema>;
 export const ToolResultPartSchema = z.strictObject({
   type: z.literal('tool_result'), partId: EntityIdSchema, toolCallId: EntityIdSchema, toolName: z.string().min(1),
   output: JsonValueSchema.optional(), error: z.string().optional(), isError: z.boolean(),
+  /** Machine-readable failure class (`timeout`, `background-job`, `interrupted`, …) beside the human detail in `error`. */
+  errorKind: z.string().min(1).optional(),
 });
 export type ToolResultPart = z.infer<typeof ToolResultPartSchema>;
 export const AttachmentPartSchema = PromptAttachmentSchema.safeExtend({ type: z.literal('attachment'), partId: EntityIdSchema });
@@ -173,9 +175,23 @@ export const TokenUsageSchema = z.strictObject({
 });
 export type TokenUsage = z.infer<typeof TokenUsageSchema>;
 
+/**
+ * When one assistant step started, delivered its first token, and finished.
+ * Times are absolute epochs so a restored step carries the same values the
+ * live stream published, and a consumer subtracts rather than sums.
+ */
+export const StepTimingSchema = z.strictObject({
+  startedAt: TimestampSchema,
+  firstTokenAt: TimestampSchema.optional(),
+  completedAt: TimestampSchema.optional(),
+});
+export type StepTiming = z.infer<typeof StepTimingSchema>;
+
 export const MessageSchema = z.strictObject({
   messageId: EntityIdSchema, sessionId: EntityIdSchema, turnId: EntityIdSchema,
   role: z.enum(['user', 'assistant', 'system']), createdAt: TimestampSchema, parts: z.array(PartSchema),
   providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional(),
+  /** Present on assistant steps; a user or notice row carries none. */
+  timing: StepTimingSchema.optional(),
 });
 export type Message = z.infer<typeof MessageSchema>;

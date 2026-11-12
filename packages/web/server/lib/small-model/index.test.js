@@ -72,7 +72,7 @@ describe('Host canonical utility completion owner', () => {
   test('a role selector carrying a thinking level resolves its model', async () => {
     // OMP stores `provider/model:effort`; the suffix names the next turn's
     // thinking level and is not part of the model ID.
-    settingsModelRoles = { smol: 'other/haiku:high', commit: 'selected/large:MEDIUM' };
+    settingsModelRoles = { smol: 'other/haiku:high', commit: 'selected/large:medium' };
     expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'smol' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'modelRoles' });
     expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'commit' })).toMatchObject({ providerID: 'selected', modelID: 'large', source: 'modelRoles' });
     // A colon that is not a known level stays part of the model ID.
@@ -85,6 +85,23 @@ describe('Host canonical utility completion owner', () => {
     expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'commit' })).toMatchObject({ providerID: 'selected', modelID: 'large', source: 'modelRoles' });
     settingsModelRoles = { default: 'other/haiku' };
     expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'commit' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'modelRoles' });
+  });
+  test('a role written with :thinkingLevel resolves to its model and asks for that effort', async () => {
+    models = [{
+      ...model('other', 'haiku'),
+      reasoningEffortSupported: true,
+      reasoningOptions: [
+        { reasoningEffort: 'low', label: 'Low', budgetTokens: null },
+        { reasoningEffort: 'high', label: 'High', budgetTokens: null },
+      ],
+    }];
+    settingsModelRoles = { smol: 'other/haiku:high' };
+    // The suffix must not stop the role from resolving to `other/haiku`.
+    expect(await describeSmallModel({ workspaceId: 'workspace-a', role: 'smol' })).toMatchObject({ providerID: 'other', modelID: 'haiku', source: 'modelRoles' });
+    await generateSmallModelText({ workspaceId: 'workspace-a', prompt: 'hello', role: 'smol' });
+    expect(calls.find(call => call.pathname.endsWith('/completions')).body).toMatchObject({
+      selection: { providerId: 'other', modelId: 'haiku' }, reasoningEffort: 'high',
+    });
   });
   test('structured errors preserve the provider failure instead of valid empty output', async () => {
     completion = { status: 'failed', error: { code: 'STRUCTURED_OUTPUT_INVALID', detail: 'Invalid provider output', retryable: false } };

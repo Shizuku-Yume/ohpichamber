@@ -11,6 +11,8 @@ import {
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import type { AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import { ProjectionError } from '../projection/journal.ts';
+import { presentOmpSetting } from './settings-ui.ts';
+import { join } from 'node:path';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 /**
@@ -18,8 +20,7 @@ import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
  * All setting definitions come from the pinned @oh-my-pi/pi-coding-agent package
  * and are constrained by OMP_SETTING_IDS in @openchamber/agent-contract.
  */
-export const OMP_CATALOG_SETTING_IDS = OMP_SETTING_IDS;
-const allowlist = new Set<string>(OMP_CATALOG_SETTING_IDS);
+const allowlist = new Set<string>(OMP_SETTING_IDS);
 const byId = new Map<string, AnySetting>();
 
 /**
@@ -48,13 +49,21 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
     : undefined;
   const rawValue = setting.layered(settings);
   const rawDefault = setting.definition.default;
+  const id = OmpSettingIdSchema.parse(setting.id);
+  const presentation = presentOmpSetting(id, ui?.condition, settings);
   const descriptor: OmpSetting = {
-    id: OmpSettingIdSchema.parse(setting.id),
+    id,
     type: setting.definition.type,
     value: rawValue === undefined ? null : JsonValueSchema.parse(rawValue),
     default: rawDefault === undefined ? null : JsonValueSchema.parse(rawDefault),
     configured: setting.isConfigured(settings),
+    surface: presentation.surface,
   };
+  if (presentation.owner !== undefined) descriptor.owner = presentation.owner;
+  if (presentation.condition !== undefined) {
+    descriptor.condition = presentation.condition;
+    descriptor.conditionActive = presentation.conditionActive ?? true;
+  }
   if (setting.enumValues !== undefined) descriptor.enumValues = [...setting.enumValues];
   if (list !== undefined) descriptor.options = list;
   if (ui?.label !== undefined) descriptor.label = ui.label;
@@ -64,14 +73,27 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   return OmpSettingSchema.parse(descriptor);
 }
 
+/** The config file the settings write, shown so the page can offer it. OMP reads it inside the agent directory. */
+const OMP_CONFIG_FILENAME = 'config.yml';
+
 export class NativeSettings {
-  constructor(private readonly settings: Settings) {}
+  private readonly configFilePath: string | undefined;
+
+  constructor(private readonly settings: Settings, agentDirectory?: string) {
+    this.configFilePath = agentDirectory === undefined ? undefined : join(agentDirectory, OMP_CONFIG_FILENAME);
+  }
+
+  private state(workspaceId: string, revision: string): OmpSettingsState {
+    return OmpSettingsStateSchema.parse({
+      workspaceId, revision,
+      ...(this.configFilePath === undefined ? {} : { configPath: this.configFilePath }),
+      settings: OMP_SETTING_IDS.map(id => descriptor(handle(id), this.settings)),
+    });
+  }
 
   async read(workspaceId: string, revision: string): Promise<OmpSettingsState> {
     await this.settings.reloadFromDisk();
-    return OmpSettingsStateSchema.parse({
-      workspaceId, revision, settings: OMP_SETTING_IDS.map(id => descriptor(handle(id), this.settings)),
-    });
+    return this.state(workspaceId, revision);
   }
 
   async write(workspaceId: string, revision: string, request: OmpSettingsUpdateRequest): Promise<OmpSettingsState> {
@@ -110,8 +132,6 @@ export class NativeSettings {
       throw new ProjectionError(503, 'INTERNAL_ERROR', 'OMP settings could not be persisted');
     }
     await this.settings.reloadFromDisk();
-    return OmpSettingsStateSchema.parse({
-      workspaceId, revision, settings: OMP_SETTING_IDS.map(id => descriptor(handle(id), this.settings)),
-    });
+    return this.state(workspaceId, revision);
   }
 }

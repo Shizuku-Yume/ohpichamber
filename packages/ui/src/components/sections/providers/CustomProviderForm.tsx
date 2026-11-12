@@ -42,6 +42,7 @@ import {
 } from './custom-provider-form';
 import { CustomProviderModelDiscovery } from './CustomProviderModelDiscovery';
 import { CustomProviderModelRow } from './CustomProviderModelRow';
+import { problemMessage } from '@/lib/problemMessage';
 
 interface CustomProviderFormProps {
   workspaceId: string;
@@ -181,9 +182,9 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     try {
       const result = await canonicalClient.discoverProviderModels(workspaceId, buildProviderDiscoveryRequest(form, isEdit));
       if (lifetime.current && runtime === getRuntimeKey()) setDiscoveredModels(result.models);
-    } catch {
+    } catch (error) {
       if (lifetime.current && runtime === getRuntimeKey()) {
-        setDiscoveryError(t('settings.providers.page.custom.discovery.failed'));
+        setDiscoveryError(problemMessage(error, t('settings.providers.page.custom.discovery.failed')));
       }
     } finally {
       if (lifetime.current) setDiscovering(false);
@@ -222,15 +223,15 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     let plan: CustomProviderPersistPlan;
     try {
       plan = buildCustomProviderRequest(form, revision);
-    } catch {
-      setFormError(t('settings.providers.native.invalidConfiguration'));
+    } catch (error) {
+      setFormError(problemMessage(error, t('settings.providers.native.invalidConfiguration')));
       return;
     }
     try {
       await onSubmit(plan);
       if (lifetime.current) setForm((previous) => ({ ...previous, apiKey: '' }));
-    } catch {
-      if (lifetime.current) setFormError(t('settings.providers.page.toast.customProviderSaveFailed'));
+    } catch (error) {
+      if (lifetime.current) setFormError(problemMessage(error, t('settings.providers.page.toast.customProviderSaveFailed')));
     }
   };
 

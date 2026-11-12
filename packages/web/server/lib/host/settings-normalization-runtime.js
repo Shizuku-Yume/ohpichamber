@@ -1,3 +1,5 @@
+import { modelRefKey } from '@openchamber/agent-contract';
+
 export const createSettingsNormalizationRuntime = (dependencies) => {
   const {
     os,
@@ -473,7 +475,7 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
       const providerID = typeof entry.providerID === 'string' ? entry.providerID.trim() : '';
       const modelID = typeof entry.modelID === 'string' ? entry.modelID.trim() : '';
       if (!providerID || !modelID) continue;
-      const key = `${providerID}/${modelID}`;
+      const key = modelRefKey(providerID, modelID);
       if (seen.has(key)) continue;
       seen.add(key);
       result.push({ providerID, modelID });

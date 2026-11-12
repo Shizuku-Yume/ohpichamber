@@ -1,3 +1,4 @@
+import { formatModelRef, modelRefKey } from '@openchamber/agent-contract';
 import { useCallback, useState } from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
@@ -18,7 +19,7 @@ interface WalkthroughBlockerProps {
 }
 
 const modelLabel = (model?: WalkthroughModel) =>
-  model ? `${model.providerID}/${model.modelID}` : '';
+  model ? formatModelRef({ providerId: model.providerID, modelId: model.modelID }) : '';
 
 /**
  * A refusal the user can act on. Both blocking reasons come down to "this small
@@ -52,7 +53,7 @@ export const WalkthroughBlocker = ({
   const handleModelChange = useCallback(
     async (providerId: string, modelId: string) => {
       if (!providerId || !modelId || saving) return;
-      const value = `${providerId}/${modelId}`;
+      const value = modelRefKey(providerId, modelId);
       setSaving(true);
       try {
         const workspaceId = getDirectoryState()?.workspace?.workspaceId;
@@ -78,7 +79,7 @@ export const WalkthroughBlocker = ({
   // the same refusal one click later.
   const isStructuredOutputCapable = useCallback(
     (providerId: string, modelId: string) =>
-      modelsMetadata.get(`${providerId}/${modelId}`)?.structured_output !== false,
+      modelsMetadata.get(modelRefKey(providerId, modelId))?.structured_output !== false,
     [modelsMetadata]
   );
 

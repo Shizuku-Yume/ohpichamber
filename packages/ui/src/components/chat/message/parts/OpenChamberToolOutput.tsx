@@ -1,3 +1,4 @@
+import { formatModelRef } from '@openchamber/agent-contract';
 import * as React from 'react';
 import { z } from 'zod';
 
@@ -89,7 +90,7 @@ const DispatchedBody: React.FC<{ data: unknown }> = ({ data }) => {
     const parsed = dispatchedSchema.safeParse(data);
     if (!parsed.success) return null;
     const { sessionId, directory, title, model, agent } = parsed.data;
-    const modelLabel = [model?.providerID && model.modelID ? `${model.providerID}/${model.modelID}` : undefined, agent].filter(Boolean).join(' · ');
+    const modelLabel = [model ? formatModelRef({ providerId: model.providerID, modelId: model.modelID }) || undefined : undefined, agent].filter(Boolean).join(' · ');
     return (
         <>
             <SessionLinkRow sessionId={sessionId} directory={directory} title={title} secondary={modelLabel || undefined} />
@@ -308,7 +309,7 @@ const SessionsListedBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
-const modelLabel = (model: { providerID: string; modelID: string }) => `${model.providerID}/${model.modelID}`;
+const modelLabel = (model: { providerID: string; modelID: string }) => formatModelRef({ providerId: model.providerID, modelId: model.modelID });
 
 const ModelPreferencesBody: React.FC<{ data: unknown }> = ({ data }) => {
     const { t } = useI18n();

@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { selectProjectMemoryForPath, useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { startMemoryTidy } from './memoryTidy';
+import { problemMessage } from '@/lib/problemMessage';
 
 /**
  * Starts the tidy-up session. Offered only while both scopes are loaded for
@@ -54,8 +55,8 @@ const MemoryTidyButton: React.FC<{ projectPath: string | null }> = ({ projectPat
           ? 'rightSidebar.contextNotesTodo.memory.tidy.noModel'
           : 'rightSidebar.contextNotesTodo.memory.tidy.failed'));
       }
-    } catch {
-      toast.error(t('rightSidebar.contextNotesTodo.memory.tidy.failed'));
+    } catch (error) {
+      toast.error(problemMessage(error, t('rightSidebar.contextNotesTodo.memory.tidy.failed')));
     } finally {
       setStarting(false);
     }

@@ -256,7 +256,7 @@ export const createPageAnswers = ({ onWaitChange = () => {} } = {}) => {
  * first. The plugin's prompt hook cannot catch it, since it fired before the
  * page existed.
  */
-export const createRenderPageAction = ({ isEnabled, pageAnswers, hasUnreadChat }) => async (input, { sessionId, callId, directory, signal } = {}) => {
+export const createRenderPageAction = ({ isEnabled, pageAnswers, hasUnreadChat = async () => false }) => async (input, { sessionId, callId, directory, signal } = {}) => {
   if (!await isEnabled()) {
     throw new OpenChamberControlError('The render tool is turned off in OpenChamber settings', 403);
   }

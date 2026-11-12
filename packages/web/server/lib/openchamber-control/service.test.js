@@ -20,6 +20,7 @@ const createHarness = (settings = {
   agentNotifyToolEnabled: true,
   agentImageToolEnabled: true,
   agentImageModel: 'openrouter/openai/gpt-image-2',
+  agentRenderToolEnabled: true,
 }, overrides = {}) => {
   const created = [];
   const sent = [];
@@ -196,6 +197,44 @@ describe('OpenChamber control service canonical consumers', () => {
 
     expect(created).toHaveLength(0);
     expect(sent).toHaveLength(0);
+  });
+
+  it('serves render.page through the render feature policy and carries the call id to a waiting page', async () => {
+    const waits = [];
+    const { control } = createHarness(undefined, {
+      onPageWaitChange: (change) => waits.push(change),
+    });
+    const scope = { rootSessionId: 'session-1', ...scopeForWorkspace };
+    const call = { action: 'render.page', html: '<h1>Fixture</h1>', title: 'Fixture' };
+    const result = await control.invokeHostAction(scope, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', input: call,
+    });
+    expect(result).toMatchObject({ ok: true, value: { shown: true, title: 'Fixture' } });
+    // A page that waits publishes its call identity, which is what the answer
+    // route resolves against.
+    const waiting = new Promise((resolve) => {
+      const previous = waits.length;
+      const poll = () => (waits.length > previous && waits.at(-1).type === 'waiting'
+        ? resolve(waits.at(-1))
+        : setTimeout(poll, 5));
+      poll();
+    });
+    const pending = control.invokeHostAction(scope, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1',
+      input: { html: '<h1>Ask</h1>', title: 'Ask', awaitAnswer: true }, toolCallId: 'call-ask',
+    });
+    const announced = await waiting;
+    expect(announced).toMatchObject({ type: 'waiting', sessionId: 'session-1', callId: 'call-ask', title: 'Ask' });
+    expect(control.answerPage({ sessionId: 'session-1', callId: 'call-ask', summary: 'chose one', data: { n: 1 } }))
+      .toEqual({ answered: true });
+    await expect(pending).resolves.toMatchObject({
+      ok: true,
+      value: { title: 'Ask', answer: { answered: true, summary: 'chose one' } },
+    });
+    const disabled = createHarness({ agentRenderToolEnabled: false }).control;
+    await expect(disabled.invokeHostAction(scope, {
+      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', input: call,
+    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber_render tool is disabled' });
   });
 
   it('returns canonical project and workspace-scoped model projections', async () => {

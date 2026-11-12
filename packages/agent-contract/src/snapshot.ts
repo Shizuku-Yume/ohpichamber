@@ -39,7 +39,11 @@ export const SessionSnapshotSchema = z.strictObject({
   const lastMessage = snapshot.messages.at(-1)?.messageId ?? null;
   if (window.firstTurnId !== firstTurn || window.lastTurnId !== lastTurn
     || window.firstMessageId !== firstMessage || window.lastMessageId !== lastMessage
-    || (snapshot.turns.length === 0) !== (snapshot.messages.length === 0)
+    // A turn opens before its first step message exists (a run OMP starts itself
+    // opens a turn, the agent's first message follows), and a turn can stand
+    // without a user row of its own, so turns may be empty of messages; messages
+    // never exist without the turn that owns them.
+    || (snapshot.messages.length > 0 && snapshot.turns.length === 0)
     || (snapshot.turns.length === 0 && (window.hasEarlier || snapshot.branch.leafMessageId !== null))
     || (snapshot.messages.length > 0 && snapshot.branch.leafMessageId !== lastMessage)) {
     context.addIssue({ code: 'custom', message: 'Snapshot window must describe its inclusive history bounds and branch leaf', path: ['window'] });

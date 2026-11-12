@@ -23,6 +23,7 @@ import { IntegrationCatalogCard } from './IntegrationCatalogCard';
 import { TrackerProjectMapping } from './TrackerProjectMapping';
 import { TrackerSessionComments } from './TrackerSessionComments';
 import { trackerSettingsCopy } from './trackerSettingsCopy';
+import { problemMessage } from '@/lib/problemMessage';
 
 const AUTHORIZATION_WATCH_MS = 3 * 60_000;
 const AUTHORIZATION_POLL_MS = 1_500;
@@ -274,8 +275,8 @@ export const TrackerSettings: React.FC<TrackerSettingsProps> = ({ descriptor, ex
     try {
       setTrackerStatus(providerId, await trackers.authActivate(providerId, accountId));
       toast.success(t(copy.toastAccountSwitched, { provider }));
-    } catch {
-      toast.error(t(copy.toastAccountSwitchFailed, { provider }));
+    } catch (error) {
+      toast.error(problemMessage(error, t(copy.toastAccountSwitchFailed, { provider })));
     } finally {
       setIsBusy(false);
     }
@@ -289,8 +290,8 @@ export const TrackerSettings: React.FC<TrackerSettingsProps> = ({ descriptor, ex
       await trackers.authDisconnect(providerId);
       toast.success(t(copy.toastDisconnected, { provider }));
       await refreshTrackerStatus(trackers, providerId, { force: true });
-    } catch {
-      toast.error(t(copy.toastDisconnectFailed, { provider }));
+    } catch (error) {
+      toast.error(problemMessage(error, t(copy.toastDisconnectFailed, { provider })));
     } finally {
       setIsBusy(false);
     }

@@ -71,6 +71,7 @@ import { titlebarControlsWidthReaderRef } from './titlebarControlsWidth';
 import { useLayoutAnimationMs } from '@/hooks/useLayoutAnimationMs';
 import { LAYOUT_ANIMATION_EASING } from '@/lib/layoutAnimation';
 import { findWorktreeHoldingDirectory } from '@/lib/worktrees/worktreePaths';
+import { problemMessage } from '@/lib/problemMessage';
 
 // Like the icon rail: muted at rest, full strength on hover, while its menu is
 // open or while what it controls is on, and no hover fill.
@@ -481,7 +482,7 @@ export const Header: React.FC = () => {
       toast[result.ok ? 'success' : 'error'](t(result.ok
         ? 'sessions.sidebar.session.copyId.success'
         : 'sessions.sidebar.session.copyId.error'));
-    }).catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
+    }).catch((error) => toast.error(problemMessage(error, t('sessions.sidebar.session.copyId.error'))));
   }, [t]);
 
   const exportCurrentSession = React.useCallback(async () => {

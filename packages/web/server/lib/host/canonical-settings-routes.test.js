@@ -26,7 +26,7 @@ const endpoint = '/api/agent/v1/workspaces/workspace_1/settings';
 const state = {
   workspaceId: 'workspace_1', revision: '7', settings: [{
     id: 'compaction.thresholdPercent', type: 'number', value: 50, default: -1, configured: true,
-    label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
+    label: 'Compaction Threshold', group: 'Compaction', tab: 'context', surface: 'gui',
   }],
 };
 const updated = { ...state, revision: '8', settings: [{ ...state.settings[0], value: 60 }] };

@@ -159,6 +159,22 @@ An agent-discovery cache in `NativeAgents` was measured and dropped: it moved
 the agents catalog from 78 to 67 ms, a path outside all three budgets, and it
 would serve stale definitions after an external file edit.
 
+### After the integration merge
+
+Measured again on the merged tree (integration tip merged into the branch, no
+conflicts):
+
+```
+catalog models:    first 32.00 ms, warm median 12.90 ms, max 14.75 ms   (budget 20 ms)   PASS
+catalog providers: first 19.34 ms, warm median 13.48 ms, max 16.94 ms   (budget 20 ms)   PASS
+dispatch:          new session 148.49 ms, warm 153.49 ms, overhead -5.00 ms (budget 150 ms) PASS
+settings tab switch: 51.85, 51.72, 51.79, 51.52, 51.72 ms              (budget 100 ms)  PASS
+```
+
+The dispatch pair lands within noise of each other on this run, which is what
+the budget asks for: a new session no longer costs measurably more than a warm
+one.
+
 ### Check
 
 `Check before:` not run; the baseline run ended before the check.

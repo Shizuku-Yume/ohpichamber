@@ -97,6 +97,7 @@
     "profile:toggle": "node scripts/profile-toggle.mjs",
     "profile:ios": "node scripts/profile-ios.mjs",
     "profile:serve": "node scripts/perf/isolated-server.mjs",
+    "profile:omp": "node scripts/perf/omp-performance.mjs",
     "profile:analyze": "node scripts/perf/analyze-run.mjs",
     "type-check:mobile": "bun run --cwd packages/mobile type-check",
     "dev:web": "bun run --cwd packages/web build:watch",

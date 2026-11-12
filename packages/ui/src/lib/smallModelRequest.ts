@@ -14,7 +14,7 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { formatMessage, useI18nStore } from '@/lib/i18n';
 import { getRuntimeKey, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
 import { getDirectoryState, getSyncSessionDirectory } from '@/sync/sync-refs';
-import { useConfigStore } from '@/stores/useConfigStore';
+import { selectModelsForDirectory, useConfigStore } from '@/stores/useConfigStore';
 export type SmallModelRequest = Pick<CompletionRequest, 'prompt'> & Partial<Pick<CompletionRequest, 'system' | 'format' | 'maxOutputTokens' | 'timeoutMs' | 'overflow'>> & {
   directory?: string | null;
   workspaceId?: string;
@@ -59,16 +59,30 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
     const workspace = input.workspaceId ? { workspaceId: input.workspaceId } : await canonicalClient.resolveWorkspace(directory!);
     check();
     const targetRole = input.role ?? 'smol';
-    const [catalog, ompSettings] = await Promise.all([
-      canonicalClient.getModels(workspace.workspaceId),
-      canonicalClient.getOmpSettings(workspace.workspaceId).catch(() => null),
-    ]);
-    check();
+    // The config loader already read this directory's catalog and the OMP
+    // settings roles resolve from; asking again made every background
+    // completion pay two catalog reads for data the app already held. A cold
+    // store (a background job that ran before the first load settled) still
+    // reads them, so the resolver never depends on load order.
+    const store = useConfigStore.getState();
+    const cachedModels = selectModelsForDirectory(store, directory);
+    const cachedSettings = store.ompSettings;
+    let models = cachedModels;
+    let ompSettings = cachedSettings;
+    if (cachedModels.length === 0 || cachedSettings === null) {
+      const [catalog, settings] = await Promise.all([
+        cachedModels.length === 0 ? canonicalClient.getModels(workspace.workspaceId) : Promise.resolve(null),
+        cachedSettings === null ? canonicalClient.getOmpSettings(workspace.workspaceId).catch(() => null) : Promise.resolve(null),
+      ]);
+      check();
+      if (catalog !== null) models = catalog.models;
+      if (settings !== null) ompSettings = settings;
+    }
     // The catalog entry travels with the selection: a reasoning-enabled request
     // must ask only for an effort the model actually advertises.
     const catalogModel = (selection: ModelSelection | null): Model | null => (
       selection
-        ? catalog.models.find((model) => model.provider === selection.providerId && model.modelId === selection.modelId) ?? null
+        ? models.find((model) => model.provider === selection.providerId && model.modelId === selection.modelId) ?? null
         : null
     );
     if (input.selection) {
@@ -88,7 +102,7 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
       const parsed = roleSelector ? parseModelSelector(roleSelector) : null;
       if (!parsed) return { workspaceId: workspace.workspaceId, selection: null, model: null, thinkingLevel: undefined, variant: null };
       const selection = { providerId: parsed.providerId, modelId: parsed.modelId };
-      const available = catalog.models.some((model) => usable(model) && model.provider === selection.providerId && model.modelId === selection.modelId);
+      const available = models.some((model) => usable(model) && model.provider === selection.providerId && model.modelId === selection.modelId);
       return {
         workspaceId: workspace.workspaceId,
         selection: available ? selection : null,
@@ -97,15 +111,15 @@ export async function resolveSmallModel(input: Pick<SmallModelRequest, 'director
         variant: parsed.variant ?? null,
       };
     }
-    const models = catalog.models.filter(model => usable(model) && (!preferred || model.provider === preferred.providerId));
+    const candidates = models.filter(model => usable(model) && (!preferred || model.provider === preferred.providerId));
     // A default utility selection may use a smaller model, but only within
     // the provider captured when the operation started.
     let small: Model | undefined;
     for (const family of families) {
-      small = models.find(model => model.modelId.toLowerCase().replaceAll('_', '-').includes(family));
+      small = candidates.find(model => model.modelId.toLowerCase().replaceAll('_', '-').includes(family));
       if (small) break;
     }
-    const chosen = small ?? (preferred ? models.find(model => model.modelId === preferred.modelId) : undefined);
+    const chosen = small ?? (preferred ? candidates.find(model => model.modelId === preferred.modelId) : undefined);
     return {
       workspaceId: workspace.workspaceId,
       selection: chosen ? { providerId: chosen.provider, modelId: chosen.modelId } : null,

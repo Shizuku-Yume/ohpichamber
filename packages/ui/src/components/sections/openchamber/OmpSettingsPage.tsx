@@ -2,7 +2,6 @@ import React from 'react';
 import {
   JsonObjectSchema,
   MODEL_ROLE_IDS,
-  type Model,
   type OmpSetting,
   type OmpSettingId,
   type OmpSettingValue,
@@ -11,6 +10,7 @@ import {
 } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
@@ -263,7 +263,9 @@ export const OmpSettingsPage: React.FC = () => {
   const [loading, setLoading] = React.useState(true);
   const [loadFailed, setLoadFailed] = React.useState(false);
   const [reload, setReload] = React.useState(0);
-  const [models, setModels] = React.useState<Model[]>([]);
+  // The catalog loader already read this directory's models; fetching them
+  // again here duplicated the slowest request the page made.
+  const models = useSettingsModels(directory);
   const savedRef = React.useRef<OmpSettingsState | null>(null);
   const scopeGeneration = React.useRef(0);
 
@@ -287,14 +289,10 @@ export const OmpSettingsPage: React.FC = () => {
       try {
         const workspace = await canonicalClient.resolveWorkspace(directory);
         if (abort.signal.aborted || generation !== scopeGeneration.current) return;
-        const [snapshot, modelCatalog] = await Promise.all([
-          canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal),
-          canonicalClient.getModels(workspace.workspaceId).catch(() => null),
-        ]);
+        const snapshot = await canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal);
         if (abort.signal.aborted || generation !== scopeGeneration.current) return;
         savedRef.current = snapshot;
         setState(snapshot);
-        if (modelCatalog?.models) setModels(modelCatalog.models);
 
         const initialValues: Values = {};
         for (const setting of snapshot.settings) initialValues[setting.id] = setting.value;

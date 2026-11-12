@@ -171,3 +171,13 @@ paths:
   settings-registry gate passes; the one failure is the unrelated `npm pack`
   tarball test hitting its 5 s timeout.
 - `bun run settings-registry:generate` twice → identical output.
+
+After merging `ux-v270-omp-alignment/integration` into this branch, the same
+Check was rerun on the merged tree: 20/20 test files pass, the CSS check exits 0
+(2268 tokens), `bun run lint` exits 0 for all six packages, and
+`bunx tsc --noEmit -p packages/ui/tsconfig.json` exits 0. The merge's only
+conflict was `CommandsPage.tsx`, where task 26 removed the read-only builtin
+branch; integration's side was taken (builtins are editable now) and the dead
+`typography-body` token the merge reintroduced was removed. The effect test
+then caught a genuine new consumer — `permissionStore` reads
+`permissionDefaultMode` — so that entry now declares `store` too.

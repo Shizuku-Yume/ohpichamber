@@ -1,4 +1,4 @@
-import { parseNativeReadPath, toolDescription, toolInputPath } from '@/lib/toolHelpers';
+import { isReadTool, parseNativeReadPath, toolInputPath } from '@/lib/toolHelpers';
 import type { ToolCallPart } from '@openchamber/agent-contract';
 import React from 'react';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
@@ -15,7 +15,7 @@ import { Text } from '@/components/ui/text';
 import { Icon } from "@/components/icon/Icon";
 import { FadeInOnReveal } from '../FadeInOnReveal';
 import { getToolIcon } from './toolPresentation';
-import { getToolMetadata } from '@/lib/toolHelpers';
+import { toolGrouping, toolPresentation, describeToolCall } from '@/lib/toolPresentation';
 import { useGuestToolPresentation } from '@/lib/guests/tool-presentation';
 import { isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
@@ -25,7 +25,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import ReasoningPart from './ReasoningPart';
 import JustificationBlock from './JustificationBlock';
 import { areRenderRelevantPartsEqual } from '../renderCompare';
-import { getExternalFaviconUrl } from '@/lib/url';
 import { getDirectoryForFilePath, getRelativeFilePath, isFilePathWithinDirectory, toAbsoluteFilePath } from '@/lib/path-utils';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
@@ -51,42 +50,12 @@ interface ProgressiveGroupProps {
     renderJustificationActions?: (activity: TurnActivityPart) => React.ReactNode;
 }
 
-const ExternalLinkFavicon: React.FC<{ href: string }> = ({ href }) => {
-    const [failed, setFailed] = React.useState(false);
-    const faviconUrl = React.useMemo(() => getExternalFaviconUrl(href), [href]);
-
-    if (!faviconUrl || failed) {
-        return null;
-    }
-
-    return (
-        <span className="inline-flex size-[18px] flex-shrink-0 items-center justify-center rounded border border-[var(--border)] bg-[var(--interactive-hover)]">
-            <img
-                src={faviconUrl}
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                decoding="async"
-                className="size-3.5 rounded-sm"
-                onError={() => setFailed(true)}
-            />
-        </span>
-    );
-};
-
 const isActivityRunning = (activity: TurnActivityPart): boolean => {
     const part = activity.part;
     return activity.kind === 'tool' && part.type === 'tool_call'
         && (part.status === 'pending_approval' || part.status === 'approved' || part.status === 'running');
 };
 
-/**
- * Parts arrive in correct chronological order:
- * messages in sequence, parts within each message in their natural LLM
- * production order. No re-sorting needed — time-based sorting breaks this
- * because text parts get time.end = message completion time (later than
- * tools), pushing text after tools within the same message.
- */
 const sortPartsByTime = (parts: TurnActivityPart[]): TurnActivityPart[] => parts;
 
 /**
@@ -159,15 +128,12 @@ const SHORT_DESCRIPTION_MAX = 50;
 
 const getToolShortDescription = (activity: TurnActivityPart): string | null => {
     const part = activity.part;
-    if (part.type !== 'tool_call' && part.type !== 'tool_result') return null;
-    const described = toolDescription(part);
-
-    if (described?.kind === 'text') {
-        return described.value.length > SHORT_DESCRIPTION_MAX
-            ? `${described.value.slice(0, SHORT_DESCRIPTION_MAX)}...`
-            : described.value;
-    }
-    return getToolFileName(activity);
+    if (part.type !== 'tool_call') return getToolFileName(activity);
+    const described = describeToolCall(part.input, part.toolName);
+    if (!described) return getToolFileName(activity);
+    return described.length > SHORT_DESCRIPTION_MAX
+        ? `${described.slice(0, SHORT_DESCRIPTION_MAX)}...`
+        : described;
 };
 
 type AggregatedRow =
@@ -403,9 +369,9 @@ const StaticToolRowInner: React.FC<{
     // name the canonical part reported, which every activity in the group carries.
     const firstPart = activities[0]?.part;
     const presentation = useGuestToolPresentation(firstPart?.type === 'tool_call' || firstPart?.type === 'tool_result' ? firstPart.toolName : null);
-    const displayName = presentation?.name ?? getToolMetadata(toolName).displayName;
+    const displayName = presentation?.name ?? toolPresentation(toolName).label;
     const icon = getToolIcon(toolName, presentation);
-    const isReadGroup = toolName === 'read';
+    const isReadGroup = isReadTool(toolName);
     const runtime = React.useContext(RuntimeAPIContext);
     const mobileActions = useMobileAppActions();
     const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
@@ -488,8 +454,7 @@ const StaticToolRowInner: React.FC<{
         uiStore.openContextFile(contextDirectory, absolutePath);
     }, [currentDirectory, mobileActions, runtime]);
 
-    const isSearchGroup = toolName === 'grep' || toolName === 'find' || toolName === 'glob';
-    const isFetchGroup = toolName === 'fetch';
+    const isSearchGroup = toolGrouping(toolName) === 'search';
 
     return (
         <div
@@ -545,26 +510,7 @@ const StaticToolRowInner: React.FC<{
                     </span>
                 ))
                 : null}
-            {isFetchGroup && descriptions.length > 0
-                ? descriptions.map((url, index) => (
-                    <a
-                        key={`${url}-${index}`}
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                            'min-w-0 flex-1 inline-flex items-center gap-1.5 underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90',
-                            'truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS
-                        )}
-                        style={{ color: 'var(--status-info)' }}
-                        title={url}
-                    >
-                        <ExternalLinkFavicon href={url} />
-                        <span className="min-w-0 truncate">{url}</span>
-                    </a>
-                ))
-                : null}
-            {!isReadGroup && !isSearchGroup && !isFetchGroup && descriptions.length > 0 ? (
+            {!isReadGroup && !isSearchGroup && descriptions.length > 0 ? (
                 <Text
                     variant={animateTailText ? 'generate-effect' : 'static'}
                     className={cn('min-w-0 flex-1 truncate whitespace-nowrap', TOOL_ROW_DESCRIPTION_CLASS)}

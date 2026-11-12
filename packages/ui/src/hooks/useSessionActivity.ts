@@ -17,7 +17,6 @@ export interface SessionActivityResult {
   phase: SessionActivityPhase;
   isWorking: boolean;
   isBusy: boolean;
-  isCooldown: boolean;
   isUnknown: boolean;
 }
 
@@ -25,7 +24,6 @@ const IDLE_RESULT: SessionActivityResult = {
   phase: 'idle',
   isWorking: false,
   isBusy: false,
-  isCooldown: false,
   isUnknown: false,
 };
 
@@ -33,7 +31,6 @@ const UNKNOWN_RESULT: SessionActivityResult = {
   phase: 'unknown',
   isWorking: false,
   isBusy: false,
-  isCooldown: false,
   isUnknown: true,
 };
 
@@ -41,7 +38,6 @@ const BUSY_RESULT: SessionActivityResult = {
   phase: 'busy',
   isWorking: true,
   isBusy: true,
-  isCooldown: false,
   isUnknown: false,
 };
 

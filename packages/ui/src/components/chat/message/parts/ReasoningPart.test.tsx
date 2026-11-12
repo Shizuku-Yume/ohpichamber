@@ -12,6 +12,7 @@ import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import type { RuntimeAPIs } from '@/lib/api/types';
 
 import { I18nProvider } from '@/lib/i18n';
+import { useUIStore } from '@/stores/useUIStore';
 import ReasoningPart, { ReasoningTimelineBlock } from './ReasoningPart';
 import type { StreamPhase } from '../types';
 
@@ -412,6 +413,36 @@ describe('ReasoningPart streaming gating (issue #2020)', () => {
       await act(async () => {
         root.unmount();
       });
+      dom.restore();
+    }
+  });
+});
+
+describe('ReasoningPart live streaming', () => {
+  test('an expanded thought shows each new line as it arrives', async () => {
+    const dom = installDomStub();
+    const root = createRoot(dom.container);
+    const previousExpansion = useUIStore.getState().expandReasoningWhileStreaming;
+    useUIStore.setState({ expandReasoningWhileStreaming: true });
+
+    const part = (content: string): ReasoningPartFixture => ({ type: 'reasoning', partId: 'prt_live', content });
+    const renderTree = (content: string) => (
+      <TestProviders>
+        <ReasoningPart part={part(content)} messageId="msg_live" streamPhase="streaming" />
+      </TestProviders>
+    );
+
+    try {
+      await act(async () => { root.render(renderTree('First thought about the task')); });
+      // The block opens while it streams, and the growing paragraph is on
+      // screen: no finished-block hold keeps it back.
+      expect(dom.container.textContent).toContain('First thought about the task');
+
+      await act(async () => { root.render(renderTree('First thought about the task\nand a second line')); });
+      expect(dom.container.textContent).toContain('and a second line');
+    } finally {
+      await act(async () => { root.unmount(); });
+      useUIStore.setState({ expandReasoningWhileStreaming: previousExpansion });
       dom.restore();
     }
   });

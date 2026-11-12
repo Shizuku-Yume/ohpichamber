@@ -6,6 +6,7 @@ import { compactionSettingsI18n } from './compaction-settings.i18n';
 import { consoleBudgetsI18n } from './console-budgets.i18n';
 import { selectionApprovalI18n } from './selection-approval.i18n';
 import { agentStatusI18n } from './agent-status.i18n';
+import { todoTrayI18n } from './todo-tray.i18n';
 import { snippetsI18n } from './snippets.i18n';
 import { prReviewI18n } from './pr-review.i18n';
 import { imageToolI18n } from './image-tool.i18n';
@@ -231,6 +232,7 @@ export const dict = {
   ...consoleBudgetsI18n.en,
   ...selectionApprovalI18n.en,
   ...agentStatusI18n.en,
+  ...todoTrayI18n['en'],
   ...snippetsI18n.en,
   ...prReviewI18n.en,
   ...imageToolI18n.en,

@@ -1,5 +1,5 @@
 import { WorkerCommandSchema } from '../protocol.ts';
-import type { CompletionWorkerBootstrap, UsageWorkerBootstrap, WorkerBootstrapMessage, WorkerReply } from '../protocol.ts';
+import type { CompletionWorkerBootstrap, UsageWorkerBootstrap, WorkerBootstrapMessage, WorkerOperation, WorkerReply } from '../protocol.ts';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 import { WorkerSession } from './session.ts';
@@ -25,6 +25,28 @@ function nativeMcpStatus(error: NativeMcpError): number {
     case 'MCP_CREDENTIAL_UNAVAILABLE': return 422;
     case 'MCP_OAUTH_FAILED': return error.retryable ? 502 : 422;
     default: return 503;
+  }
+}
+
+/**
+ * Operations that only read native state. None of them can change the catalog,
+ * credentials, settings or MCP configuration an authorization policy is
+ * captured from, so the snapshot around them would repeat what the worker
+ * already published. Skipping both captures keeps a repeated catalog read off
+ * the native settings and policy path; every mutation and the bootstrap still
+ * publish, so admission always sees a policy as fresh as the last change.
+ */
+function isReadOnlyOperation(operation: WorkerOperation): boolean {
+  if (operation.type === 'mcp.configuration.read') return true;
+  if (operation.type !== 'catalog') return false;
+  switch (operation.operation.type) {
+    case 'catalog.models.read': case 'catalog.providers.read': case 'catalog.agents.read':
+    case 'catalog.settings.read': case 'catalog.warming.read': case 'skills.read': case 'skills.expand':
+    case 'catalog.provider.accounts.read': case 'catalog.provider.oauth.methods':
+    case 'catalog.provider.configuration.read':
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -94,9 +116,10 @@ process.on('message', raw => {
       if (command.operation.type === 'usage.stats') return { type: 'usage.stats' as const, result: await getUsageStats(command.operation.query, command.operation.references) };
       if (command.operation.type === 'usage.tools') return { type: 'usage.tools' as const, result: await getUsageTools(command.operation.query, command.operation.references) };
       if (!owned) throw new Error('Worker resources are unavailable');
-      if (owned instanceof StatelessWorker) send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
+      const publishPolicy = owned instanceof StatelessWorker && !isReadOnlyOperation(command.operation);
+      if (publishPolicy) send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
       const result = await owned.operation(command.operation);
-      if (owned instanceof StatelessWorker) send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
+      if (publishPolicy) send({ type: 'policy.snapshot', workerGeneration: command.workerGeneration, snapshot: await owned.authorizationPolicy() });
       return result;
     })().then(result => {
       send({ type: 'result', workerGeneration: command.workerGeneration, commandId: command.commandId, result });

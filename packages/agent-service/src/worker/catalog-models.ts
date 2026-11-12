@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, rm } from 'node:fs/promises';
+import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
@@ -273,8 +273,47 @@ const IMAGE_GENERATION_TIMEOUT_MS = 5 * 60 * 1000;
 
 export class NativeModels {
  private metadata: CatalogMetadata = MetadataSchema.parse({});
+ /**
+  * The last computed catalogs and the state they were computed from. Every
+  * catalog read used to re-derive the whole model and provider list; the
+  * composer and every Settings page read them, so the work repeated far more
+  * often than the inputs changed. The key covers the four things a catalog
+  * depends on: the committed catalog revision (model and provider writes),
+  * the settings revision (enabled models, disabled providers, roles), the
+  * credential generation (auth writes), and the native models file.
+  */
+ private readonly catalogCache = new Map<'models' | 'providers', { key: string; catalog: ModelCatalog | ProviderCatalog }>();
+ /** The native configuration `load()` last read, so a cached read needs no second file pass. */
+ private currentConfig: ConfigState['config'] = {};
  constructor(private readonly context: NativeModelsContext) {
   if (context.modelRegistry.authStorage !== context.authStorage) throw new Error('Catalog registry and credential storage must share ownership');
+ }
+
+ /**
+  * Reloads the cheap inputs a catalog depends on and returns the identity of
+  * the state they describe. Both reloads are single-file reads; the expensive
+  * policy re-application and catalog construction stay behind the cache.
+  */
+ private async catalogState(): Promise<string> {
+  await this.load();
+  await this.context.authStorage.credentials.reload();
+  let stamp = 'absent';
+  try {
+   const info = await stat(ModelsConfigFile.relocate(this.context.modelsPath).path());
+   stamp = `${info.mtimeMs}:${info.size}`;
+  } catch {
+   // An absent models file is a state of its own, and `load()` has already
+   // resolved it; the stamp only has to change when the file appears.
+  }
+  // The settings revision moves on every reload even when nothing changed, so
+  // the key uses the values a catalog actually reads instead.
+  const settings = this.context.settings;
+  return JSON.stringify([
+   stamp, this.context.authStorage.credentials.generation,
+   cfgEnabledModels.get(settings), cfgDisabledProviders.get(settings),
+   cfgDefaultThinkingLevel.get(settings), settings.getModelRole('default'), settings.getModelRole('plan'),
+   getModelMatchPreferences(settings),
+  ]);
  }
 
  private async load(): Promise<ConfigState> {
@@ -295,11 +334,15 @@ export class NativeModels {
    }
   }
   this.metadata = metadata;
+  this.currentConfig = loaded.status === 'ok' ? loaded.value : {};
   return { config: loaded.status === 'ok' ? structuredClone(loaded.value) : {}, metadata: structuredClone(metadata), path: file.path(), content };
  }
 
  async readModels(workspaceId: string, revision: string): Promise<ModelCatalog> {
-  await this.load();
+  const state = await this.catalogState();
+  const cacheKey = `models|${workspaceId}|${revision}|${state}`;
+  const cached = this.catalogCache.get('models');
+  if (cached?.key === cacheKey) return structuredClone(cached.catalog as ModelCatalog);
   await this.context.modelRegistry.reapplyModelPolicies();
   // A model is listed only when its provider can execute: configured
   // models.yml entries (including keyless endpoints), stored/environment/
@@ -336,10 +379,12 @@ export class NativeModels {
   // Plan mode needs the `plan` role; resolve it exactly as the mode
   // controller does so the composer can disable Plan before a session exists.
   const planRole = resolveRoleModelFull(this.context.settings, 'plan', this.context.modelRegistry.getAvailable(), undefined);
-  return ModelCatalogSchema.parse({
+  const catalog = ModelCatalogSchema.parse({
    workspaceId, revision, models, imageModels,
    defaults: await this.readDefaults(), planRoleAvailable: planRole.model !== undefined
   });
+  this.catalogCache.set('models', { key: cacheKey, catalog });
+  return catalog;
  }
 
  /**
@@ -364,16 +409,20 @@ export class NativeModels {
  }
 
  async readProviders(workspaceId: string, revision: string): Promise<ProviderCatalog> {
-  const state = await this.load();
-  await this.context.authStorage.credentials.reload();
+  const state = await this.catalogState();
+  const cacheKey = `providers|${workspaceId}|${revision}|${state}`;
+  const cached = this.catalogCache.get('providers');
+  if (cached?.key === cacheKey) return structuredClone(cached.catalog as ProviderCatalog);
   await this.context.modelRegistry.reapplyModelPolicies();
   const ids = new Set([
    ...this.context.modelRegistry.getAll('all').map(model => model.provider),
-   ...Object.keys(state.config.providers ?? {}), ...Object.keys(state.metadata.providers),
+   ...Object.keys(this.currentConfig.providers ?? {}), ...Object.keys(this.metadata.providers),
    ...this.context.authStorage.credentials.list().map(row => row.provider),
    ...this.context.oauthProviderIds(),
   ]);
-  return ProviderCatalogSchema.parse({ workspaceId, revision, providers: [...ids].map(id => this.provider(id)) });
+  const catalog = ProviderCatalogSchema.parse({ workspaceId, revision, providers: [...ids].map(id => this.provider(id)) });
+  this.catalogCache.set('providers', { key: cacheKey, catalog });
+  return catalog;
  }
 
  async supportsSelectedFileHandoff(providerId: string): Promise<boolean> {

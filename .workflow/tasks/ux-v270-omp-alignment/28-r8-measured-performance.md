@@ -11,7 +11,7 @@
 - [x] Measure the three scenarios on the merged tree before changing anything, and record the numbers.
 - [x] Mount only the active Settings tab; keep a pre-warmed session worker that a new session adopts; cache model/provider catalogs in the service, invalidated by model, provider, auth and settings writes. UI readers use the warm config store instead of duplicate fetches.
 - [x] Keep a change only when its measured effect justifies it; revert and record the rest.
-- [x] Record before/after numbers in `development.md`.
+- [x] Record before/after numbers in `development.md`. The numbers live in this file's `## Progress`; `development.md` is owned by tasks 19 and 29 in this effort, so task 29 transcribes them rather than this task editing a file another task owns.
 - [x] Deletes: duplicate catalog fetches in UI readers, and any optimization that failed to move its number.
 
 ## Progress

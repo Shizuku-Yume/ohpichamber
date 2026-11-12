@@ -487,8 +487,12 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     ]),
     [catalog, marketplaceQuery],
   );
+  // A marketplace entry is installed only in the scope it was installed into:
+  // the same plugin can be installed globally and again for one project.
   const installedMarketplaceKeys = React.useMemo(() => new Set((catalog?.plugins ?? []).flatMap(entry => (
-    entry.target.kind === 'marketplace' ? [`${entry.target.name}@${entry.target.marketplace}`] : []
+    entry.target.kind === 'marketplace'
+      ? [`${entry.target.name}@${entry.target.marketplace}@${entry.scope === 'global' ? 'user' : 'project'}`]
+      : []
   ))), [catalog]);
 
   const requestDelete = (target: DeleteTarget) => {
@@ -989,7 +993,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
 
           <div className="divide-y divide-[var(--surface-subtle)]">
             {marketplaceEntries.map(entry => {
-              const installed = installedMarketplaceKeys.has(`${entry.name}@${entry.marketplace}`);
+              const installed = installedMarketplaceKeys.has(`${entry.name}@${entry.marketplace}@${marketplaceScope}`);
               const badges = [entry.details?.category, ...(entry.details?.keywords ?? [])]
                 .filter((value): value is string => Boolean(value))
                 .slice(0, 6);

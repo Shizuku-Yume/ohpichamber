@@ -37,7 +37,7 @@ interface ModelInfo {
 }
 
 /** One provider's quota panel: its windows, its models, and the work-status switch. */
-const ProviderQuota: React.FC<{ providerId: QuotaProviderId }> = ({ providerId }) => {
+const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: string }> = ({ providerId, settingsItem }) => {
   const { t } = useI18n();
   const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
   const results = useQuotaStore((state) => state.results);
@@ -145,6 +145,7 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId }> = ({ providerId }
               time: formatTime(lastUpdated, timeFormatPreference),
             })
             : t('settings.usage.page.header.lastUpdated', { time: formatTime(lastUpdated, timeFormatPreference) })}
+      settingsItem={settingsItem}
       contentClassName="space-y-3"
     >
       <SettingsCheckboxRow
@@ -270,8 +271,12 @@ export const UsagePage: React.FC = () => {
             {t('settings.usage.page.state.noConfiguredProvidersDescription')}
           </p>
         </SettingsSection>
-      ) : configuredProviderIds.map((providerId) => (
-        <ProviderQuota key={providerId} providerId={providerId} />
+      ) : configuredProviderIds.map((providerId, index) => (
+        <ProviderQuota
+          key={providerId}
+          providerId={providerId}
+          settingsItem={index === 0 ? 'usage.quotas' : undefined}
+        />
       ))}
     </SettingsPageLayout>
   );

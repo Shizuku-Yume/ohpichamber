@@ -201,7 +201,7 @@ of this task's surface. The suites that do cover the changed code pass:
 `bun test packages/ui/src/lib/smallModelRequest.test.ts
 packages/ui/src/stores/configCatalogCache.test.ts` → 27 pass, 0 fail.
 
-- **Review:** Read-only self-review of the diff against `ab047171d` across the
+- **Review:** pass. Read-only self-review of the diff against `ab047171d` across the
   catalog cache and its key, the read-only policy-capture skip, the pre-warmed
   worker handshake and spare lifecycle, the store's catalog field and selector,
   and the four deduplicated readers. Findings fixed in this task: a late `idle`

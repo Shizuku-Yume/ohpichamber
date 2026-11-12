@@ -180,7 +180,8 @@ one.
 `Check before:` not run; the baseline run ended before the check.
 
 `Check after:` `bun --cwd packages/agent-service test` →
-`485 pass, 10 skip, 0 fail` across 68 files (exit 0).
+`485 pass, 10 skip, 0 fail` across 68 files (exit 0). Re-run on the tree with
+integration merged in: `486 pass, 10 skip, 0 fail` across 68 files (exit 0).
 
 `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/stores` cannot run in this
 tree: every file in `packages/ui/src/stores` imports `bun:test`, and vitest

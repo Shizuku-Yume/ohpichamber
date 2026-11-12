@@ -395,7 +395,14 @@ export const useQuotaStore = create<QuotaStore>()(
           const providerIds = missingProvidersOnly
             ? requestedIds.filter(providerId => !get().results.some(result => result.providerId === providerId))
             : requestedIds;
-          if (providerIds.length === 0) return;
+          if (providerIds.length === 0) {
+            // An authoritatively empty selection (every provider unchecked) is
+            // an answer, not a read that never happened: leaving the phase
+            // `unknown` would say "usage has not loaded" forever.
+            if (generation !== quotaGeneration) return;
+            set({ loadedRuntimeKey: runtimeKey, phase: 'ready' });
+            return;
+          }
           const answered = await fetchQuotas(providerIds);
           // Mark the instance loaded only once it actually answered. Claiming it
           // up front meant a load that failed on a cold or briefly unreachable

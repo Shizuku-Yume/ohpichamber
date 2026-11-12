@@ -409,12 +409,20 @@ export const WebSearchPage: React.FC = () => {
   // store's own retry button owns the failed case.
   const scope = getWebSearchScopeKey();
   const stateKind = state.kind;
+  // A read is only "already running" for the scope it started in. A scope
+  // change mid-read abandons the old request, so the page must start the new
+  // one rather than wait for a reply that will be discarded.
+  const loadingScope = state.kind === 'loading' ? state.scope : null;
   const readyScope = state.kind === 'ready' ? state.snapshot.scope : null;
   React.useEffect(() => {
     if (stateKind === 'ready' && readyScope === scope) return;
+    if (stateKind === 'loading' && loadingScope !== scope) {
+      void load();
+      return;
+    }
     if (stateKind === 'loading' || stateKind === 'failed') return;
     void load();
-  }, [load, scope, stateKind, readyScope]);
+  }, [load, scope, stateKind, loadingScope, readyScope]);
 
   const snapshot = state.kind === 'ready' && state.snapshot.scope === scope ? state.snapshot : null;
   const failed = state.kind === 'failed';

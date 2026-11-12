@@ -142,4 +142,33 @@ describe('WebSearchPage', () => {
 
     expect(loads).toBe(1);
   });
+
+  // A read in flight belongs to the scope that started it. A scope change
+  // abandons that request, so the page must start the new one instead of
+  // waiting for a reply the store will discard.
+  test('a scope change during a read starts a load for the new scope', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    let loads = 0;
+    useWebSearchStore.setState({
+      state: { kind: 'loading', scope: 'a-different-scope' },
+      error: null,
+      outcome: null,
+      busy: false,
+      load: async () => { loads += 1; },
+    });
+
+    await act(async () => {
+      root?.render(
+        <I18nProvider>
+          <WebSearchPage />
+        </I18nProvider>,
+      );
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(loads).toBe(1);
+  });
 });

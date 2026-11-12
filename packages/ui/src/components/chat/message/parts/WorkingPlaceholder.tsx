@@ -8,7 +8,7 @@ interface WorkingPlaceholderProps {
   isWorking: boolean;
   status: AgentStatus | null;
   isWaitingForPermission?: boolean;
-  retryInfo?: { attempt?: number; next?: number } | null;
+  retryInfo?: { attempt?: number; maxAttempts?: number; next?: number } | null;
   agentName?: string;
   modelName?: string | null;
   providerId?: string | null;
@@ -100,13 +100,15 @@ export function WorkingPlaceholder({
     <ProviderLogo providerId={providerId} alt="" fallback={null} className="h-4 w-4 shrink-0 p-[1.3px] me-1.5" />
   ) : null;
 
-  // Retry state: show countdown and attempt info
+  // Retry state: OMP names the attempt and the cap ("Retrying · attempt 1 of 3")
+  // and counts the wait down, so the row does the same.
   if (retryInfo) {
-    const attempt = retryInfo.attempt && retryInfo.attempt > 1 ? retryInfo.attempt : null;
+    const attempt = retryInfo.attempt ?? null;
+    const max = retryInfo.maxAttempts ?? null;
     const time = retryCountdown !== null && retryCountdown > 0 ? formatRetryCountdown(retryCountdown, locale) : null;
-    const retrying = time && attempt ? t('chat.agentStatus.retry.inAttempt', { time, attempt })
+    const retrying = time && attempt && max ? t('chat.agentStatus.retry.inAttempt', { time, attempt, max })
       : time ? t('chat.agentStatus.retry.in', { time })
-        : attempt ? t('chat.agentStatus.retry.attempt', { attempt })
+        : attempt && max ? t('chat.agentStatus.retry.attempt', { attempt, max })
           : t('chat.agentStatus.retry');
     return (
       <div

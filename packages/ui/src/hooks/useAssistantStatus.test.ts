@@ -183,8 +183,8 @@ describe('retryInfoOf', () => {
         details: { attempt, maxAttempts: 5, delayMs, errorMessage: 'overloaded' },
     });
 
-    test('a trailing retry notice reports its attempt and delay', () => {
-        expect(retryInfoOf([retryNotice(2, 4000)])).toEqual({ attempt: 2, next: 4000 });
+    test('a trailing retry notice reports its attempt, cap and delay', () => {
+        expect(retryInfoOf([retryNotice(2, 4000)])).toEqual({ attempt: 2, maxAttempts: 5, next: 4000 });
     });
 
     test('work after the notice means the retry already ran', () => {

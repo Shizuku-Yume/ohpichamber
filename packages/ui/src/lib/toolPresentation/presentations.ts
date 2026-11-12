@@ -36,8 +36,24 @@ const counted = (value: JsonValue | undefined, amountKey: string, fileKey: strin
     const amount = detailNumber(value, amountKey);
     const files = detailNumber(value, fileKey);
     if (amount === null && files === null) return null;
-    return [amount !== null ? `${amount} matches` : null, files !== null ? `${files} files` : null]
+    const plural = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
+    return [amount !== null ? plural(amount, 'match', 'matches') : null, files !== null ? plural(files, 'file', 'files') : null]
         .filter(Boolean).join(' · ');
+};
+
+/**
+ * A search row's summary, in OMP's own header terms: `N matches · M files` for
+ * a pattern search, `N files` for a listing, `N hits` for a relevance search.
+ * Falls back to the reported item count when the result carries no totals.
+ */
+const searchResultSummary = (value: JsonValue | undefined): string | null => {
+    const matches = counted(value, 'matchCount', 'fileCount');
+    if (matches) return matches;
+    const files = detailNumber(value, 'fileCount');
+    if (files !== null) return `${files} ${files === 1 ? 'file' : 'files'}`;
+    const hits = z.array(z.unknown()).safeParse(detailValue(value, 'hits')).data?.length;
+    if (hits !== undefined) return `${hits} ${hits === 1 ? 'hit' : 'hits'}`;
+    return counted(value, 'totalReplacements', 'filesTouched');
 };
 
 /** Added and removed line counts from a unified diff, as `+3/-1`. */
@@ -106,9 +122,6 @@ const bashSummary: ToolPresentation['describeResult'] = (result) => {
     return exitCode === 0 ? 'exit 0' : `exit ${exitCode}`;
 };
 
-const searchSummary = (value: JsonValue | undefined): string | null =>
-    counted(value, 'matchCount', 'fileCount') ?? counted(value, 'totalReplacements', 'filesTouched');
-
 const hostCall: ToolPresentation['describeCall'] = (input) => {
     const action = z.object({ action: z.string().optional(), input: z.record(z.string(), z.unknown()).optional() }).safeParse(input).data;
     if (!action?.action) return null;
@@ -132,11 +145,11 @@ const bashPresentation: ToolPresentation = {
     describeResult: bashSummary,
 };
 
-/** A tool whose call row shows a free-form query. */
+/** A tool whose call row shows a free-form query, summarized by what it found. */
 const queryTool = (label: string, icon: ToolPresentation['icon'], keys: readonly string[], group: ToolGroup = 'search'): ToolPresentation => ({
     label, icon, group, outputLanguage: 'text',
     describeCall: (input) => inputText(input, ...keys),
-    describeResult: jsonSummary,
+    describeResult: group === 'search' ? searchResultSummary : jsonSummary,
 });
 
 /** A tool whose results are code or JSON with no dedicated summary. */
@@ -162,7 +175,7 @@ export const TOOL_PRESENTATIONS = {
     ast_grep: {
         label: 'AST Grep', icon: 'code-box', group: 'search', outputLanguage: 'text',
         describeCall: (input) => inputText(input, 'pat', 'pattern'),
-        describeResult: searchSummary,
+        describeResult: searchResultSummary,
     },
     ast_edit: {
         label: 'AST Edit', icon: 'code-box', group: 'call', outputLanguage: 'diff',
@@ -170,7 +183,7 @@ export const TOOL_PRESENTATIONS = {
             const ops = z.array(z.object({ pat: z.string(), out: z.string() })).safeParse(input.ops).data;
             return ops?.[0] ? text(`${ops[0].pat} → ${ops[0].out}`) : inputText(input, 'path', 'paths');
         },
-        describeResult: searchSummary,
+        describeResult: searchResultSummary,
     },
     ask: {
         label: 'Ask', icon: 'survey', group: 'call', outputLanguage: 'text',

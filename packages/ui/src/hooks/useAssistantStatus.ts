@@ -15,7 +15,7 @@ interface WorkingSummary {
     isWaitingForPermission: boolean;
     abortActive: boolean;
     /** The retry the run is waiting on, from its newest `auto_retry_start` notice. */
-    retryInfo: { attempt?: number; next?: number } | null;
+    retryInfo: { attempt?: number; maxAttempts?: number; next?: number } | null;
 }
 
 interface FormingSummary {
@@ -131,12 +131,12 @@ const decodeParsedStatus = (signature: string): ParsedStatusResult => {
  * has happened since: OMP reports `auto_retry_start` with the delay it will
  * wait, and the next text or call means the retry already ran.
  */
-export const retryInfoOf = (parts: readonly Part[]): { attempt?: number; next?: number } | null => {
+export const retryInfoOf = (parts: readonly Part[]): { attempt?: number; maxAttempts?: number; next?: number } | null => {
     for (let index = parts.length - 1; index >= 0; index -= 1) {
         const part = parts[index];
         if (!part) continue;
         if (part.type === 'notice' && part.noticeType === 'auto_retry_start') {
-            return { attempt: part.details.attempt, next: part.details.delayMs };
+            return { attempt: part.details.attempt, maxAttempts: part.details.maxAttempts, next: part.details.delayMs };
         }
         if (part.type === 'tool_call' || (part.type === 'text' && part.content.trim().length > 0)) return null;
     }
@@ -201,7 +201,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                 : EMPTY_PARTS;
             const parsed = createParsedStatus(parts);
             const retry = retryInfoOf(parts);
-            return [encodeParsedStatus(parsed), retry?.attempt ?? '', retry?.next ?? ''].join(STATUS_SIGNATURE_SEPARATOR);
+            return [encodeParsedStatus(parsed), retry?.attempt ?? '', retry?.next ?? '', retry?.maxAttempts ?? ''].join(STATUS_SIGNATURE_SEPARATOR);
         }, [currentSessionId, lastAssistantId]),
         currentSessionDirectory ?? undefined,
     );
@@ -226,11 +226,12 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     }, [lastAssistantSignature]);
 
     const retryInfo = React.useMemo(() => {
-        const [, attempt, next] = lastAssistantSignature.split(STATUS_SIGNATURE_SEPARATOR);
+        const [, attempt, next, maxAttempts] = lastAssistantSignature.split(STATUS_SIGNATURE_SEPARATOR);
         if (!attempt) return null;
         return {
             attempt: Number(attempt),
             ...(next ? { next: Number(next) } : {}),
+            ...(maxAttempts ? { maxAttempts: Number(maxAttempts) } : {}),
         };
     }, [lastAssistantSignature]);
 

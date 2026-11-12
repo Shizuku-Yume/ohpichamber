@@ -51,3 +51,5 @@
 - Check after: 2026-11-12 — `VITEST_MAX_WORKERS=2 node scripts/run-isolated-tests.mjs packages/ui/src/lib/toolPresentation packages/ui/src/components/chat` → 234/234 files passed, exit 0. `bun run lint` → exit 0 (warnings only, all pre-existing in files this task does not own). `packages/ui` `tsc -b` → exit 0. `packages/ui/src/lib/i18n/messages` and `packages/ui/src/hooks` suites → 82/82 files passed.
 
 - Check after (post-merge, 2026-11-12): after merging `ux-v270-omp-alignment/integration` (one conflict, `tools/oxlint/openchamber/index.ts`, resolved keeping both `no-tool-name-literal` and `no-cross-source-time-compare`), `VITEST_MAX_WORKERS=2 node scripts/run-isolated-tests.mjs packages/ui/src/lib/toolPresentation packages/ui/src/components/chat` → 234/234 files passed; `bun run lint` → exit 0.
+
+- Review: pass (base a3883ab4fb8217b1388bf1cc2e7fe7a642f354f7) — reviewer subagent read the full diff against the base and the acceptance file; no blocking findings.

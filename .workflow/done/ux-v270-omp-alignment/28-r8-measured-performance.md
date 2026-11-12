@@ -179,20 +179,16 @@ one.
 
 `Check before:` not run; the baseline run ended before the check.
 
-`Check after:` `bun --cwd packages/agent-service test` →
-`485 pass, 10 skip, 0 fail` across 68 files (exit 0). Re-run on the tree with
-integration merged in: `486 pass, 10 skip, 0 fail` across 68 files (exit 0).
+Check after: `bun --cwd packages/agent-service test` → 485 pass, 10 skip,
+0 fail across 68 files (exit 0); re-run with integration merged in → 486 pass,
+10 skip, 0 fail across 68 files (exit 0). The perf scenarios in `## Progress`
+all meet their budgets on the same tree.
 
 `VITEST_MAX_WORKERS=2 bunx vitest run packages/ui/src/stores` cannot run in this
 tree: every file in `packages/ui/src/stores` imports `bun:test`, and vitest
 reports `Cannot find package 'bun:test'` for all 85 files (85 failed, no tests
 ran). This is the substitution task 25 recorded, so the same suites were run
-with the package's own runner:
-
-```
-bun --cwd packages/ui test src/stores
-  1303/1310 test files passed, 7 failed
-```
+with the package's own runner: 1303 of 1310 test files passed, 7 failed.
 
 The 7 failing files are `useSmallModelStore`, `useConfigStore`, `smallModel`,
 `sessionTitle`, and three `generateCommitMessage` suites. Each fails

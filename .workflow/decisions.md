@@ -62,6 +62,33 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 
 ## Entries
 
+## 2026-11-12 - A dead settings row is deleted, not kept for later
+
+- **Decided:** a persisted settings key with no consumer outside the settings plumbing is deleted through its whole chain (registry row, store field and setter, page control, search entry, translations, server sanitizer, snapshot, fixture). Each surviving entry declares its effect as `ui`, `store`, `server` or `shell`, and a test fails on a key with no consumer or a declaration the code contradicts.
+- **Instead of:** keeping the rows and wiring each to something plausible, or leaving the declaration out and relying on review.
+- **Because:** 25 keys had no reader at all — the control moved, nothing happened, and nothing failed. A declaration alone is a claim; deriving it from the same scan the test runs makes it evidence. The four effect classes are the boundaries the repo already separates, so the truth is mechanical.
+- **Mine:** yes
+- **Revisit when:** a key legitimately has no reader yet (a staged rollout) — then the registry needs an explicit `pending` effect with an expiry, not a silent exception.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - Turn telemetry reads a run, because a turn is one step
+
+- **Decided:** `getLatestCompletedTurnStats` gathers every turn of the latest run and derives model time, tool time, TTFT and throughput from their `Message.timing`. A metric with no source is `null` and its row is not rendered.
+- **Instead of:** deriving per turn, which is what the field name suggests.
+- **Because:** the server records one turn per model step, so a turn holds exactly one step: tool time (the gaps between steps) was always `null` and model time covered only the final step. A live run proved it — 3748 ms of model time and 588 ms of tool time only appear when the run is read as a whole.
+- **Mine:** yes
+- **Revisit when:** the agent service starts recording one turn per run instead of per step; then the run grouping is redundant and should collapse back to the turn.
+- **Effort:** ux-v270-omp-alignment
+
+## 2026-11-12 - A class name must resolve to something, and the check enforces it
+
+- **Decided:** `scripts/check-css-classes.mjs` runs in `bun run check` and fails on any class token in UI TSX that is neither a stylesheet rule, a Tailwind utility, a class the runtime kit injects, nor a documented marker naming who queries it.
+- **Instead of:** a lint rule per stylesheet, or trusting review to notice an unstyled element.
+- **Because:** a class that resolves to nothing renders unstyled and no other check fails. Writing it found a dropped animation the component and its test still expected, four colour tokens utilities already referenced, and ~30 dead typography names. It also found its own blind spot: a `className` string closed by a JSX `>` was read as a comparison, hiding 257 tokens.
+- **Mine:** yes
+- **Revisit when:** the kit stops injecting CSS as a string, or a second runtime-injected source appears — the declared-class scan must learn it or the check will report false positives.
+- **Effort:** ux-v270-omp-alignment
+
 ## 2026-10-10 - Workflow owns development routing and records
 
 - **Decided:** use `.workflow` as the default conversation process and home for development records, migration design and inherited sandbox design.

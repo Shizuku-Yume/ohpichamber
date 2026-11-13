@@ -126,7 +126,7 @@ test('workspace apply and exact-server reconnect retain partial failures and las
     await coordinator.register(second.worker);
     await coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } });
     control.fail = true;
-    await expect(coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '1', config: { servers: [server, { ...server, serverId: 'other' }] } })).rejects.toMatchObject({ code: 'MCP_APPLY_FAILED', details: { result: { status: 'partial', configuration: { persistedRevision: '2' }, workers: [ { outcome: 'applied', revisions: { appliedRevision: '2' } }, { outcome: 'failed', revisions: { appliedRevision: '1' } } ] } } });
+    await expect(coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '1', config: { servers: [server, { ...server, serverId: 'other' }] } })).rejects.toMatchObject({ code: 'MCP_APPLY_FAILED', details: { result: { status: 'partial', configuration: { persistedRevision: '2' }, workers: [{ outcome: 'applied', revisions: { appliedRevision: '2' } }, { outcome: 'failed', revisions: { appliedRevision: '1' } }] } } });
     await expect(coordinator.reconnectWorkspaceMcp('workspace', 'tools', { persistedRevision: '2' }, async () => { throw new Error('Must use live roots'); })).rejects.toMatchObject({ code: 'MCP_RECONNECT_FAILED', details: { result: { status: 'partial' } } });
     expect(first.reconnects).toEqual(['tools']);
     expect(second.reconnects).toEqual(['tools']);
@@ -174,4 +174,92 @@ test('reconnect finalizes earlier retired generations and holds new worker admis
     expect(result.workers.map(outcome => outcome.outcome)).toEqual(['retired', 'applied']);
     expect((await admission).mcpConfiguration.persistedRevision).toBe('1');
   } finally { releaseSecond.resolve(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('configureWorkspaceMcp reports applied, saved-needs-auth, and saved-not-connected outcomes', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-outcomes-'));
+  let stored: MCPConfigurationState | null = null;
+  const coordinator = new CatalogCoordinator(directory, {
+    readMcpConfiguration: async () => stored,
+    commitMcp: async (_id, _input, next) => { stored = next; },
+  });
+
+  let workerOutcome: { fail: boolean; code?: string; detail?: string } = { fail: false };
+  const identity = { rootSessionId: 'root-worker', workspaceId: 'workspace', workerGeneration: 'gen-1' };
+  const worker: CatalogWorker = {
+    identity: { ...identity, agentDirectoryId: 'agent' },
+    isLive: () => true,
+    mcp: {
+      read: async configuration => ({ configuration, workerCatalog: { worker: identity, runtimeStatus: 'unavailable', appliedRevision: null, catalogRevision: '0', activeServers: [], tools: [] } }),
+      apply: async (_request, configuration) => {
+        if (workerOutcome.fail) {
+          return {
+            worker: identity,
+            outcome: 'failed',
+            revisions: { runtimeStatus: 'unavailable', appliedRevision: null, catalogRevision: '0' },
+            error: { code: workerOutcome.code ?? 'MCP_APPLY_FAILED', detail: workerOutcome.detail ?? 'Failed', retryable: true },
+          };
+        }
+        return {
+          worker: identity,
+          outcome: 'applied',
+          revisions: { runtimeStatus: 'ready', appliedRevision: configuration.persistedRevision, catalogRevision: '1' },
+        };
+      },
+      reconnect: async () => { throw new Error('Unused'); },
+      oauth: async () => { throw new Error('Unused'); },
+      oauthStatus: async () => { throw new Error('Unused'); },
+    },
+    skills: {
+      read: async sources => ({ worker: identity, agentDirectoryId: 'agent', runtimeStatus: 'unavailable', persistedSources: sources, appliedSources: null, catalogRevision: '0', skills: [] }),
+      apply: async () => { throw new Error('Unused'); },
+      expand: async () => { throw new Error('Unused'); },
+    },
+  };
+
+  try {
+    await coordinator.initialize();
+    await coordinator.registerWorkspace('workspace', 'agent');
+    await coordinator.register(worker);
+
+    // 1. Outcome 'applied'
+    workerOutcome = { fail: false };
+    const appliedResult = await coordinator.configureWorkspaceMcp('workspace', {
+      expectedPersistedRevision: '0',
+      config: { servers: [server] },
+    });
+    expect(appliedResult.outcome).toBe('applied');
+    expect(appliedResult.status).toBe('applied');
+
+    // 2. Outcome 'saved-needs-auth' (e.g. OAuth 401 / MCP_AUTH_REQUIRED)
+    workerOutcome = { fail: true, code: 'MCP_AUTH_REQUIRED', detail: '401 Unauthorized: sign-in required' };
+    const authResult = await coordinator.configureWorkspaceMcp('workspace', {
+      expectedPersistedRevision: '1',
+      config: { servers: [server, { ...server, serverId: 'oauth-server' }] },
+    });
+    expect(authResult.outcome).toBe('saved-needs-auth');
+    expect(authResult.status).toBe('failed');
+
+    // 3. Outcome 'saved-not-connected' (connection failure -> throws 503 with result in details)
+    workerOutcome = { fail: true, code: 'MCP_APPLY_FAILED', detail: 'ECONNREFUSED 127.0.0.1:9999' };
+    try {
+      await coordinator.configureWorkspaceMcp('workspace', {
+        expectedPersistedRevision: '2',
+        config: { servers: [server] },
+      });
+      expect.unreachable('Should have thrown for saved-not-connected');
+    } catch (err: unknown) {
+      expect(err).toMatchObject({
+        code: 'MCP_APPLY_FAILED',
+        details: {
+          result: {
+            outcome: 'saved-not-connected',
+            status: 'failed',
+          },
+        },
+      });
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

@@ -16,6 +16,7 @@ import type {
   MCPWorkerApplyOutcome, MCPApplyResult, SkillsCatalogState, SkillsApplyResult,
   SkillsWorkerApplyOutcome, SkillExpandRequest, SkillExpandResult, SkillSourceRevisions,
   SkillInstallResult, SkillSourceScope, CatalogOperationError, MCPOAuthRequest, MCPOAuthResult,
+  MCPApplyOutcome,
 } from '@openchamber/agent-contract';
 import { MCPWorkspaceReconnectResultSchema } from '@openchamber/agent-contract';
 import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@openchamber/agent-contract';
@@ -417,7 +418,7 @@ export class CatalogCoordinator {
     owner.configuration = next;
     try { await this.persist(); }
     catch { throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', 'The MCP configuration revision could not be persisted', {}); }
-    return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision });
+    return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision }, true);
   }
 
   reconnectWorkspaceMcp(workspaceId: string, serverId: string, request: MCPApplyRequest, probe: (configuration: MCPConfigurationState) => Promise<MCPConnectionTestResult>): Promise<MCPWorkspaceReconnectResult> {
@@ -451,7 +452,7 @@ export class CatalogCoordinator {
     });
   }
 
-  private async applyMcpNow(workspaceId: string, request: MCPApplyRequest): Promise<MCPApplyResult> {
+  private async applyMcpNow(workspaceId: string, request: MCPApplyRequest, isConfigure = false): Promise<MCPApplyResult> {
     const input = MCPApplyRequestSchema.parse(request);
     const configuration = this.workspace(workspaceId).configuration;
     if (input.persistedRevision !== configuration.persistedRevision) {
@@ -462,8 +463,24 @@ export class CatalogCoordinator {
       outcomes.push(await this.applyMcpWorker(worker, input, configuration));
     }
     await this.finalizeMcpOutcomes(outcomes);
-    const result = { kind: 'mcp' as const, status: aggregate(outcomes), configuration, workers: outcomes } satisfies MCPApplyResult;
-    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
+    const status = aggregate(outcomes);
+    let outcome: MCPApplyOutcome = 'applied';
+    if (status === 'failed' || status === 'partial') {
+      const authNeeded = outcomes.some(o => o.outcome === 'failed' && (
+        o.error.code === 'MCP_AUTH_REQUIRED' ||
+        o.error.code === 'AUTH_REQUIRED' ||
+        /401|auth|sign-in|unauthorized/i.test(o.error.detail) ||
+        /401|auth|sign-in|unauthorized/i.test(o.error.code)
+      ));
+      outcome = authNeeded ? 'saved-needs-auth' : 'saved-not-connected';
+    }
+    const result: MCPApplyResult = { kind: 'mcp' as const, status, outcome, configuration, workers: outcomes };
+    if (!isConfigure && (result.status === 'partial' || result.status === 'failed')) {
+      throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
+    }
+    if (isConfigure && outcome === 'saved-not-connected') {
+      throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
+    }
     return result;
   }
 

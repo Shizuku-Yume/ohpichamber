@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { MCPConfigurationState, MCPConnectionTestResult, MCPConfigureRequest } from '@openchamber/agent-contract';
 
-const configuration: MCPConfigurationState = { workspaceId: 'workspace', persistedRevision: '3', config: { servers: [{ serverId: 'tools', label: 'Tools', enabled: false, transport: { type: 'http', url: 'https://mcp.example.test' } }] } };
+const configuration: MCPConfigurationState = { workspaceId: 'workspace', persistedRevision: '3', config: { servers: [{ serverId: 'tools', label: 'Tools', enabled: false, scope: 'project' as const, transport: { type: 'http', url: 'https://mcp.example.test' } }] } };
 let pending = Promise.withResolvers<MCPConfigurationState>();
 let configRead = () => Promise.resolve(configuration);
 let failRead = false;
@@ -10,13 +10,15 @@ const testServer = mock(async (): Promise<MCPConnectionTestResult> => ({ workspa
 const resolveWorkspace = mock(async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }));
 // Load the store only after installing its canonical transport seam.
 const actual = await import('@/api/canonicalClient');
-mock.module('@/api/canonicalClient', () => ({ ...actual, canonicalClient: {
-  resolveWorkspace,
-  getWorkspaceMcpConfig: async () => { if (failRead) throw new Error('offline'); return configRead(); },
-  listSessions: async () => ({ items: [], errors: {} }),
-  configureWorkspaceMcp: configure,
-  testWorkspaceMcpServer: testServer,
-} }));
+mock.module('@/api/canonicalClient', () => ({
+  ...actual, canonicalClient: {
+    resolveWorkspace,
+    getWorkspaceMcpConfig: async () => { if (failRead) throw new Error('offline'); return configRead(); },
+    listSessions: async () => ({ items: [], errors: {} }),
+    configureWorkspaceMcp: configure,
+    testWorkspaceMcpServer: testServer,
+  }
+}));
 const { useMcpStore, computeMcpHealth } = await import('./useMcpStore');
 const { useMcpConfigStore } = await import('./useMcpConfigStore');
 

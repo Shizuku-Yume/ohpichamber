@@ -9408,6 +9408,7 @@ export const dict = {
   ...m4LaneDI18n.tr,
   "gitIdentities.state.unknown": "Git kimlikleri henüz yüklenmedi.",
   "settings.usage.state.unknown": "Kullanım henüz yüklenmedi.",
+  "settings.usage.state.error": "Kullanım yüklenemedi.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Kayıtlı bellek henüz yüklenmedi.",
 
   "chat.workStatus.mcp.unknown": "MCP sunucuları henüz yüklenmedi.",

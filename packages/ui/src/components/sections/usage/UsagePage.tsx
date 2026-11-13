@@ -271,6 +271,8 @@ export const UsagePage: React.FC = () => {
               unknown the page says so instead of claiming there is nothing. */}
           {quotaPhase === 'unknown' ? (
             <p className="typography-ui-label text-foreground">{t('settings.usage.state.unknown')}</p>
+          ) : quotaPhase === 'error' ? (
+            <p className="typography-ui-label text-status-error">{t('settings.usage.state.error')}</p>
           ) : (
             <>
               <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noConfiguredProvidersTitle')}</p>

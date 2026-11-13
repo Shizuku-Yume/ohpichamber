@@ -9427,6 +9427,7 @@ export const dict = {
   ...m4LaneDI18n.ja,
   "gitIdentities.state.unknown": "Git の ID はまだ読み込まれていません。",
   "settings.usage.state.unknown": "使用状況はまだ読み込まれていません。",
+  "settings.usage.state.error": "使用状況を読み込めませんでした。",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "保存されたメモリはまだ読み込まれていません。",
 
   "chat.workStatus.mcp.unknown": "MCP サーバーはまだ読み込まれていません。",

@@ -9087,6 +9087,7 @@ export const dict = {
   ...m4LaneDI18n['he'],
   "gitIdentities.state.unknown": "זהויות Git טרם נטענו.",
   "settings.usage.state.unknown": "השימוש טרם נטען.",
+  "settings.usage.state.error": "טעינת השימוש נכשלה.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "הזיכרון השמור טרם נטען.",
 
   "chat.workStatus.mcp.unknown": "שרתי MCP טרם נטענו.",

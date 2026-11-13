@@ -67,4 +67,10 @@ describe('canonical event boundaries', () => {
     expect(CanonicalEventSchema.parse(untimed)).toEqual(untimed);
     expect(CanonicalEventSchema.safeParse({ ...created, timing: { startedAt: 0.5 } }).success).toBe(false);
   });
+
+  test('session suggestions carry non-empty text and envelope metadata', () => {
+    const suggestion = { ...envelope, type: 'session.suggestion', suggestion: 'Run tests next.', createdAt: 2 };
+    expect(CanonicalEventSchema.parse(suggestion)).toEqual(suggestion);
+    expect(CanonicalEventSchema.safeParse({ ...suggestion, suggestion: '' }).success).toBe(false);
+  });
 });

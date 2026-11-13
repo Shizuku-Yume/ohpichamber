@@ -95,7 +95,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  setOptimisticRefs(() => {}, () => {}, () => {})
+  setOptimisticRefs(() => { }, () => { }, () => { })
   setImperativeSessionMessageLoader(null)
   loader?.dispose()
   manager.disposeAll()
@@ -176,8 +176,10 @@ describe("native branch consumer lifecycle", () => {
       ? nativeHistory([], null, snapshot)
       : nativeHistory(snapshot.messages, "older-page", snapshot))
     const published: Array<{ directory: string; snapshot: SessionSnapshot }> = []
-    loader = new SessionMessageLoader(manager, { runtimeKey: getRuntimeKey(), client: canonicalClient,
-      onSnapshot: (target, accepted) => { published.push({ directory: target.directory, snapshot: accepted }) } })
+    loader = new SessionMessageLoader(manager, {
+      runtimeKey: getRuntimeKey(), client: canonicalClient,
+      onSnapshot: (target, accepted) => { published.push({ directory: target.directory, snapshot: accepted }) }
+    })
     setImperativeSessionMessageLoader(loader)
     spyOn(canonicalClient, "resolveWorkspace").mockResolvedValue(workspace)
     spyOn(canonicalClient, "relocateSession").mockResolvedValue({ sessions: [moved] })
@@ -309,9 +311,11 @@ describe("Host archive transitions over native records", () => {
 
   test("confirmed archive invalidates status and moves the full canonical record", async () => {
     const store = seed()
-    store.setState({ sessionStatusReady: true, session_status: { "session-a": "running" },
+    store.setState({
+      sessionStatusReady: true, session_status: { "session-a": "running" },
       snapshot: { "session-a": nativeSnapshot() }, message: { "session-a": [nativeMessage()] },
-      permission: { "session-a": [nativeApproval()] }, form: { "session-a": [nativeQuestion()] } })
+      permission: { "session-a": [nativeApproval()] }, form: { "session-a": [nativeQuestion()] }
+    })
     spyOn(globalThis, "fetch").mockResolvedValue(archiveResponse(["session-a"]))
     expect(await archiveSession("session-a")).toBe(true)
     expect(store.getState().session).toEqual([])
@@ -327,8 +331,10 @@ describe("Host archive transitions over native records", () => {
 
   test("batches held sessions into one request and one directory publication", async () => {
     const store = seed([session(), session("session-b")])
-    store.setState({ sessionStatusReady: true, snapshot: { "session-a": nativeSnapshot(), "session-b": nativeSnapshot("session-b") },
-      message: { "session-a": [nativeMessage()], "session-b": [nativeMessage("session-b")] } })
+    store.setState({
+      sessionStatusReady: true, snapshot: { "session-a": nativeSnapshot(), "session-b": nativeSnapshot("session-b") },
+      message: { "session-a": [nativeMessage()], "session-b": [nativeMessage("session-b")] }
+    })
     const fetch = spyOn(globalThis, "fetch").mockImplementation(async input => String(input).includes("/auth/url-token")
       ? Response.json({ token: "actions-token", expiresAt: 999 })
       : archiveResponse(["session-a", "session-b"]))
@@ -608,10 +614,12 @@ describe("native delivery and execution controls", () => {
     const cached = nativeMessage()
     store.setState({ message: { "session-a": [cached] } })
     let fail = true
-    const client = nativeClient({ getSnapshot: async id => {
-      if (fail) throw new Error("loader offline")
-      return nativeSnapshot(id, [])
-    } })
+    const client = nativeClient({
+      getSnapshot: async id => {
+        if (fail) throw new Error("loader offline")
+        return nativeSnapshot(id, [])
+      }
+    })
     loader = new SessionMessageLoader(manager, { client, runtimeKey: getRuntimeKey() })
     setImperativeSessionMessageLoader(loader)
     await expect(refetchSessionMessages("session-a")).rejects.toThrow("loader offline")
@@ -715,7 +723,7 @@ describe("native approval and question CAS", () => {
     const store = requests()
     const message = nativeMessage()
     store.setState({ message: { "session-a": [message] } })
-    const materialize = mock(() => {})
+    const materialize = mock(() => { })
     setActionRefs(manager, () => directory, materialize)
     spyOn(canonicalClient, "respondApproval").mockRejectedValue(problem("APPROVAL_NOT_FOUND"))
     spyOn(canonicalClient, "respondQuestion").mockRejectedValue(problem("QUESTION_EXPIRED"))
@@ -837,10 +845,10 @@ describe("native metadata publication", () => {
   })
 
   test("native metadata patches preserve siblings and encode removals as merge-patch null", async () => {
-    const original = session("session-a", { title: "Before", metadata: {notes: "remove", openchamber: { work: { state: "open" }, linked_issues: [] }} })
+    const original = session("session-a", { title: "Before", metadata: { notes: "remove", openchamber: { work: { state: "open" }, linked_issues: [] } } })
     const store = seed([original])
     spyOn(canonicalClient, "getSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "1", metadata: original.metadata })
-    const write = spyOn(canonicalClient, "patchSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "2", metadata: {openchamber: { work: { state: "done" }, linked_issues: [] }} })
+    const write = spyOn(canonicalClient, "patchSessionMetadata").mockResolvedValue({ sessionId: "session-a", revision: "2", metadata: { openchamber: { work: { state: "done" }, linked_issues: [] } } })
     await patchSessionMetadata("session-a", directory, metadata => {
       const next = SessionMetadataSchema.parse(metadata)
       delete next.notes
@@ -1115,6 +1123,82 @@ describe("review-flow optimistic send", () => {
       snapshot: { ...state.snapshot, "session-a": snapshot },
     }))
     expect(store.getState().message["session-a"]).toEqual([existing, canonical])
+  })
+  test("normal send path renders user message before createRun resolves and reconciles once accepted", async () => {
+    const store = seed()
+    let duringSend: Message[] = []
+    const createRunDeferred = Promise.withResolvers<{ run: Run }>()
+    spyOn(canonicalClient, "createRun").mockImplementation(async () => {
+      duringSend = store.getState().message["session-a"] ?? []
+      return createRunDeferred.promise
+    })
+
+    const run: Run = { runId: "run-normal", sessionId: "session-a", status: "running", origin: "host", createdAt: 1 }
+    const promptRequest: PromptRequest = {
+      input: { text: "Optimistic user prompt", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+
+    useOptimisticLoader(async () => nativeSnapshot("session-a", []))
+
+    const streamAttached: string[] = []
+    setActionRefs(manager, () => currentDirectory, undefined, (sessionId) => {
+      streamAttached.push(sessionId)
+    })
+
+    const sendPromise = sendMessage({
+      sessionId: "session-a",
+      directory,
+      request: promptRequest,
+      optimistic: true,
+    })
+    await Promise.resolve()
+
+    expect(streamAttached).toEqual(["session-a"])
+    expect(duringSend).toHaveLength(1)
+    expect(duringSend[0]?.role).toBe("user")
+    expect(duringSend[0]?.parts).toEqual([{ type: "text", partId: expect.any(String), content: "Optimistic user prompt" }])
+
+    createRunDeferred.resolve({ run })
+    const acceptedRun = await sendPromise
+    expect(acceptedRun).toEqual(run)
+
+    expect(store.getState().message["session-a"]).toHaveLength(1)
+
+    const canonical = canonicalUserMessage("session-a", "canonical-normal-user", "Optimistic user prompt", 10)
+    const snapshot = snapshotWithRun(run, canonical)
+    store.setState((state) => ({
+      message: { ...state.message, "session-a": [...(state.message["session-a"] ?? []), canonical] },
+      snapshot: { ...state.snapshot, "session-a": snapshot },
+    }))
+
+    expect(store.getState().message["session-a"]).toEqual([canonical])
+  })
+
+  test("failed normal send removes optimistic message and records send failure", async () => {
+    const store = seed()
+    let duringSend: Message[] = []
+    spyOn(canonicalClient, "createRun").mockImplementation(async () => {
+      duringSend = store.getState().message["session-a"] ?? []
+      throw new Error("createRun network failure")
+    })
+
+    const promptRequest: PromptRequest = {
+      input: { text: "Will fail", attachments: [], context: [] },
+      options: { providerId: "provider-a", modelId: "model-a", agentId: null, variant: null, reasoningEffort: null },
+    }
+
+    useOptimisticLoader(async () => nativeSnapshot("session-a", []))
+
+    await expect(sendMessage({
+      sessionId: "session-a",
+      directory,
+      request: promptRequest,
+      optimistic: true,
+    })).rejects.toThrow("createRun network failure")
+
+    expect(duringSend).toHaveLength(1)
+    expect(store.getState().message["session-a"]).toEqual([])
   })
 })
 

@@ -22,20 +22,22 @@ const historyPage = (sessionId, pending = true) => {
 const makeRuntime = ({ ask, session = rootSession, sessionScope = { ...scope, sessionId: session.sessionId }, pending = true,
   classifierEndpoint = async (workspaceId) => { expect(workspaceId).toBe(scope.workspaceId); return endpoint; },
   updateMetadata = async () => ({ changed: true, metadata: {} }) } = {}) => createSessionWorkRuntime({
-  sessionService: {
-    open: async () => ({ session }),
-    history: async () => historyPage(session.sessionId, pending),
-  },
-  resolveSessionScope: async () => sessionScope,
-  getSettings: () => ({ enabled: true, autoOpen: true, reviewOffer: false }),
-  classifierEndpoint,
-  jev: { ask: ask || (async () => ({ answers: { change: { noul: 1 }, toward_change: { noul: 1 } } })) },
-  readMetadata: async () => ({}),
-  updateMetadata,
-});
+    sessionService: {
+      open: async () => ({ session }),
+      history: async () => historyPage(session.sessionId, pending),
+    },
+    resolveSessionScope: async () => sessionScope,
+    getSettings: () => ({ enabled: true, autoOpen: true, reviewOffer: false }),
+    classifierEndpoint,
+    jev: { ask: ask || (async () => ({ answers: { change: { noul: 1 }, toward_change: { noul: 1 } } })) },
+    readMetadata: async () => ({}),
+    updateMetadata,
+  });
 
-const userEvent = (sessionId = 'ses_1') => ({ type: 'message.created', sessionId, messageId: 'new-user-1', role: 'user', createdAt: 4,
-  parts: [{ partId: 'new-user-text', type: 'text', content: 'Please start the implementation.' }] });
+const userEvent = (sessionId = 'ses_1') => ({
+  type: 'message.created', sessionId, messageId: 'new-user-1', role: 'user', createdAt: 4,
+  parts: [{ partId: 'new-user-text', type: 'text', content: 'Please start the implementation.' }]
+});
 
 describe('session-work canonical consumer', () => {
   it('opens work only from a canonical user message and a workspace-scoped positive classifier answer', async () => {
@@ -80,7 +82,8 @@ describe('session-work canonical consumer', () => {
   it('resolves the Host workspace before classifying a canonical completed turn', async () => {
     const workspaces = [];
     const writes = [];
-    const runtime = makeRuntime({ pending: false,
+    const runtime = makeRuntime({
+      pending: false,
       classifierEndpoint: async (workspaceId) => { workspaces.push(workspaceId); return workspaceId === scope.workspaceId ? endpoint : null; },
       ask: async (request, selectedEndpoint) => {
         expect(selectedEndpoint).toBe(endpoint);
@@ -89,7 +92,7 @@ describe('session-work canonical consumer', () => {
       },
       updateMetadata: async (...args) => { writes.push(args); return { changed: true, metadata: {} }; },
     });
-    expect(await runtime.evaluateTurnEnd({ sessionId: scope.sessionId, assist: { recap: true, suggestion: false } })).toEqual({ recap: true, suggestion: true });
+    expect(await runtime.evaluateTurnEnd({ sessionId: scope.sessionId, assist: { recap: true } })).toEqual({ recap: true });
     expect(workspaces).toEqual([scope.workspaceId]);
     expect(writes).toHaveLength(1);
     expect(writes[0][2]).toEqual({ directory: scope.cwd });
@@ -98,7 +101,8 @@ describe('session-work canonical consumer', () => {
 
   it('never resolves an unscoped endpoint when the Host session scope is missing', async () => {
     const workspaces = [];
-    const runtime = makeRuntime({ sessionScope: null,
+    const runtime = makeRuntime({
+      sessionScope: null,
       classifierEndpoint: async (workspaceId) => { workspaces.push(workspaceId); return endpoint; },
     });
     runtime.processCanonicalEvent(userEvent(), scope);

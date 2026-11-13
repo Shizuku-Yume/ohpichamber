@@ -1,5 +1,6 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui';
 import { NumberInput } from '@/components/ui/number-input';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
@@ -18,6 +19,8 @@ import {
 } from '@/components/sections/shared/SettingsSection';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
 import { useDeviceInfo } from '@/lib/device';
+import { canonicalClient } from '@/api/canonicalClient';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import {
   MAX_INPUT_HISTORY_LIMIT,
@@ -547,8 +550,40 @@ const AssistanceTab: React.FC = () => {
   const setDraftStartersVisible = useUIStore((state) => state.setDraftStartersVisible);
   const sessionRecapEnabled = useUIStore((state) => state.sessionRecapEnabled);
   const setSessionRecapEnabled = useUIStore((state) => state.setSessionRecapEnabled);
-  const sessionSuggestionEnabled = useUIStore((state) => state.sessionSuggestionEnabled);
-  const setSessionSuggestionEnabled = useUIStore((state) => state.setSessionSuggestionEnabled);
+  const suggestionGenerator = useUIStore((state) => state.suggestionGenerator);
+  const setSuggestionGenerator = useUIStore((state) => state.setSuggestionGenerator);
+  const settingsDirectory = useSettingsDirectory();
+
+  const suggestionGeneratorOptions = React.useMemo<Array<{ value: 'session' | 'small' | 'off'; label: string }>>(
+    () => [
+      { value: 'session', label: t('settings.openchamber.visual.option.suggestionGenerator.session') },
+      { value: 'small', label: t('settings.openchamber.visual.option.suggestionGenerator.small') },
+      { value: 'off', label: t('settings.openchamber.visual.option.suggestionGenerator.off') },
+    ],
+    [t],
+  );
+
+  const handleSuggestionGeneratorChange = React.useCallback(
+    async (value: 'session' | 'small' | 'off') => {
+      const previous = suggestionGenerator;
+      setSuggestionGenerator(value);
+      try {
+        if (settingsDirectory) {
+          const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+          const omp = await canonicalClient.getOmpSettings(workspace.workspaceId);
+          await canonicalClient.updateOmpSettings(omp.workspaceId, {
+            expectedRevision: omp.revision,
+            changes: [{ id: 'suggestion.generator', value }],
+          });
+        }
+        await updateDesktopSettings({ suggestionGenerator: value });
+      } catch (error) {
+        setSuggestionGenerator(previous);
+        toast.error(error instanceof Error ? error.message : 'Failed to save suggestion generator setting');
+      }
+    },
+    [suggestionGenerator, setSuggestionGenerator, settingsDirectory],
+  );
   const sessionReviewOfferEnabled = useUIStore((state) => state.sessionReviewOfferEnabled);
   const setSessionReviewOfferEnabled = useUIStore((state) => state.setSessionReviewOfferEnabled);
   const jevAvailable = useRoutingStore(selectSafetyNetAvailable);
@@ -584,13 +619,18 @@ const AssistanceTab: React.FC = () => {
           ariaLabel={t('settings.openchamber.visual.field.sessionRecapAria')}
           settingsItem="chat.session-recap"
         />
-        <SettingsCheckboxRow
-          checked={sessionSuggestionEnabled}
-          onChange={setSessionSuggestionEnabled}
-          label={t('settings.openchamber.visual.field.sessionSuggestion')}
-          ariaLabel={t('settings.openchamber.visual.field.sessionSuggestionAria')}
-          settingsItem="chat.session-suggestion"
-        />
+        <SettingsFieldRow
+          label={t('settings.openchamber.visual.field.suggestionGenerator')}
+          info={t('settings.openchamber.visual.field.suggestionGeneratorHint')}
+          settingsItem="chat.suggestion-generator"
+        >
+          <SettingsChipGroup
+            value={suggestionGenerator}
+            options={suggestionGeneratorOptions}
+            onChange={handleSuggestionGeneratorChange}
+            aria-label={t('settings.openchamber.visual.field.suggestionGeneratorAria')}
+          />
+        </SettingsFieldRow>
         {/* Jev runs on the OpenChamber server, which VS Code does not have.
             The line naming who decides sits under the label, so it reads as
             part of this option rather than text between two checkboxes. */}

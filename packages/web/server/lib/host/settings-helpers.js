@@ -489,8 +489,8 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionRecapEnabled === 'boolean') {
       result.sessionRecapEnabled = candidate.sessionRecapEnabled;
     }
-    if (typeof candidate.sessionSuggestionEnabled === 'boolean') {
-      result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
+    if (typeof candidate.suggestionGenerator === 'string' && ['session', 'small', 'off'].includes(candidate.suggestionGenerator)) {
+      result.suggestionGenerator = candidate.suggestionGenerator;
     }
     if (typeof candidate.sessionWorkEnabled === 'boolean') {
       result.sessionWorkEnabled = candidate.sessionWorkEnabled;

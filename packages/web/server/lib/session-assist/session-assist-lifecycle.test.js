@@ -76,29 +76,6 @@ describe('session-assist production lifecycle integration', () => {
     const assistRuntime = createSessionAssistRuntime({
       sessionService,
       resolveSessionScope: async () => scope,
-      getSmallModelService: async () => ({
-        describeSmallModel: async () => ({ inputCharBudget: 20_000, providerID: 'provider-1', modelID: 'model-1' }),
-        generateSmallModelText: async () => ({
-          text: JSON.stringify({
-            recap: 'Deployed feature to production.',
-            suggestion: 'Check the error logs next?',
-          }),
-        }),
-      }),
-      getTargets: () => ({ recap: true, suggestion: true }),
-      persistSessionAssist: async (sessionId, directory, assist) => {
-        persisted.push({ sessionId, directory, assist });
-        broadcastEvents.push({
-          type: 'openchamber:session-metadata',
-          properties: {
-            sessionId,
-            sessionID: sessionId,
-            metadata: { openchamber: { assist } },
-            revision: '1',
-          },
-        });
-      },
-      quietMs: 10, // Fast quiet window for test
       onTurnSettled: async (sessionId) => {
         await hub.releaseSession(sessionId, 'run');
         settled.resolve();
@@ -121,26 +98,9 @@ describe('session-assist production lifecycle integration', () => {
     // 3. Wait for assist generation, metadata persist, and turn settlement
     await settled.promise;
 
-    // 4. Assert assist was persisted with correct payload
-    expect(persisted).toHaveLength(1);
-    expect(persisted[0].sessionId).toBe('session');
-    expect(persisted[0].assist).toMatchObject({
-      recap: 'Deployed feature to production.',
-      suggestion: 'Check the error logs next?',
-      forMessageID: 'assistant-1',
-    });
-
-    // 5. Assert metadata event was broadcast
-    expect(broadcastEvents).toHaveLength(1);
-    expect(broadcastEvents[0]).toMatchObject({
-      type: 'openchamber:session-metadata',
-      properties: {
-        sessionId: 'session',
-        sessionID: 'session',
-        revision: '1',
-      },
-    });
-
+    // 4. Assert assist was not persisted (suggestion path removed)
+    expect(persisted).toHaveLength(0);
+    expect(broadcastEvents).toHaveLength(0);
     // 6. Assert lifecycle teardown: run lease released and session unsubscribed!
     expect(hub.hasLeases('session')).toBe(false);
     expect(hub.isSessionConnected('session')).toBe(false);
@@ -173,29 +133,6 @@ describe('session-assist production lifecycle integration', () => {
     const assistRuntime = createSessionAssistRuntime({
       sessionService,
       resolveSessionScope: async () => scope,
-      getSmallModelService: async () => ({
-        describeSmallModel: async () => ({ inputCharBudget: 20_000, providerID: 'provider-1', modelID: 'model-1' }),
-        generateSmallModelText: async () => ({
-          text: JSON.stringify({
-            recap: 'Deployed feature to production.',
-            suggestion: 'Check the error logs next?',
-          }),
-        }),
-      }),
-      getTargets: () => ({ recap: true, suggestion: true }),
-      persistSessionAssist: async (sessionId, directory, assist) => {
-        persisted.push({ sessionId, directory, assist });
-        broadcastEvents.push({
-          type: 'openchamber:session-metadata',
-          properties: {
-            sessionId,
-            sessionID: sessionId,
-            metadata: { openchamber: { assist } },
-            revision: '1',
-          },
-        });
-      },
-      quietMs: 10,
       onTurnSettled: async (sessionId) => {
         await hub.releaseSession(sessionId, 'run');
         settled.resolve();
@@ -222,26 +159,9 @@ describe('session-assist production lifecycle integration', () => {
     // 4. Wait for assist generation, metadata persist, and turn settlement
     await settled.promise;
 
-    // 5. Assert assist was persisted exactly once (no duplicate generation)
-    expect(persisted).toHaveLength(1);
-    expect(persisted[0].sessionId).toBe('session');
-    expect(persisted[0].assist).toMatchObject({
-      recap: 'Deployed feature to production.',
-      suggestion: 'Check the error logs next?',
-      forMessageID: 'assistant-1',
-    });
-
-    // 6. Assert metadata event was broadcast exactly once
-    expect(broadcastEvents).toHaveLength(1);
-    expect(broadcastEvents[0]).toMatchObject({
-      type: 'openchamber:session-metadata',
-      properties: {
-        sessionId: 'session',
-        sessionID: 'session',
-        revision: '1',
-      },
-    });
-
+    // 5. Assert assist was not persisted (suggestion path removed)
+    expect(persisted).toHaveLength(0);
+    expect(broadcastEvents).toHaveLength(0);
     // 7. Assert lifecycle teardown: run lease released and session unsubscribed cleanly
     expect(hub.hasLeases('session')).toBe(false);
     expect(hub.isSessionConnected('session')).toBe(false);
@@ -324,13 +244,6 @@ describe('session-assist production lifecycle integration', () => {
         history: async () => ({ sessionId: 'session', branch: { branchId: 'b-1', branchVersion: '1', leafMessageId: 'assistant-1' }, turns: [], messages: [], nextCursor: null }),
       },
       resolveSessionScope: async () => scope,
-      getSmallModelService: async () => ({
-        describeSmallModel: async () => ({ inputCharBudget: 20_000, providerID: 'provider-1', modelID: 'model-1' }),
-        generateSmallModelText: async () => ({ text: '{}' }),
-      }),
-      getTargets: () => ({ recap: true, suggestion: true }),
-      persistSessionAssist: async () => { },
-      quietMs: 10,
       onTurnSettled: async (sessionId) => {
         await hub.releaseSession(sessionId, 'run');
         settled.resolve();

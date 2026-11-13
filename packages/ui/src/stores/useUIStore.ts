@@ -1029,7 +1029,7 @@ interface UIStore {
  sessionWorkKeepInGroup: boolean;
  streamingAutoFollowEnabled: boolean;
  sessionRecapEnabled: boolean;
- sessionSuggestionEnabled: boolean;
+ suggestionGenerator: 'session' | 'small' | 'off';
  /** The "In work" sidebar block, the Track / Done actions, and sessions going in on a sent message. */
  sessionWorkEnabled: boolean;
  /** Let Jev offer an AI review or a walkthrough after a turn that changed the project. */
@@ -1363,7 +1363,7 @@ interface UIStore {
  setShowReasoningTraces: (value: boolean) => void;
  setStreamingAutoFollowEnabled: (value: boolean) => void;
  setSessionRecapEnabled: (value: boolean) => void;
- setSessionSuggestionEnabled: (value: boolean) => void;
+ setSuggestionGenerator: (value: 'session' | 'small' | 'off') => void;
  setSessionWorkEnabled: (value: boolean) => void;
  setSessionReviewOfferEnabled: (value: boolean) => void;
  setSessionGoalEnabled: (value: boolean) => void;
@@ -1619,7 +1619,7 @@ export const useUIStore = create<UIStore>()(
     sessionWorkKeepInGroup: false,
     streamingAutoFollowEnabled: true,
     sessionRecapEnabled: true,
-    sessionSuggestionEnabled: true,
+    suggestionGenerator: 'session',
     sessionWorkEnabled: true,
     sessionReviewOfferEnabled: false,
     sessionGoalEnabled: true,
@@ -2708,8 +2708,8 @@ export const useUIStore = create<UIStore>()(
      set({ sessionRecapEnabled: value });
     },
 
-    setSessionSuggestionEnabled: (value) => {
-     set({ sessionSuggestionEnabled: value });
+    setSuggestionGenerator: (value) => {
+     set({ suggestionGenerator: value });
     },
 
     setSessionWorkEnabled: (value) => {
@@ -3801,7 +3801,7 @@ export const useUIStore = create<UIStore>()(
      showReasoningTraces: state.showReasoningTraces,
      streamingAutoFollowEnabled: state.streamingAutoFollowEnabled,
      sessionRecapEnabled: state.sessionRecapEnabled,
-     sessionSuggestionEnabled: state.sessionSuggestionEnabled,
+     suggestionGenerator: state.suggestionGenerator,
      sessionWorkEnabled: state.sessionWorkEnabled,
      sessionReviewOfferEnabled: state.sessionReviewOfferEnabled,
      sessionGoalEnabled: state.sessionGoalEnabled,

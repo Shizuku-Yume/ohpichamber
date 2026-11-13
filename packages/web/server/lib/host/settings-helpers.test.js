@@ -822,7 +822,7 @@ describe('settings registry gate', () => {
     defaultSessionMode: 'main',
     favoriteModels: [{ providerID: 'anthropic', modelID: 'claude' }], hiddenModels: [{ providerID: 'openai', modelID: 'gpt' }],
     recentModels: [{ providerID: 'anthropic', modelID: 'claude' }], lastSelectedModel: 'anthropic/claude', favoriteAgents: ['build'], providerOrder: ['anthropic'],
-    sessionRecapEnabled: true, sessionSuggestionEnabled: true, sessionWorkEnabled: true, sessionWorkAutoOpen: true, sessionReviewOfferEnabled: true, sessionWorkKeepInGroup: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
+    sessionRecapEnabled: true, suggestionGenerator: 'session', sessionWorkEnabled: true, sessionWorkAutoOpen: true, sessionReviewOfferEnabled: true, sessionWorkKeepInGroup: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
     maxLastMessageLength: 200, showDeletionDialog: true,
     nativeNotificationsEnabled: true, notificationMode: 'always', notifyOnSubtasks: true, notifyOnCompletion: true, notifyOnError: true, notifyOnQuestion: true, notifyOnPullRequests: true,
     notificationTemplates: { completion: { title: 't', message: 'm' } }, reportUsage: true,

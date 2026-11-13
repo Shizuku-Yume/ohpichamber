@@ -641,7 +641,7 @@
     "sessionRecapEnabled": {
       "scope": "profile"
     },
-    "sessionSuggestionEnabled": {
+    "suggestionGenerator": {
       "scope": "profile"
     },
     "sessionWorkEnabled": {

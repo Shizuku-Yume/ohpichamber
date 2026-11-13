@@ -45,7 +45,15 @@ import { createOutboundHandles } from '../source-control/outbound-handles.js';
 import { createExtensionProviders } from '../source-control/extension-providers.js';
 import { createTrackerRegistry } from '../trackers/registry.js';
 import { registerTrackerRoutes } from '../trackers/routes.js';
-import { SOURCE_CONTROL_OUTBOUND_PATH } from '@openchamber/sdk';
+import { SOURCE_CONTROL_OUTBOUND_PATH, TRACKER_OUTBOUND_PATH } from '@openchamber/sdk';
+import { createExtensionTrackers } from '../trackers/extension-trackers.js';
+import { createTrackerAccounts, trackerAccountsPersistPath } from '../trackers/extension-accounts.js';
+import { createTrackerOAuth } from '../trackers/extension-oauth.js';
+import { registerNotificationChannelRoutes } from '../notifications/channel-routes.js';
+import { registerAutoReviewRoutes } from '../auto-review/runtime.js';
+import { registerPrWatchRoutes } from '../pr-watch/runtime.js';
+import { registerProviderLogoRoutes } from './provider-logo-routes.js';
+import { createSshPassphraseStore } from '../git/ssh-passphrases.js';
 import { setHostCallbackRoute } from '../guests/host-callback.js';
 import { createGitCredentialResolver, createHttpsCredentialReference, parseGitCredentialReference } from '../git/credential-resolver.js';
 import { createGitRepositoryCredentialRuntime } from '../git/repository-credential-runtime.js';
@@ -276,6 +284,16 @@ export const createFeatureRoutesRuntime = () => {
     // Agent workflows, present only in a build with OPENCHAMBER_WORKFLOWS_ENABLE.
     routeDependencies.workflows?.register(app);
 
+    if (routeDependencies.autoReviewRuntime) registerAutoReviewRoutes(app, routeDependencies.autoReviewRuntime);
+    if (routeDependencies.prWatchRuntime) registerPrWatchRoutes(app, routeDependencies.prWatchRuntime);
+    registerProviderLogoRoutes(app, {
+      fsPromises,
+      path,
+      crypto,
+      openchamberDataDir,
+      readSettingsFromDiskMigrated,
+      persistResolvedSettings: routeDependencies.persistResolvedSettings ?? persistSettings,
+    });
     registerMarkdownImageGrantRoutes(app, {
       fsPromises,
       path,
@@ -386,7 +404,53 @@ export const createFeatureRoutesRuntime = () => {
       filePath: path.join(openchamberDataDir, 'git-ssh-credentials.json'),
       fsImpl: fsPromises,
     });
+    const sshPassphraseSource = {
+      list: async () => {
+        try {
+          const raw = await fsPromises.readFile(path.join(openchamberDataDir, 'git-ssh-passphrases.json'), 'utf8');
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (err) {
+          if (err?.code === 'ENOENT') return [];
+          throw err;
+        }
+      },
+      create: async (entry) => {
+        const p = path.join(openchamberDataDir, 'git-ssh-passphrases.json');
+        let list = [];
+        try {
+          const raw = await fsPromises.readFile(p, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) list = parsed;
+        } catch (err) {
+          if (err?.code !== 'ENOENT') throw err;
+        }
+        const idx = list.findIndex((e) => e.id === entry.id);
+        if (idx >= 0) list[idx] = entry;
+        else list.push(entry);
+        const tmp = `${p}.${process.pid}.${Date.now()}.tmp`;
+        await fsPromises.writeFile(tmp, JSON.stringify(list, null, 2), { mode: 0o600 });
+        await fsPromises.rename(tmp, p);
+      },
+      remove: async (id) => {
+        const p = path.join(openchamberDataDir, 'git-ssh-passphrases.json');
+        let list = [];
+        try {
+          const raw = await fsPromises.readFile(p, 'utf8');
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) list = parsed;
+        } catch (err) {
+          if (err?.code !== 'ENOENT') throw err;
+        }
+        list = list.filter((e) => e.id !== id);
+        const tmp = `${p}.${process.pid}.${Date.now()}.tmp`;
+        await fsPromises.writeFile(tmp, JSON.stringify(list, null, 2), { mode: 0o600 });
+        await fsPromises.rename(tmp, p);
+      },
+    };
+    const sshPassphrases = createSshPassphraseStore(sshPassphraseSource);
     const managedSshInventory = createManagedSshInventory({
+      passphrases: sshPassphrases,
       store: sshCredentialStore,
       snapshotRoot: path.join(openchamberDataDir, 'git-ssh-operation-keys'),
       discoveryRoot: path.join(os.homedir(), '.ssh'),
@@ -455,8 +519,9 @@ export const createFeatureRoutesRuntime = () => {
       }
       return null;
     };
+    const trackedItemReaders = createTrackedItemReaders({ readLiveSummaries: walkthroughBindingService.readLiveSummaries, trackers });
     trackedItemsService = createTrackedItemsService({
-      readers: createTrackedItemReaders({ readLiveSummaries: walkthroughBindingService.readLiveSummaries, trackers }),
+      readers: trackedItemReaders,
       persistence: createTrackedItemsPersistence({ dataDir: openchamberDataDir }),
       isConnectionOpen: (connectionId) => findEventClient(connectionId) !== null,
       send: (connectionId, event) => {
@@ -524,6 +589,7 @@ export const createFeatureRoutesRuntime = () => {
       readTransportCredential: sourceControlProviders.readTransportCredential,
       describeProvider: sourceControlProviders.describe,
       lookupManagedSshKey: sshCredentialStore.lookup,
+      passphrases: sshPassphrases,
       fsImpl: fsPromises,
       snapshotRoot: path.join(openchamberDataDir, 'git-ssh-operation-keys'),
     });
@@ -584,6 +650,33 @@ export const createFeatureRoutesRuntime = () => {
         }
       },
     });
+    const trackerOutboundHandles = createOutboundHandles();
+    setHostCallbackRoute(TRACKER_OUTBOUND_PATH, {
+      refusal: trackerOutboundHandles.refusal,
+      serve: trackerOutboundHandles.serve,
+    });
+    const extensionTrackers = createExtensionTrackers({
+      listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }),
+      currentGuest: async (guestId) => (await listInstalledGuests({ persistPath: extensionsPersistPath(openchamberDataDir) }))
+        .find((guest) => guest.id === guestId) ?? null,
+      registry: trackers,
+      accounts: createTrackerAccounts({ persistPath: trackerAccountsPersistPath(openchamberDataDir) }),
+      handles: trackerOutboundHandles,
+      oauth: createTrackerOAuth(),
+      sessionStatus: { forget: () => { } },
+      persistPath: extensionsPersistPath(openchamberDataDir),
+      emitChanged: () => {
+        const clients = getOpenChamberEventClients();
+        for (const client of clients) {
+          try {
+            writeSseEvent(client, { type: 'openchamber:tracker-providers-changed', properties: {} });
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
+    });
+
     registerGuestRoutes(app, {
       openchamberDataDir,
       openchamberVersion,
@@ -596,8 +689,16 @@ export const createFeatureRoutesRuntime = () => {
       onGuestDeactivated: settleGuestDeactivationListeners([
         { name: 'hand back an extension role', listener: onGuestDeactivated },
         { name: 'withdraw an extension Git host', listener: (event) => extensionSourceControlProviders.deactivated(event) },
+        { name: 'withdraw an extension notification channel', listener: (event) => routeDependencies.extensionNotificationChannels?.deactivated(event) },
+        { name: 'withdraw an extension tracker', listener: (event) => extensionTrackers.deactivated(event) },
       ]),
-      onGuestActivated: () => extensionSourceControlProviders.reconcile(),
+      onGuestActivated: async () => {
+        await Promise.allSettled([
+          extensionSourceControlProviders.reconcile(),
+          routeDependencies.extensionNotificationChannels?.reconcile(),
+          extensionTrackers.reconcile(),
+        ]);
+      },
       onGuestsChanged: () => {
         const clients = getOpenChamberEventClients();
         for (const client of clients) {
@@ -615,6 +716,15 @@ export const createFeatureRoutesRuntime = () => {
     await extensionSourceControlProviders.reconcile().catch((error) => {
       console.warn('Failed to load extension Git hosts:', error?.message ?? error);
     });
+    await extensionTrackers.reconcile().catch((error) => {
+      console.warn('Failed to load extension trackers:', error?.message ?? error);
+    });
+    if (routeDependencies.extensionNotificationChannels) {
+      registerNotificationChannelRoutes(app, { channels: routeDependencies.extensionNotificationChannels });
+      await routeDependencies.extensionNotificationChannels.reconcile().catch((error) => {
+        console.warn('Failed to load extension notification channels:', error?.message ?? error);
+      });
+    }
     gitWorktreeCreation = registerGitRoutes(app, {
       // Identities for accounts connected before identities carried one are
       // made the first time identities are listed: a moment someone asked for,
@@ -650,6 +760,7 @@ export const createFeatureRoutesRuntime = () => {
     });
     registerLinearRoutes(app);
     registerTrackerRoutes(app, { registry: trackers });
+    routeDependencies.prWatchRuntime?.attach?.({ trackedItems: trackedItemsService, readers: trackedItemReaders });
     // The session service was built before Git routes: fill the move bridge
     // with the same creation pipeline and stash operations the dialog uses.
     if (routeDependencies.sessionWorktreeMoveBridge) {
@@ -723,7 +834,21 @@ export const createFeatureRoutesRuntime = () => {
       sessionFoldersStore: routeDependencies.sessionFoldersStore,
       openchamberDataDir,
     });
-    registerSessionDraftRoutes(app, { fsPromises, path, openchamberDataDir });
+    registerSessionDraftRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir,
+      onChanged: (updatedAt) => {
+        const clients = getOpenChamberEventClients();
+        for (const client of clients) {
+          try {
+            writeSseEvent(client, { type: 'openchamber:session-drafts-changed', properties: { updatedAt } });
+          } catch {
+            clients.delete(client);
+          }
+        }
+      },
+    });
     registerFsRoutes(app, {
       os,
       path,

@@ -30,6 +30,20 @@ describe('core-routes', () => {
     expect(shutdownOpts).toEqual({ exitProcess: true });
   });
 
+  it('serves /api/diagnostics/local-files for loopback requests', async () => {
+    const app = express();
+    const dependencies = {
+      express,
+      getServerPort: () => 4000,
+      uiAuthController: { requireAuth: (_req, _res, next) => next() },
+      tunnelAuthController: { classifyRequestScope: () => 'local' },
+    };
+    registerServerStatusRoutes(app, dependencies);
+    const res = await request(app).get('/api/diagnostics/local-files');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveProperty('events');
+    expect(res.body).toHaveProperty('coverage');
+  });
   it('lets the agent credential helper past the UI session guard, and nothing else', async () => {
     const app = express();
     const requireAuth = vi.fn((_req, res) => res.status(401).json({ error: 'Unauthorized' }));
@@ -68,7 +82,7 @@ describe('core-routes', () => {
   it('should require UI auth before /api/system/shutdown when auth is configured', async () => {
     const app = express();
     const dependencies = {
-      gracefulShutdown: vi.fn(async () => {}),
+      gracefulShutdown: vi.fn(async () => { }),
       getHealthSnapshot: () => ({ status: 'ok' }),
       openchamberVersion: '1.0.0',
       runtimeName: 'test',
@@ -95,7 +109,7 @@ describe('core-routes', () => {
   it('should allow authenticated /api/system/shutdown requests', async () => {
     const app = express();
     const dependencies = {
-      gracefulShutdown: vi.fn(async () => {}),
+      gracefulShutdown: vi.fn(async () => { }),
       getHealthSnapshot: () => ({ status: 'ok' }),
       openchamberVersion: '1.0.0',
       runtimeName: 'test',
@@ -122,7 +136,7 @@ describe('core-routes', () => {
   it('should require tunnel auth for tunneled /api/system/shutdown requests', async () => {
     const app = express();
     const dependencies = {
-      gracefulShutdown: vi.fn(async () => {}),
+      gracefulShutdown: vi.fn(async () => { }),
       getHealthSnapshot: () => ({ status: 'ok' }),
       openchamberVersion: '1.0.0',
       runtimeName: 'test',
@@ -658,7 +672,7 @@ describe('client auth routes', () => {
       tunnelAuthController: {
         classifyRequestScope: () => 'local',
         getTunnelSessionFromRequest: () => null,
-        clearTunnelSessionCookie: () => {},
+        clearTunnelSessionCookie: () => { },
         requireTunnelSession: (_req, _res, next) => next(),
       },
       uiAuthController: {
@@ -936,7 +950,7 @@ describe('client auth routes', () => {
     registerServerStatusRoutes(app, {
       process,
       serverStartedAt: '2026-01-01T00:00:00.000Z',
-      gracefulShutdown: vi.fn(async () => {}),
+      gracefulShutdown: vi.fn(async () => { }),
       getHealthSnapshot: () => ({ status: 'ok' }),
       openchamberVersion: '1.0.0',
       runtimeName: 'test',
@@ -959,7 +973,7 @@ describe('client auth routes', () => {
     registerServerStatusRoutes(app, {
       process,
       serverStartedAt: '2026-01-01T00:00:00.000Z',
-      gracefulShutdown: vi.fn(async () => {}),
+      gracefulShutdown: vi.fn(async () => { }),
       getHealthSnapshot: () => ({ status: 'ok' }),
       openchamberVersion: '1.0.0',
       runtimeName: 'test',
@@ -980,7 +994,7 @@ describe('client auth routes', () => {
     registerServerStatusRoutes(app, {
       process,
       serverStartedAt: '2026-01-01T00:00:00.000Z',
-      gracefulShutdown: vi.fn(async () => {}),
+      gracefulShutdown: vi.fn(async () => { }),
       getHealthSnapshot: () => ({ status: 'ok' }),
       openchamberVersion: '1.0.0',
       runtimeName: 'test',

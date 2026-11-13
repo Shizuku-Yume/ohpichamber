@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { HostToolInvocation } from './host-tool.ts';
-import { createHostToolExtension } from './host-tool.ts';
+import { createHostToolController, createHostToolExtension } from './host-tool.ts';
+import { HostActionRequestSchema } from '../native-policy-protocol.ts';
 
 interface RegisteredToolStub {
   name: string;
@@ -11,8 +12,40 @@ interface RegisteredToolStub {
   execute: (callId: string, params: Record<string, unknown>, signal?: AbortSignal) => Promise<{ content: Array<{ type: string; text: string }>; details: unknown }>;
 }
 
-describe('createHostToolExtension', () => {
-  test('registers openchamber_image and dispatches image.generate to host action invoker', async () => {
+describe('HostActionRequestSchema', () => {
+  test('parses workflow.run in the host action schema', () => {
+    const parsed = HostActionRequestSchema.safeParse({
+      sessionId: 'session-123',
+      toolName: 'openchamber_workflow',
+      action: 'workflow.run',
+      input: { script: 'workflow.js' },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.toolName).toBe('openchamber_workflow');
+      expect(parsed.data.action).toBe('workflow.run');
+    }
+  });
+
+  test('rejects deleted openchamber_image and memory tools', () => {
+    expect(HostActionRequestSchema.safeParse({
+      sessionId: 'session-123',
+      toolName: 'openchamber_image',
+      action: 'image.generate',
+      input: {},
+    }).success).toBe(false);
+
+    expect(HostActionRequestSchema.safeParse({
+      sessionId: 'session-123',
+      toolName: 'memory',
+      action: 'memory.read',
+      input: {},
+    }).success).toBe(false);
+  });
+});
+
+describe('createHostToolExtension & controller', () => {
+  test('disabled host tool is absent and workflow.run dispatches to host', async () => {
     const registeredTools = new Map<string, RegisteredToolStub>();
     const mockApi = {
       typebox: {
@@ -29,40 +62,95 @@ describe('createHostToolExtension', () => {
     };
 
     let capturedInvocation: HostToolInvocation | null = null;
-    const extension = createHostToolExtension({
+    const controller = createHostToolController({
       scope: { sessionId: 'session-123', rootSessionId: 'root-123', workspaceId: 'ws-123' },
       invoke: async (invocation) => {
         capturedInvocation = invocation;
-        return { ok: true, path: '/tmp/generated.png' };
+        return { ok: true, runId: 'run-workflow-1' };
       },
     });
 
-    extension(mockApi as never);
+    controller.extension(mockApi as never);
 
-    // Verify all tools are registered including openchamber_image
+    // Default enabled host tools are registered
     expect(registeredTools.has('openchamber')).toBe(true);
     expect(registeredTools.has('web')).toBe(true);
-    expect(registeredTools.has('memory')).toBe(true);
     expect(registeredTools.has('openchamber_knowledge')).toBe(true);
-    expect(registeredTools.has('notify')).toBe(true);
-    expect(registeredTools.has('openchamber_image')).toBe(true);
+    expect(registeredTools.has('openchamber_render')).toBe(true);
+    expect(registeredTools.has('openchamber_workflow')).toBe(true);
 
-    // Execute openchamber_image tool call
-    const imageTool = registeredTools.get('openchamber_image');
-    expect(imageTool).toBeDefined();
-    const result = await imageTool!.execute('call-1', {
-      action: 'image.generate',
-      input: { prompt: 'a beautiful sunrise', count: 1 },
+    // Disabled host tool (notify defaults to false) is ABSENT
+    expect(registeredTools.has('notify')).toBe(false);
+
+    // Deleted tools are ABSENT
+    expect(registeredTools.has('openchamber_image')).toBe(false);
+    expect(registeredTools.has('memory')).toBe(false);
+
+    // Execute openchamber_workflow tool call
+    const workflowTool = registeredTools.get('openchamber_workflow');
+    expect(workflowTool).toBeDefined();
+    const result = await workflowTool!.execute('call-wf-1', {
+      action: 'workflow.run',
+      input: { script: 'deploy.js' },
     });
 
-    expect(result.details).toEqual({ ok: true, path: '/tmp/generated.png' });
+    expect(result.details).toEqual({ ok: true, runId: 'run-workflow-1' });
     expect(capturedInvocation).not.toBeNull();
     expect(capturedInvocation!.request).toEqual({
       sessionId: 'session-123',
-      toolName: 'openchamber_image',
-      action: 'image.generate',
-      input: { prompt: 'a beautiful sunrise', count: 1 },
+      toolName: 'openchamber_workflow',
+      action: 'workflow.run',
+      input: { script: 'deploy.js' },
     });
+
+    // Toggle notify on -> dynamically registers tool
+    expect(registeredTools.has('notify')).toBe(false);
+    await controller.toggle('notify', true);
+    expect(registeredTools.has('notify')).toBe(true);
+  });
+
+  test('re-registers and deactivates tools on toggle with active session mock', async () => {
+    const registeredTools = new Map<string, RegisteredToolStub>();
+    const mockApi = {
+      typebox: {
+        Type: {
+          Object: (props: unknown) => ({ type: 'object', properties: props }),
+          String: () => ({ type: 'string' }),
+          Record: () => ({ type: 'object' }),
+          Unknown: () => ({}),
+        },
+      },
+      registerTool: (tool: RegisteredToolStub) => {
+        registeredTools.set(tool.name, tool);
+      },
+    };
+
+    let activeTools = ['openchamber', 'web', 'openchamber_knowledge', 'openchamber_render', 'openchamber_workflow'];
+    const mockSession = {
+      getActiveToolNames: () => [...activeTools],
+      setActiveToolsByName: async (names: string[]) => {
+        activeTools = [...names];
+      },
+    };
+
+    const controller = createHostToolController({
+      scope: { sessionId: 'session-123', rootSessionId: 'root-123', workspaceId: 'ws-123' },
+      invoke: async () => ({ ok: true }),
+    });
+
+    controller.extension(mockApi as never);
+    controller.bindSession(mockSession as never);
+
+    expect(mockSession.getActiveToolNames()).not.toContain('notify');
+
+    // Toggle notify on
+    await controller.toggle('notify', true);
+    expect(registeredTools.has('notify')).toBe(true);
+    expect(mockSession.getActiveToolNames()).toContain('notify');
+
+    // Toggle web off -> removed from session active tool list
+    await controller.toggle('web', false);
+    expect(mockSession.getActiveToolNames()).not.toContain('web');
   });
 });
 

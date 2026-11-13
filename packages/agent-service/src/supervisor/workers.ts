@@ -167,6 +167,7 @@ const WORKER_ENV_KEYS = Object.freeze([
   'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR',
   'OMP_PROFILE', 'PI_PROFILE', 'PI_CONFIG_DIR',
   'BUN_INSTALL', 'BUN_INSTALL_BIN',
+  'OPENCHAMBER_DATA_DIR',
 ]);
 
 // A directory overlay comes from user/project settings, but it must not be able

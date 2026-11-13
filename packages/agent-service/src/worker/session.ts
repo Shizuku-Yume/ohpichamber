@@ -59,7 +59,7 @@ import { WorkerCompletion } from './completion.ts';
 import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import { NativeApprovalRequired, type WorkerAuthorize } from './policy.ts';
-import { createHostToolExtension, HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
+import { createHostToolController, readHostToolEnablement, HOST_TOOL_DESCRIPTIONS, type HostToolController, type HostToolName } from './host-tool.ts';
 import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
@@ -188,6 +188,7 @@ export class WorkerSession {
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
     private readonly permissionBridge: NativePermissionBridge,
+    private readonly hostToolsController?: HostToolController,
   ) {
     this.modeController = new WorkerModeController(
       session,
@@ -549,6 +550,15 @@ export class WorkerSession {
       // no such seam.
       cfgTitleRefreshOnReplan.override(settings, false);
       cfgTaskPerCallModel.override(settings, 'on');
+      const initialHostTools = {
+        ...readHostToolEnablement(),
+        ...(input.hostTools as Record<HostToolName, boolean> | undefined),
+      };
+      const hostToolsController = createHostToolController({
+        scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
+        invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
+        initialEnablement: initialHostTools,
+      });
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
@@ -559,10 +569,7 @@ export class WorkerSession {
           interaction, approval: bashPolicy.approval,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
           nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
-        }), createHostToolExtension({
-          scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
-          invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
-        })],
+        }), hostToolsController.extension],
         extensionRoots: () => nativeExtensionRoots(settings, pluginExtensionPaths),
         getApiKey: async model => {
           await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
@@ -575,6 +582,7 @@ export class WorkerSession {
       }
       const nativeSession = session;
       nativeSession.setClientBridge(permissionBridge.clientBridge);
+      hostToolsController.bindSession(nativeSession);
       mcp?.attachSession(nativeSession);
       result.setToolUIContext(interaction.ui, true);
       const warming = new NativeCacheWarming({ cwd: input.cwd, agentDirectory: input.agentDirectory, session: nativeSession });
@@ -650,7 +658,7 @@ export class WorkerSession {
       const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
         await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
       };
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, hostToolsController);
       // Persisted subagents must be revivable after a worker restart: the factory
       // rebuilds one from its transcript, and the TTL mirrors the native task-agent
       // idle setting so a parked agent is collected exactly when OMP would.
@@ -1307,6 +1315,13 @@ export class WorkerSession {
     this.promptTask = task.then(() => { }, () => { });
     return task;
   }
+  async toggleHostTool(toolName: HostToolName, enabled: boolean): Promise<void> {
+    await this.hostToolsController?.toggle(toolName, enabled);
+  }
+
+  async configureHostTools(tools: Partial<Record<HostToolName, boolean>>): Promise<void> {
+    await this.hostToolsController?.configure(tools);
+  }
 
   /** Stop an in-flight background title before a user turn or disposal touches provider settings. */
   private async stopAutoTitle(): Promise<void> {
@@ -1441,6 +1456,14 @@ export class WorkerSession {
         const result = await this.webSearch.operation(operation.operation);
         await this.session.reconcileBuiltinTools();
         return { type: 'web-search', result };
+      }
+      case 'host-tools.toggle': {
+        await this.toggleHostTool(operation.toolName as HostToolName, operation.enabled);
+        return { type: 'host-tools.toggle', enabled: operation.enabled };
+      }
+      case 'host-tools.configure': {
+        await this.configureHostTools(operation.tools as Partial<Record<HostToolName, boolean>>);
+        return { type: 'host-tools.configure', configured: true };
       }
       case 'catalog': {
         const applying = operation.operation.type === 'skills.apply';

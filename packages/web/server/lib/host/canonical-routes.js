@@ -147,7 +147,7 @@ export function registerCanonicalHostRoutes(app, {
  express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions,
  resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope, listProjects, listWorkspaces,
  resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes,
- skillFileOwner, getSkillRepositoryDependencies, globalEventHub,
+ skillFileOwner, getSkillRepositoryDependencies, globalEventHub, resolveHostTools,
 }) {
  const validService = service && z.function().safeParse(service.request).success && z.function().safeParse(service.getState).success;
  if (!validService) throw new TypeError('Canonical gateway requires the real Agent Service request/getState');
@@ -317,8 +317,12 @@ export function registerCanonicalHostRoutes(app, {
     const bootstrap = {
      rootSessionId: scope.rootSessionId ?? sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId,
      cwd: scope.cwd, agentDirectory: scope.agentDirectory, agentDirectoryId: scope.agentDirectoryId,
-     displayPath: scope.displayPath ?? 'workspace'
+     displayPath: scope.displayPath ?? 'workspace',
     };
+    if (typeof resolveHostTools === 'function') {
+     const hostTools = await resolveHostTools().catch(() => null);
+     if (hostTools) bootstrap.hostTools = hostTools;
+    }
     if (scope.env !== undefined) bootstrap.env = scope.env;
     const reopened = await service.request(`/internal/sessions/${encodeURIComponent(sessionId)}/reopen`, {
      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bootstrap), signal: controller.signal,

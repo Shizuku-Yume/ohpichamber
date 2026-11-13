@@ -255,6 +255,10 @@ export class WorkerRegistry {
   list(): RegisteredWorkerInfo[] {
     return [...this.workerEntries.values()].map(entry => ({ ...entry.info, kind: entry.kind }));
   }
+  async broadcastOperation(operation: WorkerOperation): Promise<void> {
+    const active = this.list();
+    await Promise.allSettled(active.map(w => this.request(w.rootSessionId, operation)));
+  }
 
   info(rootSessionId: string): WorkerInfo | undefined {
     const entry = this.workerEntries.get(rootSessionId);

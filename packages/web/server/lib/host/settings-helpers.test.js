@@ -790,7 +790,7 @@ describe('settings registry gate', () => {
     defaultGitIdentityId: 'global', permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
     sessionGoalChecker: 'classifier', sessionGoalMaxAutoTurns: 20,
     autoApplyAgentModel: true, planModeAllowAgents: true,
-    agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
+    agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
     // Registry keys the settings-registry regeneration added; the gate fails
     // without a fixture line for each, and these are their real shapes.
     openLinksInBrowserPanel: true, liveBrowserTabLimit: 4, openTrackerLinksOnBoard: true, layoutAnimations: true,
@@ -839,7 +839,7 @@ describe('settings registry gate', () => {
     responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'Be brief.',
     // Registry keys whose server branch is a pass-through: the registry parser
     // owns their shape, so the fixture is the client's own write shape.
-    agentImageToolEnabled: true, agentImageModel: 'anthropic/claude', sessionRetentionIncludeInWork: true,
+    sessionRetentionIncludeInWork: true,
     dictationAutoSend: true, sttEndpointPath: '/speech_to_text', sttCorrectTranscript: true,
     sidebarSections: [{ kind: 'custom', id: 'g', name: 'Clients', grouping: 'project', links: [] }],
     sidebarPinLists: [{ id: 'pinned', name: 'Pinned' }], sidebarHiddenSections: ['work'],

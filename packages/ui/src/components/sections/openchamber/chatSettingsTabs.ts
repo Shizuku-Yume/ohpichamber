@@ -56,7 +56,7 @@ const SEARCH_TARGET_TABS = new Map<string, ChatSettingsTab>([
   ['chat.session-assistance', 'assistance'],
   ['chat.draft-starters-visible', 'assistance'],
   ['chat.session-recap', 'assistance'],
-  ['chat.session-suggestion', 'assistance'],
+  ['chat.suggestion-generator', 'assistance'],
   ['chat.session-review-offer', 'assistance'],
   ['chat.session-goal', 'assistance'],
   ['chat.session-goal-checker', 'assistance'],

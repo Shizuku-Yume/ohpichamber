@@ -465,6 +465,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionTabsEnabled === 'boolean') {
       result.sessionTabsEnabled = candidate.sessionTabsEnabled;
     }
+    if (typeof candidate.terminalCloseOnExit === 'boolean') {
+      result.terminalCloseOnExit = candidate.terminalCloseOnExit;
+    }
     if (typeof candidate.largeTextPasteBehavior === 'string') {
       const mode = candidate.largeTextPasteBehavior.trim();
       if (mode === 'ask' || mode === 'attach' || mode === 'inline' || mode === 'inline-double-paste') {
@@ -718,12 +721,6 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.showTurnChangedFiles === 'boolean') {
       result.showTurnChangedFiles = candidate.showTurnChangedFiles;
-    }
-    if (typeof candidate.showExpandedBashTools === 'boolean') {
-      result.showExpandedBashTools = candidate.showExpandedBashTools;
-    }
-    if (typeof candidate.showExpandedEditTools === 'boolean') {
-      result.showExpandedEditTools = candidate.showExpandedEditTools;
     }
     if (typeof candidate.timeFormatPreference === 'string') {
       const mode = candidate.timeFormatPreference.trim();

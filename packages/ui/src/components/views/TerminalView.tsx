@@ -376,6 +376,14 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
   [setTabPreviewUrl]
  );
 
+ const onLastTabClosedRef = React.useRef(onLastTabClosed);
+ onLastTabClosedRef.current = onLastTabClosed;
+
+ const closesOnExit = React.useCallback(
+  () => useUIStore.getState().terminalCloseOnExit,
+  [],
+ );
+
  const startStream = React.useCallback(
   (
    directory: string,
@@ -412,7 +420,20 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
 
         replaceBuffer(directory, tabId, event.data ?? '', event.sequence ?? 0, terminalSnapshotSize(event));
         scanTerminalPreviewOutput(directory, tabId, event.data ?? '');
-        if (event.status === 'exited') setTabLifecycle(directory, tabId, 'exited');
+        if (event.status === 'exited') {
+         if (closesOnExit()) {
+          void closeTerminalTab({
+           terminal,
+           directory,
+           tabId,
+           beforeClose: tabId === activeTabIdRef.current ? disconnectStream : undefined,
+           onLastTab: onLastTabClosedRef.current,
+           processExited: true,
+          });
+          break;
+         }
+         setTabLifecycle(directory, tabId, 'exited');
+        }
         break;
        }
        case 'reconnecting': {
@@ -430,6 +451,17 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
         break;
        }
        case 'exit': {
+        if (closesOnExit()) {
+         void closeTerminalTab({
+          terminal,
+          directory,
+          tabId,
+          beforeClose: tabId === activeTabIdRef.current ? disconnectStream : undefined,
+          onLastTab: onLastTabClosedRef.current,
+          processExited: true,
+         });
+         break;
+        }
         const exitCode =
          typeof event.exitCode === 'number' ? event.exitCode : null;
         const signal = typeof event.signal === 'number' ? event.signal : null;
@@ -462,6 +494,21 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
       }
      },
      onError: (error, fatal) => {
+      if (error.code === 'KILLED' && activeTerminalIdRef.current === terminalId && closesOnExit()) {
+       const killedTab = useTerminalStore.getState().getDirectoryState(directory)?.tabs.find((tab) => tab.id === tabId);
+       if (killedTab && (killedTab.terminalSessionId === terminalId || killedTab.terminalSessionId === null)) {
+        setTabSessionId(directory, tabId, null);
+        void closeTerminalTab({
+         terminal,
+         directory,
+         tabId,
+         beforeClose: tabId === activeTabIdRef.current ? disconnectStream : undefined,
+         onLastTab: onLastTabClosedRef.current,
+         processExited: true,
+        });
+        return;
+       }
+      }
       if (!ownsStream()) {
        return;
       }
@@ -506,6 +553,7 @@ export const TerminalView: React.FC<TerminalViewProps> = ({ visible, directory, 
    appendToBuffer,
    replaceBuffer,
    disconnectStream,
+   closesOnExit,
    focusTerminalWhenWindowActive,
    scanTerminalPreviewOutput,
    setConnecting,

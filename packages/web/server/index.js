@@ -905,9 +905,7 @@ const sessionLineage = createSessionLineage();
 const sessionAssistRuntime = createSessionAssistRuntime({
  sessionService: openChamberSessionService,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
- getSmallModelService: async () => import('./lib/small-model/index.js'),
- persistSessionAssist: (sessionID, directory, assist) =>
-  persistSessionMetadataPatch(sessionID, { openchamber: { assist } }, { directory }),
+ lineage: sessionLineage,
  onTurnSettled: (sessionId) => {
   void globalMessageStreamHub.releaseSession(sessionId, 'run');
  },

@@ -59,7 +59,7 @@ import { WorkerCompletion } from './completion.ts';
 import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import { NativeApprovalRequired, type WorkerAuthorize } from './policy.ts';
-import { createHostToolController, readHostToolEnablement, HOST_TOOL_DESCRIPTIONS, type HostToolController, type HostToolName } from './host-tool.ts';
+import { createHostToolController, normalizeHostToolEnablement, HOST_TOOL_DESCRIPTIONS, type HostToolController, type HostToolName } from './host-tool.ts';
 import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
@@ -550,10 +550,7 @@ export class WorkerSession {
       // no such seam.
       cfgTitleRefreshOnReplan.override(settings, false);
       cfgTaskPerCallModel.override(settings, 'on');
-      const initialHostTools = {
-        ...readHostToolEnablement(),
-        ...(input.hostTools as Record<HostToolName, boolean> | undefined),
-      };
+      const initialHostTools = normalizeHostToolEnablement(input.hostTools);
       const hostToolsController = createHostToolController({
         scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
         invoke: invocation => invokeHostAction(invocation.request, invocation.signal),

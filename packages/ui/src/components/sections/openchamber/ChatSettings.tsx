@@ -580,16 +580,17 @@ const AssistanceTab: React.FC = () => {
   }, [ompState]);
 
   const handleSessionRecapChange = React.useCallback(async (enabled: boolean) => {
-    setSessionRecapEnabled(enabled);
-    void updateDesktopSettings({ sessionRecapEnabled: enabled });
     const current = ompStateRef.current;
     if (!current) return;
+    const previous = current.settings.find((s) => s.id === 'recap.enabled')?.value === true;
+    setSessionRecapEnabled(enabled);
     try {
       const next = await canonicalClient.updateOmpSettings(current.workspaceId, {
         expectedRevision: current.revision,
         changes: [{ id: 'recap.enabled', value: enabled }],
       });
       setOmpState(next);
+      void updateDesktopSettings({ sessionRecapEnabled: enabled });
     } catch (error) {
       if (error instanceof CanonicalApiError && error.problem.status === 409) {
         try {
@@ -599,10 +600,14 @@ const AssistanceTab: React.FC = () => {
             changes: [{ id: 'recap.enabled', value: enabled }],
           });
           setOmpState(next);
+          void updateDesktopSettings({ sessionRecapEnabled: enabled });
+          return;
         } catch {
-          // ignore
+          // fall through to rollback
         }
       }
+      setSessionRecapEnabled(previous);
+      void updateDesktopSettings({ sessionRecapEnabled: previous });
     }
   }, [setSessionRecapEnabled]);
 

@@ -717,6 +717,11 @@ export class AgentService {
         const input = await readBody(request, WorkerBootstrapSchema);
         respondJson(response, 201, await this.admit(input, bootstrap => this.workers.start(bootstrap))); return;
       }
+      if (request.method === 'POST' && url.pathname === '/internal/workers/host-tools') {
+        const input = await readBody(request, z.strictObject({ tools: z.record(z.string(), z.boolean()) }));
+        await this.workers.broadcastOperation({ type: 'host-tools.configure', tools: input.tools });
+        response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return;
+      }
       const restart = /^\/internal\/workers\/([^/]+)\/restart$/.exec(url.pathname);
       if (restart && request.method === 'POST') {
         const input = await readBody(request, WorkerBootstrapSchema);

@@ -167,7 +167,6 @@ const WORKER_ENV_KEYS = Object.freeze([
   'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_RUNTIME_DIR',
   'OMP_PROFILE', 'PI_PROFILE', 'PI_CONFIG_DIR',
   'BUN_INSTALL', 'BUN_INSTALL_BIN',
-  'OPENCHAMBER_DATA_DIR',
 ]);
 
 // A directory overlay comes from user/project settings, but it must not be able
@@ -255,6 +254,10 @@ export class WorkerRegistry {
 
   list(): RegisteredWorkerInfo[] {
     return [...this.workerEntries.values()].map(entry => ({ ...entry.info, kind: entry.kind }));
+  }
+  async broadcastOperation(operation: WorkerOperation): Promise<void> {
+    const active = this.list();
+    await Promise.allSettled(active.map(w => this.request(w.rootSessionId, operation)));
   }
 
   info(rootSessionId: string): WorkerInfo | undefined {

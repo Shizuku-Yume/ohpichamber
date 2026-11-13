@@ -730,6 +730,7 @@ const openChamberSessionService = createOpenChamberSessionService({
   get resolveWorktreeSetup() { return sessionWorktreeMoveBridge.resolveWorktreeSetup ?? undefined; },
   warn: (message, error) => console.warn(message, error instanceof Error ? error.message : String(error)),
  },
+ readSettings: readSettingsFromDiskMigrated,
  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
  resolveWorkspaceDirectory: agentScopeRuntime.resolveWorkspaceDirectory,
  resolveHostWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
@@ -1936,6 +1937,17 @@ async function main(options = {}) {
     express, store: attachmentStore, resolveWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
    })),
    globalEventHub: globalMessageStreamHub,
+   resolveHostTools: async () => {
+    const settings = await readSettingsFromDiskMigrated().catch(() => null);
+    return {
+     openchamber: settings?.agentControlToolEnabled !== false,
+     web: settings?.agentWebToolEnabled !== false,
+     openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
+     notify: settings?.agentNotifyToolEnabled === true,
+     openchamber_render: settings?.agentRenderToolEnabled !== false,
+     openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
+    };
+   },
   },
   ensurePushInitialized,
   ensureGlobalWatcherStarted,
@@ -2091,6 +2103,25 @@ async function main(options = {}) {
   readSettingsFromDiskMigrated,
   formatSettingsResponse,
   persistSettings,
+  onSettingsUpdated: async (settings) => {
+   try {
+    const tools = {
+     openchamber: settings?.agentControlToolEnabled !== false,
+     web: settings?.agentWebToolEnabled !== false,
+     openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
+     notify: settings?.agentNotifyToolEnabled === true,
+     openchamber_render: settings?.agentRenderToolEnabled !== false,
+     openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
+    };
+    await hostAgentRuntime.service.request('/internal/workers/host-tools', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ tools }),
+    });
+   } catch {
+    // ignore if service not ready
+   }
+  },
  });
 
  await featureRoutesRuntime.registerRoutes(app, {

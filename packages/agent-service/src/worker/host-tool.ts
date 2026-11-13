@@ -1,7 +1,5 @@
 import type { ExtensionFactory, ExtensionAPI } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { z } from 'zod';
 import { JsonObjectSchema, type JsonObject, type JsonValue } from '@openchamber/agent-contract';
 import { HostActionRequestSchema, type HostActionRequest } from '../native-policy-protocol.ts';
@@ -32,26 +30,18 @@ export const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean
   openchamber_workflow: true,
 });
 
-export function readHostToolEnablement(settingsDir?: string): Record<HostToolName, boolean> {
+export function normalizeHostToolEnablement(input?: Record<string, boolean>): Record<HostToolName, boolean> {
   const result = { ...DEFAULT_HOST_TOOL_ENABLEMENT };
-  const targetPath = settingsDir
-    ? join(settingsDir, 'settings.json')
-    : process.env.OPENCHAMBER_DATA_DIR
-      ? join(process.env.OPENCHAMBER_DATA_DIR, 'settings.json')
-      : null;
-  if (targetPath && existsSync(targetPath)) {
-    try {
-      const parsed = JSON.parse(readFileSync(targetPath, 'utf8'));
-      if (typeof parsed?.agentControlToolEnabled === 'boolean') result.openchamber = parsed.agentControlToolEnabled;
-      if (typeof parsed?.agentWebToolEnabled === 'boolean') result.web = parsed.agentWebToolEnabled;
-      if (typeof parsed?.agentKnowledgeToolEnabled === 'boolean') result.openchamber_knowledge = parsed.agentKnowledgeToolEnabled;
-      if (typeof parsed?.agentNotifyToolEnabled === 'boolean') result.notify = parsed.agentNotifyToolEnabled;
-      if (typeof parsed?.agentRenderToolEnabled === 'boolean') result.openchamber_render = parsed.agentRenderToolEnabled;
-      if (typeof parsed?.agentWorkflowToolEnabled === 'boolean') result.openchamber_workflow = parsed.agentWorkflowToolEnabled;
-    } catch {
-      // ignore parse failures; keep current values
-    }
+  if (!input) return result;
+  for (const name of HOST_TOOL_NAMES) {
+    if (typeof input[name] === 'boolean') result[name] = input[name];
   }
+  if (typeof input.agentControlToolEnabled === 'boolean') result.openchamber = input.agentControlToolEnabled;
+  if (typeof input.agentWebToolEnabled === 'boolean') result.web = input.agentWebToolEnabled;
+  if (typeof input.agentKnowledgeToolEnabled === 'boolean') result.openchamber_knowledge = input.agentKnowledgeToolEnabled;
+  if (typeof input.agentNotifyToolEnabled === 'boolean') result.notify = input.agentNotifyToolEnabled;
+  if (typeof input.agentRenderToolEnabled === 'boolean') result.openchamber_render = input.agentRenderToolEnabled;
+  if (typeof input.agentWorkflowToolEnabled === 'boolean') result.openchamber_workflow = input.agentWorkflowToolEnabled;
   return result;
 }
 

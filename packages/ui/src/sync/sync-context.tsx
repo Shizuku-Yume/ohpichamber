@@ -447,9 +447,29 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const directory = currentDirectoryRef.current
     if (directory) childStores.ensureChild(directory, { priority: "selected", reason: "current-directory" })
     setSyncRefs(childStores, directory)
-    setActionRefs(childStores, () => currentDirectoryRef.current, (targetDirectory, sessionId) => {
-      if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => { })
-    })
+    setActionRefs(
+      childStores,
+      () => currentDirectoryRef.current,
+      (targetDirectory, sessionId) => {
+        if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => { })
+      },
+      (sessionId, targetDirectory) => {
+        if (!isCurrent()) return
+        const dir = targetDirectory || currentDirectoryRef.current
+        const store = childStores.getChild(dir)
+        const snapshot = store?.getState().snapshot[sessionId]
+        if (snapshot) {
+          pipelineRef.current?.attach({ directory: dir, sessionId }, snapshot)
+          return
+        }
+        const session = store?.getState().session.find(s => s.sessionId === sessionId)
+          ?? useGlobalSessionsStore.getState().sessions.get(sessionId)
+        if (session) {
+          const cursor = `${session.epoch}:${session.headSequence}`
+          pipelineRef.current?.attach({ directory: dir, sessionId }, { cursor, session: { sessionId, runtimeStatus: session.runtimeStatus } })
+        }
+      },
+    )
     setOptimisticRefs(
       (input) => { if (isCurrent()) messageLoader.optimisticAdd({ ...input, directory: input.directory || currentDirectoryRef.current }) },
       (input) => { if (isCurrent()) messageLoader.optimisticRemove({ ...input, directory: input.directory || currentDirectoryRef.current }) },

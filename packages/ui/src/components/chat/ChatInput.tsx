@@ -1417,7 +1417,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             so the DOM-first input snapshot would read empty content. */
         presetText?: string;
     };
-    const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => {});
+    const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => { });
 
     const getSubmitErrorMessage = React.useCallback((error: unknown, fallback: string) => {
         let problemStatus: number | undefined;
@@ -1576,8 +1576,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const queuedModelId = expandedResource?.modelSelection?.modelId ?? currentModelId;
         const queuedAgent = queueSessionId
             ? useSelectionStore.getState().getSessionAgentSelection(queueSessionId)
-                ?? useConfigStore.getState().currentAgentName
-                ?? ROOT_SELECTION_AGENT
+            ?? useConfigStore.getState().currentAgentName
+            ?? ROOT_SELECTION_AGENT
             : undefined;
         const queuedSessionEffort = queueSessionId && queuedAgent !== undefined
             ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
@@ -1857,8 +1857,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
         const variantToSend = capturedSendConfig ? capturedSendConfig.variant : currentVariant;
         const sessionEffortAgent = currentSessionId
             ? useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
-                ?? useConfigStore.getState().currentAgentName
-                ?? ROOT_SELECTION_AGENT
+            ?? useConfigStore.getState().currentAgentName
+            ?? ROOT_SELECTION_AGENT
             : undefined;
         const sessionReasoningEffort = currentSessionId && sessionEffortAgent !== undefined
             ? useSelectionStore.getState().getAgentModelReasoningEffortForSession(
@@ -2327,8 +2327,8 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             const linkTargetDirectory = currentSessionId
                 ? currentSessionDirectoryForSync ?? currentDirectory
                 : sessionState.currentSessionDirectory
-                    ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
-                    ?? currentDirectory;
+                ?? (linkTargetSessionId ? sessionState.getDirectoryForSession(linkTargetSessionId) : null)
+                ?? currentDirectory;
             if (linkTargetSessionId && getRuntimeKey() === submitRuntimeKey) {
                 void recordLinkedReferences(linkTargetSessionId, linkTargetDirectory, linkedReferences).catch((error: unknown) => {
                     console.error('Session link update failed:', error);
@@ -2408,7 +2408,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 return;
             }
 
-            toast.error(rawMessage || t('chat.chatInput.toast.messageSendFailed'));
+            toast.error(problemMessage(error, rawMessage || t('chat.chatInput.toast.messageSendFailed')));
         });
 
         if (!isMobile) {
@@ -2553,7 +2553,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
             : openAutocomplete === 'skill' ? skillRef.current
                 : openAutocomplete === 'mention' ? mentionRef.current
                     : openAutocomplete === 'emoji' && emojiRef.current?.hasResults?.() ? emojiRef.current
-                    : null;
+                        : null;
         const autocompleteKey = getDropdownNavigationKey(e) ?? e.key;
         if (autocomplete && (autocompleteKey === 'Enter' || autocompleteKey === 'ArrowUp' || autocompleteKey === 'ArrowDown' || autocompleteKey === 'Escape' || autocompleteKey === 'Tab')) {
             e.preventDefault();
@@ -4122,404 +4122,404 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
 
     return (
         <>
-        <form
-            // One callback sets both the ref other hooks read and the route
-            // owner the search shortcut resolves through.
-            ref={setPromptHistorySearchForm}
-            data-btw-composer={isBtwActive ? 'true' : undefined}
-            onContextMenuCapture={() => {
-                largeTextPasteGesture.invalidate();
-                setLargeTextPasteOffer(null);
-            }}
-            // Whichever composer the user works in holds the selected
-            // attachment slot, so its paste, drop, picker and remove act on
-            // its own files when a second chat is open beside it.
-            onPointerDownCapture={claimAttachmentSlot}
-            onFocusCapture={claimAttachmentSlot}
-            onDragEnterCapture={claimAttachmentSlot}
-            onKeyDownCapture={(event) => {
-                if (!isBtwActive || event.key !== 'Escape' || isIMECompositionEvent(event) || hasOpenDropdown()) return;
-                if (!(event.target instanceof Element) || !event.target.closest('[data-chat-input-footer]')) return;
-                // Footer tooltips must not consume the only exit key for a pending BTW.
-                event.preventDefault();
-                event.stopPropagation();
-                handleExitBtw();
-            }}
-            onSubmit={(e) => {
-                e.preventDefault();
-                // Comment mode owns the form: submit attaches the comment and
-                // must never reach the send path.
-                if (mobileCommentActive) {
-                    attachMobileCommentRef.current();
-                    return;
-                }
-                handlePrimaryAction();
-            }}
-            className={cn(
-                "relative w-full pt-0 pb-4",
-                isDesktopExpanded && 'flex h-full min-h-0 flex-col pt-4',
-                isMobileExpanded && 'flex h-full min-h-0 flex-col pt-2',
-                isMobile && 'bottom-safe-area oc-mobile-composer'
-            )}
-            style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
-        >
-            {showDesktopDraftPresentation ? (
-                <div className={cn('chat-input-column mb-7 text-center', draftPresentationClassName)}>
-                    <h1 className="text-balance text-2xl font-normal tracking-tight text-foreground md:text-3xl">
-                        {renderDraftTitle(
-                            draftProjectLabel
-                                ? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
-                                : t('chat.emptyState.draftTitle'),
-                            draftProjectLabel,
-                        )}
-                    </h1>
-                </div>
-            ) : null}
-            <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
-                {/* Comment mode shows only its own shell: the normal composer's
-                    furniture (chips, banners, draft selectors) stays in state
-                    and returns unchanged when the comment exits. */}
-                {!mobileCommentActive ? (<>
-                {!isMobile && (showDraftTargetSelectors || draftPresentationExiting) && selectedDraftProject ? (
-                    <div className={draftPresentationClassName}>
-                        <DraftTargetSelectors
-                            projects={draftProjects}
-                            selectedProject={selectedDraftProject}
-                            selectedDirectory={selectedDraftDirectory}
-                            selectedBranchLabel={selectedDraftBranchLabel}
-                            selectedBranchIsKnown={selectedDraftBranchIsKnown}
-                            hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
-                            projectRootBranchOption={projectRootBranchOption}
-                            worktreeBranchOptions={worktreeBranchOptions}
-                            branchItems={draftBranchItems}
-                            showBranchSelector={shouldShowDraftBranchSelector}
-                            onProjectChange={handleDraftProjectChange}
-                            onDirectoryChange={handleDraftDirectoryChange}
-                            onCreateSpace={handleCreateSpace}
-                            onCreateCustomWorktree={handleCreateCustomWorktree}
-                            theme={currentTheme}
-                        />
+            <form
+                // One callback sets both the ref other hooks read and the route
+                // owner the search shortcut resolves through.
+                ref={setPromptHistorySearchForm}
+                data-btw-composer={isBtwActive ? 'true' : undefined}
+                onContextMenuCapture={() => {
+                    largeTextPasteGesture.invalidate();
+                    setLargeTextPasteOffer(null);
+                }}
+                // Whichever composer the user works in holds the selected
+                // attachment slot, so its paste, drop, picker and remove act on
+                // its own files when a second chat is open beside it.
+                onPointerDownCapture={claimAttachmentSlot}
+                onFocusCapture={claimAttachmentSlot}
+                onDragEnterCapture={claimAttachmentSlot}
+                onKeyDownCapture={(event) => {
+                    if (!isBtwActive || event.key !== 'Escape' || isIMECompositionEvent(event) || hasOpenDropdown()) return;
+                    if (!(event.target instanceof Element) || !event.target.closest('[data-chat-input-footer]')) return;
+                    // Footer tooltips must not consume the only exit key for a pending BTW.
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleExitBtw();
+                }}
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    // Comment mode owns the form: submit attaches the comment and
+                    // must never reach the send path.
+                    if (mobileCommentActive) {
+                        attachMobileCommentRef.current();
+                        return;
+                    }
+                    handlePrimaryAction();
+                }}
+                className={cn(
+                    "relative w-full pt-0 pb-4",
+                    isDesktopExpanded && 'flex h-full min-h-0 flex-col pt-4',
+                    isMobileExpanded && 'flex h-full min-h-0 flex-col pt-2',
+                    isMobile && 'bottom-safe-area oc-mobile-composer'
+                )}
+                style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
+            >
+                {showDesktopDraftPresentation ? (
+                    <div className={cn('chat-input-column mb-7 text-center', draftPresentationClassName)}>
+                        <h1 className="text-balance text-2xl font-normal tracking-tight text-foreground md:text-3xl">
+                            {renderDraftTitle(
+                                draftProjectLabel
+                                    ? t('chat.emptyState.draftTitleWithProject', { project: draftProjectLabel })
+                                    : t('chat.emptyState.draftTitle'),
+                                draftProjectLabel,
+                            )}
+                        </h1>
                     </div>
                 ) : null}
-                {isMobile && showDraftTargetSelectors && selectedDraftProject ? (
-                    <MobileDraftTargetTriggers
-                        selectedProject={selectedDraftProject}
-                        selectedBranchLabel={selectedDraftBranchLabel}
-                        showBranchSelector={shouldShowDraftBranchSelector}
-                        theme={currentTheme}
-                        onOpenPicker={setMobileDraftPicker}
-                    />
-                ) : null}
-                </>) : null}
-                <div
-                    // Desktop: layout-transparent. Mobile: positioning host for
-                    // the wrapper-level dictation overlay across pill/full states.
-                    data-dictation-host="true"
-                    // Mobile: the context-chip preview opens above this host.
-                    ref={isMobile ? setContextPreviewHost : undefined}
-                    className={cn(
-                        !isMobile && 'contents',
-                        isMobile && 'relative',
-                        isMobileExpanded && 'flex min-h-0 flex-1 flex-col',
-                    )}
-                >
-                {mobileCommentActive && mobileComment.draft.status === 'open' ? (
-                    // Keyed by generation: a replaced open remounts the shell
-                    // so its dictation callbacks can never target the
-                    // previous quote.
-                    <MobileCommentComposer
-                        key={mobileComment.draft.generation}
-                        draft={mobileComment.draft}
-                        theme={currentTheme}
-                        handlers={mobileComment.handlers}
-                    />
-                ) : isMobile && !mobileComposerExpanded && !isBtwActive ? (
-                    <MobilePillComposer
-                        message={message}
-                        sessionId={currentSessionId}
-                        newSessionDraftOpen={newSessionDraftOpen}
-                        hasContent={Boolean(hasContent)}
-                        canAbort={canAbort}
-                        footerIconButtonClass={footerIconButtonClass}
-                        iconSizeClass={iconSizeClass}
-                        sendIconSizeClass={sendIconSizeClass}
-                        stopIconSizeClass={stopIconSizeClass}
-                        topRow={composerTopRows}
-                        attachments={(
-                            <div className="px-3 pt-1">
-                                <AttachedFilesList draftIdentity={chatDraftIdentity} onShowPopup={handleShowAttachmentPreview} className="pt-2" />
-                                {linkedReferenceChips}
-                                {contextChips}
+                <div className={cn('chat-input-column relative overflow-visible', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
+                    {/* Comment mode shows only its own shell: the normal composer's
+                    furniture (chips, banners, draft selectors) stays in state
+                    and returns unchanged when the comment exits. */}
+                    {!mobileCommentActive ? (<>
+                        {!isMobile && (showDraftTargetSelectors || draftPresentationExiting) && selectedDraftProject ? (
+                            <div className={draftPresentationClassName}>
+                                <DraftTargetSelectors
+                                    projects={draftProjects}
+                                    selectedProject={selectedDraftProject}
+                                    selectedDirectory={selectedDraftDirectory}
+                                    selectedBranchLabel={selectedDraftBranchLabel}
+                                    selectedBranchIsKnown={selectedDraftBranchIsKnown}
+                                    hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
+                                    projectRootBranchOption={projectRootBranchOption}
+                                    worktreeBranchOptions={worktreeBranchOptions}
+                                    branchItems={draftBranchItems}
+                                    showBranchSelector={shouldShowDraftBranchSelector}
+                                    onProjectChange={handleDraftProjectChange}
+                                    onDirectoryChange={handleDraftDirectoryChange}
+                                    onCreateSpace={handleCreateSpace}
+                                    onCreateCustomWorktree={handleCreateCustomWorktree}
+                                    theme={currentTheme}
+                                />
                             </div>
+                        ) : null}
+                        {isMobile && showDraftTargetSelectors && selectedDraftProject ? (
+                            <MobileDraftTargetTriggers
+                                selectedProject={selectedDraftProject}
+                                selectedBranchLabel={selectedDraftBranchLabel}
+                                showBranchSelector={shouldShowDraftBranchSelector}
+                                theme={currentTheme}
+                                onOpenPicker={setMobileDraftPicker}
+                            />
+                        ) : null}
+                    </>) : null}
+                    <div
+                        // Desktop: layout-transparent. Mobile: positioning host for
+                        // the wrapper-level dictation overlay across pill/full states.
+                        data-dictation-host="true"
+                        // Mobile: the context-chip preview opens above this host.
+                        ref={isMobile ? setContextPreviewHost : undefined}
+                        className={cn(
+                            !isMobile && 'contents',
+                            isMobile && 'relative',
+                            isMobileExpanded && 'flex min-h-0 flex-1 flex-col',
                         )}
-                        bottomRow={mobileModelRow}
-                        onExpand={mobileShell.expand}
-                        onPrimaryAction={handlePrimaryAction}
-                        onQueueMessage={() => { void handleQueueMessage(); }}
-                        onPickLocalFiles={handlePickLocalFiles}
-                        onOpenGitHubPicker={openGitHubPicker}
-                        repositoryProvider={repositoryProvider ?? undefined}
-                        isVSCode={isVSCode}
-                        trackerPickers={trackerPickers}
-                        onOpenAttachSheet={openMobileAttachSheet}
-                        onStartDictation={toggleDictation}
-                        onAbort={handleAbort}
-                    />
-                ) : (
-                <>
-                {/* The autocomplete popups anchor to this wrapper, not to the
+                    >
+                        {mobileCommentActive && mobileComment.draft.status === 'open' ? (
+                            // Keyed by generation: a replaced open remounts the shell
+                            // so its dictation callbacks can never target the
+                            // previous quote.
+                            <MobileCommentComposer
+                                key={mobileComment.draft.generation}
+                                draft={mobileComment.draft}
+                                theme={currentTheme}
+                                handlers={mobileComment.handlers}
+                            />
+                        ) : isMobile && !mobileComposerExpanded && !isBtwActive ? (
+                            <MobilePillComposer
+                                message={message}
+                                sessionId={currentSessionId}
+                                newSessionDraftOpen={newSessionDraftOpen}
+                                hasContent={Boolean(hasContent)}
+                                canAbort={canAbort}
+                                footerIconButtonClass={footerIconButtonClass}
+                                iconSizeClass={iconSizeClass}
+                                sendIconSizeClass={sendIconSizeClass}
+                                stopIconSizeClass={stopIconSizeClass}
+                                topRow={composerTopRows}
+                                attachments={(
+                                    <div className="px-3 pt-1">
+                                        <AttachedFilesList draftIdentity={chatDraftIdentity} onShowPopup={handleShowAttachmentPreview} className="pt-2" />
+                                        {linkedReferenceChips}
+                                        {contextChips}
+                                    </div>
+                                )}
+                                bottomRow={mobileModelRow}
+                                onExpand={mobileShell.expand}
+                                onPrimaryAction={handlePrimaryAction}
+                                onQueueMessage={() => { void handleQueueMessage(); }}
+                                onPickLocalFiles={handlePickLocalFiles}
+                                onOpenGitHubPicker={openGitHubPicker}
+                                repositoryProvider={repositoryProvider ?? undefined}
+                                isVSCode={isVSCode}
+                                trackerPickers={trackerPickers}
+                                onOpenAttachSheet={openMobileAttachSheet}
+                                onStartDictation={toggleDictation}
+                                onAbort={handleAbort}
+                            />
+                        ) : (
+                            <>
+                                {/* The autocomplete popups anchor to this wrapper, not to the
                     glass box: a backdrop-filter ancestor is a backdrop root,
                     so a glass popup inside the box would only blur the box's
                     own contents and read as a flat tint over the transcript. */}
-                <div
-                    ref={isMobile ? undefined : setContextPreviewHost}
-                    className={cn('relative', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}
-                >
-                    {largeTextPasteOffer ? (
-                        <LargeTextPasteChoice
-                            key={largeTextPasteOffer.id}
-                            takeFocus={!isMobile}
-                            onChoose={(action, explicitlyChosen) => largeTextPasteOffer.resolve(action, explicitlyChosen)}
-                            onTypeThrough={(text) => largeTextPasteOffer.resolve('inline', true, text)}
-                        />
-                    ) : null}
-                    <ComposerAutocompletePopups
-                        open={openAutocomplete}
-                        query={autocompleteQuery}
-                        overlayPosition={isDesktopExpanded ? autocompleteOverlayPosition : null}
-                        commandRef={commandRef}
-                        skillRef={skillRef}
-                        mentionRef={mentionRef}
-                        emojiRef={emojiRef}
-                        onCommandSelect={handleCommandSelect}
-                        onSkillSelect={handleSkillSelect}
-                        onFileSelect={handleFileSelect}
-                        onEmojiSelect={handleEmojiSelect}
-                        onClose={closeAutocomplete}
-                    />
-                {/* The prompt-history search draws above the composer box:
+                                <div
+                                    ref={isMobile ? undefined : setContextPreviewHost}
+                                    className={cn('relative', isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}
+                                >
+                                    {largeTextPasteOffer ? (
+                                        <LargeTextPasteChoice
+                                            key={largeTextPasteOffer.id}
+                                            takeFocus={!isMobile}
+                                            onChoose={(action, explicitlyChosen) => largeTextPasteOffer.resolve(action, explicitlyChosen)}
+                                            onTypeThrough={(text) => largeTextPasteOffer.resolve('inline', true, text)}
+                                        />
+                                    ) : null}
+                                    <ComposerAutocompletePopups
+                                        open={openAutocomplete}
+                                        query={autocompleteQuery}
+                                        overlayPosition={isDesktopExpanded ? autocompleteOverlayPosition : null}
+                                        commandRef={commandRef}
+                                        skillRef={skillRef}
+                                        mentionRef={mentionRef}
+                                        emojiRef={emojiRef}
+                                        onCommandSelect={handleCommandSelect}
+                                        onSkillSelect={handleSkillSelect}
+                                        onFileSelect={handleFileSelect}
+                                        onEmojiSelect={handleEmojiSelect}
+                                        onClose={closeAutocomplete}
+                                    />
+                                    {/* The prompt-history search draws above the composer box:
                     normal height as a zero-height row, expanded pinned to the
                     box's bottom edge so it does not push the box around. */}
-                <div
-                    className={cn(isComposerExpanded ? 'absolute inset-s-0 inset-e-0 bottom-0 h-0' : 'relative h-0')}
-                    data-prompt-history-search-anchor
-                >
-                    {isPromptHistorySearchOpen && promptHistorySearch ? (
-                        <PromptHistorySearchPanel
-                            history={historyValues}
-                            initialQuery={promptHistorySearch.initialQuery}
-                            olderRequest={promptHistorySearch.olderRequest}
-                            onPick={pickPromptHistoryCandidate}
-                            onClose={closePromptHistorySearch}
-                        />
-                    ) : null}
-                </div>
-                {/* The lift shadow lives on this wrapper, away from the glass
+                                    <div
+                                        className={cn(isComposerExpanded ? 'absolute inset-s-0 inset-e-0 bottom-0 h-0' : 'relative h-0')}
+                                        data-prompt-history-search-anchor
+                                    >
+                                        {isPromptHistorySearchOpen && promptHistorySearch ? (
+                                            <PromptHistorySearchPanel
+                                                history={historyValues}
+                                                initialQuery={promptHistorySearch.initialQuery}
+                                                olderRequest={promptHistorySearch.olderRequest}
+                                                onPick={pickPromptHistoryCandidate}
+                                                onClose={closePromptHistorySearch}
+                                            />
+                                        ) : null}
+                                    </div>
+                                    {/* The lift shadow lives on this wrapper, away from the glass
                     box's backdrop-filter: on the same element Chromium grows
                     the glass layer by the shadow's blur, and that band painted
                     a flat grey strip over the bottom of the goal row above. */}
-                <div
-                    className={cn(
-                        'flex flex-col',
-                        isComposerExpanded && 'flex-1 min-h-0',
-                        'shadow-[0_4px_16px_-4px_rgb(0_0_0_/_0.12)]',
-                    )}
-                    style={{ borderRadius: chatInputRadius }}
-                >
-                <div
-                    className={cn(
-                        "flex flex-col relative overflow-visible",
-                        isComposerExpanded && 'flex-1 min-h-0',
-                        // Opaque: always on screen over the moving transcript
-                        // (see .oc-surface-floating in design-system.css).
-                        'oc-surface-floating',
-                        // Lit like a dropdown (top edge, hairline, shadow). Its
-                        // box-shadow would hide the drag ring, so it steps aside
-                        // while a file is dragged over.
-                        isDragging ? "ring-2 ring-primary ring-offset-2" : 'oc-glass-floating oc-composer-sheen',
-                    )}
-                    style={{ borderRadius: chatInputRadius }}
-                    ref={dropZoneRef}
-                    // The mobile pill morph measures and animates this box.
-                    data-composer-box={isMobile ? 'true' : undefined}
-                    // The desktop dictation overlay is up: the box hides its
-                    // other contents (see design-system.css).
-                    data-dictating={desktopDictating && !isMobile && !isBtwActive ? 'true' : undefined}
-                    onDropCapture={handleDropCapture}
-                    onDragEnter={handleDragEnter}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    onDragEnd={handleDragEnd}
-                >
-                    {isDragging && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 rounded-xl">
-                            <div className="text-center">
-                                <div className="inline-flex justify-center">
-                                    <button
-                                        type="button"
-                                        className={iconButtonBaseClass}
-                                        onClick={() => handlePickLocalFiles()}
-                                        title={t('chat.chatInput.actions.attachFiles')}
-                                        aria-label={t('chat.chatInput.actions.attachFiles')}
+                                    <div
+                                        className={cn(
+                                            'flex flex-col',
+                                            isComposerExpanded && 'flex-1 min-h-0',
+                                            'shadow-[0_4px_16px_-4px_rgb(0_0_0_/_0.12)]',
+                                        )}
+                                        style={{ borderRadius: chatInputRadius }}
                                     >
-                                        <Icon name="attachment-2" className={cn(iconSizeClass, 'text-current')} />
-                                    </button>
-                                </div>
-                                <p className="mt-2 typography-ui-label text-muted-foreground">
-                                    {isInternalDrag ? t('chat.chatInput.drop.insertMention') : t('chat.chatInput.drop.attachFiles')}
-                                </p>
-                            </div>
-                        </div>
-                    )}
+                                        <div
+                                            className={cn(
+                                                "flex flex-col relative overflow-visible",
+                                                isComposerExpanded && 'flex-1 min-h-0',
+                                                // Opaque: always on screen over the moving transcript
+                                                // (see .oc-surface-floating in design-system.css).
+                                                'oc-surface-floating',
+                                                // Lit like a dropdown (top edge, hairline, shadow). Its
+                                                // box-shadow would hide the drag ring, so it steps aside
+                                                // while a file is dragged over.
+                                                isDragging ? "ring-2 ring-primary ring-offset-2" : 'oc-glass-floating oc-composer-sheen',
+                                            )}
+                                            style={{ borderRadius: chatInputRadius }}
+                                            ref={dropZoneRef}
+                                            // The mobile pill morph measures and animates this box.
+                                            data-composer-box={isMobile ? 'true' : undefined}
+                                            // The desktop dictation overlay is up: the box hides its
+                                            // other contents (see design-system.css).
+                                            data-dictating={desktopDictating && !isMobile && !isBtwActive ? 'true' : undefined}
+                                            onDropCapture={handleDropCapture}
+                                            onDragEnter={handleDragEnter}
+                                            onDragOver={handleDragOver}
+                                            onDragLeave={handleDragLeave}
+                                            onDrop={handleDrop}
+                                            onDragEnd={handleDragEnd}
+                                        >
+                                            {isDragging && (
+                                                <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 rounded-xl">
+                                                    <div className="text-center">
+                                                        <div className="inline-flex justify-center">
+                                                            <button
+                                                                type="button"
+                                                                className={iconButtonBaseClass}
+                                                                onClick={() => handlePickLocalFiles()}
+                                                                title={t('chat.chatInput.actions.attachFiles')}
+                                                                aria-label={t('chat.chatInput.actions.attachFiles')}
+                                                            >
+                                                                <Icon name="attachment-2" className={cn(iconSizeClass, 'text-current')} />
+                                                            </button>
+                                                        </div>
+                                                        <p className="mt-2 typography-ui-label text-muted-foreground">
+                                                            {isInternalDrag ? t('chat.chatInput.drop.insertMention') : t('chat.chatInput.drop.attachFiles')}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
 
-                    {/* Positioning context for the dictation overlay: covers the
+                                            {/* Positioning context for the dictation overlay: covers the
                         text area + footer exactly. */}
-                    <div className={cn('relative flex flex-col', isComposerExpanded && 'flex-1 min-h-0')} data-dictation-chain="true">
-                    <div className={cn("overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
-                        {parallel.isActive ? <ParallelComposerStrip parallel={parallel} project={parallelProjectRef} /> : null}
-                        {composerTopRows}
-                        <div className="flex items-center gap-1 px-3 pt-1 flex-wrap relative z-10">
-                            <AttachedFilesList draftIdentity={chatDraftIdentity} onShowPopup={handleShowAttachmentPreview} className="pt-2" />
-                            {!isBtwActive ? linkedReferenceChips : null}
-                            {contextChips}
-                        </div>
-                        <div
-                            ref={dictationHeightHostRef}
-                            className={cn("relative overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}
-                            // The mobile pill morph moves this block from the
-                            // pill's text line and unfurls it.
-                            data-composer-morph-prompt={isMobile ? 'true' : undefined}
-                            onDragEnter={handleDragEnter}
-                            onDragOver={handleDragOver}
-                            onDropCapture={handleDropCapture}
-                            onDrop={handleDrop}
-                            onDragEnd={handleDragEnd}
-                            style={dictationContentHeight !== null && !isComposerExpanded
-                                ? {
-                                    minHeight: `${Math.min(
-                                        dictationContentHeight,
-                                        dictationHeightLimit ?? dictationContentHeight,
-                                    )}px`,
-                                }
-                                : undefined}
-                        >
-                            <ComposerEditor
-                                ref={composerRef}
-                                viewStore={composerViewStore}
-                                data-testid="chat-input"
-                                value={message}
-                                languageContext={languageContext}
-                                onChange={handleComposerChange}
-                                onKeyDown={(event) => {
-                                    // Every interception branch calls
-                                    // preventDefault, so the event itself
-                                    // reports whether the composer consumed it.
-                                    handleKeyDown(event);
-                                    return event.defaultPrevented;
-                                }}
-                                onPaste={handlePaste}
-                                onKeyUp={(event) => largeTextPasteGesture.keyUp(event)}
-                                onSelectionChange={(selection) => {
-                                    largeTextPasteGesture.invalidate();
-                                    cursorPosRef.current = selection.start;
-                                    updateAutocompleteOverlayPosition();
-                                }}
-                                onFocus={mobileShell.onEditorFocus}
-                                onBlur={() => {
-                                    largeTextPasteGesture.invalidate();
-                                    mobileShell.onEditorBlur();
-                                }}
-                                placeholder={isBtwActive
-                                    ? t('chat.btw.draftHint')
-                                    : currentSessionId || newSessionDraftOpen
-                                        ? inputMode === 'shell'
-                                            ? t('chat.chatInput.placeholder.shell')
-                                            : t(useCompactChatPlaceholder ? 'chat.chatInput.placeholder.chatCompact' : 'chat.chatInput.placeholder.chat')
-                                        : t('chat.chatInput.placeholder.selectSession')}
-                                editable={Boolean(currentSessionId || newSessionDraftOpen)}
-                                autoCorrect={composerAutoCorrect({ isMobile })}
-                                autoCapitalize={isMobile ? 'sentences' : 'none'}
-                                preserveDeferredEnterShift={!enterToSendConfigured || !isMobile}
-                                spellCheck={isMobile || inputSpellcheckEnabled}
-                                fillContainer={isComposerExpanded}
-                                maxLines={isMobile ? MAX_MOBILE_COMPOSER_LINES : MAX_VISIBLE_COMPOSER_LINES}
-                                boundSelector={isMobile ? '[data-composer-bound]' : undefined}
-                                boundGapPx={MOBILE_COMPOSER_BOUND_GAP_PX}
-                                className={cn(
-                                    'min-h-[52px] px-3 relative z-10',
-                                    isComposerExpanded
-                                        ? cn('h-full min-h-0', isMobile ? 'py-2.5' : 'py-4')
-                                        : isMobile
-                                            ? 'pt-4 pb-2.5'
-                                            : 'pt-4 pb-2',
-                                    inputMode === 'shell' ? 'font-mono' : 'typography-markdown md:typography-ui-label',
-                                )}
-                            />
-                        </div>
-                    </div>
-                    <ComposerFooter
-                        isMobile={isMobile}
-                        sessionId={currentSessionId}
-                        mode={sessionMode}
-                        runActive={Boolean(workerRun)}
-                        directory={currentSessionDirectoryForSync ?? currentDirectory}
-                        newSessionDraftOpen={newSessionDraftOpen}
-                        draftMode={newSessionDraft.mode}
-                        draftGoalObjective={newSessionDraft.goalObjective ?? null}
-                        planRoleAvailable={planRoleAvailable}
-                        sessionGoalEnabled={sessionGoalEnabled}
-                        onDraftModeChange={handleDraftModeChange}
-                        radius={chatInputRadius}
-                        footerPaddingClass={footerPaddingClass}
-                        footerGapClass={footerGapClass}
-                        footerIconButtonClass={footerIconButtonClass}
-                        iconSizeClass={iconSizeClass}
-                        sendIconSizeClass={sendIconSizeClass}
-                        stopIconSizeClass={stopIconSizeClass}
-                        canSend={canSend}
-                        canAbort={canAbort}
-                        hasContent={Boolean(hasContent)}
-                        isExpandedInput={isExpandedInput}
-                        permissionMode={shownPermissionMode}
-                        isPermissionAutoAcceptInteractive={isPermissionAutoAcceptInteractive}
-                        dictationActive={mobileShell.dictationActive}
-                        onOpenSettings={onOpenSettings}
-                        onPickLocalFiles={handlePickLocalFiles}
-                        onOpenGitHubPicker={openGitHubPicker}
-                        repositoryProvider={repositoryProvider ?? undefined}
-                        isVSCode={isVSCode}
-                        trackerPickers={trackerPickers}
-                        attachGuests={isMobile ? NO_ATTACH_GUESTS : guestAttachItems}
-                        onOpenGuestAttach={openGuestAttach}
-                        onOpenAttachSheet={openMobileAttachSheet}
-                        onToggleExpandedInput={handleToggleExpandedInput}
-                        onCyclePermissionMode={handlePermissionModeCycle}
-                        onPrimaryAction={handlePrimaryAction}
-                        onQueueMessage={handleQueueMessage}
-                        onAbort={handleAbort}
-                        onStartDictation={toggleDictation}
-                        onDictationInsert={handleDictationInsert}
-                        onDictationInsertAndSend={handleDictationInsertAndSend}
-                        onDictationSendStart={handleDictationSendStart}
-                        onDictationStart={markDictationStart}
-                        onDictationContentHeightChange={handleDictationContentHeightChange}
-                        onDictationActiveChange={setDesktopDictating}
-                        isBtw={isBtwActive}
-                        pinnedSelection={pinnedComposerSelection}
-                        onRunInParallel={!isMobile && !isBtwActive && !columnPinned ? handleRunInParallel : undefined}
-                        parallelRun={parallelRun}
-                        waitingForAgent={waitingForAgent}
-                    />
-                    {mobileModelRow}
-                    </div>
+                                            <div className={cn('relative flex flex-col', isComposerExpanded && 'flex-1 min-h-0')} data-dictation-chain="true">
+                                                <div className={cn("overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}>
+                                                    {parallel.isActive ? <ParallelComposerStrip parallel={parallel} project={parallelProjectRef} /> : null}
+                                                    {composerTopRows}
+                                                    <div className="flex items-center gap-1 px-3 pt-1 flex-wrap relative z-10">
+                                                        <AttachedFilesList draftIdentity={chatDraftIdentity} onShowPopup={handleShowAttachmentPreview} className="pt-2" />
+                                                        {!isBtwActive ? linkedReferenceChips : null}
+                                                        {contextChips}
+                                                    </div>
+                                                    <div
+                                                        ref={dictationHeightHostRef}
+                                                        className={cn("relative overflow-hidden", isComposerExpanded && 'flex flex-1 min-h-0 flex-col')}
+                                                        // The mobile pill morph moves this block from the
+                                                        // pill's text line and unfurls it.
+                                                        data-composer-morph-prompt={isMobile ? 'true' : undefined}
+                                                        onDragEnter={handleDragEnter}
+                                                        onDragOver={handleDragOver}
+                                                        onDropCapture={handleDropCapture}
+                                                        onDrop={handleDrop}
+                                                        onDragEnd={handleDragEnd}
+                                                        style={dictationContentHeight !== null && !isComposerExpanded
+                                                            ? {
+                                                                minHeight: `${Math.min(
+                                                                    dictationContentHeight,
+                                                                    dictationHeightLimit ?? dictationContentHeight,
+                                                                )}px`,
+                                                            }
+                                                            : undefined}
+                                                    >
+                                                        <ComposerEditor
+                                                            ref={composerRef}
+                                                            viewStore={composerViewStore}
+                                                            data-testid="chat-input"
+                                                            value={message}
+                                                            languageContext={languageContext}
+                                                            onChange={handleComposerChange}
+                                                            onKeyDown={(event) => {
+                                                                // Every interception branch calls
+                                                                // preventDefault, so the event itself
+                                                                // reports whether the composer consumed it.
+                                                                handleKeyDown(event);
+                                                                return event.defaultPrevented;
+                                                            }}
+                                                            onPaste={handlePaste}
+                                                            onKeyUp={(event) => largeTextPasteGesture.keyUp(event)}
+                                                            onSelectionChange={(selection) => {
+                                                                largeTextPasteGesture.invalidate();
+                                                                cursorPosRef.current = selection.start;
+                                                                updateAutocompleteOverlayPosition();
+                                                            }}
+                                                            onFocus={mobileShell.onEditorFocus}
+                                                            onBlur={() => {
+                                                                largeTextPasteGesture.invalidate();
+                                                                mobileShell.onEditorBlur();
+                                                            }}
+                                                            placeholder={isBtwActive
+                                                                ? t('chat.btw.draftHint')
+                                                                : currentSessionId || newSessionDraftOpen
+                                                                    ? inputMode === 'shell'
+                                                                        ? t('chat.chatInput.placeholder.shell')
+                                                                        : t(useCompactChatPlaceholder ? 'chat.chatInput.placeholder.chatCompact' : 'chat.chatInput.placeholder.chat')
+                                                                    : t('chat.chatInput.placeholder.selectSession')}
+                                                            editable={Boolean(currentSessionId || newSessionDraftOpen)}
+                                                            autoCorrect={composerAutoCorrect({ isMobile })}
+                                                            autoCapitalize={isMobile ? 'sentences' : 'none'}
+                                                            preserveDeferredEnterShift={!enterToSendConfigured || !isMobile}
+                                                            spellCheck={isMobile || inputSpellcheckEnabled}
+                                                            fillContainer={isComposerExpanded}
+                                                            maxLines={isMobile ? MAX_MOBILE_COMPOSER_LINES : MAX_VISIBLE_COMPOSER_LINES}
+                                                            boundSelector={isMobile ? '[data-composer-bound]' : undefined}
+                                                            boundGapPx={MOBILE_COMPOSER_BOUND_GAP_PX}
+                                                            className={cn(
+                                                                'min-h-[52px] px-3 relative z-10',
+                                                                isComposerExpanded
+                                                                    ? cn('h-full min-h-0', isMobile ? 'py-2.5' : 'py-4')
+                                                                    : isMobile
+                                                                        ? 'pt-4 pb-2.5'
+                                                                        : 'pt-4 pb-2',
+                                                                inputMode === 'shell' ? 'font-mono' : 'typography-markdown md:typography-ui-label',
+                                                            )}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <ComposerFooter
+                                                    isMobile={isMobile}
+                                                    sessionId={currentSessionId}
+                                                    mode={sessionMode}
+                                                    runActive={Boolean(workerRun)}
+                                                    directory={currentSessionDirectoryForSync ?? currentDirectory}
+                                                    newSessionDraftOpen={newSessionDraftOpen}
+                                                    draftMode={newSessionDraft.mode}
+                                                    draftGoalObjective={newSessionDraft.goalObjective ?? null}
+                                                    planRoleAvailable={planRoleAvailable}
+                                                    sessionGoalEnabled={sessionGoalEnabled}
+                                                    onDraftModeChange={handleDraftModeChange}
+                                                    radius={chatInputRadius}
+                                                    footerPaddingClass={footerPaddingClass}
+                                                    footerGapClass={footerGapClass}
+                                                    footerIconButtonClass={footerIconButtonClass}
+                                                    iconSizeClass={iconSizeClass}
+                                                    sendIconSizeClass={sendIconSizeClass}
+                                                    stopIconSizeClass={stopIconSizeClass}
+                                                    canSend={canSend}
+                                                    canAbort={canAbort}
+                                                    hasContent={Boolean(hasContent)}
+                                                    isExpandedInput={isExpandedInput}
+                                                    permissionMode={shownPermissionMode}
+                                                    isPermissionAutoAcceptInteractive={isPermissionAutoAcceptInteractive}
+                                                    dictationActive={mobileShell.dictationActive}
+                                                    onOpenSettings={onOpenSettings}
+                                                    onPickLocalFiles={handlePickLocalFiles}
+                                                    onOpenGitHubPicker={openGitHubPicker}
+                                                    repositoryProvider={repositoryProvider ?? undefined}
+                                                    isVSCode={isVSCode}
+                                                    trackerPickers={trackerPickers}
+                                                    attachGuests={isMobile ? NO_ATTACH_GUESTS : guestAttachItems}
+                                                    onOpenGuestAttach={openGuestAttach}
+                                                    onOpenAttachSheet={openMobileAttachSheet}
+                                                    onToggleExpandedInput={handleToggleExpandedInput}
+                                                    onCyclePermissionMode={handlePermissionModeCycle}
+                                                    onPrimaryAction={handlePrimaryAction}
+                                                    onQueueMessage={handleQueueMessage}
+                                                    onAbort={handleAbort}
+                                                    onStartDictation={toggleDictation}
+                                                    onDictationInsert={handleDictationInsert}
+                                                    onDictationInsertAndSend={handleDictationInsertAndSend}
+                                                    onDictationSendStart={handleDictationSendStart}
+                                                    onDictationStart={markDictationStart}
+                                                    onDictationContentHeightChange={handleDictationContentHeightChange}
+                                                    onDictationActiveChange={setDesktopDictating}
+                                                    isBtw={isBtwActive}
+                                                    pinnedSelection={pinnedComposerSelection}
+                                                    onRunInParallel={!isMobile && !isBtwActive && !columnPinned ? handleRunInParallel : undefined}
+                                                    parallelRun={parallelRun}
+                                                    waitingForAgent={waitingForAgent}
+                                                />
+                                                {mobileModelRow}
+                                            </div>
 
-                </div>
-                </div>
-                </div>
-                </>
-                )}
-                {/* Wrapper-level dictation engine + overlay: stays mounted across
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                        {/* Wrapper-level dictation engine + overlay: stays mounted across
                     the pill ↔ composer swap so a recording started from the pill
                     survives the morph. Its absolute overlay covers whichever
                     shape the wrapper currently has. NOT mounted during comment
@@ -4527,198 +4527,198 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                     and two engines would both answer the global dictation
                     toggle (an in-flight recording is discarded by the swap —
                     its transcript must never reach the normal draft). */}
-                {isMobile && !isBtwActive && !mobileCommentActive ? (
-                    <MemoComposerDictation
-                        radius={chatInputRadius}
-                        isMobile={isMobile}
-                        footerIconButtonClass={footerIconButtonClass}
-                        footerPaddingClass={footerPaddingClass}
-                        iconSizeClass={iconSizeClass}
-                        sendIconSizeClass={sendIconSizeClass}
-                        onInsert={handleDictationInsert}
-                        onInsertAndSend={handleDictationInsertAndSend}
-                        onSendStart={handleDictationSendStart}
-                        onStart={markDictationStart}
-                        onActiveChange={handleDictationActiveChange}
-                        onContentHeightChange={handleDictationContentHeightChange}
-                        renderTrigger={false}
-                    />
-                ) : null}
-                </div>
-                {/* Hidden host for the model/agent/variant bottom sheets. Kept
+                        {isMobile && !isBtwActive && !mobileCommentActive ? (
+                            <MemoComposerDictation
+                                radius={chatInputRadius}
+                                isMobile={isMobile}
+                                footerIconButtonClass={footerIconButtonClass}
+                                footerPaddingClass={footerPaddingClass}
+                                iconSizeClass={iconSizeClass}
+                                sendIconSizeClass={sendIconSizeClass}
+                                onInsert={handleDictationInsert}
+                                onInsertAndSend={handleDictationInsertAndSend}
+                                onSendStart={handleDictationSendStart}
+                                onStart={markDictationStart}
+                                onActiveChange={handleDictationActiveChange}
+                                onContentHeightChange={handleDictationContentHeightChange}
+                                renderTrigger={false}
+                            />
+                        ) : null}
+                    </div>
+                    {/* Hidden host for the model/agent/variant bottom sheets. Kept
                     outside the pill conditional so an open panel survives (and
                     stays visible over) the collapsed composer. */}
-                {isMobile && !isBtwActive ? (
-                    <MemoModelControls
-                        className="hidden"
-                        mobilePanel={mobileControlsPanel}
-                        onMobilePanelChange={setMobileControlsPanel}
+                    {isMobile && !isBtwActive ? (
+                        <MemoModelControls
+                            className="hidden"
+                            mobilePanel={mobileControlsPanel}
+                            onMobilePanelChange={setMobileControlsPanel}
+                        />
+                    ) : null}
+                </div>
+                {showDesktopDraftPresentation ? (
+                    <DraftPresetChips
+                        onSubmit={handlePresetChipSubmit}
+                        className={cn('chat-input-column mt-4', draftPresentationClassName)}
                     />
                 ) : null}
-            </div>
-            {showDesktopDraftPresentation ? (
-                <DraftPresetChips
-                    onSubmit={handlePresetChipSubmit}
-                    className={cn('chat-input-column mt-4', draftPresentationClassName)}
+                {/* One floating panel at a time: BTW, then a permission, then the form. */}
+                <PermissionDock
+                    sessionId={currentSessionId}
+                    directory={currentSessionDirectoryForSync ?? currentDirectory ?? undefined}
+                    hidden={newSessionDraftOpen || isBtwActive || isBtwPanelVisible}
+                />
+                <FormDock
+                    sessionId={currentSessionId}
+                    directory={currentSessionDirectoryForSync ?? currentDirectory ?? undefined}
+                    hidden={newSessionDraftOpen || isBtwActive || isBtwPanelVisible || hasPendingPermission}
+                />
+                {currentSessionId ? <BtwPanel parentSessionId={currentSessionId} panel={btwPanel} onExit={handleExitBtw} /> : null}
+            </form>
+
+            {referencePicker ? (
+                <ReferencePickerDialog
+                    open
+                    onOpenChange={(open) => {
+                        if (!open) setReferencePicker(null);
+                    }}
+                    source={referencePicker.source}
+                    purpose="attach"
+                    selection="multiple"
+                    directory={referencePickerDirectory}
+                    initialGitHubKind={referencePicker.source === 'repository' ? referencePicker.kind : undefined}
+                    onConfirm={attachReferences}
                 />
             ) : null}
-            {/* One floating panel at a time: BTW, then a permission, then the form. */}
-            <PermissionDock
-                sessionId={currentSessionId}
-                directory={currentSessionDirectoryForSync ?? currentDirectory ?? undefined}
-                hidden={newSessionDraftOpen || isBtwActive || isBtwPanelVisible}
-            />
-            <FormDock
-                sessionId={currentSessionId}
-                directory={currentSessionDirectoryForSync ?? currentDirectory ?? undefined}
-                hidden={newSessionDraftOpen || isBtwActive || isBtwPanelVisible || hasPendingPermission}
-            />
-            {currentSessionId ? <BtwPanel parentSessionId={currentSessionId} panel={btwPanel} onExit={handleExitBtw} /> : null}
-        </form>
+            {attachDialogGuestId && !isMobile ? (
+                <React.Suspense fallback={null}>
+                    <GuestAttachDialog
+                        guestId={attachDialogGuestId}
+                        item={attachDialogItem}
+                        onOpenChange={(open) => {
+                            if (!open) {
+                                setAttachDialogGuestId(null);
+                                setAttachDialogItem(null);
+                            }
+                        }}
+                    />
+                </React.Suspense>
+            ) : null}
+            {reviewDialogMounted ? <ReviewFlowDialog
+                open={reviewDialogOpen}
+                onOpenChange={setReviewDialogOpen}
+                projectDirectory={currentSessionDirectoryForSync ?? currentDirectory ?? null}
+                submitting={reviewFlowSubmitting}
+                onConfirm={handleStartReviewFlow}
+            /> : null}
+            {attachmentPreviewMounted ? (
+                <React.Suspense fallback={null}>
+                    <ToolOutputDialog
+                        popup={attachmentPreview}
+                        onOpenChange={handleAttachmentPreviewOpenChange}
+                        isMobile={isMobile}
+                    />
+                </React.Suspense>
+            ) : null}
 
-        {referencePicker ? (
-            <ReferencePickerDialog
-                open
-                onOpenChange={(open) => {
-                    if (!open) setReferencePicker(null);
-                }}
-                source={referencePicker.source}
-                purpose="attach"
-                selection="multiple"
-                directory={referencePickerDirectory}
-                initialGitHubKind={referencePicker.source === 'repository' ? referencePicker.kind : undefined}
-                onConfirm={attachReferences}
-            />
-        ) : null}
-        {attachDialogGuestId && !isMobile ? (
-            <React.Suspense fallback={null}>
-                <GuestAttachDialog
-                    guestId={attachDialogGuestId}
-                    item={attachDialogItem}
-                    onOpenChange={(open) => {
-                        if (!open) {
-                            setAttachDialogGuestId(null);
-                            setAttachDialogItem(null);
-                        }
-                    }}
-                />
-            </React.Suspense>
-        ) : null}
-        {reviewDialogMounted ? <ReviewFlowDialog
-            open={reviewDialogOpen}
-            onOpenChange={setReviewDialogOpen}
-            projectDirectory={currentSessionDirectoryForSync ?? currentDirectory ?? null}
-            submitting={reviewFlowSubmitting}
-            onConfirm={handleStartReviewFlow}
-        /> : null}
-        {attachmentPreviewMounted ? (
-            <React.Suspense fallback={null}>
-                <ToolOutputDialog
-                    popup={attachmentPreview}
-                    onOpenChange={handleAttachmentPreviewOpenChange}
-                    isMobile={isMobile}
-                />
-            </React.Suspense>
-        ) : null}
-
-        {/* Single always-mounted picker input. It must NOT live inside
+            {/* Single always-mounted picker input. It must NOT live inside
             ComposerAttachmentControls: that component mounts once per composer
             variant (pill / expanded footer), so a shared ref got nulled when a
             variant unmounted, and a variant swap while the OS file picker was
             open detached the clicked input — its change event was silently
             lost and the picked files never attached. */}
-        <AttachmentPickerInput ref={fileInputRef} onChange={handleLocalFileSelect} />
+            <AttachmentPickerInput ref={fileInputRef} onChange={handleLocalFileSelect} />
 
-        {/* Mobile attachment sheet: replaces the dropdown (which stole focus and
+            {/* Mobile attachment sheet: replaces the dropdown (which stole focus and
             dismissed the keyboard) and leaves room for more actions later. */}
-        {isMobile ? (
-            <MobileOverlayPanel
-                open={mobileAttachMenuOpen}
-                title={t('chat.chatInput.actions.addAttachment')}
-                onClose={() => setMobileAttachMenuOpen(false)}
-            >
-                <div className="flex flex-col px-3 pb-4 pt-1">
-                    <button
-                        type="button"
-                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
-                        onClick={() => {
-                            // The native file/photo picker takes over next — restoring
-                            // the keyboard in between would flash it open and shut.
-                            mobileShell.cancelOverlayCloseRestore();
-                            setMobileAttachMenuOpen(false);
-                            requestAnimationFrame(handlePickLocalFiles);
-                        }}
-                    >
-                        <Icon name="attachment-2" className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
-                        {t('chat.chatInput.actions.attachFiles')}
-                    </button>
-                    <button
-                        type="button"
-                        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
-                        onClick={() => {
-                            // Hand-off to the picker: don't sync-restore the
-                            // keyboard under the overlay that opens next frame.
-                            mobileShell.skipNextOverlayCloseRestore();
-                            setMobileAttachMenuOpen(false);
-                            requestAnimationFrame(openGitHubPicker);
-                        }}
-                    >
-                        <Icon name={repositoryProvider === 'gitlab' ? 'gitlab' : 'github'} className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
-                        {t(repositoryProvider === 'gitlab' ? 'chat.chatInput.actions.linkGitlab' : 'chat.chatInput.actions.linkGithub')}
-                    </button>
-                    {trackerPickers.map((picker) => (
+            {isMobile ? (
+                <MobileOverlayPanel
+                    open={mobileAttachMenuOpen}
+                    title={t('chat.chatInput.actions.addAttachment')}
+                    onClose={() => setMobileAttachMenuOpen(false)}
+                >
+                    <div className="flex flex-col px-3 pb-4 pt-1">
                         <button
-                            key={picker.provider}
                             type="button"
                             className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
                             onClick={() => {
-                                mobileShell.skipNextOverlayCloseRestore();
+                                // The native file/photo picker takes over next — restoring
+                                // the keyboard in between would flash it open and shut.
+                                mobileShell.cancelOverlayCloseRestore();
                                 setMobileAttachMenuOpen(false);
-                                requestAnimationFrame(picker.open);
+                                requestAnimationFrame(handlePickLocalFiles);
                             }}
                         >
-                            <Icon name={picker.icon} className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
-                            {picker.label}
+                            <Icon name="attachment-2" className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
+                            {t('chat.chatInput.actions.attachFiles')}
                         </button>
-                    ))}
-                </div>
-            </MobileOverlayPanel>
-        ) : null}
+                        <button
+                            type="button"
+                            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
+                            onClick={() => {
+                                // Hand-off to the picker: don't sync-restore the
+                                // keyboard under the overlay that opens next frame.
+                                mobileShell.skipNextOverlayCloseRestore();
+                                setMobileAttachMenuOpen(false);
+                                requestAnimationFrame(openGitHubPicker);
+                            }}
+                        >
+                            <Icon name={repositoryProvider === 'gitlab' ? 'gitlab' : 'github'} className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
+                            {t(repositoryProvider === 'gitlab' ? 'chat.chatInput.actions.linkGitlab' : 'chat.chatInput.actions.linkGithub')}
+                        </button>
+                        {trackerPickers.map((picker) => (
+                            <button
+                                key={picker.provider}
+                                type="button"
+                                className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-3 text-start typography-ui-label hover:bg-[var(--interactive-hover)]"
+                                onClick={() => {
+                                    mobileShell.skipNextOverlayCloseRestore();
+                                    setMobileAttachMenuOpen(false);
+                                    requestAnimationFrame(picker.open);
+                                }}
+                            >
+                                <Icon name={picker.icon} className="h-[18px] w-[18px] flex-shrink-0 text-muted-foreground" />
+                                {picker.label}
+                            </button>
+                        ))}
+                    </div>
+                </MobileOverlayPanel>
+            ) : null}
 
-        {/* Mobile draft target pickers: bottom sheets replacing the inline
+            {/* Mobile draft target pickers: bottom sheets replacing the inline
             project/branch Selects (which desktop keeps). */}
-        {isMobile && showDraftTargetSelectors && selectedDraftProject ? (
-            <MobileDraftTargetSheets
-                projects={draftProjects}
-                selectedProject={selectedDraftProject}
-                selectedDirectory={selectedDraftDirectory}
-                selectedBranchLabel={selectedDraftBranchLabel}
-                selectedBranchIsKnown={selectedDraftBranchIsKnown}
-                hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
-                projectRootBranchOption={projectRootBranchOption}
-                worktreeBranchOptions={worktreeBranchOptions}
-                branchItems={draftBranchItems}
-                showBranchSelector={shouldShowDraftBranchSelector}
-                onProjectChange={handleDraftProjectChange}
-                onDirectoryChange={handleDraftDirectoryChange}
-                onCreateSpace={handleCreateSpace}
-                onCreateCustomWorktree={handleCreateCustomWorktree}
-                theme={currentTheme}
-                openPicker={mobileDraftPicker}
-                onOpenPickerChange={setMobileDraftPicker}
-            />
-        ) : null}
-        {newSpaceProject ? (
-            <NewSpaceDialog open onOpenChange={(open) => { if (!open) setNewSpaceProject(null); }} project={newSpaceProject} />
-        ) : null}
-        {newWorktreeProject ? (
-            <NewWorktreeDialog
-                open
-                onOpenChange={(open) => { if (!open) setNewWorktreeProject(null); }}
-                project={newWorktreeProject}
-                onWorktreeCreated={handleCustomWorktreeCreated}
-            />
-        ) : null}
+            {isMobile && showDraftTargetSelectors && selectedDraftProject ? (
+                <MobileDraftTargetSheets
+                    projects={draftProjects}
+                    selectedProject={selectedDraftProject}
+                    selectedDirectory={selectedDraftDirectory}
+                    selectedBranchLabel={selectedDraftBranchLabel}
+                    selectedBranchIsKnown={selectedDraftBranchIsKnown}
+                    hasUncommittedChanges={selectedDraftDirectoryHasUncommittedChanges}
+                    projectRootBranchOption={projectRootBranchOption}
+                    worktreeBranchOptions={worktreeBranchOptions}
+                    branchItems={draftBranchItems}
+                    showBranchSelector={shouldShowDraftBranchSelector}
+                    onProjectChange={handleDraftProjectChange}
+                    onDirectoryChange={handleDraftDirectoryChange}
+                    onCreateSpace={handleCreateSpace}
+                    onCreateCustomWorktree={handleCreateCustomWorktree}
+                    theme={currentTheme}
+                    openPicker={mobileDraftPicker}
+                    onOpenPickerChange={setMobileDraftPicker}
+                />
+            ) : null}
+            {newSpaceProject ? (
+                <NewSpaceDialog open onOpenChange={(open) => { if (!open) setNewSpaceProject(null); }} project={newSpaceProject} />
+            ) : null}
+            {newWorktreeProject ? (
+                <NewWorktreeDialog
+                    open
+                    onOpenChange={(open) => { if (!open) setNewWorktreeProject(null); }}
+                    project={newWorktreeProject}
+                    onWorktreeCreated={handleCustomWorktreeCreated}
+                />
+            ) : null}
         </>
     );
 };

@@ -6419,6 +6419,8 @@ export const dict = {
   "settings.openchamber.visual.field.queueMessagesByDefaultTooltip": "عند التفعيل، يضع Enter الرسائل في قائمة الانتظار. استخدم {modifier}+Enter للإرسال.",
   "settings.openchamber.visual.field.enableSpellcheckInTextInputsAria": "تفعيل التدقيق الإملائي في حقول النص",
   "settings.openchamber.visual.field.enableSpellcheckInTextInputs": "تفعيل التدقيق الإملائي في حقول النص",
+  "settings.openchamber.visual.field.persistDraftMessages": "الاحتفاظ بمسودات الرسائل",
+  "settings.openchamber.visual.field.persistDraftMessagesAria": "الاحتفاظ بمسودات الرسائل",
   "settings.openchamber.visual.field.largeTextPaste": "لصق نص كبير",
   "settings.openchamber.visual.field.largeTextPasteHint": "عند لصق أكثر من نحو 2,000 حرف أو 25 سطرًا، اختر إرفاق النص كملف، أو لصقه داخل الرسالة، أو السؤال في كل مرة. مع اللصق المزدوج، يتحوّل النص إلى ملف إذا لصقته مرة أخرى خلال ثانية.",
   "settings.openchamber.visual.field.enterToSend": "اختصار الإرسال",

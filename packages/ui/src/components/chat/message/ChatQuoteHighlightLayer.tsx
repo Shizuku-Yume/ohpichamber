@@ -50,6 +50,8 @@ const FLASH_DURATION_MS = 1600;
 const POPOVER_OPEN_DELAY_MS = 400;
 const POPOVER_CLOSE_DELAY_MS = 250;
 const CORRIDOR_PADDING_PX = 6;
+// Frames a scrolled-to row may take to mount, and a renderer to settle.
+const ROW_MOUNT_FRAMES = 20;
 // Page frames may mount after scrolling.
 const REVEAL_ATTEMPTS = 10;
 
@@ -325,6 +327,7 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
             if (!isCurrent() || !scrollNode) return;
             if (!scrolled && !mounted) return;
             let steps = 0;
+            let misses = 0;
             const tryReveal = () => {
                 frame = null;
                 if (!isCurrent()) { cancel(); return; }
@@ -334,9 +337,19 @@ export const ChatQuoteHighlightLayer = React.memo(function ChatQuoteHighlightLay
                     pageRowRequested = true;
                     return;
                 }
-                // A lazy fallback can contain raw Markdown on mobile. Wait for
-                // the renderer before treating a failed match as final.
-                if (roots.length === 0 || roots.some((root) => root.querySelector('[data-chat-quote-pending]'))) return;
+                // A row mounts on the frame after the scroll request, and a lazy
+                // renderer draws raw source first; an absent row or one still
+                // settling says nothing yet.
+                const pendingRenderer = roots.some((root) => root.querySelector('[data-chat-quote-pending]'));
+                if (roots.length === 0 || pendingRenderer) {
+                    // A missing row is a mount timing question, so frames answer
+                    // it; a pending renderer settles on its own mutation.
+                    if (!pendingRenderer && misses < ROW_MOUNT_FRAMES) {
+                        misses += 1;
+                        frame = window.requestAnimationFrame(tryReveal);
+                    }
+                    return;
+                }
                 const parts = resolveChatQuoteRanges(roots, anchor);
                 // A long answer's later rows mount as they near the view: step
                 // down past the lowest one drawn while the message continues.

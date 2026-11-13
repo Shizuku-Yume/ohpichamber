@@ -69,13 +69,6 @@ const RECAP = {
   },
 };
 
-const NEXT_STEP = {
-  question: 'After `answer`, is part of what the user asked for in `request` still unfinished, so the agent could continue it with one more message without the user first testing, deciding, or approving anything?',
-  criteria: {
-    true: 'The agent stopped part-way: it names remaining steps of the requested work it can do itself, or the work was cut off.',
-    false: 'The request is satisfied, or the next move belongs to the user (test, choose, approve, answer a question), or an analysis, explanation, or recommendation was requested and delivered.',
-  },
-};
 
 /** Open when either passes (measured together). */
 const OPEN_THRESHOLDS = { change: 0.85, towardChange: 0.9 };
@@ -83,7 +76,7 @@ const WRAP_UP_THRESHOLD = 0.8;
 const REVIEW_READY_THRESHOLD = 0.7;
 /** The recap is skipped only when Jev is nearly sure there is nothing to remind. */
 const RECAP_SKIP_BELOW = 0.3;
-const NEXT_STEP_THRESHOLD = 0.5;
+
 
 const noul = (context, { question, criteria }) => {
   const asked = { type: 'noul', instructions: [context, question] };
@@ -115,7 +108,7 @@ export const buildTurnEndRequest = ({ history, request, answer, ask }) => {
   if (ask.wrapUp) questions.wrap_up = noul(TURN_END_CONTEXT, { question: WRAP_UP });
   if (ask.reviewReady) questions.review_ready = noul(TURN_END_CONTEXT, REVIEW_READY);
   if (ask.recap) questions.recap = noul(TURN_END_CONTEXT, RECAP);
-  if (ask.nextStep) questions.next_step = noul(TURN_END_CONTEXT, NEXT_STEP);
+
   if (Object.keys(questions).length === 0) return null;
   return { state: { history, request, answer }, questions };
 };
@@ -147,9 +140,7 @@ export const decideReviewReady = (answers) => {
  */
 export const decideAssist = (answers) => {
   const recap = answerOf(answers, 'recap');
-  const nextStep = answerOf(answers, 'next_step');
   return {
     recap: recap === null || recap >= RECAP_SKIP_BELOW,
-    suggestion: nextStep === null || nextStep >= NEXT_STEP_THRESHOLD,
   };
 };

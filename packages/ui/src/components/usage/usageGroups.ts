@@ -46,7 +46,7 @@ export const useUsageProviderGroups = (): UsageProviderGroup[] => {
       .filter((providerMeta) => dropdownProviderIds.includes(providerMeta.id))
       .filter((providerMeta) => {
         const result = resultsByProvider.get(providerMeta.id);
-        return result?.configured === true || (!result && Boolean(refreshErrors[providerMeta.id]));
+        return result?.configured === true;
       })
       .map((providerMeta) => {
         const result = resultsByProvider.get(providerMeta.id);

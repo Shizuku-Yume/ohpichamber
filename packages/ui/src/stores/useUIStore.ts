@@ -1025,13 +1025,11 @@ interface UIStore {
  showReasoningTraces: boolean;
  chatRenderMode: 'live' | 'sorted';
  persistChatDraft: boolean;
- showExpandedBashTools: boolean;
- showExpandedEditTools: boolean;
  sessionWorkAutoOpen: boolean;
  sessionWorkKeepInGroup: boolean;
  streamingAutoFollowEnabled: boolean;
  sessionRecapEnabled: boolean;
- sessionSuggestionEnabled: boolean;
+ suggestionGenerator: 'session' | 'small' | 'off';
  /** The "In work" sidebar block, the Track / Done actions, and sessions going in on a sent message. */
  sessionWorkEnabled: boolean;
  /** Let Jev offer an AI review or a walkthrough after a turn that changed the project. */
@@ -1081,6 +1079,8 @@ interface UIStore {
  terminalFontSize: number;
  terminalShell: TerminalShell;
  terminalLoginShells: TerminalShell[];
+ /** A terminal or project action tab closes when its process exits; off keeps the exited output. */
+ terminalCloseOnExit: boolean;
  editorFontSize: number;
  uiFont: UiFontOption;
  monoFont: MonoFontOption;
@@ -1328,8 +1328,6 @@ interface UIStore {
  setRuntimeStatusText: (text: string) => void;
  setSessionWorkAutoOpen: (value: boolean) => void;
  setSessionWorkKeepInGroup: (value: boolean) => void;
- setShowExpandedBashTools: (value: boolean) => void;
- setShowExpandedEditTools: (value: boolean) => void;
  setOpenCodeStatusDialogOpen: (open: boolean) => void;
  setOpenCodeStatusText: (text: string) => void;
  setScheduledTasksDialogOpen: (open: boolean) => void;
@@ -1361,7 +1359,7 @@ interface UIStore {
  setShowReasoningTraces: (value: boolean) => void;
  setStreamingAutoFollowEnabled: (value: boolean) => void;
  setSessionRecapEnabled: (value: boolean) => void;
- setSessionSuggestionEnabled: (value: boolean) => void;
+ setSuggestionGenerator: (value: 'session' | 'small' | 'off') => void;
  setSessionWorkEnabled: (value: boolean) => void;
  setSessionReviewOfferEnabled: (value: boolean) => void;
  setSessionGoalEnabled: (value: boolean) => void;
@@ -1393,6 +1391,7 @@ interface UIStore {
  setTerminalFontSize: (size: number) => void;
  setTerminalShell: (shell: TerminalShell) => void;
  setTerminalLoginShells: (shells: TerminalShell[]) => void;
+ setTerminalCloseOnExit: (value: boolean) => void;
  setEditorFontSize: (size: number) => void;
  setUiFont: (font: UiFontOption) => void;
  setMonoFont: (font: MonoFontOption) => void;
@@ -1413,6 +1412,7 @@ interface UIStore {
  ) => void;
  setProviderOrder: (orderedProviderIDs: string[]) => void;
  setCustomProviderIcon: (providerID: string, icon: CustomProviderIcon | null) => void;
+ setCustomProviderLogo: (providerID: string, logo: CustomProviderLogo | null) => void;
  toggleHiddenModel: (providerID: string, modelID: string) => void;
  isHiddenModel: (providerID: string, modelID: string) => boolean;
  hideAllModels: (providerID: string, modelIDs: string[]) => void;
@@ -1441,6 +1441,7 @@ interface UIStore {
  setNotificationMode: (mode: 'always' | 'hidden-only') => void;
  setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
  setSessionTabsEnabled: (value: boolean) => void;
+ setSessionTabsPerWorkspace: (value: boolean) => void;
  setNotifyOnSubtasks: (value: boolean) => void;
  setDockBadgeEnabled: (value: boolean) => void;
  setAlwaysShowScrollbars: (value: boolean) => void;
@@ -1607,13 +1608,11 @@ export const useUIStore = create<UIStore>()(
     showReasoningTraces: true,
     chatRenderMode: 'live',
     persistChatDraft: true,
-    showExpandedBashTools: false,
-    showExpandedEditTools: false,
     sessionWorkAutoOpen: true,
     sessionWorkKeepInGroup: false,
     streamingAutoFollowEnabled: true,
     sessionRecapEnabled: true,
-    sessionSuggestionEnabled: true,
+    suggestionGenerator: 'session',
     sessionWorkEnabled: true,
     sessionReviewOfferEnabled: false,
     sessionGoalEnabled: true,
@@ -1644,6 +1643,7 @@ export const useUIStore = create<UIStore>()(
     terminalFontSize: 14,
     terminalShell: 'auto',
     terminalLoginShells: [],
+    terminalCloseOnExit: true,
     editorFontSize: 13,
     uiFont: DEFAULT_UI_FONT,
     monoFont: DEFAULT_MONO_FONT,
@@ -2543,13 +2543,6 @@ export const useUIStore = create<UIStore>()(
      set({ sessionWorkKeepInGroup: value });
     },
 
-    setShowExpandedBashTools: (value) => {
-     set({ showExpandedBashTools: value });
-    },
-
-    setShowExpandedEditTools: (value) => {
-     set({ showExpandedEditTools: value });
-    },
 
     setOpenCodeStatusDialogOpen: (open) => {
      set({ isOpenCodeStatusDialogOpen: open });
@@ -2705,8 +2698,8 @@ export const useUIStore = create<UIStore>()(
      set({ sessionRecapEnabled: value });
     },
 
-    setSessionSuggestionEnabled: (value) => {
-     set({ sessionSuggestionEnabled: value });
+    setSuggestionGenerator: (value) => {
+     set({ suggestionGenerator: value });
     },
 
     setSessionWorkEnabled: (value) => {
@@ -2851,6 +2844,10 @@ export const useUIStore = create<UIStore>()(
 
     setTerminalLoginShells: (shells) => {
      set({ terminalLoginShells: [...new Set(shells)] });
+    },
+
+    setTerminalCloseOnExit: (value) => {
+     set({ terminalCloseOnExit: value });
     },
 
     setEditorFontSize: (size) => {
@@ -3061,6 +3058,17 @@ export const useUIStore = create<UIStore>()(
      });
     },
 
+    setCustomProviderLogo: (providerID, logo) => {
+     const normalizedProviderID = providerID.trim();
+     if (!normalizedProviderID) return;
+     set((state) => {
+      const next = { ...state.customProviderLogos };
+      if (logo) next[normalizedProviderID] = logo;
+      else delete next[normalizedProviderID];
+      return { customProviderLogos: next };
+     });
+    },
+
     toggleHiddenModel: (providerID, modelID) => {
      set((state) => {
       const exists = state.hiddenModels.some(
@@ -3220,6 +3228,10 @@ export const useUIStore = create<UIStore>()(
 
     setSessionTabsEnabled: (value) => {
      set({ sessionTabsEnabled: value });
+    },
+
+    setSessionTabsPerWorkspace: (value) => {
+     set({ sessionTabsPerWorkspace: value });
     },
 
     setNotifyOnSubtasks: (value) => {
@@ -3770,7 +3782,7 @@ export const useUIStore = create<UIStore>()(
      showReasoningTraces: state.showReasoningTraces,
      streamingAutoFollowEnabled: state.streamingAutoFollowEnabled,
      sessionRecapEnabled: state.sessionRecapEnabled,
-     sessionSuggestionEnabled: state.sessionSuggestionEnabled,
+     suggestionGenerator: state.suggestionGenerator,
      sessionWorkEnabled: state.sessionWorkEnabled,
      sessionReviewOfferEnabled: state.sessionReviewOfferEnabled,
      sessionGoalEnabled: state.sessionGoalEnabled,
@@ -3801,6 +3813,7 @@ export const useUIStore = create<UIStore>()(
      terminalFontSize: state.terminalFontSize,
      terminalShell: state.terminalShell,
      terminalLoginShells: state.terminalLoginShells,
+     terminalCloseOnExit: state.terminalCloseOnExit,
      editorFontSize: state.editorFontSize,
      uiFont: state.uiFont,
      monoFont: state.monoFont,

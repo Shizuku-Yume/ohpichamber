@@ -6,6 +6,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { SessionRecapListResponseSchema } from '@openchamber/agent-contract';
 import { useSessionRecapStore } from '@/stores/useSessionRecapStore';
+import { useSessionSuggestionStore } from '@/stores/useSessionSuggestionStore';
 
 export interface SessionAssistState {
   /** Valid (fresh) assist payload, or null. */
@@ -59,8 +60,6 @@ export function useSessionAssistState(sessionId: string, directory?: string): Se
     directory,
   );
   const sessionRecapEnabled = useUIStore((state) => state.sessionRecapEnabled);
-  const sessionSuggestionEnabled = useUIStore((state) => state.sessionSuggestionEnabled);
-
   // The same settled rule the composer uses for its send/stop button. Accepting
   // only `idle` dropped a real recap and suggestion after a reload: the Agent
   // Service reports a session it no longer holds as `unavailable`, and a
@@ -77,13 +76,16 @@ export function useSessionAssistState(sessionId: string, directory?: string): Se
   const pushedRecap = useSessionRecapStore(
     React.useCallback((state) => state.recap[sessionId]?.recap ?? null, [sessionId]),
   );
+  const pushedSuggestion = useSessionSuggestionStore(
+    React.useCallback((state) => state.suggestions[sessionId]?.suggestion ?? null, [sessionId]),
+  );
   const journalledRecap = useNativeRecap(sessionId, sessionRecapEnabled && isSettled);
   const promoted = pushedRecap ?? journalledRecap ?? (assist && assist.recap ? assist.recap : null);
 
   return {
     assist,
     visibleRecap: sessionRecapEnabled ? promoted : null,
-    suggestion: sessionSuggestionEnabled && assist && assist.suggestion ? assist.suggestion : null,
+    suggestion: isSettled ? pushedSuggestion : null,
     sessionKnown: session !== undefined && session !== null,
   };
 }

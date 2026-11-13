@@ -104,7 +104,7 @@ import { createJevClient } from './lib/routing/jev.js';
 import { createSessionWorkRuntime } from './lib/session-work/runtime.js';
 import { createSessionLineage } from './lib/session-lineage.js';
 import { beginGuestServiceHost, beginGuestServiceShutdown, stopAllGuestServices } from './lib/guests/service.js';
-import { findInstalledGuest } from './lib/guests/catalog.js';
+import { findInstalledGuest, listInstalledGuests } from './lib/guests/catalog.js';
 import { extensionsPersistPath } from './lib/guests/persist.js';
 import { createGuestSurfaceRuntime } from './lib/guests/surface.js';
 import { BROWSER_PROVIDER_IDLE_MS } from '@openchamber/sdk';
@@ -157,7 +157,15 @@ import { createFileOpenRequester } from './lib/openchamber-control/file-open.js'
 import { applyConnectAttemptTimeout } from './lib/network-defaults.js';
 import { applyOutboundProxyFromEnv } from './lib/outbound-proxy.js';
 import { applySystemCertificates } from './lib/system-ca.js';
-
+import { createOutboundHandles } from './lib/source-control/outbound-handles.js';
+import { createNotificationChannelAccounts, notificationChannelsPersistPath } from './lib/notifications/channel-accounts.js';
+import { createExtensionNotificationChannels } from './lib/notifications/extension-channels.js';
+import { NOTIFICATIONS_OUTBOUND_PATH } from '@openchamber/sdk';
+import { createAutoReviewRuntime } from './lib/auto-review/runtime.js';
+import { createPrWatchRuntime } from './lib/pr-watch/runtime.js';
+import { createClientPushAccess } from './lib/notifications/client-push-access.js';
+import { proxyGuestServiceRequest } from './lib/guests/service.js';
+import { setHostCallbackRoute } from './lib/guests/host-callback.js';
 // Background CLI launches enter here in a fresh process, without CLI defaults.
 applyConnectAttemptTimeout();
 applySystemCertificates();
@@ -862,7 +870,22 @@ notificationTemplateRuntime = createNotificationTemplateRuntime({
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
  readSettingsFromDisk,
 });
+const notificationChannelHandles = createOutboundHandles();
+setHostCallbackRoute(NOTIFICATIONS_OUTBOUND_PATH, {
+ refusal: notificationChannelHandles.refusal,
+ serve: notificationChannelHandles.serve,
+});
+const extensionNotificationChannels = createExtensionNotificationChannels({
+ listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(OPENCHAMBER_DATA_DIR) }),
+ proxyServiceRequest: proxyGuestServiceRequest,
+ persistPath: extensionsPersistPath(OPENCHAMBER_DATA_DIR),
+ accounts: createNotificationChannelAccounts({ persistPath: notificationChannelsPersistPath(OPENCHAMBER_DATA_DIR) }),
+ handles: notificationChannelHandles,
+ isAnyUiVisible,
+});
 
+let autoReviewRuntime = null;
+let prWatchRuntime = null;
 const notificationTriggerRuntime = createNotificationTriggerRuntime({
  readSettingsFromDisk,
  prepareNotificationLastMessage,
@@ -878,6 +901,8 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
  isAnyInteractiveClientVisible,
  sessionService: openChamberSessionService,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+ deliverToExtensionChannels: (delivery) => extensionNotificationChannels.deliver(delivery),
+ isInAutoReview: (sessionId, turnEndedAt) => autoReviewRuntime.speaksFor(sessionId, turnEndedAt),
 });
 
 clearPendingPushBadge = () => notificationTriggerRuntime.clearPendingPushBadge();
@@ -888,9 +913,7 @@ const sessionLineage = createSessionLineage();
 const sessionAssistRuntime = createSessionAssistRuntime({
  sessionService: openChamberSessionService,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
- getSmallModelService: async () => import('./lib/small-model/index.js'),
- persistSessionAssist: (sessionID, directory, assist) =>
-  persistSessionMetadataPatch(sessionID, { openchamber: { assist } }, { directory }),
+ lineage: sessionLineage,
  onTurnSettled: (sessionId) => {
   void globalMessageStreamHub.releaseSession(sessionId, 'run');
  },
@@ -938,6 +961,29 @@ const globalMessageStreamHub = createGlobalMessageStreamHub({
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
 });
 
+autoReviewRuntime = createAutoReviewRuntime({
+ globalEventHub: globalMessageStreamHub,
+ dataDir: OPENCHAMBER_DATA_DIR,
+ buildOpenCodeUrl: (fetchPath) => fetchPath,
+ getOpenCodeAuthHeaders: () => ({}),
+ readSessionMetadata: readStoredSessionMetadata,
+ onRunUpdated: ({ run }) => broadcastOpenChamberUiEvent({
+  type: 'openchamber:auto-review-run',
+  properties: { run },
+ }),
+});
+autoReviewRuntime.start();
+
+prWatchRuntime = createPrWatchRuntime({
+ buildOpenCodeUrl: (fetchPath) => fetchPath,
+ getOpenCodeAuthHeaders: () => ({}),
+ broadcastUiEvent: broadcastOpenChamberUiEvent,
+ dataDir: OPENCHAMBER_DATA_DIR,
+ readCleanupOnMerge: async () => (await readSettingsFromDiskMigrated())?.mergedWorktreeCleanupEnabled === true,
+ isSessionArchived: (sessionID) => openChamberSessionService?.sessionArchive?.isArchived(sessionID) ?? false,
+ insideSpace: Boolean(process.env.OPENCHAMBER_SPACE_IDLE_STOP_FILE),
+});
+prWatchRuntime.start(globalMessageStreamHub);
 // Jev model routing and the permission safety net. Every failure keeps the
 // user's own model or the auto-accept reply it was asked about.
 const routingRuntime = createRoutingRuntime({
@@ -1153,6 +1199,10 @@ const clientPairingRuntime = createClientPairingRuntime({
  crypto,
  storePath: CLIENT_PAIRING_SESSIONS_FILE_PATH,
  remoteClientAuthRuntime,
+});
+const clientPushAccess = createClientPushAccess({
+ listClients: remoteClientAuthRuntime.listClients,
+ removeDevicesOfSessions: [apnsRuntime.removeApnsDevicesOfSessions, pushRuntime.removePushDevicesOfSessions],
 });
 const featureRoutesRuntime = createFeatureRoutesRuntime();
 const bootstrapRuntime = createBootstrapRuntime({
@@ -1897,6 +1947,7 @@ async function main(options = {}) {
   // Re-evaluate the relay lifecycle after pairing/device changes (a revoked or
   // redeemed device can flip relay demand on or off).
   reconcileRelay: () => (relayServiceInstance ? relayServiceInstance.reconcile() : Promise.resolve()),
+  removeClientPushDevices: clientPushAccess.removeDevicesOfClients,
   getPairingTransports: resolvePairingTransports,
   getDirectCandidateUrls: resolveDirectLanUrls,
   // Stable server identity for client-side verification of learned addresses.
@@ -2125,7 +2176,10 @@ async function main(options = {}) {
  });
 
  await featureRoutesRuntime.registerRoutes(app, {
-  themesDir: OPENCHAMBER_USER_THEMES_DIR,
+  extensionNotificationChannels,
+  autoReviewRuntime,
+  prWatchRuntime,
+  persistResolvedSettings: (...args) => settingsRuntime.persistResolvedSettings(...args),
   environmentStore,
   environmentRuntime,
   listConfiguredProjects,

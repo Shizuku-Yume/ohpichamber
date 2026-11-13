@@ -72,6 +72,13 @@ export const SessionRecapEventSchema = DataEventEnvelopeSchema.extend({
   createdAt: TimestampSchema,
 });
 export type SessionRecapEvent = z.infer<typeof SessionRecapEventSchema>;
+/** A next-prompt suggestion, published once the worker completes an ephemeral prediction turn. */
+export const SessionSuggestionEventSchema = DataEventEnvelopeSchema.extend({
+  type: z.literal('session.suggestion'),
+  suggestion: z.string().min(1),
+  createdAt: TimestampSchema,
+});
+export type SessionSuggestionEvent = z.infer<typeof SessionSuggestionEventSchema>;
 export const CleanseProgressEventSchema = DataEventEnvelopeSchema.extend({
   type: z.literal('cleanse.progress'),
   activeCheckers: z.array(z.string()),
@@ -134,6 +141,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({ type: z.literal('message.updated'), messageId: EntityIdSchema, providerId: z.string().min(1).optional(), modelId: z.string().min(1).optional(), usage: TokenUsageSchema.optional(), timing: StepTimingSchema.optional() }),
   SubagentUpdatedEventSchema,
   SessionRecapEventSchema,
+  SessionSuggestionEventSchema,
   AdvisorYieldedEventSchema,
   CleanseProgressEventSchema,
 ]);

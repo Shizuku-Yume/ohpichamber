@@ -1117,3 +1117,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** a product glossary fixes a different term.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Session creation responds after worker ready and decouples catalog discovery
+
+- **Decided:** `POST /sessions` returns immediately after worker `ready`, deferring MCP and skill catalog discovery (`registerCatalogWorker`) to the background with a generation guard. We retain synchronous worker `ready` before returning the session ID, accepting p50 ~880 ms (down from ~1620 ms) rather than returning an uninitialized session ID before worker start.
+- **Instead of:** returning a speculative session ID immediately before worker spawn and queueing prompt delivery behind worker ready.
+- **Because:** returning an uninitialized session ID changes the session lifecycle and error contract across the Host and Agent Service, requiring speculative SSE buffering and rollbacks if the worker process fails to boot. Decoupling catalog reads alone eliminated 740 ms of latency (~45%) while maintaining strict lifecycle invariants and 100% supervisor test compatibility.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP SDK supports zero-cost instant session instantiation or when asynchronous session bootstrap becomes a planned architectural migration.
+- **Effort:** ux-feedback-2026-11-12

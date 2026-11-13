@@ -85,14 +85,18 @@ const fetchFromCanonical: UsageStatsFetcher = async ({ range, projectDirectory }
   const workspace = projectDirectory ? await canonicalClient.resolveWorkspace(projectDirectory, { signal }) : undefined;
   signal.throwIfAborted();
   const to = Date.now();
-  return canonicalClient.getUsageStats({ from: rangeStart(range, new Date(to)), to, timezone: viewerTimeZone(),
-    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId }, { signal });
+  return canonicalClient.getUsageStats({
+    from: rangeStart(range, new Date(to)), to, timezone: viewerTimeZone(),
+    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId
+  }, { signal });
 };
 
 const fetchToolsFromCanonical: UsageToolsFetcher = async ({ projectDirectory }, window, signal) => {
   const workspace = projectDirectory ? await canonicalClient.resolveWorkspace(projectDirectory, { signal }) : undefined;
-  return canonicalClient.getUsageTools({ from: window.from, to: window.to, timezone: viewerTimeZone(),
-    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId }, { signal });
+  return canonicalClient.getUsageTools({
+    from: window.from, to: window.to, timezone: viewerTimeZone(),
+    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId
+  }, { signal });
 };
 
 const isExpiredToday = (request: UsageStatsRequest, entry: UsageStatsEntry | undefined, at: number): boolean =>
@@ -185,14 +189,27 @@ export function createUsageStatsStore(
         const { signal } = controller;
         const read = Symbol('usage tools read');
         currentToolReads.set(key, read);
-        const isDropped = () => signal.aborted || currentToolReads.get(key) !== read;
+        const isDropped = () => signal.aborted || runtimeKey() !== runtime || currentToolReads.get(key) !== read;
+        // The report may have moved window without superseding this read (a
+        // refresh that started after it): its answer names the old bounds.
+        const windowMoved = () => get().entries[key]?.stats?.range !== window;
         patchTools(key, { loading: true });
         try {
           const tools = await toolsFetcher(request, window, signal);
           if (isDropped()) return;
+          if (windowMoved()) {
+            patchTools(key, { loading: false });
+            void get().loadTools(request, { force: true });
+            return;
+          }
           patchTools(key, { tools, loading: false, error: null });
         } catch (error) {
           if (isDropped()) return;
+          if (windowMoved()) {
+            patchTools(key, { loading: false });
+            void get().loadTools(request, { force: true });
+            return;
+          }
           patchTools(key, { loading: false, error: error instanceof Error ? error.message : String(error) });
         }
       },

@@ -6428,6 +6428,8 @@ export const dict = {
   "settings.openchamber.visual.field.queueMessagesByDefaultTooltip": "כשהאפשרות מופעלת, Enter מוסיף הודעות לתור המתנה. לשליחה יש להשתמש ב-{modifier}+Enter.",
   "settings.openchamber.visual.field.enableSpellcheckInTextInputsAria": "הפעלת בדיקת איות בשדות טקסט",
   "settings.openchamber.visual.field.enableSpellcheckInTextInputs": "הפעלת בדיקת איות בשדות טקסט",
+  "settings.openchamber.visual.field.persistDraftMessages": "שמירת טיוטות של הודעות",
+  "settings.openchamber.visual.field.persistDraftMessagesAria": "שמירת טיוטות של הודעות",
   "settings.openchamber.visual.field.largeTextPaste": "הדבקת טקסט ארוך",
   "settings.openchamber.visual.field.largeTextPasteHint": "בהדבקה של יותר מכ-2,000 תווים או 25 שורות, אפשר לבחור אם לצרף את הטקסט כקובץ, להדביק אותו בתוך ההודעה או לשאול בכל פעם. בהדבקה כפולה, הדבקה חוזרת של אותו טקסט תוך שנייה הופכת אותו לקובץ.",
   "settings.openchamber.visual.field.enterToSend": "קיצור מקשים לשליחה",

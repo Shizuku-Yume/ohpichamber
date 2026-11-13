@@ -144,6 +144,7 @@ export const OMP_SETTING_IDS = [
   'interruptMode',
   'composer.predictions',
   'composer.predictionAlternatives',
+  'suggestion.generator',
   'display.shellVisualization',
   'extensionRenderers.transcriptPresenters',
   'providers.openaiResponsesWebsockets',

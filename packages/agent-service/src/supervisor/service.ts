@@ -250,7 +250,11 @@ export class AgentService {
       try {
         const scope = this.workers.authorizationScope(bootstrap.rootSessionId);
         if (!scope || scope.agentDirectoryId !== agentDirectoryId) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The launched worker was not admitted under the expected agent directory');
-        await this.registerCatalogWorker(bootstrap, scope.workerGeneration);
+        void this.registerCatalogWorker(bootstrap, scope.workerGeneration).catch(async () => {
+          if (this.workers.authorizationScope(bootstrap.rootSessionId)?.workerGeneration === scope.workerGeneration) {
+            await this.workers.stop(bootstrap.rootSessionId).catch(() => { });
+          }
+        });
         return result;
       } catch (error) {
         await this.workers.stop(bootstrap.rootSessionId);

@@ -41,6 +41,9 @@ import { listConnectableProviders } from './connectableProviders';
 import { oauthMethodsForProvider, requiresProviderAuth, shouldAutoOpenAuthPanel } from './providerAuth';
 import { CUSTOM_PROVIDER_ID, type CustomProviderPersistPlan } from './custom-provider-form';
 import { problemMessage } from '@/lib/problemMessage';
+import { ProviderLogoImageControl } from './ProviderLogoImageControl';
+import { providerLogoUploadSupported, removeProviderLogo, uploadProviderLogo } from '@/lib/customProviderLogos';
+import type { CustomProviderLogoPlan } from './custom-provider-form';
 
 const ADD_PROVIDER_ID = '__add_provider__';
 const CLASSIFICATION_PAGE_ID = '__classification__';
@@ -69,6 +72,8 @@ interface ProviderDetailProps {
   onRefresh: () => Promise<void>;
   onSave: (plan: CustomProviderPersistPlan) => Promise<void>;
   onClearAuthFailure: () => void;
+  applyLogoPlan: (providerId: string, plan: CustomProviderLogoPlan) => Promise<void>;
+  logoBusyId: string | null;
 }
 
 function ProviderDetail({
@@ -86,6 +91,8 @@ function ProviderDetail({
   onRefresh,
   onSave,
   onClearAuthFailure,
+  applyLogoPlan,
+  logoBusyId,
 }: ProviderDetailProps) {
   const { t } = useI18n();
   const [detail, setDetail] = React.useState<Detail | null>(null);
@@ -100,6 +107,7 @@ function ProviderDetail({
   const [disconnectBusy, setDisconnectBusy] = React.useState(false);
   const hiddenModels = useUIStore((state) => state.hiddenModels);
   const customProviderIcon = useUIStore((state) => state.customProviderIcons[provider.providerId]);
+  const customProviderLogos = useUIStore((state) => state.customProviderLogos);
   const toggleHiddenModel = useUIStore((state) => state.toggleHiddenModel);
   const hideAllModels = useUIStore((state) => state.hideAllModels);
   const showAllModels = useUIStore((state) => state.showAllModels);
@@ -390,6 +398,23 @@ function ProviderDetail({
         {accountError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{accountError}</p> : null}
         {authFailureHint ? <p role="status" className="typography-meta text-[var(--status-warning)]">{authFailureHint}</p> : null}
       </SettingsSection>
+
+      {providerLogoUploadSupported() && (!detail?.configuration || enterprise) ? (
+        <SettingsSection
+          title={t('settings.providers.page.logo.title')}
+          info={t('settings.providers.page.logo.info')}
+          settingsItem="providers.logo"
+        >
+          <ProviderLogoImageControl
+            preview={customProviderLogos[provider.providerId]
+              ? <ProviderLogo providerId={provider.providerId} alt="" className="size-5" />
+              : null}
+            busy={logoBusyId === provider.providerId}
+            onPick={(file) => void applyLogoPlan(provider.providerId, { kind: 'upload', file })}
+            onRemove={() => void applyLogoPlan(provider.providerId, { kind: 'remove' })}
+          />
+        </SettingsSection>
+      ) : null}
 
       {providerModels.length > 0 ? (
         <SettingsSection
@@ -690,6 +715,7 @@ export const ProvidersPage: React.FC = () => {
           console.warn('[providers] could not save the provider icon:', error);
         }
       }
+      await applyLogoPlan(result.providerId, plan.logo);
 
       if (runtime !== getRuntimeKey() || store.getState().workspaceId !== workspaceId) return;
       setPartialProvider(keyFailed ? result.providerId : null);
@@ -701,6 +727,28 @@ export const ProvidersPage: React.FC = () => {
       else toast.success(t('settings.providers.page.toast.customProviderSaved', { provider: plan.request.configuration.name }));
     } finally {
       if (runtime === getRuntimeKey()) setBusy(false);
+    }
+  };
+
+  const [logoBusyId, setLogoBusyId] = React.useState<string | null>(null);
+  const applyLogoPlan = async (providerId: string, logoPlan: CustomProviderLogoPlan) => {
+    if (logoPlan.kind === 'keep' || !providerLogoUploadSupported()) return;
+    if (logoPlan.kind === 'remove' && !useUIStore.getState().customProviderLogos[providerId]) return;
+    setLogoBusyId(providerId);
+    try {
+      if (logoPlan.kind === 'upload') {
+        useUIStore.getState().setCustomProviderLogo(providerId, await uploadProviderLogo(providerId, logoPlan.file));
+      } else {
+        await removeProviderLogo(providerId);
+        useUIStore.getState().setCustomProviderLogo(providerId, null);
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      toast.error(logoPlan.kind === 'upload'
+        ? t('settings.providers.page.logo.toast.uploadFailed', { reason })
+        : t('settings.providers.page.logo.toast.removeFailed', { reason }));
+    } finally {
+      setLogoBusyId(null);
     }
   };
 
@@ -881,6 +929,8 @@ export const ProvidersPage: React.FC = () => {
           onRefresh={state.refresh}
           onSave={saveCustomProvider}
           onClearAuthFailure={() => setPartialProvider(null)}
+          applyLogoPlan={applyLogoPlan}
+          logoBusyId={logoBusyId}
         />
       </SettingsPageLayout>
     );

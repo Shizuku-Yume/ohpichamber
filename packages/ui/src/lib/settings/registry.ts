@@ -470,8 +470,6 @@ export const SETTINGS_REGISTRY = {
  tableCellWrap: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('tableCellWrap', (v) => useUIStore.getState().setTableCellWrap(v)) }),
  copyMessagesAsPlainText: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('copyMessagesAsPlainText', (v) => useUIStore.getState().setCopyMessagesAsPlainText(v)) }),
  showTurnChangedFiles: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('showTurnChangedFiles', (v) => useUIStore.getState().setShowTurnChangedFiles(v)) }),
- showExpandedBashTools: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('showExpandedBashTools', (v) => useUIStore.getState().setShowExpandedBashTools(v)) }),
- showExpandedEditTools: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('showExpandedEditTools', (v) => useUIStore.getState().setShowExpandedEditTools(v)) }),
  toolJsonViewMode: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseOneOf(['summary', 'formatted', 'raw']), ui: uiStore('toolJsonViewMode', (v) => useUIStore.getState().setToolJsonViewMode(v)) }),
  timeFormatPreference: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['auto', '12h', '24h']), ui: uiStore('timeFormatPreference', (v) => useUIStore.getState().setTimeFormatPreference(v)) }),
  weekStartPreference: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['auto', 'sunday', 'monday']), ui: uiStore('weekStartPreference', (v) => useUIStore.getState().setWeekStartPreference(v)) }),
@@ -506,8 +504,9 @@ export const SETTINGS_REGISTRY = {
  autoSaveEnabled: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseBoolean, ui: uiStore('autoSaveEnabled', (v) => useUIStore.getState().setAutoSaveEnabled(v)) }),
  confirmFileTreeMove: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('confirmFileTreeMove', (v) => useUIStore.getState().setConfirmFileTreeMove(v)) }),
  autoCreateWorktree: field({ scope: 'profile', effect: ['store'], parse: parseBoolean }),
+ terminalCloseOnExit: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('terminalCloseOnExit', (v) => useUIStore.getState().setTerminalCloseOnExit(v)) }),
  sessionTabsEnabled: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('sessionTabsEnabled', (v) => useUIStore.getState().setSessionTabsEnabled(v)) }),
- sessionTabsPerWorkspace: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('sessionTabsPerWorkspace', setUi('sessionTabsPerWorkspace')) }),
+ sessionTabsPerWorkspace: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('sessionTabsPerWorkspace', (v) => useUIStore.getState().setSessionTabsPerWorkspace(v)) }),
  allowPromptingSubagentSessions: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('allowPromptingSubagentSessions', (v) => useUIStore.getState().setAllowPromptingSubagentSessions(v)) }),
 
  // ── Composer (profile) ──
@@ -593,7 +592,7 @@ export const SETTINGS_REGISTRY = {
 
  // ── Sessions and summaries (profile) ──
  sessionRecapEnabled: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('sessionRecapEnabled', (v) => useUIStore.getState().setSessionRecapEnabled(v)) }),
- sessionSuggestionEnabled: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('sessionSuggestionEnabled', (v) => useUIStore.getState().setSessionSuggestionEnabled(v)) }),
+ suggestionGenerator: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['session', 'small', 'off'] as const), ui: uiStore('suggestionGenerator', (v) => useUIStore.getState().setSuggestionGenerator(v)) }),
  sessionWorkEnabled: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('sessionWorkEnabled', (v) => useUIStore.getState().setSessionWorkEnabled(v)) }),
  sessionWorkAutoOpen: field({ scope: 'profile', effect: ['server', 'ui'], surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionWorkAutoOpen', (v) => useUIStore.getState().setSessionWorkAutoOpen(v)) }),
  sessionReviewOfferEnabled: field({ scope: 'profile', effect: ['server', 'ui'], surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionReviewOfferEnabled', (v) => useUIStore.getState().setSessionReviewOfferEnabled(v)) }),

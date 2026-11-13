@@ -294,6 +294,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['terminal', 'shell', 'bash', 'zsh', 'fish', 'pwsh', 'powershell'],
   },
   {
+    id: 'appearance.terminal-close-on-exit',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.terminalCloseOnExit',
+    descriptionKey: 'settings.openchamber.visual.field.terminalCloseOnExitInfo',
+    keywords: ['terminal', 'exit', 'close', 'tab', 'shell'],
+  },
+  {
     id: 'appearance.editor-font-size',
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.editorFontSize',
@@ -399,10 +406,10 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['recap', 'suggestion', 'subagent'],
   },
   {
-    id: 'chat.session-suggestion',
+    id: 'chat.suggestion-generator',
     page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.sessionSuggestion',
-    keywords: ['suggestion', 'assist', 'small model', 'follow up'],
+    titleKey: 'settings.openchamber.visual.field.suggestionGenerator',
+    keywords: ['suggestion', 'generator', 'next prompt', 'prediction', 'small model'],
   },
   {
     id: 'chat.session-review-offer',
@@ -580,6 +587,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.enableSpellcheckInTextInputs',
     keywords: ['spelling', 'input'],
     isAvailable: (ctx) => !ctx.isMobile,
+  },
+  {
+    id: 'chat.persist-drafts',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.persistDraftMessages',
+    keywords: ['draft', 'message'],
   },
   {
     id: 'chat.large-text-paste',
@@ -1307,6 +1320,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'providers',
     titleKey: 'settings.providers.accounts.title',
     keywords: ['api key', 'oauth', 'credentials', 'accounts', 'switch account', 'disconnect'],
+  },
+  {
+    id: 'providers.logo',
+    page: 'providers',
+    titleKey: 'settings.providers.page.logo.title',
+    keywords: ['logo', 'image', 'upload', 'icon', 'picture', 'svg', 'png'],
   },
   {
     id: 'providers.models',

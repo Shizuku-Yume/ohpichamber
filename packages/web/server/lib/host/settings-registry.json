@@ -428,12 +428,6 @@
     "showTurnChangedFiles": {
       "scope": "profile"
     },
-    "showExpandedBashTools": {
-      "scope": "profile"
-    },
-    "showExpandedEditTools": {
-      "scope": "profile"
-    },
     "toolJsonViewMode": {
       "scope": "profile"
     },
@@ -496,6 +490,14 @@
     },
     "autoCreateWorktree": {
       "scope": "profile"
+    },
+    "terminalCloseOnExit": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop",
+        "mobile"
+      ]
     },
     "sessionTabsEnabled": {
       "scope": "profile",
@@ -630,7 +632,7 @@
     "sessionRecapEnabled": {
       "scope": "profile"
     },
-    "sessionSuggestionEnabled": {
+    "suggestionGenerator": {
       "scope": "profile"
     },
     "sessionWorkEnabled": {

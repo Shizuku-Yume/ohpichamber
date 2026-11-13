@@ -161,6 +161,7 @@ describe('MCP configuration management and unmanaged projection', () => {
               serverId: 'server-one',
               label: 'Server One',
               enabled: true,
+              scope: 'project' as const,
               transport: {
                 type: 'stdio',
                 command: 'node',
@@ -213,6 +214,64 @@ describe('MCP configuration management and unmanaged projection', () => {
         expect(error).toBeInstanceOf(NativeMcpError);
         expect((error as NativeMcpError).code).toBe('MCP_CONFIG_READ_FAILED');
       }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('scope round-trip: writes user scope to userConfigPath in OMP format and project scope to projectConfigPath', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mcp-scope-test-'));
+    try {
+      const projectPath = join(dir, 'project-mcp.json');
+      const userPath = join(dir, 'user-mcp.json');
+
+      const state: MCPConfigurationState = {
+        workspaceId: 'workspace-1',
+        persistedRevision: '1',
+        config: {
+          servers: [
+            {
+              serverId: 'proj-server',
+              label: 'Project Server',
+              enabled: true,
+              scope: 'project',
+              transport: { type: 'stdio', command: 'node', args: ['proj.js'] },
+            },
+            {
+              serverId: 'user-server',
+              label: 'User Server',
+              enabled: true,
+              scope: 'user',
+              transport: { type: 'http', url: 'https://user-mcp.example/api' },
+            },
+          ],
+        },
+      };
+
+      await writeNativeMcpConfiguration(projectPath, state, userPath);
+
+      // Check project file content
+      const projectRaw = JSON.parse(await readFile(projectPath, 'utf8'));
+      expect(projectRaw.openchamber).toBeDefined();
+      expect(projectRaw.mcpServers['proj-server']).toBeDefined();
+      expect(projectRaw.mcpServers['user-server']).toBeUndefined();
+
+      // Check user file content (OMP format: NO openchamber property)
+      const userRaw = JSON.parse(await readFile(userPath, 'utf8'));
+      expect(userRaw.openchamber).toBeUndefined();
+      expect(userRaw.mcpServers['user-server']).toBeDefined();
+      expect(userRaw.mcpServers['proj-server']).toBeUndefined();
+
+      // Read back with both paths
+      const readBack = await readNativeMcpConfigurationIfPresent(projectPath, 'workspace-1', userPath);
+      expect(readBack).not.toBeNull();
+      expect(readBack?.config.servers).toHaveLength(2);
+
+      const projRead = readBack?.config.servers.find(s => s.serverId === 'proj-server');
+      expect(projRead?.scope).toBe('project');
+
+      const userRead = readBack?.config.servers.find(s => s.serverId === 'user-server');
+      expect(userRead?.scope).toBe('user');
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

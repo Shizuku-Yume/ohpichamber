@@ -19,13 +19,15 @@ mock.module('./McpOAuthSignIn', () => ({ McpOAuthSignIn: () => null }));
 const secretWrites: Array<{ value: string; persistedRevision: string }> = [];
 // DOM globals and canonical transport seams must exist before importing the editor.
 const real = await import('@/api/canonicalClient');
-mock.module('@/api/canonicalClient', () => ({ ...real, canonicalClient: {
-  resolveWorkspace: async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }),
-  writeWorkspaceMcpCredential: async (_workspaceId: string, _serverId: string, request: { value: string; persistedRevision: string }) => {
-    secretWrites.push(request);
-    return { workspaceId: 'workspace', serverId: 'tools', persistedRevision: '3', credentialRef: 'private_ref' };
-  },
-} }));
+mock.module('@/api/canonicalClient', () => ({
+  ...real, canonicalClient: {
+    resolveWorkspace: async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }),
+    writeWorkspaceMcpCredential: async (_workspaceId: string, _serverId: string, request: { value: string; persistedRevision: string }) => {
+      secretWrites.push(request);
+      return { workspaceId: 'workspace', serverId: 'tools', persistedRevision: '3', credentialRef: 'private_ref' };
+    },
+  }
+}));
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
@@ -35,7 +37,7 @@ const { McpPage } = await import('./McpPage');
 const container = document.createElement('div');
 document.body.appendChild(container);
 let root: ReturnType<typeof createRoot>;
-const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, transport: { type: 'http', url: 'https://initial.test' } };
+const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, scope: 'project' as const, transport: { type: 'http', url: 'https://initial.test' } };
 const applyResult = (servers: MCPServerConfig[]): MCPApplyResult => ({ kind: 'mcp', status: 'no-active-workers', workers: [], configuration: { workspaceId: 'workspace', persistedRevision: '3', config: { servers } } });
 beforeEach(() => {
   secretWrites.length = 0;
@@ -53,11 +55,13 @@ const edit = async (field: HTMLInputElement, value: string, blur = true) => {
 
 test('a native catalog echo preserves a newer draft while serialized autosave is in flight', async () => {
   const writes: Array<{ value: string; finish: () => void }> = [];
-  useMcpConfigStore.setState({ updateMcp: async (_serverId, config) => {
-    const result = Promise.withResolvers<{ ok: true; result: MCPApplyResult }>();
-    writes.push({ value: config.transport?.type === 'http' ? config.transport.url : '', finish: () => result.resolve({ ok: true, result: applyResult([{ ...server, ...config }]) }) });
-    return result.promise;
-  } });
+  useMcpConfigStore.setState({
+    updateMcp: async (_serverId, config) => {
+      const result = Promise.withResolvers<{ ok: true; result: MCPApplyResult; outcome: 'applied' }>();
+      writes.push({ value: config.transport?.type === 'http' ? config.transport.url : '', finish: () => result.resolve({ ok: true, result: applyResult([{ ...server, ...config }]), outcome: 'applied' }) });
+      return result.promise;
+    }
+  });
   await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
   const field = container.querySelector<HTMLInputElement>('input[aria-label="Server URL"]');
   if (!field) throw new Error('Missing URL field');
@@ -75,7 +79,7 @@ test('a native catalog echo preserves a newer draft while serialized autosave is
 
 test('header values are written privately and only opaque references reach configuration', async () => {
   const configs: Array<Partial<MCPServerConfig>> = [];
-  useMcpConfigStore.setState({ updateMcp: async (_serverId, config) => { configs.push(config); return { ok: true, result: applyResult([{ ...server, ...config }]) }; } });
+  useMcpConfigStore.setState({ updateMcp: async (_serverId, config) => { configs.push(config); return { ok: true, result: applyResult([{ ...server, ...config }]), outcome: 'applied' }; } });
   await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
   const addVariable = [...container.querySelectorAll('button')].find((button) => button.textContent === 'Add header');
   if (!addVariable) throw new Error('Missing add header control');
@@ -107,6 +111,7 @@ test('unmanaged servers render read-only indicator and all fields are disabled/n
     label: 'Unmanaged Tool',
     enabled: true,
     managed: false,
+    scope: 'project' as const,
     transport: { type: 'stdio', command: 'unmanaged-binary', args: ['--serve'] },
   };
   useMcpConfigStore.setState({

@@ -6,12 +6,13 @@ import { problemMessage } from '@/lib/problemMessage';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 export type McpDraft = MCPServerConfig;
-type McpMutationResult =
-  | { ok: true; result: MCPApplyResult }
-  | { ok: false; error: string; result?: MCPApplyResult };
+export type McpInstallOutcome = 'applied' | 'saved-needs-auth' | 'saved-not-connected';
+export type McpMutationResult =
+  | { ok: true; result: MCPApplyResult; outcome: McpInstallOutcome }
+  | { ok: false; error: string; result?: MCPApplyResult; outcome?: McpInstallOutcome };
 
-export const createMcpDraft = (serverId: string): McpDraft => ({
-  serverId, label: serverId, enabled: true, transport: { type: 'stdio', command: '', args: [] },
+export const createMcpDraft = (serverId: string, scope: 'project' | 'user' = 'project'): McpDraft => ({
+  serverId, label: serverId, enabled: true, scope, transport: { type: 'stdio', command: '', args: [] },
 });
 
 export const resolveMcpDirectory = (directory?: string | null): string => {
@@ -26,7 +27,6 @@ const keyFor = (directory?: string | null): string => {
 let generation = 0;
 let mutationRevision = 0;
 const revisions = new Map<string, number>();
-const EMPTY_SERVERS: MCPServerConfig[] = [];
 
 interface McpConfigStore {
   mcpServers: MCPServerConfig[];
@@ -49,8 +49,8 @@ interface McpConfigStore {
   resetForRuntimeSwitch: () => void;
 }
 
-export const selectMcpServersForDirectory = (state: Pick<McpConfigStore, 'serversByDirectory'>, directory?: string | null): MCPServerConfig[] =>
-  state.serversByDirectory[keyFor(directory)] ?? EMPTY_SERVERS;
+export const selectMcpServersForDirectory = (state: Pick<McpConfigStore, 'serversByDirectory' | 'mcpServers'>, directory?: string | null): MCPServerConfig[] =>
+  state.serversByDirectory[keyFor(directory)] ?? state.mcpServers;
 
 export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) => {
   const publish = (directory: string, configuration: MCPConfigurationState, result?: MCPApplyResult) => {
@@ -80,21 +80,22 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
       if (ownerGeneration !== generation) throw new Error('Runtime changed.');
       revisions.set(key, ++mutationRevision);
       publish(key, result.configuration, result);
-      return result.status === 'applied' || result.status === 'no-active-workers'
-        ? { ok: true, result }
-        : { ok: false, error: result.workers.filter(worker => worker.outcome === 'failed').map(worker => worker.error.detail).join('\n'), result };
+      const outcome: McpInstallOutcome = result.outcome
+        ?? (result.status === 'applied' || result.status === 'no-active-workers' ? 'applied' : 'saved-not-connected');
+      if (outcome === 'applied' || outcome === 'saved-needs-auth') {
+        return { ok: true, result, outcome };
+      }
+      const failureDetail = result.workers.find(worker => worker.outcome === 'failed')?.error.detail || 'The MCP server could not connect.';
+      return { ok: false, error: failureDetail, result, outcome };
     } catch (error) {
       const message = problemMessage(error, 'The MCP configuration could not be saved.');
       const parsed = error instanceof CanonicalApiError ? MCPApplyResultSchema.safeParse(error.problem.details?.result) : null;
       const result = parsed?.success && parsed.data.configuration.workspaceId === workspaceId ? parsed.data : undefined;
+      const outcome: McpInstallOutcome | undefined = result?.outcome;
       if (ownerGeneration === generation) {
-        if (result) {
-          revisions.set(key, ++mutationRevision);
-          publish(key, result.configuration, result);
-        }
         set(state => ({ errorsByDirectory: { ...state.errorsByDirectory, [key]: message } }));
       }
-      return { ok: false, error: message, ...(result ? { result } : {}) };
+      return { ok: false, error: message, ...(result ? { result, outcome } : {}) };
     }
   };
   return {
@@ -126,7 +127,7 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
     },
     createMcp: (config, directory) => mutate(directory, servers => {
       if (servers.some(server => server.serverId === config.serverId)) throw new Error('MCP server already exists.');
-      return [...servers, MCPServerConfigSchema.parse(config)];
+      return [...servers, MCPServerConfigSchema.parse({ ...config, scope: config.scope ?? 'project' })];
     }),
     updateMcp: (serverId, config, directory) => mutate(directory, servers => {
       if (!servers.some(server => server.serverId === serverId)) throw new Error('MCP server not found.');

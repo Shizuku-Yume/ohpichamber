@@ -24,9 +24,10 @@ import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n } from '@/lib/i18n';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn } from '@/lib/utils';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { createMcpDraft, selectMcpServersForDirectory, useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { getMcpServerStatus, useMcpStore } from '@/stores/useMcpStore';
-
 const nextServerId = (existing: readonly { serverId: string }[]): string => {
   const baseName = 'new-mcp-server';
   let name = baseName;
@@ -82,7 +83,16 @@ export const McpGrid: React.FC = () => {
   const getErrorForDirectory = useMcpStore((state) => state.getErrorForDirectory);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [query, setQuery] = React.useState('');
-
+  const [addOpen, setAddOpen] = React.useState(false);
+  const settingsProjectPath = useUIStore((state) => state.settingsProjectPath);
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const projects = useProjectsStore((state) => state.projects);
+  const hasSelectedProject = Boolean(
+    settingsProjectPath
+      ? projects.some((p) => p.path === settingsProjectPath)
+      : activeProjectId && projects.some((p) => p.id === activeProjectId),
+  );
+  const [addScope, setAddScope] = React.useState<'project' | 'user'>('project');
   React.useEffect(() => {
     void loadMcpConfigs({ directory: settingsDirectory });
     void refreshStatus({ directory: settingsDirectory, silent: true });
@@ -103,9 +113,8 @@ export const McpGrid: React.FC = () => {
   };
 
   const handleCreate = () => {
-    const serverId = nextServerId(servers);
-    setMcpDraft(createMcpDraft(serverId));
-    setSelectedMcp(serverId);
+    setAddScope(hasSelectedProject ? 'project' : 'user');
+    setAddOpen(true);
   };
 
   const handleDelete = async () => {
@@ -183,7 +192,14 @@ export const McpGrid: React.FC = () => {
               icon={<SettingsCardIcon name={server.transport.type === 'stdio' ? 'server' : 'global'} />}
               title={server.label}
               subtitle={target || undefined}
-              badges={<StatusPill status={status} enabled={server.enabled} managed={server.managed} />}
+              badges={
+                <div className="flex items-center gap-1.5">
+                  <SettingsCardPill tone="neutral">
+                    {server.scope === 'user' ? t('settings.mcp.grid.scope.user') : t('settings.mcp.grid.scope.project')}
+                  </SettingsCardPill>
+                  <StatusPill status={status} enabled={server.enabled} managed={server.managed} />
+                </div>
+              }
               muted={!server.enabled}
               footer={<span>{t(transportKey)}</span>}
               onOpen={() => {
@@ -213,6 +229,53 @@ export const McpGrid: React.FC = () => {
             </Button>
             <Button variant="destructive" size="sm" onClick={() => void handleDelete()} disabled={isDeleting}>
               {isDeleting ? t('settings.mcp.page.actions.deleting') : t('settings.common.actions.delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('settings.mcp.dialog.add.title')}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className="flex items-center gap-3 rounded-lg border border-[var(--interactive-border)] p-3 cursor-pointer hover:bg-[var(--surface-hover)]">
+              <input
+                type="radio"
+                name="mcp-add-scope"
+                value="project"
+                checked={addScope === 'project'}
+                onChange={() => setAddScope('project')}
+                className="size-4"
+              />
+              <span className="text-sm font-medium text-foreground">{t('settings.mcp.dialog.add.scope.project')}</span>
+            </label>
+            <label className="flex items-center gap-3 rounded-lg border border-[var(--interactive-border)] p-3 cursor-pointer hover:bg-[var(--surface-hover)]">
+              <input
+                type="radio"
+                name="mcp-add-scope"
+                value="user"
+                checked={addScope === 'user'}
+                onChange={() => setAddScope('user')}
+                className="size-4"
+              />
+              <span className="text-sm font-medium text-foreground">{t('settings.mcp.dialog.add.scope.user')}</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              {t('settings.common.actions.cancel')}
+            </Button>
+            <Button
+              onClick={() => {
+                const serverId = nextServerId(servers);
+                setMcpDraft(createMcpDraft(serverId, addScope));
+                setSelectedMcp(serverId);
+                setAddOpen(false);
+              }}
+            >
+              {t('settings.mcp.dialog.add.title')}
             </Button>
           </DialogFooter>
         </DialogContent>

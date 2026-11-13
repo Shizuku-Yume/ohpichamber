@@ -75,7 +75,7 @@ const { McpPage } = await import('./McpPage');
 const container = document.createElement('div');
 document.body.appendChild(container);
 let root: Root;
-const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, transport: { type: 'http', url: 'https://initial.test' } };
+const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, scope: 'project' as const, transport: { type: 'http', url: 'https://initial.test' } };
 const configuration = { workspaceId: 'workspace', persistedRevision: '3', config: { servers: [server] } };
 let updateCalls = 0;
 
@@ -96,7 +96,7 @@ beforeEach(() => {
     applyResultsByDirectory: {},
     updateMcp: async () => {
       updateCalls += 1;
-      return { ok: true, result: { kind: 'mcp', status: 'no-active-workers', workers: [], configuration } };
+      return { ok: true, result: { kind: 'mcp', status: 'no-active-workers', workers: [], configuration }, outcome: 'applied' as const };
     },
   });
 });

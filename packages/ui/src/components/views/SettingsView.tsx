@@ -12,7 +12,7 @@ import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
-import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
+import { createMcpDraft, useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { projectSettingsTabForSearchTarget, useProjectSettingsTabStore } from '@/components/sections/projects/projectSettingsTabs';
 import { chatSettingsTabForSearchTarget, useChatSettingsTabStore } from '@/components/sections/openchamber/chatSettingsTabs';
@@ -399,10 +399,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (result.id.startsWith('mcp.')) {
       const store = useMcpConfigStore.getState();
       const name = nextUniqueName('new-mcp-server', store.mcpServers.map((server) => server.serverId));
-      store.setMcpDraft({
-        serverId: name, label: name, enabled: true,
-        transport: { type: 'stdio', command: '', args: [] },
-      });
+      store.setMcpDraft(createMcpDraft(name));
       store.setSelectedMcp(name);
       return result.id === 'mcp.create' ? 'mcp.server' : result.id;
     }

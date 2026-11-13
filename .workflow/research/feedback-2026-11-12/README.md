@@ -1,6 +1,6 @@
 # Research: maintainer feedback 2026-11-12
 
-Seventeen items the maintainer reported on the installed build of `main` at `97284e9cf`. Each item's root cause is located in source; the reports below cite file and line. Screenshots: `~/.omp/agent/sessions/-Project-ohpichamber/2026-11-05T05-15-23-885Z_01a1aa22-196d-7067-87ff-720a5f864276/local/`.
+Seventeen items the maintainer reported on the installed build of `main` at `97284e9cf`, verbatim in [00-maintainer-feedback.md](00-maintainer-feedback.md). Each item's root cause is located in source; the reports below cite file and line. Screenshots: `~/.omp/agent/sessions/-Project-ohpichamber/2026-11-05T05-15-23-885Z_01a1aa22-196d-7067-87ff-720a5f864276/local/`.
 
 | Item | Report |
 |---|---|

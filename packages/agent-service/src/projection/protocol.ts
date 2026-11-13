@@ -1,4 +1,4 @@
-import { AdvisorYieldedEventSchema, CanonicalEventSchema, CleanseProgressEventSchema, MessageSchema, SessionRecapEventSchema, SessionModeSchema, SessionSnapshotSchema, SubagentUpdatedEventSchema, TimestampSchema, TurnSchema } from '@openchamber/agent-contract';
+import { AdvisorYieldedEventSchema, CanonicalEventSchema, CleanseProgressEventSchema, MessageSchema, SessionRecapEventSchema, SessionSuggestionEventSchema, SessionModeSchema, SessionSnapshotSchema, SubagentUpdatedEventSchema, TimestampSchema, TurnSchema } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
 // Preserve each tuple member's payload type; Array.map widens away its fields.
@@ -35,6 +35,7 @@ const ProjectionEventSchema = z.union([
   CanonicalEventSchema.options[26].omit(envelope),
   SubagentUpdatedEventSchema.omit(envelope),
   SessionRecapEventSchema.omit(envelope),
+  SessionSuggestionEventSchema.omit(envelope),
   AdvisorYieldedEventSchema.omit(envelope),
   CleanseProgressEventSchema.omit(envelope),
 ]);

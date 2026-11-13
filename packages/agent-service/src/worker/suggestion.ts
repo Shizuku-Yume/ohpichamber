@@ -233,15 +233,19 @@ export class SuggestionDriver {
       messages: llmMessages,
     };
     if (this.session.systemPrompt) {
-      context.systemPrompt = [this.session.systemPrompt];
+      context.systemPrompt = Array.isArray(this.session.systemPrompt)
+        ? this.session.systemPrompt
+        : [this.session.systemPrompt];
     }
 
+    const apiKey = await this.session.modelRegistry?.getApiKey?.(targetModel);
     const assistantMessage = await completeSimple(
       targetModel,
       context,
       {
-        maxTokens: PREDICTION_MAX_TOKENS,
+        maxTokens: 256,
         signal: options.signal,
+        apiKey,
       },
     );
 

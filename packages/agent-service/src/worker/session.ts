@@ -2064,7 +2064,7 @@ export class WorkerSession {
     }
   }
   hasDraft(): boolean {
-    return this._draftPresent || this.queuedContext.size > 0;
+    return this._draftPresent;
   }
 
   setDraft(present: boolean): void {

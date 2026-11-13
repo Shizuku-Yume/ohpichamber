@@ -485,6 +485,9 @@ export class WorkerRegistry {
         for (const stored of [entry.input.sessionsDirectory, entry.input.sessionFile]) {
           if (stored && isInsideOrSameDirectory(leaseDirectory, stored)) throw refuse('COMMAND_IN_FLIGHT');
         }
+        if (current.info.state === 'starting') {
+          try { await waitWithin(current.ready, 5_000); } catch { /* starting settles */ }
+        }
         if (current.info.state === 'starting' || this.restartReservations.has(current.info.rootSessionId) || pendingWork(current)) {
           throw refuse('COMMAND_IN_FLIGHT');
         }
@@ -492,8 +495,13 @@ export class WorkerRegistry {
         // A background shell job outlives its start operation; its own snapshot
         // is the authority, and a missing or failed probe is not proven idle.
         if (!(await this.hasNoRunningShellJobs(current))) throw refuse('COMMAND_IN_FLIGHT');
-      } else if (current.info.state === 'starting' || pendingWork(current)) {
-        throw refuse('COMMAND_IN_FLIGHT');
+      } else {
+        if (current.info.state === 'starting') {
+          try { await waitWithin(current.ready, 5_000); } catch { /* starting settles */ }
+        }
+        if (current.info.state === 'starting' || pendingWork(current)) {
+          throw refuse('COMMAND_IN_FLIGHT');
+        }
       }
       // Re-read after the probes: a start, run or operation may have arrived.
       const again = this.workerEntries.get(entry.info.rootSessionId);

@@ -332,6 +332,7 @@ export class WorkerProjection {
   private readonly liveToolCallOwners = new Map<string, { messageId: string; callPartId: string }>();
   private readonly publishedResultParts = new Set<string>();
   private readonly completedResultParts = new Set<string>();
+  private readonly toolCallPreviews = new Map<string, EditPreview>();
 
   private ownToolCall(toolCallId: string, messageId: string | undefined, contentIndex: number | undefined): void {
     if (!messageId || contentIndex === undefined) return;
@@ -579,6 +580,7 @@ export class WorkerProjection {
     this.liveToolCallOwners.clear();
     this.publishedResultParts.clear();
     this.completedResultParts.clear();
+    this.toolCallPreviews.clear();
     this.attachments = attachments;
     this.sessionMentions = sessionMentions(context);
     const result: ProjectionInput[] = [{ timestamp, event: { type: 'run.started', runId, origin, createdAt: timestamp } }];
@@ -809,7 +811,7 @@ export class WorkerProjection {
             this.ownToolCall(src.id, current.messageId, update.contentIndex);
             const input = this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(src.arguments))));
             const serializedInput = JSON.stringify(input);
-            const editPreview = current.editPreviewsByToolCallId.get(src.id);
+            const editPreview = current.editPreviewsByToolCallId.get(src.id) ?? this.toolCallPreviews.get(src.id);
             const part: Part = {
               type: 'tool_call',
               partId: id,
@@ -839,7 +841,7 @@ export class WorkerProjection {
             if (!call.id || !call.name) break;
             const id = partId(current.messageId, update.contentIndex);
             const input = this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(call.arguments))));
-            const editPreview = current.editPreviewsByToolCallId.get(call.id);
+            const editPreview = current.editPreviewsByToolCallId.get(call.id) ?? this.toolCallPreviews.get(call.id);
             const part: Part = {
               type: 'tool_call',
               partId: id,
@@ -877,7 +879,11 @@ export class WorkerProjection {
         for (const part of parts(event.message, current.messageId, current.attachments, current.sessionMentions)) {
           const index = Number(part.partId.slice(current.messageId.length + 1));
           this.textSuffixes.delete(part.partId);
-          if (part.type === 'tool_call') this.ownToolCall(part.toolCallId, current.messageId, index);
+          if (part.type === 'tool_call') {
+            this.ownToolCall(part.toolCallId, current.messageId, index);
+            const preview = this.toolCallPreviews.get(part.toolCallId) ?? current.editPreviewsByToolCallId.get(part.toolCallId);
+            if (preview) part.editPreview = preview;
+          }
           if (!current.started.has(index) && part.type !== 'attachment') {
             emit({ type: 'part.started', messageId: current.messageId, part });
           }
@@ -954,24 +960,27 @@ export class WorkerProjection {
           ...(part.type === 'tool_result' && part.error !== undefined ? { error: part.error } : {}),
           ...(part.type === 'tool_result' && part.errorKind !== undefined ? { errorKind: part.errorKind } : {}),
         });
+        this.toolCallPreviews.delete(event.toolCallId);
         break;
       }
       case 'tool_stream_update': {
-        const current = this.message;
-        if (!current || !event.toolCallId || !event.toolName) break;
-        const contentIndex = current.toolCallIndexById.get(event.toolCallId);
-        if (contentIndex === undefined) break;
-        const src = current.nativeMessage.role === 'assistant' && Array.isArray(current.nativeMessage.content)
-          ? current.nativeMessage.content[contentIndex] : undefined;
-        const rawArgs = src && src.type === 'toolCall' ? src.arguments : {};
-        const id = partId(current.messageId, contentIndex);
+        if (!event.toolCallId || !event.toolName) break;
         const editPreview = this.parseEditPreview(event.update);
         if (editPreview) {
-          current.editPreviewsByToolCallId.set(event.toolCallId, editPreview);
+          this.toolCallPreviews.set(event.toolCallId, editPreview);
+          if (this.message) this.message.editPreviewsByToolCallId.set(event.toolCallId, editPreview);
         }
-        const effectivePreview = editPreview ?? current.editPreviewsByToolCallId.get(event.toolCallId);
+        const effectivePreview = editPreview ?? this.toolCallPreviews.get(event.toolCallId);
+        const owner = this.liveToolCallOwners.get(event.toolCallId);
+        const current = this.message;
+        const contentIndex = current?.toolCallIndexById.get(event.toolCallId);
+        const id = owner ? owner.callPartId : (current && contentIndex !== undefined ? partId(current.messageId, contentIndex) : undefined);
+        if (!id) break;
+        const src = current && current.nativeMessage.role === 'assistant' && Array.isArray(current.nativeMessage.content) && contentIndex !== undefined
+          ? current.nativeMessage.content[contentIndex] : undefined;
+        const rawArgs = src && src.type === 'toolCall' ? src.arguments : {};
         const input = this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(rawArgs))));
-        current.lastEmittedToolInputByCallId.set(event.toolCallId, JSON.stringify(input));
+        if (current) current.lastEmittedToolInputByCallId.set(event.toolCallId, JSON.stringify(input));
         const part: Part = {
           type: 'tool_call',
           partId: id,

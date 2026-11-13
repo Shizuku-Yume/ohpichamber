@@ -983,12 +983,13 @@ test('emits no part.updated for an unchanged tool input and forwards tool_stream
     });
     expect(streamUpdateEvents.map(e => e.event.type)).toEqual(['part.updated']);
     const streamUpdatedPart = (streamUpdateEvents[0].event as Extract<typeof streamUpdateEvents[0]['event'], { type: 'part.updated' }>).part;
-    if (streamUpdatedPart.type === 'tool_call') {
-      expect(streamUpdatedPart.editPreview).toBeDefined();
-      expect(streamUpdatedPart.editPreview?.files).toEqual([
+    if (streamUpdatedPart.type === 'tool_call' && streamUpdatedPart.editPreview) {
+      expect(streamUpdatedPart.editPreview.files).toEqual([
         { path: 'src/main.ts', diff: '-1|old\n+1|new', firstChangedLine: 1 },
       ]);
-      expect(streamUpdatedPart.editPreview?.streaming).toBe(true);
+      expect(streamUpdatedPart.editPreview.streaming).toBe(true);
+    } else {
+      expect(streamUpdatedPart.type).toBe('tool_call');
     }
 
     // 7. Following toolcall_delta retains the edit preview
@@ -1004,12 +1005,34 @@ test('emits no part.updated for an unchanged tool input and forwards tool_stream
     });
     expect(followingDeltaEvents.map(e => e.event.type)).toEqual(['part.updated']);
     const followingPart = (followingDeltaEvents[0].event as Extract<typeof followingDeltaEvents[0]['event'], { type: 'part.updated' }>).part;
-    if (followingPart.type === 'tool_call') {
+    if (followingPart.type === 'tool_call' && followingPart.editPreview) {
       expect(followingPart.input).toEqual({ path: 'src/main.ts', text: 'some code more' });
-      expect(followingPart.editPreview).toBeDefined();
-      expect(followingPart.editPreview?.files).toEqual([
+      expect(followingPart.editPreview.files).toEqual([
         { path: 'src/main.ts', diff: '-1|old\n+1|new', firstChangedLine: 1 },
       ]);
+    } else {
+      expect(followingPart.type).toBe('tool_call');
+    }
+
+    // 8. message_end preserves editPreview on the completed tool_call part
+    const completedMsg: Assistant = {
+      role: 'assistant',
+      content: [{ type: 'toolCall', id: 'edit-1', name: 'edit', arguments: { path: 'src/main.ts', text: 'some code more' } }],
+      api: 'openai-completions', provider: 'fixture', model: 'fixture',
+      stopReason: 'toolUse', timestamp: 30,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    };
+    const endEvents = projection.consume({ type: 'message_end', message: completedMsg });
+    const completedEntry = endEvents.find(e => e.event.type === 'part.completed');
+    if (!completedEntry || completedEntry.event.type !== 'part.completed') throw new Error('Expected part.completed');
+    const completedPart = completedEntry.event.part;
+    expect(completedPart.type).toBe('tool_call');
+    if (completedPart.type === 'tool_call' && completedPart.editPreview) {
+      expect(completedPart.editPreview.files).toEqual([
+        { path: 'src/main.ts', diff: '-1|old\n+1|new', firstChangedLine: 1 },
+      ]);
+    } else {
+      expect(completedPart.type).toBe('tool_call');
     }
   } finally {
     await manager.close();

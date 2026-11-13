@@ -18,6 +18,7 @@ import { applyDirectoryEvent, compareCounters, installSessionList, mergeHostSess
 import { useBtwStore } from "@/stores/useBtwStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { useSessionRecapStore } from "@/stores/useSessionRecapStore"
+import { useSessionSuggestionStore } from "@/stores/useSessionSuggestionStore"
 import { useCleanseStore } from "@/stores/useCleanseStore"
 import { useAdvisorStore } from "@/stores/useAdvisorStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
@@ -110,7 +111,12 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     }
     if (event.type === "session.recap") {
       useSessionRecapStore.getState().applyRecap(event);
-      continue;
+    }
+    if (event.type === "session.suggestion") {
+      useSessionSuggestionStore.getState().applySuggestion(event);
+    }
+    if (event.type === "run.started" || event.type === "turn.started") {
+      useSessionSuggestionStore.getState().clearSuggestion(target.sessionId);
     }
     if (event.type === "cleanse.progress") {
       useCleanseStore.getState().applyCleanseProgress(target.sessionId, event);

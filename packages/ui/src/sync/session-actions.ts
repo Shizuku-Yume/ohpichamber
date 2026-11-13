@@ -28,6 +28,7 @@ import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { clearSessionPrefetch } from "./session-prefetch-cache"
 import { dropSessionCaches } from "./session-cache"
 import { useInputStore } from "./input-store"
+import { useSessionSuggestionStore } from "@/stores/useSessionSuggestionStore"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { requestSessionArchiveBatch, requestSessionLinksUpdate, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
 import { markSessionUnreadSeen } from "./session-unread"
@@ -153,6 +154,7 @@ export type SessionSendInput = {
  * the canonical turn and user message with this specific send.
  */
 export async function sendMessage(input: SessionSendInput): Promise<Run | null> {
+ useSessionSuggestionStore.getState().clearSuggestion(input.sessionId)
  const runtimeKey = input.runtimeKey ?? getRuntimeKey()
  const runtimeRevision = input.runtimeRevision ?? getRuntimeSwitchRevision()
  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")

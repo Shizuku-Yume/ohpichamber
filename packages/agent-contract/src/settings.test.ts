@@ -55,7 +55,7 @@ test('the allowlist is unique and excludes credential, path, command and egress 
     'cycleOrder', 'modelPresets', 'modelRoleStorage', 'tier.openai', 'tier.anthropic',
     'tier.google', 'tier.subagent', 'tier.advisor', 'out.enabled', 'tui.renderMermaid',
     'tui.renderSvg', 'tui.autoGraph', 'steeringMode', 'followUpMode', 'interruptMode',
-    'composer.predictions', 'composer.predictionAlternatives',
+    'composer.predictions', 'composer.predictionAlternatives', 'suggestion.generator',
     'tools.artifactSpillThreshold', 'tools.artifactTailBytes', 'tools.artifactHeadBytes',
     'tools.outputMaxColumns', 'tools.artifactTailLines', 'tools.artifactMaxBytes',
   ]) expect(OmpSettingIdSchema.safeParse(exposed).success).toBe(true);

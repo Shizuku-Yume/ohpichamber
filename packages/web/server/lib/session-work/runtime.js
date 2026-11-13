@@ -203,7 +203,7 @@ export function createSessionWorkRuntime({
   const evaluateTurnEnd = async ({ sessionId, directory, assist }) => {
     if (stopped || lineage?.isChild(sessionId) === true) return null;
     const settings = getSettings();
-    if (!settings.enabled && !settings.reviewOffer && !assist.recap && !assist.suggestion) return null;
+    if (!settings.enabled && !settings.reviewOffer && !assist?.recap) return null;
     // Never capture 0: an evicted session also reads 0.
     if (!turnGenerations.has(sessionId)) advanceTurn(sessionId);
     const generation = turnGeneration(sessionId);
@@ -219,8 +219,7 @@ export function createSessionWorkRuntime({
         open: settings.enabled && settings.autoOpen && work?.state !== 'open',
         wrapUp: settings.enabled && work?.state === 'open',
         reviewReady: settings.reviewOffer,
-        recap: assist.recap,
-        nextStep: assist.suggestion,
+        recap: Boolean(assist?.recap),
       };
       const context = await loadAssistContext({ readPage: readPages(sessionId), signal: new AbortController().signal });
       if (!context) return null;

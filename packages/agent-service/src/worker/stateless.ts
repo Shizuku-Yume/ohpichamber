@@ -1,6 +1,6 @@
 import { dirname, join } from 'node:path';
 import { NativeProviderOAuth } from './provider-oauth.ts';
-import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
+import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, MCPConfigurationStateSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
 import { CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, type CatalogResult } from '../catalogs/protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
@@ -60,7 +60,9 @@ export class StatelessWorker {
       get skillOptions() { return nativeSkillOptions(runtime.settings); }
     });
     this.mcp = input.mcpConfigPath ? new WorkerMcp({
-      cwd: input.cwd, configPath: input.mcpConfigPath, authStorage: runtime.authStorage,
+      cwd: input.cwd, configPath: input.mcpConfigPath,
+      userConfigPath: join(input.agentDirectory, 'mcp.json'),
+      authStorage: runtime.authStorage,
       worker: { rootSessionId: input.authorizationRootId, workspaceId: input.workspaceId, workerGeneration: input.workerGeneration },
       resolveCredentialRef: reference => this.mcpCredentials.resolve(reference),
       resolveCommand: async transport => transport.command,
@@ -130,13 +132,14 @@ export class StatelessWorker {
           : [...Object.values(server.transport.headerCredentialRefs ?? {}), ...(server.transport.credentialRef ? [server.transport.credentialRef] : [])];
         for (const reference of references) await this.mcpCredentials.resolve(reference);
       }
-      return { type: 'mcp', result: { type: 'persisted', configuration: await writeNativeMcpConfiguration(path, configuration) } };
+      return { type: 'mcp', result: { type: 'persisted', configuration: await writeNativeMcpConfiguration(path, configuration, join(this.input.agentDirectory, 'mcp.json')) } };
     }
     if (operation.type === 'mcp') {
       if (!this.mcp) throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP storage ownership is unavailable.', true);
       const request = operation.operation;
+      const expected = MCPConfigurationStateSchema.parse(request.configuration);
       const configuration = await this.readConfiguration();
-      if (!configuration || JSON.stringify(configuration) !== JSON.stringify(request.configuration)) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
+      if (!configuration || JSON.stringify(configuration) !== JSON.stringify(expected)) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
       switch (request.type) {
         case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, configuration) } };
         case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, configuration) } };
@@ -163,7 +166,7 @@ export class StatelessWorker {
   private async readConfiguration(): Promise<MCPConfigurationState | null> {
     const path = this.input.mcpConfigPath;
     if (!path) throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP storage ownership is unavailable.', true);
-    return readNativeMcpConfigurationIfPresent(path, this.input.workspaceId);
+    return readNativeMcpConfigurationIfPresent(path, this.input.workspaceId, join(this.input.agentDirectory, 'mcp.json'));
   }
 
   private async catalog(input: CatalogOperation, revision: string): Promise<CatalogResult> {

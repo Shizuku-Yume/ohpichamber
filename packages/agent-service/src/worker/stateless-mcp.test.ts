@@ -25,7 +25,8 @@ async function fixture() {
 }
 
 async function persist(worker: StatelessWorker, server: MCPServerConfig, previous = '0') {
-  const configuration: MCPConfigurationState = { workspaceId: 'workspace', persistedRevision: (BigInt(previous) + 1n).toString(), config: { servers: [server] } };
+  const normalizedServer = { scope: 'project' as const, ...server };
+  const configuration: MCPConfigurationState = { workspaceId: 'workspace', persistedRevision: (BigInt(previous) + 1n).toString(), config: { servers: [normalizedServer] } };
   await worker.operation({ type: 'mcp', operation: { type: 'persist', request: { expectedPersistedRevision: previous, config: configuration.config }, configuration } });
   return configuration;
 }
@@ -34,7 +35,7 @@ test('stateless MCP secrets survive cold reopen, remain reference-only, and cann
   const { root, bootstrap } = await fixture();
   let worker: StatelessWorker | undefined;
   try {
-    worker = await StatelessWorker.open(bootstrap, async () => {});
+    worker = await StatelessWorker.open(bootstrap, async () => { });
     let configuration = await persist(worker, { serverId: 'tools', label: 'Tools', enabled: false, transport: { type: 'stdio', command: 'mcp-tool', args: [] } });
     const written = await worker.operation({ type: 'mcp', operation: { type: 'secret.write', serverId: 'tools', configuration, request: { persistedRevision: '1', value: '!literal-not-a-command' } } });
     if (written.type !== 'mcp' || written.result.type !== 'secret.written') throw new Error('Expected private secret receipt');
@@ -57,7 +58,7 @@ test('stateless MCP secrets survive cold reopen, remain reference-only, and cann
       foreignReference = (await new NativeMcpCredentials(runtime.authStorage, 'sibling-workspace').write('tools', '2', 'sibling-private-secret')).credentialRef;
     } finally { runtime.authStorage.close(); }
     expect((await readdir(bootstrap.agentDirectory)).some(name => name.startsWith('session'))).toBe(false);
-    worker = await StatelessWorker.open({ ...bootstrap, workerGeneration: 'reopened-generation' }, async () => {});
+    worker = await StatelessWorker.open({ ...bootstrap, workerGeneration: 'reopened-generation' }, async () => { });
     expect(await worker.operation({ type: 'mcp.configuration.read' })).toEqual({ type: 'mcp.configuration', configuration });
     await expect(persist(worker, { serverId: 'tools', label: 'Tools', enabled: false, transport: { type: 'stdio', command: 'mcp-tool', args: [], envCredentialRefs: { TOOL_KEY: foreignReference } } }, '2')).rejects.toMatchObject({ status: 403, code: 'UNAUTHORIZED' });
     expect(await worker.operation({ type: 'mcp.configuration.read' })).toEqual({ type: 'mcp.configuration', configuration });
@@ -68,19 +69,23 @@ test('stateless MCP test performs a real HTTP handshake with private headers and
   const { root, bootstrap } = await fixture();
   const received: string[] = [];
   const rpc = z.object({ id: z.union([z.number(), z.string()]).optional(), method: z.string(), params: z.object({ protocolVersion: z.string().optional() }).passthrough().optional() });
-  const endpoint = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: async request => {
-    if (request.method === 'GET') return new Response(null, { status: 405 });
-    if (request.method === 'DELETE') return new Response(null, { status: 204 });
-    received.push(request.headers.get('x-workspace-secret') ?? '');
-    const message = rpc.parse(await request.json());
-    if (message.id === undefined) return new Response(null, { status: 202 });
-    return Response.json({ jsonrpc: '2.0', id: message.id, result: message.method === 'initialize'
-      ? { protocolVersion: message.params?.protocolVersion ?? '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'native-mcp-test', version: '1' } }
-      : { tools: [{ name: 'fixture_tool', description: 'Native test tool', inputSchema: { type: 'object', properties: {} } }] } });
-  } });
+  const endpoint = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch: async request => {
+      if (request.method === 'GET') return new Response(null, { status: 405 });
+      if (request.method === 'DELETE') return new Response(null, { status: 204 });
+      received.push(request.headers.get('x-workspace-secret') ?? '');
+      const message = rpc.parse(await request.json());
+      if (message.id === undefined) return new Response(null, { status: 202 });
+      return Response.json({
+        jsonrpc: '2.0', id: message.id, result: message.method === 'initialize'
+          ? { protocolVersion: message.params?.protocolVersion ?? '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'native-mcp-test', version: '1' } }
+          : { tools: [{ name: 'fixture_tool', description: 'Native test tool', inputSchema: { type: 'object', properties: {} } }] }
+      });
+    }
+  });
   let worker: StatelessWorker | undefined;
   try {
-    worker = await StatelessWorker.open(bootstrap, async () => {});
+    worker = await StatelessWorker.open(bootstrap, async () => { });
     let configuration = await persist(worker, { serverId: 'remote', label: 'Remote', enabled: true, transport: { type: 'http', url: endpoint.url.href } });
     const written = await worker.operation({ type: 'mcp', operation: { type: 'secret.write', serverId: 'remote', configuration, request: { persistedRevision: '1', value: 'private-header-value' } } });
     if (written.type !== 'mcp' || written.result.type !== 'secret.written') throw new Error('Expected private secret receipt');

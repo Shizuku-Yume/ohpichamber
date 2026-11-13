@@ -458,7 +458,9 @@ export class WorkerSession {
     };
     const mcpCredentials = new NativeMcpCredentials(authStorage, input.workspaceId);
     const mcp = input.mcpConfigPath ? new WorkerMcp({
-      cwd: input.cwd, configPath: input.mcpConfigPath, worker, authStorage,
+      cwd: input.cwd, configPath: input.mcpConfigPath,
+      userConfigPath: join(input.agentDirectory, 'mcp.json'),
+      worker, authStorage,
       resolveCredentialRef: reference => mcpCredentials.resolve(reference),
       // authorizeServer already checked the Host-resolved command before this resolver is called.
       resolveCommand: async transport => transport.command,
@@ -619,7 +621,7 @@ export class WorkerSession {
       await owned.modeController.goal.reconcile();
       await owned.modeController.restore();
       capturePolicy = async () => {
-        const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
+        const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId, join(input.agentDirectory, 'mcp.json')) : null;
         publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
       };
       await capturePolicy();

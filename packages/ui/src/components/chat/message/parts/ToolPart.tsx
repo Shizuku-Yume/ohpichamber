@@ -33,8 +33,9 @@ import {
     toolInputPath,
     toolPresentation,
 } from '@/lib/toolHelpers';
-import { describeToolCall, describeToolResult } from '@/lib/toolPresentation';
+import { describeToolCall, describeToolResult, isMemoryTool } from '@/lib/toolPresentation';
 import { TodoCard } from './TodoCard';
+import { MemoryToolCard } from './MemoryToolCard';
 import { extractTodoPhases } from '../../todoData';
 import { toolDisplayStyles } from '@/lib/typography';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
@@ -1434,6 +1435,9 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                 const phases = extractTodoPhases(resultContent.details);
                                 return phases ? <TodoCard phases={phases} defaultExpanded /> : null;
                             })() : null}
+                            {isMemoryTool(toolName) && result && !result.isError ? (
+                                <MemoryToolCard toolName={toolName} input={call?.input ?? {}} result={resultContent} />
+                            ) : null}
                             <BlockLine onToggle={toggleRow} topOffset={1} />
                             <ToolExpandedContent
                                 part={part}

@@ -1,4 +1,14 @@
 import React from 'react';
+import type { OmpSettingsState } from '@openchamber/agent-contract';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
@@ -535,6 +545,93 @@ const AssistanceTab: React.FC = () => {
   const setDraftStartersVisible = useUIStore((state) => state.setDraftStartersVisible);
   const sessionRecapEnabled = useUIStore((state) => state.sessionRecapEnabled);
   const setSessionRecapEnabled = useUIStore((state) => state.setSessionRecapEnabled);
+  const settingsDirectory = useSettingsDirectory();
+  const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
+  const ompStateRef = React.useRef<OmpSettingsState | null>(null);
+  ompStateRef.current = ompState;
+
+  React.useEffect(() => {
+    let active = true;
+    const abort = new AbortController();
+    void (async () => {
+      try {
+        if (!settingsDirectory) return;
+        const workspace = await canonicalClient.resolveWorkspace(settingsDirectory, { signal: abort.signal });
+        const snapshot = await canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal);
+        if (!active || abort.signal.aborted) return;
+        setOmpState(snapshot);
+        const recapSetting = snapshot.settings.find((s) => s.id === 'recap.enabled');
+        if (typeof recapSetting?.value === 'boolean') {
+          setSessionRecapEnabled(recapSetting.value);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      active = false;
+      abort.abort();
+    };
+  }, [settingsDirectory, setSessionRecapEnabled]);
+
+  const recapIdleSeconds = React.useMemo(() => {
+    const raw = ompState?.settings.find((s) => s.id === 'recap.idleSeconds')?.value;
+    return typeof raw === 'number' && Number.isFinite(raw) ? raw : 240;
+  }, [ompState]);
+
+  const handleSessionRecapChange = React.useCallback(async (enabled: boolean) => {
+    setSessionRecapEnabled(enabled);
+    void updateDesktopSettings({ sessionRecapEnabled: enabled });
+    const current = ompStateRef.current;
+    if (!current) return;
+    try {
+      const next = await canonicalClient.updateOmpSettings(current.workspaceId, {
+        expectedRevision: current.revision,
+        changes: [{ id: 'recap.enabled', value: enabled }],
+      });
+      setOmpState(next);
+    } catch (error) {
+      if (error instanceof CanonicalApiError && error.problem.status === 409) {
+        try {
+          const latest = await canonicalClient.getOmpSettings(current.workspaceId);
+          const next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
+            expectedRevision: latest.revision,
+            changes: [{ id: 'recap.enabled', value: enabled }],
+          });
+          setOmpState(next);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [setSessionRecapEnabled]);
+
+  const handleRecapIdleSecondsChange = React.useCallback(async (value: number) => {
+    const current = ompStateRef.current;
+    if (!current) return;
+    const seconds = Number(value);
+    try {
+      const next = await canonicalClient.updateOmpSettings(current.workspaceId, {
+        expectedRevision: current.revision,
+        changes: [{ id: 'recap.idleSeconds', value: seconds }],
+      });
+      setOmpState(next);
+    } catch (error) {
+      if (error instanceof CanonicalApiError && error.problem.status === 409) {
+        try {
+          const latest = await canonicalClient.getOmpSettings(current.workspaceId);
+          const next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
+            expectedRevision: latest.revision,
+            changes: [{ id: 'recap.idleSeconds', value: seconds }],
+          });
+          setOmpState(next);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, []);
+
   const sessionSuggestionEnabled = useUIStore((state) => state.sessionSuggestionEnabled);
   const setSessionSuggestionEnabled = useUIStore((state) => state.setSessionSuggestionEnabled);
   const sessionReviewOfferEnabled = useUIStore((state) => state.sessionReviewOfferEnabled);
@@ -567,11 +664,44 @@ const AssistanceTab: React.FC = () => {
         />
         <SettingsCheckboxRow
           checked={sessionRecapEnabled}
-          onChange={setSessionRecapEnabled}
+          onChange={handleSessionRecapChange}
           label={t('settings.openchamber.visual.field.sessionRecap')}
           ariaLabel={t('settings.openchamber.visual.field.sessionRecapAria')}
           settingsItem="chat.session-recap"
         />
+        {sessionRecapEnabled ? (
+          <div className="ps-6 pb-1">
+            <SettingsFieldRow
+              label={t('settings.openchamber.visual.field.sessionRecapIdleSeconds')}
+              settingsItem="chat.session-recap.idle-seconds"
+              info={t('settings.openchamber.visual.field.sessionRecapIdleSecondsInfo')}
+            >
+              <Select
+                value={String(recapIdleSeconds)}
+                onValueChange={(val) => {
+                  const num = Number(val);
+                  if (Number.isFinite(num)) void handleRecapIdleSecondsChange(num);
+                }}
+              >
+                <SelectTrigger
+                  className="w-auto min-w-[10rem]"
+                  aria-label={t('settings.openchamber.visual.field.sessionRecapIdleSecondsAria')}
+                >
+                  <SelectValue>
+                    {(val) => t('settings.openchamber.visual.field.sessionRecapIdleSecondsOption', { count: Number(val) || 240 })}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {[60, 120, 240, 300, 600].map((seconds) => (
+                    <SelectItem key={seconds} value={String(seconds)}>
+                      {t('settings.openchamber.visual.field.sessionRecapIdleSecondsOption', { count: seconds })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingsFieldRow>
+          </div>
+        ) : null}
         <SettingsCheckboxRow
           checked={sessionSuggestionEnabled}
           onChange={setSessionSuggestionEnabled}

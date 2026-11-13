@@ -27,9 +27,7 @@ import { useProjectContextOwner } from '@/hooks/useProjectContextOwner';
 const AGENT_MEMORY_FRESH_MS = 60_000;
 
 export const useAgentMemorySync = (directory: string | null): void => {
-  const enabled = useUIStore((state) => (
-    state.agentMemoryFeatureAvailable && state.agentMemoryToolEnabled
-  ));
+  const enabled = useUIStore((state) => state.agentMemoryFeatureAvailable);
   const load = useAgentMemoryStore((state) => state.load);
   const owner = useProjectContextOwner(directory);
   const projectPath = owner?.path ?? null;

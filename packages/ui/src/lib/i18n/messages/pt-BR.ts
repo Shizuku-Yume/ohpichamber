@@ -9418,6 +9418,7 @@ export const dict = {
   ...m4LaneDI18n['pt-BR'],
   "gitIdentities.state.unknown": "As identidades do Git ainda não foram carregadas.",
   "settings.usage.state.unknown": "O uso ainda não foi carregado.",
+  "settings.usage.state.error": "Falha ao carregar o uso.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "A memória armazenada ainda não foi carregada.",
 
   "chat.workStatus.mcp.unknown": "Os servidores MCP ainda não foram carregados.",

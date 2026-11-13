@@ -9427,6 +9427,7 @@ export const dict = {
   ...m4LaneDI18n.uk,
   "gitIdentities.state.unknown": "Ідентичності Git ще не завантажено.",
   "settings.usage.state.unknown": "Використання ще не завантажено.",
+  "settings.usage.state.error": "Не вдалося завантажити використання.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Збережена пам'ять ще не завантажена.",
 
   "chat.workStatus.mcp.unknown": "Сервери MCP ще не завантажено.",

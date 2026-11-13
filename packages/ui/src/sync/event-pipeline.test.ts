@@ -52,7 +52,7 @@ describe("native canonical event pipeline", () => {
   test("attaches from the snapshot cursor and forwards native events", () => {
     const fake = fakeClient()
     const batches: CanonicalEvent[][] = []
-    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: (_target, events) => { batches.push([...events]); return true }, recover: async () => {} })
+    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: (_target, events) => { batches.push([...events]); return true }, recover: async () => { } })
     pipeline.attach(target, snapshot)
     fake.emit(nativeEvent)
     expect(fake.counts().cursor).toBe("epoch-1:4")
@@ -63,7 +63,7 @@ describe("native canonical event pipeline", () => {
 
   test("a cold snapshot without a worker does not request an event stream", () => {
     const fake = fakeClient()
-    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: () => true, recover: async () => {} })
+    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: () => true, recover: async () => { } })
     const cold = { ...snapshot, session: { ...snapshot.session, runtimeStatus: "unavailable" as const, activeRunId: null } }
     pipeline.attach(target, cold)
     expect(fake.counts().subscriptions).toBe(0)
@@ -74,7 +74,7 @@ describe("native canonical event pipeline", () => {
   test("destination attachment retires the source stream and rejects its late callbacks", () => {
     const fake = fakeClient()
     const received: SessionMessageTarget[] = []
-    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: (owner) => { received.push(owner); return true }, recover: async () => {} })
+    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: (owner) => { received.push(owner); return true }, recover: async () => { } })
     const destination = { ...target, directory: "/destination" }
     try {
       pipeline.attach(target, snapshot)
@@ -103,7 +103,7 @@ describe("native canonical event pipeline", () => {
   test("detach cancels callbacks so stale native events cannot publish", () => {
     const fake = fakeClient()
     const received: CanonicalEvent[] = []
-    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: (_target, events) => { received.push(...events); return true }, recover: async () => {} })
+    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: (_target, events) => { received.push(...events); return true }, recover: async () => { } })
     pipeline.attach(target, snapshot)
     pipeline.detach(target)
     fake.emit(nativeEvent)
@@ -117,8 +117,10 @@ describe("native canonical event pipeline", () => {
     let finish!: () => void
     let recoveries = 0
     let disconnected = 0
-    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: () => true,
-      recover: () => { recoveries += 1; return new Promise<void>((resolve) => { finish = resolve }) }, onDisconnect: () => { disconnected += 1 } })
+    const pipeline = createEventPipeline({
+      client: fake.client, isCurrent: () => true, onEvents: () => true,
+      recover: () => { recoveries += 1; return new Promise<void>((resolve) => { finish = resolve }) }, onDisconnect: () => { disconnected += 1 }
+    })
     try {
       pipeline.attach(target, snapshot)
       fake.fail(new TypeError("network"))
@@ -141,7 +143,7 @@ describe("native canonical event pipeline", () => {
   test("permanent errors use the long cap and manual recovery cancels that wait", () => {
     const time = clock()
     const fake = fakeClient()
-    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: () => true, recover: async () => {} })
+    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: () => true, recover: async () => { } })
     try {
       pipeline.attach(target, snapshot)
       fake.fail(canonicalNotFound)
@@ -174,7 +176,7 @@ describe("native canonical event pipeline", () => {
   test("detach aborts retry and directory eviction preserves unrelated streams", () => {
     const time = clock()
     const fake = fakeClient()
-    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: () => true, recover: async () => {} })
+    const pipeline = createEventPipeline({ client: fake.client, isCurrent: () => true, onEvents: () => true, recover: async () => { } })
     try {
       pipeline.attach(target, snapshot)
       pipeline.attach({ ...target, directory: "/other" }, snapshot)
@@ -185,5 +187,66 @@ describe("native canonical event pipeline", () => {
       pipeline.detach({ ...target, directory: "/other" })
       expect(time.delays()).toEqual([])
     } finally { pipeline.cleanup(); time.restore() }
+  })
+
+  test("feeding a delta every 5 ms flushes every 33 ± 5 ms", () => {
+    let currentTime = 1000
+    const dateSpy = spyOn(Date, "now").mockImplementation(() => currentTime)
+    type ScheduledTimer = { run: () => void; time: number }
+    const timerBox = { current: null as ScheduledTimer | null }
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((run: () => void, delay = 0) => {
+      timerBox.current = { run, time: currentTime + delay }
+      return 1
+    }) as typeof setTimeout)
+    const clearSpy = spyOn(globalThis, "clearTimeout").mockImplementation((() => {
+      timerBox.current = null
+    }) as typeof clearTimeout)
+
+    const fake = fakeClient()
+    const flushTimes: number[] = []
+    const pipeline = createEventPipeline({
+      client: fake.client,
+      isCurrent: () => true,
+      onEvents: () => {
+        flushTimes.push(currentTime)
+        return true
+      },
+      recover: async () => { },
+    })
+
+    try {
+      pipeline.attach(target, snapshot)
+      let seq = 5
+      // Feed events every 5 ms for 150 ms
+      for (let step = 0; step < 30; step++) {
+        currentTime += 5
+        if (timerBox.current && currentTime >= timerBox.current.time) {
+          const { run } = timerBox.current
+          timerBox.current = null
+          run()
+        }
+        fake.emit({ ...nativeEvent, sequence: String(seq++) })
+      }
+      if (timerBox.current) {
+        currentTime = timerBox.current.time
+        const { run } = timerBox.current
+        timerBox.current = null
+        run()
+      }
+      expect(flushTimes.length).toBeGreaterThanOrEqual(4)
+      const intervals: number[] = []
+      for (let i = 1; i < flushTimes.length; i++) {
+        intervals.push(flushTimes[i] - flushTimes[i - 1])
+      }
+      for (const interval of intervals) {
+        expect(interval).toBeGreaterThanOrEqual(28)
+        expect(interval).toBeLessThanOrEqual(38)
+      }
+    } finally {
+      pipeline.cleanup()
+      dateSpy.mockRestore()
+      timeoutSpy.mockRestore()
+      clearSpy.mockRestore()
+    }
   })
 })

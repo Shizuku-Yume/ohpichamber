@@ -2,7 +2,7 @@ import type { CanonicalEvent, SessionRuntimeStatus, SessionSnapshot } from "@ope
 import type { CanonicalClient } from "@/api/canonicalClient"
 import type { SessionMessageTarget } from "./session-message-loader"
 
-const FLUSH_FRAME_MS = 100
+const FLUSH_FRAME_MS = 33
 const RETRY_BACKOFF_BASE_MS = 250
 const RETRY_BACKOFF_CAP_VISIBLE_MS = 5_000
 const RETRY_BACKOFF_CAP_BACKGROUND_MS = 60_000

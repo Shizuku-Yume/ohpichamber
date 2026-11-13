@@ -18,6 +18,8 @@
  * - **New chat latency (create → run → first event)**: on a fresh chat,
  *   `POST /sessions` p50 must be ≤ 400 ms, and the first `part.delta` event
  *   after send must arrive within ≤ 600 ms.
+ * - **Stream cadence**: the UI event pipeline flushes live streaming events
+ *   every 33 ± 5 ms.
  *
  * The catalog, dispatch, and new-chat numbers are HTTP/SSE timings against the
  * server the caller names; the tab switch is measured in a real Chrome through CDP.
@@ -36,11 +38,12 @@ import process from "node:process"
 import { CdpClient, createPageTarget, evaluateValue, launchChrome, reservePort, resolveChrome, resolveProfileDir, wait } from "./cdp.mjs"
 import { percentile, round } from "./metrics.mjs"
 import { parseModelSelector } from "../../packages/agent-contract/src/index.ts"
+import { createEventPipeline } from "../../packages/ui/src/sync/event-pipeline.ts"
 
 const HELP = `Usage: bun run profile:omp -- [options]
 
-Measures the R8 and new-chat budgets: the OMP Settings tab switch, prompt dispatch on a new
-versus a warm session, repeated model/provider catalog reads, and new chat latency.
+Measures the R8, new-chat, and stream-cadence budgets: the OMP Settings tab switch, prompt dispatch on a new
+versus a warm session, repeated model/provider catalog reads, new chat latency, and stream cadence.
 
 Options:
   --url <url>              OpenChamber URL (default: http://localhost:3000)
@@ -286,6 +289,99 @@ const measureCreateRunFirstEvent = async (client, workspace, model, iterations =
   }
 }
 
+/**
+ * Measures the event pipeline flush cadence against live SSE stream deltas.
+ *
+ * Budget:
+ * - flushes every 33 ± 5 ms
+ */
+const measureStreamCadence = async (client, workspace, model) => {
+  const options = { providerId: model?.providerId ?? null, modelId: model?.modelId ?? null, agentId: null, variant: null, reasoningEffort: null }
+  const sessionRes = await client.json("/api/agent/v1/sessions", {
+    method: "POST",
+    body: JSON.stringify({ projectId: workspace.projectId, workspaceId: workspace.workspaceId, options }),
+  })
+  const session = sessionRes.session
+  const sessionId = session.sessionId
+  const cursor = `${session.epoch}:${session.headSequence}`
+  const controller = new AbortController()
+  const streamUrl = new URL(`/api/agent/v1/sessions/${sessionId}/events?cursor=${encodeURIComponent(cursor)}`, client.baseUrl)
+  const streamResponse = await fetch(streamUrl, {
+    headers: { cookie: client.cookie, origin: client.baseUrl, accept: "text/event-stream" },
+    signal: controller.signal,
+  })
+  if (!streamResponse.ok || !streamResponse.body) {
+    controller.abort()
+    throw new Error(`SSE stream connection failed with HTTP ${streamResponse.status}`)
+  }
+
+  const flushTimes = []
+  let onEventCallback = null
+  const pipelineClient = {
+    subscribeSessionEvents: (_sid, _cur, onEvent) => {
+      onEventCallback = onEvent
+      return () => { }
+    },
+  }
+  const pipeline = createEventPipeline({
+    client: pipelineClient,
+    isCurrent: () => true,
+    onEvents: () => {
+      flushTimes.push(performance.now())
+      return true
+    },
+    recover: async () => { },
+  })
+  pipeline.attach({ directory: workspace.path, sessionId }, { cursor, session: { sessionId, runtimeStatus: "running" } })
+
+  const reader = streamResponse.body.getReader()
+  const decoder = new TextDecoder()
+  const readPromise = (async () => {
+    let buffer = ""
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() ?? ""
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const parsed = JSON.parse(line.slice(6))
+            onEventCallback?.(parsed)
+            if (parsed.type === "turn.completed" || parsed.type === "run.completed") return
+          } catch { }
+        }
+      }
+    }
+  })()
+
+  await client.json(`/api/agent/v1/sessions/${sessionId}/runs`, {
+    method: "POST",
+    body: JSON.stringify({ input: { text: "Count from 1 to 20.", attachments: [], context: [] }, options }),
+  })
+
+  await Promise.race([readPromise, wait(30_000)])
+  controller.abort()
+  pipeline.cleanup()
+  await waitIdle(client, sessionId)
+
+  const intervals = []
+  for (let i = 1; i < flushTimes.length; i++) {
+    intervals.push(round(flushTimes[i] - flushTimes[i - 1]))
+  }
+  const warmIntervals = intervals.slice(1)
+  const activeIntervals = warmIntervals.length ? warmIntervals : intervals
+  return {
+    p50IntervalMs: percentile(activeIntervals, 0.5),
+    minIntervalMs: round(Math.min(...activeIntervals)),
+    maxIntervalMs: round(Math.max(...activeIntervals)),
+    samples: activeIntervals,
+    budgetIntervalMs: 33,
+    budgetToleranceMs: 5,
+  }
+}
+
 const OMP_NAV = `[...document.querySelectorAll('button')].find((button) => (button.textContent ?? '').trim() === 'OMP')`
 const OMP_HEADING = `!!document.querySelector('[data-settings-page-heading]')?.textContent?.includes('OMP')`
 
@@ -353,6 +449,9 @@ const main = async () => {
 
   summary.newChat = await measureCreateRunFirstEvent(client, workspace, model, options.newChatRuns)
   console.log(`new chat: POST /sessions p50 ${summary.newChat.createSession.p50Ms} ms (budget 400 ms), first part.delta after send p50 ${summary.newChat.firstDeltaAfterSend.p50Ms} ms (budget 600 ms)`)
+
+  summary.streamCadence = await measureStreamCadence(client, workspace, model)
+  console.log(`stream cadence: p50 flush interval ${summary.streamCadence.p50IntervalMs} ms (budget 33 ± 5 ms)`)
 
   if (!options.skipUi) {
     const profile = resolveProfileDir(options.profileDir, "omp-performance")

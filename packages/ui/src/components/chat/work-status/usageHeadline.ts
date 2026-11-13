@@ -1,3 +1,4 @@
+import { useQuotaStore } from '@/stores/useQuotaStore';
 import type { UsageProviderGroup, UsageLimitRow } from '@/components/usage/usageGroups';
 
 /**
@@ -10,32 +11,16 @@ import type { UsageProviderGroup, UsageLimitRow } from '@/components/usage/usage
  * answer "can I keep working right now".
  */
 
-/**
- * Quota provider ids mostly match OpenCode provider ids; these are the ones
- * that do not. Unmatched providers simply produce no headline.
- *
- * `claude-agent` is OpenCode's built-in Claude Agent provider and `claude-code`
- * the one the opencode-claude plugin registers; both bill against the same
- * Claude subscription the `claude` quota reports.
- * `kilocode` / `kilo-code` are the same Kilo Gateway account as `kilo`.
- */
-const QUOTA_PROVIDER_ALIASES = new Map<string, string>([
-  ['openai', 'codex'],
-  ['chatgpt', 'codex'],
-  ['anthropic', 'claude'],
-  ['claude-agent', 'claude'],
-  ['claude-code', 'claude'],
-  ['gemini', 'google'],
-  ['kilocode', 'kilo'],
-  ['kilo-code', 'kilo'],
-]);
-
 const normalize = (value: string | null | undefined): string => (value ?? '').trim().toLowerCase();
 
-export const resolveQuotaProviderId = (modelProviderId: string | null | undefined): string | null => {
+export const resolveQuotaProviderId = (
+  modelProviderId: string | null | undefined,
+  mapping?: Record<string, string>,
+): string | null => {
   const normalized = normalize(modelProviderId);
   if (!normalized) return null;
-  return QUOTA_PROVIDER_ALIASES.get(normalized) ?? normalized;
+  const nativeToLogical = mapping ?? useQuotaStore.getState().nativeToLogical;
+  return nativeToLogical[normalized] ?? normalized;
 };
 
 /**
@@ -48,8 +33,9 @@ export const resolveQuotaProviderId = (modelProviderId: string | null | undefine
 export const pickUsageHeadline = (
   groups: readonly UsageProviderGroup[],
   modelProviderId: string | null | undefined,
+  mapping?: Record<string, string>,
 ): { group: UsageProviderGroup; row: UsageLimitRow } | null => {
-  const quotaProviderId = resolveQuotaProviderId(modelProviderId);
+  const quotaProviderId = resolveQuotaProviderId(modelProviderId, mapping);
   if (!quotaProviderId) return null;
 
   const group = groups.find((candidate) => normalize(candidate.providerId) === quotaProviderId);

@@ -6,10 +6,14 @@ import { useConfigStore } from './useConfigStore';
 
 const result = (providerId: QuotaProviderId = 'claude'): ProviderResult => ({
   providerId, providerName: providerId, ok: true, configured: true, fetchedAt: 123,
-  usage: { windows: { session: {
-    usedPercent: 42, remainingPercent: 58, windowSeconds: 18000,
-    resetAfterSeconds: 100, resetAt: 1000, resetAtFormatted: null, resetAfterFormatted: null,
-  } } },
+  usage: {
+    windows: {
+      session: {
+        usedPercent: 42, remainingPercent: 58, windowSeconds: 18000,
+        resetAfterSeconds: 100, resetAt: 1000, resetAtFormatted: null, resetAfterFormatted: null,
+      }
+    }
+  },
 });
 const json = (body: ProviderResult) => Response.json(body);
 const pause = () => new Promise(resolve => setTimeout(resolve, 5));
@@ -23,9 +27,14 @@ let handleRequest: (url: string, signal?: AbortSignal | null) => Promise<Respons
 const network = spyOn(globalThis, 'fetch');
 
 beforeEach(() => {
-  useConfigStore.setState({ workspaceId: 'ws_quota_test' });
+  useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_quota_test' });
   useQuotaStore.getState().resetForRuntimeSwitch();
-  handleRequest = async () => json(result());
+  handleRequest = async (url) => {
+    if (url.includes('/api/quota/providers')) {
+      return Response.json({ providers: ['claude', 'codex'], nativeToLogical: {} });
+    }
+    return json(result());
+  };
   network.mockImplementation((input, init) => handleRequest(input.toString(), init?.signal));
 });
 afterEach(() => {
@@ -38,7 +47,10 @@ describe('quota refresh failure is not empty success', () => {
   test('keeps the exact previous snapshot, configuration and timestamp on network failure', async () => {
     await useQuotaStore.getState().fetchQuotas(['claude']);
     const before = useQuotaStore.getState();
-    handleRequest = async () => { throw new Error('network down'); };
+    handleRequest = async (url) => {
+      if (url.includes('/api/quota/providers')) return Response.json({ providers: ['claude'], nativeToLogical: {} });
+      throw new Error('network down');
+    };
     expect(await useQuotaStore.getState().fetchQuotas(['claude'])).toBe(false);
     const after = useQuotaStore.getState();
     expect(after.results).toBe(before.results);
@@ -59,7 +71,8 @@ describe('quota refresh failure is not empty success', () => {
 
   test('another provider succeeding does not clear a failed provider or its error', async () => {
     await useQuotaStore.getState().fetchProviderQuota('claude');
-    handleRequest = async url => {
+    handleRequest = async (url) => {
+      if (url.includes('/api/quota/providers')) return Response.json({ providers: ['claude', 'codex'], nativeToLogical: {} });
       if (String(url).split('?')[0].endsWith('/claude')) throw new Error('claude unreachable');
       await pause();
       return json(result('codex'));
@@ -184,12 +197,102 @@ describe('quota request deadline', () => {
 });
 
 
-describe('runtime reset', () => {
+describe('workspace-scoped quota context', () => {
+  test('a directory switch drops the old workspace results before the next catalog resolves', async () => {
+    const ensure = useQuotaStore.getState().ensureLoadedForRuntime;
+    useQuotaStore.setState({ ensureLoadedForRuntime: async () => { } });
+    try {
+      useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_quota_test', activeDirectoryKey: 'dir_a' });
+      await useQuotaStore.getState().fetchProviderQuota('claude');
+      expect(useQuotaStore.getState().results).toHaveLength(1);
+
+      useConfigStore.setState({ activeDirectoryKey: 'dir_b', workspaceId: '' });
+      expect(useQuotaStore.getState().results).toEqual([]);
+      expect(useQuotaStore.getState().refreshErrors).toEqual({});
+    } finally {
+      useQuotaStore.setState({ ensureLoadedForRuntime: ensure });
+    }
+  });
+
+  test('a workspace published before initialization triggers a load once initialized', async () => {
+    let ensured = 0;
+    const ensure = useQuotaStore.getState().ensureLoadedForRuntime;
+    useQuotaStore.setState({ ensureLoadedForRuntime: async () => { ensured += 1; } });
+    try {
+      useConfigStore.setState({ isInitialized: false, workspaceId: 'ws_quota_test' });
+      expect(ensured).toBe(0);
+      useConfigStore.setState({ isInitialized: true });
+      expect(ensured).toBe(1);
+    } finally {
+      useQuotaStore.setState({ ensureLoadedForRuntime: ensure });
+    }
+  });
+
+  test('an in-flight request from the previous workspace cannot land after a switch', async () => {
+    const ensure = useQuotaStore.getState().ensureLoadedForRuntime;
+    useQuotaStore.setState({ ensureLoadedForRuntime: async () => { } });
+    try {
+      const marked = (usedPercent: number) => ({
+        ...result(),
+        usage: { windows: { session: { ...result().usage!.windows.session, usedPercent } } },
+      });
+      useConfigStore.setState({ isInitialized: true, activeDirectoryKey: 'dir_a', workspaceId: 'ws_a' });
+      const previous = deferredResponse();
+      handleRequest = async (url) => String(url).includes('workspaceId=ws_a') ? previous.promise : json(marked(22));
+      const pendingPrevious = useQuotaStore.getState().fetchProviderQuota('claude');
+      await pause();
+
+      useConfigStore.setState({ activeDirectoryKey: 'dir_b', workspaceId: '' });
+      useConfigStore.setState({ workspaceId: 'ws_b' });
+      await useQuotaStore.getState().fetchProviderQuota('claude');
+
+      previous.complete(json(marked(11)));
+      await pendingPrevious;
+      expect(useQuotaStore.getState().results).toHaveLength(1);
+      expect(useQuotaStore.getState().results[0].usage?.windows.session.usedPercent).toBe(22);
+    } finally {
+      useQuotaStore.setState({ ensureLoadedForRuntime: ensure });
+    }
+  });
+
   test('runtime switch clears workspace results', async () => {
     useConfigStore.setState({ isInitialized: true, activeDirectoryKey: 'dir_a', workspaceId: 'ws_a' });
     await useQuotaStore.getState().fetchProviderQuota('claude');
     expect(useQuotaStore.getState().results).toHaveLength(1);
     useQuotaStore.getState().resetForRuntimeSwitch();
     expect(useQuotaStore.getState().results).toEqual([]);
+    expect(useQuotaStore.getState().loadedWorkspaceId).toBeNull();
+  });
+
+  test('quota requests carry workspaceId query parameter', async () => {
+    useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_scoped_1' });
+    const urls: string[] = [];
+    handleRequest = async (url) => {
+      urls.push(url);
+      if (url.includes('/api/quota/providers')) {
+        return json({ providers: ['claude'], nativeToLogical: { anthropic: 'claude' } });
+      }
+      return json(result());
+    };
+    await useQuotaStore.getState().fetchQuotas(['claude']);
+    expect(urls.some((u) => u.includes('/api/quota/providers') && u.includes('workspaceId=ws_scoped_1'))).toBe(true);
+    expect(urls.some((u) => u.includes('/api/quota/claude') && u.includes('workspaceId=ws_scoped_1'))).toBe(true);
+  });
+
+  test('a failed provider-list read sets one error state and does not fan out to providers', async () => {
+    useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_scoped_error' });
+    const providerUrls: string[] = [];
+    handleRequest = async (url) => {
+      if (url.includes('/api/quota/providers')) {
+        return new Response(JSON.stringify({ error: 'Catalog unavailable' }), { status: 503 });
+      }
+      providerUrls.push(url);
+      return json(result());
+    };
+    const answered = await useQuotaStore.getState().fetchQuotas(['claude', 'codex', 'deepseek']);
+    expect(answered).toBe(false);
+    expect(useQuotaStore.getState().phase).toBe('error');
+    expect(useQuotaStore.getState().error).toBe('Quota provider catalog unavailable');
+    expect(providerUrls).toHaveLength(0);
   });
 });

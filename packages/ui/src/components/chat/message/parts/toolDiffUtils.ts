@@ -74,6 +74,10 @@ export interface ToolDiff {
     deletions: number;
 }
 
+function normalizeFileOp(op?: string): 'create' | 'delete' | 'update' | undefined {
+    return op === 'create' || op === 'delete' || op === 'update' ? op : undefined;
+}
+
 /** Convert the SDK's numbered compact diff, not a tool input, to unified hunks.
  * Context/deletions carry old line numbers; additions carry new line numbers.
  * Blank/ellipsis rows separate regions, as in pi-tui's nativeDiff renderer.
@@ -119,6 +123,21 @@ function parseNativeDiff(path: string, text: string): Omit<ToolDiff, 'path'> | u
     close();
     if (!hunks.length) return undefined;
     return { diff: `--- a/${path}\n+++ b/${path}\n${hunks.join('\n')}\n`, additions, deletions };
+}
+
+function parseDiffHunks(path: string, text: string): Omit<ToolDiff, 'path'> | undefined {
+    if (!text.trim()) return { diff: '', additions: 0, deletions: 0 };
+    if (text.startsWith('---') || text.startsWith('@@')) {
+        let additions = 0;
+        let deletions = 0;
+        for (const line of text.split('\n')) {
+            if (line.startsWith('+++') || line.startsWith('---')) continue;
+            if (line.startsWith('+')) additions++;
+            else if (line.startsWith('-')) deletions++;
+        }
+        return { diff: text, additions, deletions };
+    }
+    return parseNativeDiff(path, text);
 }
 
 const AST_EDIT_CHANGE_LINE_RE = /^([+\- ])\s*(\d+)\s*(?:│|[:|])\s*(.*)$/;
@@ -225,6 +244,20 @@ function parseAstEditOutput(output: unknown): ToolFileChange[] {
 }
 /** Successful native mutations only; call inputs are never evidence of a diff. */
 export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): ToolFileChange[] {
+    if (part.type === 'tool_call') {
+        if (!isEditTool(part.toolName) || !part.editPreview?.files) return [];
+        return part.editPreview.files.flatMap((file): ToolFileChange[] => {
+            if (!file || file.error) return [];
+            const path = file.path;
+            if (workspaceRelativePath(path) === null) return [];
+            const parsed = file.diff ? parseDiffHunks(path, file.diff) : undefined;
+            return [{
+                path: normalizeWorkspaceToolPath(path),
+                op: normalizeFileOp(file.op),
+                ...parsed,
+            }];
+        });
+    }
     if (part.type !== 'tool_result' || part.isError) return [];
     const call = pairedCall?.toolCallId === part.toolCallId && pairedCall.toolName === part.toolName ? pairedCall : undefined;
     if (isWriteTool(part.toolName)) {
@@ -239,7 +272,22 @@ export function getToolFileChanges(part: ToolPart, pairedCall?: ToolCallPart): T
     }
     if (!isEditTool(part.toolName)) return [];
     const details = editResultSchema.safeParse(part.output).data?.details;
-    if (!details) return [];
+    if (!details) {
+        if (call?.editPreview?.files) {
+            return call.editPreview.files.flatMap((file): ToolFileChange[] => {
+                if (!file || file.error) return [];
+                const path = file.path;
+                if (workspaceRelativePath(path) === null) return [];
+                const parsed = file.diff ? parseDiffHunks(path, file.diff) : undefined;
+                return [{
+                    path: normalizeWorkspaceToolPath(path),
+                    op: normalizeFileOp(file.op),
+                    ...parsed,
+                }];
+            });
+        }
+        return [];
+    }
     const files = details.perFileResults ?? (details.path ? [{ ...details, path: details.path }] : []);
     return files.flatMap((file): ToolFileChange[] => {
         if (!file || ('isError' in file && file.isError)) return [];

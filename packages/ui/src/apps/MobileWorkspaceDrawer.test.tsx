@@ -2,19 +2,27 @@ import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
+import { I18nProvider } from '@/lib/i18n';
 
-const dom = new Window({ url: 'https://app.test' });
-Object.assign(globalThis, {
-  window: dom,
-  document: dom.document,
-  navigator: dom.navigator,
-  HTMLElement: dom.HTMLElement,
-  Element: dom.Element,
-  Node: dom.Node,
-  Event: dom.Event,
-  KeyboardEvent: dom.KeyboardEvent,
-  IS_REACT_ACT_ENVIRONMENT: true,
-});
+if (!globalThis.window) {
+  const dom = new Window({ url: 'http://localhost' });
+  Object.assign(globalThis, {
+    window: dom,
+    document: dom.document,
+    navigator: dom.navigator,
+    HTMLElement: dom.HTMLElement,
+    Element: dom.Element,
+    Node: dom.Node,
+    Event: dom.Event,
+    KeyboardEvent: dom.KeyboardEvent,
+    MouseEvent: dom.MouseEvent,
+    MutationObserver: dom.MutationObserver,
+    requestAnimationFrame: dom.requestAnimationFrame.bind(dom),
+    cancelAnimationFrame: dom.cancelAnimationFrame.bind(dom),
+    getComputedStyle: dom.getComputedStyle.bind(dom),
+    IS_REACT_ACT_ENVIRONMENT: true,
+  });
+}
 
 let lastTabClosedHandler: (() => void) | undefined;
 let terminalViewMounted = false;
@@ -30,14 +38,6 @@ mock.module('@/components/views/TerminalView', () => ({
     }, []);
     return <div data-testid="terminal-view" data-visible={visible}>Terminal</div>;
   },
-}));
-
-mock.module('@/lib/i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
-}));
-
-mock.module('@/stores/useUIStore', () => ({
-  useUIStore: () => [],
 }));
 
 mock.module('@/hooks/useEdgeSwipe', () => ({
@@ -60,7 +60,6 @@ mock.module('@/components/context/ProjectContextPanel', () => ({
   ProjectContextPanel: () => <div />,
 }));
 
-// Static import of the component under test
 import { MobileWorkspaceDrawer } from './MobileWorkspaceDrawer';
 
 describe('MobileWorkspaceDrawer terminal lifecycle', () => {
@@ -72,7 +71,7 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
     terminalViewMounted = false;
     container = document.createElement('div');
     document.body.append(container);
-    root = createRoot(container);
+    root = createRoot(container as unknown as Element);
   });
 
   afterEach(() => {
@@ -86,15 +85,17 @@ describe('MobileWorkspaceDrawer terminal lifecycle', () => {
 
     await act(async () => {
       root.render(
-        <MobileWorkspaceDrawer
-          open={true}
-          tab="terminal"
-          onClose={onClose}
-          onTabChange={() => undefined}
-          pendingChangesDiff={null}
-          onOpenPlan={() => undefined}
-          variant="panel"
-        />,
+        <I18nProvider>
+          <MobileWorkspaceDrawer
+            open={true}
+            tab="terminal"
+            onClose={onClose}
+            onTabChange={() => undefined}
+            pendingChangesDiff={null}
+            onOpenPlan={() => undefined}
+            variant="panel"
+          />
+        </I18nProvider>,
       );
     });
 

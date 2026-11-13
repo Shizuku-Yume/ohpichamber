@@ -4,8 +4,10 @@ import type { Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
 import type { DesktopHost, HostProbeResult } from '@/lib/desktopHosts';
 
-const dom = new Window({ url: 'http://localhost/' });
+const dom = (globalThis.window as unknown as Window | undefined) ?? new Window({ url: 'http://localhost/' });
+(dom as unknown as { __OPENCHAMBER_ELECTRON__: unknown }).__OPENCHAMBER_ELECTRON__ = { runtime: 'electron' };
 Object.assign(globalThis, {
+  __OPENCHAMBER_ELECTRON__: { runtime: 'electron' },
   window: dom, document: dom.document, navigator: dom.navigator, localStorage: dom.localStorage,
   Node: dom.Node, Element: dom.Element, HTMLElement: dom.HTMLElement,
   Event: dom.Event, MouseEvent: dom.MouseEvent, MutationObserver: dom.MutationObserver,

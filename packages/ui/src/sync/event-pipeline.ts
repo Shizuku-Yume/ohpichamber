@@ -1,4 +1,4 @@
-import type { CanonicalEvent, SessionSnapshot } from "@openchamber/agent-contract"
+import type { CanonicalEvent, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
 import type { CanonicalClient } from "@/api/canonicalClient"
 import type { SessionMessageTarget } from "./session-message-loader"
 
@@ -28,8 +28,13 @@ export type EventPipelineInput = {
   onDisconnect?: (target: SessionMessageTarget, error?: unknown) => void
 }
 
+export type EventPipelineAttachTarget = {
+  cursor: string
+  session: { sessionId: string; runtimeStatus: SessionRuntimeStatus }
+}
+
 export type EventPipeline = {
-  attach: (target: SessionMessageTarget, snapshot: SessionSnapshot) => void
+  attach: (target: SessionMessageTarget, snapshot: SessionSnapshot | EventPipelineAttachTarget) => void
   invalidate: (target: SessionMessageTarget) => void
   detach: (target: SessionMessageTarget) => void
   clearDirectory: (directory: string) => void
@@ -101,7 +106,7 @@ export function createEventPipeline(input: EventPipelineInput): EventPipeline {
     else stream.failures = 0
   }
 
-  const attach = (target: SessionMessageTarget, snapshot: SessionSnapshot) => {
+  const attach = (target: SessionMessageTarget, snapshot: SessionSnapshot | EventPipelineAttachTarget) => {
     if (disposed || !input.isCurrent() || target.sessionId !== snapshot.session.sessionId) return
     // A cold snapshot has no worker-owned stream; subscribing would 404 and
     // start no worker. The next snapshot after a mutation re-attaches.

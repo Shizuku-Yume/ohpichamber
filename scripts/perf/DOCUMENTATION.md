@@ -21,7 +21,7 @@ or extending these scripts. The methodology rules they enforce come from
 | `bun run profile:toggle` | What opening and closing the left session sidebar and the right context panel costs, per toggle. |
 | `bun run profile:ios` | What the iOS app does on a real iPhone, over its WebKit inspector: tap to keyboard, per-frame positions through a keyboard open, the heaviest subtrees. Setup in the `performance-engineering` skill, `references/ios-webkit.md`. |
 | `bun run profile:compare` | Whether a change made the scenarios faster or slower: builds the before and the after, measures both the same way, prints one table. |
-| `bun run profile:omp` | The three R8 budgets against a running server: repeated model/provider catalog reads, prompt dispatch on a new versus a warm session, and the OMP Settings page switch over CDP. |
+| `bun run profile:omp` | The R8 and new-chat budgets against a running server: repeated model/provider catalog reads, prompt dispatch on a new versus a warm session, new chat latency (`create → run → first event`), and the OMP Settings page switch over CDP. |
 | `bun run profile:serve` | An isolated server with the fixture provider, to run the commands above by hand. |
 | `bun run profile:analyze` | Where one run's time went: functions, source files, components, long tasks, renders. |
 | `bun run build:web:diag` | Not a capture: the diagnostic build that names functions and components (Attribution below). |

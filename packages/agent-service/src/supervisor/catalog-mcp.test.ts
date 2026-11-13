@@ -175,6 +175,74 @@ test('reconnect finalizes earlier retired generations and holds new worker admis
     expect((await admission).mcpConfiguration.persistedRevision).toBe('1');
   } finally { releaseSecond.resolve(); await rm(directory, { recursive: true, force: true }); }
 });
+test('the generation guard keeps a late registration from overwriting a newer one', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'catalog-generation-guard-'));
+  const coordinator = new CatalogCoordinator(directory, {
+    readMcpConfiguration: async () => null,
+    commitMcp: async () => { throw new Error('Unrelated MCP mutation'); },
+  });
+  await coordinator.initialize();
+  await coordinator.registerWorkspace('workspace', 'agent');
+
+  const rootSessionId = 'session-1';
+  let firstLive = true;
+  const firstIdentity = { rootSessionId, workspaceId: 'workspace', agentDirectoryId: 'agent', workerGeneration: 'gen-1' };
+  const firstCatalog: MCPCatalogState = { worker: firstIdentity, runtimeStatus: 'ready', appliedRevision: '0', catalogRevision: '1', activeServers: [], tools: [] };
+  const firstDeferred = Promise.withResolvers<void>();
+  const firstWorker: CatalogWorker = {
+    identity: firstIdentity,
+    isLive: () => firstLive,
+    mcp: {
+      read: async configuration => {
+        await firstDeferred.promise;
+        return { configuration, workerCatalog: firstCatalog };
+      },
+      apply: async () => { throw new Error('Unused'); },
+      reconnect: async () => { throw new Error('Unused'); },
+      oauth: async () => { throw new Error('Unused'); },
+      oauthStatus: async () => { throw new Error('Unused'); },
+    },
+    skills: {
+      read: async persistedSources => ({ worker: firstIdentity, agentDirectoryId: 'agent', runtimeStatus: 'ready', persistedSources, appliedSources: null, catalogRevision: '1', skills: [] }),
+      apply: async () => { throw new Error('Unused'); },
+      expand: async () => { throw new Error('Unused'); },
+    },
+  };
+
+  const firstRegistering = coordinator.register(firstWorker);
+
+  const secondLive = true;
+  const secondIdentity = { rootSessionId, workspaceId: 'workspace', agentDirectoryId: 'agent', workerGeneration: 'gen-2' };
+  const secondCatalog: MCPCatalogState = { worker: secondIdentity, runtimeStatus: 'ready', appliedRevision: '0', catalogRevision: '2', activeServers: [], tools: [{ toolName: 'second-tool', description: 'from gen-2', inputSchema: {} }] };
+  const secondWorker: CatalogWorker = {
+    identity: secondIdentity,
+    isLive: () => secondLive,
+    mcp: {
+      read: async configuration => ({ configuration, workerCatalog: secondCatalog }),
+      apply: async () => { throw new Error('Unused'); },
+      reconnect: async () => { throw new Error('Unused'); },
+      oauth: async () => { throw new Error('Unused'); },
+      oauthStatus: async () => { throw new Error('Unused'); },
+    },
+    skills: {
+      read: async persistedSources => ({ worker: secondIdentity, agentDirectoryId: 'agent', runtimeStatus: 'ready', persistedSources, appliedSources: null, catalogRevision: '2', skills: [] }),
+      apply: async () => { throw new Error('Unused'); },
+      expand: async () => { throw new Error('Unused'); },
+    },
+  };
+
+  firstLive = false;
+  await coordinator.register(secondWorker);
+
+  firstDeferred.resolve();
+  await firstRegistering.catch(() => { });
+
+  const mcp = await coordinator.readMcp(rootSessionId);
+  expect(mcp.workerCatalog.worker.workerGeneration).toBe('gen-2');
+  expect(mcp.workerCatalog.tools).toEqual(secondCatalog.tools);
+
+  await rm(directory, { recursive: true, force: true });
+});
 
 test('configureWorkspaceMcp reports applied, saved-needs-auth, and saved-not-connected outcomes', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-outcomes-'));

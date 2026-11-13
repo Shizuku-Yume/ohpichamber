@@ -220,8 +220,12 @@ export class CatalogCoordinator {
     if (!workspace || !workspace.agentDirectoryIds.includes(worker.identity.agentDirectoryId)) {
       throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The worker workspace or agent directory is not registered in the catalog', {});
     }
+    if (!await this.live(worker)) return;
     const previous = this.workers.get(worker.identity.rootSessionId);
-    if (previous && previous.identity.workerGeneration !== worker.identity.workerGeneration) this.dropWorker(previous);
+    if (previous && previous.identity.workerGeneration !== worker.identity.workerGeneration) {
+      if (await this.live(previous)) return;
+      this.dropWorker(previous);
+    }
     this.workers.set(worker.identity.rootSessionId, worker);
     try {
       await this.ensureHydrated(worker.identity.workspaceId, worker.identity.agentDirectoryId);

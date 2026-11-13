@@ -13,7 +13,7 @@
   - longest task: 45.83 ms, long tasks (>50ms): 0, tasks >16.7ms: 7, tasks >8.33ms: 19
   - scheduled timer call sites: ~100 ms cadence (`setTimeout(96)`, `setTimeout(98)`, `setTimeout(99)`)
 **Base commit:** e4cd04fe83a4c2586a92f479f959f27f71f7879e
-**Review:** pass (base e4cd04fe83a4c2586a92f479f959f27f71f7879e)
+**Review:** pass (reviewer subagent ufb-18.Reviewer round 1: 2 blocking findings [P1: ToolPart shouldRenderResult did not permit preview-bearing tool_call; P2: projection message_end cleared toolCallPreviews and did not preserve editPreview]; both fixed and verified with tests in round 2; base e4cd04fe83a4c2586a92f479f959f27f71f7879e)
 
 - [x] Set the pipeline flush to 33 ms; streaming text passes straight through the throttle hook, keeping its identity reset.
 - [x] Skip `part.updated` when the redacted tool input equals the last emitted one.
@@ -35,6 +35,6 @@ Check after:
 - `profile:omp` stream cadence scenario (`scripts/perf/omp-performance.mjs`):
   - Stream cadence p50 flush interval: 33.20 ms (budget: 33 ± 5 ms; receipt in `task18/omp-performance/omp-performance.json`).
 - Fixed pre-existing bug in `packages/web/server/lib/openchamber-control/service.js` which called `isBoolean(input.wait)` without importing `isBoolean` from `../shared/guards.js`.
-- Real path: attempted real provider at `https://cli.shizukuyume.com/v1` from `~/.config/ohpichamber/omp-m0-provider.env` (`gemini-3.5-flash-lite`); returned HTTP 401 Unauthorized with the provided API key. On the isolated server on port 4118 with fixture provider (`perf/stream-300cps`), text streams per frame with 33 ms cadence, quiet tool input updates skip redundant frames, and live edit preview diffs render while arguments stream.
+- Real path: attempted real provider at `https://cli.shizukuyume.com/v1` from `~/.config/ohpichamber/omp-m0-provider.env` (`gemini-3.5-flash-lite`); both `GET /models` and `POST /chat/completions` returned HTTP 401 Unauthorized with the provided API key. On the isolated fixture provider, text streaming cadence was measured via `profile:omp` (flush interval p50 33.20 ms, timer delays at ~30 ms; not confirmed by human visual inspection). Live edit previews while arguments stream and quiet tool-input updates are verified by automated unit and projection tests (`toolDiffUtils.test.ts`, `projection.test.ts`, `ToolPart.diff-stats.test.tsx`), not visually observed on a live provider run because the fixture provider does not emit incremental tool argument streams with `tool_stream_update`.
 
-Review: pass (base e4cd04fe83a4c2586a92f479f959f27f71f7879e)
+Review: pass (reviewer subagent ufb-18.Reviewer round 1: 2 blocking findings [P1: ToolPart shouldRenderResult did not permit preview-bearing tool_call; P2: projection message_end cleared toolCallPreviews and did not preserve editPreview]; both fixed and verified with tests in round 2; base e4cd04fe83a4c2586a92f479f959f27f71f7879e)

@@ -2,6 +2,7 @@ import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
 import type { ToolGroup, ToolPresentation } from './types';
+import { evalResultSummary } from './toolView';
 
 /** A JSON field's non-blank text. */
 const text = (value: JsonValue | undefined, max = 160): string | null => {
@@ -200,10 +201,7 @@ export const TOOL_PRESENTATIONS = {
     eval: {
         label: 'Eval', icon: 'code', group: 'call', outputLanguage: 'text',
         describeCall: (input) => inputText(input, 'title', 'language', 'code'),
-        describeResult: (result) => {
-            const cells = z.array(z.unknown()).safeParse(detailValue(result, 'cells')).data;
-            return cells?.length ? `${cells.length} cells` : null;
-        },
+        describeResult: evalResultSummary,
     },
     github: plainTool('GitHub', 'github', ['op', 'repo', 'query']),
     glob: queryTool('Glob', 'file-search', ['path', 'pattern']),

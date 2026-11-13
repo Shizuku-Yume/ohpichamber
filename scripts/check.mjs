@@ -63,6 +63,11 @@ const steps = [
     command: 'node',
     args: ['scripts/check-css-classes.mjs'],
   },
+  {
+    name: 'upstream-gaps',
+    command: 'node',
+    args: ['scripts/upstream-gaps.mjs', '--check'],
+  },
 ];
 
 const failed = [];

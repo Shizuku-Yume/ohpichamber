@@ -16,7 +16,7 @@ const provider = { providerId: 'provider_1', name: 'Provider', endpoint: 'https:
 const agent = { agentId: 'agent_1', name: 'Reviewer', description: 'Reviews changes', model: selection, allowedTools: ['read'] };
 const providerConfiguration = { providerId: 'provider_1', name: 'Provider', endpoint: provider.endpoint, protocol: 'chat-completions', credentialRef: 'credential_1' };
 const transport = { type: 'stdio', command: 'mcp-tool', args: ['--mode', 'read'], envCredentialRefs: { API_KEY: 'credential_1' } };
-const server = { serverId: 'server_1', label: 'Workspace tools', enabled: true, transport };
+const server = { serverId: 'server_1', label: 'Workspace tools', enabled: true, scope: 'project' as const, transport };
 const config = { servers: [server] };
 const tool = { serverId: 'server_1', toolId: 'tool_1', name: 'search', description: 'Search workspace', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } };
 const worker = { rootSessionId: 'root_a', workspaceId: 'workspace_1', workerGeneration: 'generation_a1' };
@@ -190,6 +190,19 @@ describe('Canonical catalogs and scoped operations', () => {
     expect(Catalog.MCPServerConfigSchema.parse({ ...server, managed: false }).managed).toBe(false);
     expect(Catalog.MCPServerConfigSchema.parse({ ...server, managed: true }).managed).toBe(true);
     expect(Catalog.MCPServerConfigSchema.parse(server).managed).toBeUndefined();
+  });
+  test('MCPServerConfigSchema accepts project and user scopes and defaults to project', () => {
+    expect(Catalog.MCPServerConfigSchema.parse(server).scope).toBe('project');
+    expect(Catalog.MCPServerConfigSchema.parse({ ...server, scope: 'user' }).scope).toBe('user');
+    expect(Catalog.MCPServerConfigSchema.parse({ ...server, scope: 'project' }).scope).toBe('project');
+    expect(Catalog.MCPServerConfigSchema.safeParse({ ...server, scope: 'invalid' }).success).toBe(false);
+  });
+
+  test('MCPApplyResultSchema accepts install outcomes', () => {
+    for (const outcome of ['applied', 'saved-needs-auth', 'saved-not-connected'] as const) {
+      expect(Catalog.MCPApplyResultSchema.parse({ ...mcpResult, outcome }).outcome).toBe(outcome);
+    }
+    expect(Catalog.MCPApplyResultSchema.safeParse({ ...mcpResult, outcome: 'other' }).success).toBe(false);
   });
 
   test('wire counters are uint64 decimal and invalid counter text never throws from revision comparison', () => {

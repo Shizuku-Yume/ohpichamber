@@ -47,7 +47,7 @@ type WorkerEntry = WorkerInput & {
   rejectReady: (error: Error) => void;
   exited: Promise<void>;
   stopping?: Promise<boolean>;
-  pending: Map<string, { resolve: (result: WorkerOperationResult) => void; reject: (error: Error) => void }>;
+  pending: Map<string, { resolve: (result: WorkerOperationResult) => void; reject: (error: Error) => void; type?: WorkerOperation['type'] }>;
   policySnapshot?: HostNativePolicySnapshot;
   environment: NodeJS.ProcessEnv;
   lastActivityAt: number;
@@ -478,12 +478,15 @@ export class WorkerRegistry {
       if (current !== entry) return null;
       const refuse = (code: 'RUN_ACTIVE' | 'COMMAND_IN_FLIGHT') => new WorkerOperationError(409, code, code === 'RUN_ACTIVE' ? 'The session still has an active run'
         : 'The session still has a command in flight', { sessionId: entry.info.rootSessionId });
-      const pendingWork = (candidate: WorkerEntry): boolean => candidate.pending.size > 0
+      const pendingWork = (candidate: WorkerEntry): boolean => [...candidate.pending.values()].some(p => p.type !== 'mcp' && p.type !== 'catalog')
         || [...this.actions.values()].some(action => action.entry === candidate);
       if (entry.kind === 'session') {
         // Removing the folder would delete session storage inside it.
         for (const stored of [entry.input.sessionsDirectory, entry.input.sessionFile]) {
           if (stored && isInsideOrSameDirectory(leaseDirectory, stored)) throw refuse('COMMAND_IN_FLIGHT');
+        }
+        if (current.info.state === 'starting') {
+          try { await waitWithin(current.ready, 5_000); } catch { /* starting settles */ }
         }
         if (current.info.state === 'starting' || this.restartReservations.has(current.info.rootSessionId) || pendingWork(current)) {
           throw refuse('COMMAND_IN_FLIGHT');
@@ -492,8 +495,13 @@ export class WorkerRegistry {
         // A background shell job outlives its start operation; its own snapshot
         // is the authority, and a missing or failed probe is not proven idle.
         if (!(await this.hasNoRunningShellJobs(current))) throw refuse('COMMAND_IN_FLIGHT');
-      } else if (current.info.state === 'starting' || pendingWork(current)) {
-        throw refuse('COMMAND_IN_FLIGHT');
+      } else {
+        if (current.info.state === 'starting') {
+          try { await waitWithin(current.ready, 5_000); } catch { /* starting settles */ }
+        }
+        if (current.info.state === 'starting' || pendingWork(current)) {
+          throw refuse('COMMAND_IN_FLIGHT');
+        }
       }
       // Re-read after the probes: a start, run or operation may have arrived.
       const again = this.workerEntries.get(entry.info.rootSessionId);
@@ -562,12 +570,13 @@ export class WorkerRegistry {
   private dispatch(entry: WorkerEntry, operation: WorkerOperation): Promise<WorkerOperationResult> {
     const commandId = randomUUID();
     entry.lastActivityAt = Date.now();
-    const result = new Promise<WorkerOperationResult>((resolve, reject) => entry.pending.set(commandId, { resolve, reject }));
+    const { promise, resolve, reject } = Promise.withResolvers<WorkerOperationResult>();
+    entry.pending.set(commandId, { resolve, reject, type: operation.type });
     entry.child.send({ type: 'operation', workerGeneration: entry.info.workerGeneration, commandId, operation }, error => {
       if (!error) return;
       const pending = entry.pending.get(commandId); entry.pending.delete(commandId); pending?.reject(new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The worker stopped before accepting the operation'));
     });
-    return result;
+    return promise;
   }
 
   /** Serialize capacity decisions so two roots cannot both claim the same free slot or evict past the cap. */
@@ -801,18 +810,19 @@ export class WorkerRegistry {
     return this.withRoot(rootSessionId, async () => {
       const entry = this.workerEntries.get(rootSessionId);
       if (!entry || entry.kind !== 'session' || this.closing) return true;
-      if (entry.info.state === 'starting' || this.restartReservations.has(rootSessionId) || entry.pending.size > 0
-        || [...this.actions.values()].some(action => action.entry === entry)) {
-        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted, so its worker cannot restart');
-      }
       if (!this.sessionIsIdle(rootSessionId)) {
         throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session still has an active run');
+      }
+      const hasActiveSessionCommand = [...entry.pending.values()].some(p => p.type !== 'mcp' && p.type !== 'catalog');
+      if (entry.info.state === 'starting' || this.restartReservations.has(rootSessionId) || hasActiveSessionCommand
+        || [...this.actions.values()].some(action => action.entry === entry)) {
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted, so its worker cannot restart');
       }
       if (!(await this.hasNoRunningShellJobs(entry))) {
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is controlled, so its worker cannot restart');
       }
       if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready' || this.closing
-        || this.restartReservations.has(rootSessionId) || entry.pending.size > 0
+        || this.restartReservations.has(rootSessionId) || [...entry.pending.values()].some(p => p.type !== 'mcp' && p.type !== 'catalog')
         || [...this.actions.values()].some(action => action.entry === entry)
         || !this.sessionIsIdle(rootSessionId)) {
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is relocating, so its worker cannot restart');
@@ -1038,7 +1048,7 @@ export class WorkerRegistry {
         void (async () => {
           const descriptor = await describeNativeOperation(input.cwd, request, reply.data.type === 'policy.request' ? reply.data.nativeContext : undefined);
           if (this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The worker left service before its policy request was answered' } as const;
-          if (descriptor && request.type === 'tool' && request.toolName === 'bash' && request.approvalId && request.toolCallId) {
+          if (descriptor && request.type === 'tool' && request.approvalId && request.toolCallId) {
             descriptor.approvalGrant = this.options.consumeApprovalGrant?.(entry.info.rootSessionId, workerGeneration, request);
           }
           return check ? check(entry.info.rootSessionId, request, descriptor) : { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The Host has no policy check for worker operations' } as const;

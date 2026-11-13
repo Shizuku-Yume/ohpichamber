@@ -77,14 +77,21 @@ export const parseNotificationChannelsJson = (json: string): NotificationChannel
   return channels;
 };
 
-/** `null` is a failed load, never an empty list. */
-export const loadNotificationChannels = async (): Promise<NotificationChannel[] | null> => {
+export type LoadChannelsResult =
+  | { ok: true; channels: NotificationChannel[] }
+  | { ok: false; absent: boolean };
+
+/** Loads notification channels; distinguishes absent capability (404) from real failure. */
+export const loadNotificationChannels = async (): Promise<LoadChannelsResult> => {
   try {
     const response = await runtimeFetch('/api/notifications/channels');
-    if (!response.ok) return null;
-    return parseNotificationChannelsJson(await response.text());
+    if (response.status === 404) return { ok: false, absent: true };
+    if (!response.ok) return { ok: false, absent: false };
+    const channels = parseNotificationChannelsJson(await response.text());
+    if (channels === null) return { ok: false, absent: false };
+    return { ok: true, channels };
   } catch {
-    return null;
+    return { ok: false, absent: false };
   }
 };
 

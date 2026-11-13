@@ -47,16 +47,19 @@ const linearServer = {
   serverId: 'linear',
   label: 'Linear',
   enabled: true as const,
+  scope: 'project' as const,
   transport: { type: 'http' as const, url: 'https://mcp.linear.app/mcp' },
 };
 const atlassianServer = {
   serverId: 'atlassian',
   label: 'Atlassian',
   enabled: true as const,
+  scope: 'project' as const,
   transport: { type: 'http' as const, url: 'https://mcp.atlassian.com/v2/mcp' },
 };
 const appliedMcpMutation = () => ({
   ok: true as const,
+  outcome: 'applied' as const,
   result: {
     kind: 'mcp' as const,
     status: 'applied' as const,

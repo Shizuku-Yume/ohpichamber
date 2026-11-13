@@ -243,11 +243,13 @@ export async function routeMessage(params: {
     params.appendSubmissions?.()
     await sendMessageAction({
       sessionId: params.sessionId,
+      directory: params.directory,
       request,
       mode: params.delivery ?? 'run',
       runtimeKey,
       runtimeRevision,
       commandId: params.commandId,
+      optimistic: !params.delivery || params.delivery === 'run',
     })
     assertSendRuntime(runtimeKey, runtimeRevision)
   }
@@ -748,7 +750,7 @@ const applyDraftTargetSelectionDefaults = (
   if (previousDraft?.open && previousDraft.draftId === draft.draftId && previousDraft.target === draft.target) {
     const previousProject = previousDraft.target !== 'project' ? null
       : projects.find((project) => project.id === previousDraft.selectedProjectId)
-        ?? resolveDraftProjectForDirectory(projects, availableWorktreesByProject, normalizePath(previousDraft.directoryOverride ?? null))
+      ?? resolveDraftProjectForDirectory(projects, availableWorktreesByProject, normalizePath(previousDraft.directoryOverride ?? null))
     const previousConfigDirectory = normalizePath(previousDraft.directoryOverride ?? null)
       ?? normalizePath(previousProject?.path ?? null)
     if (previousConfigDirectory === configDirectory) return
@@ -866,10 +868,10 @@ const resolveActiveProjectDirectory = (draft: NewSessionDraftState): string | nu
   const projectsState = useProjectsStore.getState()
   return normalizePath(
     projectsState.getActiveProject()?.path
-      ?? (draft.selectedProjectId
-        ? projectsState.projects.find((project) => project.id === draft.selectedProjectId)?.path
-        : null)
-      ?? null,
+    ?? (draft.selectedProjectId
+      ? projectsState.projects.find((project) => project.id === draft.selectedProjectId)?.path
+      : null)
+    ?? null,
   )
 }
 
@@ -1120,9 +1122,9 @@ export async function materializeOpenDraftSession(selection: {
   // sync/global indexes; native Session deliberately carries no Host path.
   const createdDirectory = normalizePath(
     getSyncSessionDirectory(created.sessionId)
-      ?? resolveGlobalSessionDirectory(created)
-      ?? draftDirectoryOverride
-      ?? null,
+    ?? resolveGlobalSessionDirectory(created)
+    ?? draftDirectoryOverride
+    ?? null,
   )
 
   if (useSessionUIStore.getState().newSessionDraft.draftId === draft.draftId) {
@@ -1290,15 +1292,15 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       persistLastActiveSession(key, { sessionId: id, directory: rememberedDir })
     }
 
-      if (resolvedDir && directoryState.currentDirectory !== resolvedDir) {
-        directoryState.setDirectory(resolvedDir, { showOverlay: false })
-      }
-      if (sessionProject && projectsState.activeProjectId !== sessionProject.id) {
-        projectsState.setActiveProjectIdOnly(sessionProject.id)
-      }
-      if (id && !isGuessedDir && sessionProject) {
-        useSessionDisplayStore.getState().setSingleProjectId(sessionProject.id)
-      }
+    if (resolvedDir && directoryState.currentDirectory !== resolvedDir) {
+      directoryState.setDirectory(resolvedDir, { showOverlay: false })
+    }
+    if (sessionProject && projectsState.activeProjectId !== sessionProject.id) {
+      projectsState.setActiveProjectIdOnly(sessionProject.id)
+    }
+    if (id && !isGuessedDir && sessionProject) {
+      useSessionDisplayStore.getState().setSingleProjectId(sessionProject.id)
+    }
 
     // Defer viewport anchor save for previous session — not needed for the
     // skeleton to render and reads messages which can be expensive.
@@ -1392,7 +1394,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       availableWorktrees: flattenWorktreeMap(availableWorktreesByProject),
       availableWorktreesByProject,
       sessionAbortFlags: new Map(),
-        })
+    })
     if (restoredSessionId) {
       setActiveSession(restoredDirectory ?? useDirectoryStore.getState().currentDirectory ?? "", restoredSessionId)
     } else {
@@ -1536,14 +1538,14 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       mode: options?.mode !== undefined
         ? options.mode
         : ((() => {
-            const defaultMode = useUIStore.getState().defaultSessionMode ?? 'main';
-            return defaultMode === 'main' ? undefined : defaultMode;
-          })()),
+          const defaultMode = useUIStore.getState().defaultSessionMode ?? 'main';
+          return defaultMode === 'main' ? undefined : defaultMode;
+        })()),
       goalObjective: options?.goalObjective !== undefined
         ? options.goalObjective
         : (options?.mode === 'goal' || (options?.mode === undefined && useUIStore.getState().defaultSessionMode === 'goal')
-            ? { objective: '', tokenBudget: null }
-            : undefined),
+          ? { objective: '', tokenBudget: null }
+          : undefined),
     }
 
     set({
@@ -2026,6 +2028,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       })
       assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
     })().catch((error) => {
+      if (createsDraftSession && getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
+        useSessionUIStore.setState({ newSessionDraft: draft, currentSessionId: targetSessionId ?? null })
+      }
       if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
         useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride, goalArm.composerGoal)
       }

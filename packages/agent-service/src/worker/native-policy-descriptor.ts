@@ -294,5 +294,25 @@ export async function describeNativeOperation(cwd: string, request: WorkerPolicy
    sourcePaths: typeof input.file === 'string' && input.file.trim() !== '*' ? [parseLspPath(input.file, cwd)] : [cwd],
   });
  }
- return undefined;
+ if (toolName === 'find') {
+  const rawPath = typeof input?.path === 'string' && input.path.trim().length > 0 ? input.path.trim() : '.';
+  const entries = await expandDelimitedPathEntries(toPathList(rawPath), cwd);
+  const sourcePaths = entries.map(entry => localPath(entry, cwd));
+  return NativeOperationDescriptorSchema.parse({ ...effective, sourcePaths: sourcePaths.length > 0 ? sourcePaths : [cwd] });
+ }
+ if (toolName === 'ast_grep') {
+  const rawPaths = Array.isArray(input?.paths) ? input.paths : typeof input?.path === 'string' ? [input.path] : ['.'];
+  const rawList = rawPaths.flatMap(p => typeof p === 'string' ? toPathList(p) : []);
+  const entries = await expandDelimitedPathEntries(rawList, cwd);
+  const sourcePaths = entries.map(entry => localPath(entry, cwd));
+  return NativeOperationDescriptorSchema.parse({ ...effective, sourcePaths: sourcePaths.length > 0 ? sourcePaths : [cwd] });
+ }
+ if (toolName === 'ast_edit') {
+  const rawPaths = Array.isArray(input?.paths) ? input.paths : typeof input?.path === 'string' ? [input.path] : ['.'];
+  const rawList = rawPaths.flatMap(p => typeof p === 'string' ? toPathList(p) : []);
+  const entries = await expandDelimitedPathEntries(rawList, cwd);
+  const destinationPaths = entries.map(entry => localPath(entry, cwd));
+  return NativeOperationDescriptorSchema.parse({ ...effective, destinationPaths: destinationPaths.length > 0 ? destinationPaths : [cwd] });
+ }
+ return NativeOperationDescriptorSchema.parse({ ...effective });
 }

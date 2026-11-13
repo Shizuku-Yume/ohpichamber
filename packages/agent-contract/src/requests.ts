@@ -62,6 +62,17 @@ export const ApprovalRequestSchema = RequestCASSchema.extend({
   }
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
+export const ApprovalGrantSchema = z.strictObject({
+  approvalId: EntityIdSchema,
+  toolCallId: EntityIdSchema,
+  rootSessionId: EntityIdSchema,
+  workerGeneration: EntityIdSchema,
+  epoch: EntityIdSchema,
+  command: z.string().min(1).optional(),
+  toolName: z.string().min(1).optional(),
+  input: JsonObjectSchema.optional(),
+});
+export type ApprovalGrant = z.infer<typeof ApprovalGrantSchema>;
 export const PlanReferenceSchema = z.string().regex(/^local:\/\/[^\s?#]+$/).refine(value => !value.includes('..') && !value.includes('\\'), 'Plan reference must remain session-local');
 export const PlanReviewSchema = z.strictObject({
   type: z.literal('plan-review'),

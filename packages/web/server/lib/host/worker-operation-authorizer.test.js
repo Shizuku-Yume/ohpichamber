@@ -17,7 +17,7 @@ beforeAll(async () => {
   scope = { rootSessionId: 'root', workerGeneration: 'generation', projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'agent-directory', cwd, agentDirectory };
   const policy = {
     projectId: scope.projectId, workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId, cwd, agentDirectory,
-    providers: [], mcpServers: [server], fileTools: [], shellCommands: [], toolRequests: [], agentIds: [], permissionPresetIds: [], providerEntry: true
+    providers: [], mcpServers: [server], fileTools: [], shellCommands: [], agentIds: [], permissionPresetIds: [], providerEntry: true
   };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
   authorize = createWorkerOperationAuthorizer({
@@ -62,7 +62,7 @@ async function nativeHarness(rows = [], enterprisePolicyOptions) {
   const nativeScope = { rootSessionId: 'native-root', workerGeneration: 'native-generation', projectId: 'native-project', workspaceId: 'native-workspace', agentDirectoryId: 'native-source', cwd, agentDirectory };
   const policy = {
     projectId: nativeScope.projectId, workspaceId: nativeScope.workspaceId, agentDirectoryId: nativeScope.agentDirectoryId, cwd, agentDirectory,
-    providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }], mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], toolRequests: [], agentIds: [], permissionPresetIds: [], providerEntry: true
+    providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }], mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], agentIds: [], permissionPresetIds: [], providerEntry: true
   };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
   const nativeAuthorize = createWorkerOperationAuthorizer({ resolvePolicy: async () => policy, validateDirectoryPath: directoryOwner.validateDirectoryPath, approvalPolicyStore: { list: () => rows }, enterprisePolicyOptions });
@@ -562,5 +562,158 @@ describe('Host-owned native LSP tool authorization', () => {
       const desc = { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
       expect(await harness.authorize(harness.scope, req, desc)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
+  });
+});
+
+describe('OMP 18.18.0 tier-based tool authorization', () => {
+  it('loads OMP 18.18.0 built-in tool list from the pinned package and asserts decisions matching OMP tiers', async () => {
+    const builtinPath = fileURLToPath(new URL('../../../../../packages/agent-service/node_modules/@oh-my-pi/pi-coding-agent/src/tools/builtin-names.ts', import.meta.url));
+    const { BUILTIN_TOOL_NAMES } = await import(builtinPath);
+    expect(BUILTIN_TOOL_NAMES.length).toBeGreaterThan(20);
+
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.txt');
+      await fs.writeFile(inside, 'inside');
+
+      const readTier = new Set(['read', 'grep', 'glob', 'find', 'ast_grep', 'checkpoint', 'rewind', 'memory_edit', 'recall', 'reflect', 'think', 'ask', 'todo', 'wait']);
+      const writeTier = new Set(['write', 'edit', 'ast_edit', 'new_context', 'manage_skill']);
+      const execTier = new Set(['eval', 'debug', 'ida', 'github', 'security_scan', 'bash']);
+
+      for (const toolName of BUILTIN_TOOL_NAMES) {
+        if (toolName === 'task') {
+          const res = await harness.authorize(harness.scope, { type: 'tool', toolName: 'task', input: { name: 'child', task: 'do' } });
+          expect(res).toEqual({ allowed: true });
+          continue;
+        }
+        if (toolName === 'web_search') {
+          const res = await harness.authorize(harness.scope, { type: 'web-search' });
+          expect(res).toEqual({ allowed: true });
+          continue;
+        }
+        if (toolName === 'context_notes') {
+          const readRes = await harness.authorize(harness.scope, { type: 'tool', toolName, input: {} });
+          expect(readRes).toEqual({ allowed: true });
+          const writeRes = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { text: 'note' } });
+          expect(writeRes).toEqual({ allowed: true });
+          continue;
+        }
+        if (toolName === 'retain' || toolName === 'learn') {
+          const readRes = await harness.authorize(harness.scope, { type: 'tool', toolName, input: {} });
+          expect(readRes).toEqual({ allowed: true });
+          continue;
+        }
+        if (toolName === 'lsp') {
+          const lspDesc = { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
+          const res = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { action: 'hover' } }, lspDesc);
+          expect(res).toEqual({ allowed: true });
+          continue;
+        }
+
+        if (readTier.has(toolName)) {
+          const descriptor = ['read', 'grep', 'glob'].includes(toolName)
+            ? { toolName, sourcePaths: [inside], destinationPaths: [], fileOps: [] }
+            : undefined;
+          const res = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { path: 'inside.txt' } }, descriptor);
+          expect(res.allowed).toBe(true);
+        } else if (writeTier.has(toolName)) {
+          const descriptor = ['write', 'edit'].includes(toolName)
+            ? { toolName, sourcePaths: [inside], destinationPaths: [inside], fileOps: [], effectiveMode: 'replace' }
+            : undefined;
+          const res = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { path: 'inside.txt' } }, descriptor);
+          expect(res.allowed).toBe(true);
+        } else if (execTier.has(toolName)) {
+          const descriptor = toolName === 'bash'
+            ? { toolName: 'bash', command: 'echo 1', sourcePaths: [harness.scope.cwd], destinationPaths: [], fileOps: [] }
+            : undefined;
+          const res = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { command: 'echo 1' } }, descriptor);
+          expect(res.allowed).toBe(false);
+          expect(res.approvalRequired).toBe(true);
+        }
+      }
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('out-of-workspace read returns approvalRequired and succeeds with approvalGrant', async () => {
+    const harness = await nativeHarness();
+    try {
+      const outside = path.join(harness.outside, 'outside.txt');
+      await fs.writeFile(outside, 'outside');
+      const req = { type: 'tool', toolName: 'read', input: { path: outside }, approvalId: 'app-out', toolCallId: 'call-out' };
+      const desc = { toolName: 'read', sourcePaths: [outside], destinationPaths: [], fileOps: [] };
+
+      const unapproved = await harness.authorize(harness.scope, req, desc);
+      expect(unapproved).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The operation targets a path outside the authorized workspace' });
+
+      const grant = { approvalId: 'app-out', toolCallId: 'call-out', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: 'read', input: req.input };
+      const approved = await harness.authorize(harness.scope, req, { ...desc, approvalGrant: grant });
+      expect(approved).toEqual({ allowed: true });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('out-of-workspace write stays denied even with approvalGrant', async () => {
+    const harness = await nativeHarness();
+    try {
+      const outside = path.join(harness.outside, 'outside.txt');
+      await fs.writeFile(outside, 'outside');
+      const req = { type: 'tool', toolName: 'write', input: { path: outside, content: 'evil' }, approvalId: 'app-out', toolCallId: 'call-out' };
+      const desc = { toolName: 'write', sourcePaths: [], destinationPaths: [outside], fileOps: [{ kind: 'write', path: outside }] };
+      const grant = { approvalId: 'app-out', toolCallId: 'call-out', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: 'write', input: req.input };
+
+      const res = await harness.authorize(harness.scope, req, { ...desc, approvalGrant: grant });
+      expect(res).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The operation targets a path outside the authorized workspace' });
+      expect(res.approvalRequired).toBeUndefined();
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('authorizes MCP tools: configured server returns approvalRequired (allowed with grant); unconfigured server denied', async () => {
+    const harness = await nativeHarness();
+    try {
+      harness.policy.mcpServers = [{ serverId: 'github_mcp', label: 'GitHub MCP', enabled: true, transport: { type: 'http', url: 'https://mcp.example/tools' } }];
+      const toolCallId = 'mcp-call-1';
+      const approvalId = 'mcp-app-1';
+      const input = { query: 'repo' };
+      const req = { type: 'tool', toolName: 'mcp__github_mcp_search', input, approvalId, toolCallId };
+
+      const unapproved = await harness.authorize(harness.scope, req);
+      expect(unapproved).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The MCP tool requires approval' });
+
+      const grant = { approvalId, toolCallId, rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: req.toolName, input };
+      const desc = { toolName: req.toolName, sourcePaths: [], destinationPaths: [], fileOps: [], approvalGrant: grant };
+      const approved = await harness.authorize(harness.scope, req, desc);
+      expect(approved).toEqual({ allowed: true });
+
+      const unconfReq = { type: 'tool', toolName: 'mcp__unknown_server_tool', input: {} };
+      const unconfRes = await harness.authorize(harness.scope, unconfReq);
+      expect(unconfRes).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The MCP server is not in the workspace configuration' });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('authorizes eval tool: returns approvalRequired without grant, allowed with grant', async () => {
+    const harness = await nativeHarness();
+    try {
+      const toolCallId = 'eval-call-1';
+      const approvalId = 'eval-app-1';
+      const input = { code: 'console.log("hello")' };
+      const req = { type: 'tool', toolName: 'eval', input, approvalId, toolCallId };
+
+      const unapproved = await harness.authorize(harness.scope, req);
+      expect(unapproved).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The eval tool requires approval' });
+
+      const grant = { approvalId, toolCallId, rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: 'eval', input };
+      const desc = { toolName: 'eval', sourcePaths: [], destinationPaths: [], fileOps: [], approvalGrant: grant };
+      const approved = await harness.authorize(harness.scope, req, desc);
+      expect(approved).toEqual({ allowed: true });
+    } finally {
+      await harness.close();
+    }
   });
 });

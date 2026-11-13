@@ -986,7 +986,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     };
 
     const hasVisibleOutput = outputString.trim().length > 0;
-    const shouldRenderResult = part.type === 'tool_result' || (isShellTool(toolName) && hasVisibleOutput);
+    const shouldRenderResult = part.type === 'tool_result' || (isShellTool(toolName) && hasVisibleOutput) || fileChanges.length > 0;
     const hasVisualDiffEntry = fileChanges.some((entry) => !!entry.diff);
 
     const openImagePreview = (index: number) => {

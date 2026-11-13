@@ -73,6 +73,7 @@ import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 import { cfgTaskPerCallModel } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
+import { SuggestionDriver } from './suggestion.ts';
 import { InternalUrlRouter, resolveLocalRoot } from '@oh-my-pi/pi-coding-agent/internal-urls';
 import { readPlanFile } from '@oh-my-pi/pi-coding-agent/plan-mode/plan-files';
 import { prompt as nativePrompt } from '@oh-my-pi/pi-utils';
@@ -151,6 +152,8 @@ export class WorkerSession {
   private planReviewTask: Promise<void> | undefined;
   private publishedContinuationPending = false;
   private readonly liveSubagents = new Map<string, Subagent>();
+  readonly suggestionDriver: SuggestionDriver;
+  private _draftPresent = false;
   private readonly toolCallToSubagentId = new Map<string, string>();
   // Agent Hub reads: the observer registry tracks live sessions for the tree
   // cost rollup, and the persisted roster is only awaited when the UI asks.
@@ -240,6 +243,13 @@ export class WorkerSession {
         this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'session.recap', recap, createdAt: Date.now() } }]);
       },
     });
+    this.suggestionDriver = new SuggestionDriver({
+      session,
+      emit: events => this.emit(events),
+      hasDraft: () => this.hasDraft(),
+      isAborted: () => Boolean(this.cancellingRunId),
+      authorize: this.authorizeProviderUse,
+    });
     // Subagents restored from persisted transcripts become `parked` refs, so a
     // UI reload still sees the swarm the previous worker built.
     this.persistedRoster = registerPersistedSubagents(AgentRegistry.global(), this._sessionFile).catch(() => undefined);
@@ -286,6 +296,7 @@ export class WorkerSession {
       if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
       if (event.type === 'agent_end') {
         this.scheduleAutoTitle();
+        void this.suggestionDriver.handleAgentEnd(event);
         // Settle this turn's spend into `stats.db`; the analytics index must
         // follow live work instead of waiting for an offline rescan.
         void settleUsageSession(this._sessionFile).catch(() => undefined);
@@ -1242,6 +1253,7 @@ export class WorkerSession {
     const task = (async () => {
       try {
         await this.stopAutoTitle();
+        this.suggestionDriver.cancel();
         await this.session.sessionManager.flush();
         const dispatched = await start();
         await this.bind();
@@ -1926,6 +1938,7 @@ export class WorkerSession {
         if (this.preparation || this.projection.activeRun() || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills must be successfully applied before prompt admission');
         await this.stopAutoTitle();
+        this.suggestionDriver.cancel();
         this.preparation = this.prepare(operation);
         let prepared: PreparedPrompt;
         try { prepared = await this.preparation; }
@@ -1958,6 +1971,7 @@ export class WorkerSession {
         this.planRevision++;
         this.cancellingRunId = operation.runId;
         await this.stopAutoTitle();
+        this.suggestionDriver.cancel();
         this.interaction.cancelAll();
         await this.session.abort();
         await this.promptTask;
@@ -2012,6 +2026,7 @@ export class WorkerSession {
     this.permissionBridge?.stop();
     this.pendingTitleInput = undefined;
     await this.stopAutoTitle();
+    this.suggestionDriver.cancel();
     this.interaction.close();
     // Close the MCP owner first: it disconnects staged transports, so a pending
     // 30 s handshake settles instead of stalling this worker's 5 s shutdown.
@@ -2047,6 +2062,13 @@ export class WorkerSession {
         try { await this.session.dispose(); } finally { this.authStorage.close(); }
       }
     }
+  }
+  hasDraft(): boolean {
+    return this._draftPresent || this.queuedContext.size > 0;
+  }
+
+  setDraft(present: boolean): void {
+    this._draftPresent = present;
   }
 }
 

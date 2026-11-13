@@ -16,12 +16,17 @@ Object.assign(globalThis, {
 
 const sshState = {
   instances: [], statusesById: {}, importCandidates: [],
-  load: async () => {}, loadImports: async () => {}, refreshStatuses: async () => {},
+  load: async () => { }, loadImports: async () => { }, refreshStatuses: async () => { },
 };
 mock.module('@/stores/useDesktopSshStore', () => ({ useDesktopSshStore: (select: (state: unknown) => unknown) => select(sshState) }));
 mock.module('@/stores/useUIStore', () => ({ useUIStore: (select: (state: unknown) => unknown) => select({ settingsRemoteInstancesSelectedId: null }) }));
-mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({}) }));
-mock.module('@/components/ui', () => ({ toast: { error() {} } }));
+let mockClientAuth: {
+  listClients: () => Promise<Array<{ id: string; label: string; clientKind: string; lastUsedAt?: string; revokedAt?: string | null }>>;
+  listPendingPairings: () => Promise<never[]>;
+  getRelayHostStatus?: () => Promise<unknown>;
+} | null = null;
+mock.module('@/hooks/useRuntimeAPIs', () => ({ useRuntimeAPIs: () => ({ clientAuth: mockClientAuth }) }));
+mock.module('@/components/ui', () => ({ toast: { error() { } } }));
 
 const desktop = await import('@/lib/desktop');
 mock.module('@/lib/desktop', () => ({ ...desktop, isDesktopShell: () => true, isElectronShell: () => true }));
@@ -101,3 +106,32 @@ for (const status of ['wrong-service', 'incompatible'] as const) {
     expect(document.body.textContent).not.toContain(status === 'wrong-service' ? 'Wrong service' : 'Incompatible');
   });
 }
+
+test('pairedDevices filter excludes desktop-local and shows empty state when only desktop-local exists', async () => {
+  mockClientAuth = {
+    listClients: async () => [
+      { id: 'c1', label: 'Local Operator Desktop', clientKind: 'desktop-local' },
+    ],
+    listPendingPairings: async () => [],
+    getRelayHostStatus: async () => null,
+  };
+  await render();
+  expect(document.body.textContent).toContain('No devices connected yet.');
+  expect(document.body.textContent).not.toContain('Local Operator Desktop');
+  mockClientAuth = null;
+});
+
+test('pairedDevices filter renders remote devices but hides desktop-local', async () => {
+  mockClientAuth = {
+    listClients: async () => [
+      { id: 'c1', label: 'Local Operator Desktop', clientKind: 'desktop-local' },
+      { id: 'c2', label: 'Android Phone', clientKind: 'mobile' },
+    ],
+    listPendingPairings: async () => [],
+    getRelayHostStatus: async () => null,
+  };
+  await render();
+  expect(document.body.textContent).toContain('Android Phone');
+  expect(document.body.textContent).not.toContain('Local Operator Desktop');
+  mockClientAuth = null;
+});

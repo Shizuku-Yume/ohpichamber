@@ -1,5 +1,6 @@
 import React from 'react';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui';
 import { NumberInput } from '@/components/ui/number-input';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
@@ -551,25 +552,25 @@ const AssistanceTab: React.FC = () => {
   );
 
   const handleSuggestionGeneratorChange = React.useCallback(
-    (value: 'session' | 'small' | 'off') => {
+    async (value: 'session' | 'small' | 'off') => {
+      const previous = suggestionGenerator;
       setSuggestionGenerator(value);
-      void updateDesktopSettings({ suggestionGenerator: value });
-      if (settingsDirectory) {
-        void canonicalClient
-          .resolveWorkspace(settingsDirectory)
-          .then((workspace) => canonicalClient.getOmpSettings(workspace.workspaceId))
-          .then((omp) =>
-            canonicalClient.updateOmpSettings(omp.workspaceId, {
-              expectedRevision: omp.revision,
-              changes: [{ id: 'suggestion.generator', value }],
-            }),
-          )
-          .catch(() => {
-            // best-effort OMP settings sync
+      try {
+        if (settingsDirectory) {
+          const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+          const omp = await canonicalClient.getOmpSettings(workspace.workspaceId);
+          await canonicalClient.updateOmpSettings(omp.workspaceId, {
+            expectedRevision: omp.revision,
+            changes: [{ id: 'suggestion.generator', value }],
           });
+        }
+        await updateDesktopSettings({ suggestionGenerator: value });
+      } catch (error) {
+        setSuggestionGenerator(previous);
+        toast.error(error instanceof Error ? error.message : 'Failed to save suggestion generator setting');
       }
     },
-    [setSuggestionGenerator, settingsDirectory],
+    [suggestionGenerator, setSuggestionGenerator, settingsDirectory],
   );
   const sessionReviewOfferEnabled = useUIStore((state) => state.sessionReviewOfferEnabled);
   const setSessionReviewOfferEnabled = useUIStore((state) => state.setSessionReviewOfferEnabled);

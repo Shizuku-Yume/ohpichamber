@@ -111,11 +111,12 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     }
     if (event.type === "session.recap") {
       useSessionRecapStore.getState().applyRecap(event);
-      continue;
     }
     if (event.type === "session.suggestion") {
       useSessionSuggestionStore.getState().applySuggestion(event);
-      continue;
+    }
+    if (event.type === "run.started" || event.type === "turn.started") {
+      useSessionSuggestionStore.getState().clearSuggestion(target.sessionId);
     }
     if (event.type === "cleanse.progress") {
       useCleanseStore.getState().applyCleanseProgress(target.sessionId, event);

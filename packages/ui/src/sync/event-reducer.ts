@@ -281,7 +281,28 @@ export function installRuntimeRun(state: State, run: Run, requestBaseline: RunCo
 
 /** Every canonical variant shares the same sequence gate. Never apply across a gap. */
 export function applyDirectoryEvent(state: State, event: CanonicalEvent): DirectoryEventResult {
- if (event.type === 'btw.delta' || event.type === 'btw.completed' || event.type === 'subagent.updated' || event.type === 'session.recap' || event.type === 'session.suggestion') return { kind: 'applied', state };
+ if (event.type === 'btw.delta' || event.type === 'btw.completed' || event.type === 'subagent.updated') return { kind: 'applied', state };
+ if (event.type === 'session.recap' || event.type === 'session.suggestion') {
+  const id = event.sessionId;
+  const snapshot = state.snapshot[id];
+  if (!snapshot) return { kind: 'applied', state };
+  if (event.epoch !== snapshot.session.epoch) return { kind: 'resnapshot', state };
+  const comparison = compareCounters(event.sequence, snapshot.session.headSequence);
+  if (comparison <= 0) return { kind: 'duplicate', state };
+  if (BigInt(event.sequence) !== BigInt(snapshot.session.headSequence) + 1n) return { kind: 'resnapshot', state };
+  const session = { ...snapshot.session, headSequence: event.sequence };
+  return {
+   kind: 'applied',
+   state: {
+    ...state,
+    snapshot: {
+     ...state.snapshot,
+     [id]: { ...snapshot, session },
+    },
+    session: state.session.map(s => s.sessionId === id ? { ...s, headSequence: event.sequence } : s),
+   },
+  };
+ }
  if (event.type === 'cleanse.progress') {
   const id = event.sessionId;
   const existing = state.cleanse?.[id];

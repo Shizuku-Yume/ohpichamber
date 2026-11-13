@@ -1048,7 +1048,7 @@ export class WorkerRegistry {
         void (async () => {
           const descriptor = await describeNativeOperation(input.cwd, request, reply.data.type === 'policy.request' ? reply.data.nativeContext : undefined);
           if (this.workerEntries.get(entry.info.rootSessionId) !== entry || entry.info.workerGeneration !== workerGeneration) return { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The worker left service before its policy request was answered' } as const;
-          if (descriptor && request.type === 'tool' && request.toolName === 'bash' && request.approvalId && request.toolCallId) {
+          if (descriptor && request.type === 'tool' && request.approvalId && request.toolCallId) {
             descriptor.approvalGrant = this.options.consumeApprovalGrant?.(entry.info.rootSessionId, workerGeneration, request);
           }
           return check ? check(entry.info.rootSessionId, request, descriptor) : { allowed: false, code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'The Host has no policy check for worker operations' } as const;

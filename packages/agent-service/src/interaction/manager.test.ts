@@ -14,8 +14,10 @@ function sessionHarness() {
   return { manager, events, operations };
 }
 
-const planReview: WorkerInteraction = { kind: 'question', questionId: 'plan-review', turnId: 'turn-1', prompt: 'Review plan',
-  schema: { type: 'plan-review', title: 'Review plan', planReference: 'local://review-plan.md', planText: '# Plan\nImplement review.' } };
+const planReview: WorkerInteraction = {
+  kind: 'question', questionId: 'plan-review', turnId: 'turn-1', prompt: 'Review plan',
+  schema: { type: 'plan-review', title: 'Review plan', planReference: 'local://review-plan.md', planText: '# Plan\nImplement review.' }
+};
 
 test('plan reviews retain reconnect recovery and validate all actions under the existing CAS', async () => {
   for (const response of [{ action: 'approve' }, { action: 'approve-compact' }, { action: 'reject' }, { action: 'feedback', feedback: 'Revise step two' }]) {
@@ -41,7 +43,7 @@ test('plan reviews retain reconnect recovery and validate all actions under the 
 test('plan review expires fail-closed and generation changes cannot revive it', async () => {
   const dispatched = Promise.withResolvers<WorkerOperation>();
   const manager = new InteractionManager(10);
-  manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { dispatched.resolve(operation); }, () => {});
+  manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { dispatched.resolve(operation); }, () => { });
   try {
     manager.onRequest('session-1', 'worker-1', planReview);
     expect(await dispatched.promise).toEqual({ type: 'question.resolve', questionId: 'plan-review', action: 'cancel' });
@@ -51,7 +53,7 @@ test('plan review expires fail-closed and generation changes cannot revive it', 
   const next = sessionHarness();
   try {
     next.manager.onRequest('session-1', 'worker-1', planReview);
-    next.manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => {}, () => {});
+    next.manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => { }, () => { });
     await expect(next.manager.resolveQuestion('session-1', 'plan-review', { action: 'answer', response: { action: 'approve' }, version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' })).rejects.toMatchObject({ code: 'QUESTION_EXPIRED' });
     expect(next.manager.questions('session-1')).toEqual([]);
     expect(next.operations).toEqual([]);
@@ -84,11 +86,13 @@ describe('service-owned interaction CAS', () => {
     try {
       await expect(manager.resolveApproval('session-1', 'approval-1', {
         decision: 'approve', version: '99', epoch: 'epoch-1', workerGeneration: 'worker-1',
-      })).rejects.toMatchObject({ status: 409, code: 'APPROVAL_CONFLICT', details: {
-        expectedVersion: '99', actualVersion: '1', currentRecord: {
-          approvalId: 'approval-1', sessionId: 'session-1', version: '1', status: 'pending',
-        },
-      } });
+      })).rejects.toMatchObject({
+        status: 409, code: 'APPROVAL_CONFLICT', details: {
+          expectedVersion: '99', actualVersion: '1', currentRecord: {
+            approvalId: 'approval-1', sessionId: 'session-1', version: '1', status: 'pending',
+          },
+        }
+      });
       expect(manager.approvals('session-1')[0]?.status).toBe('pending');
     } finally { manager.closeSession('session-1'); }
   });
@@ -137,7 +141,7 @@ describe('service-owned interaction CAS', () => {
   test('a worker generation change expires old handles and rejects stale replies', async () => {
     const { manager, events } = sessionHarness();
     manager.onRequest('session-1', 'worker-1', approval);
-    manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => {}, input => { events.push(input); });
+    manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => { }, input => { events.push(input); });
     const stale: ApprovalReply = { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
     await expect(manager.resolveApproval('session-1', 'approval-1', stale)).rejects.toMatchObject({ status: 410, code: 'APPROVAL_EXPIRED' });
     await expect(manager.resolveApproval('session-1', 'unknown-approval', stale)).rejects.toMatchObject({ status: 410, code: 'APPROVAL_EXPIRED' });
@@ -183,7 +187,7 @@ describe('service-owned interaction CAS', () => {
     manager.onRequest('session-1', 'worker-1', approval);
     const reply: ApprovalReply = { decision: 'always-deny', policyScope: 'workspace', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
     const resolving = manager.resolveApproval('session-1', 'approval-1', reply);
-    manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => {}, event => events.push(event));
+    manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => { }, event => events.push(event));
     committed.resolve({ policyId: 'policy-1', revision: '1' });
     await expect(resolving).rejects.toMatchObject({ status: 410, code: 'APPROVAL_EXPIRED' });
     expect(events.filter(event => event.event.type === 'approval.resolved')).toHaveLength(1);
@@ -193,7 +197,7 @@ describe('service-owned interaction CAS', () => {
 
   test('policy persistence failure keeps the request pending for an ordinary decision', async () => {
     const manager = new InteractionManager(60_000, async () => { throw new Error('Disk full'); });
-    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async () => {}, () => {});
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async () => { }, () => { });
     manager.onRequest('session-1', 'worker-1', approval);
     await expect(manager.resolveApproval('session-1', 'approval-1', { decision: 'always-deny', policyScope: 'workspace', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' })).rejects.toMatchObject({ code: 'APPROVAL_POLICY_WRITE_FAILED' });
     expect(manager.approvals('session-1')[0]).toMatchObject({ status: 'pending', version: '1' });
@@ -203,15 +207,17 @@ describe('service-owned interaction CAS', () => {
 
   test('another session cannot answer a question and cancellation is terminal', async () => {
     const { manager } = sessionHarness();
-    manager.openSession('session-2', 'epoch-2', 'worker-2', 'workspace-1', async () => {}, () => {});
+    manager.openSession('session-2', 'epoch-2', 'worker-2', 'workspace-1', async () => { }, () => { });
     manager.onRequest('session-1', 'worker-1', { kind: 'question', questionId: 'question-1', turnId: 'turn-1', prompt: 'Choose', schema: { type: 'omp.ask', questions: [{ id: 'q', question: 'Choose', options: [{ label: 'one' }] }] } });
     await expect(manager.resolveQuestion('session-2', 'question-1', { action: 'cancel', version: '1', epoch: 'epoch-2', workerGeneration: 'worker-2' })).rejects.toMatchObject({ code: 'QUESTION_NOT_FOUND' });
     expect(manager.questions('session-1')).toHaveLength(1);
     const cancel: QuestionReply = { action: 'cancel', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
     expect((await manager.resolveQuestion('session-1', 'question-1', cancel)).status).toBe('cancelled');
-    await expect(manager.resolveQuestion('session-1', 'question-1', cancel)).rejects.toMatchObject({ code: 'QUESTION_CONFLICT', details: {
-      expectedVersion: '1', actualVersion: '2', currentRecord: { questionId: 'question-1', status: 'cancelled', version: '2' },
-    } });
+    await expect(manager.resolveQuestion('session-1', 'question-1', cancel)).rejects.toMatchObject({
+      code: 'QUESTION_CONFLICT', details: {
+        expectedVersion: '1', actualVersion: '2', currentRecord: { questionId: 'question-1', status: 'cancelled', version: '2' },
+      }
+    });
     manager.closeSession('session-1');
     manager.closeSession('session-2');
   });
@@ -355,7 +361,7 @@ describe('service-owned interaction CAS', () => {
     expect(events).toHaveLength(eventCount + 1);
     expect(committedTarget).toBeUndefined();
 
-    manager.openSession('session-1', 'epoch-1', 'worker-2', 'workspace-1', async () => {}, input => { events.push(input); });
+    manager.openSession('session-1', 'epoch-1', 'worker-2', 'workspace-1', async () => { }, input => { events.push(input); });
     manager.onRequest('session-1', 'worker-2', { ...secondApproval, approvalId: 'approval-sec-3', toolCallId: 'call-sec-3' });
     expect(manager.approvals('session-1')).toHaveLength(1);
     manager.closeSession('session-1');
@@ -364,7 +370,7 @@ describe('service-owned interaction CAS', () => {
   test('ordinary approvals never permit a session allowance', async () => {
     const events: ProjectionInput[] = [];
     const manager = new InteractionManager(60_000);
-    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async () => {}, input => { events.push(input); });
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async () => { }, input => { events.push(input); });
     manager.onRequest('session-1', 'worker-1', {
       ...approval, approvalId: 'approval-plain', toolCallId: 'call-plain', sessionRuleKey: undefined,
     });
@@ -419,7 +425,7 @@ describe('service-owned interaction CAS', () => {
       operations.push(operation);
       if (operation.type === 'approval.resolve') {
         expect(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-native', 'bash', input)).toEqual({
-          approvalId: 'approval-native', toolCallId: 'call-native', rootSessionId: 'session-1', workerGeneration: 'worker-1', epoch: 'epoch-1', command: input.command,
+          approvalId: 'approval-native', toolCallId: 'call-native', rootSessionId: 'session-1', workerGeneration: 'worker-1', epoch: 'epoch-1', command: input.command, toolName: 'bash', input,
         });
         expect(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-native', 'bash', input)).toBeUndefined();
         dispatched.resolve(operation);
@@ -448,15 +454,36 @@ describe('service-owned interaction CAS', () => {
       expect(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-1', 'bash', { command: 'printf other' })).toBeUndefined();
       consumed.push(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-1', 'bash', input));
       expect(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-1', 'bash', input)).toBeUndefined();
-    }, () => {});
+    }, () => { });
     try {
       manager.onRequest('session-1', 'worker-1', { ...approval, policyTarget: target });
       expect(manager.consumeApprovalGrant('session-1', 'worker-1', 'approval-1', 'call-1', 'bash', input)).toBeUndefined();
       const resolved = await manager.resolveApproval('session-1', 'approval-1', { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' });
       expect(resolved.status).toBe('approved');
-      expect(consumed).toEqual([{ approvalId: 'approval-1', toolCallId: 'call-1', rootSessionId: 'session-1', workerGeneration: 'worker-1', epoch: 'epoch-1', command: input.command }]);
+      expect(consumed).toEqual([{ approvalId: 'approval-1', toolCallId: 'call-1', rootSessionId: 'session-1', workerGeneration: 'worker-1', epoch: 'epoch-1', command: input.command, toolName: 'bash', input }]);
     } finally { manager.closeSession('session-1'); }
   });
+  test('an approved non-bash tool operation (e.g. eval) is consumed once with toolName and input', async () => {
+    const input = { code: '1 + 2' };
+    const target = { toolName: 'eval', pattern: JSON.stringify(input) };
+    const consumed: unknown[] = [];
+    const manager = new InteractionManager(60_000);
+    manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => {
+      if (operation.type !== 'approval.resolve') throw new Error('Unexpected dispatch');
+      consumed.push(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-eval-1', 'eval', input));
+      expect(manager.consumeApprovalGrant('session-1', 'worker-1', operation.approvalId, 'call-eval-1', 'eval', input)).toBeUndefined();
+    }, () => { });
+    try {
+      manager.onRequest('session-1', 'worker-1', {
+        ...approval, approvalId: 'approval-eval-1', toolCallId: 'call-eval-1', toolName: 'eval', policyTarget: target,
+      });
+      expect(manager.consumeApprovalGrant('session-1', 'worker-1', 'approval-eval-1', 'call-eval-1', 'eval', input)).toBeUndefined();
+      const resolved = await manager.resolveApproval('session-1', 'approval-eval-1', { decision: 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' });
+      expect(resolved.status).toBe('approved');
+      expect(consumed).toEqual([{ approvalId: 'approval-eval-1', toolCallId: 'call-eval-1', rootSessionId: 'session-1', workerGeneration: 'worker-1', epoch: 'epoch-1', toolName: 'eval', input }]);
+    } finally { manager.closeSession('session-1'); }
+  });
+
 
   const permissionApproval: WorkerInteraction = {
     ...approval, approvalId: 'permission-1', toolCallId: 'permission-call-1', permissionRequest: true,
@@ -563,9 +590,9 @@ describe('service-owned interaction CAS', () => {
     const stale = Promise.withResolvers<'accept'>();
     const replacementOps: WorkerOperation[] = [];
     const replacement = new InteractionManager(60_000, undefined, { resolveMode: async () => 'safety', evaluate: async () => stale.promise });
-    replacement.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { replacementOps.push(operation); }, () => {});
+    replacement.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async operation => { replacementOps.push(operation); }, () => { });
     replacement.onRequest('session-1', 'worker-1', permissionApproval);
-    replacement.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async operation => { replacementOps.push(operation); }, () => {});
+    replacement.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async operation => { replacementOps.push(operation); }, () => { });
     stale.resolve('accept');
     await settle();
     expect(replacementOps).toEqual([]);
@@ -657,13 +684,13 @@ describe('service-owned interaction CAS', () => {
     const input = { command: 'printf denied' };
     for (const scenario of ['reject', 'invalidate', 'dispatch-failed'] as const) {
       const manager = new InteractionManager(60_000);
-      manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async () => { if (scenario === 'dispatch-failed') throw new Error('Native handle disappeared'); }, () => {});
+      manager.openSession('session-1', 'epoch-1', 'worker-1', 'workspace-1', async () => { if (scenario === 'dispatch-failed') throw new Error('Native handle disappeared'); }, () => { });
       try {
         manager.onRequest('session-1', 'worker-1', { ...approval, policyTarget: { toolName: 'bash', pattern: JSON.stringify(input) } });
         const resolving = manager.resolveApproval('session-1', 'approval-1', { decision: scenario === 'reject' ? 'reject' : 'approve', version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' });
         if (scenario === 'dispatch-failed') await expect(resolving).rejects.toThrow('Native handle disappeared');
         else await resolving;
-        if (scenario === 'invalidate') manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => {}, () => {});
+        if (scenario === 'invalidate') manager.openSession('session-1', 'epoch-2', 'worker-2', 'workspace-1', async () => { }, () => { });
         expect(manager.consumeApprovalGrant('session-1', 'worker-1', 'approval-1', 'call-1', 'bash', input)).toBeUndefined();
       } finally { manager.closeSession('session-1'); }
     }

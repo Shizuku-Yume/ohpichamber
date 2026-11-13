@@ -72,12 +72,24 @@ export class WorkerInteraction {
     this.executionReceipts.delete(toolCallId);
     return receipt;
   }
-  async approveBash(toolCallId: string, input: JsonObject, signal?: AbortSignal): Promise<boolean> {
-    const captured = this.inputs.get(toolCallId);
-    const turnId = this.callbacks.currentTurn();
-    if (this.closed || !turnId || !captured || JSON.stringify(captured) !== JSON.stringify(input)) return false;
-    const choice = await this.requestApproval(turnId, toolCallId, 'bash', captured, 'Host policy requires approval for this exact command', ['Approve', 'Reject'], signal);
+  async approveTool(toolCallId: string, toolName: string, input: JsonObject, reason: string, signal?: AbortSignal): Promise<boolean> {
+    const captured = this.inputs.get(toolCallId) ?? input;
+    const turnId = this.callbacks.currentTurn() ?? 'turn-0';
+    if (this.closed || signal?.aborted) return false;
+    const choice = await this.requestApproval(
+      turnId,
+      toolCallId,
+      toolName,
+      captured,
+      reason || `Host policy requires approval for ${toolName}`,
+      ['Approve', 'Reject'],
+      signal,
+    );
     return choice === 'Approve';
+  }
+
+  async approveBash(toolCallId: string, input: JsonObject, signal?: AbortSignal): Promise<boolean> {
+    return this.approveTool(toolCallId, 'bash', input, 'Host policy requires approval for this exact command', signal);
   }
 
   readonly ui: ExtensionUIContext = {
@@ -92,38 +104,64 @@ export class WorkerInteraction {
       return result?.kind === 'submit' ? result.results[0]?.customInput : undefined;
     },
     askDialog: (questions, dialogOptions) => this.askDialog(questions, dialogOptions),
-    notify: () => {},
-    onTerminalInput: () => () => {},
-    setStatus: () => {},
-    setWorkingMessage: () => {},
-    setWidget: () => {},
-    setFooter: () => {},
-    setHeader: () => {},
-    setTitle: () => {},
+    notify: () => { },
+    onTerminalInput: () => () => { },
+    setStatus: () => { },
+    setWorkingMessage: () => { },
+    setWidget: () => { },
+    setFooter: () => { },
+    setHeader: () => { },
+    setTitle: () => { },
     custom: async () => { throw new Error('Custom interactive UI is unavailable in the Agent Service worker'); },
-    setEditorText: () => {},
-    pasteToEditor: () => {},
+    setEditorText: () => { },
+    pasteToEditor: () => { },
     getEditorText: () => '',
     editor: async () => { throw new Error('Terminal editor UI is unavailable in the Agent Service worker'); },
-    addAutocompleteProvider: () => {},
-    setEditorComponent: () => {},
+    addAutocompleteProvider: () => { },
+    setEditorComponent: () => { },
     getEditorComponent: () => undefined,
-    refreshTranscript: () => {},
-    rerenderMessage: () => {},
+    refreshTranscript: () => { },
+    rerenderMessage: () => { },
     getLinkClicksAvailable: () => false,
     get theme(): Theme { ensureThemeSync(); return theme; },
     getAllThemes: async () => [],
     getTheme: async () => undefined,
     setTheme: async () => ({ success: false, error: 'Theme UI is unavailable in the Agent Service worker' }),
     getToolsExpanded: () => false,
-    setToolsExpanded: () => {},
+    setToolsExpanded: () => { },
   };
 
   private async handleApprove(prompt: ExtensionApprovalPrompt, dialogOptions?: { signal?: AbortSignal }): Promise<ExtensionApprovalAnswer> {
     if (this.closed) return 'deny';
-    const turnId = this.callbacks.currentTurn();
-    if (!turnId) return 'deny';
-    const observer = [...this.observed.values()][0];
+    const turnId = this.callbacks.currentTurn() ?? 'turn-0';
+    const callId = (dialogOptions as { toolCallId?: string } | undefined)?.toolCallId
+      ?? (prompt as { toolCallId?: string } | undefined)?.toolCallId;
+    let observer: ToolApprovalRequestedEvent | undefined;
+    if (callId && this.observed.has(callId)) {
+      observer = this.observed.get(callId);
+    } else {
+      for (const candidate of this.observed.values()) {
+        const input = this.inputs.get(candidate.toolCallId);
+        const nameMatches = prompt.full.toLowerCase().includes(candidate.toolName.toLowerCase())
+          || prompt.compact.toLowerCase().includes(candidate.toolName.toLowerCase());
+        const inputValues = input ? Object.values(input).map(String) : [];
+        const inputMatches = inputValues.some(val => val.length > 2 && (prompt.full.includes(val) || prompt.compact.includes(val)));
+        if (nameMatches && inputMatches) {
+          observer = candidate;
+          break;
+        }
+      }
+      if (!observer) {
+        for (const candidate of this.observed.values()) {
+          if (prompt.full.toLowerCase().includes(candidate.toolName.toLowerCase())
+            || prompt.compact.toLowerCase().includes(candidate.toolName.toLowerCase())) {
+            observer = candidate;
+            break;
+          }
+        }
+      }
+      observer ??= [...this.observed.values()][0];
+    }
     if (!observer) return 'deny';
     this.observed.delete(observer.toolCallId);
     const input = this.inputs.get(observer.toolCallId);
@@ -138,9 +176,20 @@ export class WorkerInteraction {
 
   private async select(title: string, options: ExtensionUISelectItem[], dialogOptions?: { signal?: AbortSignal }): Promise<string | undefined> {
     if (this.closed) return undefined;
-    const turnId = this.callbacks.currentTurn();
-    if (!turnId) return undefined;
-    const observer = [...this.observed.values()][0];
+    const turnId = this.callbacks.currentTurn() ?? 'turn-0';
+    const callId = (dialogOptions as { toolCallId?: string } | undefined)?.toolCallId;
+    let observer: ToolApprovalRequestedEvent | undefined;
+    if (callId && this.observed.has(callId)) {
+      observer = this.observed.get(callId);
+    } else {
+      for (const candidate of this.observed.values()) {
+        if (title.toLowerCase().includes(candidate.toolName.toLowerCase())) {
+          observer = candidate;
+          break;
+        }
+      }
+      observer ??= [...this.observed.values()][0];
+    }
     if (!observer) {
       const result = await this.askDialog([{
         id: 'select',
@@ -204,8 +253,8 @@ export class WorkerInteraction {
     signal?: AbortSignal,
     steeringSignal?: AbortSignal,
   ): Promise<NativePermissionChoice | undefined> {
-    const turnId = this.callbacks.currentTurn();
-    if (this.closed || !turnId || signal?.aborted || steeringSignal?.aborted) return undefined;
+    const turnId = this.callbacks.currentTurn() ?? 'turn-0';
+    if (this.closed || signal?.aborted || steeringSignal?.aborted) return undefined;
     const approvalId = randomUUID();
     const input = this.approvalInput(toolCall);
     const action = actionType(toolCall.toolName);

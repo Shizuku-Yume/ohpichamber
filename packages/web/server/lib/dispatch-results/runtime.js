@@ -68,11 +68,11 @@ const retryDelay = (failures) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(fa
 const unavailableError = (message, status) => Object.assign(new Error(message), { status });
 
 /** A durable delivery id minted once and reused across retries. */
-const createMessageId = (now) => {
+export const createMessageId = (now) => {
   const time = (BigInt(now) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
   let random = '';
   for (let index = 0; index < 14; index += 1) random += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
-  return `delivery_${time}${random}`;
+  return `msg_${time}${random}`;
 };
 
 export const escapeAttribute = (value) => value
@@ -87,17 +87,47 @@ const messageText = (message) => (Array.isArray(message?.parts) ? message.parts 
   .join('')
   .trim();
 
-const OUTCOME_STATES = { completed: 'completed', failed: 'error', cancelled: 'cancelled' };
+const OUTCOME_STATES = {
+  succeeded: 'completed',
+  failed: 'error',
+  interrupted: 'cancelled',
+  stopped: 'cancelled',
+  completed: 'completed',
+  cancelled: 'cancelled',
+};
 
-export const readDispatchOutcome = (page, dispatchedAt, afterTurnId) => {
-  if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
-  const turns = page.turns.filter((turn) => turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled');
+export const readDispatchOutcome = (pageOrRecords, dispatchedAt, afterTurnOrIdleId, { withText = false } = {}) => {
+  if (Array.isArray(pageOrRecords)) {
+    const records = pageOrRecords;
+    const idleIndex = records.findIndex((record) => record?.type === 'idle');
+    if (idleIndex === -1) return null;
+    const idle = records[idleIndex];
+    if (!idle || !idle.time) return null;
+    const byOrder = afterTurnOrIdleId !== undefined;
+    if (byOrder ? idle.id === afterTurnOrIdleId : idle.time.created < dispatchedAt) return null;
+    const baselineIndex = byOrder && afterTurnOrIdleId !== null
+      ? records.findIndex((record) => record?.id === afterTurnOrIdleId)
+      : -1;
+    const turnRecords = records.slice(idleIndex + 1, baselineIndex === -1 ? undefined : baselineIndex);
+    const replies = turnRecords
+      .filter((record) => record?.type === 'assistant' && (byOrder || record.time?.created >= dispatchedAt));
+    const reply = replies[0];
+    const assistantText = (a) => (Array.isArray(a?.content) ? a.content.map((c) => c?.text || '').join('') : '');
+    const textReply = withText ? replies.find((a) => assistantText(a)) : reply;
+    return {
+      state: OUTCOME_STATES[idle.outcome] ?? idle.outcome,
+      text: textReply ? assistantText(textReply) : '',
+      errorMessage: reply?.error?.message?.trim() ?? '',
+    };
+  }
+  if (!pageOrRecords || !Array.isArray(pageOrRecords.turns) || !Array.isArray(pageOrRecords.messages)) return null;
+  const turns = pageOrRecords.turns.filter((turn) => turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled');
   const turn = turns.find((candidate) => {
-    if (afterTurnId !== undefined && candidate.turnId === afterTurnId) return false;
+    if (afterTurnOrIdleId !== undefined && candidate.turnId === afterTurnOrIdleId) return false;
     return Number(candidate.finishedAt) >= dispatchedAt;
   });
   if (!turn) return null;
-  const reply = page.messages.find((message) => message.turnId === turn.turnId && message.role === 'assistant');
+  const reply = pageOrRecords.messages.find((message) => message.turnId === turn.turnId && message.role === 'assistant');
   return {
     state: OUTCOME_STATES[turn.status],
     text: reply ? messageText(reply) : '',

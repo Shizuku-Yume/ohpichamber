@@ -161,9 +161,9 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.keep': '保留的近期上下文',
     'settings.openchamber.defaults.compaction.keepInfo': '压缩后在摘要旁原样保留的最近对话量。越多越能保留准确细节，但留给新工作的空间越少。',
     'settings.openchamber.defaults.compaction.keepDefault': '默认（{count}）',
-    'settings.openchamber.defaults.compaction.tokens': '{count} token',
+    'settings.openchamber.defaults.compaction.tokens': '{count} Token',
     'settings.openchamber.defaults.compaction.background': '在后台压缩',
-    'settings.openchamber.defaults.compaction.backgroundInfo': 'OpenCode 的实验性功能。会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 token。约 64K token 以下的会话不会使用。',
+    'settings.openchamber.defaults.compaction.backgroundInfo': 'OpenCode 的实验性功能。会话接近压缩时，OpenCode 会提前写好摘要，到需要压缩时直接换上，会话无需停下等待。最终没用上的摘要同样消耗 Token。约 64K Token 以下的会话不会使用。',
   },
   'zh-TW': {
     'settings.openchamber.defaults.compaction.title': '壓縮',
@@ -176,9 +176,9 @@ export const compactionSettingsI18n = {
     'settings.openchamber.defaults.compaction.keep': '保留的近期上下文',
     'settings.openchamber.defaults.compaction.keepInfo': '壓縮後在摘要旁原樣保留的最近對話量。越多越能保留準確細節，但留給新工作的空間越少。',
     'settings.openchamber.defaults.compaction.keepDefault': '預設（{count}）',
-    'settings.openchamber.defaults.compaction.tokens': '{count} token',
+    'settings.openchamber.defaults.compaction.tokens': '{count} Token',
     'settings.openchamber.defaults.compaction.background': '在背景壓縮',
-    'settings.openchamber.defaults.compaction.backgroundInfo': 'OpenCode 的實驗性功能。工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 token。約 64K token 以下的工作階段不會使用。',
+    'settings.openchamber.defaults.compaction.backgroundInfo': 'OpenCode 的實驗性功能。工作階段接近壓縮時，OpenCode 會先寫好摘要，到需要壓縮時直接換上，工作階段不必停下等待。最後沒用上的摘要同樣消耗 Token。約 64K Token 以下的工作階段不會使用。',
   },
   tr: {
     'settings.openchamber.defaults.compaction.title': 'Sıkıştırma',

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { z } from 'zod';
 import {
   CatalogWorkerIdentitySchema, CounterSchema, EntityIdSchema, JsonObjectSchema,
@@ -28,6 +29,7 @@ import {
 import { refreshStoredManagedMcpOAuthCredential } from '@oh-my-pi/pi-coding-agent/mcp/oauth-credentials';
 import type { MCPConfigFile, MCPHttpServerConfig, MCPSseServerConfig, MCPServerConfig as SDKMCPServerConfig } from '@oh-my-pi/pi-coding-agent/mcp/types';
 import type { AuthStorage as SDKAuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
+import { getAgentDir } from '@oh-my-pi/pi-utils';
 import { ProjectionError } from '../projection/journal.ts';
 
 export * from './mcp/protocol.ts';
@@ -81,7 +83,22 @@ function managedFile(configuration: MCPConfigurationState): ManagedFile {
 }
 
 /** The workspace owner supplies the durable revision; a worker never mints it. */
-function projectUnmanagedMcpConfiguration(raw: unknown, workspaceId: string): MCPConfigurationState {
+function isAuthError(detail: string, config?: unknown): boolean {
+  if (/401|unauthorized|sign-in|sign in|auth required|needs auth|oauth/i.test(detail)) return true;
+  if (config && typeof config === 'object') {
+    const cfg = config as Record<string, unknown>;
+    if (cfg.auth === 'oauth' || (cfg.oauth && typeof cfg.oauth === 'object')) return true;
+  }
+  return false;
+}
+
+/** The workspace owner supplies the durable revision; a worker never mints it. */
+function projectUnmanagedMcpConfiguration(
+  raw: unknown,
+  workspaceId: string,
+  scope: 'project' | 'user' = 'project',
+  managed = false,
+): MCPConfigurationState {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration is absent, invalid or unreadable.', true);
   }
@@ -145,7 +162,8 @@ function projectUnmanagedMcpConfiguration(raw: unknown, workspaceId: string): MC
       serverId,
       label,
       enabled,
-      managed: false,
+      managed,
+      scope,
       transport,
     });
   }
@@ -158,14 +176,20 @@ function projectUnmanagedMcpConfiguration(raw: unknown, workspaceId: string): MC
 }
 
 /** The workspace owner supplies the durable revision; a worker never mints it. */
-export async function writeNativeMcpConfiguration(configPath: string, captured: MCPConfigurationState): Promise<MCPConfigurationState> {
+export async function writeNativeMcpConfiguration(
+  configPath: string,
+  captured: MCPConfigurationState,
+  userConfigPath?: string,
+): Promise<MCPConfigurationState> {
   const configuration = MCPConfigurationStateSchema.parse(captured);
+  const resolvedUserPath = userConfigPath ?? join(getAgentDir(), 'mcp.json');
+
   let fileExists = false;
   try {
     await lstat(configPath);
     fileExists = true;
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       fileExists = false;
     } else {
       throw new NativeMcpError('MCP_CONFIG_WRITE_FAILED', 'MCP configuration could not be checked.', true);
@@ -185,11 +209,15 @@ export async function writeNativeMcpConfiguration(configPath: string, captured: 
     }
   }
 
-  const sanitizedConfiguration: MCPConfigurationState = {
-    ...configuration,
+  const projectServers = configuration.config.servers.filter(s => s.scope !== 'user');
+  const userServers = configuration.config.servers.filter(s => s.scope === 'user');
+
+  const sanitizedProjectConfig: MCPConfigurationState = {
+    workspaceId: configuration.workspaceId,
+    persistedRevision: configuration.persistedRevision,
     config: {
-      servers: configuration.config.servers.map(s => {
-        const copy = { ...s };
+      servers: projectServers.map(s => {
+        const copy = { ...s, scope: 'project' as const };
         delete copy.managed;
         return copy;
       }),
@@ -197,41 +225,140 @@ export async function writeNativeMcpConfiguration(configPath: string, captured: 
   };
 
   try {
-    await writeMCPConfigFile(configPath, managedFile(sanitizedConfiguration));
+    await writeMCPConfigFile(configPath, managedFile(sanitizedProjectConfig));
   } catch {
     throw new NativeMcpError('MCP_CONFIG_WRITE_FAILED', 'MCP configuration could not be committed.', true);
   }
-  return sanitizedConfiguration;
+
+  if (userConfigPath !== undefined || userServers.length > 0) {
+    const userOmpFile = {
+      mcpServers: Object.fromEntries(userServers.map(server => [server.serverId, definition(server)])),
+      disabledServers: userServers.filter(server => !server.enabled).map(server => server.serverId),
+    };
+    try {
+      await writeMCPConfigFile(resolvedUserPath, userOmpFile);
+    } catch {
+      throw new NativeMcpError('MCP_CONFIG_WRITE_FAILED', 'Global user MCP configuration could not be committed.', true);
+    }
+  }
+
+  return {
+    ...configuration,
+    config: {
+      servers: [
+        ...sanitizedProjectConfig.config.servers,
+        ...userServers.map(s => {
+          const copy = { ...s, scope: 'user' as const };
+          delete copy.managed;
+          return copy;
+        }),
+      ],
+    },
+  };
 }
 
 /** First-use storage may be absent; malformed or unreadable configured files still fail closed. */
-export async function readNativeMcpConfigurationIfPresent(configPath: string, workspaceId: string): Promise<MCPConfigurationState | null> {
-  try { await lstat(configPath); }
-  catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return null;
-    throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration could not be read.', true);
-  }
-  return readNativeMcpConfiguration(configPath, workspaceId);
-}
-
-async function readNativeMcpConfiguration(configPath: string, workspaceId: string): Promise<MCPConfigurationState> {
-  let raw: unknown;
+export async function readNativeMcpConfigurationIfPresent(
+  configPath: string,
+  workspaceId: string,
+  userConfigPath?: string,
+): Promise<MCPConfigurationState | null> {
+  let hasProject = false;
+  let hasUser = false;
   try {
-    raw = await readMCPConfigFile(configPath);
-  } catch {
-    throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration is absent, invalid or unreadable.', true);
-  }
-  const managedResult = ManagedFileSchema.safeParse(raw);
-  if (managedResult.success && managedResult.data.openchamber.workspaceId === workspaceId) {
-    const file = managedResult.data;
-    const expected = managedFile(file.openchamber);
-    if (JSON.stringify(file.mcpServers) === JSON.stringify(expected.mcpServers)
-      && JSON.stringify(file.disabledServers) === JSON.stringify(expected.disabledServers)) {
-      return file.openchamber;
+    await lstat(configPath);
+    hasProject = true;
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+      throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration could not be read.', true);
     }
   }
-  return projectUnmanagedMcpConfiguration(raw, workspaceId);
+  if (userConfigPath) {
+    try {
+      await lstat(userConfigPath);
+      hasUser = true;
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration could not be read.', true);
+      }
+    }
+  }
+  if (!hasProject && !hasUser) return null;
+  return readNativeMcpConfiguration(configPath, workspaceId, userConfigPath);
 }
+
+async function readNativeMcpConfiguration(
+  configPath: string,
+  workspaceId: string,
+  userConfigPath?: string,
+): Promise<MCPConfigurationState> {
+  let projectServers: MCPServerConfig[] = [];
+  let persistedRevision = '0';
+
+  try {
+    const raw = await readMCPConfigFile(configPath);
+    const managedResult = ManagedFileSchema.safeParse(raw);
+    if (managedResult.success && managedResult.data.openchamber.workspaceId === workspaceId) {
+      const file = managedResult.data;
+      const expected = managedFile(file.openchamber);
+      if (JSON.stringify(file.mcpServers) === JSON.stringify(expected.mcpServers)
+        && JSON.stringify(file.disabledServers) === JSON.stringify(expected.disabledServers)) {
+        projectServers = file.openchamber.config.servers.map(s => ({ ...s, scope: 'project' as const }));
+        persistedRevision = file.openchamber.persistedRevision;
+      } else {
+        projectServers = projectUnmanagedMcpConfiguration(raw, workspaceId, 'project', false).config.servers;
+      }
+    } else {
+      projectServers = projectUnmanagedMcpConfiguration(raw, workspaceId, 'project', false).config.servers;
+    }
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      // Absent project file is ok
+    } else if (error instanceof NativeMcpError) {
+      throw error;
+    } else {
+      throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP configuration is absent, invalid or unreadable.', true);
+    }
+  }
+
+  let userServers: MCPServerConfig[] = [];
+  if (userConfigPath) {
+    try {
+      const rawUser = await readMCPConfigFile(userConfigPath);
+      userServers = projectUnmanagedMcpConfiguration(rawUser, workspaceId, 'user', true).config.servers;
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        // Absent user file is ok
+      } else if (error instanceof NativeMcpError) {
+        throw error;
+      } else {
+        throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'User MCP configuration is absent, invalid or unreadable.', true);
+      }
+    }
+  }
+
+  const seen = new Set<string>();
+  const mergedServers: MCPServerConfig[] = [];
+  for (const server of projectServers) {
+    if (!seen.has(server.serverId)) {
+      seen.add(server.serverId);
+      mergedServers.push(server);
+    }
+  }
+  for (const server of userServers) {
+    if (!seen.has(server.serverId)) {
+      seen.add(server.serverId);
+      mergedServers.push(server);
+    }
+  }
+
+  return {
+    workspaceId,
+    persistedRevision,
+    config: { servers: mergedServers },
+  };
+}
+
 
 export class NativeMcpError extends Error {
   constructor(readonly code: string, detail: string, readonly retryable: boolean, readonly state?: MCPCatalogRead) {
@@ -246,6 +373,7 @@ export class NativeMcpError extends Error {
 export interface NativeMcpDependencies {
   readonly cwd: string;
   readonly configPath: string;
+  readonly userConfigPath?: string;
   readonly worker: CatalogWorkerIdentity;
   readonly authStorage: SDKAuthStorage;
   /** Host-authorized opaque reference -> private AuthStorage provider namespace. */
@@ -326,8 +454,10 @@ export class WorkerMcp extends MCPManager {
         return { ...owner, status: 'connected', toolCount: manager.getTools().length };
       } catch (error) {
         if (error instanceof ProjectionError) throw error;
-        return { ...owner, status: 'failed', error: error instanceof NativeMcpError ? error.operationError
-          : { code: 'MCP_RECONNECT_FAILED', detail: 'MCP connection test failed.', retryable: true } };
+        return {
+          ...owner, status: 'failed', error: error instanceof NativeMcpError ? error.operationError
+            : { code: 'MCP_RECONNECT_FAILED', detail: 'MCP connection test failed.', retryable: true }
+        };
       } finally { if (manager) await this.#release([manager]); }
     });
   }
@@ -337,8 +467,8 @@ export class WorkerMcp extends MCPManager {
     return this.#serialize(async () => {
       const request = MCPConfigureRequestSchema.parse(raw);
       const configuration = this.#capture(next);
-      const current = await readNativeMcpConfiguration(this.deps.configPath, this.deps.worker.workspaceId);
-      if (current.config.servers.some(s => s.managed === false)) {
+      const current = await readNativeMcpConfiguration(this.deps.configPath, this.deps.worker.workspaceId, this.deps.userConfigPath);
+      if (current.config.servers.some(s => s.managed === false && s.scope === 'project')) {
         throw new NativeMcpError('CATALOG_CONFLICT', 'Hand-written or unmanaged MCP configuration cannot be mutated in place.', false);
       }
       if (request.expectedPersistedRevision !== current.persistedRevision
@@ -347,7 +477,7 @@ export class WorkerMcp extends MCPManager {
         throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
       }
       for (const server of configuration.config.servers) await this.deps.authorizeServer(server, true);
-      const persisted = await writeNativeMcpConfiguration(this.deps.configPath, configuration);
+      const persisted = await writeNativeMcpConfiguration(this.deps.configPath, configuration, this.deps.userConfigPath);
       await this.#retireIncompatibleOAuth(persisted);
       return persisted;
     });
@@ -368,7 +498,12 @@ export class WorkerMcp extends MCPManager {
       }));
       if (attempts.some(attempt => attempt.status === 'rejected')) {
         await this.#release(next.values());
-        return this.#failed(configuration, 'MCP_APPLY_FAILED', 'MCP runtime application failed; the prior catalog is retained.');
+        const rejections = attempts.filter((a): a is PromiseRejectedResult => a.status === 'rejected');
+        const authRejection = rejections.find(r => r.reason instanceof NativeMcpError && r.reason.code === 'MCP_AUTH_REQUIRED');
+        const chosen = authRejection ?? rejections[0];
+        const code = chosen?.reason instanceof NativeMcpError ? chosen.reason.code : 'MCP_APPLY_FAILED';
+        const detail = chosen?.reason instanceof Error ? chosen.reason.message : 'MCP runtime application failed; the prior catalog is retained.';
+        return this.#failed(configuration, code, detail);
       }
       try {
         await this.#publish(next, configuration, configuration.persistedRevision);
@@ -432,19 +567,19 @@ export class WorkerMcp extends MCPManager {
     return MCPOAuthResultSchema.parse(
       authenticated
         ? {
-            serverId,
-            worker: this.deps.worker,
-            persistedRevision: configuration.persistedRevision,
-            status: 'authenticated',
-            authenticated: true,
-          }
+          serverId,
+          worker: this.deps.worker,
+          persistedRevision: configuration.persistedRevision,
+          status: 'authenticated',
+          authenticated: true,
+        }
         : {
-            serverId,
-            worker: this.deps.worker,
-            persistedRevision: configuration.persistedRevision,
-            status: 'unauthenticated',
-            authenticated: false,
-          },
+          serverId,
+          worker: this.deps.worker,
+          persistedRevision: configuration.persistedRevision,
+          status: 'unauthenticated',
+          authenticated: false,
+        },
     );
   }
 
@@ -721,8 +856,10 @@ export class WorkerMcp extends MCPManager {
           env[name] = refreshed.credential.access;
         } else env[name] = credential.key;
       }
-      return { type: 'stdio', command: await this.deps.resolveCommand(server.transport), args: server.transport.args,
-        cwd: this.deps.cwd, env, envPolicy: 'literal', enabled: true };
+      return {
+        type: 'stdio', command: await this.deps.resolveCommand(server.transport), args: server.transport.args,
+        cwd: this.deps.cwd, env, envPolicy: 'literal', enabled: true
+      };
     }
     let remote: MCPHttpServerConfig | MCPSseServerConfig = { type: server.transport.type, url: server.transport.url, enabled: true };
     if (server.transport.credentialRef) {
@@ -767,15 +904,21 @@ export class WorkerMcp extends MCPManager {
       const result = await manager.connectServers({ [server.serverId]: config }, {}, undefined, 0);
       const status = await manager.waitForStartup(30_000);
       this.#assertCurrent();
-      if (result.errors.size || status.pending.length || status.failed.length
-        || !status.connected.includes(server.serverId) || !manager.getConnection(server.serverId)?.tools) {
-        throw new Error('MCP handshake or tools failed');
+      const failedEntry = status.failed.find(f => f.name === server.serverId);
+      const errorMsg = failedEntry?.error || result.errors.get(server.serverId);
+      if (errorMsg || status.pending.length || !status.connected.includes(server.serverId) || !manager.getConnection(server.serverId)?.tools) {
+        const detail = errorMsg || (status.pending.length ? 'MCP handshake timed out' : 'MCP handshake or tools failed');
+        const isAuth = isAuthError(detail, config);
+        throw new NativeMcpError(isAuth ? 'MCP_AUTH_REQUIRED' : 'MCP_APPLY_FAILED', detail, true);
       }
       this.#wire(server.serverId, manager);
       return manager;
-    } catch {
+    } catch (err) {
       await this.#release([manager]);
-      throw new NativeMcpError('MCP_APPLY_FAILED', 'An MCP server could not establish a usable tool catalog.', true);
+      if (err instanceof NativeMcpError) throw err;
+      const detail = err instanceof Error ? err.message : String(err);
+      const isAuth = isAuthError(detail, config);
+      throw new NativeMcpError(isAuth ? 'MCP_AUTH_REQUIRED' : 'MCP_APPLY_FAILED', detail, true);
     }
   }
 
@@ -863,8 +1006,10 @@ export class WorkerMcp extends MCPManager {
     return MCPAppliedRevisionsSchema.parse({ runtimeStatus, appliedRevision, catalogRevision });
   }
   #failed(configuration: MCPConfigurationState, code: string, detail: string): MCPWorkerApplyOutcome {
-    return MCPWorkerApplyOutcomeSchema.parse({ worker: this.deps.worker, outcome: 'failed',
-      revisions: this.#revisions(configuration), error: { code, detail, retryable: true } });
+    return MCPWorkerApplyOutcomeSchema.parse({
+      worker: this.deps.worker, outcome: 'failed',
+      revisions: this.#revisions(configuration), error: { code, detail, retryable: true }
+    });
   }
   #capture(raw: MCPConfigurationState): MCPConfigurationState {
     this.#assertCurrent();

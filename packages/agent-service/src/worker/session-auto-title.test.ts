@@ -7,7 +7,7 @@ import { JsonValueSchema, type PromptRequest, type ProjectionInput } from '@open
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { __resetDirsFromEnvForTests } from '@oh-my-pi/pi-utils';
 import { WorkerSession } from './session.ts';
-
+import { cfgSuggestionGenerator } from './suggestion.ts';
 const directoryEnvironmentKeys = ['HOME', 'USERPROFILE', 'PI_CONFIG_DIR', 'PI_CODING_AGENT_DIR', 'OMP_PROFILE', 'PI_PROFILE', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'] as const;
 let environmentRoot = '';
 let previousEnvironment: Array<readonly [string, string | undefined]> = [];
@@ -118,7 +118,7 @@ async function session(answers: TitleAnswers, firstText: string, onContextReques
  }, () => { throw new Error('No interaction expected'); }, () => { throw new Error('Title work must not fail the worker'); },
   async () => { }, async () => { throw new Error('No Host action expected'); }, () => { });
  const worker = await open();
- // Register the fixture model so OMP's title roles can be pinned to it.
+ cfgSuggestionGenerator.override(worker.session.settings, 'off');
  await worker.operation({
   type: 'catalog', revision: '1', operation: {
    type: 'catalog.provider.configure', request: {

@@ -1487,6 +1487,8 @@ export class WorkerSession {
         } finally { if (applying) this.skillsApplying = false; }
       }
       case 'btw.ask': {
+        this.suggestionDriver.cancel();
+        await this.stopAutoTitle();
         const record = await this.btw.ask(operation.question, operation.recordId);
         return { type: 'btw.ask', recordId: record.id };
       }

@@ -71,6 +71,18 @@ export const isWebSearchTool = (toolName: string | undefined): boolean => toolBa
 /** The plan tool every todo snapshot comes from. */
 export const isTodoTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'todo';
 
+/** Tools that manage long-term agent memory. */
+export const isMemoryTool = (toolName: string | undefined): boolean => {
+    const name = toolBaseName(toolName);
+    return name === 'retain' || name === 'recall' || name === 'reflect' || name === 'memory_edit' || name === 'learn';
+};
+
+export const isRetainTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'retain';
+export const isRecallTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'recall';
+export const isReflectTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'reflect';
+export const isLearnTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'learn';
+/** Text-to-image generation and editing tool. */
+export const isImageGenerationTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'generate_image';
 /** Rows with a direct in-app destination: reads and skills. */
 export const isStaticTool = (toolName: string | undefined): boolean => {
     const name = toolBaseName(toolName);

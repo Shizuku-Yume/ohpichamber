@@ -72,7 +72,8 @@ function instructionMessages(request: ProviderRequest): Array<{ role: string; co
  return request.messages.filter(message => message.role === 'system' || message.role === 'developer')
   .map(message => ({ role: message.role, content: message.content }));
 }
-const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify', 'openchamber_image', 'openchamber_render'] as const;
+const HOST_TOOL_NAMES = ['openchamber', 'web', 'openchamber_knowledge', 'notify', 'openchamber_render', 'openchamber_workflow'] as const;
+const ENABLED_HOST_TOOL_NAMES = ['openchamber', 'web', 'openchamber_knowledge', 'openchamber_render', 'openchamber_workflow'] as const;
 // The worker bypasses generic tool authorization for every registered Host
 // tool: their capability owners authorize the inner call. The list is derived
 // from the registry so a newly registered Host tool cannot silently fall to the
@@ -80,7 +81,7 @@ const HOST_TOOL_NAMES = ['openchamber', 'web', 'memory', 'openchamber_knowledge'
 const HOST_TOOL_BYPASS_NAMES = [...Object.keys(HOST_TOOL_DESCRIPTIONS), 'bash'];
 
 test('every registered Host tool is bypassed by the worker tool_call guard', () => {
-  expect(HOST_TOOL_BYPASS_NAMES).toEqual(expect.arrayContaining([...HOST_TOOL_NAMES, 'bash']));
+ expect(HOST_TOOL_BYPASS_NAMES).toEqual(expect.arrayContaining([...HOST_TOOL_NAMES, 'bash']));
 });
 const HOST_TOOL_INVENTORY_LINE = new RegExp(`^- (?:${HOST_TOOL_NAMES.join('|')})(?:: \`[^\`]+\`)?$`);
 /**
@@ -843,13 +844,13 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
  const harness = await fixture({
   respond(payload) {
    const messages = payload.messages;
-   return messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'memory', id: 'host-memory', input: { action: 'memory.save', input: { key: 'proof', content: 'HOST_MEMORY_WRITTEN' } } });
+   return messages.at(-1)?.role === 'tool' ? completion() : completion({ name: 'openchamber_workflow', id: 'host-workflow', input: { action: 'workflow.run', input: { script: 'workflow.js' } } });
   }, async invoke(request, signal, root) {
    signal.throwIfAborted();
    invoked = request;
-   await writeFile(join(root, 'memory.txt'), String(request.input.content));
-   const stored = await readFile(join(root, 'memory.txt'), 'utf8');
-   return { stored, bytes: Buffer.byteLength(stored) };
+   await writeFile(join(root, 'workflow.txt'), String(request.input.script));
+   const stored = await readFile(join(root, 'workflow.txt'), 'utf8');
+   return { ok: true, stored, bytes: Buffer.byteLength(stored) };
   }
  });
  const terminal = Promise.withResolvers<void>();
@@ -857,13 +858,16 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
  try {
   await expect(readFile(harness.mcpConfigPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   cfgToolsApprovalMode.override(harness.worker.session.settings, 'yolo');
-  expect(harness.worker.session.getAllToolInfos().map(tool => tool.name)).toEqual(expect.arrayContaining([...HOST_TOOL_NAMES]));
-  await harness.worker.operation({ type: 'prompt', runId: 'host-run', request: prompt('Store the marker with the memory tool.') });
+  expect(harness.worker.session.getAllToolInfos().map(tool => tool.name)).toEqual(expect.arrayContaining([...ENABLED_HOST_TOOL_NAMES]));
+  expect(harness.worker.session.getActiveToolNames()).not.toContain('notify');
+  expect(harness.worker.session.getActiveToolNames()).not.toContain('memory');
+  expect(harness.worker.session.getActiveToolNames()).not.toContain('openchamber_image');
+  await harness.worker.operation({ type: 'prompt', runId: 'host-run', request: prompt('Start the workflow with the workflow tool.') });
   await terminal.promise;
-  expect(invoked).toEqual({ sessionId: rootSessionId, toolName: 'memory', action: 'memory.save', input: { key: 'proof', content: 'HOST_MEMORY_WRITTEN' } });
-  expect(await readFile(join(harness.root, 'memory.txt'), 'utf8')).toBe('HOST_MEMORY_WRITTEN');
-  expect(JSON.stringify(harness.requests)).toContain('HOST_MEMORY_WRITTEN');
-  expect(harness.events.some(input => input.event.type === 'tool.completed' && input.event.toolCallId === 'host-memory' && input.event.status === 'completed')).toBe(true);
+  expect(invoked).toEqual({ sessionId: rootSessionId, toolName: 'openchamber_workflow', action: 'workflow.run', input: { script: 'workflow.js' } });
+  expect(await readFile(join(harness.root, 'workflow.txt'), 'utf8')).toBe('workflow.js');
+  expect(JSON.stringify(harness.requests)).toContain('workflow.js');
+  expect(harness.events.some(input => input.event.type === 'tool.completed' && input.event.toolCallId === 'host-workflow' && input.event.status === 'completed')).toBe(true);
   expect(harness.fatal()).toBe(false);
  } finally { unsubscribe(); await harness.close(); }
 }, 30000);
@@ -915,13 +919,15 @@ test('worker sends plain OMP system and developer context plus only the user pin
   const workerInstructions = instructionMessages(workerRequest);
   const plainInstructions = instructionMessages(plainRequest);
   expect(withoutHostToolInventory(workerInstructions)).toEqual(plainInstructions);
-  for (const toolName of HOST_TOOL_NAMES) expect(JSON.stringify(workerInstructions)).toContain(`- ${toolName}: \`${toolName}\``);
+  for (const toolName of ENABLED_HOST_TOOL_NAMES) expect(JSON.stringify(workerInstructions)).toContain(`- ${toolName}: \`${toolName}\``);
+  expect(JSON.stringify(workerInstructions)).not.toContain('- notify: `notify`');
   expect(JSON.stringify(plainInstructions)).not.toContain('openchamber');
   expect(JSON.stringify(workerRequest.messages)).toContain('USER_PIN_MARKER');
   expect(JSON.stringify(instructionMessages(workerRequest))).not.toContain('USER_PIN_MARKER');
   expect(JSON.stringify(workerRequest)).not.toContain('ohpichamber.context');
   const workerTools = requestTools(workerRequest);
-  for (const toolName of HOST_TOOL_NAMES) expect(workerTools.get(toolName)).toBe(HOST_TOOL_DESCRIPTIONS[toolName]);
+  for (const toolName of ENABLED_HOST_TOOL_NAMES) expect(workerTools.get(toolName)).toBe(HOST_TOOL_DESCRIPTIONS[toolName]);
+  expect(workerTools.has('notify')).toBe(false);
   expect([...workerTools.keys()].some(name => name.includes('://'))).toBe(false);
   expect(harness.fatal()).toBe(false);
  } finally {

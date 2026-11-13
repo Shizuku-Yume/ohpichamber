@@ -7,9 +7,6 @@ interface UseStreamingTextThrottleInput {
     identityKey?: string;
     allowTextReplacement?: boolean;
 }
-
-const DEFAULT_STREAMING_TEXT_THROTTLE_MS = 100;
-
 export const getStreamingThrottleText = (
     current: string,
     next: string,
@@ -48,14 +45,20 @@ const clearTimer = (state: StreamingThrottleState): void => {
 export const useStreamingTextThrottle = ({
     text,
     isStreaming,
-    throttleMs = DEFAULT_STREAMING_TEXT_THROTTLE_MS,
+    throttleMs,
     identityKey,
     allowTextReplacement = false,
 }: UseStreamingTextThrottleInput): string => {
     const [throttledText, setThrottledText] = React.useState(text);
     const latestTextRef = React.useRef(text);
     const throttledTextRef = React.useRef(throttledText);
+    const lastIdentityKeyRef = React.useRef(identityKey);
+    const lastPassThroughTextRef = React.useRef(text);
 
+    if (identityKey !== lastIdentityKeyRef.current) {
+        lastIdentityKeyRef.current = identityKey;
+        lastPassThroughTextRef.current = text;
+    }
     const stateRef = React.useRef<StreamingThrottleState>({
         timer: null,
         pendingText: text,
@@ -86,7 +89,7 @@ export const useStreamingTextThrottle = ({
         const currentThrottled = throttledTextRef.current;
         const stableText = getStreamingThrottleText(currentThrottled, text, isStreaming, allowTextReplacement);
 
-        if (!isStreaming) {
+        if (!throttleMs || throttleMs <= 0) {
             clearTimer(state);
             state.lastEmitAt = Date.now();
             state.emitted = false;
@@ -96,6 +99,15 @@ export const useStreamingTextThrottle = ({
             return;
         }
 
+        if (!isStreaming) {
+            clearTimer(state);
+            state.lastEmitAt = Date.now();
+            state.emitted = false;
+            if (stableText !== currentThrottled) {
+                setThrottledText(stableText);
+            }
+            return;
+        }
         if (stableText === currentThrottled) {
             // Nothing new to show; a stale scheduled update would only repeat it.
             clearTimer(state);
@@ -137,11 +149,20 @@ export const useStreamingTextThrottle = ({
         };
     }, []);
 
+    // When no throttle window is requested, streaming text passes straight through.
+    if (!throttleMs || throttleMs <= 0) {
+        stateRef.current.emitted = true;
+        stateRef.current.lastEmitAt = Date.now();
+        const stable = getStreamingThrottleText(lastPassThroughTextRef.current, text, isStreaming, allowTextReplacement);
+        lastPassThroughTextRef.current = stable;
+        return stable;
+    }
+
     // Leading edge during render: before the stream has shown anything, the
     // text on screen is the text that arrived, so the first token lands in the
     // commit that delivers it instead of waiting for the effect that commits
     // the throttled value after paint. There is nothing to coalesce yet.
-    return isStreaming && throttledText.length === 0
+    return isStreaming && !stateRef.current.emitted && throttledText.length === 0
         ? getStreamingThrottleText('', text, isStreaming, allowTextReplacement)
         : throttledText;
 };

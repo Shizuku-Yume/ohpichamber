@@ -85,13 +85,29 @@ const createCanonicalSessionService = (dependencies) => {
   // move itself. Every dependency is injected so the decision stays testable
   // and the Host owns the Git and bootstrap authority.
   const worktreeMover = typeof dependencies.createSessionWorktreeMover === 'function'
-   ? dependencies.createSessionWorktreeMover(dependencies.worktreeMove ?? {})
-   : createSessionWorktreeMover(dependencies.worktreeMove ?? {});
+    ? dependencies.createSessionWorktreeMover(dependencies.worktreeMove ?? {})
+    : createSessionWorktreeMover(dependencies.worktreeMove ?? {});
   const requiredFunctions = [service?.request, resolveWorkspaceScope, resolveSessionScope, resolveHostSessionScope,
     registerSessionScope, resolveAttachments, capturePrompt, beforeDispatch, onPromptAccepted,
-    directCommandAdmissionStore?.claim, directCommandAdmissionStore?.accept];
+  directCommandAdmissionStore?.claim, directCommandAdmissionStore?.accept];
   if (!service || requiredFunctions.some((candidate) => !z.function().safeParse(candidate).success))
     throw new Error('session routes require the Agent service, Host scope resolvers, registration, attachment, delivery and direct command admission owners');
+  const resolveHostTools = dependencies.resolveHostTools
+    ? dependencies.resolveHostTools
+    : async () => {
+      const settings = typeof dependencies.readSettings === 'function'
+        ? await dependencies.readSettings().catch(() => null)
+        : null;
+      if (!settings) return undefined;
+      return {
+        openchamber: settings.agentControlToolEnabled !== false,
+        web: settings.agentWebToolEnabled !== false,
+        openchamber_knowledge: settings.agentKnowledgeToolEnabled !== false,
+        notify: settings.agentNotifyToolEnabled === true,
+        openchamber_render: settings.agentRenderToolEnabled !== false,
+        openchamber_workflow: settings.agentWorkflowToolEnabled !== false,
+      };
+    };
   const request = async (pathname, init = {}) => {
     const response = await service.request(pathname, { ...init, headers: { accept: 'application/json', ...(init.headers || {}) } });
     const body = await response.json().catch(() => null);
@@ -123,23 +139,25 @@ const createCanonicalSessionService = (dependencies) => {
   const assertWritableScope = (scope) => {
     if (scope.workspaceId.startsWith('archive_')) throw new OpenChamberControlError('Deleted-space sessions are permanently read-only', 409, { code: 'SESSION_READ_ONLY', retryable: false });
   };
-  const emit = (event) => { try { publishSessionEvent?.(event); } catch {} try { broadcastGlobalUiEvent?.(event); } catch {} };
+  const emit = (event) => { try { publishSessionEvent?.(event); } catch { } try { broadcastGlobalUiEvent?.(event); } catch { } };
   // Roots this process confirmed live through a successful reopen or run
   // acknowledgement. A warm send then dispatches without another reopen;
   // delete, relocation, unload and a failed reopen forget the confirmation.
   const liveRootSessions = new Set();
   const rememberLive = (rootSessionId) => { liveRootSessions.add(rootSessionId); };
   const forgetLive = (rootSessionId) => { liveRootSessions.delete(rootSessionId); };
-  const metadata = { getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => {
-    if (persistSessionMetadata) return persistSessionMetadata(id, patch, { directory });
-    // The fallback owns the store for module tests and compositions without an
-    // injected writer, so it announces the committed merge like that writer.
-    const result = await sessionMetadataStore.setSessionMetadata(id, patch);
-    if (result.changed) {
-      try { broadcastGlobalUiEvent?.({ type: 'openchamber:session-metadata', properties: { sessionId: id, sessionID: id, metadata: result.metadata, revision: result.revision } }); } catch {}
+  const metadata = {
+    getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => {
+      if (persistSessionMetadata) return persistSessionMetadata(id, patch, { directory });
+      // The fallback owns the store for module tests and compositions without an
+      // injected writer, so it announces the committed merge like that writer.
+      const result = await sessionMetadataStore.setSessionMetadata(id, patch);
+      if (result.changed) {
+        try { broadcastGlobalUiEvent?.({ type: 'openchamber:session-metadata', properties: { sessionId: id, sessionID: id, metadata: result.metadata, revision: result.revision } }); } catch { }
+      }
+      return result;
     }
-    return result;
-  } };
+  };
   const withSessionAdmission = async (scope, operation, rootSessionId, work, readOnly = false) => {
     if (!agentScopeStore) throw new OpenChamberControlError('Host session admission authority is unavailable', 503);
     const admission = await agentScopeStore.reserveSessionAdmission(scope.workspaceId, operation, rootSessionId);
@@ -178,10 +196,12 @@ const createCanonicalSessionService = (dependencies) => {
     const rootSessionId = randomUUID();
     const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
     const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
+    const hostTools = await resolveHostTools();
     const sessionBootstrap = {
       rootSessionId, projectId, workspaceId,
       cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId,
       displayPath, options,
+      ...(hostTools ? { hostTools } : {}),
     };
     if (parentSessionId !== undefined) sessionBootstrap.parentSessionId = parentSessionId;
     if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
@@ -396,9 +416,11 @@ const createCanonicalSessionService = (dependencies) => {
     if (archiveState.conversion?.code || Object.keys(archiveState.errors).length > 0)
       throw new OpenChamberControlError('Host archive state is unavailable', 503);
     const key = { hostProjectId: scope.hostProjectId, archiveId };
-    let binding = await agentScopeStore.createWorktreeArchive({ ...key, archiveRef, snapshotCommit,
+    let binding = await agentScopeStore.createWorktreeArchive({
+      ...key, archiveRef, snapshotCommit,
       anchorWorkspaceId: scope.workspaceId, claimId, claimGeneration: worktreeArchiveGeneration,
-      branchName, branchOid });
+      branchName, branchOid
+    });
     try {
       binding = await agentScopeStore.archiveWorktreeSessions(key, claimId, archivedAt);
       return { key, claimId, revision: binding.revision };
@@ -555,8 +577,8 @@ const createCanonicalSessionService = (dependencies) => {
     const rootSessionId = source.rootSessionId;
     if (relocationControls.has(rootSessionId)) throw new OpenChamberControlError('Session relocation is in progress', 409, { code: 'COMMAND_IN_FLIGHT' });
     // Relocation retires the source worker, so a later prompt must reopen it.
-  forgetLive(rootSessionId);
-  relocationControls.add(rootSessionId);
+    forgetLive(rootSessionId);
+    relocationControls.add(rootSessionId);
     try {
       await recoverRelocation(rootSessionId);
       source = archiveClaimId ? await agentScopeStore.getSession(sessionId) : await resolveHostRelocationScope(sessionId);
@@ -572,8 +594,10 @@ const createCanonicalSessionService = (dependencies) => {
       const intent = { rootSessionId, transactionId: randomUUID(), sourceWorkspaceId: source.workspaceId, destinationWorkspaceId: destination.workspaceId };
       await agentScopeStore.createRelocation(intent, archiveClaimId);
       try {
-        const destinationScope = { rootSessionId, projectId: destination.projectId, workspaceId: destination.workspaceId, cwd: destination.cwd, agentDirectory: destination.agentDirectory,
-          agentDirectoryId: destination.agentDirectoryId, displayPath: destination.displayPath ?? 'workspace' };
+        const destinationScope = {
+          rootSessionId, projectId: destination.projectId, workspaceId: destination.workspaceId, cwd: destination.cwd, agentDirectory: destination.agentDirectory,
+          agentDirectoryId: destination.agentDirectoryId, displayPath: destination.displayPath ?? 'workspace'
+        };
         if (destination.env) destinationScope.env = destination.env;
         const prepared = HostSessionRelocationPreparedSchema.parse(await request(`/internal/sessions/${encodeURIComponent(rootSessionId)}/relocation/prepare`, {
           method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(HostSessionRelocationPrepareSchema.parse({
@@ -702,8 +726,10 @@ const createCanonicalSessionService = (dependencies) => {
       const root = rows.find((item) => item.sessionId === rootId);
       if (reservation.action === 'done' && !operationId) continue;
       if (!root || !operationId) throw new OpenChamberControlError('Archived root session is unavailable', 503);
-      const nativeDelete = { operationId, projectId: binding.projectId, workspaceId: root.workspaceId,
-        agentDirectoryId: root.agentDirectoryId, sessionIds: rows.map((item) => item.sessionId) };
+      const nativeDelete = {
+        operationId, projectId: binding.projectId, workspaceId: root.workspaceId,
+        agentDirectoryId: root.agentDirectoryId, sessionIds: rows.map((item) => item.sessionId)
+      };
       if (reservation.action === 'done') {
         await request(`/internal/sessions/${encodeURIComponent(rootId)}/worktree-archive-delete/retire`, {
           method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(nativeDelete),
@@ -778,7 +804,7 @@ const createCanonicalSessionService = (dependencies) => {
     }));
     return { sessions };
   };
-  const unloadWorker = async (id) => { forgetLive(id); try { await request(`/internal/workers/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch {} };
+  const unloadWorker = async (id) => { forgetLive(id); try { await request(`/internal/workers/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch { } };
   /**
    * A session's own folder name inside its checkout, or the worktree root:
    * the same rule the New worktree dialog applies (worktree-start-directory).

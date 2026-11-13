@@ -10,8 +10,10 @@ import { nativePrivateRootContext, rememberPrivateRoots, WorkerProjection } from
 type NativeMessage = Extract<AgentSessionEvent, { type: 'message_start' }>['message'];
 type Assistant = Extract<NativeMessage, { role: 'assistant' }>;
 function assistant(content: Assistant['content'], stopReason: Assistant['stopReason'], timestamp: number): Assistant {
-  return { role: 'assistant', content, api: 'openai-completions', provider: 'fixture', model: 'fixture', stopReason, timestamp,
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } } };
+  return {
+    role: 'assistant', content, api: 'openai-completions', provider: 'fixture', model: 'fixture', stopReason, timestamp,
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
+  };
 }
 
 test('binds queued mention provenance to its native entry even when timestamps collide', async () => {
@@ -159,8 +161,10 @@ test('a seeded live assistant start does not duplicate the first text delta', as
     expect(started.flatMap(({ event }) => event.type === 'part.started' && event.part.type === 'text' ? [event.part.content] : []).join('')).toBe('');
     let streamed = '';
     for (const delta of ['w8', ' snapshot']) {
-      streamed += projection.consume({ type: 'message_update', message: seed,
-        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta, partial: seed } })
+      streamed += projection.consume({
+        type: 'message_update', message: seed,
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta, partial: seed }
+      })
         .flatMap(({ event }) => event.type === 'part.delta' ? [event.delta] : []).join('');
     }
     expect(streamed).toBe('w8 snapshot');
@@ -185,8 +189,10 @@ test('configured private roots are withheld across split native deltas without c
     let streamed = '';
     const remaining = `${cwd.slice(5)}/secret.txt; /usr/share/public.txt`;
     for (const delta of [prefix, remaining]) {
-      const events = projection.consume({ type: 'message_update', message: native,
-        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta, partial: native } });
+      const events = projection.consume({
+        type: 'message_update', message: native,
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta, partial: native }
+      });
       streamed += events.flatMap(({ event }) => event.type === 'part.delta' ? [event.delta] : []).join('');
       expect(streamed).not.toContain(cwd);
     }
@@ -196,8 +202,10 @@ test('configured private roots are withheld across split native deltas without c
     const unrelated = `${cwd}-other/file /unrelated${cwd}/file`;
     let unchanged = '';
     for (const delta of [` ${cwd}-other/file /unrelated`, `${cwd}/file`]) {
-      unchanged += projection.consume({ type: 'message_update', message: native,
-        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta, partial: native } })
+      unchanged += projection.consume({
+        type: 'message_update', message: native,
+        assistantMessageEvent: { type: 'text_delta', contentIndex: 0, delta, partial: native }
+      })
         .flatMap(({ event }) => event.type === 'part.delta' ? [event.delta] : []).join('');
     }
     expect(unchanged).toBe(` ${unrelated}`);
@@ -211,9 +219,11 @@ test('configured private roots are withheld across split native deltas without c
     const nativeToolCompleted = { type: 'tool_execution_end' as const, toolCallId: `${cwd}/call`, toolName: 'read', result: toolResult, isError: false };
     const toolCompleted = projection.consume(nativeToolCompleted);
     expect(nativeToolCompleted.toolCallId).toBe(`${cwd}/call`);
-    expect(toolCompleted[0]?.event).toMatchObject({ type: 'tool.completed', toolCallId: '[workspace]/call', output: {
-      content: [{ type: 'text', text: '[session-storage]/private.json' }], details: { path: '[workspace]/file' },
-    } });
+    expect(toolCompleted[0]?.event).toMatchObject({
+      type: 'tool.completed', toolCallId: '[workspace]/call', output: {
+        content: [{ type: 'text', text: '[session-storage]/private.json' }], details: { path: '[workspace]/file' },
+      }
+    });
     expect(toolResult.details.path).toBe(`${cwd}/file`);
     const failure = projection.failRun(`Cannot read ${cwd}/file`, 3);
     expect(failure.find(({ event }) => event.type === 'run.failed')?.event).toMatchObject({ type: 'run.failed', error: 'Cannot read [workspace]/file' });
@@ -310,8 +320,10 @@ test('SDK symbol-keyed edit arguments project to the exact canonical tool input'
     await manager.ensureOnDisk();
     const projection = new WorkerProjection(manager, 'session');
     projection.beginRun('run', 1);
-    const input = { path: 'fixture-diff.txt', old_string: "export const greeting = 'hello';",
-      new_string: "export const greeting = 'hello, restored UI';\nexport const mood = 'warm';" };
+    const input = {
+      path: 'fixture-diff.txt', old_string: "export const greeting = 'hello';",
+      new_string: "export const greeting = 'hello, restored UI';\nexport const mood = 'warm';"
+    };
     const marker = Symbol('sdk.validation');
     const marked = Object.assign({}, input, { [marker]: true });
     const toolCall = { type: 'toolCall' as const, id: 'call_fixture_edit', name: 'edit', arguments: marked };
@@ -322,8 +334,10 @@ test('SDK symbol-keyed edit arguments project to the exact canonical tool input'
 
     const streamed = assistant([], 'toolUse', 3);
     projection.consume({ type: 'message_start', message: streamed });
-    const endedPart = projection.consume({ type: 'message_update', message: streamed,
-      assistantMessageEvent: { type: 'toolcall_end', contentIndex: 0, toolCall, partial: streamed } })
+    const endedPart = projection.consume({
+      type: 'message_update', message: streamed,
+      assistantMessageEvent: { type: 'toolcall_end', contentIndex: 0, toolCall, partial: streamed }
+    })
       .flatMap(({ event }) => event.type === 'part.started' && event.part.type === 'tool_call' ? [event.part.input] : []);
     expect(endedPart).toEqual([input]);
 
@@ -511,8 +525,10 @@ test('native history applies recovered retries and terminal outcomes', async () 
   const manager = SessionManager.create(root, root);
   try {
     await manager.ensureOnDisk();
-    const recovery = { kind: 'auto-retry' as const, status: 'recovered' as const, attempt: 1, recoveredAt: new Date(3).toISOString(),
-      recovery: 'plain' as const, note: 'error; retried' };
+    const recovery = {
+      kind: 'auto-retry' as const, status: 'recovered' as const, attempt: 1, recoveredAt: new Date(3).toISOString(),
+      recovery: 'plain' as const, note: 'error; retried'
+    };
     manager.appendMessage({ role: 'user', content: 'Ask a question.', timestamp: 1 });
     manager.appendMessage({ ...assistant([], 'error', 2), retryRecovery: recovery });
     manager.appendMessage(assistant([{ type: 'text', text: 'Answered after retry.' }], 'stop', 3));
@@ -645,8 +661,10 @@ test('reopening a native session maps reasoningTokens usage into the canonical s
     deliver({ role: 'user', content: 'ping', timestamp: timestamp++ });
     const answer: Assistant = {
       ...assistant([{ type: 'text', text: 'pong' }], 'stop', timestamp++),
-      usage: { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12,
-        cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 } },
+      usage: {
+        input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12,
+        cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 }
+      },
     };
     deliver(answer);
     journal.append(projection.completeRun(timestamp++));
@@ -666,8 +684,10 @@ test('reopening a native session maps reasoningTokens usage into the canonical s
     const restored = new WorkerProjection(reopened, 'session');
     // `reasoning` is the projected provider reasoning counter; it stays separate
     // from totalTokens, which the provider already counts in full.
-    const expected = { input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12, reasoning: 3,
-      cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 } };
+    const expected = {
+      input: 7, output: 5, cacheRead: 2, cacheWrite: 1, totalTokens: 12, reasoning: 3,
+      cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4, total: 10 }
+    };
     const seeded = restored.seed().messages.find((message) => message.role === 'assistant');
     expect(seeded?.usage).toEqual(expected);
     const page = restored.history({ sessionId: 'session' }).messages.find((message) => message.role === 'assistant');
@@ -748,12 +768,16 @@ test('a partial tool result reaches the call while it runs', async () => {
     deliver(call);
     journal.append(projection.consume({ type: 'tool_execution_start', toolCallId: 'call', toolName: 'bash', args: { command: 'sleep 5' } }));
 
-    const first = projection.consume({ type: 'tool_execution_update', toolCallId: 'call', toolName: 'bash', args: {},
-      partialResult: { content: [{ type: 'text', text: 'line one' }], details: {} } });
+    const first = projection.consume({
+      type: 'tool_execution_update', toolCallId: 'call', toolName: 'bash', args: {},
+      partialResult: { content: [{ type: 'text', text: 'line one' }], details: {} }
+    });
     const firstPart = journal.append(first).find(event => event.type === 'part.started');
     expect(firstPart).toMatchObject({ type: 'part.started', part: { type: 'tool_result', toolCallId: 'call', isError: false } });
-    journal.append(projection.consume({ type: 'tool_execution_update', toolCallId: 'call', toolName: 'bash', args: {},
-      partialResult: { content: [{ type: 'text', text: 'line one\nline two' }], details: {} } }));
+    journal.append(projection.consume({
+      type: 'tool_execution_update', toolCallId: 'call', toolName: 'bash', args: {},
+      partialResult: { content: [{ type: 'text', text: 'line one\nline two' }], details: {} }
+    }));
     const live = journal.snapshot().messages.find(message => message.role === 'assistant');
     const liveResult = live?.parts.find(part => part.type === 'tool_result');
     expect(liveResult).toMatchObject({ output: { content: [{ type: 'text', text: 'line one\nline two' }] } });
@@ -782,16 +806,20 @@ test('a failed tool reports the kind and the detail the tool gave', async () => 
     journal.append(projection.consume({ type: 'message_start', message: call }));
     manager.appendMessage(call);
     journal.append(projection.consume({ type: 'message_end', message: call }));
-    journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'call', toolName: 'bash',
-      result: { content: [{ type: 'text', text: 'Command timed out after 30s' }], details: { timedOut: true, exitCode: 124 } }, isError: true }));
+    journal.append(projection.consume({
+      type: 'tool_execution_end', toolCallId: 'call', toolName: 'bash',
+      result: { content: [{ type: 'text', text: 'Command timed out after 30s' }], details: { timedOut: true, exitCode: 124 } }, isError: true
+    }));
     const completed = journal.snapshot().messages.flatMap(message => message.parts).find(part => part.type === 'tool_result');
     expect(completed).toMatchObject({ isError: true, errorKind: 'timeout', error: 'Command timed out after 30s' });
     const editor = assistant([{ type: 'toolCall', id: 'edit-call', name: 'edit', arguments: { path: 'a.ts' } }], 'toolUse', 3);
     journal.append(projection.consume({ type: 'message_start', message: editor }));
     manager.appendMessage(editor);
     journal.append(projection.consume({ type: 'message_end', message: editor }));
-    journal.append(projection.consume({ type: 'tool_execution_end', toolCallId: 'edit-call', toolName: 'edit',
-      result: { content: [{ type: 'text', text: 'Not unique' }], details: { errorKind: 'not-unique' } }, isError: true }));
+    journal.append(projection.consume({
+      type: 'tool_execution_end', toolCallId: 'edit-call', toolName: 'edit',
+      result: { content: [{ type: 'text', text: 'Not unique' }], details: { errorKind: 'not-unique' } }, isError: true
+    }));
     const editResult = journal.snapshot().messages.flatMap(message => message.parts).filter(part => part.type === 'tool_result')[1];
     expect(editResult).toMatchObject({ errorKind: 'not-unique', error: 'Not unique' });
   } finally {
@@ -852,6 +880,160 @@ test('a run OMP prompts itself opens a turn without an empty user message', asyn
     expect(begun.some(event => event.type === 'message.created')).toBe(false);
     journal.append(projection.consume({ type: 'message_start', message: assistant([{ type: 'text', text: 'Working on it.' }], 'stop', 2) }));
     expect(journal.snapshot().messages.some(message => message.role === 'user')).toBe(false);
+  } finally {
+    await manager.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('emits no part.updated for an unchanged tool input and forwards tool_stream_update edit previews', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'canonical-tool-stream-'));
+  const manager = SessionManager.create(root, root);
+  try {
+    await manager.ensureOnDisk();
+    const projection = new WorkerProjection(manager, 'session');
+    projection.beginRun('run-1', 1);
+
+    const userMsg = { role: 'user' as const, content: 'Edit this file', timestamp: 10 };
+    projection.consume({ type: 'message_start', message: userMsg });
+    projection.consume({ type: 'message_end', message: userMsg });
+
+    const assistantMsg = {
+      role: 'assistant' as const,
+      content: [],
+      api: 'openai-completions', provider: 'fixture', model: 'fixture',
+      stopReason: 'toolUse', timestamp: 20,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    };
+
+    // 1. message_start for assistant
+    projection.consume({ type: 'message_start', message: assistantMsg });
+
+    // 2. toolcall_start: emits part.started
+    const startEvents = projection.consume({
+      type: 'message_update',
+      message: assistantMsg,
+      assistantMessageEvent: {
+        type: 'toolcall_start',
+        contentIndex: 0,
+        partial: { role: 'assistant', content: [{ type: 'toolCall', id: 'edit-1', name: 'edit', arguments: { path: 'src/main.ts', text: '' } }] } as unknown as Assistant,
+      },
+    });
+    expect(startEvents.map(e => e.event.type)).toEqual(['part.started']);
+    const startedPart = (startEvents[0].event as Extract<typeof startEvents[0]['event'], { type: 'part.started' }>).part;
+    expect(startedPart.type).toBe('tool_call');
+    if (startedPart.type === 'tool_call') {
+      expect(startedPart.toolCallId).toBe('edit-1');
+      expect(startedPart.input).toEqual({ path: 'src/main.ts', text: '' });
+    }
+
+    // 3. toolcall_delta with UNCHANGED input: emits NO part.updated!
+    const unchangedDeltaEvents = projection.consume({
+      type: 'message_update',
+      message: assistantMsg,
+      assistantMessageEvent: {
+        type: 'toolcall_delta',
+        contentIndex: 0,
+        delta: '',
+        partial: { role: 'assistant', content: [{ type: 'toolCall', id: 'edit-1', name: 'edit', arguments: { path: 'src/main.ts', text: '' } }] } as unknown as Assistant,
+      },
+    });
+    expect(unchangedDeltaEvents).toHaveLength(0);
+
+    // 4. toolcall_delta with CHANGED input: emits part.updated
+    const changedDeltaEvents = projection.consume({
+      type: 'message_update',
+      message: assistantMsg,
+      assistantMessageEvent: {
+        type: 'toolcall_delta',
+        contentIndex: 0,
+        delta: 'some code',
+        partial: { role: 'assistant', content: [{ type: 'toolCall', id: 'edit-1', name: 'edit', arguments: { path: 'src/main.ts', text: 'some code' } }] } as unknown as Assistant,
+      },
+    });
+    expect(changedDeltaEvents.map(e => e.event.type)).toEqual(['part.updated']);
+    const changedPart = (changedDeltaEvents[0].event as Extract<typeof changedDeltaEvents[0]['event'], { type: 'part.updated' }>).part;
+    if (changedPart.type === 'tool_call') {
+      expect(changedPart.input).toEqual({ path: 'src/main.ts', text: 'some code' });
+    }
+
+    // 5. Another identical toolcall_delta: emits NO part.updated!
+    const secondUnchangedEvents = projection.consume({
+      type: 'message_update',
+      message: assistantMsg,
+      assistantMessageEvent: {
+        type: 'toolcall_delta',
+        contentIndex: 0,
+        delta: '',
+        partial: { role: 'assistant', content: [{ type: 'toolCall', id: 'edit-1', name: 'edit', arguments: { path: 'src/main.ts', text: 'some code' } }] } as unknown as Assistant,
+      },
+    });
+    expect(secondUnchangedEvents).toHaveLength(0);
+
+    // 6. tool_stream_update forwards edit previews into part.updated
+    const streamUpdateEvents = projection.consume({
+      type: 'tool_stream_update',
+      toolCallId: 'edit-1',
+      toolName: 'edit',
+      update: {
+        files: [{ path: 'src/main.ts', diff: '-1|old\n+1|new', firstChangedLine: 1 }],
+        streaming: true,
+        generation: 1,
+      },
+    });
+    expect(streamUpdateEvents.map(e => e.event.type)).toEqual(['part.updated']);
+    const streamUpdatedPart = (streamUpdateEvents[0].event as Extract<typeof streamUpdateEvents[0]['event'], { type: 'part.updated' }>).part;
+    if (streamUpdatedPart.type === 'tool_call' && streamUpdatedPart.editPreview) {
+      expect(streamUpdatedPart.editPreview.files).toEqual([
+        { path: 'src/main.ts', diff: '-1|old\n+1|new', firstChangedLine: 1 },
+      ]);
+      expect(streamUpdatedPart.editPreview.streaming).toBe(true);
+    } else {
+      expect(streamUpdatedPart.type).toBe('tool_call');
+    }
+
+    // 7. Following toolcall_delta retains the edit preview
+    const followingDeltaEvents = projection.consume({
+      type: 'message_update',
+      message: assistantMsg,
+      assistantMessageEvent: {
+        type: 'toolcall_delta',
+        contentIndex: 0,
+        delta: ' more',
+        partial: { role: 'assistant', content: [{ type: 'toolCall', id: 'edit-1', name: 'edit', arguments: { path: 'src/main.ts', text: 'some code more' } }] } as unknown as Assistant,
+      },
+    });
+    expect(followingDeltaEvents.map(e => e.event.type)).toEqual(['part.updated']);
+    const followingPart = (followingDeltaEvents[0].event as Extract<typeof followingDeltaEvents[0]['event'], { type: 'part.updated' }>).part;
+    if (followingPart.type === 'tool_call' && followingPart.editPreview) {
+      expect(followingPart.input).toEqual({ path: 'src/main.ts', text: 'some code more' });
+      expect(followingPart.editPreview.files).toEqual([
+        { path: 'src/main.ts', diff: '-1|old\n+1|new', firstChangedLine: 1 },
+      ]);
+    } else {
+      expect(followingPart.type).toBe('tool_call');
+    }
+
+    // 8. message_end preserves editPreview on the completed tool_call part
+    const completedMsg: Assistant = {
+      role: 'assistant',
+      content: [{ type: 'toolCall', id: 'edit-1', name: 'edit', arguments: { path: 'src/main.ts', text: 'some code more' } }],
+      api: 'openai-completions', provider: 'fixture', model: 'fixture',
+      stopReason: 'toolUse', timestamp: 30,
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    };
+    const endEvents = projection.consume({ type: 'message_end', message: completedMsg });
+    const completedEntry = endEvents.find(e => e.event.type === 'part.completed');
+    if (!completedEntry || completedEntry.event.type !== 'part.completed') throw new Error('Expected part.completed');
+    const completedPart = completedEntry.event.part;
+    expect(completedPart.type).toBe('tool_call');
+    if (completedPart.type === 'tool_call' && completedPart.editPreview) {
+      expect(completedPart.editPreview.files).toEqual([
+        { path: 'src/main.ts', diff: '-1|old\n+1|new', firstChangedLine: 1 },
+      ]);
+    } else {
+      expect(completedPart.type).toBe('tool_call');
+    }
   } finally {
     await manager.close();
     await rm(root, { recursive: true, force: true });

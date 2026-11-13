@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { parseNotificationChannelsJson } from './channels.ts';
+import { loadNotificationChannels, parseNotificationChannelsJson } from './channels.ts';
 
 describe('parseNotificationChannelsJson', () => {
   const channel = {
@@ -21,5 +21,24 @@ describe('parseNotificationChannelsJson', () => {
     expect(parseNotificationChannelsJson('null')).toBeNull();
     expect(parseNotificationChannelsJson('not json')).toBeNull();
     expect(parseNotificationChannelsJson('{"channels":[]}')).toEqual([]);
+  });
+});
+
+describe('loadNotificationChannels', () => {
+  const originalFetch = globalThis.fetch;
+
+  test('reports absent: true on 404, and absent: false on 500', async () => {
+    try {
+      globalThis.fetch = async () => new Response('Not found', { status: 404 });
+      expect(await loadNotificationChannels()).toEqual({ ok: false, absent: true });
+
+      globalThis.fetch = async () => new Response('Server error', { status: 500 });
+      expect(await loadNotificationChannels()).toEqual({ ok: false, absent: false });
+
+      globalThis.fetch = async () => new Response(JSON.stringify({ channels: [] }), { status: 200, headers: { 'content-type': 'application/json' } });
+      expect(await loadNotificationChannels()).toEqual({ ok: true, channels: [] });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

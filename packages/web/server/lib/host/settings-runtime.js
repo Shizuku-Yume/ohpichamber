@@ -59,8 +59,8 @@ export const createSettingsRuntime = (deps) => {
     normalizeManagedRemoteTunnelPresetTokens,
     syncManagedRemoteTunnelConfigWithPresets,
     upsertManagedRemoteTunnelToken,
-    onMessageSearchEnabledChanged = () => {},
-    onMessageSearchReasoningChanged = () => {},
+    onMessageSearchEnabledChanged = () => { },
+    onMessageSearchReasoningChanged = () => { },
   } = deps;
 
   let persistSettingsLock = Promise.resolve();
@@ -674,7 +674,7 @@ export const createSettingsRuntime = (deps) => {
     try {
       await fsPromises.copyFile(tmp, target);
     } finally {
-      await fsPromises.rm(tmp, { force: true }).catch(() => {});
+      await fsPromises.rm(tmp, { force: true }).catch(() => { });
     }
   };
 
@@ -683,7 +683,7 @@ export const createSettingsRuntime = (deps) => {
       const entries = await fsPromises.readdir(directory, { withFileTypes: true });
       const cleanupTasks = entries
         .filter((entry) => entry.isFile() && (entry.name.startsWith('settings.json.tmp-') || entry.name.startsWith('preferences.json.tmp-')))
-        .map((entry) => fsPromises.rm(path.join(directory, entry.name), { force: true }).catch(() => {}));
+        .map((entry) => fsPromises.rm(path.join(directory, entry.name), { force: true }).catch(() => { }));
       await Promise.all(cleanupTasks);
     } catch {
       // Best-effort cleanup: errors reading directory must not fail settings operations
@@ -707,7 +707,7 @@ export const createSettingsRuntime = (deps) => {
       await replaceFile(tmp, filePath);
       if (process.platform !== 'win32') await fsPromises.chmod(filePath, 0o600);
     } catch (error) {
-      await fsPromises.rm(tmp, { force: true }).catch(() => {});
+      await fsPromises.rm(tmp, { force: true }).catch(() => { });
       console.warn(`Failed to write ${path.basename(filePath)}:`, error);
       throw error;
     }
@@ -1037,12 +1037,13 @@ export const createSettingsRuntime = (deps) => {
     return normalizeSettingsSurface(surface) ? readSettingsFromDisk({ surface }) : migration8.settings;
   };
 
-  const persistSettings = async (changes, { surface = null } = {}) => {
+  const persistResolvedSettings = async (resolveChanges, { surface = null } = {}) => {
     const result = persistSettingsLock.then(async () => {
+      const current = await readSettingsFromDisk({ surface });
+      const changes = typeof resolveChanges === 'function' ? resolveChanges(current) : resolveChanges;
       // Log field names only — changes can carry credentials (UI password,
       // client tokens, tunnel tokens) that must never reach the log file.
       console.log('[persistSettings] Updating fields:', Object.keys(changes || {}).join(', ') || '(none)');
-      const current = await readSettingsFromDisk({ surface });
       const sanitized = sanitizeSettingsUpdate(changes);
       for (const key of Object.keys(sanitized)) {
         // Device state belongs to the install in front of the user, never to
@@ -1130,9 +1131,11 @@ export const createSettingsRuntime = (deps) => {
     });
     // A failed write (a full disk) rejects only its own caller; the next
     // save still runs instead of replaying that error until a restart.
-    persistSettingsLock = result.catch(() => {});
+    persistSettingsLock = result.catch(() => { });
     return result;
   };
+
+  const persistSettings = (changes, options) => persistResolvedSettings(() => changes, options);
 
   return {
     readSettingsFromDisk,
@@ -1140,5 +1143,6 @@ export const createSettingsRuntime = (deps) => {
     readSettingsFromDiskMigrated,
     writeSettingsToDisk,
     persistSettings,
+    persistResolvedSettings,
   };
 };

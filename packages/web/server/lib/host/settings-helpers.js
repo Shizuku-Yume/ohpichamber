@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createRequire } from 'node:module';
 
-export const isAgentMemoryFeatureAvailable = () => true;
+export const isAgentMemoryFeatureAvailable = () => false;
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
 export const isWorkflowFeatureAvailable = () => true;
 import { idleStopSchema } from '../spaces/idle-stop.js';
@@ -694,9 +694,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.agentControlToolEnabled === 'boolean') {
       result.agentControlToolEnabled = candidate.agentControlToolEnabled;
     }
-    if (typeof candidate.agentMemoryToolEnabled === 'boolean') {
-      result.agentMemoryToolEnabled = candidate.agentMemoryToolEnabled;
-    }
     if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
       result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
     }
@@ -991,7 +988,7 @@ export const createSettingsHelpers = (dependencies) => {
     // registry is the authority on what a client may persist, and the client
     // parses the same document on the way back in.
     for (const key of [
-      'agentImageToolEnabled', 'agentImageModel', 'sessionRetentionIncludeInWork',
+      'sessionRetentionIncludeInWork',
       'dictationAutoSend', 'sttEndpointPath', 'sttCorrectTranscript',
       'sidebarSections', 'sidebarPinLists', 'sidebarHiddenSections',
       'sessionTabsPerWorkspace', 'selectionApprovalText', 'customProviderLogos',

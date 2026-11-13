@@ -112,9 +112,7 @@ import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { worktreeSetupOf } from './lib/projects/worktree-setup.js';
 import { ensureChatsDir, migrateLegacyUserDirs } from './lib/data-dir-migration.js';
 import { createProjectContextRuntime } from './lib/project-context/runtime.js';
-import { createAgentMemoryRuntime } from './lib/agent-memory/runtime.js';
-import { createAgentMemoryActions } from './lib/agent-memory/actions.js';
-import { createMemoryProjectResolver } from './lib/agent-memory/project-resolution.js';
+import { createProjectIdFromPath } from './lib/projects/project-id.js';
 import { createSpacesHost } from './lib/spaces/host.js';
 import { createSpaceArchive } from './lib/spaces/space-archive.js';
 import { CHAT_EXPORT_TIMEOUT_MS } from './lib/spaces/space-native-archive.js';
@@ -836,22 +834,6 @@ const projectContextRuntime = createProjectContextRuntime({
  }),
 });
 
-const agentMemoryRuntime = createAgentMemoryRuntime({
- fsPromises,
- path,
- projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
- userConfigRoot: OPENCHAMBER_USER_CONFIG_ROOT,
-});
-
-/**
- * One switch for everything memory-related. It gates the tool, these routes,
- * and the session index alike, so turning memory off leaves nothing behind
- * that still reads or writes the store.
- */
-const isAgentMemoryEnabled = async () => {
- const settings = await readSettingsFromDiskMigrated().catch(() => null);
- return settings?.agentMemoryToolEnabled === true;
-};
 
 
 
@@ -919,11 +901,7 @@ const sessionAssistRuntime = createSessionAssistRuntime({
  */
 const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
  projectContextRuntime,
- agentMemoryRuntime,
- // Called, not captured: the resolver is declared further down, and taking a
- // reference here would read it before it exists.
- resolveProjectId: (directory) => resolveMemoryProjectId(directory),
- isAgentMemoryEnabled,
+ resolveProjectId: (directory) => resolveProjectContextId(directory),
  isSessionLinkingAvailable: async () => {
   const settings = await readSettingsFromDiskMigrated();
   return settings.agentControlToolEnabled !== false;
@@ -1338,36 +1316,15 @@ const convertLegacyQueue = async () => {
  }
 };
 /**
- * Maps a session directory onto the project whose memory it belongs to, so a
- * session running in a worktree writes to the project the panel shows.
+ * Maps a session directory onto the project it belongs to.
  */
-const resolveMemoryProjectId = createMemoryProjectResolver({
- listProjectPaths: async () => {
-  const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return sanitizeProjects(settings?.projects || []).map((project) => project.path);
- },
- resolvePrimaryWorktreeRoot,
- managedProjectRoots: [...new Set([path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR])],
-});
-
-/**
- * Tells open panels that the service changed what it remembers, so what it just
- * stored is visible without reopening anything.
- */
-const emitAgentMemoryChangedEvent = (event) => {
- for (const client of uiOpenChamberEventClients) {
-  try {
-   writeSseEvent(client, {
-    type: 'openchamber:service-memory-changed',
-    properties: {
-     scope: event.scope,
-     ...(event.projectId ? { projectId: event.projectId } : {}),
-    },
-   });
-  } catch {
-   uiOpenChamberEventClients.delete(client);
-  }
- }
+const resolveProjectContextId = async (directory) => {
+ if (!directory || typeof directory !== 'string') return null;
+ const settings = await readSettingsFromDiskMigrated().catch(() => null);
+ const projectPaths = sanitizeProjects(settings?.projects || []).map((project) => project.path);
+ const primaryRoot = await resolvePrimaryWorktreeRoot(directory, projectPaths).catch(() => null);
+ const root = primaryRoot || directory;
+ return createProjectIdFromPath(root);
 };
 const scheduledTaskService = createScheduledTaskService({
  readSettingsFromDiskMigrated,
@@ -1485,17 +1442,10 @@ const openChamberControlService = createOpenChamberControlService({
   }
   return pluginNotificationEmitter.emit(input);
  },
- agentMemoryActions: createAgentMemoryActions({
-  agentMemoryRuntime,
-  createError: (message, status) => new OpenChamberControlError(message, status),
-  onMemoryChanged: emitAgentMemoryChangedEvent,
-  isAgentMemoryEnabled,
-  resolveProjectId: resolveMemoryProjectId,
- }),
  projectContextRuntime,
  // The resolver session knowledge reads pinned notes and plans through, so
  // what an agent writes is what the next session is given.
- resolveProjectContextId: resolveMemoryProjectId,
+ resolveProjectContextId,
  // On by default: the knowledge tool is the canonical owner of notes, todos
  // and plans, and a client must not keep writing after it is switched off.
  isKnowledgeToolEnabled: async () => {
@@ -2203,8 +2153,6 @@ async function main(options = {}) {
   resolvePrimaryWorktreeRoot,
   resolveWorktreeTopLevel,
   projectContextRuntime,
-  agentMemoryRuntime,
-  isAgentMemoryEnabled,
   sessionKnowledgeRuntime,
   scheduledTasksRuntime,
   scheduledTaskService,

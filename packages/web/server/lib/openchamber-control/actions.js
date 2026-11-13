@@ -55,27 +55,6 @@ export const OPENCHAMBER_WEB_ACTIONS = Object.freeze(
   OPENCHAMBER_WEB_ACTION_DEFINITIONS.map(({ action }) => action),
 );
 
-/**
- * Memory is its own tool for the same reason web is: remembering across
- * sessions is a distinct intent from controlling one, and a shared description
- * would blur both. It also has to switch off cleanly and completely, which a
- * shared schema cannot do.
- *
- * The session already carries an index of stored titles and says to read an
- * entry before acting on it (../session-knowledge/runtime.js), so memory.read
- * takes a title as the index spells it and memory.list is for a missing or
- * stale index.
- */
-const OPENCHAMBER_MEMORY_ACTION_DEFINITIONS = Object.freeze([
-  { action: 'memory.read', title: 'Read a stored memory', description: 'Read the full text of one memory listed in the session index. The index shows titles only, and a title omits the conditions that decide how the memory applies, so read before acting rather than working from the title. Once read, an entry stays in your context; do not read it again in the same conversation. Requires title (as the index spells it) or memoryId; scope is optional and both stores are searched without it' },
-  { action: 'memory.list', title: 'List stored memories', description: 'List stored memory titles when the session index is missing or stale; scope is global, project, or both (default)' },
-  { action: 'memory.save', title: 'Remember something', description: 'Store a durable fact, preference, or reference; requires title and body, plus scope global (about the user) or project (about this codebase). Restating something already stored updates it. Do not store secrets, one-off task state, or anything the user asked you not to keep; when the user explicitly asks you to remember something, store it unless it is a secret' },
-  { action: 'memory.delete', title: 'Forget a memory', description: 'Delete a memory that turned out to be wrong or obsolete; requires memoryId and scope' },
-]);
-
-export const OPENCHAMBER_MEMORY_ACTIONS = Object.freeze(
-  OPENCHAMBER_MEMORY_ACTION_DEFINITIONS.map(({ action }) => action),
-);
 
 /**
  * Project knowledge: keeping the Notes, Todos and Plans the user sees in the
@@ -134,9 +113,6 @@ const OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS = Object.freeze([
   { action: 'workflow.list', title: 'List workflows', description: "This project's saved workflows and this session's runs" },
 ]);
 
-const OPENCHAMBER_WORKFLOW_ACTIONS = Object.freeze(
-  OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS.map(({ action }) => action),
-);
 
 /**
  * How a workflow agent asked for a schema answer hands it over. A tool of its
@@ -154,6 +130,11 @@ const OPENCHAMBER_WORKFLOW_ANSWER_ACTION_DEFINITIONS = Object.freeze([
 const OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS = Object.freeze(
   OPENCHAMBER_WORKFLOW_ANSWER_ACTION_DEFINITIONS.map(({ action }) => action),
 );
+
+export const OPENCHAMBER_WORKFLOW_ACTIONS = Object.freeze([
+  ...OPENCHAMBER_WORKFLOW_ACTION_DEFINITIONS.map(({ action }) => action),
+  ...OPENCHAMBER_WORKFLOW_ANSWER_ACTIONS,
+]);
 
 /**
  * What the managed `openchamber` tool may ask for. Scheduling stays in this
@@ -189,7 +170,6 @@ export const OPENCHAMBER_AGENT_TOOL_ACTIONS = Object.freeze(
 const ACTIONS_BY_TOOL = Object.freeze({
   openchamber: OPENCHAMBER_AGENT_TOOL_ACTIONS,
   openchamber_web: OPENCHAMBER_WEB_ACTIONS,
-  openchamber_memory: OPENCHAMBER_MEMORY_ACTIONS,
   openchamber_knowledge: OPENCHAMBER_KNOWLEDGE_ACTIONS,
   openchamber_notify: OPENCHAMBER_NOTIFY_ACTIONS,
   openchamber_render: OPENCHAMBER_RENDER_ACTIONS,
@@ -238,19 +218,9 @@ export const resolveAgentToolAction = (requested, toolName) => {
 
 /** Everything the callback route will dispatch, whichever tool asked. */
 
-export const OPENCHAMBER_IMAGE_ACTION_DEFINITIONS = Object.freeze([
-  { action: "image.generate", title: "Generate an image", description: "Requires prompt" },
-]);
-
-export const OPENCHAMBER_IMAGE_ACTIONS = Object.freeze(
-  OPENCHAMBER_IMAGE_ACTION_DEFINITIONS.map(({ action }) => action),
-);
-
 export const OPENCHAMBER_ALL_ACTIONS = Object.freeze([
-  ...OPENCHAMBER_IMAGE_ACTIONS,
   ...OPENCHAMBER_CONTROL_ACTIONS,
   ...OPENCHAMBER_WEB_ACTIONS,
-  ...OPENCHAMBER_MEMORY_ACTIONS,
   ...OPENCHAMBER_KNOWLEDGE_ACTIONS,
   ...OPENCHAMBER_NOTIFY_ACTIONS,
   ...OPENCHAMBER_RENDER_ACTIONS,

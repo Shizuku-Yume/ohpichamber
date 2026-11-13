@@ -1027,3 +1027,93 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes (conservative option inside the 2026-11-10 R7 cutover)
 - **Revisit when:** a layer that parses selectors has the resolved model in hand and needs routing fidelity; it should then pass `allowUpstreamRouting: true` plus its registry check.
 - **Effort:** ux-v270-omp-alignment
+
+## 2026-11-13 - Host authorizes OMP tools by tier, not by a known-name list
+
+- **Decided:** the worker operation authorizer classifies every OMP tool by its tier. Read-tier tools are allowed after the path check. Write-tier tools need the workspace write grant. Exec-tier tools (`eval`, `debug`, `ida`, `github`) and `mcp__*` calls return `approvalRequired` through the same approve-then-reauthorize loop as `bash`. Reads outside the workspace become an approval card, which `auto` answers. Writes and edits outside the workspace stay hard-denied. The worker forwards the Host's refusal reason to the model instead of a fixed sentence.
+- **Instead of:** adding `eval` and similar tools to the descriptor-free allow list, or adding fixed read-only roots such as the temp directory.
+- **Because:** the fall-through deny at `worker-operation-authorizer.js:203` refuses every OMP tool the fork did not list, so YOLO still showed denials. `eval` runs arbitrary code like `bash`, so `ask` and `safety` must still prompt for it. Bash can already read outside the workspace, so a hard deny on reads adds no security.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP exposes a per-call tier the Host can read directly, or ADR-05 changes the path boundary.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-13 - MCP installs choose project or user scope
+
+- **Decided:** installing an MCP server, from the Integrations marketplace or Settings → MCP, asks whether to install for the project or globally (`~/.omp/agent/mcp.json`, shared with the OMP TUI). Settings → MCP lists both scopes and labels each server's scope. An install that saved but did not connect shows "saved, not connected" or "sign-in required", never a success toast or a bare failure.
+- **Instead of:** user scope only, project scope only, or today's per-chat-directory scope.
+- **Because:** installs into a no-project chat directory were invisible to every other chat and to Settings → MCP. The maintainer wants both scopes available.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP adds a third MCP scope.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-13 - Settings pages show their title and description
+
+- **Decided:** every settings page renders its title and description, matching the v2.7.0 release and the fork's own pages. `namedBySidebar` is dropped from the call sites, and the `settings.page.*.description` keys return.
+- **Instead of:** upstream main's `namedBySidebar` (commit `f2d8615b4`), which hides both.
+- **Because:** the maintainer prefers pages that carry a title and description, and the mixed state (some pages titled, some not) is inconsistent.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** a later upstream merge reworks the settings layout.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-13 - The Usage page is an OMP-native dashboard
+
+- **Decided:** the Usage page reads OMP's own statistics (`stats.db` rollups, `authStorage` usage reports and session stats) through a new Agent Service endpoint and contract. It covers all OMP sessions, including TUI sessions. It offers an all-providers view with a provider comparison, and a per-provider view for every configured provider, custom ones included. Unconfigured quota plans are not shown. TTFT, tok/s, error rate and cost come from OMP, and OMP's pricing is the cost authority. A model with unknown pricing shows "—", never $0.00.
+- **Instead of:** a single page with a scope switcher over the session-derived report, or upstream's master/detail page narrowed to configured providers.
+- **Because:** the maintainer wants OMP's richer data and TUI `/usage` parity. The session-derived report cannot separate unpriced from free, and it hard-codes reasoning tokens to null.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** the Host-authorized-reference design for usage (`worker/usage.ts:34-42`) must exclude non-OhPiChamber sessions.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-13 - OMP settings live on the page that owns the concept
+
+- **Decided:** each OMP setting is placed on the OpenChamber page that already owns its concept: Sessions, Chat, Behavior, Agents, Web search, Voice, Notifications, Git. New Tools and Memory pages hold capability toggles and the memory backend. The OMP page keeps only the long tail, rendered from OMP's settings registry instead of a hand-kept allowlist. A setting another page owns is never rendered twice.
+- **Instead of:** an OMP hub page grouped by task that links out to owning pages.
+- **Because:** 335 of the 450 TUI-visible settings were unreachable, while several OpenChamber controls duplicated OMP ones or claimed ownership without writing the OMP key. Placement by concept removes the duplicates without copying the TUI layout.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP adds a category field to its settings registry.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-13 - OMP owns image generation and agent memory
+
+- **Decided:** image generation uses OMP's `generate_image` tool and its `image` role; the `openchamber_image` host tool and the separate image-model picker are removed. Agent memory uses OMP's `memory.backend` (local, mnemopi, hindsight), managed on the new Memory page; the OpenChamber `memory` host tool and its store are removed.
+- **Instead of:** keeping the host tools and disabling OMP's, or keeping both memory systems side by side.
+- **Because:** each pair is two unrelated implementations of one capability that the model sees at the same time, with two settings surfaces.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** an OpenChamber-only consumer needs the removed memory store's data.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-13 - Next-prompt suggestions run at turn end, from the session model or the small model
+
+- **Decided:** a suggestion is generated as soon as a turn completes, with no quiet timer. A setting chooses the generator: the session's own model through OMP's `runEphemeralTurn` (cache-warm, as the OMP TUI does), the small model, or off. It is on by default.
+- **Instead of:** keeping the Host's 60-second quiet timer, or offering only the session-model path.
+- **Because:** the 60-second timer, left from the OpenCode design, made suggestions arrive a minute late. The maintainer wants the choice of generator and accepts one extra billed request per turn by default.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP exposes a non-TUI composer prediction controller.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-13 - Streaming text updates every 33 ms
+
+- **Decided:** the UI event pipeline flushes every 33 ms, and streaming text passes through without a second per-part throttle.
+- **Instead of:** the current 100 ms pipeline flush stacked on a 100 ms text throttle, or 16 ms or 50 ms.
+- **Because:** the stacked gates made streaming arrive in 10 Hz chunks. 33 ms matches the OMP TUI's minimum render interval.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** markdown re-parse cost at 33 ms exceeds the session profiling budget.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-13 - Chinese copy writes LLM tokens as "Token"
+
+- **Decided:** zh-CN and zh-TW copy write LLM tokens as "Token". "词元", "詞元" and "令牌" are replaced in that sense.
+- **Instead of:** "令牌", or keeping "词元".
+- **Because:** "令牌" already means credentials (访问令牌), and the context and telemetry strings already use "Token".
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** a product glossary fixes a different term.
+- **Effort:** ux-feedback-2026-11-12

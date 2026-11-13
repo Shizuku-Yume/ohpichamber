@@ -1,6 +1,6 @@
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { EntityIdSchema, JsonObjectSchema, JsonValueSchema, ProblemCodeSchema, MCPServerConfigSchema } from '@openchamber/agent-contract';
+import { EntityIdSchema, JsonObjectSchema, JsonValueSchema, ProblemCodeSchema, MCPServerConfigSchema, ApprovalGrantSchema, type ApprovalGrant } from '@openchamber/agent-contract';
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
 /** OMP internal URL schemes the Host passes to the SDK instead of resolving. */
@@ -24,8 +24,8 @@ export const NativePolicyContextSchema = z.strictObject({
   providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
 });
 export type NativePolicyContext = z.infer<typeof NativePolicyContextSchema>;
-const NativeApprovalGrantSchema = z.strictObject({ approvalId: EntityIdSchema, toolCallId: EntityIdSchema, rootSessionId: EntityIdSchema, workerGeneration: EntityIdSchema, epoch: EntityIdSchema, command: z.string().min(1) });
-export type NativeApprovalGrant = z.infer<typeof NativeApprovalGrantSchema>;
+export const NativeApprovalGrantSchema = ApprovalGrantSchema;
+export type NativeApprovalGrant = ApprovalGrant;
 export const NativeLspActionSchema = z.enum([
   'diagnostics',
   'definition',

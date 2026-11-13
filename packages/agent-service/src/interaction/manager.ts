@@ -103,7 +103,7 @@ export class InteractionManager {
     private readonly timeoutMs = 300_000,
     private readonly policyCommit?: ApprovalPolicyCommit,
     private readonly permission?: PermissionAuthority,
-  ) {}
+  ) { }
 
   openSession(sessionId: string, epoch: string, generation: string, workspaceId: string, dispatch: SessionState['dispatch'], append: SessionState['append']): void {
     const prior = this.sessions.get(sessionId);
@@ -162,7 +162,19 @@ export class InteractionManager {
     // A request that was revoked while its answer was computed has no card to show.
     if (!current) return;
     if (!this.permission) { ensurePublished(); return; }
-    const mode = await this.permission.resolveMode(sessionId, current.request).catch(() => 'ask' as const);
+    let mode: SessionPermissionMode;
+    try {
+      mode = await this.permission.resolveMode(sessionId, current.request);
+    } catch {
+      ensurePublished();
+      setTimeout(() => {
+        const live = this.pendingExecutionApproval(sessionId, approvalId, epoch, generation);
+        if (live && live.request.status === 'pending') {
+          this.scheduleReconsider(live.request);
+        }
+      }, 250).unref?.();
+      return;
+    }
     if (mode === 'ask') { ensurePublished(); return; }
     const pending = this.pendingExecutionApproval(sessionId, approvalId, epoch, generation);
     if (!pending) return;
@@ -193,8 +205,7 @@ export class InteractionManager {
   }
 
   /** The record when it is still the pending execution gate of the current worker generation. */
-  private pendingExecutionApproval(sessionId: string, approvalId: string, epoch: string, generation: string):
-    { record: ApprovalRecordState; request: ApprovalRequest; state: SessionState; publish?: () => void } | undefined {
+  private pendingExecutionApproval(sessionId: string, approvalId: string, epoch: string, generation: string): { record: ApprovalRecordState; request: ApprovalRequest; state: SessionState; publish?: () => void } | undefined {
     const state = this.sessions.get(sessionId);
     if (!state || state.epoch !== epoch || state.generation !== generation) return undefined;
     const record = this.records.get(approvalId);
@@ -261,7 +272,7 @@ export class InteractionManager {
           sessionId, workerGeneration: state.generation, epoch: state.epoch,
           toolCallId: interaction.toolCallId, target: privateTarget, expiresAt: now + this.timeoutMs, timer,
         });
-        void state.dispatch({ type: 'approval.resolve', approvalId: interaction.approvalId, decision: 'approve' }).catch(() => {});
+        void state.dispatch({ type: 'approval.resolve', approvalId: interaction.approvalId, decision: 'approve' }).catch(() => { });
         return;
       }
       const sessionRuleKey = interaction.sessionRuleKey;
@@ -303,7 +314,7 @@ export class InteractionManager {
         void this.resolveApproval(sessionId, request.approvalId, {
           decision: 'reject', version: request.version,
           epoch: request.epoch, workerGeneration: generation,
-        }).catch(() => {});
+        }).catch(() => { });
         return;
       }
       // Only the native ACP execution-permission gate is answered for the
@@ -338,15 +349,24 @@ export class InteractionManager {
   consumeApprovalGrant(sessionId: string, generation: string, approvalId: string, toolCallId: string, toolName: string, input: JsonObject): NativeApprovalGrant | undefined {
     const grant = this.executionGrants.get(approvalId);
     const state = this.sessions.get(sessionId);
-    const command = z.string().safeParse(input.command);
-    if (!grant || !state || !command.success || grant.expiresAt <= Date.now() || state.generation !== generation
+    const command = typeof input.command === 'string' && input.command.length > 0 ? input.command : undefined;
+    if (!grant || !state || grant.expiresAt <= Date.now() || state.generation !== generation
       || grant.sessionId !== sessionId || grant.workerGeneration !== generation || grant.epoch !== state.epoch
-      || grant.toolCallId !== toolCallId || toolName !== 'bash' || grant.target.toolName !== toolName
+      || grant.toolCallId !== toolCallId || grant.target.toolName !== toolName
       || grant.target.pattern !== JSON.stringify(input)
       || this.matchingPolicy(sessionId, state.workspaceId, grant.target)?.decision === 'deny') return undefined;
     clearTimeout(grant.timer);
     this.executionGrants.delete(approvalId);
-    return { approvalId, toolCallId, rootSessionId: sessionId, workerGeneration: generation, epoch: state.epoch, command: command.data };
+    return {
+      approvalId,
+      toolCallId,
+      rootSessionId: sessionId,
+      workerGeneration: generation,
+      epoch: state.epoch,
+      ...(command !== undefined ? { command } : {}),
+      toolName,
+      input,
+    };
   }
 
   async resolveApproval(sessionId: string, approvalId: string, input: ApprovalReply, resolvedBy = 'agent-service'): Promise<ApprovalRequest> {
@@ -378,7 +398,7 @@ export class InteractionManager {
       }
       this.assertOwner(sessionId, reply.epoch, reply.workerGeneration, this.records.get(approvalId), 'approval');
       this.assertCas(this.records.get(approvalId)!.request, reply.version, 'approval');
-      if ((reply.decision === 'approve' || reply.decision === 'always-allow') && record.target.toolName === 'bash'
+      if ((reply.decision === 'approve' || reply.decision === 'always-allow')
         && this.matchingPolicy(sessionId, state.workspaceId, record.target)?.decision !== 'deny') {
         const expiresAt = Date.now() + this.timeoutMs;
         this.executionGrants.set(approvalId, {

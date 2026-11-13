@@ -58,9 +58,9 @@ Codebase references point to paths relative to the repository root, such as `../
 ### ADR-05: Host Gatekeeper as the authoritative security boundary
 
 - **Context:** OMP provides tool approval hooks, but its permission system cannot verify the full host environment, file traversal boundaries, or shell escape sequences. Furthermore, Guest extensions declare capabilities that must be strictly enforced.
-- **Decision:** The Host Gatekeeper remains the primary, authoritative security boundary for all machine mutations. OMP approval events request user confirmation, but the Host Gatekeeper validates every file modification, path traversal, and command execution before running it.
+- **Decision:** The Host Gatekeeper remains the primary, authoritative security boundary for all machine mutations. OMP approval events request user confirmation, but the Host Gatekeeper validates every file modification, path traversal, and command execution before running it. Tools are authorized by capability tier: read-tier operations within the workspace are allowed, while out-of-workspace reads require approval; write-tier tools require the workspace write grant and stay contained within the workspace; exec-tier tools and policy MCP servers require interactive or mode approval.
 - **Rationale:** The Host Gateway operates with the user's local permissions. Relying solely on model-level or SDK-level checks creates vulnerabilities if prompts are manipulated or SDK internal tools bypass checks. The Host Gatekeeper enforces canonical realpath verification, command injection filters, and environment stripping independently of the agent engine.
-- **Consequences:** Even when an OMP tool call succeeds internally, any file system or execution operation performed via host bridges must clear Host Gatekeeper rules.
+- **Consequences:** Even when an OMP tool call succeeds internally, any file system or execution operation performed via host bridges must clear Host Gatekeeper rules. Reads outside the workspace produce an approval card; writes and edits outside the workspace remain strictly refused.
 
 ### ADR-06: Retirement of VS Code extension and dual-engine mechanisms
 

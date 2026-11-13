@@ -85,7 +85,7 @@ export function createHostAgentRuntime({
     return HostWorkspacePolicySchema.parse({
       ...native,
       // These are contained Host capabilities, not an SDK grant or a bypass of native approval.
-      fileTools: ['read', 'write'], shellCommands: [], toolRequests: [],
+      fileTools: ['read', 'write'], shellCommands: [],
       providerEntry: !isEnterpriseMode(enterprisePolicyOptions),
     });
   };

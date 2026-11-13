@@ -60,7 +60,7 @@ test('expiry cancellation and worker shutdown never approve a plan', () => {
   interaction.requestPlanReview(review, response => responses.push(response));
   interaction.close();
   expect(responses).toEqual([undefined, undefined]);
-  expect(() => interaction.requestPlanReview(review, () => {})).toThrow();
+  expect(() => interaction.requestPlanReview(review, () => { })).toThrow();
 });
 
 test('native approval names the tool and projects a redacted one-line input summary', async () => {
@@ -398,7 +398,7 @@ describe('WorkerInteraction OMP 18.16 ui.approve bridge', () => {
 
   test('throws if native approval has no captured execution input', async () => {
     const interaction = new WorkerInteraction({
-      request: () => {},
+      request: () => { },
       currentTurn: () => 'turn-1',
     });
 
@@ -410,5 +410,59 @@ describe('WorkerInteraction OMP 18.16 ui.approve bridge', () => {
     };
 
     await expect(interaction.ui.approve!(prompt)).rejects.toThrow('Native approval has no captured execution input');
+  });
+
+  test('handleApprove and requestPermission succeed when currentTurn is undefined', async () => {
+    const requests: WorkerInteractionMessage[] = [];
+    const interaction = new WorkerInteraction({
+      request: item => requests.push(item),
+      currentTurn: () => undefined,
+    });
+
+    const toolCallId = 'call-no-turn';
+    interaction.observeToolCall(createToolCall('bash', toolCallId, { command: 'echo fallback' }));
+    interaction.observeApproval(createApprovalRequested('bash', toolCallId, 'Fallback test'));
+
+    const prompt: ExtensionApprovalPrompt = {
+      full: 'Execute bash command: echo fallback',
+      compact: 'echo fallback',
+    };
+
+    const approvePromise = interaction.ui.approve!(prompt);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.turnId).toBe('turn-0');
+    interaction.resolveApproval(requests[0]!.approvalId, 'approve');
+    expect(await approvePromise).toBe('once');
+
+    const permOptions = [{ optionId: 'once', name: 'Allow once', kind: 'allow_once' as const }];
+    const permPromise = interaction.requestPermission({ toolCallId: 'perm-call', toolName: 'bash', title: 'bash', rawInput: {} }, permOptions, undefined);
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.turnId).toBe('turn-0');
+    interaction.resolveApproval(requests[1]!.approvalId, 'approve');
+    expect(await permPromise).toBe('once');
+  });
+
+  test('handleApprove matches observed tool by callId when dialogOptions specifies toolCallId', async () => {
+    const requests: WorkerInteractionMessage[] = [];
+    const interaction = new WorkerInteraction({
+      request: item => requests.push(item),
+      currentTurn: () => 'turn-1',
+    });
+
+    interaction.observeToolCall(createToolCall('eval', 'call-eval-1', { code: '1+1' }));
+    interaction.observeApproval(createApprovalRequested('eval', 'call-eval-1', 'eval 1'));
+    interaction.observeToolCall(createToolCall('eval', 'call-eval-2', { code: '2+2' }));
+    interaction.observeApproval(createApprovalRequested('eval', 'call-eval-2', 'eval 2'));
+
+    const prompt: ExtensionApprovalPrompt = {
+      full: 'Allow tool: eval 2+2',
+      compact: 'eval 2+2',
+    };
+
+    const approvePromise = interaction.ui.approve!(prompt, { toolCallId: 'call-eval-2' });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.toolCallId).toBe('call-eval-2');
+    interaction.resolveApproval(requests[0]!.approvalId, 'approve');
+    expect(await approvePromise).toBe('once');
   });
 });

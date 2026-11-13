@@ -58,7 +58,7 @@ import { WorkerShell } from './shell.ts';
 import { WorkerCompletion } from './completion.ts';
 import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
-import type { WorkerAuthorize } from './policy.ts';
+import { NativeApprovalRequired, type WorkerAuthorize } from './policy.ts';
 import { createHostToolExtension, HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
 import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
@@ -425,9 +425,9 @@ export class WorkerSession {
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
     const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
     const observer: ExtensionFactory = api => {
-      api.on('tool_call', async event => {
+      api.on('tool_call', async (event, ctx) => {
         interaction.observeToolCall(event);
-        if (admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
+        if ((!ctx?.agent || ctx.agent.kind === 'main') && admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
         // Host tools route through their domain capability owner; `bash` keeps
         // its own approval path. The set comes from the registered inventory so
         // a newly registered host tool cannot fall to the generic refusal below.
@@ -445,11 +445,56 @@ export class WorkerSession {
         if (internalDevice) return;
         if (event.toolName === 'web_search') {
           try { await authorize({ type: 'web-search' }); }
-          catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
+          catch (error) {
+            return {
+              block: true,
+              reason: error instanceof ProjectionError ? error.message : 'Host policy refused the tool operation',
+            };
+          }
           return;
         }
-        try { await authorizeTool(event.toolName, JsonObjectSchema.parse(JSON.parse(JSON.stringify(event.input)))); }
-        catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
+        const toolInput = JsonObjectSchema.parse(JSON.parse(JSON.stringify(event.input)));
+        try {
+          await authorizeTool(event.toolName, toolInput);
+        } catch (error) {
+          if (error instanceof NativeApprovalRequired) {
+            let approved = false;
+            if (ctx?.ui?.approve) {
+              const answer = await ctx.ui.approve(
+                { full: error.message, compact: error.message },
+                { toolCallId: event.toolCallId } as unknown as { signal?: AbortSignal },
+              );
+              approved = answer === 'once';
+            } else {
+              approved = await interaction.approveTool(
+                event.toolCallId,
+                event.toolName,
+                toolInput,
+                error.message,
+              );
+            }
+            if (!approved) {
+              return { block: true, reason: 'Tool approval was rejected' };
+            }
+            const approvalId = interaction.takeApprovalReceipt(event.toolCallId);
+            if (!approvalId) {
+              return { block: true, reason: 'Tool approval is unavailable' };
+            }
+            try {
+              await authorizeTool(event.toolName, toolInput, { approvalId, toolCallId: event.toolCallId });
+              return;
+            } catch (reauthError) {
+              return {
+                block: true,
+                reason: reauthError instanceof ProjectionError ? reauthError.message : 'Host policy refused the tool operation',
+              };
+            }
+          }
+          return {
+            block: true,
+            reason: error instanceof ProjectionError ? error.message : 'Host policy refused the tool operation',
+          };
+        }
       });
       api.on('before_agent_start', () => undefined);
       api.on('tool_approval_requested', event => { interaction.observeApproval(event); });

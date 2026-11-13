@@ -191,6 +191,18 @@ export const createAgentServiceSupervisor = ({
   let ownsPolicyStore = false;
   const state = () => ({ phase, pid: child?.pid ?? null, port });
   const assertAdmitted = () => { if (!accepting || phase !== 'ready' || !child) throw new Error('Agent service is not accepting requests'); };
+  const pendingModeSessions = new Set();
+  const pushPermissionMode = async (sessionId) => {
+    if (!port || !secret || !accepting) return;
+    try {
+      const mode = await resolveHostPermissionMode(sessionId);
+      await fetchImpl(`http://127.0.0.1:${port}/internal/sessions/${encodeURIComponent(sessionId)}/permission-mode`, {
+        method: 'POST',
+        headers: { [SECRET_HEADER]: secret, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+    } catch { /* best-effort notification */ }
+  };
   const captureScope = (body, allowRebind = false) => {
     const scope = { rootSessionId: body.rootSessionId, projectId: body.projectId, workspaceId: body.workspaceId, cwd: body.cwd, agentDirectory: body.agentDirectory };
     if (body.agentDirectoryId !== undefined) scope.agentDirectoryId = body.agentDirectoryId;
@@ -199,6 +211,9 @@ export const createAgentServiceSupervisor = ({
     if (prior && !allowRebind && !isDeepStrictEqual(prior, captured)) throw new Error('Host bootstrap scope cannot change');
     if (prior && !allowRebind) return { captured: prior, prior };
     scopes.set(captured.rootSessionId, captured);
+    if (pendingModeSessions.delete(captured.rootSessionId) || allowRebind) {
+      void pushPermissionMode(captured.rootSessionId);
+    }
     return { captured, prior };
   };
   const handlePolicyMessage = (launched, message) => {
@@ -207,7 +222,7 @@ export const createAgentServiceSupervisor = ({
     if (message.type === 'permission.evaluate' || message.type === 'permission.mode.load') {
       const request = message.type === 'permission.evaluate' ? HostPermissionEvaluateRequestSchema : HostPermissionModeLoadRequestSchema;
       const parsed = request.safeParse(message);
-      const sendVerdict = (verdict) => { if (launched.connected) launched.send(verdict, () => {}); };
+      const sendVerdict = (verdict) => { if (launched.connected) launched.send(verdict, () => { }); };
       if (!parsed.success) {
         sendVerdict(message.type === 'permission.evaluate'
           ? { type: 'permission.verdict', requestId: message?.requestId, verdict: 'unavailable' }
@@ -221,7 +236,11 @@ export const createAgentServiceSupervisor = ({
       const failClosed = () => sendVerdict(message.type === 'permission.evaluate'
         ? { type: 'permission.verdict', requestId: parsed.data.requestId, verdict: 'unavailable' }
         : { type: 'permission.mode', requestId: parsed.data.requestId, mode: 'ask' });
-      if (!captured || captured.rootSessionId !== sessionId || child !== launched) { failClosed(); return; }
+      if (!captured || captured.rootSessionId !== sessionId || child !== launched) {
+        pendingModeSessions.add(sessionId);
+        failClosed();
+        return;
+      }
       void Promise.resolve()
         .then(() => (message.type === 'permission.evaluate'
           // The classifier and its credentials stay on the Host; the service only asks.

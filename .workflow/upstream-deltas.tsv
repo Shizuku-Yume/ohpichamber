@@ -1528,3 +1528,9 @@ packages/ui/src/lib/i18n/messages/extensions.settings.i18n.ts	fork-differs	decis
 packages/ui/src/lib/i18n/messages/integrations-catalog.i18n.ts	fork-differs	decision	2026-11-13 - MCP installs choose project or user scope	MCP scope choice copy.
 packages/ui/src/lib/notifications/channels.test.ts	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Notification channels test.
 packages/web/server/lib/auto-review/runtime.js	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Auto-review runtime restoration.
+packages/ui/src/apps/MobileWorkspaceDrawer.tsx	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Restores overwritten fork fix: unmounts terminal pane on last tab close (W1, task 02).
+packages/ui/src/components/chat/message/ChatQuoteHighlightLayer.test.tsx	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Restores overwritten fork fix test for quote reveal mount frames retry (W1, task 02).
+packages/ui/src/components/chat/message/ChatQuoteHighlightLayer.tsx	fork-differs	decision	2026-11-10 - Merge upstream OpenChamber with a real git merge	Restores overwritten fork fix: quote reveal frame retry up to ROW_MOUNT_FRAMES (W1, task 02).
+packages/ui/src/components/chat/work-status/usageHeadline.test.ts	fork-differs	decision	2026-11-13 - The Usage page is an OMP-native dashboard	Restores native-to-logical quota mapping tests (W3, task 02).
+packages/ui/src/components/chat/work-status/usageHeadline.ts	fork-differs	decision	2026-11-13 - The Usage page is an OMP-native dashboard	Replaces QUOTA_PROVIDER_ALIASES with Host native-to-logical mapping (W3, task 02).
+packages/ui/src/components/usage/usageGroups.ts	fork-differs	decision	2026-11-13 - The Usage page is an OMP-native dashboard	Drops unconfigured quota provider rows in usage groups (W3, task 02).

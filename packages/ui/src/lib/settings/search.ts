@@ -299,7 +299,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.visual.field.terminalCloseOnExit',
     descriptionKey: 'settings.openchamber.visual.field.terminalCloseOnExitInfo',
     keywords: ['terminal', 'exit', 'close', 'tab', 'shell'],
-    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'appearance.editor-font-size',
@@ -1337,7 +1336,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'providers',
     titleKey: 'settings.providers.page.logo.title',
     keywords: ['logo', 'image', 'upload', 'icon', 'picture', 'svg', 'png'],
-    isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     id: 'providers.models',

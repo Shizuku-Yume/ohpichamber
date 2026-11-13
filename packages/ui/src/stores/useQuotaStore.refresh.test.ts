@@ -270,7 +270,7 @@ describe('workspace-scoped quota context', () => {
     handleRequest = async (url) => {
       urls.push(url);
       if (url.includes('/api/quota/providers')) {
-        return json({ providers: ['claude'], nativeToLogical: { anthropic: 'claude' } });
+        return Response.json({ providers: ['claude'], nativeToLogical: { anthropic: 'claude' } });
       }
       return json(result());
     };

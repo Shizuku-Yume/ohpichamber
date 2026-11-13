@@ -244,7 +244,6 @@ export const SETTINGS_REGISTRY = {
  worktreeArchiveOnDoneEnabled: field({ scope: 'instance', effect: ['ui'], parse: parseBoolean, ui: uiStore('worktreeArchiveOnDoneEnabled', (v) => useUIStore.getState().setWorktreeArchiveOnDoneEnabled(v)) }),
  agentKnowledgeToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentKnowledgeToolEnabled', (v) => useUIStore.getState().setAgentKnowledgeToolEnabled(v)) }),
  agentRenderToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentRenderToolEnabled', (v) => useUIStore.getState().setAgentRenderToolEnabled(v)) }),
- agentImageToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentImageToolEnabled', (v) => useUIStore.getState().setAgentImageToolEnabled(v)) }),
 
  permissionDefaultMode: field({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseOneOf(['ask', 'safety', 'auto']), ui: uiStore('permissionDefaultMode', (v) => useUIStore.getState().setPermissionDefaultMode(v)) }),
  sessionGoalChecker: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseOneOf(['classifier', 'small-model']), ui: uiStore('sessionGoalChecker', (v) => useUIStore.getState().setSessionGoalChecker(v)) }),
@@ -252,7 +251,6 @@ export const SETTINGS_REGISTRY = {
  autoApplyAgentModel: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('autoApplyAgentModel', (v) => useUIStore.getState().setAutoApplyAgentModel(v)) }),
  planModeAllowAgents: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('planModeAllowAgents', (v) => useUIStore.getState().setPlanModeAllowAgents(v)) }),
  // `provider/model` of an image model; the server checks the shape.
- agentImageModel: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseNonEmptyString, ui: uiStore('agentImageModel', (v) => useUIStore.getState().setAgentImageModel(v)) }),
  agentWorkflowToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentWorkflowToolEnabled', (v) => useUIStore.getState().setAgentWorkflowToolEnabled(v)) }),
  mobileReturnKeySends: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('mobileReturnKeySends', (v) => useUIStore.getState().setMobileReturnKeySends(v)) }),
 
@@ -320,7 +318,6 @@ export const SETTINGS_REGISTRY = {
  // `builtin` or an installed extension id; the server falls back to `builtin` when that extension cannot serve.
  browserProvider: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseNonEmptyString, ui: uiStore('browserProvider', (v) => useUIStore.getState().setBrowserProvider(v)) }),
  agentNotifyToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentNotifyToolEnabled', (v) => useUIStore.getState().setAgentNotifyToolEnabled(v)) }),
- agentMemoryToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentMemoryToolEnabled', (v) => useUIStore.getState().setAgentMemoryToolEnabled(v)) }),
  // The isolated-spaces switch the server reads once at start. It has no Settings
  // row: the feature is unreleased, and `lib/spaces/release.ts` gates the UI on
  // its own. Declared here because the Host persists it and the wire snapshot
@@ -473,8 +470,6 @@ export const SETTINGS_REGISTRY = {
  tableCellWrap: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('tableCellWrap', (v) => useUIStore.getState().setTableCellWrap(v)) }),
  copyMessagesAsPlainText: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('copyMessagesAsPlainText', (v) => useUIStore.getState().setCopyMessagesAsPlainText(v)) }),
  showTurnChangedFiles: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('showTurnChangedFiles', (v) => useUIStore.getState().setShowTurnChangedFiles(v)) }),
- showExpandedBashTools: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('showExpandedBashTools', (v) => useUIStore.getState().setShowExpandedBashTools(v)) }),
- showExpandedEditTools: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('showExpandedEditTools', (v) => useUIStore.getState().setShowExpandedEditTools(v)) }),
  toolJsonViewMode: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseOneOf(['summary', 'formatted', 'raw']), ui: uiStore('toolJsonViewMode', (v) => useUIStore.getState().setToolJsonViewMode(v)) }),
  timeFormatPreference: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['auto', '12h', '24h']), ui: uiStore('timeFormatPreference', (v) => useUIStore.getState().setTimeFormatPreference(v)) }),
  weekStartPreference: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['auto', 'sunday', 'monday']), ui: uiStore('weekStartPreference', (v) => useUIStore.getState().setWeekStartPreference(v)) }),
@@ -509,8 +504,9 @@ export const SETTINGS_REGISTRY = {
  autoSaveEnabled: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseBoolean, ui: uiStore('autoSaveEnabled', (v) => useUIStore.getState().setAutoSaveEnabled(v)) }),
  confirmFileTreeMove: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('confirmFileTreeMove', (v) => useUIStore.getState().setConfirmFileTreeMove(v)) }),
  autoCreateWorktree: field({ scope: 'profile', effect: ['store'], parse: parseBoolean }),
+ terminalCloseOnExit: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('terminalCloseOnExit', (v) => useUIStore.getState().setTerminalCloseOnExit(v)) }),
  sessionTabsEnabled: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('sessionTabsEnabled', (v) => useUIStore.getState().setSessionTabsEnabled(v)) }),
- sessionTabsPerWorkspace: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('sessionTabsPerWorkspace', setUi('sessionTabsPerWorkspace')) }),
+ sessionTabsPerWorkspace: field({ scope: 'profile', effect: ['ui'], surfaces: ['web', 'desktop'], parse: parseBoolean, ui: uiStore('sessionTabsPerWorkspace', (v) => useUIStore.getState().setSessionTabsPerWorkspace(v)) }),
  allowPromptingSubagentSessions: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('allowPromptingSubagentSessions', (v) => useUIStore.getState().setAllowPromptingSubagentSessions(v)) }),
 
  // ── Composer (profile) ──
@@ -596,7 +592,7 @@ export const SETTINGS_REGISTRY = {
 
  // ── Sessions and summaries (profile) ──
  sessionRecapEnabled: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('sessionRecapEnabled', (v) => useUIStore.getState().setSessionRecapEnabled(v)) }),
- sessionSuggestionEnabled: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('sessionSuggestionEnabled', (v) => useUIStore.getState().setSessionSuggestionEnabled(v)) }),
+ suggestionGenerator: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['session', 'small', 'off'] as const), ui: uiStore('suggestionGenerator', (v) => useUIStore.getState().setSuggestionGenerator(v)) }),
  sessionWorkEnabled: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('sessionWorkEnabled', (v) => useUIStore.getState().setSessionWorkEnabled(v)) }),
  sessionWorkAutoOpen: field({ scope: 'profile', effect: ['server', 'ui'], surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionWorkAutoOpen', (v) => useUIStore.getState().setSessionWorkAutoOpen(v)) }),
  sessionReviewOfferEnabled: field({ scope: 'profile', effect: ['server', 'ui'], surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionReviewOfferEnabled', (v) => useUIStore.getState().setSessionReviewOfferEnabled(v)) }),

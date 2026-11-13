@@ -243,7 +243,7 @@ export const createWorkerOperationAuthorizer = ({
     }
     return approvalGranted ? allowed : approvalRequired('The MCP tool requires approval');
    }
-   const isWriteTier = ['write', 'edit', 'ast_edit', 'new_context', 'manage_skill'].includes(request.toolName)
+   const isWriteTier = ['write', 'edit', 'ast_edit', 'new_context', 'manage_skill', 'generate_image'].includes(request.toolName)
     || (request.toolName === 'context_notes' && input?.text !== undefined)
     || (request.toolName === 'retain' && Array.isArray(input?.items) && input.items.some(i => i?.scope === 'global'))
     || (request.toolName === 'learn' && Boolean(input?.skill || input?.scope === 'global'));

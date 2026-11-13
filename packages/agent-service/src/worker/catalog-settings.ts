@@ -9,7 +9,8 @@ import {
   type OmpSettingsUpdateRequest,
 } from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
-import type { AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
+import { lookup, type AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
+import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
 import { presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
@@ -33,7 +34,7 @@ function handle(id: string): AnySetting {
   if (!allowlist.has(id)) throw new ProjectionError(400, 'INVALID_REQUEST', `OMP setting ${id} is not exposed`);
   let setting = byId.get(id);
   if (setting === undefined) {
-    setting = orderedSettings().find(candidate => candidate.id === id);
+    setting = lookup(id) ?? orderedSettings().find(candidate => candidate.id === id);
     if (setting === undefined) throw new ProjectionError(503, 'INTERNAL_ERROR', `OMP setting ${id} is unavailable`);
     if (setting.isCredential) throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', `OMP setting ${id} is credential-backed`);
     byId.set(id, setting);

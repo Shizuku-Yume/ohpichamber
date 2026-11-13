@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { createRequire } from 'node:module';
 
-export const isAgentMemoryFeatureAvailable = () => true;
+export const isAgentMemoryFeatureAvailable = () => false;
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
 export const isWorkflowFeatureAvailable = () => true;
 import { idleStopSchema } from '../spaces/idle-stop.js';
@@ -465,6 +465,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionTabsEnabled === 'boolean') {
       result.sessionTabsEnabled = candidate.sessionTabsEnabled;
     }
+    if (typeof candidate.terminalCloseOnExit === 'boolean') {
+      result.terminalCloseOnExit = candidate.terminalCloseOnExit;
+    }
     if (typeof candidate.largeTextPasteBehavior === 'string') {
       const mode = candidate.largeTextPasteBehavior.trim();
       if (mode === 'ask' || mode === 'attach' || mode === 'inline' || mode === 'inline-double-paste') {
@@ -486,8 +489,8 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionRecapEnabled === 'boolean') {
       result.sessionRecapEnabled = candidate.sessionRecapEnabled;
     }
-    if (typeof candidate.sessionSuggestionEnabled === 'boolean') {
-      result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
+    if (typeof candidate.suggestionGenerator === 'string' && ['session', 'small', 'off'].includes(candidate.suggestionGenerator)) {
+      result.suggestionGenerator = candidate.suggestionGenerator;
     }
     if (typeof candidate.sessionWorkEnabled === 'boolean') {
       result.sessionWorkEnabled = candidate.sessionWorkEnabled;
@@ -694,9 +697,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.agentControlToolEnabled === 'boolean') {
       result.agentControlToolEnabled = candidate.agentControlToolEnabled;
     }
-    if (typeof candidate.agentMemoryToolEnabled === 'boolean') {
-      result.agentMemoryToolEnabled = candidate.agentMemoryToolEnabled;
-    }
     if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
       result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
     }
@@ -718,12 +718,6 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.showTurnChangedFiles === 'boolean') {
       result.showTurnChangedFiles = candidate.showTurnChangedFiles;
-    }
-    if (typeof candidate.showExpandedBashTools === 'boolean') {
-      result.showExpandedBashTools = candidate.showExpandedBashTools;
-    }
-    if (typeof candidate.showExpandedEditTools === 'boolean') {
-      result.showExpandedEditTools = candidate.showExpandedEditTools;
     }
     if (typeof candidate.timeFormatPreference === 'string') {
       const mode = candidate.timeFormatPreference.trim();
@@ -991,7 +985,7 @@ export const createSettingsHelpers = (dependencies) => {
     // registry is the authority on what a client may persist, and the client
     // parses the same document on the way back in.
     for (const key of [
-      'agentImageToolEnabled', 'agentImageModel', 'sessionRetentionIncludeInWork',
+      'sessionRetentionIncludeInWork',
       'dictationAutoSend', 'sttEndpointPath', 'sttCorrectTranscript',
       'sidebarSections', 'sidebarPinLists', 'sidebarHiddenSections',
       'sessionTabsPerWorkspace', 'selectionApprovalText', 'customProviderLogos',

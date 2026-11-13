@@ -85,10 +85,7 @@ export const buildKnowledgeText = ({ notes, plans }) => {
 export const createSessionKnowledgeRuntime = (dependencies) => {
   const {
     projectContextRuntime,
-    agentMemoryRuntime,
     resolveProjectId,
-    isAgentMemoryEnabled,
-
     // Pins and the delivered-signature cursor live in OpenChamber's own session
     // metadata store, which merges patches after creation.
     readSessionMetadata = null,
@@ -173,22 +170,7 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
       plans = [];
     }
 
-    let memory = { global: 0, project: 0 };
-    const memoryEnabled = typeof isAgentMemoryEnabled === 'function'
-      ? await isAgentMemoryEnabled().catch(() => false)
-      : true;
-    if (memoryEnabled) {
-      try {
-        const stored = await agentMemoryRuntime.readAll(projectId);
-        memory = {
-          global: stored.globalFailed ? 0 : stored.global.length,
-          project: stored.projectFailed ? 0 : stored.project.length,
-        };
-      } catch {
-        memory = { global: 0, project: 0 };
-      }
-    }
-
+    const memory = { global: 0, project: 0 };
     return { notes, plans, memory };
   };
 

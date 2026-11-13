@@ -1,7 +1,49 @@
-import type { ExtensionFactory } from '@oh-my-pi/pi-coding-agent/sdk';
+import type { ExtensionFactory, ExtensionAPI } from '@oh-my-pi/pi-coding-agent/sdk';
+import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import { z } from 'zod';
 import { JsonObjectSchema, type JsonObject, type JsonValue } from '@openchamber/agent-contract';
 import { HostActionRequestSchema, type HostActionRequest } from '../native-policy-protocol.ts';
+
+export type HostToolName =
+  | 'openchamber'
+  | 'web'
+  | 'openchamber_knowledge'
+  | 'notify'
+  | 'openchamber_render'
+  | 'openchamber_workflow';
+
+export const HOST_TOOL_NAMES: readonly HostToolName[] = [
+  'openchamber',
+  'web',
+  'openchamber_knowledge',
+  'notify',
+  'openchamber_render',
+  'openchamber_workflow',
+] as const;
+
+export const DEFAULT_HOST_TOOL_ENABLEMENT: Readonly<Record<HostToolName, boolean>> = Object.freeze({
+  openchamber: true,
+  web: true,
+  openchamber_knowledge: true,
+  notify: false,
+  openchamber_render: true,
+  openchamber_workflow: true,
+});
+
+export function normalizeHostToolEnablement(input?: Record<string, boolean>): Record<HostToolName, boolean> {
+  const result = { ...DEFAULT_HOST_TOOL_ENABLEMENT };
+  if (!input) return result;
+  for (const name of HOST_TOOL_NAMES) {
+    if (typeof input[name] === 'boolean') result[name] = input[name];
+  }
+  if (typeof input.agentControlToolEnabled === 'boolean') result.openchamber = input.agentControlToolEnabled;
+  if (typeof input.agentWebToolEnabled === 'boolean') result.web = input.agentWebToolEnabled;
+  if (typeof input.agentKnowledgeToolEnabled === 'boolean') result.openchamber_knowledge = input.agentKnowledgeToolEnabled;
+  if (typeof input.agentNotifyToolEnabled === 'boolean') result.notify = input.agentNotifyToolEnabled;
+  if (typeof input.agentRenderToolEnabled === 'boolean') result.openchamber_render = input.agentRenderToolEnabled;
+  if (typeof input.agentWorkflowToolEnabled === 'boolean') result.openchamber_workflow = input.agentWorkflowToolEnabled;
+  return result;
+}
 
 export interface HostToolScope { sessionId: string; rootSessionId: string; workspaceId: string }
 export interface HostToolInvocation extends HostToolScope { request: HostActionRequest; signal: AbortSignal }
@@ -14,12 +56,11 @@ export const HOST_TOOL_DESCRIPTIONS = {
     + 'Plans are markdown files: list gives their paths, and read or edit one with your file tools; save creates or replaces one whole. '
     + 'knowledge.show opens a plan for the user. knowledge.delete requires kind and id.',
   web: 'Invoke retained browser navigation, snapshot, interaction, inspection, capture and resize actions. Browser credentials remain with the Host.',
-  memory: 'Invoke memory.read, memory.list, memory.save or memory.delete in the captured session.',
   notify: 'Invoke notify.send for an authorized OpenChamber notification.',
-  openchamber_image: 'Generate or edit images with the configured agent image model. Returns the file path where the generated image is saved.',
   openchamber_render: 'Show a page in the chat: one complete HTML document or one openui-lang program, with a title, in the same call. '
     + 'With awaitAnswer the page waits for the user\'s answer and returns their summary and data; without it the page is only shown. '
     + 'The chat draws the page inline, so do not restate what it already says.',
+  openchamber_workflow: 'Propose, check, run, inspect, stop or resume multi-agent workflows in the project. Actions: workflow.run, workflow.check, workflow.status, workflow.result, workflow.stop, workflow.resume, workflow.save, workflow.list.',
 } satisfies Record<HostActionRequest['toolName'], string>;
 
 /**
@@ -38,36 +79,121 @@ function envelopeFor(toolName: HostActionRequest['toolName'], action: string, va
   };
 }
 
-export function createHostToolExtension({ scope, invoke }: { scope: HostToolScope; invoke: (request: HostToolInvocation) => Promise<JsonValue> }): ExtensionFactory {
+export interface HostToolController {
+  readonly isEnabled: (tool: HostToolName) => boolean;
+  readonly toggle: (tool: HostToolName, enabled: boolean) => Promise<void>;
+  readonly configure: (tools: Partial<Record<HostToolName, boolean>>) => Promise<void>;
+  readonly bindSession: (session: AgentSession) => void;
+  readonly extension: ExtensionFactory;
+}
+
+export function createHostToolController({
+  scope,
+  invoke,
+  initialEnablement,
+}: {
+  scope: HostToolScope;
+  invoke: (request: HostToolInvocation) => Promise<JsonValue>;
+  initialEnablement?: Partial<Record<HostToolName, boolean>> | ((tool: HostToolName) => boolean);
+}): HostToolController {
   const captured = Object.freeze({ ...scope });
-  return api => {
-    for (const toolName of ['openchamber', 'web', 'memory', 'openchamber_knowledge', 'notify', 'openchamber_image', 'openchamber_render'] as const) {
-      const parameters = api.typebox.Type.Object({
-        action: api.typebox.Type.String(),
-        input: api.typebox.Type.Record(api.typebox.Type.String(), api.typebox.Type.Unknown()),
-      });
-      api.registerTool<typeof parameters>({
-        name: toolName, label: toolName, description: HOST_TOOL_DESCRIPTIONS[toolName], parameters, approval: 'exec', loadMode: 'essential',
-        async execute(toolCallId, params, signal) {
-          const cancellation = signal ?? new AbortController().signal;
-          cancellation.throwIfAborted();
-          const input = JsonObjectSchema.parse(params);
-          const action = z.string().safeParse(input.action);
-          const toolInput = JsonObjectSchema.parse(input.input);
-          const parsed = HostActionRequestSchema.parse({
-            sessionId: captured.sessionId, toolName, action: action.success ? action.data : '', input: toolInput,
-            // A page that waits is answered by the call that showed it.
-            ...(toolName === 'openchamber_render' && toolCallId ? { toolCallId } : {}),
-          });
-          const value = await invoke({ ...captured, request: parsed, signal: cancellation });
-          cancellation.throwIfAborted();
-          // The host action's own answer envelope, so the chat reads the page's
-          // answer where it reads every OpenChamber tool result: under
-          // `details.openchamber`, hoisted to the result's top level.
-          const envelope = envelopeFor(toolName, parsed.action, value);
-          return { content: [{ type: 'text', text: JSON.stringify(envelope ?? value) }], details: envelope ?? value };
-        },
-      });
+  const enablement: Record<HostToolName, boolean> = { ...DEFAULT_HOST_TOOL_ENABLEMENT };
+  if (typeof initialEnablement === 'function') {
+    for (const name of HOST_TOOL_NAMES) enablement[name] = initialEnablement(name);
+  } else if (initialEnablement) {
+    for (const name of HOST_TOOL_NAMES) {
+      if (typeof initialEnablement[name] === 'boolean') enablement[name] = initialEnablement[name]!;
+    }
+  }
+
+  let registeredApi: ExtensionAPI | undefined;
+  let boundSession: AgentSession | undefined;
+  const registeredWithApi = new Set<HostToolName>();
+
+  const registerSingleTool = (api: ExtensionAPI, toolName: HostToolName) => {
+    const parameters = api.typebox.Type.Object({
+      action: api.typebox.Type.String(),
+      input: api.typebox.Type.Record(api.typebox.Type.String(), api.typebox.Type.Unknown()),
+    });
+    api.registerTool<typeof parameters>({
+      name: toolName,
+      label: toolName,
+      description: HOST_TOOL_DESCRIPTIONS[toolName],
+      parameters,
+      approval: 'exec',
+      loadMode: 'essential',
+      async execute(toolCallId, params, signal) {
+        const cancellation = signal ?? new AbortController().signal;
+        cancellation.throwIfAborted();
+        const input = JsonObjectSchema.parse(params);
+        const action = z.string().safeParse(input.action);
+        const toolInput = JsonObjectSchema.parse(input.input);
+        const parsed = HostActionRequestSchema.parse({
+          sessionId: captured.sessionId,
+          toolName,
+          action: action.success ? action.data : '',
+          input: toolInput,
+          ...(toolName === 'openchamber_render' && toolCallId ? { toolCallId } : {}),
+        });
+        const value = await invoke({ ...captured, request: parsed, signal: cancellation });
+        cancellation.throwIfAborted();
+        const envelope = envelopeFor(toolName, parsed.action, value);
+        return { content: [{ type: 'text', text: JSON.stringify(envelope ?? value) }], details: envelope ?? value };
+      },
+    });
+    registeredWithApi.add(toolName);
+  };
+
+  const extension: ExtensionFactory = (api: ExtensionAPI) => {
+    registeredApi = api;
+    for (const toolName of HOST_TOOL_NAMES) {
+      if (enablement[toolName]) {
+        registerSingleTool(api, toolName);
+      }
     }
   };
+
+  const toggle = async (tool: HostToolName, enabled: boolean): Promise<void> => {
+    enablement[tool] = enabled;
+    if (enabled) {
+      if (registeredApi && !registeredWithApi.has(tool)) {
+        registerSingleTool(registeredApi, tool);
+      }
+      if (boundSession) {
+        const active = boundSession.getActiveToolNames();
+        if (!active.includes(tool)) {
+          await boundSession.setActiveToolsByName([...active, tool]);
+        }
+      }
+    } else if (boundSession) {
+      const active = boundSession.getActiveToolNames();
+      if (active.includes(tool)) {
+        await boundSession.setActiveToolsByName(active.filter(name => name !== tool));
+      }
+    }
+  };
+
+  const configure = async (tools: Partial<Record<HostToolName, boolean>>): Promise<void> => {
+    for (const [key, value] of Object.entries(tools)) {
+      if (typeof value === 'boolean' && HOST_TOOL_NAMES.includes(key as HostToolName)) {
+        await toggle(key as HostToolName, value);
+      }
+    }
+  };
+
+  return {
+    isEnabled: (tool: HostToolName) => enablement[tool] === true,
+    toggle,
+    configure,
+    bindSession: (session: AgentSession) => { boundSession = session; },
+    extension,
+  };
+}
+
+export function createHostToolExtension(options: {
+  scope: HostToolScope;
+  invoke: (request: HostToolInvocation) => Promise<JsonValue>;
+  initialEnablement?: Partial<Record<HostToolName, boolean>> | ((tool: HostToolName) => boolean);
+}): ExtensionFactory {
+  return createHostToolController(options).extension;
 }

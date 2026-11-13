@@ -51,6 +51,7 @@ const DUPLICATES: readonly (readonly [OmpSettingId, string])[] = [
   ['recap.enabled', 'chat.session-recap'],
   ['recap.idleSeconds', 'chat.session-recap'],
   ['tools.approvalMode', 'sessions.permission-default'],
+  ['suggestion.generator', 'chat.suggestion-generator'],
 ];
 
 /**

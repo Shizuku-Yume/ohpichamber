@@ -133,9 +133,7 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
 
   // The whole feature is one switch: with memory off there is nothing for the
   // agent to manage, so showing the user what is stored would be pointless.
-  const memoryEnabled = useUIStore((state) => (
-    state.agentMemoryFeatureAvailable && state.agentMemoryToolEnabled
-  ));
+  const memoryEnabled = useUIStore((state) => state.agentMemoryFeatureAvailable);
   const memoryDisabledByServer = useAgentMemoryStore((state) => state.disabled);
   const memoryVisible = memoryEnabled && !memoryDisabledByServer;
   const globalMemory = useAgentMemoryStore((state) => state.global);
@@ -571,81 +569,81 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
       )}
 
       <div className="relative min-h-0 min-w-0 flex-1">
-      {showSearchBar ? (
-        // Over the list column in the split layout, so it never covers the
-        // open entry's toolbar.
-        <div className={cn('pointer-events-none absolute top-2 z-20', split ? 'inset-s-3' : 'inset-e-3')}>
-          <KnowledgeSearchBar
-            query={query}
-            onQueryChange={setQuery}
-            placeholder={searchLabel}
-            nothingFound={nothingFound}
-            focusRequest={searchFocusRequest}
-            onClose={closeSearch}
-          />
-        </div>
-      ) : null}
-      {/* An open entry scrolls itself; nesting it in this scroller would give
-          the panel two scrollbars for one document. In the split layout each
-          column scrolls itself. */}
-      <ScrollableOverlay
-        ref={listScrollerRef}
-        outerClassName="h-full min-w-0"
-        className={cn(split ? 'overflow-hidden' : cn('p-3', entryOpen && 'overflow-hidden'))}
-        disableHorizontal
-      >
-        {activeTab === 'notes' ? (
-          <NotesSection
-            projectRef={projectRef}
-            notes={contextEntry.notes}
-            disabled={isLoading}
-            query={query}
-            pinnedNoteIds={pinnedNoteIds}
-            onTogglePinned={(noteId, pinned) => toggleSessionPin('note', noteId, pinned)}
-            openNoteId={openIdIn('notes')}
-            onOpenNote={openNote}
-            split={split}
-          />
-        ) : null}
-
-        {activeTab === 'todos' ? (
-          // Todos open nothing, so a wide panel gets one column of readable
-          // width instead of rows stretched edge to edge.
-          <div className={cn(wide && 'mx-auto max-w-3xl')}>
-            <TodosSection
-              todos={todos}
+        {showSearchBar ? (
+          // Over the list column in the split layout, so it never covers the
+          // open entry's toolbar.
+          <div className={cn('pointer-events-none absolute top-2 z-20', split ? 'inset-s-3' : 'inset-e-3')}>
+            <KnowledgeSearchBar
               query={query}
-              disabled={isLoading}
-              canCreateWorktree={canCreateWorktree}
-              sendingTodoId={send.sendingTodoId}
-              onPersistTodos={handlePersistTodos}
-              onSendToCurrentSession={send.sendToCurrentSession}
-              onSendToNewSession={send.sendToNewSession}
-              onSendToNewWorktreeSession={send.sendToNewWorktreeSession}
+              onQueryChange={setQuery}
+              placeholder={searchLabel}
+              nothingFound={nothingFound}
+              focusRequest={searchFocusRequest}
+              onClose={closeSearch}
             />
           </div>
         ) : null}
-
-        {activeTab === 'memory' && memoryVisible ? (
-          <MemorySection
-            projectPath={projectRef.path}
-            query={query}
-            openMemoryId={openIdIn('memory')}
-            onOpenMemory={openMemory}
-            split={split}
-          />
-        ) : null}
-
-        {activeTab === 'plans' ? (
-          split ? (
-            <KnowledgeSplit
-              list={plansList}
-              detail={openPlanId ? planView(openPlanId) : null}
-              emptyLabel={t('rightSidebar.contextNotesTodo.plans.selectHint')}
+        {/* An open entry scrolls itself; nesting it in this scroller would give
+          the panel two scrollbars for one document. In the split layout each
+          column scrolls itself. */}
+        <ScrollableOverlay
+          ref={listScrollerRef}
+          outerClassName="h-full min-w-0"
+          className={cn(split ? 'overflow-hidden' : cn('p-3', entryOpen && 'overflow-hidden'))}
+          disableHorizontal
+        >
+          {activeTab === 'notes' ? (
+            <NotesSection
+              projectRef={projectRef}
+              notes={contextEntry.notes}
+              disabled={isLoading}
+              query={query}
+              pinnedNoteIds={pinnedNoteIds}
+              onTogglePinned={(noteId, pinned) => toggleSessionPin('note', noteId, pinned)}
+              openNoteId={openIdIn('notes')}
+              onOpenNote={openNote}
+              split={split}
             />
-          ) : openPlanId ? planView(openPlanId) : plansList
-        ) : null}
-      </ScrollableOverlay>
+          ) : null}
+
+          {activeTab === 'todos' ? (
+            // Todos open nothing, so a wide panel gets one column of readable
+            // width instead of rows stretched edge to edge.
+            <div className={cn(wide && 'mx-auto max-w-3xl')}>
+              <TodosSection
+                todos={todos}
+                query={query}
+                disabled={isLoading}
+                canCreateWorktree={canCreateWorktree}
+                sendingTodoId={send.sendingTodoId}
+                onPersistTodos={handlePersistTodos}
+                onSendToCurrentSession={send.sendToCurrentSession}
+                onSendToNewSession={send.sendToNewSession}
+                onSendToNewWorktreeSession={send.sendToNewWorktreeSession}
+              />
+            </div>
+          ) : null}
+
+          {activeTab === 'memory' && memoryVisible ? (
+            <MemorySection
+              projectPath={projectRef.path}
+              query={query}
+              openMemoryId={openIdIn('memory')}
+              onOpenMemory={openMemory}
+              split={split}
+            />
+          ) : null}
+
+          {activeTab === 'plans' ? (
+            split ? (
+              <KnowledgeSplit
+                list={plansList}
+                detail={openPlanId ? planView(openPlanId) : null}
+                emptyLabel={t('rightSidebar.contextNotesTodo.plans.selectHint')}
+              />
+            ) : openPlanId ? planView(openPlanId) : plansList
+          ) : null}
+        </ScrollableOverlay>
       </div>
 
       <DelegatedTooltip containerRef={rootRef} className={ROW_TOOLTIP_CLASS} />

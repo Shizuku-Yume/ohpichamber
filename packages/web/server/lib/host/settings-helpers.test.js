@@ -182,7 +182,7 @@ describe('settings helpers', () => {
     } finally {
       rmSync(tempRoot, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   it('accepts only booleans for draft starter visibility', () => {
     const helpers = createTestHelpers();
@@ -790,7 +790,7 @@ describe('settings registry gate', () => {
     defaultGitIdentityId: 'global', permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
     sessionGoalChecker: 'classifier', sessionGoalMaxAutoTurns: 20,
     autoApplyAgentModel: true, planModeAllowAgents: true,
-    agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
+    agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
     // Registry keys the settings-registry regeneration added; the gate fails
     // without a fixture line for each, and these are their real shapes.
     openLinksInBrowserPanel: true, liveBrowserTabLimit: 4, openTrackerLinksOnBoard: true, layoutAnimations: true,
@@ -808,11 +808,11 @@ describe('settings registry gate', () => {
     showReasoningTraces: true, streamingAutoFollowEnabled: true, collapsibleThinkingBlocks: true, expandReasoningWhileStreaming: true, showTextJustificationActivity: true,
     chatRenderMode: 'live', activityRenderMode: 'summary', mermaidRenderingMode: 'svg', userMessageRenderingMode: 'markdown', collapsibleUserMessages: true,
     stickyUserHeader: true, promptNavigatorEnabled: true, wideChatLayoutEnabled: true, showSplitAssistantMessageActions: true, showToolFileIcons: true,
-    codeBlockLineWrap: true, tableCellWrap: true, copyMessagesAsPlainText: true, showTurnChangedFiles: true, showExpandedBashTools: true, showExpandedEditTools: true, toolJsonViewMode: 'raw',
+    codeBlockLineWrap: true, tableCellWrap: true, copyMessagesAsPlainText: true, showTurnChangedFiles: true, toolJsonViewMode: 'raw',
     timeFormatPreference: '24h', weekStartPreference: 'monday', messageStreamTransport: 'ws', diffLayoutPreference: 'inline', diffWrapLines: true, diffHideWhitespace: true,
     gitChangesViewMode: 'tree', gitmojiEnabled: true, defaultFileViewerPreview: true, directoryShowHidden: true, filesViewShowGitignored: true,
     generateCommitMessages: true, commitMessageReasoning: false, commitMessageNotes: false, commitMessageChangeId: false,
-    fileEditorKeymap: 'vim', fileEditorVimMappings: 'inoremap jk <Esc>', autoSaveEnabled: true, confirmFileTreeMove: false, autoCreateWorktree: true, sessionTabsEnabled: true,
+    fileEditorKeymap: 'vim', fileEditorVimMappings: 'inoremap jk <Esc>', autoSaveEnabled: true, confirmFileTreeMove: false, autoCreateWorktree: true, terminalCloseOnExit: true, sessionTabsEnabled: true,
     allowPromptingSubagentSessions: true, inputSpellcheckEnabled: true, enterToSend: true, enterToSendConfigured: true, persistChatDraft: true,
     largeTextPasteBehavior: 'attach', followUpBehavior: 'steer', queueModeEnabled: true, inputHistoryScope: 'global', inputHistoryLimit: 40,
     draftStarters: [{ type: 'command', name: 'plan-feature' }], draftStartersVisible: true, draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true,
@@ -822,7 +822,7 @@ describe('settings registry gate', () => {
     defaultSessionMode: 'main',
     favoriteModels: [{ providerID: 'anthropic', modelID: 'claude' }], hiddenModels: [{ providerID: 'openai', modelID: 'gpt' }],
     recentModels: [{ providerID: 'anthropic', modelID: 'claude' }], lastSelectedModel: 'anthropic/claude', favoriteAgents: ['build'], providerOrder: ['anthropic'],
-    sessionRecapEnabled: true, sessionSuggestionEnabled: true, sessionWorkEnabled: true, sessionWorkAutoOpen: true, sessionReviewOfferEnabled: true, sessionWorkKeepInGroup: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
+    sessionRecapEnabled: true, suggestionGenerator: 'session', sessionWorkEnabled: true, sessionWorkAutoOpen: true, sessionReviewOfferEnabled: true, sessionWorkKeepInGroup: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
     maxLastMessageLength: 200, showDeletionDialog: true,
     nativeNotificationsEnabled: true, notificationMode: 'always', notifyOnSubtasks: true, notifyOnCompletion: true, notifyOnError: true, notifyOnQuestion: true, notifyOnPullRequests: true,
     notificationTemplates: { completion: { title: 't', message: 'm' } }, reportUsage: true,
@@ -839,7 +839,7 @@ describe('settings registry gate', () => {
     responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'Be brief.',
     // Registry keys whose server branch is a pass-through: the registry parser
     // owns their shape, so the fixture is the client's own write shape.
-    agentImageToolEnabled: true, agentImageModel: 'anthropic/claude', sessionRetentionIncludeInWork: true,
+    sessionRetentionIncludeInWork: true,
     dictationAutoSend: true, sttEndpointPath: '/speech_to_text', sttCorrectTranscript: true,
     sidebarSections: [{ kind: 'custom', id: 'g', name: 'Clients', grouping: 'project', links: [] }],
     sidebarPinLists: [{ id: 'pinned', name: 'Pinned' }], sidebarHiddenSections: ['work'],

@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises';
-import { createImageGenerationAction } from './generate-image.js';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import { asNonEmptyString, isBoolean } from '../shared/guards.js';
 import { OpenChamberControlError, asControlError } from './error.js';
@@ -7,11 +6,10 @@ import {
  OPENCHAMBER_ALL_ACTIONS,
  OPENCHAMBER_AGENT_TOOL_ACTIONS,
  OPENCHAMBER_WEB_ACTIONS,
- OPENCHAMBER_MEMORY_ACTIONS,
  OPENCHAMBER_KNOWLEDGE_ACTIONS,
  OPENCHAMBER_NOTIFY_ACTIONS,
- OPENCHAMBER_IMAGE_ACTIONS,
  OPENCHAMBER_RENDER_ACTIONS,
+ OPENCHAMBER_WORKFLOW_ACTIONS,
 } from './actions.js';
 import { createProjectKnowledgeActions } from './project-knowledge.js';
 import { writeScreenshot } from './screenshots.js';
@@ -26,11 +24,10 @@ const CONTROL_ACTIONS = new Set(OPENCHAMBER_ALL_ACTIONS);
 const TOOL_ACTIONS = new Map([
  ['openchamber', new Set(OPENCHAMBER_AGENT_TOOL_ACTIONS)],
  ['web', new Set(OPENCHAMBER_WEB_ACTIONS)],
- ['memory', new Set(OPENCHAMBER_MEMORY_ACTIONS)],
  ['openchamber_knowledge', new Set(OPENCHAMBER_KNOWLEDGE_ACTIONS)],
  ['notify', new Set(OPENCHAMBER_NOTIFY_ACTIONS)],
- ['openchamber_image', new Set(OPENCHAMBER_IMAGE_ACTIONS)],
  ['openchamber_render', new Set(OPENCHAMBER_RENDER_ACTIONS)],
+ ['openchamber_workflow', new Set(OPENCHAMBER_WORKFLOW_ACTIONS)],
 ]);
 const SCHEDULE_TASK_ID_ACTIONS = new Set([
  'schedule.update',
@@ -257,7 +254,6 @@ export const createOpenChamberControlService = (dependencies) => {
   browserControl = null,
   fileOpen = null,
   notifyUser = null,
-  agentMemoryActions = null,
   // Notes, todos and plans behind the `openchamber_knowledge` tool.
   projectContextRuntime = null,
   // The resolver the knowledge tool and session knowledge share, so what an
@@ -426,15 +422,6 @@ export const createOpenChamberControlService = (dependencies) => {
 
  const pageAnswers = createPageAnswers({ onWaitChange: onPageWaitChange });
  const renderPage = createRenderPageAction({ isEnabled: isRenderToolEnabled, pageAnswers });
- const generateImage = createImageGenerationAction({
-  service,
-  resolveWorkspaceScope: async ({ directory, sessionId } = {}) => {
-   const input = directory ? { directory } : {};
-   return await resolveWorkspaceFor(input, sessionId, directory).catch(() => null);
-  },
-  readSettings: readSettingsFromDiskMigrated,
-  fsPromises: dependencies.fsPromises ?? fs,
- });
 
  // 2 for a favorite, 1 for a recent model, absent for the rest.
  const PREFERENCE_BY_RANK = { 2: 'favorite', 1: 'recent' };
@@ -923,21 +910,8 @@ export const createOpenChamberControlService = (dependencies) => {
    if (!CONTROL_ACTIONS.has(action)) {
     throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || "missing"}`, 400);
    }
-   if (action === "image.generate") {
-    return await generateImage(input, {
-     directory: asNonEmptyString(contextDirectory),
-     sessionId: asNonEmptyString(options.contextSessionId),
-     signal: options.signal,
-    });
-   }
    if (OPENCHAMBER_KNOWLEDGE_ACTIONS.includes(action)) {
     return await knowledgeActions.execute(action, input, contextDirectory, options.contextSessionId);
-   }
-   if (action.startsWith('memory.')) {
-    if (!agentMemoryActions) {
-     throw new OpenChamberControlError('Agent memory is not available on this server', 503);
-    }
-    return agentMemoryActions.execute(action, input, contextDirectory);
    }
    if (action.startsWith('browser.')) {
     if (!browserControl) {
@@ -1114,26 +1088,7 @@ export const createOpenChamberControlService = (dependencies) => {
  const featurePolicy = async (toolName, action) => {
   const actions = TOOL_ACTIONS.get(toolName);
   if (!actions || !actions.has(action)) return { code: 'INVALID_REQUEST', status: 400, detail: `Unsupported ${toolName} action: ${action}` };
-  let settings;
-  try {
-   settings = await readSettingsFromDiskMigrated();
-  } catch {
-   return { code: 'SERVICE_UNAVAILABLE', status: 503, detail: 'Failed to read settings' };
-  }
-  const enabled = toolName === 'openchamber'
-   ? settings?.agentControlToolEnabled !== false
-   : toolName === 'web'
-    ? settings?.agentWebToolEnabled !== false
-    : toolName === 'memory'
-     ? settings?.agentMemoryToolEnabled === true
-     : toolName === 'openchamber_knowledge'
-      ? settings?.agentKnowledgeToolEnabled !== false
-      : toolName === 'openchamber_image'
-       ? settings?.agentImageToolEnabled === true
-       : toolName === 'openchamber_render'
-        ? settings?.agentRenderToolEnabled !== false
-        : settings?.agentNotifyToolEnabled === true;
-  return enabled ? null : { code: 'UNAUTHORIZED', status: 403, detail: `${toolName} tool is disabled` };
+  return null;
  };
 
  const invokeHostAction = async (scope, request, signal) => {

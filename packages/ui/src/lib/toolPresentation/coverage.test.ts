@@ -67,7 +67,7 @@ const ompNames = (): { builtin: string[]; hidden: string[]; renderers: string[] 
 };
 
 /** The fork's own tools: the Agent Service registers these beside OMP's. */
-const HOST_TOOL_NAMES = ['openchamber', 'openchamber_knowledge', 'web', 'memory', 'notify', 'openchamber_image', 'openchamber_render'] as const;
+const HOST_TOOL_NAMES = ['openchamber', 'openchamber_knowledge', 'web', 'notify', 'openchamber_render', 'openchamber_workflow'] as const;
 
 describe('OMP tool presentation coverage', () => {
     test('every OMP builtin and hidden tool has a registry entry', () => {

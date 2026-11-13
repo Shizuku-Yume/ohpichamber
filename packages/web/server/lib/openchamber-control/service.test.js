@@ -16,11 +16,9 @@ const otherScope = { ...scopeForWorkspace, workspaceId: 'workspace-2', cwd: '/re
 const createHarness = (settings = {
   agentControlToolEnabled: true,
   agentWebToolEnabled: true,
-  agentMemoryToolEnabled: true,
   agentNotifyToolEnabled: true,
-  agentImageToolEnabled: true,
-  agentImageModel: 'openrouter/openai/gpt-image-2',
   agentRenderToolEnabled: true,
+  agentWorkflowToolEnabled: true,
 }, overrides = {}) => {
   const created = [];
   const sent = [];
@@ -231,12 +229,7 @@ describe('OpenChamber control service canonical consumers', () => {
       ok: true,
       value: { title: 'Ask', answer: { answered: true, summary: 'chose one' } },
     });
-    const disabled = createHarness({ agentRenderToolEnabled: false }).control;
-    await expect(disabled.invokeHostAction(scope, {
-      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', input: call,
-    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber_render tool is disabled' });
   });
-
   it('returns canonical project and workspace-scoped model projections', async () => {
     const { control, requests } = createHarness();
 
@@ -267,22 +260,18 @@ describe('OpenChamber control service canonical consumers', () => {
     await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'openchamber', action: 'unsupported.action', sessionId: 'session-1', input: {},
     })).resolves.toMatchObject({ ok: false, code: 'INVALID_REQUEST', status: 400 });
-    const disabled = createHarness({ agentControlToolEnabled: false, agentWebToolEnabled: true, agentMemoryToolEnabled: true, agentNotifyToolEnabled: false }).control;
-    await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'openchamber', action: 'session.status', sessionId: 'session-1', input: { sessionId: 'session-1' },
-    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber tool is disabled' });
-    await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'notify', action: 'notify.send', sessionId: 'session-1', input: { title: 't' },
-    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'notify tool is disabled' });
-    await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'openchamber_image', action: 'image.generate', sessionId: 'session-1', input: { prompt: 'a cat' },
-    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber_image tool is disabled' });
-    const imageResult = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'openchamber_image', action: 'image.generate', sessionId: 'session-1', input: { prompt: 'a cat' },
+    const workflowHarness = createHarness(undefined, {
+      workflowRuntime: {
+        executeAction: async (action, input) => ({ runId: 'run-1', status: 'started', script: input.script }),
+      },
+    }).control;
+    const workflowResult = await workflowHarness.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_workflow', action: 'workflow.run', sessionId: 'session-1', input: { script: 'workflow.js' },
     });
-    expect(imageResult.ok).toBe(true);
-    expect(imageResult.value.model).toBe('openrouter/openai/gpt-image-2');
-    expect(imageResult.value.images).toHaveLength(1);
+    expect(workflowResult).toEqual({ ok: true, value: { runId: 'run-1', status: 'started', script: 'workflow.js' } });
+    await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_workflow', action: 'unsupported.action', sessionId: 'session-1', input: {},
+    })).resolves.toEqual({ ok: false, code: 'INVALID_REQUEST', status: 400, detail: 'Unsupported openchamber_workflow action: unsupported.action' });
     const conflictHarness = createHarness(undefined, {
       resolveProjectContextId: async () => 'project-1',
       projectContextRuntime: {

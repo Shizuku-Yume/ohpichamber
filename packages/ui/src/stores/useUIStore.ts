@@ -1025,13 +1025,11 @@ interface UIStore {
  showReasoningTraces: boolean;
  chatRenderMode: 'live' | 'sorted';
  persistChatDraft: boolean;
- showExpandedBashTools: boolean;
- showExpandedEditTools: boolean;
  sessionWorkAutoOpen: boolean;
  sessionWorkKeepInGroup: boolean;
  streamingAutoFollowEnabled: boolean;
  sessionRecapEnabled: boolean;
- sessionSuggestionEnabled: boolean;
+ suggestionGenerator: 'session' | 'small' | 'off';
  /** The "In work" sidebar block, the Track / Done actions, and sessions going in on a sent message. */
  sessionWorkEnabled: boolean;
  /** Let Jev offer an AI review or a walkthrough after a turn that changed the project. */
@@ -1081,6 +1079,8 @@ interface UIStore {
  terminalFontSize: number;
  terminalShell: TerminalShell;
  terminalLoginShells: TerminalShell[];
+ /** A terminal or project action tab closes when its process exits; off keeps the exited output. */
+ terminalCloseOnExit: boolean;
  editorFontSize: number;
  uiFont: UiFontOption;
  monoFont: MonoFontOption;
@@ -1161,7 +1161,6 @@ interface UIStore {
  messageSearchReasoningEnabled: boolean;
  /** Who answers the agent's browser actions: `builtin` (the in-app view) or an extension id. */
  browserProvider: string;
- agentMemoryToolEnabled: boolean;
  agentKnowledgeToolEnabled: boolean;
  agentNotifyToolEnabled: boolean;
  agentRenderToolEnabled: boolean;
@@ -1175,9 +1174,6 @@ interface UIStore {
  autoApplyAgentModel: boolean;
  /** Keep the subagent task tool available while Plan mode is active. */
  planModeAllowAgents: boolean;
- agentImageToolEnabled: boolean;
- /** `provider/model` the image tool draws with; empty until the user picks one. */
- agentImageModel: string;
  agentWorkflowToolEnabled: boolean;
  /** The isolated-spaces switch as saved; the server applies it at its next start. */
  isolatedSpacesEnabled: boolean;
@@ -1332,8 +1328,6 @@ interface UIStore {
  setRuntimeStatusText: (text: string) => void;
  setSessionWorkAutoOpen: (value: boolean) => void;
  setSessionWorkKeepInGroup: (value: boolean) => void;
- setShowExpandedBashTools: (value: boolean) => void;
- setShowExpandedEditTools: (value: boolean) => void;
  setOpenCodeStatusDialogOpen: (open: boolean) => void;
  setOpenCodeStatusText: (text: string) => void;
  setScheduledTasksDialogOpen: (open: boolean) => void;
@@ -1365,7 +1359,7 @@ interface UIStore {
  setShowReasoningTraces: (value: boolean) => void;
  setStreamingAutoFollowEnabled: (value: boolean) => void;
  setSessionRecapEnabled: (value: boolean) => void;
- setSessionSuggestionEnabled: (value: boolean) => void;
+ setSuggestionGenerator: (value: 'session' | 'small' | 'off') => void;
  setSessionWorkEnabled: (value: boolean) => void;
  setSessionReviewOfferEnabled: (value: boolean) => void;
  setSessionGoalEnabled: (value: boolean) => void;
@@ -1397,6 +1391,7 @@ interface UIStore {
  setTerminalFontSize: (size: number) => void;
  setTerminalShell: (shell: TerminalShell) => void;
  setTerminalLoginShells: (shells: TerminalShell[]) => void;
+ setTerminalCloseOnExit: (value: boolean) => void;
  setEditorFontSize: (size: number) => void;
  setUiFont: (font: UiFontOption) => void;
  setMonoFont: (font: MonoFontOption) => void;
@@ -1417,6 +1412,7 @@ interface UIStore {
  ) => void;
  setProviderOrder: (orderedProviderIDs: string[]) => void;
  setCustomProviderIcon: (providerID: string, icon: CustomProviderIcon | null) => void;
+ setCustomProviderLogo: (providerID: string, logo: CustomProviderLogo | null) => void;
  toggleHiddenModel: (providerID: string, modelID: string) => void;
  isHiddenModel: (providerID: string, modelID: string) => boolean;
  hideAllModels: (providerID: string, modelIDs: string[]) => void;
@@ -1445,6 +1441,7 @@ interface UIStore {
  setNotificationMode: (mode: 'always' | 'hidden-only') => void;
  setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
  setSessionTabsEnabled: (value: boolean) => void;
+ setSessionTabsPerWorkspace: (value: boolean) => void;
  setNotifyOnSubtasks: (value: boolean) => void;
  setDockBadgeEnabled: (value: boolean) => void;
  setAlwaysShowScrollbars: (value: boolean) => void;
@@ -1461,7 +1458,6 @@ interface UIStore {
  setMessageSearchEnabled: (value: boolean) => void;
  setMessageSearchReasoningEnabled: (value: boolean) => void;
  setBrowserProvider: (value: string) => void;
- setAgentMemoryToolEnabled: (value: boolean) => void;
  setAgentKnowledgeToolEnabled: (value: boolean) => void;
  setAgentNotifyToolEnabled: (value: boolean) => void;
  setAgentRenderToolEnabled: (value: boolean) => void;
@@ -1470,8 +1466,6 @@ interface UIStore {
  setPermissionDefaultMode: (value: PermissionMode) => void;
  setAutoApplyAgentModel: (value: boolean) => void;
  setPlanModeAllowAgents: (value: boolean) => void;
- setAgentImageToolEnabled: (value: boolean) => void;
- setAgentImageModel: (value: string) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
  setAgentMemoryFeatureAvailable: (value: boolean) => void;
@@ -1614,13 +1608,11 @@ export const useUIStore = create<UIStore>()(
     showReasoningTraces: true,
     chatRenderMode: 'live',
     persistChatDraft: true,
-    showExpandedBashTools: false,
-    showExpandedEditTools: false,
     sessionWorkAutoOpen: true,
     sessionWorkKeepInGroup: false,
     streamingAutoFollowEnabled: true,
     sessionRecapEnabled: true,
-    sessionSuggestionEnabled: true,
+    suggestionGenerator: 'session',
     sessionWorkEnabled: true,
     sessionReviewOfferEnabled: false,
     sessionGoalEnabled: true,
@@ -1651,6 +1643,7 @@ export const useUIStore = create<UIStore>()(
     terminalFontSize: 14,
     terminalShell: 'auto',
     terminalLoginShells: [],
+    terminalCloseOnExit: true,
     editorFontSize: 13,
     uiFont: DEFAULT_UI_FONT,
     monoFont: DEFAULT_MONO_FONT,
@@ -1709,7 +1702,6 @@ export const useUIStore = create<UIStore>()(
     messageSearchEnabled: false,
     messageSearchReasoningEnabled: false,
     browserProvider: 'builtin',
-    agentMemoryToolEnabled: false,
     agentKnowledgeToolEnabled: true,
     agentNotifyToolEnabled: false,
     agentRenderToolEnabled: true,
@@ -1718,8 +1710,6 @@ export const useUIStore = create<UIStore>()(
     permissionDefaultMode: 'ask',
     autoApplyAgentModel: false,
     planModeAllowAgents: false,
-    agentImageToolEnabled: false,
-    agentImageModel: '',
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
     agentMemoryFeatureAvailable: false,
@@ -2553,13 +2543,6 @@ export const useUIStore = create<UIStore>()(
      set({ sessionWorkKeepInGroup: value });
     },
 
-    setShowExpandedBashTools: (value) => {
-     set({ showExpandedBashTools: value });
-    },
-
-    setShowExpandedEditTools: (value) => {
-     set({ showExpandedEditTools: value });
-    },
 
     setOpenCodeStatusDialogOpen: (open) => {
      set({ isOpenCodeStatusDialogOpen: open });
@@ -2715,8 +2698,8 @@ export const useUIStore = create<UIStore>()(
      set({ sessionRecapEnabled: value });
     },
 
-    setSessionSuggestionEnabled: (value) => {
-     set({ sessionSuggestionEnabled: value });
+    setSuggestionGenerator: (value) => {
+     set({ suggestionGenerator: value });
     },
 
     setSessionWorkEnabled: (value) => {
@@ -2861,6 +2844,10 @@ export const useUIStore = create<UIStore>()(
 
     setTerminalLoginShells: (shells) => {
      set({ terminalLoginShells: [...new Set(shells)] });
+    },
+
+    setTerminalCloseOnExit: (value) => {
+     set({ terminalCloseOnExit: value });
     },
 
     setEditorFontSize: (size) => {
@@ -3071,6 +3058,17 @@ export const useUIStore = create<UIStore>()(
      });
     },
 
+    setCustomProviderLogo: (providerID, logo) => {
+     const normalizedProviderID = providerID.trim();
+     if (!normalizedProviderID) return;
+     set((state) => {
+      const next = { ...state.customProviderLogos };
+      if (logo) next[normalizedProviderID] = logo;
+      else delete next[normalizedProviderID];
+      return { customProviderLogos: next };
+     });
+    },
+
     toggleHiddenModel: (providerID, modelID) => {
      set((state) => {
       const exists = state.hiddenModels.some(
@@ -3232,6 +3230,10 @@ export const useUIStore = create<UIStore>()(
      set({ sessionTabsEnabled: value });
     },
 
+    setSessionTabsPerWorkspace: (value) => {
+     set({ sessionTabsPerWorkspace: value });
+    },
+
     setNotifyOnSubtasks: (value) => {
      set({ notifyOnSubtasks: value });
     },
@@ -3270,9 +3272,6 @@ export const useUIStore = create<UIStore>()(
     setBrowserProvider: (value) => {
      set({ browserProvider: value });
     },
-    setAgentMemoryToolEnabled: (value) => {
-     set({ agentMemoryToolEnabled: value });
-    },
     setAgentKnowledgeToolEnabled: (value) => {
      set({ agentKnowledgeToolEnabled: value });
     },
@@ -3305,12 +3304,6 @@ export const useUIStore = create<UIStore>()(
      set({ planModeAllowAgents: value });
     },
 
-    setAgentImageToolEnabled: (value) => {
-     set({ agentImageToolEnabled: value });
-    },
-    setAgentImageModel: (value) => {
-     set({ agentImageModel: value });
-    },
     setAgentWorkflowToolEnabled: (value) => {
      set({ agentWorkflowToolEnabled: value });
      if (value) return;
@@ -3789,7 +3782,7 @@ export const useUIStore = create<UIStore>()(
      showReasoningTraces: state.showReasoningTraces,
      streamingAutoFollowEnabled: state.streamingAutoFollowEnabled,
      sessionRecapEnabled: state.sessionRecapEnabled,
-     sessionSuggestionEnabled: state.sessionSuggestionEnabled,
+     suggestionGenerator: state.suggestionGenerator,
      sessionWorkEnabled: state.sessionWorkEnabled,
      sessionReviewOfferEnabled: state.sessionReviewOfferEnabled,
      sessionGoalEnabled: state.sessionGoalEnabled,
@@ -3820,6 +3813,7 @@ export const useUIStore = create<UIStore>()(
      terminalFontSize: state.terminalFontSize,
      terminalShell: state.terminalShell,
      terminalLoginShells: state.terminalLoginShells,
+     terminalCloseOnExit: state.terminalCloseOnExit,
      editorFontSize: state.editorFontSize,
      uiFont: state.uiFont,
      monoFont: state.monoFont,
@@ -3863,12 +3857,9 @@ export const useUIStore = create<UIStore>()(
      messageSearchEnabled: state.messageSearchEnabled,
      messageSearchReasoningEnabled: state.messageSearchReasoningEnabled,
      browserProvider: state.browserProvider,
-     agentMemoryToolEnabled: state.agentMemoryToolEnabled,
      agentKnowledgeToolEnabled: state.agentKnowledgeToolEnabled,
      agentNotifyToolEnabled: state.agentNotifyToolEnabled,
      agentRenderToolEnabled: state.agentRenderToolEnabled,
-     agentImageToolEnabled: state.agentImageToolEnabled,
-     agentImageModel: state.agentImageModel,
      agentWorkflowToolEnabled: state.agentWorkflowToolEnabled,
      isolatedSpacesEnabled: state.isolatedSpacesEnabled,
      agentMemoryViewedAt: state.agentMemoryViewedAt,

@@ -1,5 +1,16 @@
 import React from 'react';
+import type { OmpSettingsState } from '@openchamber/agent-contract';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui';
 import { NumberInput } from '@/components/ui/number-input';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
@@ -369,6 +380,8 @@ const ComposerTab: React.FC = () => {
   const setMobileReturnKeySends = useUIStore((state) => state.setMobileReturnKeySends);
   const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
   const setInputSpellcheckEnabled = useUIStore((state) => state.setInputSpellcheckEnabled);
+  const persistChatDraft = useUIStore((state) => state.persistChatDraft);
+  const setPersistChatDraft = useUIStore((state) => state.setPersistChatDraft);
   const inputHistoryScope = useInputHistoryStore((state) => state.scope);
   const inputHistoryLimit = useInputHistoryStore((state) => state.entryLimit);
   const applyInputHistoryScope = useInputHistoryStore((state) => state.applyScope);
@@ -471,6 +484,16 @@ const ComposerTab: React.FC = () => {
 
       <SettingsSection title={t('settings.layout.chat.section.draftsAndHistory')} contentClassName="space-y-3">
         <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <SettingsCheckboxRow
+            checked={persistChatDraft}
+            onChange={(enabled) => {
+              setPersistChatDraft(enabled);
+              void updateDesktopSettings({ persistChatDraft: enabled });
+            }}
+            label={t('settings.openchamber.visual.field.persistDraftMessages')}
+            ariaLabel={t('settings.openchamber.visual.field.persistDraftMessagesAria')}
+            settingsItem="chat.persist-drafts"
+          />
           {isMobile ? null : (
             <SettingsCheckboxRow
               checked={inputSpellcheckEnabled}
@@ -535,8 +558,131 @@ const AssistanceTab: React.FC = () => {
   const setDraftStartersVisible = useUIStore((state) => state.setDraftStartersVisible);
   const sessionRecapEnabled = useUIStore((state) => state.sessionRecapEnabled);
   const setSessionRecapEnabled = useUIStore((state) => state.setSessionRecapEnabled);
-  const sessionSuggestionEnabled = useUIStore((state) => state.sessionSuggestionEnabled);
-  const setSessionSuggestionEnabled = useUIStore((state) => state.setSessionSuggestionEnabled);
+  const settingsDirectory = useSettingsDirectory();
+  const [ompState, setOmpState] = React.useState<OmpSettingsState | null>(null);
+  const ompStateRef = React.useRef<OmpSettingsState | null>(null);
+  ompStateRef.current = ompState;
+
+  React.useEffect(() => {
+    let active = true;
+    const abort = new AbortController();
+    void (async () => {
+      try {
+        if (!settingsDirectory) return;
+        const workspace = await canonicalClient.resolveWorkspace(settingsDirectory, { signal: abort.signal });
+        const snapshot = await canonicalClient.getOmpSettings(workspace.workspaceId, abort.signal);
+        if (!active || abort.signal.aborted) return;
+        setOmpState(snapshot);
+        const recapSetting = snapshot.settings.find((s) => s.id === 'recap.enabled');
+        if (typeof recapSetting?.value === 'boolean') {
+          setSessionRecapEnabled(recapSetting.value);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      active = false;
+      abort.abort();
+    };
+  }, [settingsDirectory, setSessionRecapEnabled]);
+
+  const recapIdleSeconds = React.useMemo(() => {
+    const raw = ompState?.settings.find((s) => s.id === 'recap.idleSeconds')?.value;
+    return typeof raw === 'number' && Number.isFinite(raw) ? raw : 240;
+  }, [ompState]);
+
+  const handleSessionRecapChange = React.useCallback(async (enabled: boolean) => {
+    const current = ompStateRef.current;
+    if (!current) return;
+    const previous = current.settings.find((s) => s.id === 'recap.enabled')?.value === true;
+    setSessionRecapEnabled(enabled);
+    try {
+      const next = await canonicalClient.updateOmpSettings(current.workspaceId, {
+        expectedRevision: current.revision,
+        changes: [{ id: 'recap.enabled', value: enabled }],
+      });
+      setOmpState(next);
+      void updateDesktopSettings({ sessionRecapEnabled: enabled });
+    } catch (error) {
+      if (error instanceof CanonicalApiError && error.problem.status === 409) {
+        try {
+          const latest = await canonicalClient.getOmpSettings(current.workspaceId);
+          const next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
+            expectedRevision: latest.revision,
+            changes: [{ id: 'recap.enabled', value: enabled }],
+          });
+          setOmpState(next);
+          void updateDesktopSettings({ sessionRecapEnabled: enabled });
+          return;
+        } catch {
+          // fall through to rollback
+        }
+      }
+      setSessionRecapEnabled(previous);
+      void updateDesktopSettings({ sessionRecapEnabled: previous });
+    }
+  }, [setSessionRecapEnabled]);
+
+  const handleRecapIdleSecondsChange = React.useCallback(async (value: number) => {
+    const current = ompStateRef.current;
+    if (!current) return;
+    const seconds = Number(value);
+    try {
+      const next = await canonicalClient.updateOmpSettings(current.workspaceId, {
+        expectedRevision: current.revision,
+        changes: [{ id: 'recap.idleSeconds', value: seconds }],
+      });
+      setOmpState(next);
+    } catch (error) {
+      if (error instanceof CanonicalApiError && error.problem.status === 409) {
+        try {
+          const latest = await canonicalClient.getOmpSettings(current.workspaceId);
+          const next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
+            expectedRevision: latest.revision,
+            changes: [{ id: 'recap.idleSeconds', value: seconds }],
+          });
+          setOmpState(next);
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, []);
+
+  const suggestionGenerator = useUIStore((state) => state.suggestionGenerator);
+  const setSuggestionGenerator = useUIStore((state) => state.setSuggestionGenerator);
+
+  const suggestionGeneratorOptions = React.useMemo<Array<{ value: 'session' | 'small' | 'off'; label: string }>>(
+    () => [
+      { value: 'session', label: t('settings.openchamber.visual.option.suggestionGenerator.session') },
+      { value: 'small', label: t('settings.openchamber.visual.option.suggestionGenerator.small') },
+      { value: 'off', label: t('settings.openchamber.visual.option.suggestionGenerator.off') },
+    ],
+    [t],
+  );
+
+  const handleSuggestionGeneratorChange = React.useCallback(
+    async (value: 'session' | 'small' | 'off') => {
+      const previous = suggestionGenerator;
+      setSuggestionGenerator(value);
+      try {
+        if (settingsDirectory) {
+          const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+          const omp = await canonicalClient.getOmpSettings(workspace.workspaceId);
+          await canonicalClient.updateOmpSettings(omp.workspaceId, {
+            expectedRevision: omp.revision,
+            changes: [{ id: 'suggestion.generator', value }],
+          });
+        }
+        await updateDesktopSettings({ suggestionGenerator: value });
+      } catch (error) {
+        setSuggestionGenerator(previous);
+        toast.error(error instanceof Error ? error.message : 'Failed to save suggestion generator setting');
+      }
+    },
+    [suggestionGenerator, setSuggestionGenerator, settingsDirectory],
+  );
   const sessionReviewOfferEnabled = useUIStore((state) => state.sessionReviewOfferEnabled);
   const setSessionReviewOfferEnabled = useUIStore((state) => state.setSessionReviewOfferEnabled);
   const jevAvailable = useRoutingStore(selectSafetyNetAvailable);
@@ -567,79 +713,117 @@ const AssistanceTab: React.FC = () => {
         />
         <SettingsCheckboxRow
           checked={sessionRecapEnabled}
-          onChange={setSessionRecapEnabled}
+          onChange={handleSessionRecapChange}
           label={t('settings.openchamber.visual.field.sessionRecap')}
           ariaLabel={t('settings.openchamber.visual.field.sessionRecapAria')}
           settingsItem="chat.session-recap"
         />
-        <SettingsCheckboxRow
-          checked={sessionSuggestionEnabled}
-          onChange={setSessionSuggestionEnabled}
-          label={t('settings.openchamber.visual.field.sessionSuggestion')}
-          ariaLabel={t('settings.openchamber.visual.field.sessionSuggestionAria')}
-          settingsItem="chat.session-suggestion"
-        />
-        {/* Jev runs on the OpenChamber server, which VS Code does not have.
+        {sessionRecapEnabled ? (
+          <div className="ps-6 pb-1">
+            <SettingsFieldRow
+              label={t('settings.openchamber.visual.field.sessionRecapIdleSeconds')}
+              settingsItem="chat.session-recap.idle-seconds"
+              info={t('settings.openchamber.visual.field.sessionRecapIdleSecondsInfo')}
+            >
+              <Select
+                value={String(recapIdleSeconds)}
+                onValueChange={(val) => {
+                  const num = Number(val);
+                  if (Number.isFinite(num)) void handleRecapIdleSecondsChange(num);
+                }}
+              >
+                <SelectTrigger
+                  className="w-auto min-w-[10rem]"
+                  aria-label={t('settings.openchamber.visual.field.sessionRecapIdleSecondsAria')}
+                >
+                  <SelectValue>
+                    {(val) => t('settings.openchamber.visual.field.sessionRecapIdleSecondsOption', { count: Number(val) || 240 })}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {[60, 120, 240, 300, 600].map((seconds) => (
+                    <SelectItem key={seconds} value={String(seconds)}>
+                      {t('settings.openchamber.visual.field.sessionRecapIdleSecondsOption', { count: seconds })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SettingsFieldRow>
+          </div>
+        ) : null}
+        <SettingsFieldRow
+          label={t('settings.openchamber.visual.field.suggestionGenerator')}
+          info={t('settings.openchamber.visual.field.suggestionGeneratorHint')}
+          settingsItem="chat.suggestion-generator"
+        >
+          <SettingsChipGroup
+            value={suggestionGenerator}
+            options={suggestionGeneratorOptions}
+            onChange={handleSuggestionGeneratorChange}
+            aria-label={t('settings.openchamber.visual.field.suggestionGeneratorAria')}
+          />
+        </SettingsFieldRow>
+  {/* Jev runs on the OpenChamber server, which VS Code does not have.
             The line naming who decides sits under the label, so it reads as
             part of this option rather than text between two checkboxes. */}
-        <SettingsCheckboxRow
-          checked={jevAvailable && sessionReviewOfferEnabled}
-          onChange={setSessionReviewOfferEnabled}
-          disabled={!jevAvailable}
-          label={t('settings.openchamber.visual.field.sessionReviewOffer')}
-          ariaLabel={t('settings.openchamber.visual.field.sessionReviewOffer')}
-          info={t('settings.openchamber.visual.field.sessionReviewOfferInfo')}
-          footer={<JevAccessNote />}
-          settingsItem="chat.session-review-offer"
-        />
-      </SettingsSection>
+  <SettingsCheckboxRow
+    checked={jevAvailable && sessionReviewOfferEnabled}
+    onChange={setSessionReviewOfferEnabled}
+    disabled={!jevAvailable}
+    label={t('settings.openchamber.visual.field.sessionReviewOffer')}
+    ariaLabel={t('settings.openchamber.visual.field.sessionReviewOffer')}
+    info={t('settings.openchamber.visual.field.sessionReviewOfferInfo')}
+    footer={<JevAccessNote />}
+    settingsItem="chat.session-review-offer"
+  />
+      </SettingsSection >
 
-      <SettingsSection
-        title={t('settings.openchamber.visual.goal.sectionTitle')}
-        info={t('settings.openchamber.visual.goal.description')}
-        contentClassName="space-y-3"
+  <SettingsSection
+    title={t('settings.openchamber.visual.goal.sectionTitle')}
+    info={t('settings.openchamber.visual.goal.description')}
+    contentClassName="space-y-3"
+  >
+    <SettingsCheckboxRow
+      checked={sessionGoalEnabled}
+      onChange={setSessionGoalEnabled}
+      label={t('settings.openchamber.visual.field.sessionGoal')}
+      ariaLabel={t('settings.openchamber.visual.field.sessionGoalAria')}
+      settingsItem="chat.session-goal"
+    />
+    <div>
+      <SessionGoalCheckerField disabled={!sessionGoalEnabled} />
+      <SessionGoalMaxTurnsField disabled={!sessionGoalEnabled} />
+      <SettingsFieldRow
+        label={(
+          <SettingsCheckboxRow
+            checked={sessionGoalDefaultBudgetEnabled}
+            onChange={setSessionGoalDefaultBudgetEnabled}
+            disabled={!sessionGoalEnabled}
+            label={t('settings.openchamber.visual.goal.budgetLabel')}
+            ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
+          />
+        )}
+        settingsItem="chat.session-goal-budget"
       >
-        <SettingsCheckboxRow
-          checked={sessionGoalEnabled}
-          onChange={setSessionGoalEnabled}
-          label={t('settings.openchamber.visual.field.sessionGoal')}
-          ariaLabel={t('settings.openchamber.visual.field.sessionGoalAria')}
-          settingsItem="chat.session-goal"
-        />
-        <div>
-          <SessionGoalCheckerField disabled={!sessionGoalEnabled} />
-          <SessionGoalMaxTurnsField disabled={!sessionGoalEnabled} />
-          <SettingsFieldRow
-            label={(
-              <SettingsCheckboxRow
-                checked={sessionGoalDefaultBudgetEnabled}
-                onChange={setSessionGoalDefaultBudgetEnabled}
-                disabled={!sessionGoalEnabled}
-                label={t('settings.openchamber.visual.goal.budgetLabel')}
-                ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
-              />
-            )}
-            settingsItem="chat.session-goal-budget"
-          >
-            {/* The field keeps its place while the budget is off, so
+        {/* The field keeps its place while the budget is off, so
                 turning it on does not move the rows around it. */}
-            <NumberInput
-              value={sessionGoalDefaultBudget}
-              onValueChange={(value) => {
-                if (Number.isFinite(value) && value > 0) {
-                  setSessionGoalDefaultBudget(Math.floor(value));
-                }
-              }}
-              min={1000}
-              max={100000000}
-              step={50000}
-              disabled={!sessionGoalEnabled || !sessionGoalDefaultBudgetEnabled}
-              className={SETTINGS_NUMBER_INPUT_CLASS}
-              aria-label={t('settings.openchamber.visual.goal.budgetAria')}
-            />
-          </SettingsFieldRow>
-        </div>
-      </SettingsSection>
+        <NumberInput
+          value={sessionGoalDefaultBudget}
+          onValueChange={(value) => {
+            if (Number.isFinite(value) && value > 0) {
+              setSessionGoalDefaultBudget(Math.floor(value));
+            }
+          }}
+          min={1000}
+          max={100000000}
+          step={50000}
+          disabled={!sessionGoalEnabled || !sessionGoalDefaultBudgetEnabled}
+          className={SETTINGS_NUMBER_INPUT_CLASS}
+          aria-label={t('settings.openchamber.visual.goal.budgetAria')}
+        />
+      </SettingsFieldRow>
+    </div>
+  </SettingsSection>
     </>
   );
 };

@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 import { pickUsageHeadline, resolveQuotaProviderId } from './usageHeadline';
 import type { UsageProviderGroup } from '@/components/usage/usageGroups';
+import { useQuotaStore } from '@/stores/useQuotaStore';
 
 const HOUR = 3600;
 
@@ -24,6 +25,22 @@ const group = (providerId: string, rows: Array<{ key: string; label: string; sub
     subtitle: row.subtitle,
     window: window(row.seconds),
   })),
+});
+
+beforeEach(() => {
+  useQuotaStore.setState({
+    nativeToLogical: {
+      openai: 'codex',
+      'openai-codex': 'codex',
+      anthropic: 'claude',
+      kilocode: 'kilo',
+      'kilo-code': 'kilo',
+      'claude-agent': 'claude',
+      'claude-code': 'claude',
+      'google-gemini-cli': 'google',
+      zai: 'zai-coding-plan',
+    },
+  });
 });
 
 describe('resolveQuotaProviderId', () => {

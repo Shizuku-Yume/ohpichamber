@@ -463,7 +463,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
           return
         }
         const session = store?.getState().session.find(s => s.sessionId === sessionId)
-          ?? useGlobalSessionsStore.getState().sessions.get(sessionId)
+          ?? useGlobalSessionsStore.getState().entityById.get(sessionId)
         if (session) {
           const cursor = `${session.epoch}:${session.headSequence}`
           pipelineRef.current?.attach({ directory: dir, sessionId }, { cursor, session: { sessionId, runtimeStatus: session.runtimeStatus } })

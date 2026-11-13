@@ -2029,10 +2029,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
     })().catch((error) => {
       if (createsDraftSession && getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
-        const current = useSessionUIStore.getState()
-        if (current.currentSessionId === targetSessionId || current.currentSessionId === sessionId) {
-          useSessionUIStore.setState({ newSessionDraft: draft, currentSessionId: targetSessionId ?? null })
-        }
+        useSessionUIStore.setState({ newSessionDraft: draft, currentSessionId: targetSessionId ?? null })
       }
       if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
         useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride, goalArm.composerGoal)

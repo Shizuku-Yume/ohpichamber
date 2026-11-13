@@ -211,7 +211,7 @@ test('the generation guard keeps a late registration from overwriting a newer on
 
   const firstRegistering = coordinator.register(firstWorker);
 
-  let secondLive = true;
+  const secondLive = true;
   const secondIdentity = { rootSessionId, workspaceId: 'workspace', agentDirectoryId: 'agent', workerGeneration: 'gen-2' };
   const secondCatalog: MCPCatalogState = { worker: secondIdentity, runtimeStatus: 'ready', appliedRevision: '0', catalogRevision: '2', activeServers: [], tools: [{ toolName: 'second-tool', description: 'from gen-2', inputSchema: {} }] };
   const secondWorker: CatalogWorker = {

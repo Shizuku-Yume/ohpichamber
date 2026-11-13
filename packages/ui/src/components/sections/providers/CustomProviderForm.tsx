@@ -22,6 +22,9 @@ import { useI18n } from '@/lib/i18n';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { canonicalClient } from '@/api/canonicalClient';
 import { CUSTOM_PROVIDER_ICONS, type CustomProviderIcon } from '@/lib/customProviderIcons';
+import { providerLogoUploadSupported } from '@/lib/customProviderLogos';
+import { useUIStore } from '@/stores/useUIStore';
+import { ProviderLogoImageControl } from './ProviderLogoImageControl';
 import { cn } from '@/lib/utils';
 import {
   CUSTOM_PROVIDER_PROTOCOLS,
@@ -104,6 +107,19 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
   const logoProviderId = form.providerId.trim() || 'custom';
   const { hasLogo: providerHasLogo } = useProviderLogo(logoProviderId);
+  // A logo stored under the typed ID: kept when the provider was removed and is added again.
+  const storedLogo = useUIStore((state) => state.customProviderLogos[logoProviderId]);
+  const pickedLogoFile = form.logo instanceof File ? form.logo : null;
+  const [pickedLogoUrl, setPickedLogoUrl] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!pickedLogoFile) {
+      setPickedLogoUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(pickedLogoFile);
+    setPickedLogoUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pickedLogoFile]);
   const disabled = busy || discovering;
 
   const setField = (key: 'providerId' | 'name' | 'endpoint' | 'apiKey', value: string) => {
@@ -349,6 +365,23 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             ))}
           </div>
         </SettingsStackedField>
+
+        {providerLogoUploadSupported() ? (
+          <SettingsStackedField
+            label={t('settings.providers.page.logo.title')}
+            info={t('settings.providers.page.logo.info')}
+            settingsItem="providers.logo"
+          >
+            <ProviderLogoImageControl
+              preview={pickedLogoUrl
+                ? <img src={pickedLogoUrl} alt="" className="size-5 object-contain" />
+                : form.logo === null && storedLogo ? <ProviderLogo providerId={logoProviderId} alt="" className="size-5" /> : null}
+              busy={busy}
+              onPick={(file) => setForm((previous) => ({ ...previous, logo: file }))}
+              onRemove={() => setForm((previous) => ({ ...previous, logo: 'removed' }))}
+            />
+          </SettingsStackedField>
+        ) : null}
 
         <SettingsStackedField
           label={t('settings.providers.page.custom.field.baseURL.label')}

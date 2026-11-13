@@ -5,6 +5,7 @@ import {
  isFileChangeTool as registryFileChange,
  isQuestionTool as registryQuestion,
  isShellTool as registryShell,
+ isEvalTool as registryEval,
  isStaticTool as registryStaticTool,
  isSubagentTool as registrySubagent,
  isTodoTool as registryTodo,
@@ -28,6 +29,7 @@ export function normalizeToolName(toolName: ToolName): string { return toolName?
 
 export const isShellTool = registryShell;
 export const isFileChangeTool = registryFileChange;
+export const isEvalTool = registryEval;
 export const isSubagentTool = registrySubagent;
 export const isQuestionTool = registryQuestion;
 export const isExplorationTool = registryExploration;
@@ -703,6 +705,7 @@ export function getImageMimeType(filePath: string): string {
 export function formatToolInput(input: ToolCallPart['input'], toolName: string): string {
  if (isShellTool(toolName) && typeof input.command === 'string') return input.command;
  if (isWriteTool(toolName) && typeof input.content === 'string') return input.content;
+ if (isEvalTool(toolName) && typeof input.code === 'string') return input.code;
  // Keep complete structured native edit/task/custom-tool inputs visible.
  return JSON.stringify(input, null, 2);
 }

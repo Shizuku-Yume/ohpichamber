@@ -19,6 +19,7 @@ import {
     detectToolOutputLanguage,
     formatToolInput,
     isEditTool,
+    isEvalTool,
     isFindTool,
     isQuestionTool,
     isReadTool,
@@ -33,7 +34,7 @@ import {
     toolInputPath,
     toolPresentation,
 } from '@/lib/toolHelpers';
-import { describeToolCall, describeToolResult, isMemoryTool } from '@/lib/toolPresentation';
+import { describeToolCall, describeToolResult, evalResultSummary, isMemoryTool } from '@/lib/toolPresentation';
 import { TodoCard } from './TodoCard';
 import { MemoryToolCard } from './MemoryToolCard';
 import { extractTodoPhases } from '../../todoData';
@@ -54,6 +55,7 @@ import { JsonSummaryView } from './JsonSummaryView';
 import { JsonTreeViewer } from '@/components/ui/JsonTreeViewer';
 import { Icon } from '@/components/icon/Icon';
 import { DiffViewToggle, type DiffViewMode } from '../DiffViewToggle';
+import { EvalPresenter } from './EvalPresenter';
 import { MinDurationShineText } from './MinDurationShineText';
 import { getToolIcon } from './toolPresentation';
 import { OpenChamberToolOutput } from './OpenChamberToolOutput';
@@ -1007,7 +1009,13 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
     return (
         <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-4">
-            {isQuestionTool(toolName) ? (
+            {isEvalTool(toolName) ? (
+                <EvalPresenter
+                    call={call}
+                    result={part.type === 'tool_result' ? part : undefined}
+                    onShowPopup={onShowPopup}
+                />
+            ) : isQuestionTool(toolName) ? (
                 renderResultContent()
             ) : (
                 <>
@@ -1221,16 +1229,18 @@ const ToolPart: React.FC<ToolPartProps> = ({
     // The result's own one-line summary (match counts, exit status, diff stats,
     // todo progress) sits beside the call's target, unless it repeats it.
     const resultSummary = React.useMemo(() => {
-        if (!result || result.isError) return null;
-        const summary = describeToolResult(resultContent.details, toolName);
+        if (!result || (result.isError && !isEvalTool(toolName))) return null;
+        const summary = isEvalTool(toolName)
+            ? evalResultSummary(resultContent.details, t)
+            : describeToolResult(resultContent.details, toolName);
         return summary && summary !== described.text ? summary : null;
-    }, [described.text, result, resultContent.details, toolName]);
+    }, [described.text, result, resultContent.details, t, toolName]);
     const description = guestHeader?.subtitle ?? described.text;
     const title = guestHeader?.title ?? displayName;
 
     const callStatus = call?.status;
     const failed = result?.isError ?? (callStatus === 'failed' || callStatus === 'denied');
-    const running = !result && (callStatus === 'running' || callStatus === 'approved' || callStatus === 'pending_approval');
+    const running = callStatus ? (callStatus === 'running' || callStatus === 'approved' || callStatus === 'pending_approval') : !result;
 
     const diffStats = React.useMemo(() => {
         if (diffs.length === 0) return null;

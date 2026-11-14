@@ -35,6 +35,9 @@ export const OmpSettingPlacementSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('hidden'),
   }),
+  z.strictObject({
+    type: z.literal('boundary'),
+  }),
 ]);
 export type OmpSettingPlacement = z.infer<typeof OmpSettingPlacementSchema>;
 
@@ -42,6 +45,7 @@ export function parsePlacement(raw: string): OmpSettingPlacement {
   if (raw === 'engine') return { type: 'engine' };
   if (raw === 'tui-only') return { type: 'tui-only' };
   if (raw === 'hidden') return { type: 'hidden' };
+  if (raw === 'boundary') return { type: 'boundary' };
   if (raw.startsWith('owned-by ')) {
     const owner = raw.slice('owned-by '.length).trim();
     if (owner.length > 0) return { type: 'owned-by', owner };
@@ -61,6 +65,7 @@ export function formatPlacement(placement: OmpSettingPlacement): string {
   switch (placement.type) {
     case 'engine': return 'engine';
     case 'tui-only': return 'tui-only';
+    case 'boundary': return 'boundary';
     case 'hidden': return 'hidden';
     case 'owned-by': return `owned-by ${placement.owner}`;
     case 'page': return `${placement.page}:${placement.section}`;

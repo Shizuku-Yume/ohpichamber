@@ -6,6 +6,7 @@ import { YAML } from 'bun';
 import './suggestion.ts';
 import * as contract from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
+import { OMP_SETTING_PLACEMENTS } from './settings-ui.ts';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { cfgCompactionThresholdPercent } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { NativeSettings } from './catalog-settings.ts';
@@ -44,7 +45,9 @@ test('the setting list is derived from orderedSettings and never exposes credent
     for (const cred of credentials) {
       expect(ids.has(cred)).toBe(false);
     }
-    expect(state.settings.length).toBe(all.length - credentials.length);
+    const boundaryIds = Object.keys(OMP_SETTING_PLACEMENTS).filter(id => OMP_SETTING_PLACEMENTS[id].type === 'boundary');
+    for (const id of boundaryIds) expect(ids.has(id), id).toBe(false);
+    expect(state.settings.length).toBe(all.length - new Set([...credentials, ...boundaryIds]).size);
     expect(state.settings.find(s => s.id === 'compaction.thresholdPercent')).toMatchObject({
       type: 'number', label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
     });
@@ -82,6 +85,10 @@ test('refuses to write a setting no GUI surface places', async () => {
     await expect(f.native.write('workspace_1', '1', {
       expectedRevision: read.revision,
       changes: [{ id: 'enabledProviders', value: [] }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: read.revision,
+      changes: [{ id: 'collab.relayUrl', value: 'https://relay.example' }],
     })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
   } finally { await f.close(); }
 });

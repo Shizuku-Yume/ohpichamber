@@ -34,6 +34,8 @@ test('parsePlacement and formatPlacement roundtrip correctly', () => {
 
   expect(parsePlacement('hidden')).toEqual({ type: 'hidden' });
   expect(formatPlacement({ type: 'hidden' })).toBe('hidden');
+  expect(parsePlacement('boundary')).toEqual({ type: 'boundary' });
+  expect(formatPlacement({ type: 'boundary' })).toBe('boundary');
 
   expect(parsePlacement('owned-by chat.mermaid-rendering')).toEqual({
     type: 'owned-by',

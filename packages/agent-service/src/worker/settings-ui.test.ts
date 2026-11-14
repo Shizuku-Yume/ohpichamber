@@ -37,7 +37,7 @@ test('every TUI-visible OMP setting has a placement and no hand-kept id list rem
     const placement = OMP_SETTING_PLACEMENTS[setting.id];
     expect(placement, `Missing placement for TUI-visible setting ${setting.id}`).toBeDefined();
     expect(placement.type, `Placement for ${setting.id} must not be hidden`).not.toBe('hidden');
-    expect(['page', 'engine', 'tui-only', 'owned-by'], setting.id).toContain(placement.type);
+    expect(['page', 'engine', 'tui-only', 'owned-by', 'boundary'], setting.id).toContain(placement.type);
     if (placement.type === 'owned-by') {
       expect(placement.owner.length, setting.id).toBeGreaterThan(0);
     }
@@ -57,7 +57,7 @@ test('misclassifications are fixed: followUpMode is not a chat owner; recap belo
 
 test('an owned-by placement names an owner control, and all placement types stay populated', () => {
   expect(OMP_SETTING_OWNER_IDS).toEqual(['chat.session-recap', 'chat.suggestion-generator']);
-  const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, hidden: 0 };
+  const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, hidden: 0, boundary: 0 };
   for (const placement of Object.values(OMP_SETTING_PLACEMENTS)) {
     counts[placement.type] += 1;
   }

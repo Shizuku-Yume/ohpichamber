@@ -77,3 +77,17 @@ Save screenshots and the event log to `/home/shizuku/Project/ohpichamber-omp-art
     - Lint: `bunx oxlint <changed-paths>`: exits 0 (no findings).
     - Dead code: `bun run dead-code`: inspected (no dead code introduced).
     - Guardrail check: `node scripts/upstream-gaps.mjs --check`: 8 unallowlisted gaps (7 for retired OpenCode deps of auto-review/pr-watch; 1 pre-existing ui-call-no-route for `/api/source-control/:param`).
+
+- Review R1 Fixes (task21-review-r1 findings 1–3, runtime worker).
+  - Item 1: Updated `HOST_TOOL_DESCRIPTIONS.openchamber` in `packages/agent-service/src/worker/host-tool.ts` to document `pr.watch` (parameters: required `url`, optional `sessionId` defaulting to calling session, optional `directory`; wakes session on checks, comments/reviews, conflicts, or merge) and `pr.unwatch` (optional `sessionId` defaulting to calling session).
+  - Item 2: Updated `stop()` in `packages/web/server/lib/auto-review/runtime.js` and `packages/web/server/lib/pr-watch/runtime.js` to release all observation leases in `observed`, clear `observed`, unsubscribe global hub event and status listeners, and made `stop()` idempotent. Added tests in `auto-review/runtime.test.js` and `pr-watch/runtime.test.js` asserting leases are released, hub listeners are unsubscribed, and no further events are handled after `stop()`.
+  - Item 3: Added integration tests in both `auto-review/runtime.test.js` and `pr-watch/runtime.test.js` composing the real `createOpenChamberSessionService` with real `agentScopeStore`, `directCommandAdmissionStore`, `archiveStore`, `sessionMetadataStore`, and a canonical transport `service.request`. Proved that the exact send payload passes canonical admission (`PromptRequestSchema`, `CapturedSendOptionsSchema`, and `directCommandAdmissionStore` `commandKey` acceptance), and that auto-review's history read parses via the real `HistoryPageSchema` to reach clean completion.
+  - Item 4: Added settled decision entry `## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing` in `.workflow/decisions.md` (`Effort: ux-feedback-2026-11-12`, `Mine: yes`). Updated the 7 `route-deps` rows in `scripts/upstream-gaps.allowlist.tsv` to cite the new decision heading.
+  - Check after:
+    - `node scripts/upstream-gaps.mjs --check`: exits 0 (654 detected, 654 allowlisted, 0 unallowlisted gaps).
+    - `node --test scripts/upstream-gaps.test.mjs`: exits 0 (9/9 passed).
+    - `VITEST_MAX_WORKERS=2 bun run --cwd packages/web test -- server/lib/auto-review server/lib/pr-watch server/lib/host server/lib/openchamber-control`: exits 0 (77 test files, 752 passed, 1 skipped).
+    - `bun test packages/agent-service/src/worker/host-tool.test.ts`: exits 0 (6/6 passed).
+    - `bun test packages/agent-service/src/worker/session-native.test.ts`: exits 0 (72/72 passed).
+    - `bun run --cwd packages/agent-service type-check`: exits 0.
+    - `bunx oxlint`: clean across changed paths.

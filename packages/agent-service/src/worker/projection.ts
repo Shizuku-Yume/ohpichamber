@@ -6,7 +6,7 @@ import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, NoticePartSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema, parseModelString } from '@openchamber/agent-contract';
-import type { HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, StepTiming, TokenUsage, Turn } from '@openchamber/agent-contract';
+import type { EditPreview, EditPreviewFile, HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, StepTiming, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -123,7 +123,7 @@ const HistoryCursorSchema = z.tuple([EntityIdSchema, CounterSchema, EntityIdSche
 interface LiveMessage {
   messageId: string; turnId: string; runId: string; userMessageId: string;
   nativeMessage: VisibleMessage;
-  attachments: PromptAttachment[]; sessionMentions: SessionMention[]; started: Set<number>; toolCallIndexById: Map<string, number>; providerId?: string; modelId?: string; usage?: TokenUsage; timing?: StepTiming;
+  attachments: PromptAttachment[]; sessionMentions: SessionMention[]; started: Set<number>; toolCallIndexById: Map<string, number>; lastEmittedToolInputByCallId: Map<string, string>; editPreviewsByToolCallId: Map<string, EditPreview>; providerId?: string; modelId?: string; usage?: TokenUsage; timing?: StepTiming;
 }
 
 type NativeAssistantMessage = Extract<VisibleMessage, { role: 'assistant' }>;
@@ -258,8 +258,8 @@ function toolResultPart(resultPartId: string, toolCallId: string, toolName: stri
   part.errorKind = fields.__synthetic === true ? 'synthetic'
     : fields.__interrupted === true ? 'interrupted'
       : fields.errorKind ?? (fields.timedOut === true ? 'timeout' : undefined)
-        ?? (fields.async?.state === 'failed' || fields.async?.state === 'cancelled' ? 'background-job' : undefined)
-        ?? 'tool_error';
+      ?? (fields.async?.state === 'failed' || fields.async?.state === 'cancelled' ? 'background-job' : undefined)
+      ?? 'tool_error';
   return part;
 }
 
@@ -332,6 +332,7 @@ export class WorkerProjection {
   private readonly liveToolCallOwners = new Map<string, { messageId: string; callPartId: string }>();
   private readonly publishedResultParts = new Set<string>();
   private readonly completedResultParts = new Set<string>();
+  private readonly toolCallPreviews = new Map<string, EditPreview>();
 
   private ownToolCall(toolCallId: string, messageId: string | undefined, contentIndex: number | undefined): void {
     if (!messageId || contentIndex === undefined) return;
@@ -446,6 +447,32 @@ export class WorkerProjection {
     return next ?? value;
   }
 
+  private parseEditPreview(update: unknown): EditPreview | undefined {
+    if (!update || typeof update !== 'object') return undefined;
+    const updateObj = update as Record<string, unknown>;
+    if (!('files' in updateObj) || !Array.isArray(updateObj.files)) return undefined;
+    const files: EditPreviewFile[] = [];
+    for (const item of updateObj.files) {
+      if (!item || typeof item !== 'object') continue;
+      const file = item as Record<string, unknown>;
+      if (typeof file.path !== 'string' || !file.path) continue;
+      files.push({
+        path: this.publicText(file.path),
+        ...(typeof file.diff === 'string' ? { diff: this.publicText(file.diff) } : {}),
+        ...(typeof file.firstChangedLine === 'number' && Number.isInteger(file.firstChangedLine) ? { firstChangedLine: file.firstChangedLine } : {}),
+        ...(typeof file.error === 'string' ? { error: this.publicText(file.error) } : {}),
+        ...(typeof file.op === 'string' ? { op: this.publicText(file.op) } : {}),
+        ...(typeof file.rename === 'string' ? { rename: this.publicText(file.rename) } : {}),
+      });
+    }
+    if (files.length === 0) return undefined;
+    return {
+      files,
+      ...(typeof updateObj.streaming === 'boolean' ? { streaming: updateObj.streaming } : {}),
+      ...(typeof updateObj.generation === 'number' ? { generation: updateObj.generation } : {}),
+    };
+  }
+
   private publicPart(part: Part): void {
     switch (part.type) {
       case 'text': case 'reasoning':
@@ -456,7 +483,20 @@ export class WorkerProjection {
         }
         if (part.type === 'reasoning' && part.signature !== undefined) part.signature = this.publicText(part.signature);
         break;
-      case 'tool_call': part.toolCallId = this.publicText(part.toolCallId); part.toolName = this.publicText(part.toolName); part.input = this.publicJsonObject(part.input); break;
+      case 'tool_call':
+        part.toolCallId = this.publicText(part.toolCallId);
+        part.toolName = this.publicText(part.toolName);
+        part.input = this.publicJsonObject(part.input);
+        if (part.editPreview !== undefined) {
+          for (const file of part.editPreview.files) {
+            file.path = this.publicText(file.path);
+            if (file.diff) file.diff = this.publicText(file.diff);
+            if (file.error) file.error = this.publicText(file.error);
+            if (file.op) file.op = this.publicText(file.op);
+            if (file.rename) file.rename = this.publicText(file.rename);
+          }
+        }
+        break;
       case 'tool_result':
         part.toolCallId = this.publicText(part.toolCallId);
         part.toolName = this.publicText(part.toolName);
@@ -540,6 +580,7 @@ export class WorkerProjection {
     this.liveToolCallOwners.clear();
     this.publishedResultParts.clear();
     this.completedResultParts.clear();
+    this.toolCallPreviews.clear();
     this.attachments = attachments;
     this.sessionMentions = sessionMentions(context);
     const result: ProjectionInput[] = [{ timestamp, event: { type: 'run.started', runId, origin, createdAt: timestamp } }];
@@ -693,6 +734,8 @@ export class WorkerProjection {
           attachments: native.role === 'user' ? queued?.attachments ?? this.attachments : [], started: new Set(), ...nativeMetadata,
           sessionMentions: native.role === 'user' ? queued?.sessionMentions ?? this.sessionMentions : [],
           toolCallIndexById: new Map(),
+          lastEmittedToolInputByCallId: new Map(),
+          editPreviewsByToolCallId: new Map(),
         };
         if (native.role === 'user') { this.queuedPrompts.delete(native); this.attachments = []; this.sessionMentions = []; }
         this.message = current;
@@ -745,12 +788,14 @@ export class WorkerProjection {
             const src = update.partial.content[update.contentIndex];
             if (src?.type !== 'toolCall' || !src.id || !src.name) break;
             const id = partId(current.messageId, update.contentIndex);
+            const input = this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(src.arguments))));
+            current.lastEmittedToolInputByCallId.set(src.id, JSON.stringify(input));
             const part: Part = {
               type: 'tool_call',
               partId: id,
               toolCallId: this.publicText(src.id),
               toolName: this.publicText(src.name),
-              input: this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(src.arguments)))),
+              input,
               status: 'running',
             };
             current.toolCallIndexById.set(src.id, update.contentIndex);
@@ -764,18 +809,29 @@ export class WorkerProjection {
             if (src?.type !== 'toolCall' || !src.id || !src.name) break;
             const id = partId(current.messageId, update.contentIndex);
             this.ownToolCall(src.id, current.messageId, update.contentIndex);
+            const input = this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(src.arguments))));
+            const serializedInput = JSON.stringify(input);
+            const editPreview = current.editPreviewsByToolCallId.get(src.id) ?? this.toolCallPreviews.get(src.id);
             const part: Part = {
               type: 'tool_call',
               partId: id,
               toolCallId: this.publicText(src.id),
               toolName: this.publicText(src.name),
-              input: this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(src.arguments)))),
+              input,
               status: 'running',
+              ...(editPreview ? { editPreview } : {}),
             };
             if (!current.started.has(update.contentIndex)) {
               current.started.add(update.contentIndex);
+              current.lastEmittedToolInputByCallId.set(src.id, serializedInput);
               emit({ type: 'part.started', messageId: current.messageId, part });
             } else {
+              const lastEmitted = current.lastEmittedToolInputByCallId.get(src.id);
+              if (lastEmitted === serializedInput) {
+                // Skip part.updated when the redacted tool input equals the last emitted one
+                break;
+              }
+              current.lastEmittedToolInputByCallId.set(src.id, serializedInput);
               emit({ type: 'part.updated', part });
             }
             break;
@@ -784,13 +840,16 @@ export class WorkerProjection {
             const call = update.toolCall;
             if (!call.id || !call.name) break;
             const id = partId(current.messageId, update.contentIndex);
+            const input = this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(call.arguments))));
+            const editPreview = current.editPreviewsByToolCallId.get(call.id) ?? this.toolCallPreviews.get(call.id);
             const part: Part = {
               type: 'tool_call',
               partId: id,
               toolCallId: this.publicText(call.id),
               toolName: this.publicText(call.name),
-              input: this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(call.arguments)))),
+              input,
               status: 'running',
+              ...(editPreview ? { editPreview } : {}),
             };
             current.toolCallIndexById.set(call.id, update.contentIndex);
             this.ownToolCall(call.id, current.messageId, update.contentIndex);
@@ -820,7 +879,11 @@ export class WorkerProjection {
         for (const part of parts(event.message, current.messageId, current.attachments, current.sessionMentions)) {
           const index = Number(part.partId.slice(current.messageId.length + 1));
           this.textSuffixes.delete(part.partId);
-          if (part.type === 'tool_call') this.ownToolCall(part.toolCallId, current.messageId, index);
+          if (part.type === 'tool_call') {
+            this.ownToolCall(part.toolCallId, current.messageId, index);
+            const preview = this.toolCallPreviews.get(part.toolCallId) ?? current.editPreviewsByToolCallId.get(part.toolCallId);
+            if (preview) part.editPreview = preview;
+          }
           if (!current.started.has(index) && part.type !== 'attachment') {
             emit({ type: 'part.started', messageId: current.messageId, part });
           }
@@ -897,24 +960,35 @@ export class WorkerProjection {
           ...(part.type === 'tool_result' && part.error !== undefined ? { error: part.error } : {}),
           ...(part.type === 'tool_result' && part.errorKind !== undefined ? { errorKind: part.errorKind } : {}),
         });
+        this.toolCallPreviews.delete(event.toolCallId);
         break;
       }
       case 'tool_stream_update': {
+        if (!event.toolCallId || !event.toolName) break;
+        const editPreview = this.parseEditPreview(event.update);
+        if (editPreview) {
+          this.toolCallPreviews.set(event.toolCallId, editPreview);
+          if (this.message) this.message.editPreviewsByToolCallId.set(event.toolCallId, editPreview);
+        }
+        const effectivePreview = editPreview ?? this.toolCallPreviews.get(event.toolCallId);
+        const owner = this.liveToolCallOwners.get(event.toolCallId);
         const current = this.message;
-        if (!current || !event.toolCallId || !event.toolName) break;
-        const contentIndex = current.toolCallIndexById.get(event.toolCallId);
-        if (contentIndex === undefined) break;
-        const src = current.nativeMessage.role === 'assistant' && Array.isArray(current.nativeMessage.content)
+        const contentIndex = current?.toolCallIndexById.get(event.toolCallId);
+        const id = owner ? owner.callPartId : (current && contentIndex !== undefined ? partId(current.messageId, contentIndex) : undefined);
+        if (!id) break;
+        const src = current && current.nativeMessage.role === 'assistant' && Array.isArray(current.nativeMessage.content) && contentIndex !== undefined
           ? current.nativeMessage.content[contentIndex] : undefined;
         const rawArgs = src && src.type === 'toolCall' ? src.arguments : {};
-        const id = partId(current.messageId, contentIndex);
+        const input = this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(rawArgs))));
+        if (current) current.lastEmittedToolInputByCallId.set(event.toolCallId, JSON.stringify(input));
         const part: Part = {
           type: 'tool_call',
           partId: id,
           toolCallId: this.publicText(event.toolCallId),
           toolName: this.publicText(event.toolName),
-          input: this.publicJsonObject(toolInput(JSON.parse(JSON.stringify(rawArgs)))),
+          input,
           status: 'running',
+          ...(effectivePreview ? { editPreview: effectivePreview } : {}),
         };
         emit({ type: 'part.updated', part });
         break;
@@ -1241,8 +1315,10 @@ export class WorkerProjection {
         // reads the pair without mistaking an id's own colon for a suffix.
         const parsed = parseModelString(entry.model);
         if (parsed) {
-          nativeSelection = { ...nativeSelection,
-            model: { providerId: parsed.providerId, modelId: parsed.modelId } };
+          nativeSelection = {
+            ...nativeSelection,
+            model: { providerId: parsed.providerId, modelId: parsed.modelId }
+          };
         }
       } else if (entry.type === 'thinking_level_change') {
         nativeSelection = { ...nativeSelection, thinkingLevel: entry.configured ?? entry.thinkingLevel ?? null };

@@ -23,9 +23,27 @@ export const ReasoningPartSchema = z.strictObject({
   type: z.literal('reasoning'), partId: EntityIdSchema, content: z.string(), signature: z.string().optional(),
 });
 export type ReasoningPart = z.infer<typeof ReasoningPartSchema>;
+export const EditPreviewFileSchema = z.strictObject({
+  path: z.string().min(1),
+  diff: z.string().optional(),
+  firstChangedLine: z.number().int().optional(),
+  error: z.string().optional(),
+  op: z.string().optional(),
+  rename: z.string().optional(),
+});
+export type EditPreviewFile = z.infer<typeof EditPreviewFileSchema>;
+
+export const EditPreviewSchema = z.strictObject({
+  files: z.array(EditPreviewFileSchema),
+  streaming: z.boolean().optional(),
+  generation: z.number().optional(),
+});
+export type EditPreview = z.infer<typeof EditPreviewSchema>;
+
 export const ToolCallPartSchema = z.strictObject({
   type: z.literal('tool_call'), partId: EntityIdSchema, toolCallId: EntityIdSchema, toolName: z.string().min(1),
   input: JsonObjectSchema, status: ToolStatusSchema, approvalId: EntityIdSchema.optional(),
+  editPreview: EditPreviewSchema.optional(),
 });
 export type ToolCallPart = z.infer<typeof ToolCallPartSchema>;
 export const ToolResultPartSchema = z.strictObject({

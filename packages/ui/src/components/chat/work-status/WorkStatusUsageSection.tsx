@@ -62,15 +62,19 @@ export const WorkStatusUsageSection: React.FC<{ visible?: boolean }> = ({ visibl
     preloadProviderLogos(groups.map((group) => group.providerId).filter((id) => !isExtensionQuotaProviderId(id)));
   }, [groups]);
 
-  useReportWorkStatusPresence('usage', groups.length > 0);
+  useReportWorkStatusPresence('usage', groups.length > 0 || quotaPhase === 'unknown' || quotaPhase === 'error');
 
   // Unread is not "nothing configured": say so rather than showing no readout.
   // A plain line, not a section, so the panel does not claim an empty provider
   // list and no icon/sprite work happens for a row that never had data.
   if (groups.length === 0) {
-    return quotaPhase === 'unknown'
-      ? <p className="typography-meta text-muted-foreground">{t('settings.usage.state.unknown')}</p>
-      : null;
+    if (quotaPhase === 'unknown') {
+      return <p className="typography-meta text-muted-foreground">{t('settings.usage.state.unknown')}</p>;
+    }
+    if (quotaPhase === 'error') {
+      return <p className="typography-meta text-status-error">{t('settings.usage.state.error')}</p>;
+    }
+    return null;
   }
 
   const modeLabel = displayMode === 'remaining'

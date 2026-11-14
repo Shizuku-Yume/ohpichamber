@@ -31,6 +31,7 @@ export const WorkerBootstrapSchema = z.strictObject({
   catalogRevision: CounterSchema.optional(), mcpConfiguration: MCPConfigurationStateSchema.optional(),
   pluginRevision: CounterSchema.optional(),
   skillSources: SkillSourceRevisionsSchema.optional(),
+  hostTools: z.record(z.string(), z.boolean()).optional(),
 });
 export type WorkerBootstrap = z.infer<typeof WorkerBootstrapSchema>;
 export const WorkerBootstrapMessageSchema = WorkerBootstrapSchema.omit({ env: true }).extend({
@@ -109,6 +110,8 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema).optional() }),
   z.strictObject({ type: z.literal('usage.tools'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
   z.strictObject({ type: z.literal('mcp.configuration.read') }),
+  z.strictObject({ type: z.literal('host-tools.toggle'), toolName: z.string().min(1), enabled: z.boolean() }),
+  z.strictObject({ type: z.literal('host-tools.configure'), tools: z.record(z.string(), z.boolean()) }),
 ]);
 export type WorkerOperation = z.infer<typeof WorkerOperationSchema> | { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel'; response?: JsonValue };
 const WorkerApprovalInteractionSchema = z.strictObject({
@@ -164,6 +167,8 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('usage.stats'), result: UsageStatsSchema }),
   z.strictObject({ type: z.literal('usage.tools'), result: UsageToolsResponseSchema }),
   z.strictObject({ type: z.literal('mcp.configuration'), configuration: MCPConfigurationStateSchema.nullable() }),
+  z.strictObject({ type: z.literal('host-tools.toggle'), enabled: z.boolean() }),
+  z.strictObject({ type: z.literal('host-tools.configure'), configured: z.literal(true) }),
 ]);
 export type WorkerOperationResult = z.infer<typeof WorkerOperationResultSchema>;
 const WorkerOperationCommandSchema = z.strictObject({

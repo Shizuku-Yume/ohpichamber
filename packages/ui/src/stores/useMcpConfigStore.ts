@@ -49,8 +49,9 @@ interface McpConfigStore {
   resetForRuntimeSwitch: () => void;
 }
 
+const NO_SERVERS: MCPServerConfig[] = [];
 export const selectMcpServersForDirectory = (state: Pick<McpConfigStore, 'serversByDirectory' | 'mcpServers'>, directory?: string | null): MCPServerConfig[] =>
-  state.serversByDirectory[keyFor(directory)] ?? state.mcpServers;
+  state.serversByDirectory[keyFor(directory)] ?? NO_SERVERS;
 
 export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) => {
   const publish = (directory: string, configuration: MCPConfigurationState, result?: MCPApplyResult) => {
@@ -92,6 +93,11 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
       const parsed = error instanceof CanonicalApiError ? MCPApplyResultSchema.safeParse(error.problem.details?.result) : null;
       const result = parsed?.success && parsed.data.configuration.workspaceId === workspaceId ? parsed.data : undefined;
       const outcome: McpInstallOutcome | undefined = result?.outcome;
+      // A rejected apply still advanced the persisted revision: adopt it as the next CAS baseline.
+      if (result && ownerGeneration === generation) {
+        revisions.set(key, ++mutationRevision);
+        publish(key, result.configuration, result);
+      }
       if (ownerGeneration === generation) {
         set(state => ({ errorsByDirectory: { ...state.errorsByDirectory, [key]: message } }));
       }

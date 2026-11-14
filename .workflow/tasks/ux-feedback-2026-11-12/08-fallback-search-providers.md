@@ -22,9 +22,9 @@
 - Format-on-write reindented one comment in `WebSearchPage.tsx` and one spread line in each main locale dictionary; reverted with a filtered `git apply -R`.
 - Known, not changed: `FallbackStatus` checks `credentialConfigured` before `configured`; a stale fallback id not in the provider list shows "Needs setup" with its raw id as name.
 - Up/down: the row list has a drag handle and keyboard Space/arrows (dnd-kit). No separate up/down buttons, which the row spec does not list.
-- Review: self-review of `git diff 024cbc63a` (reviewer subagent unavailable: spawning disabled). Found the one-use `placeRows` and `offered` helpers and inlined them; the `rowNames` helper matched the drag button first (class `typography-ui-label`), fixed with `.text-foreground`. Mouse drag in the test did not commit in happy-dom, so the test reorders with keyboard. Real-path mouse drag dropped one row below the aimed slot (automation tool moves in one step); keyboard reorder is exact.
+- Review: pass. Self-review of `git diff 024cbc63a` (reviewer subagent unavailable: spawning disabled). Found the one-use `placeRows` and `offered` helpers and inlined them; the `rowNames` helper matched the drag button first (class `typography-ui-label`), fixed with `.text-foreground`. Mouse drag in the test did not commit in happy-dom, so the test reorders with keyboard. Real-path mouse drag dropped one row below the aimed slot (automation tool moves in one step); keyboard reorder is exact.
 - Check before: no reorder or add-menu test existed. The old page had a plain list with Remove buttons, a constant select trigger and a sentinel item. The new test failed on its first runs (empty row names, unbound drag, missing `MouseEvent`/`DOMRect` globals) and passed after those were fixed.
-- Check after (merged tree `a4b807ef3`):
+- Check after: (merged tree `a4b807ef3`)
   - `VITEST_MAX_WORKERS=2 node scripts/run-isolated-tests.mjs src/components/sections` (from `packages/ui`): 56/56 files passed, exit 0. Includes `WebSearchPage.test.tsx` "fallback providers reorder, add and remove through the saved chain".
   - `src/components/layout` (rail dialog using the visibility list): 28/28, exit 0.
   - `src/lib/i18n` (messages parity, Chinese token copy): 52/52, exit 0.

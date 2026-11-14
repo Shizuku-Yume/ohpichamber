@@ -112,6 +112,44 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
     };
   } catch (error) { authStorage.close(); throw error; }
 }
+interface PrewarmedRuntimeEntry {
+  runtime: NativeWorkerRuntime;
+  cwd: string;
+  agentDirectory: string;
+}
+
+let prewarmedRuntimePromise: Promise<PrewarmedRuntimeEntry | undefined> | undefined;
+
+export function prewarmNativeRuntime(input: { cwd: string; agentDirectory: string }): void {
+  if (prewarmedRuntimePromise) return;
+  const canonicalCwd = resolve(input.cwd);
+  const canonicalAgentDir = resolve(input.agentDirectory);
+  prewarmedRuntimePromise = openNativeRuntime(input)
+    .then(async runtime => {
+      try { await runtime.models.readModels(input.cwd, '0'); } catch { /* best-effort model prewarm */ }
+      return { runtime, cwd: canonicalCwd, agentDirectory: canonicalAgentDir };
+    })
+    .catch(() => undefined);
+}
+
+export async function consumePrewarmedNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<NativeWorkerRuntime | undefined> {
+  if (!prewarmedRuntimePromise) return undefined;
+  const entry = await prewarmedRuntimePromise;
+  prewarmedRuntimePromise = undefined;
+  if (!entry) return undefined;
+  if (resolve(input.cwd) !== entry.cwd || resolve(input.agentDirectory) !== entry.agentDirectory) {
+    try { entry.runtime.authStorage.close(); } catch { /* cleanup on discard */ }
+    return undefined;
+  }
+  return entry.runtime;
+}
+
+export async function closePrewarmedNativeRuntime(): Promise<void> {
+  if (!prewarmedRuntimePromise) return;
+  const entry = await prewarmedRuntimePromise;
+  prewarmedRuntimePromise = undefined;
+  try { entry?.runtime.authStorage.close(); } catch { /* best-effort shutdown cleanup */ }
+}
 
 export function nativeModelsContext(
   runtime: NativeWorkerRuntime,

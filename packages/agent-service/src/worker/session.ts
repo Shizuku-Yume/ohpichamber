@@ -57,7 +57,7 @@ import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
 import { NativeMcpCredentials } from './mcp-credentials.ts';
 import { WorkerShell } from './shell.ts';
 import { WorkerCompletion } from './completion.ts';
-import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
+import { consumePrewarmedNativeRuntime, nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
 import { NativeApprovalRequired, type WorkerAuthorize } from './policy.ts';
 import { createHostToolController, normalizeHostToolEnablement, HOST_TOOL_DESCRIPTIONS, type HostToolController, type HostToolName } from './host-tool.ts';
@@ -386,7 +386,8 @@ export class WorkerSession {
   static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload) => void): Promise<WorkerSession> {
     if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
     if (input.skillSources && !input.agentDirectoryId) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership is missing');
-    const runtime = await openNativeRuntime(input);
+    const prewarmed = await consumePrewarmedNativeRuntime(input);
+    const runtime = prewarmed ?? await openNativeRuntime(input);
     const { authStorage, settings, modelRegistry } = runtime;
     let manager: SessionManager | undefined;
     let session: AgentSession | undefined;
@@ -686,7 +687,7 @@ export class WorkerSession {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId, join(input.agentDirectory, 'mcp.json')) : null;
         publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
       };
-      await capturePolicy();
+      const policyCapturePromise = capturePolicy();
       projection = owned.projection;
       // External MCP servers can take tens of seconds to handshake; the first
       // prompt must not wait for them. Start the connection in the background,
@@ -713,6 +714,7 @@ export class WorkerSession {
       });
       // Reopening a transcript must use the latest workspace preference, not restored session state.
       warming.apply((await warming.read(input.workspaceId, '0')).mode);
+      await policyCapturePromise;
       return owned;
     } catch (error) {
       interaction.close();

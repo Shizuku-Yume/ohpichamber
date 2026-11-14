@@ -8,6 +8,7 @@ import { WorkerPolicy } from './policy.ts';
 import { NativeMcpError } from './mcp.ts';
 import { WorkerHostActions } from './host-actions.ts';
 import { getUsageStats, getUsageTools } from './usage.ts';
+import { closePrewarmedNativeRuntime, prewarmNativeRuntime } from './native-runtime.ts';
 
 /** The cause a thrown value carries, whatever its shape. A thrown string is a
  * cause the worker chose, not a missing one; only a value with nothing readable
@@ -81,6 +82,7 @@ function stop(exitCode: number): Promise<void> {
         await owned.close();
         if (bootstrap && process.connected) send({ type: 'lifecycle', workerGeneration: bootstrap.workerGeneration, state: 'closed' });
       }
+      await closePrewarmedNativeRuntime();
     } catch { exitCode = 1; }
     finally { clearTimeout(deadline); process.exit(exitCode); }
   })();
@@ -125,10 +127,12 @@ process.on('message', raw => {
       send({ type: 'result', workerGeneration: command.workerGeneration, commandId: command.commandId, result });
     }).catch((error: unknown) => {
       const nativeCode = error instanceof NativeMcpError ? ProblemCodeSchema.safeParse(error.code) : undefined;
-      send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
+      send({
+        type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
         status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError ? nativeMcpStatus(error) : 503,
         code: error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE',
-        detail: operationCause(error).slice(0, 200) });
+        detail: operationCause(error).slice(0, 200)
+      });
     });
     return;
   }
@@ -185,6 +189,9 @@ process.on('message', raw => {
 // A supervisor that pre-warms a worker adopts it only after this reply, so
 // the adoption cannot claim a process that has not finished loading.
 if (process.connected) send({ type: 'idle' });
+if (process.env.PI_CODING_AGENT_DIR) {
+  prewarmNativeRuntime({ cwd: process.cwd(), agentDirectory: process.env.PI_CODING_AGENT_DIR });
+}
 process.once('disconnect', () => { void stop(0); });
 process.once('SIGTERM', () => { void stop(0); });
 process.once('SIGINT', () => { void stop(0); });

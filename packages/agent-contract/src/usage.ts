@@ -94,6 +94,7 @@ export const UsageStatsSchema = z.strictObject({
   models: z.array(UsageModelSchema),
   avgTtft: AmountSchema.nullable().optional(),
   avgTokensPerSecond: AmountSchema.nullable().optional(),
+  pricing: UsagePricingSchema.nullable().optional(),
   errorRate: z.number().min(0).max(1).optional(),
   ...FailureShape,
 });

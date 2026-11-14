@@ -1165,3 +1165,23 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OMP ships labels for these settings, or the maintainer wants them in the GUI.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - The OMP route exposes only the settings a GUI owner draws or writes
+
+- **Decided:** the OMP settings route returns and accepts only `OMP_SETTING_EXPOSED_IDS`: `engine` placements, `owned-by` placements, and `page` placements that a GUI control writes (today `defaultThinkingLevel`, written by Defaults). `tui-only`, untabbed (`hidden`), `boundary` and unwritten page placements are omitted from state and refused on write with 400. The path settings (`plan.autosaveDir`, `workspace.additionalDirectories`, `contextFiles.extra`, `mnemopi.dbPath`, `ovnfs.path`, `worktree.base`, `ida.installDir`, `browser.screenshotDir`, `python.interpreter`) and the off-host `skills.registryUrl` are `boundary`.
+- **Instead of:** the earlier rule that refused only boundary and unplaced ids, which made tui-only ids readable and writable, contrary to the 2026-11-14 owners decision.
+- **Because:** the old contract excluded remote URLs and configurable paths as a second authority and a path escape hatch. A placed row with no reader or writer is an unverified claim. The two decisions now agree.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** task 12 adds a page control that writes another page placement; that key joins `GUI_WRITTEN_PAGE_KEYS` in the same change.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Engine rows without a locale override show OMP's own label and description
+
+- **Decided:** each `engine` row takes its label and description from OMP's registry. The locale overrides in `omp-settings.i18n.ts` cover the rows the page names, and any row without an override shows OMP's English text in every locale. The 131 engine rows are not mass-translated in this effort.
+- **Instead of:** translating every engine row into 15 locales now, or hiding untranslated rows.
+- **Because:** OMP's labels are themselves technical English, and the copy is OMP's own rather than an invented fallback. Mass translation of about 3,900 strings is a separate localization effort the maintainer did not ask for in this effort.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** the maintainer schedules localization of the OMP settings page, or `locale-ui-patterns` is read to forbid English fallback on runtime-sourced copy; then translate or hide the affected rows.
+- **Effort:** ux-feedback-2026-11-12

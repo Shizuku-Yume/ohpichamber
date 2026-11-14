@@ -160,11 +160,17 @@ The session tool observer routes the exact native SDK `web_search` tool name to 
 
 ## Historical usage
 
-`GET /api/agent/v1/usage` and `/usage/tools` are Host-authenticated historical reads. Queries carry optional inclusive `from` and exclusive `to` epoch-millisecond bounds (omitted `to` defaults to now), an explicit viewer IANA timezone, and optional canonical workspace/project filters. The Host supplies its authorized opaque scope set over private transport; the supervisor intersects it with registered root and child session references. "All" means this intersection, not native home-directory discovery. No client path or global OMP statistics database participates.
+`GET /api/agent/v1/usage` reports OMP's own statistics for every OMP session in the default agent directory, TUI sessions included. Before each report the usage worker runs OMP's incremental sync (`syncAllSessions`) and reads `stats.db` only. A failed sync or database read is an error. It is never an empty report. Queries carry optional inclusive `from` and exclusive `to` epoch-millisecond bounds (omitted `to` defaults to now), an explicit viewer IANA timezone, an optional provider, and optional canonical workspace/project filters. A workspace or project filter resolves to the sessions folders of the Host-authorized roots in that scope, and every aggregate (sessions, prompts, steps, tokens, cost, activity, providers, models) is limited to transcripts under those folders. Sessions that no registered root references, in a folder no root has, appear only in the unscoped view.
 
-A dedicated cold usage worker loads exact registered native transcripts, validates loader diagnostics, and inspects native branch lineage without constructing an active agent, provider registry, or model loop. Native SDK imports remain worker-private. Summary reports and lazy tool reports use the same inclusive/exclusive window and viewer timezone. Reasoning and execution durations absent from persistence remain null. Unfinished calls remain unfinished; historical activity never establishes current runtime status.
+Pricing comes from OMP's configured model registry for the default agent directory (bundled catalog plus `models.yml`), so a configured custom model prices from its own rates. Unknown pricing is `null`. Reasoning tokens come from each request's transcript entry, for assistant turns and `model_usage` auxiliary calls alike, counted once per request. `output` already includes reasoning, so `reasoning` is never added to `total`. Provider TTFT and tokens per second are request-weighted from summed samples. Prompts are attributed to a provider through the assistant that answered them.
 
-Failures are per canonical source: valid siblings survive with partial status and sanitized error codes. Failure of every selected source is an error, not an authoritative empty report. The UI retains its existing runtime-keyed cache and reset/abort lifecycle; this feature adds no polling or cache framework.
+`accounts` carries OMP's native AuthStorage usage reports and recorded usage history for the window, projected to quota and usage fields. The usage worker opens the default agent's AuthStorage per request, and it never returns credentials, account identity, or raw provider payloads. Each source fails on its own: a failed reports or history read is `null` and named in `errors`, and the stats still return.
+
+`/usage/tools` remains a Host-authenticated read over the registered references. "All" there means their intersection with the Host's authorized scope set. No client path participates.
+
+A cold usage worker runs these reads and constructs no provider and no live session. Native SDK imports stay worker-private. Unfinished tool calls remain unfinished, and historical activity never establishes current runtime status.
+
+Failures are per source, with sanitized error codes. Valid siblings survive with `partial` status. Failure of every tool source is an error, not an authoritative empty report.
 
 ## Native workspace cache warming
 

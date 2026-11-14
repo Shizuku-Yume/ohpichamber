@@ -262,6 +262,11 @@ export class WorkspaceCatalogs {
   }
 
   async pluginRevision(workspaceId: string): Promise<string> {
+    const binding = this.pluginBindings.get(workspaceId);
+    if (binding) {
+      const owner = this.pluginOwners.get(binding.rootPath);
+      if (owner) return owner.revision;
+    }
     return (await this.pluginBinding(workspaceId)).owner.revision;
   }
 

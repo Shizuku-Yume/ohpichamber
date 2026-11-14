@@ -200,7 +200,7 @@ const createCanonicalSessionService = (dependencies) => {
     const sessionBootstrap = {
       rootSessionId, projectId, workspaceId,
       cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId,
-      displayPath, options,
+      displayPath, options, deferred: true,
       ...(hostTools ? { hostTools } : {}),
     };
     if (parentSessionId !== undefined) sessionBootstrap.parentSessionId = parentSessionId;
@@ -220,6 +220,7 @@ const createCanonicalSessionService = (dependencies) => {
         Object.assign(runtime, renamed);
       }
       settled();
+      rememberLive(runtime.sessionId);
       return runtime;
     });
     if (requestedMetadata) await metadata.set(session.sessionId, requestedMetadata, workspace.cwd);

@@ -16,7 +16,17 @@ const SessionForkRequestSchema = z.strictObject({ messageId: EntityIdSchema.opti
   (input) => input.mode === 'selected' ? input.messageId !== undefined : input.messageId === undefined,
   { message: 'Selected forks require a public message ID; full forks do not accept one' },
 );
-const SessionReopenScopeSchema = z.strictObject({ rootSessionId: z.string().min(1), projectId: z.string().min(1), workspaceId: z.string().min(1), cwd: z.string().min(1), agentDirectory: z.string().min(1), agentDirectoryId: z.string().min(1), displayPath: z.string().min(1), env: z.record(z.string(), z.string()).optional() });
+const SessionReopenScopeSchema = z.strictObject({
+  rootSessionId: z.string().min(1),
+  projectId: z.string().min(1),
+  workspaceId: z.string().min(1),
+  cwd: z.string().min(1),
+  agentDirectory: z.string().min(1),
+  agentDirectoryId: z.string().min(1),
+  displayPath: z.string().min(1),
+  env: z.record(z.string(), z.string()).optional(),
+  hostTools: z.record(z.string(), z.boolean()).optional(),
+});
 const COLD_REFUSAL_CODES = new Set(['SESSION_NOT_FOUND', 'SERVICE_UNAVAILABLE', 'SESSION_RESTORE_FAILED']);
 /**
  * A verified refusal that means the addressed root has no live worker, so a
@@ -349,7 +359,17 @@ const createCanonicalSessionService = (dependencies) => {
     return SessionCreateAckSchema.parse({ session: SessionSchema.parse(projected) });
   };
   const reopenNative = async (scope) => {
-    const privateScope = { rootSessionId: scope.rootSessionId, projectId: scope.projectId, workspaceId: scope.workspaceId, cwd: scope.cwd, agentDirectory: scope.agentDirectory, agentDirectoryId: scope.agentDirectoryId, displayPath: scope.displayPath ?? 'workspace' };
+    const hostTools = scope.hostTools ?? (typeof resolveHostTools === 'function' ? await resolveHostTools().catch(() => null) : null);
+    const privateScope = {
+      rootSessionId: scope.rootSessionId,
+      projectId: scope.projectId,
+      workspaceId: scope.workspaceId,
+      cwd: scope.cwd,
+      agentDirectory: scope.agentDirectory,
+      agentDirectoryId: scope.agentDirectoryId,
+      displayPath: scope.displayPath ?? 'workspace',
+      ...(hostTools ? { hostTools } : {}),
+    };
     if (scope.env) privateScope.env = scope.env;
     const bootstrap = SessionReopenScopeSchema.parse(privateScope);
     const runtime = RuntimeSessionSchema.parse(await request(`/internal/sessions/${encodeURIComponent(bootstrap.rootSessionId)}/reopen`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(bootstrap) }));

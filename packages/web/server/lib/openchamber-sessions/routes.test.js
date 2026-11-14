@@ -145,6 +145,57 @@ describe('canonical session route contracts', () => {
     await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send({}).expect(400);
     expect(calls).toHaveLength(afterValid);
   });
+
+  it('passes resolved host tools when reopening a cold session', async () => {
+    let capturedReopenBody = null;
+    const runtime = id => ({
+      sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+      createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+    });
+    const service = {
+      request: async (pathname, init = {}) => {
+        if (pathname.endsWith('/reopen')) {
+          capturedReopenBody = JSON.parse(init.body);
+          return Response.json(runtime('ses_admitted'));
+        }
+        if (pathname.endsWith('/runs')) {
+          const body = JSON.parse(init.body);
+          return Response.json({ run: { runId: body.runId, sessionId: 'ses_admitted', status: 'running', origin: 'host', createdAt: 1 } });
+        }
+        throw new Error(`Unexpected service request ${pathname}`);
+      }
+    };
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: routeFixture.agentScopeStore,
+      service,
+      resolveWorkspaceScope: async () => validScope('workspace'),
+      resolveSessionScope: async id => validScope(id),
+      resolveHostSessionScope: async id => id === 'ses_admitted' ? validScope(id) : null,
+      resolveHostTools: async () => ({ web: false, openchamber: true, notify: true }),
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    const app = express();
+    const router = express.Router();
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    const prompt = {
+      input: { text: 'Cold prompt', attachments: [], context: [] },
+      options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+    };
+    await request(app).post('/api/agent/v1/sessions/ses_admitted/runs').send(prompt).expect(200);
+    expect(capturedReopenBody).toMatchObject({
+      rootSessionId: 'ses_admitted',
+      hostTools: { web: false, openchamber: true, notify: true },
+    });
+  });
   it('retries one cold dispatch after a verified unloaded refusal and never duplicates an admitted run', async () => {
     const calls = []; let live = false; let runs = 0;
     const runtime = id => ({
@@ -915,13 +966,13 @@ describe('POST /api/agent/v1/sessions/:sessionId/move-to-worktree', () => {
       worktreeMove: {
         getPathsWithoutChanges: async () => [],
         createWorktree: async () => ({ name: 'fix-login', branch: 'fix-login', path: '/repo/app/worktrees/fix-login' }),
-        removeWorktree: async () => {},
+        removeWorktree: async () => { },
         waitForWorktreeReady: async () => ({ setupStillRunning: false }),
         hydrateCheckout: async () => null,
         bootstrapStore: { read: async () => null, write: async () => null },
         stashPush: async () => ({ created: false }),
-        stashApply: async () => {},
-        stashDrop: async () => {},
+        stashApply: async () => { },
+        stashDrop: async () => { },
         listStashes: async () => [],
         getBranches: async () => ({ all: ['main'], defaultBranches: { origin: 'main' } }),
         resolvePrimaryWorktreeRoot: async () => ({ root: '/repo/app' }),
@@ -992,13 +1043,13 @@ describe('session.moveToWorktree', () => {
         hydrateCheckout: async () => null,
         bootstrapStore: { read: async () => null, write: async () => null },
         stashPush: async () => ({ created: false }),
-        stashApply: async () => {},
-        stashDrop: async () => {},
+        stashApply: async () => { },
+        stashDrop: async () => { },
         listStashes: async () => [],
         getBranches: async () => ({ all: ['main'], defaultBranches: { origin: 'main' } }),
         resolvePrimaryWorktreeRoot: async () => ({ root: '/repo/app' }),
         moveSession: (id, directory) => { calls.push(['moveSession', id, directory]); return [{ sessionId: id }]; },
-        warn: () => {},
+        warn: () => { },
         ...(overrides.worktreeMove ?? {}),
       },
     });

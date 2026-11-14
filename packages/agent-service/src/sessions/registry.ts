@@ -887,6 +887,7 @@ export class SessionRegistry {
       if (source.agentDirectoryId) childInput.agentDirectoryId = source.agentDirectoryId;
       if (source.mcpConfigPath) childInput.mcpConfigPath = source.mcpConfigPath;
       if (source.options) childInput.options = source.options;
+      if (source.hostTools) childInput.hostTools = source.hostTools;
       const runtime = await this.open(childInput, false, sessionId, forkTicketId);
       return { sessionId: runtime.sessionId, rootSessionId: runtime.rootSessionId, sessionFile: childFile, sourceSessionId: sessionId, entryId, mode };
     } finally {

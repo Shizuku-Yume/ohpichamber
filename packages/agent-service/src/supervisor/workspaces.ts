@@ -139,7 +139,6 @@ export class WorkspaceCatalogs {
     const env = this.environments.get(workspaceId);
     if (!env) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The workspace environment was not captured');
     const hostTools = this.hostToolsByWorkspace.get(workspaceId);
-    const mcpTools = this.pluginCoordinator?.()?.getWorkspaceMcpTools(workspaceId);
     const input: StatelessWorkerInput = {
       rootSessionId: workspace.authorizationRootId,
       projectId: workspace.projectId,
@@ -152,7 +151,6 @@ export class WorkspaceCatalogs {
       env,
     };
     if (hostTools) input.hostTools = hostTools;
-    if (mcpTools && mcpTools.length > 0) input.mcpTools = mcpTools;
     await this.workers.startStateless(input);
     return workspace.authorizationRootId;
   }

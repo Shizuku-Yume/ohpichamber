@@ -198,19 +198,8 @@ export class StatelessWorker {
         });
       }
 
-      // Add MCP tools
-      if (this.input.mcpTools) {
-        for (const mcpTool of this.input.mcpTools) {
-          tools.push({
-            name: mcpTool.name,
-            label: mcpTool.name,
-            description: mcpTool.description ?? '',
-            tier: 'exec',
-            availability: true,
-          });
-        }
-      }
-
+      // MCP tools are appended by the workspace route from the workspace MCP
+      // owner: this process connects no server, so it cannot name them.
       return { type: 'tools.catalog', catalog: { workspaceId: this.input.workspaceId, tools } };
     }
     if (operation.type === 'mcp.configuration.read') return { type: 'mcp.configuration', configuration: await this.readConfiguration() };
@@ -243,6 +232,7 @@ export class StatelessWorker {
       if (!configuration || JSON.stringify(configuration) !== JSON.stringify(expected)) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
       switch (request.type) {
         case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, configuration) } };
+        case 'discover': return { type: 'mcp', result: { type: 'discovered', result: await this.mcp.discover(configuration) } };
         case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, configuration) } };
         case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, configuration) } };
         case 'secret.write': {

@@ -92,17 +92,13 @@ export class WorkspaceRoutes {
       }
       if (result.type !== 'tools.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested tools.catalog operation.');
       const catalog = SessionToolsCatalogSchema.parse(result.catalog);
-      const mcpTools = this.mcp.getWorkspaceMcpTools(workspaceId);
-      for (const mcpTool of mcpTools) {
-        if (!catalog.tools.some(t => t.name === mcpTool.name)) {
-          catalog.tools.push({
-            name: mcpTool.name,
-            label: mcpTool.name,
-            description: mcpTool.description ?? '',
-            tier: 'exec',
-            availability: true,
-          });
-        }
+      // The workspace catalog answers for the saved MCP configuration, not for
+      // whichever session worker happened to apply it, so a saved profile can
+      // select a server's tools before any chat exists.
+      const mcp = await this.mcp.workspaceMcpTools(workspaceId);
+      for (const tool of mcp.tools) {
+        if (catalog.tools.some(entry => entry.name === tool.name)) continue;
+        catalog.tools.push({ name: tool.name, label: tool.name, description: tool.description, tier: 'exec', availability: true });
       }
       return { status: 200, body: catalog };
     }

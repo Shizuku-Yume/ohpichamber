@@ -47,7 +47,6 @@ export const CompletionWorkerBootstrapSchema = z.strictObject({
   catalogRevision: CounterSchema,
   mcpConfigPath: PrivatePathSchema.optional(),
   hostTools: z.record(z.string(), z.boolean()).optional(),
-  mcpTools: z.array(z.strictObject({ name: z.string().min(1), description: z.string().optional() })).optional(),
 });
 export type CompletionWorkerBootstrap = z.infer<typeof CompletionWorkerBootstrapSchema>;
 

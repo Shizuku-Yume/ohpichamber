@@ -783,8 +783,7 @@ export class WorkerRegistry {
       && previous.workspaceId === input.workspaceId && previous.cwd === input.cwd
       && previous.agentDirectory === input.agentDirectory && previous.agentDirectoryId === input.agentDirectoryId
       && previous.mcpConfigPath === input.mcpConfigPath && isDeepStrictEqual(entry.environment, environment)
-      && isDeepStrictEqual(previous.hostTools, input.hostTools)
-      && isDeepStrictEqual(previous.mcpTools, input.mcpTools);
+      && isDeepStrictEqual(previous.hostTools, input.hostTools);
   }
 
   private workerEnvironment(input: WorkerInput['input']): NodeJS.ProcessEnv {

@@ -210,12 +210,6 @@ test('the stateless workspace catalog reports runtime tool metadata and real tie
       openchamber_workflow: true,
       notify: false,
     },
-    mcpTools: [
-      {
-        name: 'mcp__custom__tool',
-        description: 'A custom MCP tool for testing',
-      },
-    ],
   };
 
   let worker: StatelessWorker | undefined;
@@ -260,11 +254,6 @@ test('the stateless workspace catalog reports runtime tool metadata and real tie
     expect(notify).toBeDefined();
     expect(notify?.tier).toBe('exec');
     expect(notify?.availability).toBe(false);
-    const mcpTool = tools.find((t) => t.name === 'mcp__custom__tool');
-    expect(mcpTool).toBeDefined();
-    expect(mcpTool?.tier).toBe('exec');
-    expect(mcpTool?.availability).toBe(true);
-    expect(mcpTool?.description).toBe('A custom MCP tool for testing');
   } finally {
     await worker?.close();
     await rm(root, { recursive: true, force: true });

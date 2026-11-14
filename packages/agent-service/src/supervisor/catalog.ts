@@ -20,6 +20,7 @@ import type {
 } from '@openchamber/agent-contract';
 import { MCPWorkspaceReconnectResultSchema } from '@openchamber/agent-contract';
 import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@openchamber/agent-contract';
+import { MCPToolDiscoverySchema, type MCPDiscoveredTool, type MCPToolDiscovery } from '../worker/mcp/protocol.ts';
 import { WorkerOperationError } from './workers.ts';
 import { PluginWorkerApplyOutcomeSchema, type PluginWorkerApplyOutcome, type PluginRuntimeState } from '@openchamber/agent-contract';
 import type { HostSkillSourceCommit } from './file-resources-host-protocol.ts';
@@ -51,6 +52,8 @@ export interface CatalogCoordinatorOptions {
   commitMcp(workspaceId: string, request: MCPConfigureRequest, configuration: MCPConfigurationState): Promise<void>;
   /** Stateless isolated handshake for one server; the only connectivity evidence without a live worker. */
   probeMcp(workspaceId: string, serverId: string, configuration: MCPConfigurationState): Promise<MCPConnectionTestResult>;
+  /** Stateless isolated handshake per enabled server, naming the tools a saved profile may select. */
+  discoverMcpTools(workspaceId: string, configuration: MCPConfigurationState): Promise<MCPToolDiscovery>;
 }
 
 export interface CatalogBootstrap {
@@ -280,8 +283,38 @@ export class CatalogCoordinator {
       return result;
     });
   }
-  /** Returns MCP tools for the workspace from active session snapshots, choosing the latest ready generation deterministically. */
-  getWorkspaceMcpTools(workspaceId: string): Array<{ name: string; description?: string }> {
+  /**
+   * Names the workspace's MCP tools from its saved configuration, discovered
+   * through a real handshake, so a profile can select a server's tools before
+   * any session worker applied that configuration. A session snapshot only adds
+   * tools discovery did not report, and never replaces a fresher answer.
+   */
+  async workspaceMcpTools(workspaceId: string): Promise<MCPToolDiscovery> {
+    const configuration = await this.readWorkspaceMcpConfig(workspaceId);
+    let discovery: MCPToolDiscovery;
+    try {
+      discovery = configuration.config.servers.some(server => server.enabled)
+        ? await this.options.discoverMcpTools(workspaceId, configuration)
+        : { workspaceId, persistedRevision: configuration.persistedRevision, tools: [] };
+    } catch {
+      // A discovery failure must not remove tools a session already reported;
+      // the route still answers from the saved configuration revision.
+      discovery = { workspaceId, persistedRevision: configuration.persistedRevision, tools: [] };
+    }
+    const supplemented = new Map(discovery.tools.map(tool => [`${tool.serverId}\u0000${tool.name}`, tool]));
+    for (const tool of this.latestWorkspaceSnapshotTools(workspaceId)) {
+      const key = `${tool.serverId}\u0000${tool.name}`;
+      if (!supplemented.has(key)) supplemented.set(key, tool);
+    }
+    return MCPToolDiscoverySchema.parse({
+      workspaceId,
+      persistedRevision: configuration.persistedRevision,
+      tools: [...supplemented.values()].sort((left, right) => left.serverId.localeCompare(right.serverId) || left.name.localeCompare(right.name)),
+    });
+  }
+
+  /** The newest ready snapshot of one workspace session, chosen deterministically. */
+  private latestWorkspaceSnapshotTools(workspaceId: string): MCPDiscoveredTool[] {
     const candidates = [...this.mcpSnapshots.values()].filter(
       snapshot => snapshot.workerCatalog.worker.workspaceId === workspaceId || snapshot.configuration.workspaceId === workspaceId
     );
@@ -293,14 +326,14 @@ export class CatalogCoordinator {
       const aApplied = BigInt(a.workerCatalog.appliedRevision ?? '0');
       const bApplied = BigInt(b.workerCatalog.appliedRevision ?? '0');
       if (aApplied !== bApplied) return aApplied > bApplied ? -1 : 1;
-      const aCat = BigInt(a.workerCatalog.catalogRevision || '0');
-      const bCat = BigInt(b.workerCatalog.catalogRevision || '0');
-      if (aCat !== bCat) return aCat > bCat ? -1 : 1;
-      const genCmp = b.workerCatalog.worker.workerGeneration.localeCompare(a.workerCatalog.worker.workerGeneration);
-      if (genCmp !== 0) return genCmp;
+      const aCatalog = BigInt(a.workerCatalog.catalogRevision || '0');
+      const bCatalog = BigInt(b.workerCatalog.catalogRevision || '0');
+      if (aCatalog !== bCatalog) return aCatalog > bCatalog ? -1 : 1;
+      const generation = b.workerCatalog.worker.workerGeneration.localeCompare(a.workerCatalog.worker.workerGeneration);
+      if (generation !== 0) return generation;
       return b.workerCatalog.worker.rootSessionId.localeCompare(a.workerCatalog.worker.rootSessionId);
     });
-    return candidates[0].workerCatalog.tools.map(t => ({ name: t.name, description: t.description }));
+    return candidates[0].workerCatalog.tools.map(tool => ({ serverId: tool.serverId, name: tool.name, description: tool.description }));
   }
   async pluginRuntime(workspaceId: string): Promise<PluginRuntimeState[]> {
     const targets = await this.snapshotWorkers(worker => worker.identity.workspaceId === workspaceId);

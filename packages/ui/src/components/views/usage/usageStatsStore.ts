@@ -21,8 +21,7 @@ import { isSameLocalDay, rangeStart, type UsageRange } from './usageStatsModel';
  * an earlier local day is dropped and read again, whether or not it was forced.
  */
 
-export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null };
-
+export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null; providerId?: string | null };
 export type UsageStatsEntry = {
   /** Last successful report; kept on screen through refreshes and failed refreshes. */
   stats: UsageStats | null;
@@ -53,10 +52,11 @@ export type UsageToolsFetcher = (
 ) => Promise<UsageToolsResponse>;
 
 export const usageStatsKey = (runtimeKey: string, request: UsageStatsRequest): string =>
-  `${runtimeKey}::${request.range}::${request.projectDirectory ?? '__all__'}`;
-
+  `${runtimeKey}::${request.range}::${request.projectDirectory ?? '__all__'}::${request.providerId ?? '__all__'}`;
 type UsageStatsStore = {
   entries: Record<string, UsageStatsEntry>;
+  selectedProvider: string | null;
+  setSelectedProvider: (provider: string | null) => void;
   /**
    * Loads a report for the request under the current runtime. Without `force`
    * this only reads a key that has no report, no error and no read running,
@@ -81,13 +81,14 @@ type UsageStatsStore = {
 
 const viewerTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-const fetchFromCanonical: UsageStatsFetcher = async ({ range, projectDirectory }, signal) => {
+const fetchFromCanonical: UsageStatsFetcher = async ({ range, projectDirectory, providerId }, signal) => {
   const workspace = projectDirectory ? await canonicalClient.resolveWorkspace(projectDirectory, { signal }) : undefined;
   signal.throwIfAborted();
   const to = Date.now();
   return canonicalClient.getUsageStats({
     from: rangeStart(range, new Date(to)), to, timezone: viewerTimeZone(),
-    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId
+    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId,
+    providerId: providerId ?? undefined,
   }, { signal });
 };
 
@@ -132,7 +133,8 @@ export function createUsageStatsStore(
       entries: {},
       toolEntries: {},
       toolsRequested: false,
-
+      selectedProvider: null,
+      setSelectedProvider: (provider) => set({ selectedProvider: provider }),
       load: async (request, options) => {
         const runtime = runtimeKey();
         const key = usageStatsKey(runtime, request);
@@ -217,7 +219,7 @@ export function createUsageStatsStore(
       reset: () => {
         controller.abort();
         controller = new AbortController();
-        set({ entries: {}, toolEntries: {} });
+        set({ entries: {}, toolEntries: {}, selectedProvider: null });
       },
     };
   });

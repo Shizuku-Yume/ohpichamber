@@ -1,20 +1,22 @@
 import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { QuotaProviderLogo } from '@/components/usage/QuotaProviderLogo';
+import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Icon } from "@/components/icon/Icon";
 import { cn } from '@/lib/utils';
 import { resolveUsageTone } from '@/lib/quota';
-import { useQuotaAutoRefresh, useQuotaProviders, useQuotaStore } from '@/stores/useQuotaStore';
+import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { useUsageStatsStore } from '@/components/views/usage/usageStatsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
+import type { UsageProvider } from '@openchamber/agent-contract';
 import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
 
 interface UsageSidebarProps {
   onItemSelect?: () => void;
 }
-
 const getUsagePercent = (usage: { windows?: Record<string, { usedPercent: number | null }> } | null | undefined) => {
   const windows = usage?.windows ?? {};
   const values = Object.values(windows)
@@ -26,18 +28,51 @@ const getUsagePercent = (usage: { windows?: Record<string, { usedPercent: number
   return Math.max(...values);
 };
 
+const EMPTY_PROVIDERS: readonly UsageProvider[] = [];
+
 export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const { t } = useI18n();
   const results = useQuotaStore((state) => state.results);
-  const selectedProviderId = useQuotaStore((state) => state.selectedProviderId);
-  const setSelectedProvider = useQuotaStore((state) => state.setSelectedProvider);
+  const selectedProvider = useUsageStatsStore((state) => state.selectedProvider);
+  const setSelectedProvider = useUsageStatsStore((state) => state.setSelectedProvider);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isLoading = useQuotaStore((state) => state.isLoading);
   const quotaPhase = useQuotaStore((state) => state.phase);
   const usageDisplayMode = useQuotaStore((state) => state.displayMode);
   const setUsageDisplayMode = useQuotaStore((state) => state.setDisplayMode);
-  const providers = useQuotaProviders();
+  const configProviders = useConfigStore((state) => state.providers);
+  const statsProviders = useUsageStatsStore((state) => {
+    for (const key of Object.keys(state.entries)) {
+      const providers = state.entries[key]?.stats?.providers;
+      if (providers && providers.length > 0) return providers;
+    }
+    return EMPTY_PROVIDERS;
+  });
   useQuotaAutoRefresh(true, true);
+
+  const activeProviders = React.useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ id: string; name: string; configured: boolean }> = [];
+    for (const p of configProviders) {
+      if (!seen.has(p.providerId)) {
+        seen.add(p.providerId);
+        list.push({ id: p.providerId, name: p.name || p.providerId, configured: true });
+      }
+    }
+    for (const r of results) {
+      if (r.configured && !seen.has(r.providerId)) {
+        seen.add(r.providerId);
+        list.push({ id: r.providerId, name: r.providerName || r.providerId, configured: true });
+      }
+    }
+    for (const sp of statsProviders) {
+      if (!seen.has(sp.providerId)) {
+        seen.add(sp.providerId);
+        list.push({ id: sp.providerId, name: sp.providerId, configured: true });
+      }
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name));
+  }, [configProviders, results, statsProviders]);
 
   const persistUsageSettings = React.useCallback(async (changes: { usageDisplayMode?: 'usage' | 'remaining'; usageDropdownProviders?: string[] }) => {
     try {
@@ -62,7 +97,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
       <div className="border-b px-3 pt-4 pb-3">
         <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.usage.sidebar.title')}</h2>
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('settings.usage.sidebar.total', { count: providers.length })}</span>
+          <span className="typography-meta text-muted-foreground">{t('settings.usage.sidebar.total', { count: activeProviders.length })}</span>
           <div className="flex items-center gap-2">
             <Button size="sm"
               variant="ghost"
@@ -95,15 +130,37 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
       </div>
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
-        {quotaPhase === 'unknown' && providers.length === 0 ? (
+        {/* All providers row */}
+        <div
+          className={cn(
+            'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
+            selectedProvider === null ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
+          )}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedProvider(null);
+              onItemSelect?.();
+            }}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Icon name="bar-chart-2" className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="typography-ui-label font-medium truncate flex-1 min-w-0 text-foreground">
+              {t('usageStats.providers.allProviders')}
+            </span>
+          </button>
+        </div>
+
+        {quotaPhase === 'unknown' && activeProviders.length === 0 ? (
           <p className="typography-meta px-1 text-muted-foreground">{t('settings.usage.state.unknown')}</p>
         ) : null}
-        {providers.map((provider) => {
+        {activeProviders.map((provider) => {
           const result = results.find((entry) => entry.providerId === provider.id);
           const percent = getUsagePercent(result?.usage);
           const tone = resolveUsageTone(percent);
-          const isSelected = provider.id === selectedProviderId;
-          const configured = result?.configured;
+          const isSelected = provider.id === selectedProvider;
+          const configured = result?.configured ?? provider.configured;
 
           const statusStyle = !configured
             ? { backgroundColor: 'var(--surface-muted-foreground)', opacity: 0.4 }
@@ -129,16 +186,17 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
                 }}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={statusStyle} />
-                <QuotaProviderLogo providerId={provider.id} className="h-4 w-4 flex-shrink-0" />
+                {result?.usage ? (
+                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={statusStyle} />
+                ) : (
+                  <span className="h-2.5 w-2.5 rounded-full flex-shrink-0 bg-transparent" />
+                )}
+                <ProviderLogo providerId={provider.id} alt={provider.name} className="h-4 w-4 flex-shrink-0" />
                 <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
                   {provider.name}
                 </span>
-              {configured === false && (
-                <span className="typography-micro text-muted-foreground flex-shrink-0">{t('settings.usage.sidebar.status.notSet')}</span>
-              )}
-            </button>
-          </div>
+              </button>
+            </div>
           );
         })}
       </ScrollableOverlay>

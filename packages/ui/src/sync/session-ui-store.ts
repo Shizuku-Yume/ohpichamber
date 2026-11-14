@@ -1598,9 +1598,11 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
     const pending = createChatDirectory().then(async (directory) => {
       assertSendRuntime(runtimeKey, runtimeRevision)
-      const current = get().newSessionDraft
-      if (current.open && current.target === "chat" && current.draftId === draft.draftId) {
-        set({ newSessionDraft: { ...current, preparedChatDirectory: directory } })
+      const shouldPrepare = (current.open && current.target === "chat" && current.draftId === draft.draftId) || Boolean(draftSnapshot)
+      if (shouldPrepare) {
+        if (current.open && current.target === "chat" && current.draftId === draft.draftId) {
+          set({ newSessionDraft: { ...current, preparedChatDirectory: directory } })
+        }
         const prep = canonicalClient.resolveWorkspace(directory)
           .then((ws) => canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
           .catch(() => undefined)
@@ -1608,7 +1610,6 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         await prep
         return directory
       }
-      if (draftSnapshot) return directory
       await deleteChatDirectory(directory).catch(() => undefined)
       assertSendRuntime(runtimeKey, runtimeRevision)
       return null

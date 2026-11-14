@@ -2075,6 +2075,8 @@ export const settingsDict = {
   'settings.openchamber.defaults.smallModel.useDefaultAria': 'Standaard klein model gebruiken',
   'settings.openchamber.defaults.smallModel.thinking': 'Denken',
   'settings.openchamber.defaults.walkthroughModel.title': 'Model voor wijzigingsrondleiding',
+  'settings.openchamber.defaults.walkthroughModel.useDefault': 'Standaardmodel voor wijzigingsrondleiding gebruiken',
+  'settings.openchamber.defaults.walkthroughModel.useDefaultInfo': 'Schakel dit uit om hieronder een eigen model voor de wijzigingsrondleiding te kiezen.',
   'settings.openchamber.defaults.walkthroughModel.description': 'De AI-review van uw wijzigingen vraagt gestructureerde output en ruimte voor een volledige diff, wat een goedkoop klein model vaak niet kan bieden. Modellen die de catalogus als ongeschikt voor gestructureerde output meldt, blijven verborgen in deze kiezer. Laat het veld leeg en het kleine model wordt gebruikt.',
   'settings.openchamber.defaults.walkthroughModel.usesSmallModel': 'Klein model',
   'settings.openchamber.defaults.field.openFilesPreviewAria': 'Bestanden die een preview hebben, in previewmodus openen',

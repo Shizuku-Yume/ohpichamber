@@ -440,22 +440,25 @@ describe('createAutoReviewRuntime', () => {
     const historyPages = {
       [ORIGINAL]: {
         turns: [
+          turn({ turnId: 'turn-handoff-tool', sessionId: ORIGINAL, status: 'completed', finishedAt: Date.now() + 5_000 }),
           turn({ turnId: 'turn-1', sessionId: ORIGINAL, status: 'completed', finishedAt: Date.now() + 10_000 }),
         ],
         messages: [
+          message({ turnId: 'turn-handoff-tool', sessionId: ORIGINAL, role: 'assistant', parts: [{ type: 'tool_call', partId: 'tc_h', toolCallId: 'c_h', toolName: 'read', input: { path: 'a.ts' }, status: 'completed' }] }),
           message({ turnId: 'turn-1', sessionId: ORIGINAL, role: 'assistant', parts: [{ type: 'text', partId: 'p1', content: 'Handoff done' }] }),
         ],
       },
       [REVIEW]: {
         turns: [
+          turn({ turnId: 'turn-review-tool', sessionId: REVIEW, status: 'completed', finishedAt: Date.now() + 15_000 }),
           turn({ turnId: 'turn-2', sessionId: REVIEW, status: 'completed', finishedAt: Date.now() + 20_000 }),
         ],
         messages: [
+          message({ turnId: 'turn-review-tool', sessionId: REVIEW, role: 'assistant', parts: [{ type: 'tool_call', partId: 'tc_r', toolCallId: 'c_r', toolName: 'read', input: { path: 'a.ts' }, status: 'completed' }] }),
           message({ turnId: 'turn-2', sessionId: REVIEW, role: 'assistant', parts: [{ type: 'text', partId: 'p2', content: `Looks great.\n${FINAL_MARKER_CLEAN}` }] }),
         ],
       },
     };
-
     const service = {
       request: vi.fn(async (pathname, init = {}) => {
         requests.push({ pathname, method: init.method ?? 'GET', body: init.body, headers: init.headers });
@@ -555,7 +558,7 @@ describe('createAutoReviewRuntime', () => {
     expect(commandRows[0].command_id).toBeDefined();
     db.close();
 
-    expect(ended).toHaveLength(1);
+    expect(await until(() => ended.length > 0)).toBe(true);
     expect(ended[0]).toMatchObject({ sessionId: ORIGINAL, status: 'clean' });
 
     await hostState.close();

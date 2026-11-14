@@ -121,20 +121,31 @@ export const readDispatchOutcome = (pageOrRecords, dispatchedAt, afterTurnOrIdle
     };
   }
   if (!pageOrRecords || !Array.isArray(pageOrRecords.turns) || !Array.isArray(pageOrRecords.messages)) return null;
-  const turns = pageOrRecords.turns.filter((turn) => turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled');
-  const turn = turns.find((candidate) => {
+  let candidateTurns = pageOrRecords.turns;
+  if (afterTurnOrIdleId) {
+    const baselineIndex = candidateTurns.findIndex((t) => t.turnId === afterTurnOrIdleId);
+    if (baselineIndex !== -1) {
+      candidateTurns = candidateTurns.slice(baselineIndex + 1);
+    }
+  }
+  const matchingTurns = candidateTurns.filter((candidate) => {
+    if (candidate.status !== 'completed' && candidate.status !== 'failed' && candidate.status !== 'cancelled') {
+      return false;
+    }
     if (afterTurnOrIdleId !== undefined && candidate.turnId === afterTurnOrIdleId) return false;
     return Number(candidate.finishedAt) >= dispatchedAt;
   });
-  if (!turn) return null;
-  const reply = pageOrRecords.messages.find((message) => message.turnId === turn.turnId && message.role === 'assistant');
+  if (matchingTurns.length === 0) return null;
+  const terminalTurn = matchingTurns.at(-1);
+  const turnIds = new Set(matchingTurns.map((t) => t.turnId));
+  const replies = pageOrRecords.messages.filter((message) => turnIds.has(message.turnId) && message.role === 'assistant');
+  const text = [...replies].reverse().map((message) => messageText(message)).find((content) => content.length > 0) ?? '';
   return {
-    state: OUTCOME_STATES[turn.status],
-    text: reply ? messageText(reply) : '',
-    errorMessage: typeof turn.error === 'string' ? turn.error.trim() : '',
+    state: OUTCOME_STATES[terminalTurn.status],
+    text,
+    errorMessage: typeof terminalTurn.error === 'string' ? terminalTurn.error.trim() : '',
   };
 };
-
 const outcomeBody = ({ state, text, errorMessage }, sessionId) => {
   const answer = text.length > ANSWER_CHAR_LIMIT
     ? `${text.slice(0, ANSWER_CHAR_LIMIT)}\n\n[Cut at ${ANSWER_CHAR_LIMIT} characters; read the rest with session.messages for ${sessionId}.]`

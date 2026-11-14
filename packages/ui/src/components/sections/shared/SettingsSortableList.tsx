@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
+import { SettingsDialogDragContext } from '@/components/sections/shared/settingsDialogDrag';
 
 export interface SettingsSortableListItem {
   id: string;
@@ -78,13 +79,18 @@ export const SettingsSortableList = <Item extends SettingsSortableListItem>({
   renderRow: (item: Item, index: number) => React.ReactNode;
 }) => {
   const { t } = useI18n();
+  const reportDialogDrag = React.useContext(SettingsDialogDragContext);
+  const setDragging = (dragging: boolean) => {
+    onDraggingChange?.(dragging);
+    reportDialogDrag?.(dragging);
+  };
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    onDraggingChange?.(false);
+    setDragging(false);
     if (!over || active.id === over.id) return;
     const from = items.findIndex((item) => item.id === active.id);
     const to = items.findIndex((item) => item.id === over.id);
@@ -114,8 +120,8 @@ export const SettingsSortableList = <Item extends SettingsSortableListItem>({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      onDragStart={() => onDraggingChange?.(true)}
-      onDragCancel={() => onDraggingChange?.(false)}
+      onDragStart={() => setDragging(true)}
+      onDragCancel={() => setDragging(false)}
       onDragEnd={handleDragEnd}
       accessibility={accessibility}
     >

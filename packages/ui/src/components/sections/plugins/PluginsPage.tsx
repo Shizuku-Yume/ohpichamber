@@ -110,15 +110,18 @@ const marketplaceDetailsFor = (marketplace: readonly MarketplaceEntry[], plugin:
 const CapabilityChips: React.FC<{ details: MarketplacePluginDetails | undefined }> = ({ details }) => {
   const { t } = useI18n();
   if (!details) return null;
+  const counted = CAPABILITY_KEYS.map(key => ({ key, count: capabilityCount(details[key]) })).filter(({ count }) => count > 0);
+  if (counted.length === 0) return null;
+  // A shrinkable wrapping row: a card footer with many kinds wraps them instead of running into the enable control.
   return (
-    <>
-      {CAPABILITY_KEYS.map(key => ({ key, count: capabilityCount(details[key]) })).filter(({ count }) => count > 0).map(({ key, count }) => (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {counted.map(({ key, count }) => (
         <SettingsCardChip key={key}>
           <span>{t(CAPABILITY_LABEL[key])}</span>
           <span className="tabular-nums">{count}</span>
         </SettingsCardChip>
       ))}
-    </>
+    </div>
   );
 };
 
@@ -489,6 +492,10 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     }
     return [...counts].sort(([left, leftCount], [right, rightCount]) => rightCount - leftCount || left.localeCompare(right));
   }, [catalog]);
+  // A category the catalog no longer has would filter out every plugin and hide the chip row that holds the reset, so it is cleared.
+  React.useEffect(() => {
+    if (marketplaceCategory !== null && !marketplaceCategories.some(([category]) => category === marketplaceCategory)) setMarketplaceCategory(null);
+  }, [marketplaceCategories, marketplaceCategory]);
   // A marketplace entry is installed only in the scope it was installed into:
   // the same plugin can be installed globally and again for one project.
   const installedMarketplaceKeys = React.useMemo(() => new Set((catalog?.plugins ?? []).flatMap(entry => (

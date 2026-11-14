@@ -2,12 +2,15 @@ import React from 'react';
 import { Dialog } from '@base-ui/react/dialog';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
+import { SettingsDialogDragContext } from '@/components/sections/shared/settingsDialogDrag';
 import { SettingsView } from './SettingsView';
 
 interface SettingsWindowProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+const KEYBOARD_DRAG_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
 
 /**
  * Settings rendered as a centered window with blurred backdrop.
@@ -17,6 +20,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChan
   const { t } = useI18n();
   const descriptionId = React.useId();
   const popupRef = React.useRef<HTMLDivElement>(null);
+  // A row dragged from the keyboard keeps the arrow keys and Escape (see SettingsDialogDragContext).
+  const draggingRef = React.useRef(false);
+  const reportDragging = React.useCallback((dragging: boolean) => { draggingRef.current = dragging; }, []);
   const focusSettingsSearch = React.useCallback(() => {
     const popup = popupRef.current;
     return popup?.querySelector<HTMLElement>('[data-settings-search]') ?? popup ?? true;
@@ -35,7 +41,14 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChan
   return (
     <Dialog.Root
       open={open}
-      onOpenChange={(next) => {
+      onOpenChange={(next, details) => {
+        // Escape ends a keyboard drag and leaves Settings open; dnd-kit reads the same key.
+        if (!next && details.reason === 'escape-key' && draggingRef.current) {
+          details.cancel();
+          details.allowPropagation();
+          return;
+        }
+        draggingRef.current = false;
         if (!next && hasOpenFloatingMenu()) return;
         onOpenChange(next);
       }}
@@ -51,6 +64,10 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChan
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
           <Dialog.Popup
             ref={popupRef}
+            onKeyDown={(event) => {
+              // Base UI stops arrow keys at the popup; dnd-kit listens on the document.
+              if (draggingRef.current && KEYBOARD_DRAG_KEYS.includes(event.key)) event.preventBaseUIHandler();
+            }}
             aria-describedby={descriptionId}
             // Open straight into the settings search, so typing filters at
             // once; the window itself if the field is not there.
@@ -71,7 +88,9 @@ export const SettingsWindow: React.FC<SettingsWindowProps> = ({ open, onOpenChan
             <Dialog.Description id={descriptionId} className="sr-only">
               {t('settings.window.description')}
             </Dialog.Description>
-            <SettingsView onClose={() => onOpenChange(false)} isWindowed />
+            <SettingsDialogDragContext.Provider value={reportDragging}>
+              <SettingsView onClose={() => onOpenChange(false)} isWindowed />
+            </SettingsDialogDragContext.Provider>
           </Dialog.Popup>
         </div>
       </Dialog.Portal>

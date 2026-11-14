@@ -74,7 +74,7 @@ test('reads surface, owner and condition from the pinned definitions', async () 
     // The page needs the file it hides settings from, not a second renderer.
     expect(state.configPath).toBe(join(f.agentDirectory, 'config.yml'));
     const byId = new Map(state.settings.map(setting => [setting.id, setting]));
-    expect(byId.get('compaction.thresholdPercent')).toMatchObject({ placement: { type: 'engine' } });
+    expect(byId.get('compaction.thresholdPercent')).toMatchObject({ placement: { type: 'page', page: 'sessions', section: 'compaction' } });
     expect(byId.has('enabledModels')).toBe(false);
     expect(byId.has('tui.renderMermaid')).toBe(false);
     expect(byId.get('tools.artifactTailLines')).toMatchObject({ placement: { type: 'engine' } });
@@ -121,7 +121,7 @@ test('an unknown condition name keeps the row visible', async () => {
   const f = await fixture();
   try {
     expect(presentOmpSetting('compaction.enabled', 'someClosedSourceCondition', f.settings)).toEqual({
-      placement: { type: 'engine' }, condition: 'someClosedSourceCondition', conditionActive: true,
+      placement: { type: 'page', page: 'sessions', section: 'compaction' }, condition: 'someClosedSourceCondition', conditionActive: true,
     });
   } finally { await f.close(); }
 });
@@ -136,14 +136,14 @@ test('every engine placement carries OMP label and description from the pinned r
 });
 
 test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page placements are not', () => {
-  for (const id of ['skills.registryUrl', 'plan.autosaveDir', 'tui.renderSvg', 'steeringMode', 'collab.relayUrl']) {
+  for (const id of ['skills.registryUrl', 'plan.autosaveDir', 'tui.renderSvg', 'stt.enabled', 'collab.relayUrl']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
   }
   // Record/Array engine settings with no generic choices cannot be edited via GUI controls and stay in config.yml
-  for (const id of ['tools.approval', 'retry.fallbackChains', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools']) {
+  for (const id of ['tools.approval', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
   }
-  for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles']) {
+  for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles', 'steeringMode', 'plan.enabled', 'goal.enabled', 'retry.fallbackChains']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
   }
 });

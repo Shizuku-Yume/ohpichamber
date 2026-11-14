@@ -104,7 +104,7 @@ test('writes engine settings and refuses settings no GUI owner writes', async ()
       changes: [{ id: 'tools.artifactSpillThreshold', value: 80 }],
     });
     expect(written.settings.find(s => s.id === 'tools.artifactSpillThreshold')).toMatchObject({ value: 80, configured: true });
-    for (const change of [{ id: 'steeringMode', value: 'all' }, { id: 'tui.renderSvg', value: false }, { id: 'composer.predictions', value: true }, { id: 'skills.registryUrl', value: 'https://skills.example' }]) {
+    for (const change of [{ id: 'stt.enabled', value: true }, { id: 'tui.renderSvg', value: false }, { id: 'composer.predictions', value: true }, { id: 'skills.registryUrl', value: 'https://skills.example' }]) {
       await expect(f.native.write('workspace_1', '1', { expectedRevision: read.revision, changes: [change] }), change.id)
         .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
     }

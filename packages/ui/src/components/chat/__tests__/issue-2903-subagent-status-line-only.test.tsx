@@ -33,7 +33,7 @@ mock.module('@/stores/permissionStore', () => ({
 mock.module('@/stores/useConfigStore', () => ({
   markConfigCatalogStale: () => undefined,
   useConfigStore: {
-    getState: () => ({ isConnected: true, hasEverConnected: true, settingsMessageStreamTransport: 'auto' }),
+    getState: () => ({ isConnected: true, hasEverConnected: true }),
     setState: () => undefined,
   },
 }));
@@ -55,7 +55,7 @@ const installMinimalDom = () => {
     descriptors.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
     Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
   };
-  class ElementStub {}
+  class ElementStub { }
   const documentStub: Record<string, unknown> = {
     nodeType: 9,
     defaultView: globalThis,

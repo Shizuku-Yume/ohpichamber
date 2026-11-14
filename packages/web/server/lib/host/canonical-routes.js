@@ -27,7 +27,7 @@ const WorkspaceResolveRequestSchema = z.strictObject({ directory: z.string().min
 // Only SDK-owned operations appear here. Host session admission, metadata and delivery have their own routers.
 const AGENT_ROUTES = [
  ...FILE_RESOURCE_AGENT_ROUTES,
- { method: 'GET', pattern: /^\/usage$/, response: C.UsageStatsSchema, query: ['from', 'to', 'timezone', 'workspaceId', 'projectId'], usage: true },
+ { method: 'GET', pattern: /^\/usage$/, response: C.UsageStatsSchema, query: ['from', 'to', 'timezone', 'workspaceId', 'projectId', 'providerId'], usage: true },
  { method: 'GET', pattern: /^\/usage\/tools$/, response: C.UsageToolsResponseSchema, query: ['from', 'to', 'timezone', 'workspaceId', 'projectId'], usage: true },
  { method: 'GET', pattern: /^\/subagents$/, response: z.array(C.SubagentSchema), query: ['sessionId'], subagent: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/models$/, response: C.ModelCatalogSchema },

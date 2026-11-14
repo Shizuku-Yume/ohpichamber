@@ -98,7 +98,13 @@ test('loads an older quote source before scrolling to it', async () => {
         expect(events).toEqual(['load:older-message', 'scroll:older-message']);
         await frame();
         expect(highlights.size).toBe(0);
-        for (let index = 0; index < 15; index += 1) await frame();
+        // Frame retry keeps polling while the row mounts
+        expect(frames.size).toBe(1);
+        for (let index = 0; index < 15; index += 1) {
+            expect(frames.size).toBe(1);
+            await frame();
+        }
+        expect(frames.size).toBe(1);
         // Expansion and lazy Markdown can commit after the first scroll frame.
         scrollNode.innerHTML = '<div data-message-id="older-message"><div data-chat-quote-root><p>Earlier <strong>quoted</strong> text here.</p></div></div>';
         await act(async () => { await dom.happyDOM.waitUntilComplete(); });

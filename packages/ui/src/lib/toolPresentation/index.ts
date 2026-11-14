@@ -14,6 +14,8 @@ export {
     TOOL_ONE_LINE_DESCRIPTIONS,
     type ToolPermissionGroupKey,
 } from './groups';
+export { useEvalView, splitEvalOutput, evalResultSummary, normalizeEvalLanguage, isToolCallStatusEvent } from './toolView';
+export type { EvalLanguage, EvalTableColumn, EvalView, EvalViewEntry, EvalStatusEvent, EvalCellView, EvalViewData, EvalOutputPart } from './toolView';
 
 /** A runtime row's name may carry a stream index and a `runtime.` prefix. */
 export const toolBaseName = (toolName: string | undefined): string => {
@@ -138,8 +140,11 @@ export const isFileChangeTool = (toolName: string | undefined): boolean => {
 /** A tool that runs a command or program. */
 export const isShellTool = (toolName: string | undefined): boolean => {
     const name = toolBaseName(toolName);
-    return name === 'bash' || name === 'eval';
+    return name === 'bash';
 };
+
+/** A tool that evaluates code interactively. */
+export const isEvalTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'eval';
 
 /** A tool whose result is reading or searching the workspace. */
 export const isExplorationTool = (toolName: string | undefined): boolean => toolGrouping(toolName) === 'read' || toolGrouping(toolName) === 'search';

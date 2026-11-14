@@ -3,8 +3,9 @@
 ## Purpose
 This module fetches quota, credit, and usage signals for supported model providers in the web server runtime.
 
-Node server entrypoints apply `../network-defaults.js` before serving requests, including the daemon launched through `server/index.js`. Connection attempts receive 5 seconds without changing address-family selection.
+In the Settings Usage page, quota information is consumed as provider-specific quota cards only for configured providers that have active quota metrics. The overarching token analytics, costs, TTFT, tok/s, and error rates are provided by the Agent Service OMP statistics endpoint (`GET /api/agent/v1/usage`), while this module supplies the remaining provider quota windows and balances.
 
+Node server entrypoints apply `../network-defaults.js` before serving requests, including the daemon launched through `server/index.js`. Connection attempts receive 5 seconds without changing address-family selection.
 ## Entrypoints and structure
 - `packages/web/server/lib/quota/index.js`: public entrypoint re-exporting the dispatcher and provider fetchers.
 - `packages/web/server/lib/quota/routes.js`: Express route registration for quota endpoints (`registerQuotaRoutes`).

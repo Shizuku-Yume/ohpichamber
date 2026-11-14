@@ -11,6 +11,8 @@ if (!globalThis.window) {
     document: dom.document,
     navigator: dom.navigator,
     HTMLElement: dom.HTMLElement,
+    HTMLInputElement: dom.HTMLInputElement,
+    HTMLButtonElement: dom.HTMLButtonElement,
     Element: dom.Element,
     Node: dom.Node,
     Event: dom.Event,

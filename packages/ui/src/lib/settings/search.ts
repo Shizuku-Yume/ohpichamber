@@ -1,5 +1,4 @@
 import type { I18nKey } from '@/lib/i18n/store';
-import { useUIStore } from '@/stores/useUIStore';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
 import { getCustomizableShortcutActions } from '@/lib/shortcuts';
@@ -386,12 +385,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.appLinks.title',
     descriptionKey: 'settings.openchamber.appLinks.info',
     keywords: ['security', 'app link', 'deep link', 'scheme', 'protocol', 'obsidian', 'notion'],
-  },
-  {
-    id: 'chat.message-transport',
-    page: 'general',
-    titleKey: 'settings.openchamber.visual.section.messageStreamTransport',
-    keywords: ['streaming', 'sse', 'websocket'],
   },
   {
     id: 'chat.session-recap',
@@ -1027,12 +1020,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'projects',
     titleKey: 'settings.projects.page.field.projectName',
     keywords: ['label', 'display name', 'project metadata'],
-  },
-  {
-    id: 'projects.default-agent',
-    page: 'projects',
-    titleKey: 'settings.projects.page.field.projectAgent',
-    keywords: ['agent', 'default', 'new chat', 'project metadata'],
   },
   {
     id: 'projects.default-model',

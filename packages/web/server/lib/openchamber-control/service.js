@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
-import { asNonEmptyString } from '../shared/guards.js';
+import { asNonEmptyString, isBoolean } from '../shared/guards.js';
 import { OpenChamberControlError, asControlError } from './error.js';
 import {
  OPENCHAMBER_ALL_ACTIONS,

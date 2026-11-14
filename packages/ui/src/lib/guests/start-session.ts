@@ -27,7 +27,6 @@ import { normalizePath } from '@/lib/pathNormalization';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import * as sessionActions from '@/sync/session-actions';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -37,15 +36,15 @@ type TranslateFn = (key: I18nKey, params?: I18nParams) => string;
 type StartGuestSessionPlan =
   | { ok: false; reason: 'no-directory' }
   | {
-      ok: true;
-      directory: string;
-      title: string;
-      worktree: boolean;
-      branchName: string;
-      kind: 'pr' | 'standard';
-      linked: LinkedGuestIssue;
-      text?: string;
-    };
+    ok: true;
+    directory: string;
+    title: string;
+    worktree: boolean;
+    branchName: string;
+    kind: 'pr' | 'standard';
+    linked: LinkedGuestIssue;
+    text?: string;
+  };
 
 export const guestSessionTitle = (request: StartSessionRequest): string => (
   `${request.id} ${request.title}`.trim()
@@ -133,17 +132,6 @@ export const runStartGuestSession = async (
   return { ok: true, sessionId: created.id, sent };
 };
 
-const resolveDefaultAgentName = (): string | undefined => {
-  const configState = useConfigStore.getState();
-  if (configState.settingsDefaultAgent) {
-    return configState.settingsDefaultAgent;
-  }
-  const agents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
-  return (
-    configState.currentAgentName
-    || agents[0]?.agentId
-  );
-};
 
 const resolveDefaultModelSelection = (): { providerId: string; modelId: string } | null => {
   const parsed = parseModelSelector(useConfigStore.getState().settingsDefaultModel);
@@ -174,11 +162,10 @@ const _captureGuestSendSelection = () => {
   const defaultModel = resolveDefaultModelSelection();
   const providerId = defaultModel?.providerId || configState.currentProviderId || lastUsedProvider?.providerID;
   const modelId = defaultModel?.modelId || configState.currentModelId || lastUsedProvider?.modelID;
-  const agentName = resolveDefaultAgentName() || configState.currentAgentName || undefined;
   if (!providerId || !modelId) {
     return null;
   }
-  return { providerId, modelId, agentName, variant: resolveDefaultVariant(providerId, modelId) };
+  return { providerId, modelId, variant: resolveDefaultVariant(providerId, modelId) };
 };
 
 const sendGuestFirstMessage = async (
@@ -193,7 +180,7 @@ const sendGuestFirstMessage = async (
       text,
       selection.providerID,
       selection.modelID,
-      selection.agentName,
+      null,
       undefined,
       undefined,
       undefined,
@@ -383,8 +370,10 @@ export const startGuestSession = async (args: {
   const worktreeResult = (): GuestWorktree | undefined => {
     if (!metadata) return undefined;
     const latest = project ? guestProjectWorktrees(project.path).find((entry) => entry.path === metadata?.path) ?? metadata : metadata;
-    return { directory: latest.path, name: latest.name ?? latest.label, branch: latest.branch,
-      status: latest.worktreeStatus === 'not-a-repo' ? 'invalid' : latest.worktreeStatus ?? 'ready' };
+    return {
+      directory: latest.path, name: latest.name ?? latest.label, branch: latest.branch,
+      status: latest.worktreeStatus === 'not-a-repo' ? 'invalid' : latest.worktreeStatus ?? 'ready'
+    };
   };
   const createTargetSession = async (title: string, requestedDirectory: string): Promise<CreatedSession | null> => {
     let directory = requestedDirectory;
@@ -408,10 +397,9 @@ export const startGuestSession = async (args: {
       undefined,
       sendSelection
         ? {
-            model: { providerId: sendSelection.providerID, modelId: sendSelection.modelID },
-            agent: sendSelection.agentName,
-            variant: sendSelection.variant,
-          }
+          model: { providerId: sendSelection.providerID, modelId: sendSelection.modelID },
+          variant: sendSelection.variant,
+        }
         : undefined,
       navigation,
     );

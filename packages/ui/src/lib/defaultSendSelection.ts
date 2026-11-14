@@ -8,13 +8,6 @@ import { useSelectionStore } from '@/sync/selection-store';
  * where no composer is involved, such as an extension starting a session or the
  * Memory panel's tidy-up.
  */
-const resolveDefaultAgentName = (): string | undefined => {
-  const configState = useConfigStore.getState();
-  if (configState.settingsDefaultAgent) {
-    return configState.settingsDefaultAgent;
-  }
-  return configState.currentAgentName ?? undefined;
-};
 
 const resolveDefaultModelSelection = (): { providerID: string; modelID: string } | null => {
   const parsed = parseModelSelector(useConfigStore.getState().settingsDefaultModel);
@@ -55,9 +48,8 @@ export const captureDefaultSendSelection = () => {
   const defaultModel = resolveDefaultModelSelection();
   const providerID = defaultModel?.providerID || configState.currentProviderId || lastUsedProvider?.providerID;
   const modelID = defaultModel?.modelID || configState.currentModelId || lastUsedProvider?.modelID;
-  const agentName = resolveDefaultAgentName() || configState.currentAgentName || undefined;
   if (!providerID || !modelID) {
     return null;
   }
-  return { providerID, modelID, agentName, variant: resolveDefaultVariant(providerID, modelID) };
+  return { providerID, modelID, variant: resolveDefaultVariant(providerID, modelID) };
 };

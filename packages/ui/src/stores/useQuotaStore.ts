@@ -69,7 +69,6 @@ interface QuotaStore extends QuotaSettingsState {
   loadedWorkspaceId: string | null;
   /** Logical quota provider id by native provider id, as returned by the Host. */
   nativeToLogical: Record<string, string>;
-  selectedProviderId: QuotaProviderId | null;
   isLoading: boolean;
   isFetchingProvider: Record<string, boolean>;
   lastUpdated: number | null;
@@ -85,7 +84,6 @@ interface QuotaStore extends QuotaSettingsState {
   fetchQuotas: (providerIds: QuotaProviderId[], options?: { invalidate?: boolean }) => Promise<boolean>;
   /** Resolves true when the instance answered, false on a transport failure. */
   fetchProviderQuota: (providerId: QuotaProviderId, invalidate?: boolean) => Promise<boolean>;
-  setSelectedProvider: (providerId: QuotaProviderId | null) => void;
   setDisplayMode: (mode: 'usage' | 'remaining') => void;
   /** Shows or hides one provider in the "show in Work Status" list; answers the list to save. */
   setProviderInDropdown: (providerId: QuotaProviderId, shown: boolean) => string[];
@@ -173,7 +171,6 @@ const applyExtensionProviders = (next: ExtensionQuotaProvider[]): void => {
       dropdownProviderIds: resolveDropdownProviderIds(current.savedDropdownProviderIds, quotaProviderIds(next)),
       results: gone.length > 0 ? current.results.filter((result) => !isGone(result.providerId)) : current.results,
       refreshErrors,
-      selectedProviderId: current.selectedProviderId !== null && isGone(current.selectedProviderId) ? null : current.selectedProviderId,
       isFetchingProvider: Object.fromEntries(Object.entries(current.isFetchingProvider).filter(([id]) => !isGone(id))),
       isLoading: quotaRequests.size > 0,
     };
@@ -227,7 +224,6 @@ export const useQuotaStore = create<QuotaStore>()(
       loadedRuntimeKey: null,
       loadedWorkspaceId: null,
       nativeToLogical: {},
-      selectedProviderId: null,
       isLoading: false,
       isFetchingProvider: {},
       lastUpdated: null,
@@ -458,7 +454,6 @@ export const useQuotaStore = create<QuotaStore>()(
           loadedRuntimeKey: null,
           loadedWorkspaceId: null,
           nativeToLogical: {},
-          selectedProviderId: null,
           isLoading: false,
           isFetchingProvider: {},
           lastUpdated: null,
@@ -484,7 +479,6 @@ export const useQuotaStore = create<QuotaStore>()(
         await get().ensureLoadedForRuntime({ refresh: true, allProviders: [...quotaAutoRefreshConsumers.values()].some(Boolean), visibleOnly: true });
       },
 
-      setSelectedProvider: (providerId) => set({ selectedProviderId: providerId }),
       setDisplayMode: (mode) => set({ displayMode: mode }),
       setProviderInDropdown: (providerId, shown) => {
         const { savedDropdownProviderIds, dropdownProviderIds, extensionProviders } = get();

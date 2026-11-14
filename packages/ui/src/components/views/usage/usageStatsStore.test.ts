@@ -19,6 +19,7 @@ const report = (prompts: number): UsageStats => ({
   activeDays: 1,
   streak: 1,
   activity: [],
+  providers: [],
   models: [],
   partial: false,
 });
@@ -197,6 +198,59 @@ describe('tool calls on request', () => {
     ctx.pendingTools[1].resolve(toolCalls(2));
     await Promise.resolve();
     expect(tools(ctx, A)?.tools).toEqual(toolCalls(2));
+  });
+
+  test('windowMoved race guard rejects tools for an obsolete window and re-fetches for the new window', async () => {
+    const ctx = setup();
+    const window1 = { from: 100, to: 200 };
+    const window2 = { from: 200, to: 300 };
+    await loaded(ctx, A, { ...report(3), range: window1 });
+
+    const toolsPromise = ctx.store.getState().loadTools(A);
+    expect(ctx.pendingTools).toHaveLength(1);
+    expect(ctx.pendingTools[0].window).toEqual(window1);
+
+    const key = usageStatsKey('runtime-a', A);
+    ctx.store.setState({
+      entries: {
+        ...ctx.store.getState().entries,
+        [key]: { ...ctx.store.getState().entries[key], stats: { ...report(5), range: window2 } },
+      },
+    });
+
+    ctx.pendingTools[0].resolve(toolCalls(9));
+    await toolsPromise;
+
+    expect(tools(ctx, A)?.tools).not.toEqual(toolCalls(9));
+    expect(ctx.pendingTools).toHaveLength(2);
+    expect(ctx.pendingTools[1].window).toEqual(window2);
+
+    ctx.pendingTools[1].resolve(toolCalls(15));
+    await Promise.resolve();
+    expect(tools(ctx, A)?.tools).toEqual(toolCalls(15));
+  });
+
+  test('windowMoved race guard on failure re-fetches tools for the new window instead of latching error', async () => {
+    const ctx = setup();
+    const window1 = { from: 100, to: 200 };
+    const window2 = { from: 200, to: 300 };
+    await loaded(ctx, A, { ...report(3), range: window1 });
+
+    const toolsPromise = ctx.store.getState().loadTools(A);
+    const key = usageStatsKey('runtime-a', A);
+    ctx.store.setState({
+      entries: {
+        ...ctx.store.getState().entries,
+        [key]: { ...ctx.store.getState().entries[key], stats: { ...report(5), range: window2 } },
+      },
+    });
+
+    ctx.pendingTools[0].reject(new Error('old window failure'));
+    await toolsPromise;
+
+    expect(tools(ctx, A)?.error).toBeNull();
+    expect(ctx.pendingTools).toHaveLength(2);
+    expect(ctx.pendingTools[1].window).toEqual(window2);
   });
 });
 

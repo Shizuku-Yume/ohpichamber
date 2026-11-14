@@ -1026,7 +1026,6 @@ interface UIStore {
  chatRenderMode: 'live' | 'sorted';
  persistChatDraft: boolean;
  sessionWorkAutoOpen: boolean;
- sessionWorkKeepInGroup: boolean;
  streamingAutoFollowEnabled: boolean;
  sessionRecapEnabled: boolean;
  suggestionGenerator: 'session' | 'small' | 'off';
@@ -1170,8 +1169,6 @@ interface UIStore {
  sessionGoalMaxAutoTurns: number;
  /** How new top-level sessions answer tool permissions. */
  permissionDefaultMode: PermissionMode;
- /** Start a new session on the model the picked agent pins. */
- autoApplyAgentModel: boolean;
  /** Keep the subagent task tool available while Plan mode is active. */
  planModeAllowAgents: boolean;
  agentWorkflowToolEnabled: boolean;
@@ -1327,7 +1324,6 @@ interface UIStore {
  setRuntimeStatusDialogOpen: (open: boolean) => void;
  setRuntimeStatusText: (text: string) => void;
  setSessionWorkAutoOpen: (value: boolean) => void;
- setSessionWorkKeepInGroup: (value: boolean) => void;
  setOpenCodeStatusDialogOpen: (open: boolean) => void;
  setOpenCodeStatusText: (text: string) => void;
  setScheduledTasksDialogOpen: (open: boolean) => void;
@@ -1464,7 +1460,6 @@ interface UIStore {
  setSessionGoalChecker: (value: SessionGoalChecker) => void;
  setSessionGoalMaxAutoTurns: (value: number) => void;
  setPermissionDefaultMode: (value: PermissionMode) => void;
- setAutoApplyAgentModel: (value: boolean) => void;
  setPlanModeAllowAgents: (value: boolean) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
@@ -1609,7 +1604,6 @@ export const useUIStore = create<UIStore>()(
     chatRenderMode: 'live',
     persistChatDraft: true,
     sessionWorkAutoOpen: true,
-    sessionWorkKeepInGroup: false,
     streamingAutoFollowEnabled: true,
     sessionRecapEnabled: true,
     suggestionGenerator: 'session',
@@ -1708,7 +1702,6 @@ export const useUIStore = create<UIStore>()(
     sessionGoalChecker: 'classifier',
     sessionGoalMaxAutoTurns: DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS,
     permissionDefaultMode: 'ask',
-    autoApplyAgentModel: false,
     planModeAllowAgents: false,
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
@@ -2539,10 +2532,6 @@ export const useUIStore = create<UIStore>()(
      set({ sessionWorkAutoOpen: value });
     },
 
-    setSessionWorkKeepInGroup: (value) => {
-     set({ sessionWorkKeepInGroup: value });
-    },
-
 
     setOpenCodeStatusDialogOpen: (open) => {
      set({ isOpenCodeStatusDialogOpen: open });
@@ -3294,10 +3283,6 @@ export const useUIStore = create<UIStore>()(
 
     setPermissionDefaultMode: (value) => {
      set({ permissionDefaultMode: value });
-    },
-
-    setAutoApplyAgentModel: (value) => {
-     set({ autoApplyAgentModel: value });
     },
 
     setPlanModeAllowAgents: (value) => {

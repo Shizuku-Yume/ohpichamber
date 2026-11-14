@@ -121,18 +121,7 @@ let isCreatingWorktreeSession = false;
 const applyDefaultAgentAndModelSelection = (sessionId: string, configState = useConfigStore.getState()) => {
   try {
     const visibleAgents = selectAgentsForDirectory(useAgentsStore.getState(), configState.activeDirectoryKey);
-    let agentName: string | undefined;
-
-    if (configState.settingsDefaultAgent) {
-      const settingsAgent = visibleAgents.find((a) => a.agentId === configState.settingsDefaultAgent);
-      if (settingsAgent) {
-        agentName = settingsAgent.agentId;
-      }
-    }
-
-    if (!agentName) {
-      agentName = visibleAgents[0]?.agentId;
-    }
+    const agentName = visibleAgents[0]?.agentId;
 
     if (!agentName) {
       return;

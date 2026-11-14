@@ -177,7 +177,7 @@ describe('ModelControls native selection and effort restore', () => {
       directoryScoped: { [DIRECTORY]: { providers: [provider], models: [], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID, currentVariant: undefined, currentVariantSelection: { override: undefined, inherited: undefined }, currentAgentName: AGENT_ID, selectedProviderId: PROVIDER_ID, agentModelSelections: {}, defaultProviders: {}, selectionSource: 'auto', agentSelectionSource: 'auto' } },
       currentAgentName: AGENT_ID, currentVariant: undefined,
       currentVariantSelection: { override: undefined, inherited: undefined },
-      settingsDefaultAgent: undefined, settingsDefaultModel: undefined, agentModelSelections: {}, defaultProviders: {},
+      settingsDefaultModel: undefined, agentModelSelections: {}, defaultProviders: {},
       selectionSource: 'auto', agentSelectionSource: 'auto', lastDisconnectReason: null,
     });
     setRoster([agent, planAgent, reviewAgent]);

@@ -18,7 +18,6 @@
 
 The usage UI tests must show: a native and a logical quota id merge into one row; model-only quotas and configured-provider errors still show; TTFT, tok/s and error rate appear in a single-provider view. All of these tests exit 0.
 **Base commit:** 81e48cd715c2525dad96b3bd360a370063ac5f67
-**Status:** active
 
 Real path (Web, isolated `HOME` seeded with TUI and app sessions): per-provider views show performance metrics, a configured custom model shows its cost, and a project filter changes the totals. Screenshots go in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task22/`.
 

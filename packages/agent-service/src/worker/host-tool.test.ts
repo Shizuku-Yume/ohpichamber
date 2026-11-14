@@ -27,6 +27,32 @@ describe('HostActionRequestSchema', () => {
     }
   });
 
+  test('parses pr.watch and pr.unwatch in the host action schema under openchamber', () => {
+    const parsedWatch = HostActionRequestSchema.safeParse({
+      sessionId: 'session-123',
+      toolName: 'openchamber',
+      action: 'pr.watch',
+      input: { url: 'https://github.com/acme/app/pull/1' },
+    });
+    expect(parsedWatch.success).toBe(true);
+    if (parsedWatch.success) {
+      expect(parsedWatch.data.toolName).toBe('openchamber');
+      expect(parsedWatch.data.action).toBe('pr.watch');
+    }
+
+    const parsedUnwatch = HostActionRequestSchema.safeParse({
+      sessionId: 'session-123',
+      toolName: 'openchamber',
+      action: 'pr.unwatch',
+      input: {},
+    });
+    expect(parsedUnwatch.success).toBe(true);
+    if (parsedUnwatch.success) {
+      expect(parsedUnwatch.data.toolName).toBe('openchamber');
+      expect(parsedUnwatch.data.action).toBe('pr.unwatch');
+    }
+  });
+
   test('rejects deleted openchamber_image and memory tools', () => {
     expect(HostActionRequestSchema.safeParse({
       sessionId: 'session-123',

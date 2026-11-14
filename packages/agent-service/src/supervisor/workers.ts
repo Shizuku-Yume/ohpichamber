@@ -801,6 +801,15 @@ export class WorkerRegistry {
       return entry ? this.stopEntry(entry) : true;
     });
   }
+  async stopGeneration(rootSessionId: string, expectedGeneration: string): Promise<boolean> {
+    return this.withRoot(rootSessionId, async () => {
+      const entry = this.workerEntries.get(rootSessionId);
+      if (!entry || entry.info.workerGeneration !== expectedGeneration) return true;
+      if (this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The restart of this session is already reserved');
+      return this.stopEntry(entry);
+    });
+  }
   async withStoppedRoot<T>(rootSessionId: string, operation: () => Promise<T>): Promise<T> {
     return this.withRoot(rootSessionId, async () => {
       if (this.closing || this.workerEntries.has(rootSessionId) || this.restartReservations.has(rootSessionId))

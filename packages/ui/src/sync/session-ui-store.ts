@@ -1594,6 +1594,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       const current = get().newSessionDraft
       if (current.open && current.target === "chat" && current.draftId === draft.draftId) {
         set({ newSessionDraft: { ...current, preparedChatDirectory: directory } })
+        void canonicalClient.resolveWorkspace(directory)
+          .then((ws) => canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
+          .catch(() => undefined)
         return directory
       }
       if (draftSnapshot) return directory
@@ -1615,7 +1618,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     if (currentDraft.preparedChatDirectory) {
       void deleteChatDirectory(currentDraft.preparedChatDirectory).catch(() => undefined)
     }
-    const dir = currentDraft.directoryOverride ?? useDirectoryStore.getState().currentDirectory
+    const dir = currentDraft.preparedChatDirectory ?? currentDraft.directoryOverride ?? useDirectoryStore.getState().currentDirectory
     if (dir) {
       void canonicalClient.resolveWorkspace(dir)
         .then((ws) => canonicalClient.discardPreparedSession({ workspaceId: ws.workspaceId }))

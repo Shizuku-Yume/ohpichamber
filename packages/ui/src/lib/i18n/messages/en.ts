@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2556,7 +2557,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "Density & type",
   "settings.openchamber.visual.section.appInstall": "App install",
   "settings.openchamber.visual.section.chatFeatures": "Features",
-  "settings.openchamber.visual.section.messageStreamTransport": "Message stream transport",
   "settings.openchamber.visual.section.activityDefault": "Activity default",
   "settings.openchamber.visual.section.activityDefaultAria": "Activity default mode",
   "settings.openchamber.visual.section.sessionActivity": "Session activity",
@@ -2783,12 +2783,6 @@ export const dict = {
   "chat.message.userText.showMore": "Show more",
   "chat.message.userText.promptedBy": "From session {title}",
   "chat.message.userText.promptedByUnknown": "From another session",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "Auto",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "Prefer WebSocket and fall back to SSE if needed.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "Use WebSocket for message streaming.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "Use Server-Sent Events for message streaming.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "Collapsed",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "Keep Activity collapsed by default.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "Expanded",
@@ -9069,7 +9063,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Inherits the native default tool set.",
   "settings.agents.page.field.allowedToolsEdit": "Edit tools",
   "settings.agents.page.field.allowedToolsUseDefault": "Use native defaults",
-  "settings.agents.page.field.permissionPreset": "Permission preset ID",
   "settings.gitIdentities.editor.description.newProfile": "Create a new Git identity profile",
   "settings.gitIdentities.editor.description.editProfile": "Edit identity profile settings",
   "settings.openchamber.mergedWorktreeCleanup.title": "After a PR is merged",
@@ -9462,6 +9455,7 @@ export const dict = {
   ...tooltipsPanelI18n['en'],
   ...tooltipsChatI18n['en'],
   ...workerRunsI18n.en,
+    ...agentToolPermissionsI18n["en"],
   "gitIdentities.state.unknown": "Git identities have not loaded yet.",
   "settings.usage.state.unknown": "Usage has not loaded yet.",
   "settings.usage.state.error": "Failed to load usage.",

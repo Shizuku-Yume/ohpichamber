@@ -151,8 +151,10 @@ beforeEach(async () => {
   spyOn(trustConfirmation, "resolveWorktreeSetupCommands").mockResolvedValue([])
   spyOn(worktreeCreate, "createWorktreeWithDefaults").mockImplementation(async project => {
     createdWorktreeProjects.push(project)
-    return { source: "sdk", name: "generated-branch", path: "/worktrees/generated-branch",
-      projectDirectory: project.path, branch: "generated-branch", label: "generated-branch" }
+    return {
+      source: "sdk", name: "generated-branch", path: "/worktrees/generated-branch",
+      projectDirectory: project.path, branch: "generated-branch", label: "generated-branch"
+    }
   })
 })
 
@@ -379,7 +381,6 @@ describe("issue 2039 draft auto-accept", () => {
 
     expect(activateDirectoryCalls).toEqual(["/repo"])
     expect(applyDefaultModelAgentSelectionCalls.at(-1)).toEqual({
-      projectDefaultAgent: "agent-project",
       projectDefaultModel: "model-project",
       projectDefaultVariant: "variant-project",
     })
@@ -388,7 +389,7 @@ describe("issue 2039 draft auto-accept", () => {
   test("late activation preserves a manual pick and same-project worktree refinements", async () => {
     let finish!: () => void
     activationPending = new Promise<void>((resolve) => { finish = resolve })
-    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo', defaultAgent: 'build' }] })
+    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo' }] })
     useSessionUIStore.getState().openNewSessionDraft({ target: 'project', selectedProjectId: 'project-1', directoryOverride: '/repo' })
     expect(applyDefaultModelAgentSelectionCalls).toHaveLength(1)
     useConfigStore.setState({ selectionSource: 'manual' })
@@ -401,7 +402,7 @@ describe("issue 2039 draft auto-accept", () => {
   test("late project activation cannot replace a newer draft target or a closed draft", async () => {
     let finish!: () => void
     activationPending = new Promise<void>((resolve) => { finish = resolve })
-    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo', defaultAgent: 'project-agent' }] })
+    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo' }] })
     useSessionUIStore.getState().openNewSessionDraft({ target: 'project', selectedProjectId: 'project-1', directoryOverride: '/repo' })
     useSessionUIStore.getState().setNewSessionDraftTarget({ projectId: 'openchamber:chats' })
     const appliedBeforeClose = applyDefaultModelAgentSelectionCalls.length
@@ -453,7 +454,6 @@ describe("issue 2039 draft auto-accept", () => {
 
     expect(activateDirectoryCalls).toEqual(["/repo"])
     expect(applyDefaultModelAgentSelectionCalls.at(-1)).toEqual({
-      projectDefaultAgent: "agent-project",
       projectDefaultModel: "model-project",
       projectDefaultVariant: "variant-project",
     })
@@ -557,10 +557,12 @@ describe("assistant answer worktree routing", () => {
   })
 
   test("creates a sibling worktree from the captured source worktree directory", async () => {
-    useProjectsStore.setState({ projects: [
-      { id: "project", path: "/repo" },
-      { id: "source-worktree", path: "/worktrees/source" },
-    ] })
+    useProjectsStore.setState({
+      projects: [
+        { id: "project", path: "/repo" },
+        { id: "source-worktree", path: "/worktrees/source" },
+      ]
+    })
     const sourceWorktree = {
       path: "/worktrees/source", projectDirectory: "/repo", branch: "source", label: "source",
     }

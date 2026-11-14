@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2509,7 +2510,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "Щільність і шрифти",
   "settings.openchamber.visual.section.appInstall": "Встановлення застосунку",
   "settings.openchamber.visual.section.chatFeatures": "Функції",
-  "settings.openchamber.visual.section.messageStreamTransport": "Транспорт потокових повідомлень",
   "settings.openchamber.visual.section.activityDefault": "Активність за замовчуванням",
   "settings.openchamber.visual.section.activityDefaultAria": "Режим активності за замовчуванням",
   "settings.openchamber.visual.section.sessionActivity": "Активність сесії",
@@ -2729,12 +2729,6 @@ export const dict = {
   "chat.message.userText.showMore": "Показати більше",
   "chat.message.userText.promptedBy": "З сесії {title}",
   "chat.message.userText.promptedByUnknown": "З іншої сесії",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "Авто",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "Надавати перевагу WebSocket і повертатися до SSE за потреби.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "Використовувати WebSocket для потокового передавання повідомлень.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "Використовувати server-sent events для потокового передавання повідомлень.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "Згорнуто",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "Зберігати активність згорнутою за умовчанням.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "Розгорнуто",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Успадковує нативний набір інструментів за замовчуванням.",
   "settings.agents.page.field.allowedToolsEdit": "Редагувати інструменти",
   "settings.agents.page.field.allowedToolsUseDefault": "Використовувати нативні стандартні значення",
-  "settings.agents.page.field.permissionPreset": "ID пресету дозволів",
   "settings.gitIdentities.editor.description.newProfile": "Створити новий профіль Git-ідентичності",
   "settings.gitIdentities.editor.description.editProfile": "Редагувати налаштування профілю ідентичності",
   "settings.openchamber.mergedWorktreeCleanup.title": "Після злиття PR",
@@ -9425,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['uk'],
   ...tooltipsChatI18n['uk'],
   ...m4LaneDI18n.uk,
+    ...agentToolPermissionsI18n["uk"],
   "gitIdentities.state.unknown": "Ідентичності Git ще не завантажено.",
   "settings.usage.state.unknown": "Використання ще не завантажено.",
   "settings.usage.state.error": "Не вдалося завантажити використання.",

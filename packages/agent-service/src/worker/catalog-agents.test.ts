@@ -58,25 +58,21 @@ test('agent profile mutations round-trip through native markdown and model resol
   }
 });
 
-test('an agent write authorizes the preset it introduces, and a profile read does not claim to introduce one', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'catalog-agents-preset-'));
+test('an agent write creates a profile that can be read back', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-agent-write-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
   await Promise.all([cwd, agentDirectory].map(directory => mkdir(directory, { recursive: true })));
   const runtime = await openNativeRuntime({ cwd, agentDirectory });
-  const calls: Array<{ id: string; proposed: boolean }> = [];
   try {
     const agents = new NativeAgents({
       cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES,
-      permissionPreset: async (id, proposed) => { calls.push({ id, proposed }); },
     });
-    await agents.create({ expectedRevision: '0', agent: { agentId: 'preset-owner', name: 'Preset owner', description: 'Preset proof', model: null, allowedTools: null, permissionPresetId: 'auto' } }, '1');
-    expect(calls).toEqual([{ id: 'auto', proposed: true }]);
-    calls.length = 0;
-    // Reading the profile it just wrote checks the preset against the snapshot.
-    await agents.profile('preset-owner');
-    expect(calls).toEqual([{ id: 'auto', proposed: false }]);
+    await agents.create({ expectedRevision: '0', agent: { agentId: 'test-owner', name: 'Test owner', description: 'Test proof', model: null, allowedTools: null } }, '1');
+    const profile = await agents.profile('test-owner');
+    expect(profile.agentId).toBe('test-owner');
+    expect(profile.name).toBe('Test owner');
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();

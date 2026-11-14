@@ -25,7 +25,7 @@ const SETTINGS_DIRECTORY = '/workspace/settings';
 const agent = (name: string): Agent => ({
   agentId: `profile-${name}`, name, description: `Native ${name} profile`,
   model: { providerId: 'provider', modelId: 'model' }, allowedTools: ['read', 'edit'],
-  systemPromptOverride: 'Stored instructions', permissionPresetId: 'preset',
+  systemPromptOverride: 'Stored instructions',
 });
 let listedAgents: Agent[] = [];
 let resolveWorkspace: Mock<CanonicalClient['resolveWorkspace']>;
@@ -157,7 +157,6 @@ describe('Settings native agent profiles', () => {
     expect(draft).toMatchObject({
       name: 'custom-copy', description: original.description, model: original.model,
       allowedTools: original.allowedTools, systemPromptOverride: original.systemPromptOverride,
-      permissionPresetId: original.permissionPresetId,
     });
     expect(draft?.agentId).toBeTruthy();
     expect(draft?.agentId).not.toBe(original.agentId);

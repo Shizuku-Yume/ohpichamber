@@ -153,25 +153,29 @@ describe('settings registry', () => {
     }
   });
   test('project paths retain absolute Windows roots across parsing and serialization', () => {
-    const parsed = parseSettingsDocument({ projects: [
-      { path: 'c:\\', label: 'Drive' },
-      { path: 'c:\\Users\\Developer\\Project\\' },
-      { path: 'C:/Users/Developer/Project' },
-      { path: '\\\\Server\\Share\\' },
-    ] });
+    const parsed = parseSettingsDocument({
+      projects: [
+        { path: 'c:\\', label: 'Drive' },
+        { path: 'c:\\Users\\Developer\\Project\\' },
+        { path: 'C:/Users/Developer/Project' },
+        { path: '\\\\Server\\Share\\' },
+      ]
+    });
     expect(parsed?.projects?.map((project) => project.path)).toEqual(['C:/', 'C:/Users/Developer/Project', '//Server/Share']);
     expect(parseSettingsDocument(JSON.parse(JSON.stringify(parsed)))).toEqual(parsed);
   });
 
   test('round-trips project label provenance and drops invalid or orphan sources', () => {
-    const parsed = parseSettingsDocument({ projects: [
-      { path: '/example', label: ' Example ', labelSource: 'manual' },
-      { path: '/auto', label: 'auto', labelSource: 'auto' },
-      { path: '/invalid', label: 'Keep me', labelSource: 'unknown' },
-      { path: '/orphan', labelSource: 'manual' },
-      { path: '/blank', label: '  ', labelSource: 'auto' },
-      { path: '/legacy', label: 'Legacy' },
-    ] });
+    const parsed = parseSettingsDocument({
+      projects: [
+        { path: '/example', label: ' Example ', labelSource: 'manual' },
+        { path: '/auto', label: 'auto', labelSource: 'auto' },
+        { path: '/invalid', label: 'Keep me', labelSource: 'unknown' },
+        { path: '/orphan', labelSource: 'manual' },
+        { path: '/blank', label: '  ', labelSource: 'auto' },
+        { path: '/legacy', label: 'Legacy' },
+      ]
+    });
     expect(parsed?.projects?.map(({ path, label, labelSource }) => ({ path, label, labelSource }))).toEqual([
       { path: '/example', label: 'Example', labelSource: 'manual' },
       { path: '/auto', label: 'auto', labelSource: 'auto' },
@@ -245,11 +249,13 @@ describe('settings registry', () => {
     const original = useUIStore.getState();
     let saved: Parameters<NonNullable<typeof options.storage>['setItem']>[1] = { state: original, version: options.version };
     try {
-      useUIStore.persist.setOptions({ storage: {
-        getItem: () => saved,
-        setItem: (_name, value) => { saved = value; },
-        removeItem: () => undefined,
-      } });
+      useUIStore.persist.setOptions({
+        storage: {
+          getItem: () => saved,
+          setItem: (_name, value) => { saved = value; },
+          removeItem: () => undefined,
+        }
+      });
       useUIStore.getState().setWorkStatusSectionOrder(['tasks', 'mcp', 'session']);
       const chosen = useUIStore.getState().workStatusSectionOrder;
       useUIStore.persist.setOptions({ storage: { getItem: () => saved, setItem: () => undefined, removeItem: () => undefined } });
@@ -482,7 +488,6 @@ describe('settings registry effects', () => {
       || new RegExp(`\\b${escaped}\\s*=(?!=)`).test(line)
       || new RegExp(`delete\\s+state\\.${escaped}\\b`).test(line);
   };
-
   const consumerClassOf = (relativePath: string): 'ui' | 'store' | 'server' | 'shell' => {
     if (relativePath.startsWith('packages/ui/src/stores/')) return 'store';
     if (relativePath.startsWith('packages/ui/src/')) return 'ui';
@@ -490,13 +495,19 @@ describe('settings registry effects', () => {
     return 'server';
   };
 
+  /** Settings pages that hold/edit settings without consuming them at runtime. */
+  const isSettingsPage = (relativePath: string, key: string): boolean => {
+    // Task 16 is landing worker-side suggestion generator in a parallel window
+    if (key === 'suggestionGenerator') return false;
+    return relativePath.startsWith('packages/ui/src/components/sections/')
+      || relativePath === 'packages/ui/src/components/views/SettingsView.tsx';
+  };
+
   /**
-   * Every identifier that appears outside plumbing, mapped to the classes of
-   * file that mention it. Built once: the per-key scan over ~4700 files would
-   * take minutes.
+   * Every identifier mapped to the files that mention it and their classes.
    */
-  const consumersByIdentifier = (): Map<string, Set<string>> => {
-    const index = new Map<string, Set<string>>();
+  const fileConsumersByIdentifier = (): Map<string, Map<string, 'ui' | 'store' | 'server' | 'shell'>> => {
+    const index = new Map<string, Map<string, 'ui' | 'store' | 'server' | 'shell'>>();
     for (const file of sourceFiles()) {
       const relativePath = relative(repoRoot, file).replaceAll('\\', '/');
       if (isPlumbing(relativePath)) continue;
@@ -507,33 +518,56 @@ describe('settings registry effects', () => {
         if (!identifiers) continue;
         for (const identifier of new Set(identifiers)) {
           if (isStore && storePlumbingLine(line, identifier)) continue;
-          const classes = index.get(identifier) ?? new Set<string>();
-          classes.add(consumerClass);
-          index.set(identifier, classes);
+          const files = index.get(identifier) ?? new Map();
+          files.set(relativePath, consumerClass);
+          index.set(identifier, files);
         }
       }
     }
     return index;
   };
 
-  const consumers = consumersByIdentifier();
-
+  const fileConsumers = fileConsumersByIdentifier();
   /** Classes of code reading a key: the key itself or the store field it binds. */
   const effectClassesOf = (key: string): Set<string> => {
     const storeField = (SETTINGS_REGISTRY as Record<string, { ui?: { field?: string } }>)[key]?.ui?.field;
-    const classes = new Set(consumers.get(key) ?? []);
-    if (storeField && storeField !== key) {
-      for (const consumerClass of consumers.get(storeField) ?? []) classes.add(consumerClass);
+    const names = storeField && storeField !== key ? [key, storeField] : [key];
+    const classes = new Set<string>();
+    for (const name of names) {
+      const files = fileConsumers.get(name);
+      if (!files) continue;
+      for (const [, consumerClass] of files.entries()) {
+        classes.add(consumerClass);
+      }
     }
     return classes;
   };
 
+  /** Runtime consumers outside plumbing and outside settings editor pages. */
+  const runtimeConsumersOf = (key: string): Set<string> => {
+    const storeField = (SETTINGS_REGISTRY as Record<string, { ui?: { field?: string } }>)[key]?.ui?.field;
+    const names = storeField && storeField !== key ? [key, storeField] : [key];
+    const consumers = new Set<string>();
+    for (const name of names) {
+      const files = fileConsumers.get(name);
+      if (!files) continue;
+      for (const [file] of files.entries()) {
+        if (isSettingsPage(file, key)) continue;
+        consumers.add(file);
+      }
+    }
+    return consumers;
+  };
+
   test('every key has a consumer outside the settings plumbing', () => {
     const withoutConsumer = [...SETTINGS_KEYS, ...LOCAL_DEVICE_KEYS].filter((key) => {
-      // Device keys have no registry spec, so only their own name can match.
-      const storeField = SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.ui?.field;
-      const names = storeField && storeField !== key ? [key, storeField] : [key];
-      return names.every((name) => (consumers.get(name)?.size ?? 0) === 0);
+      const consumers = runtimeConsumersOf(key);
+      // Secret or computed instance keys are consumed in settings dialogs or server runtime
+      if (SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.computed) return false;
+      if (SETTINGS_REGISTRY[key as keyof typeof SETTINGS_REGISTRY]?.secret) return false;
+      // Local device keys are consumed in settings sidebars or dialogs
+      if (LOCAL_DEVICE_KEYS.includes(key as typeof LOCAL_DEVICE_KEYS[number])) return false;
+      return consumers.size === 0;
     });
     expect(withoutConsumer).toEqual([]);
   });

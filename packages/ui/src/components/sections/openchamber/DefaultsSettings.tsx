@@ -16,13 +16,11 @@ import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared
 import { formatRoleSelector, modelForSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
-import { AgentSelector } from '@/components/sections/agents/AgentSelector';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useConfigStore } from '@/stores/useConfigStore';
 import { useSettingsModels } from '@/hooks/useSettingsModels';
 
 
@@ -339,104 +337,80 @@ export const DefaultsSettings: React.FC = () => {
     </Select>
   );
 
-  const defaultAgent = useConfigStore((state) => state.settingsDefaultAgent);
-  const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
-  const setAgent = useConfigStore((state) => state.setAgent);
-  const autoApplyAgentModel = useUIStore((state) => state.autoApplyAgentModel);
-  const setAutoApplyAgentModel = useUIStore((state) => state.setAutoApplyAgentModel);
   const planModeAllowAgents = useUIStore((state) => state.planModeAllowAgents);
   const setPlanModeAllowAgents = useUIStore((state) => state.setPlanModeAllowAgents);
 
   return (
     <>
-    <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
-      <div className="space-y-4">
-        <ModelRoleEditor
-          role="default"
-          roles={roleSelectors}
-          models={models}
-          directory={directory ?? undefined}
-          globalLevel={configuredThinkingLevel || undefined}
-          settingsItem="sessions.default-model"
-          disabled={isSavingOmp || !ompState}
-          label={t('settings.openchamber.defaults.field.defaultModel')}
-          onChange={handleDefaultModelChange}
-        />
-        <SettingsFieldRow
-          settingsItem="sessions.default-thinking"
-          label={t('settings.openchamber.defaults.field.defaultThinking')}
-          info={t('settings.omp.modelRoles.thinkingDefaultInfo')}
-        >
-          {matchedModel ? (
-            <ModelEffortPicker
-              model={matchedModel}
-              effort={selectedEffort || configuredThinkingLevel}
-              ariaLabel={t('settings.openchamber.defaults.field.defaultThinking')}
-              disabled={isSavingOmp || !ompState}
-              onChange={handleDefaultEffortChange}
-            />
-          ) : (
-            <SettingsChipGroup
-              value={configuredThinkingLevel || 'off'}
-              aria-label={t('settings.openchamber.defaults.field.defaultThinking')}
-              options={['off', 'low', 'medium', 'high'].map((level) => ({
-                value: level,
-                label: t(`settings.omp.modelRoles.effort.${level}` as I18nKey),
-              }))}
-              onChange={handleDefaultEffortChange}
-            />
-          )}
-        </SettingsFieldRow>
-
-        <SettingsFieldRow
-          settingsItem="sessions.default-mode"
-          label={t('chat.chatInput.mode.label')}
-        >
-          <Select value={defaultSessionMode} onValueChange={(val) => setDefaultSessionMode(val as SessionModeValue)}>
-            <SelectTrigger
-              className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
-              aria-label={t('chat.chatInput.mode.label')}
-            >
-              <SelectValue>{selectorLabel(defaultSessionMode)}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {SESSION_MODE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {t(opt.labelKey)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingsFieldRow>
-
-        <SettingsFieldRow
-          settingsItem="sessions.default-agent"
-          label={t('settings.openchamber.defaults.field.defaultAgent')}
-        >
-          <AgentSelector
-            agentId={defaultAgent ?? ''}
-            onChange={(agentId) => {
-              const next = agentId || undefined;
-              setSettingsDefaultAgent(next);
-              // Auto-apply means the agent's pinned model wins, so `keepModel`
-              // is the opposite. Without it the chat keeps the model it had.
-              if (next) setAgent(next, { keepModel: !autoApplyAgentModel });
-              void updateDesktopSettings({ defaultAgent: next ?? '' });
-            }}
+      <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
+        <div className="space-y-4">
+          <ModelRoleEditor
+            role="default"
+            roles={roleSelectors}
+            models={models}
             directory={directory ?? undefined}
-            className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+            globalLevel={configuredThinkingLevel || undefined}
+            settingsItem="sessions.default-model"
+            disabled={isSavingOmp || !ompState}
+            label={t('settings.openchamber.defaults.field.defaultModel')}
+            onChange={handleDefaultModelChange}
           />
-        </SettingsFieldRow>
+          <SettingsFieldRow
+            settingsItem="sessions.default-thinking"
+            label={t('settings.openchamber.defaults.field.defaultThinking')}
+            info={t('settings.omp.modelRoles.thinkingDefaultInfo')}
+          >
+            {matchedModel ? (
+              <ModelEffortPicker
+                model={matchedModel}
+                effort={selectedEffort || configuredThinkingLevel}
+                ariaLabel={t('settings.openchamber.defaults.field.defaultThinking')}
+                disabled={isSavingOmp || !ompState}
+                onChange={handleDefaultEffortChange}
+              />
+            ) : (
+              <SettingsChipGroup
+                value={configuredThinkingLevel || 'off'}
+                aria-label={t('settings.openchamber.defaults.field.defaultThinking')}
+                options={['off', 'low', 'medium', 'high'].map((level) => ({
+                  value: level,
+                  label: t(`settings.omp.modelRoles.effort.${level}` as I18nKey),
+                }))}
+                onChange={handleDefaultEffortChange}
+              />
+            )}
+          </SettingsFieldRow>
 
-        <SettingsFieldRow
-          settingsItem="sessions.fallback-model"
-          label={t('settings.openchamber.defaults.field.fallbackModel')}
-          info={t('settings.openchamber.defaults.field.fallbackModelInfo')}
-        >
-          {fallbackSelect()}
-        </SettingsFieldRow>
-      </div>
-    </SettingsSection>
+          <SettingsFieldRow
+            settingsItem="sessions.default-mode"
+            label={t('chat.chatInput.mode.label')}
+          >
+            <Select value={defaultSessionMode} onValueChange={(val) => setDefaultSessionMode(val as SessionModeValue)}>
+              <SelectTrigger
+                className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+                aria-label={t('chat.chatInput.mode.label')}
+              >
+                <SelectValue>{selectorLabel(defaultSessionMode)}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {SESSION_MODE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {t(opt.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </SettingsFieldRow>
+
+          <SettingsFieldRow
+            settingsItem="sessions.fallback-model"
+            label={t('settings.openchamber.defaults.field.fallbackModel')}
+            info={t('settings.openchamber.defaults.field.fallbackModelInfo')}
+          >
+            {fallbackSelect()}
+          </SettingsFieldRow>
+        </div>
+      </SettingsSection>
 
       {/* Models the app runs on its own: summaries, titles, the walkthrough. */}
       <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName="space-y-2">
@@ -492,22 +466,11 @@ export const DefaultsSettings: React.FC = () => {
       </SettingsSection>
 
       <SettingsSection title={t('settings.sessions.permissions.defaultMode')} contentClassName="space-y-1">
-        <PermissionDefaultModeField agentName={defaultAgent} />
+        <PermissionDefaultModeField />
       </SettingsSection>
 
       <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')} contentClassName="space-y-1">
         <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
-          <SettingsCheckboxRow
-            settingsItem="sessions.auto-apply-agent-model"
-            checked={autoApplyAgentModel}
-            onChange={(checked) => {
-              setAutoApplyAgentModel(checked);
-              void updateDesktopSettings({ autoApplyAgentModel: checked });
-            }}
-            label={t('settings.openchamber.defaults.field.autoApplyAgentModel')}
-            ariaLabel={t('settings.openchamber.defaults.field.autoApplyAgentModelAria')}
-            description={t('settings.openchamber.defaults.field.autoApplyAgentModelInfo')}
-          />
           <SettingsCheckboxRow
             settingsItem="sessions.plan-mode-allow-agents"
             checked={planModeAllowAgents}

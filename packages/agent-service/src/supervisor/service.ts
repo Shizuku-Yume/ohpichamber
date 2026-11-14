@@ -23,6 +23,7 @@ import type {
   PluginUpdateCheckResult, PluginUpgradePreviewResult, PluginMarketplaceSources,
   ExtensionInventoryState,
   SessionRecapListResponse, SubagentListResponse, SubagentTranscriptResponse, SubagentTreeCostResponse,
+  SessionToolsCatalog,
 } from '@openchamber/agent-contract';
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
@@ -107,7 +108,8 @@ type ServiceResponse =
   | { sources: SkillSourceRevisions }
   | WorktreeLeaseAcquireResult
   | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult | ShellStreamResponse | ShellStdinResult
-  | SessionRecapListResponse | SubagentListResponse | SubagentTranscriptResponse | SubagentTreeCostResponse;
+  | SessionRecapListResponse | SubagentListResponse | SubagentTranscriptResponse | SubagentTreeCostResponse
+  | SessionToolsCatalog;
 
 function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

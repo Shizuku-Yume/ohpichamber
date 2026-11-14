@@ -122,7 +122,7 @@ describe('settings normalization runtime - symlink resolution', () => {
       expect(result[1].defaultVariant).toBe(undefined);
     });
 
-    it('keeps a project default agent', () => {
+    it('drops a legacy project default agent', () => {
       const runtime = createTestRuntime({
         realpathSync: (p) => p,
         path: { resolve: (p) => p, sep: '/', dirname: (p) => p.split('/').slice(0, -1).join('/') || '/' },
@@ -132,7 +132,7 @@ describe('settings normalization runtime - symlink resolution', () => {
         { id: 'proj1', path: '/a', defaultAgent: 'plan' },
       ]);
 
-      expect(result[0].defaultAgent).toBe('plan');
+      expect(result[0].defaultAgent).toBeUndefined();
     });
 
     it('keeps the label source next to the label it describes', () => {

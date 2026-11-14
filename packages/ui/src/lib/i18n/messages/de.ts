@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2475,7 +2476,6 @@ export const dict = {
   "settings.openchamber.visual.section.colorMode": "Farbmodus",
   "settings.openchamber.visual.section.localization": "Lokalisierung",
   "settings.openchamber.visual.section.spacingAndLayout": "Abstand & Layout",
-  "settings.openchamber.visual.section.messageStreamTransport": "Nachrichtenstrom-Transport",
   "settings.openchamber.visual.section.activityDefault": "Aktivitätsstandard",
   "settings.openchamber.visual.section.activityDefaultAria": "Aktivitätsstandardmodus",
   "settings.openchamber.visual.section.sessionActivity": "Sitzungsaktivität",
@@ -2671,12 +2671,6 @@ export const dict = {
   "settings.openchamber.visual.option.userMessageRendering.markdown.description": "Benutzer-Text mit Markdown-Formatierung darstellen.",
   "settings.openchamber.visual.option.userMessageRendering.plain.label": "Klartext",
   "settings.openchamber.visual.option.userMessageRendering.plain.description": "Benutzer-Text mit erhaltenen Leerzeichen und Links darstellen.",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "Auto",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "Bevorzugt WebSocket und wechselt bei Bedarf zu SSE.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "Verwendet WebSocket für das Streamen von Nachrichten.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "Verwendet Server-Sent Events für das Streamen von Nachrichten.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "Einklappen",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "Aktivität standardmäßig einklappen.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "Erweitert",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Erbt den nativen Standard-Werkzeugsatz.",
   "settings.agents.page.field.allowedToolsEdit": "Werkzeuge bearbeiten",
   "settings.agents.page.field.allowedToolsUseDefault": "Native Standardwerte verwenden",
-  "settings.agents.page.field.permissionPreset": "Berechtigungs-Preset-ID",
   "settings.gitIdentities.editor.description.newProfile": "Neues Git-Identitätsprofil erstellen",
   "settings.gitIdentities.editor.description.editProfile": "Identitätsprofil-Einstellungen bearbeiten",
   "settings.openchamber.mergedWorktreeCleanup.title": "Nach dem Mergen eines PR",
@@ -9425,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['de'],
   ...tooltipsChatI18n['de'],
   ...m4LaneDI18n.de,
+    ...agentToolPermissionsI18n["de"],
   "gitIdentities.state.unknown": "Git-Identitäten sind noch nicht geladen.",
   "settings.usage.state.unknown": "Die Nutzung ist noch nicht geladen.",
   "settings.usage.state.error": "Die Nutzung konnte nicht geladen werden.",

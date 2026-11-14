@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -6277,7 +6278,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "الكثافة والخط",
   "settings.openchamber.visual.section.appInstall": "تثبيت التطبيق",
   "settings.openchamber.visual.section.chatFeatures": "الميزات",
-  "settings.openchamber.visual.section.messageStreamTransport": "طريقة نقل بث الرسائل",
   "settings.openchamber.visual.section.activityDefault": "الوضع الافتراضي للنشاط",
   "settings.openchamber.visual.section.activityDefaultAria": "الوضع الافتراضي للنشاط",
   "settings.openchamber.visual.section.sessionActivity": "نشاط الجلسة",
@@ -6492,12 +6492,6 @@ export const dict = {
   "chat.message.userText.showMore": "عرض المزيد",
   "chat.message.userText.promptedBy": "من الجلسة {title}",
   "chat.message.userText.promptedByUnknown": "من جلسة أخرى",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "تلقائي",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "تفضيل WebSocket والرجوع إلى SSE عند الحاجة.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "استخدام WebSocket لبث الرسائل.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "استخدام Server-Sent Events لبث الرسائل.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "مطوي",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "إبقاء النشاط مطويًا افتراضيًا.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "موسّع",
@@ -9085,6 +9079,7 @@ export const dict = {
   ...tooltipsPanelI18n['ar'],
   ...tooltipsChatI18n['ar'],
   ...m4LaneDI18n['ar'],
+    ...agentToolPermissionsI18n["ar"],
   "gitIdentities.state.unknown": "لم يتم تحميل هويات Git بعد.",
   "settings.usage.state.unknown": "لم يتم تحميل الاستخدام بعد.",
   "settings.usage.state.error": "تعذر تحميل الاستخدام.",

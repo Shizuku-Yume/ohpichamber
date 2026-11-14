@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2441,7 +2442,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "Yoğunluk & tipografi",
   "settings.openchamber.visual.section.appInstall": "Uygulama kurulumu",
   "settings.openchamber.visual.section.chatFeatures": "Özellikler",
-  "settings.openchamber.visual.section.messageStreamTransport": "Mesaj Akışı Taşıyıcısı",
   "settings.openchamber.visual.section.activityDefault": "Etkinlik Varsayılanı",
   "settings.openchamber.visual.section.activityDefaultAria": "Etkinlik varsayılan modu",
   "settings.openchamber.visual.section.sessionActivity": "Oturum Etkinliği",
@@ -2667,12 +2667,6 @@ export const dict = {
   "chat.message.userText.showMore": "Daha fazla göster",
   "chat.message.userText.promptedBy": "{title} oturumundan",
   "chat.message.userText.promptedByUnknown": "Başka bir oturumdan",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "Otomatik",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "WebSocket'i tercih eder, gerekirse SSE'ye geçer.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "Mesaj akışı için WebSocket kullan.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "Mesaj akışı için Server-Sent Events kullan.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "Daraltılmış",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "Activity'yi varsayılan olarak daraltılmış tut.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "Genişletilmiş",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Yerel varsayılan araç kümesini devralır.",
   "settings.agents.page.field.allowedToolsEdit": "Araçları düzenle",
   "settings.agents.page.field.allowedToolsUseDefault": "Yerel varsayılanları kullan",
-  "settings.agents.page.field.permissionPreset": "İzin hazır ayar ID'si",
   "settings.gitIdentities.editor.description.newProfile": "Yeni bir Git kimlik profili oluştur",
   "settings.gitIdentities.editor.description.editProfile": "Kimlik profili ayarlarını düzenle",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR birleştirildikten sonra",
@@ -9425,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['tr'],
   ...tooltipsChatI18n['tr'],
   ...m4LaneDI18n.tr,
+    ...agentToolPermissionsI18n["tr"],
   "gitIdentities.state.unknown": "Git kimlikleri henüz yüklenmedi.",
   "settings.usage.state.unknown": "Kullanım henüz yüklenmedi.",
   "settings.usage.state.error": "Kullanım yüklenemedi.",

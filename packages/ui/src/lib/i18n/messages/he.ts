@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -6277,7 +6278,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "צפיפות וגופן",
   "settings.openchamber.visual.section.appInstall": "התקנת האפליקציה",
   "settings.openchamber.visual.section.chatFeatures": "תכונות",
-  "settings.openchamber.visual.section.messageStreamTransport": "ערוץ הזרמת הודעות",
   "settings.openchamber.visual.section.activityDefault": "ברירת מחדל לפעילות",
   "settings.openchamber.visual.section.activityDefaultAria": "מצב ברירת המחדל של הפעילות",
   "settings.openchamber.visual.section.sessionActivity": "פעילות בהפעלה",
@@ -6492,12 +6492,6 @@ export const dict = {
   "chat.message.userText.showMore": "הצג עוד",
   "chat.message.userText.promptedBy": "מההפעלה {title}",
   "chat.message.userText.promptedByUnknown": "מהפעלה אחרת",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "אוטומטי",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "עדיפות ל-WebSocket, ומעבר ל-SSE לפי הצורך.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "שימוש ב-WebSocket להזרמת הודעות.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "שימוש ב-Server-Sent Events להזרמת הודעות.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "מקופל",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "הפעילות מקופלת כברירת מחדל.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "מורחב",
@@ -9085,6 +9079,7 @@ export const dict = {
   ...tooltipsPanelI18n['he'],
   ...tooltipsChatI18n['he'],
   ...m4LaneDI18n['he'],
+    ...agentToolPermissionsI18n["he"],
   "gitIdentities.state.unknown": "זהויות Git טרם נטענו.",
   "settings.usage.state.unknown": "השימוש טרם נטען.",
   "settings.usage.state.error": "טעינת השימוש נכשלה.",

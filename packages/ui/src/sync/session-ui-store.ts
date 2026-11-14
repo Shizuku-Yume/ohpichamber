@@ -725,7 +725,6 @@ const applyDraftTargetSelectionDefaults = (
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
   selectedProjectOverride?: {
     path?: string | null
-    defaultAgent?: string | null
     defaultModel?: string | null
     defaultVariant?: string | null
   } | null,
@@ -766,7 +765,6 @@ const applyDraftTargetSelectionDefaults = (
       ? useProjectsStore.getState().projects.find((project) => normalizePath(project.path) === normalizePath(selectedProject.path))
       : undefined
     useConfigStore.getState().applyDefaultModelAgentSelection({
-      projectDefaultAgent: currentProject?.defaultAgent,
       projectDefaultModel: currentProject?.defaultModel,
       projectDefaultVariant: currentProject?.defaultVariant,
     })

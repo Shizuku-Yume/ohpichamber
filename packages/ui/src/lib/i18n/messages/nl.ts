@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2603,7 +2604,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "Dichtheid en typografie",
   "settings.openchamber.visual.section.appInstall": "App installeren",
   "settings.openchamber.visual.section.chatFeatures": "Functies",
-  "settings.openchamber.visual.section.messageStreamTransport": "Transport voor berichtenstreams",
   "settings.openchamber.visual.section.activityDefault": "Standaardactiviteit",
   "settings.openchamber.visual.section.activityDefaultAria": "Standaardmodus voor activiteit",
   "settings.openchamber.visual.section.sessionActivity": "Sessieactiviteit",
@@ -2830,12 +2830,6 @@ export const dict = {
   "chat.message.userText.showMore": "Meer tonen",
   "chat.message.userText.promptedBy": "Uit sessie {title}",
   "chat.message.userText.promptedByUnknown": "Uit een andere sessie",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "Auto",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "Geef de voorkeur aan WebSocket en val terug op SSE als dat nodig is.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "WebSocket gebruiken voor het streamen van berichten.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "Server-Sent Events gebruiken voor het streamen van berichten.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "Samengevouwen",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "Houd Activiteit standaard samengevouwen.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "Uitgevouwen",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Erft de native standaardset tools.",
   "settings.agents.page.field.allowedToolsEdit": "Hulpmiddelen bewerken",
   "settings.agents.page.field.allowedToolsUseDefault": "Native standaardwaarden gebruiken",
-  "settings.agents.page.field.permissionPreset": "Toestemmingspreset-ID",
   "settings.gitIdentities.editor.description.newProfile": "Maak een nieuw Git-identiteitsprofiel",
   "settings.gitIdentities.editor.description.editProfile": "Instellingen van het identiteitsprofiel bewerken",
   "settings.openchamber.mergedWorktreeCleanup.title": "Nadat een PR is gemerged",
@@ -9425,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['nl'],
   ...tooltipsChatI18n['nl'],
   ...m4LaneDI18n.nl,
+    ...agentToolPermissionsI18n["nl"],
   "gitIdentities.state.unknown": "Git-identiteiten zijn nog niet geladen.",
   "settings.usage.state.unknown": "Gebruik is nog niet geladen.",
   "settings.usage.state.error": "Kan gebruik niet laden.",

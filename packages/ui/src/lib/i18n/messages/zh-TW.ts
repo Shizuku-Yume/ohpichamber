@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2396,7 +2397,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "密度與字型",
   "settings.openchamber.visual.section.appInstall": "應用程式安裝",
   "settings.openchamber.visual.section.chatFeatures": "功能",
-  "settings.openchamber.visual.section.messageStreamTransport": "訊息流傳輸方式",
   "settings.openchamber.visual.section.activityDefault": "活動預設狀態",
   "settings.openchamber.visual.section.activityDefaultAria": "活動預設模式",
   "settings.openchamber.visual.section.sessionActivity": "工作階段活動",
@@ -2616,12 +2616,6 @@ export const dict = {
   "chat.message.userText.showMore": "顯示更多",
   "chat.message.userText.promptedBy": "來自工作階段 {title}",
   "chat.message.userText.promptedByUnknown": "來自其他工作階段",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "自動",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "優先使用 WebSocket，必要時退回 SSE。",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "使用 WebSocket 進行訊息串流傳輸。",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "使用 Server-Sent Events 進行訊息串流傳輸。",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "折疊",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "預設折疊 Activity。",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "展開",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "繼承原生預設工具集。",
   "settings.agents.page.field.allowedToolsEdit": "編輯工具",
   "settings.agents.page.field.allowedToolsUseDefault": "使用原生預設值",
-  "settings.agents.page.field.permissionPreset": "權限預設 ID",
   "settings.gitIdentities.editor.description.newProfile": "建立新的 Git 身分設定",
   "settings.gitIdentities.editor.description.editProfile": "編輯身分設定",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR 合併後",
@@ -9416,6 +9409,7 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-TW'],
   ...openchamberToolOutputI18n['zh-TW'],
   ...m4LaneDI18n['zh-TW'],
+    ...agentToolPermissionsI18n["zh-TW"],
   "gitIdentities.state.unknown": "Git 身分尚未載入。",
   "settings.usage.state.unknown": "用量尚未載入。",
   "settings.usage.state.error": "用量載入失敗。",

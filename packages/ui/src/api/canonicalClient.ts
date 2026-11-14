@@ -482,6 +482,14 @@ export class CanonicalClient {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/config`, scoped(C.ProviderConfigurationReadSchema, result => result.configuration.providerId === providerId));
   }
   getAgents(workspaceId: string): Promise<AgentCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/agents`, scoped(C.AgentCatalogSchema, result => result.workspaceId === workspaceId)); }
+  getTools(scope: { sessionId?: string; workspaceId?: string } | string): Promise<C.SessionToolsCatalog> {
+    const sessionId = typeof scope === 'string' ? scope : scope.sessionId;
+    const workspaceId = typeof scope === 'string' ? undefined : scope.workspaceId;
+    const path = sessionId
+      ? `/api/agent/v1/sessions/${id(sessionId)}/tools`
+      : `/api/agent/v1/workspaces/${id(workspaceId!)}/tools`;
+    return request(path, C.SessionToolsCatalogSchema);
+  }
   createAgent(workspaceId: string, input: AgentCreateRequest): Promise<AgentMutationResult> {
     const agentId = input.agent.agentId;
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/agents`, scoped(C.AgentMutationResultSchema, result => result.agentId === agentId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.AgentCreateRequestSchema, input) });

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2404,7 +2405,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "Densité et typographie",
   "settings.openchamber.visual.section.appInstall": "Installation de l’app",
   "settings.openchamber.visual.section.chatFeatures": "Fonctionnalités",
-  "settings.openchamber.visual.section.messageStreamTransport": "Transport de flux de messages",
   "settings.openchamber.visual.section.activityDefault": "Activité par défaut",
   "settings.openchamber.visual.section.activityDefaultAria": "Mode d'activité par défaut",
   "settings.openchamber.visual.section.sessionActivity": "Activité de session",
@@ -2615,12 +2615,6 @@ export const dict = {
   "chat.message.userText.showMore": "Afficher plus",
   "chat.message.userText.promptedBy": "Depuis la session {title}",
   "chat.message.userText.promptedByUnknown": "Depuis une autre session",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "Auto",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "Préférez WebSocket et revenez à SSE si besoin.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "Utilisez WebSocket pour la diffusion de messages.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "Utilisez les événements envoyés par le serveur pour la diffusion de messages.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "Réduite",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "Garder l'activité réduite par défaut.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "Développée",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Hérite du jeu d’outils natif par défaut.",
   "settings.agents.page.field.allowedToolsEdit": "Modifier les outils",
   "settings.agents.page.field.allowedToolsUseDefault": "Utiliser les valeurs natives par défaut",
-  "settings.agents.page.field.permissionPreset": "ID de préréglage de permissions",
   "settings.gitIdentities.editor.description.newProfile": "Créer un nouveau profil d'identité Git",
   "settings.gitIdentities.editor.description.editProfile": "Modifier les paramètres du profil d'identité",
   "settings.openchamber.mergedWorktreeCleanup.title": "Après la fusion d'une PR",
@@ -9425,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['fr'],
   ...tooltipsChatI18n['fr'],
   ...m4LaneDI18n.fr,
+    ...agentToolPermissionsI18n["fr"],
   "gitIdentities.state.unknown": "Les identités Git ne sont pas encore chargées.",
   "settings.usage.state.unknown": "L'utilisation n'est pas encore chargée.",
   "settings.usage.state.error": "Échec du chargement de l'utilisation.",

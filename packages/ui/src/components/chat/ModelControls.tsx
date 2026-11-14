@@ -233,14 +233,14 @@ type ModelControlsProps = {
     /** Offers "Run on several models" at the top of the desktop model picker. */
     onRunInParallel?: () => void;
 } & (
-    | { selection?: never; sessionId?: never; agentSelectable?: never }
-    | {
-        selection: ComposerModelSelection;
-        sessionId: string | null;
-        /** Offers the agent picker and saves the pick for `sessionId` (a chat pinned in the side panel). */
-        agentSelectable?: boolean;
-    }
-);
+        | { selection?: never; sessionId?: never; agentSelectable?: never }
+        | {
+            selection: ComposerModelSelection;
+            sessionId: string | null;
+            /** Offers the agent picker and saves the pick for `sessionId` (a chat pinned in the side panel). */
+            agentSelectable?: boolean;
+        }
+    );
 
 export const ModelControls: React.FC<ModelControlsProps> = ({
     className,
@@ -279,7 +279,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const configuredCurrentReasoningEffort = useConfigStore((state) => state.currentReasoningEffort);
     const currentAgentName = useConfigStore((state) => selection ? selection.agent : state.currentAgentName);
     const settingsDefaultReasoningEffort = useConfigStore((state) => state.settingsDefaultReasoningEffort);
-    const settingsDefaultAgent = useConfigStore((state) => state.settingsDefaultAgent);
     const defaultsLoaded = useConfigStore((state) => state.settingsDefaultsLoaded);
     const agentsResolved = canSelectAgent;
     const providersResolved = useConfigStore((state) => state.providersLoaded);
@@ -1047,7 +1046,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return;
             }
 
-            const fallbackAgent = agents.find(agent => agent.agentId === settingsDefaultAgent) ?? agents[0];
+            const fallbackAgent = agents[0];
             if (!fallbackAgent) {
                 return;
             }
@@ -1099,7 +1098,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         agents,
         agentsResolved,
         providersResolved,
-        settingsDefaultAgent,
         currentAgentName,
         getSessionModelSelection,
         getAgentModelForSession,
@@ -1419,7 +1417,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 <div className="flex flex-col gap-1.5">
                     {}
                     <div className="rounded-xl border border-border/40 bg-sidebar/30 px-2 py-1.5">
-                            <div className="typography-micro text-muted-foreground mb-0.5">{t('chat.modelControls.provider')}</div>
+                        <div className="typography-micro text-muted-foreground mb-0.5">{t('chat.modelControls.provider')}</div>
                         <div className="typography-meta text-foreground font-medium">{getProviderDisplayName()}</div>
                     </div>
 
@@ -1643,15 +1641,15 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                         {indicatorIcons.length > 0 ? (
                                             <div className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap ps-0.5">
                                                 {indicatorIcons.map(({ key, icon: iconName, label }) => (
-                                                <span
-                                                    key={`meta-${providerId}-${modelId}-${key}`}
-                                                    className="flex size-4 flex-shrink-0 items-center justify-center text-muted-foreground"
-                                                    title={label}
-                                                    aria-label={label}
-                                                >
-                                                    <Icon name={iconName} className="size-3" />
-                                                </span>
-                                            ))}
+                                                    <span
+                                                        key={`meta-${providerId}-${modelId}-${key}`}
+                                                        className="flex size-4 flex-shrink-0 items-center justify-center text-muted-foreground"
+                                                        title={label}
+                                                        aria-label={label}
+                                                    >
+                                                        <Icon name={iconName} className="size-3" />
+                                                    </span>
+                                                ))}
                                             </div>
                                         ) : null}
                                     </div>
@@ -1757,7 +1755,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     setMobileModelQuery(event.target.value);
                                     setExpandedMobileModelKey(null);
                                 }}
-                                        placeholder={t('chat.modelControls.searchProvidersOrModels')}
+                                placeholder={t('chat.modelControls.searchProvidersOrModels')}
                                 className="ps-7 h-9 rounded-xl border-border/40 bg-[var(--surface-elevated)] typography-meta"
                             />
                             {mobileModelQuery && (
@@ -1839,8 +1837,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         const isActiveProvider = provider.providerId === currentProviderId;
                         const isExpanded = expandedMobileProviders.has(provider.providerId) || normalizedQuery.length > 0;
 
-                         return (
-                             <div key={provider.providerId} className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
+                        return (
+                            <div key={provider.providerId} className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -2003,8 +2001,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 <div className="flex items-center gap-1.5">
                                     {inputModalityIcons.length > 0
                                         ? inputModalityIcons.map(({ key, icon, label }) =>
-                                              <IconBadge key={`input-${key}`} iconName={icon} label={`${label} input`} />
-                                          )
+                                            <IconBadge key={`input-${key}`} iconName={icon} label={`${label} input`} />
+                                        )
                                         : <span className="typography-meta text-muted-foreground">-</span>}
                                 </div>
                             </div>
@@ -2013,8 +2011,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 <div className="flex items-center gap-1.5">
                                     {outputModalityIcons.length > 0
                                         ? outputModalityIcons.map(({ key, icon, label }) =>
-                                              <IconBadge key={`output-${key}`} iconName={icon} label={`${label} output`} />
-                                          )
+                                            <IconBadge key={`output-${key}`} iconName={icon} label={`${label} output`} />
+                                        )
                                         : <span className="typography-meta text-muted-foreground">-</span>}
                                 </div>
                             </div>

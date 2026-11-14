@@ -22,9 +22,9 @@ import { getSyncChildStores } from '@/sync/sync-refs';
 
 // Base UI and React DOM detect browser support when imported.
 class TestIntersectionObserver {
-  observe(): void {}
-  disconnect(): void {}
-  unobserve(): void {}
+  observe(): void { }
+  disconnect(): void { }
+  unobserve(): void { }
 }
 const importWindow = new Window();
 Object.defineProperty(globalThis, 'window', { value: importWindow, configurable: true, writable: true });
@@ -68,7 +68,7 @@ const provider: Provider & { models: Model[] } = {
 };
 const agent: Agent = {
   agentId: AGENT_ID, name: 'Build', description: 'Build native projects',
-  model: null, allowedTools: ['read', 'custom-native-tool'], permissionPresetId: 'workspace-review',
+  model: null, allowedTools: ['read', 'custom-native-tool'],
 };
 const planAgent: Agent = { ...agent, agentId: 'profile-plan-29', name: 'Plan' };
 const reviewAgent: Agent = { ...agent, agentId: 'profile-review-31', name: 'Review' };
@@ -177,7 +177,7 @@ describe('ModelControls native selection and effort restore', () => {
       directoryScoped: { [DIRECTORY]: { providers: [provider], models: [], providersLoaded: true, currentProviderId: PROVIDER_ID, currentModelId: MODEL_ID, currentVariant: undefined, currentVariantSelection: { override: undefined, inherited: undefined }, currentAgentName: AGENT_ID, selectedProviderId: PROVIDER_ID, agentModelSelections: {}, defaultProviders: {}, selectionSource: 'auto', agentSelectionSource: 'auto' } },
       currentAgentName: AGENT_ID, currentVariant: undefined,
       currentVariantSelection: { override: undefined, inherited: undefined },
-      settingsDefaultAgent: undefined, settingsDefaultModel: undefined, agentModelSelections: {}, defaultProviders: {},
+      settingsDefaultModel: undefined, agentModelSelections: {}, defaultProviders: {},
       selectionSource: 'auto', agentSelectionSource: 'auto', lastDisconnectReason: null,
     });
     setRoster([agent, planAgent, reviewAgent]);

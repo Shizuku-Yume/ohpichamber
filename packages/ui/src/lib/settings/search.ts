@@ -387,12 +387,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['security', 'app link', 'deep link', 'scheme', 'protocol', 'obsidian', 'notion'],
   },
   {
-    id: 'chat.message-transport',
-    page: 'general',
-    titleKey: 'settings.openchamber.visual.section.messageStreamTransport',
-    keywords: ['streaming', 'sse', 'websocket'],
-  },
-  {
     id: 'chat.session-recap',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.sessionRecap',
@@ -1026,12 +1020,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'projects',
     titleKey: 'settings.projects.page.field.projectName',
     keywords: ['label', 'display name', 'project metadata'],
-  },
-  {
-    id: 'projects.default-agent',
-    page: 'projects',
-    titleKey: 'settings.projects.page.field.projectAgent',
-    keywords: ['agent', 'default', 'new chat', 'project metadata'],
   },
   {
     id: 'projects.default-model',

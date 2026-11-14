@@ -1,4 +1,4 @@
-import type { ToolPopupContent } from '@openchamber/agent-contract';
+import type { ToolPopupContent } from '../types';
 import React from 'react';
 
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
@@ -284,7 +284,7 @@ export const EvalCellBlock: React.FC<EvalCellBlockProps> = ({
                                 );
                             }
                         }
-
+                        if (part.kind !== 'text') return null;
                         return (
                             <pre
                                 key={pIdx}

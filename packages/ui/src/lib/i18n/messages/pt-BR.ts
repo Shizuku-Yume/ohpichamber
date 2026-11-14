@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2509,7 +2510,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "Densidade e tipografia",
   "settings.openchamber.visual.section.appInstall": "Instalação do app",
   "settings.openchamber.visual.section.chatFeatures": "Recursos",
-  "settings.openchamber.visual.section.messageStreamTransport": "Transporte do fluxo de mensagens",
   "settings.openchamber.visual.section.activityDefault": "Modo padrão de atividade",
   "settings.openchamber.visual.section.activityDefaultAria": "Modo padrão de atividade",
   "settings.openchamber.visual.section.sessionActivity": "Atividade da sessão",
@@ -2729,12 +2729,6 @@ export const dict = {
   "chat.message.userText.showMore": "Mostrar mais",
   "chat.message.userText.promptedBy": "Da sessão {title}",
   "chat.message.userText.promptedByUnknown": "De outra sessão",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "Automático",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "Preferir WebSocket e recorrer a SSE se necessário.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "Usar WebSocket para transmissão de mensagens.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "Usar server-sent events para transmitir mensagens.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "Recolhido",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "Manter a atividade recolhida por padrão.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "Expandido",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Herda o conjunto nativo de ferramentas padrão.",
   "settings.agents.page.field.allowedToolsEdit": "Editar ferramentas",
   "settings.agents.page.field.allowedToolsUseDefault": "Usar padrões nativos",
-  "settings.agents.page.field.permissionPreset": "ID da predefinição de permissões",
   "settings.gitIdentities.editor.description.newProfile": "Criar uma nova identidade Git",
   "settings.gitIdentities.editor.description.editProfile": "Editar as configurações da identidade",
   "settings.openchamber.mergedWorktreeCleanup.title": "Depois que um PR é mesclado",
@@ -9416,6 +9409,7 @@ export const dict = {
   ...openchamberToolsLayoutI18n['pt-BR'],
   ...openchamberToolOutputI18n['pt-BR'],
   ...m4LaneDI18n['pt-BR'],
+    ...agentToolPermissionsI18n["pt-BR"],
   "gitIdentities.state.unknown": "As identidades do Git ainda não foram carregadas.",
   "settings.usage.state.unknown": "O uso ainda não foi carregado.",
   "settings.usage.state.error": "Falha ao carregar o uso.",

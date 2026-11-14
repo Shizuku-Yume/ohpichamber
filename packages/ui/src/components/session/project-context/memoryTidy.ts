@@ -57,7 +57,6 @@ export const startMemoryTidy = async (input: {
  const session = await store.createSession(input.title, input.projectPath, undefined, {
   model: { providerId: selection.providerID, modelId: selection.modelID },
   variant: selection.variant,
-  agent: selection.agentName,
  });
  const sessionId = session?.sessionId;
  if (!sessionId) return { ok: false, reason: 'create-failed' };
@@ -71,7 +70,7 @@ export const startMemoryTidy = async (input: {
    visiblePrompt,
    selection.providerID,
    selection.modelID,
-   selection.agentName,
+   undefined,
    undefined,
    undefined,
    [{ synthetic: true, text: instructions }],

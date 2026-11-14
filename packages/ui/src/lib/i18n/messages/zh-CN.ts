@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2509,7 +2510,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "密度与字体",
   "settings.openchamber.visual.section.appInstall": "应用安装",
   "settings.openchamber.visual.section.chatFeatures": "功能",
-  "settings.openchamber.visual.section.messageStreamTransport": "消息流传输方式",
   "settings.openchamber.visual.section.activityDefault": "活动默认状态",
   "settings.openchamber.visual.section.activityDefaultAria": "活动默认模式",
   "settings.openchamber.visual.section.sessionActivity": "会话活动",
@@ -2732,12 +2732,6 @@ export const dict = {
   "chat.message.userText.showMore": "显示更多",
   "chat.message.userText.promptedBy": "来自会话 {title}",
   "chat.message.userText.promptedByUnknown": "来自其他会话",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "自动",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "优先使用 WebSocket，必要时回退到 SSE。",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "使用 WebSocket 进行消息流传输。",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "使用 Server-Sent Events 进行消息流传输。",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "折叠",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "默认折叠 Activity。",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "展开",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "继承原生默认工具集。",
   "settings.agents.page.field.allowedToolsEdit": "编辑工具",
   "settings.agents.page.field.allowedToolsUseDefault": "使用原生默认值",
-  "settings.agents.page.field.permissionPreset": "权限预设 ID",
   "settings.gitIdentities.editor.description.newProfile": "创建新的 Git 身份配置",
   "settings.gitIdentities.editor.description.editProfile": "编辑身份配置设置",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR 合并后",
@@ -9416,6 +9409,7 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-CN'],
   ...openchamberToolOutputI18n['zh-CN'],
   ...m4LaneDI18n['zh-CN'],
+    ...agentToolPermissionsI18n["zh-CN"],
   "gitIdentities.state.unknown": "Git 身份尚未加载。",
   "settings.usage.state.unknown": "用量尚未加载。",
   "settings.usage.state.error": "用量加载失败。",

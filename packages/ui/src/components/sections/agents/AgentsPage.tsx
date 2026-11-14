@@ -1,11 +1,13 @@
 import React from 'react';
 import type { AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
-import type { Agent, AgentThinkingLevel } from '@openchamber/agent-contract';
+import type { Agent, AgentThinkingLevel, ToolCatalogEntry } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { OMP_TOOL_NAMES } from '@/lib/toolPresentation';
+import { canonicalClient } from '@/api/canonicalClient';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { AgentPermissionsEditor } from './AgentPermissionsEditor';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
@@ -21,7 +23,6 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_HELPER_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Icon } from '@/components/icon/Icon';
@@ -32,7 +33,6 @@ interface FormState {
   model: Agent['model'];
   systemPromptOverride: string;
   allowedTools: string[] | null;
-  permissionPresetId: string;
   thinkingLevel: AgentThinkingLevel | 'default';
   spawns: string;
 }
@@ -43,7 +43,6 @@ const fieldsForAgent = (agent: Agent): FormState => ({
   model: agent.model,
   systemPromptOverride: agent.systemPromptOverride ?? '',
   allowedTools: agent.allowedTools === null ? null : [...agent.allowedTools],
-  permissionPresetId: agent.permissionPresetId ?? '',
   thinkingLevel: agent.thinkingLevel ?? 'default',
   spawns: agent.spawns === '*' ? '*' : Array.isArray(agent.spawns) ? agent.spawns.join(', ') : '',
 });
@@ -56,7 +55,6 @@ const fieldsEqual = (left: FormState, right: FormState): boolean =>
   left.model?.providerId === right.model?.providerId && left.model?.modelId === right.model?.modelId &&
   left.systemPromptOverride === right.systemPromptOverride &&
   toolsEqual(left.allowedTools, right.allowedTools) &&
-  left.permissionPresetId === right.permissionPresetId &&
   left.thinkingLevel === right.thinkingLevel &&
   left.spawns === right.spawns;
 
@@ -103,20 +101,35 @@ export const AgentsPage: React.FC = () => {
   const savedRef = React.useRef<FormState | null>(null);
   const savingRef = React.useRef(false);
   const [form, setForm] = React.useState<FormState>({
-    name: '', description: '', model: null, systemPromptOverride: '', allowedTools: null, permissionPresetId: '',
+    name: '', description: '', model: null, systemPromptOverride: '', allowedTools: null,
     thinkingLevel: 'default', spawns: '',
   });
   const formRef = React.useRef(form);
   formRef.current = form;
-  // Every tool the agent may be granted: the canonical OMP registry first,
-  // then any name the agent already carries (extension, MCP or host tool). The
-  // grid is the single editor, so a name outside the registry still needs a
-  // control.
-  const toolChoices: string[] = React.useMemo(() => [
-    ...OMP_TOOL_NAMES,
-    ...(source?.allowedTools ?? []).filter((tool) => !OMP_TOOL_NAMES.includes(tool)),
-  ], [source]);
-  const [toolsEditing, setToolsEditing] = React.useState(false);
+  const [toolsCatalog, setToolsCatalog] = React.useState<ToolCatalogEntry[]>([]);
+
+  React.useEffect(() => {
+    let active = true;
+    const loadCatalog = async () => {
+      try {
+        const currentSessionId = useSessionUIStore.getState().currentSessionId;
+        if (currentSessionId) {
+          const catalog = await canonicalClient.getTools({ sessionId: currentSessionId });
+          if (active) setToolsCatalog(catalog.tools);
+          return;
+        }
+        if (settingsDirectory) {
+          const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+          const catalog = await canonicalClient.getTools({ workspaceId: workspace.workspaceId });
+          if (active) setToolsCatalog(catalog.tools);
+        }
+      } catch {
+        // Tool catalog fallback handled by editor
+      }
+    };
+    void loadCatalog();
+    return () => { active = false; };
+  }, [settingsDirectory]);
   const [isCreating, setIsCreating] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -128,7 +141,6 @@ export const AgentsPage: React.FC = () => {
       entityRef.current = null;
       savedRef.current = null;
       revisionRef.current = undefined;
-      setToolsEditing(false);
       setSaveError(null);
       return;
     }
@@ -142,7 +154,6 @@ export const AgentsPage: React.FC = () => {
     savedRef.current = next;
     hydratedSelectionRef.current = selectionKey;
     setForm(next);
-    setToolsEditing(false);
     setSaveError(null);
   }, [source, revision, selectionKey]);
 
@@ -161,8 +172,6 @@ export const AgentsPage: React.FC = () => {
       if (form.systemPromptOverride) agent.systemPromptOverride = form.systemPromptOverride;
       else delete agent.systemPromptOverride;
     }
-    if (form.permissionPresetId) agent.permissionPresetId = form.permissionPresetId;
-    else delete agent.permissionPresetId;
     if (form.thinkingLevel !== 'default') agent.thinkingLevel = form.thinkingLevel;
     else delete agent.thinkingLevel;
     const spawnsTrimmed = form.spawns.trim();
@@ -325,99 +334,15 @@ export const AgentsPage: React.FC = () => {
           label={t('settings.agents.page.field.allowedTools')}
           controlClassName="w-full max-w-none flex-col items-stretch"
         >
-          {form.allowedTools === null && !toolsEditing ? (
-            <div className="flex items-center justify-between gap-2 py-1">
-              <p className={SETTINGS_HELPER_CLASS}>{t('settings.agents.page.field.allowedToolsInherit')}</p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => setToolsEditing(true)}
-              >
-                {t('settings.agents.page.field.allowedToolsEdit')}
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setToolsEditing(false);
-                    setForm((current) => ({ ...current, allowedTools: null }));
-                    requestSave();
-                  }}
-                >
-                  {t('settings.agents.page.field.allowedToolsUseDefault')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setToolsEditing(true);
-                    setForm((current) => ({ ...current, allowedTools: [...OMP_TOOL_NAMES] }));
-                    requestSave();
-                  }}
-                >
-                  {t('settings.providers.page.actions.showAll')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setToolsEditing(true);
-                    setForm((current) => ({ ...current, allowedTools: [] }));
-                    requestSave();
-                  }}
-                >
-                  {t('settings.providers.page.actions.hideAll')}
-                </Button>
-              </div>
-
-              {/* One control per tool: the checkbox grid is the editor. A tool
-                  the agent already names but the registry does not carry
-                  (an extension or MCP tool) keeps its own checkbox, so the
-                  list stays complete and nothing is edited twice. */}
-              <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @3xl:grid-cols-4">
-                {toolChoices.map((tool) => {
-                  const checked = (form.allowedTools ?? []).includes(tool);
-                  return (
-                    <label
-                      key={tool}
-                      className="flex cursor-pointer items-center gap-2 rounded-md border border-border/40 p-2 text-xs font-mono hover:bg-[var(--surface-subtle)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          setToolsEditing(true);
-                          const currentTools = form.allowedTools ?? [];
-                          const next = e.target.checked
-                            ? [...currentTools, tool]
-                            : currentTools.filter((t) => t !== tool);
-                          setForm((current) => ({ ...current, allowedTools: next }));
-                          requestSave();
-                        }}
-                        className="size-3.5 rounded border-border text-primary focus:ring-primary"
-                      />
-                      <span className="truncate">{tool}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+          <AgentPermissionsEditor
+            allowedTools={form.allowedTools}
+            toolsCatalog={toolsCatalog}
+            onChange={(nextTools) => {
+              setForm((current) => ({ ...current, allowedTools: nextTools }));
+              requestSave();
+            }}
+          />
         </SettingsStackedField>
-        <SettingsFieldRow settingsItem="agents.permission-preset" label={t('settings.agents.page.field.permissionPreset')}>
-          <Input value={form.permissionPresetId}
-            aria-label={t('settings.agents.page.field.permissionPreset')}
-            onChange={(event) => setForm({ ...form, permissionPresetId: event.target.value })}
-            className="h-8 w-64 px-2" />
-        </SettingsFieldRow>
       </SettingsSection>
       {isNewAgent && <div className="flex items-center gap-2 pb-8">
         <Button onClick={() => void handleCreate()} disabled={isCreating || !form.name.trim()} size="xs" className="!font-normal">

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2542,7 +2543,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "密度と書体",
   "settings.openchamber.visual.section.appInstall": "アプリのインストール",
   "settings.openchamber.visual.section.chatFeatures": "機能",
-  "settings.openchamber.visual.section.messageStreamTransport": "メッセージストリーム転送",
   "settings.openchamber.visual.section.activityDefault": "アクティビティデフォルト",
   "settings.openchamber.visual.section.activityDefaultAria": "アクティビティデフォルトモード",
   "settings.openchamber.visual.section.sessionActivity": "セッションアクティビティ",
@@ -2762,12 +2762,6 @@ export const dict = {
   "chat.message.userText.showMore": "もっと見る",
   "chat.message.userText.promptedBy": "セッション {title} から",
   "chat.message.userText.promptedByUnknown": "別のセッションから",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "自動",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "WebSocket を優先し、必要に応じて SSE にフォールバック。",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "メッセージストリーミングに WebSocket を使用。",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "メッセージストリーミングに SSE を使用。",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "折りたたみ",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "アクティビティをデフォルトで折りたたみ。",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "展開",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "ネイティブのデフォルトツールセットを継承します。",
   "settings.agents.page.field.allowedToolsEdit": "ツールを編集",
   "settings.agents.page.field.allowedToolsUseDefault": "ネイティブのデフォルトを使用",
-  "settings.agents.page.field.permissionPreset": "権限プリセット ID",
   "settings.gitIdentities.editor.description.newProfile": "新しい Git Identity プロファイルを作成",
   "settings.gitIdentities.editor.description.editProfile": "Identity プロファイル設定を編集",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR のマージ後",
@@ -9425,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['ja'],
   ...tooltipsChatI18n['ja'],
   ...m4LaneDI18n.ja,
+    ...agentToolPermissionsI18n["ja"],
   "gitIdentities.state.unknown": "Git の ID はまだ読み込まれていません。",
   "settings.usage.state.unknown": "使用状況はまだ読み込まれていません。",
   "settings.usage.state.error": "使用状況を読み込めませんでした。",

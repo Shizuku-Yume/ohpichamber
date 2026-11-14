@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2509,7 +2510,6 @@ export const dict = {
   "settings.openchamber.visual.section.densityAndType": "밀도 및 서체",
   "settings.openchamber.visual.section.appInstall": "앱 설치",
   "settings.openchamber.visual.section.chatFeatures": "기능",
-  "settings.openchamber.visual.section.messageStreamTransport": "메시지 스트림 전송",
   "settings.openchamber.visual.section.activityDefault": "Activity 기본값",
   "settings.openchamber.visual.section.activityDefaultAria": "Activity 기본 모드",
   "settings.openchamber.visual.section.sessionActivity": "세션 활동",
@@ -2729,12 +2729,6 @@ export const dict = {
   "chat.message.userText.showMore": "더 보기",
   "chat.message.userText.promptedBy": "{title} 세션에서",
   "chat.message.userText.promptedByUnknown": "다른 세션에서",
-  "settings.openchamber.visual.option.messageTransport.auto.label": "자동",
-  "settings.openchamber.visual.option.messageTransport.auto.description": "WebSocket을 우선 사용하고 필요하면 SSE로 fallback합니다.",
-  "settings.openchamber.visual.option.messageTransport.ws.label": "WebSocket",
-  "settings.openchamber.visual.option.messageTransport.ws.description": "메시지 스트리밍에 WebSocket을 사용합니다.",
-  "settings.openchamber.visual.option.messageTransport.sse.label": "SSE",
-  "settings.openchamber.visual.option.messageTransport.sse.description": "메시지 스트리밍에 Server-Sent Events를 사용합니다.",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.label": "접힘",
   "settings.openchamber.visual.option.activityRenderMode.collapsed.description": "Activity를 기본으로 접어 둡니다.",
   "settings.openchamber.visual.option.activityRenderMode.summary.label": "펼침",
@@ -9030,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "네이티브 기본 도구 집합을 상속합니다.",
   "settings.agents.page.field.allowedToolsEdit": "도구 편집",
   "settings.agents.page.field.allowedToolsUseDefault": "네이티브 기본값 사용",
-  "settings.agents.page.field.permissionPreset": "권한 프리셋 ID",
   "settings.gitIdentities.editor.description.newProfile": "새 Git 자격 증명 프로필을 생성하세요",
   "settings.gitIdentities.editor.description.editProfile": "Git 자격 증명 프로필 설정을 편집하세요",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR 병합 후",
@@ -9425,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['ko'],
   ...tooltipsChatI18n['ko'],
   ...m4LaneDI18n.ko,
+    ...agentToolPermissionsI18n["ko"],
   "gitIdentities.state.unknown": "Git ID가 아직 로드되지 않았습니다.",
   "settings.usage.state.unknown": "사용량이 아직 로드되지 않았습니다.",
   "settings.usage.state.error": "사용량을 불러오지 못했습니다.",

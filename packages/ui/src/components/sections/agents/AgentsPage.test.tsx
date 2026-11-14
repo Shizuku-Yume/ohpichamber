@@ -20,6 +20,20 @@ Object.assign(globalThis, {
 });
 const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
   const url = String(input instanceof Request ? input.url : input);
+  if (url.includes('/workspaces/resolve')) {
+    return Response.json({ workspaceId: 'ws_1', projectId: 'project', name: 'project' });
+  }
+  if (url.includes('/tools')) {
+    return Response.json({
+      sessionId: 'sess_1',
+      tools: [
+        { name: 'read', label: 'Read', description: 'Read files', tier: 'read', availability: true },
+        { name: 'bash', label: 'Bash', description: 'Run commands', tier: 'exec', availability: true },
+        { name: 'custom-tool', label: 'Custom', description: 'Custom tool', tier: 'exec', availability: true },
+        { name: 'disabled-tool', label: 'Disabled', description: 'Disabled tool', tier: 'exec', availability: false },
+      ],
+    });
+  }
   return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
 });
 // These loading boundaries must run after the browser globals and the Bun asset-loader plugin are installed.
@@ -44,7 +58,7 @@ const { AgentsPage } = await import('./AgentsPage');
 const initialAgent: Agent = {
   agentId: 'test', name: 'test', description: 'Initial description',
   model: { providerId: 'provider', modelId: 'model' }, allowedTools: ['read', 'custom-tool'],
-  systemPromptOverride: 'initial', permissionPresetId: 'actual-native-preset',
+  systemPromptOverride: 'initial',
 };
 const container = document.createElement('div');
 document.body.appendChild(container);
@@ -75,17 +89,15 @@ const edit = async (entry: HTMLTextAreaElement, value: string, blur = true) => {
   await act(async () => { setter.call(entry, value); entry.dispatchEvent(new Event('input', { bubbles: true })); });
   if (blur) await act(async () => { entry.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
 };
-/** The one tool editor: a labelled checkbox per tool name. */
-const toolCheckbox = (value: string): HTMLInputElement => {
-  const label = [...container.querySelectorAll<HTMLLabelElement>('label')]
-    .find((candidate) => candidate.querySelector('span')?.textContent === value);
-  const checkbox = label?.querySelector<HTMLInputElement>('input[type="checkbox"]');
-  if (!checkbox) throw new Error(`Missing tool checkbox: ${value}`);
-  return checkbox;
+const toolRow = (value: string): HTMLElement => {
+  const rows = [...container.querySelectorAll<HTMLElement>('div[role="button"]')];
+  const row = rows.find((candidate) => candidate.textContent?.includes(`(${value})`) || candidate.textContent?.includes(value));
+  if (!row) throw new Error(`Missing tool row: ${value}`);
+  return row;
 };
 const toggleTool = async (value: string) => {
-  const checkbox = toolCheckbox(value);
-  await act(async () => { checkbox.click(); });
+  const row = toolRow(value);
+  await act(async () => { row.click(); });
 };
 
 test('native catalog refresh during save preserves newer draft and advances only acknowledged revision', async () => {
@@ -113,7 +125,6 @@ test('native catalog refresh during save preserves newer draft and advances only
   expect(writes.map((write) => write.agent.systemPromptOverride)).toEqual(['older', 'newer']);
   expect(writes.map((write) => write.revision)).toEqual(['1', '2']);
   expect(writes[1].agent.allowedTools).toEqual(initialAgent.allowedTools);
-  expect(writes[1].agent.permissionPresetId).toBe(initialAgent.permissionPresetId);
   await act(async () => {
     useAgentsStore.setState({
       selectedAgentName: 'other', agentsByDirectory: { '/project': [{ ...initialAgent, agentId: 'other', name: 'other', systemPromptOverride: 'other prompt' }] },
@@ -149,11 +160,11 @@ test('dirty native fields keep hydration revision on concurrent refresh and disp
   expect(useAgentsStore.getState().selectedAgentName).toBe('test');
 });
 
-test('clean refresh hydrates native fields, actual preset and optional prompt removal', async () => {
+test('clean refresh hydrates native fields and optional prompt removal without preset input', async () => {
   const writes: Agent[] = [];
   useAgentsStore.setState({ updateAgent: async (agent) => { writes.push(agent); return { ok: true, revision: '3' }; } });
   await render();
-  expect(container.querySelector<HTMLInputElement>('input[aria-label="Permission preset ID"]')?.value).toBe('actual-native-preset');
+  expect(container.querySelector('input[aria-label="Permission preset ID"]')).toBeNull();
   expect(container.querySelectorAll('textarea')).toHaveLength(2);
   await act(async () => {
     useAgentsStore.setState({
@@ -166,7 +177,7 @@ test('clean refresh hydrates native fields, actual preset and optional prompt re
   expect(writes[0].systemPromptOverride).toBeUndefined();
   expect(writes[0].model).toEqual(initialAgent.model);
   expect(writes[0].allowedTools).toEqual(initialAgent.allowedTools);
-  expect(writes[0].permissionPresetId).toBe(initialAgent.permissionPresetId);
+  expect((writes[0] as unknown as Record<string, unknown>).permissionPresetId).toBeUndefined();
 });
 
 test('unavailable catalog is visible and never renders editable stale fields', async () => {
@@ -222,15 +233,12 @@ test('inherited tools stay null on hydrate and autosave, edit creates an explici
   expect(container.textContent).toContain('Inherits the native default tool set.');
   await edit(field('initial'), 'Inherited description');
   expect(writes[0].allowedTools).toBeNull();
-  const editTools = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.trim() === 'Edit tools');
-  if (!editTools) throw new Error('Missing edit tools action');
-  await act(async () => { editTools.click(); });
-  expect(writes).toHaveLength(1);
   await toggleTool('read');
-  expect(writes.at(-1)?.allowedTools).toEqual(['read']);
-  const useDefaults = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.trim() === 'Use native defaults');
-  if (!useDefaults) throw new Error('Missing use native defaults action');
-  await act(async () => { useDefaults.click(); });
+  expect(writes.at(-1)?.allowedTools).toEqual(['bash', 'custom-tool']);
+  const quickActionsGroup = container.querySelector('[role="group"][aria-label="Allowed tools"]');
+  const defaultChip = [...(quickActionsGroup?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find((button) => button.textContent?.trim() === 'Default');
+  if (!defaultChip) throw new Error('Missing default action');
+  await act(async () => { defaultChip.click(); });
   expect(writes.at(-1)?.allowedTools).toBeNull();
 });
 
@@ -246,7 +254,7 @@ test('explicit empty tools remain an explicit empty list', async () => {
   expect(writes[0].allowedTools).toEqual(['read']);
 });
 
-test('the checkbox grid is the only tool editor and the optional preset can be removed', async () => {
+test('the tool editor groups tools into collapsible sections with header tri-state checkboxes, N of M counts and tier chips; Show all selects only available tools; preset input is deleted', async () => {
   const writes: Agent[] = [];
   useAgentsStore.setState({
     updateAgent: async (agent) => {
@@ -254,25 +262,30 @@ test('the checkbox grid is the only tool editor and the optional preset can be r
     }
   });
   await render();
-  // No second editor: no free-text tool input and no repeated tool list.
+  // No preset input:
+  expect(container.querySelector('input[aria-label="Permission preset ID"]')).toBeNull();
   expect(container.querySelector('input[aria-label="Allowed tools"]')).toBeNull();
-  expect(container.querySelectorAll('li')).toHaveLength(0);
+
+  // Sections with counts and tier chips:
+  expect(container.textContent).toContain('Files and search');
+  expect(container.textContent).toContain('Execution');
+
+  // Toggling a tool updates allowedTools:
   await toggleTool('bash');
   expect(writes[0].allowedTools).toEqual(['read', 'custom-tool', 'bash']);
-  expect(writes[0].permissionPresetId).toBe(initialAgent.permissionPresetId);
-  await toggleTool('bash');
-  expect(writes[1].allowedTools).toEqual(['read', 'custom-tool']);
-  const preset = container.querySelector<HTMLInputElement>('input[aria-label="Permission preset ID"]');
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-  if (!preset || !setter) throw new Error('Missing native preset input');
-  await act(async () => { setter.call(preset, 'new-native-preset'); preset.dispatchEvent(new Event('input', { bubbles: true })); });
-  await act(async () => { preset.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
-  expect(writes[2].permissionPresetId).toBe('new-native-preset');
-  expect(writes[2].allowedTools).toEqual(['read', 'custom-tool']);
-  await act(async () => { setter.call(preset, ''); preset.dispatchEvent(new Event('input', { bubbles: true })); });
-  await act(async () => { preset.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
-  expect(writes[3].permissionPresetId).toBeUndefined();
-  expect(Object.hasOwn(writes[3], 'permissionPresetId')).toBe(false);
+  expect((writes[0] as unknown as Record<string, unknown>).permissionPresetId).toBeUndefined();
+
+  // Show all selects only available tools:
+  const showAll = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Show all');
+  if (!showAll) throw new Error('Missing Show all action');
+  await act(async () => { showAll.click(); });
+  expect(writes.at(-1)?.allowedTools).toEqual(['read', 'bash', 'custom-tool']);
+  expect(writes.at(-1)?.allowedTools).not.toContain('disabled-tool');
+  // Hide all selects empty:
+  const hideAll = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Hide all');
+  if (!hideAll) throw new Error('Missing Hide all action');
+  await act(async () => { hideAll.click(); });
+  expect(writes.at(-1)?.allowedTools).toEqual([]);
 });
 
 test('thinking level and spawns are updated and saved to agent definition', async () => {

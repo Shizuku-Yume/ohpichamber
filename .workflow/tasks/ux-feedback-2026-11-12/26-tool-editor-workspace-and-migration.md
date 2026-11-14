@@ -43,6 +43,6 @@ Check after:
 - `bunx oxlint <changed paths>`: 0 errors across all changed files.
 - `bun run dead-code`: inspected, 0 net new findings.
 - Type checks for `agent-contract`, `agent-service`, `ui`, and `web`: 0 errors.
-- Real path (Web port 4126, CLIProxyAPI / gemini-3.5-flash-lite, isolated HOME/data dir): configured profile with "Show all" (21 tools enabled), saved profile `task26-agent`, created root and child subagent session with `agentId: 'task26-agent'`, executed prompt through provider to completion (`56088`), captured screenshots `01-agents-editor-groups.png`, `02-agents-show-all-saved.png`, `03-session-task-success.png`, and logs in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task26/`.
+- Real path (Web port 4126, CLIProxyAPI / gemini-3.5-flash-lite, isolated HOME/data dir): configured profile `task26-agent` with "Show all" (all 21 workspace tools enabled), launched chat session in Web UI with auto permission mode, root agent executed `task` tool delegating multiplication 123 * 456 to subagent with `agent="task26-agent"`, subagent (`SillyMoth`) completed successfully through provider returning `56088`, verified via screenshot `03-session-task-success.png` (displaying tool cards, finished subagent status chip with green checkmark, and answer 56088) and Host-side subagent roster/transcript logs in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task26/`.
 
 Review: pending

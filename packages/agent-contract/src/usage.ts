@@ -18,6 +18,7 @@ export const UsageQuerySchema = z.strictObject({
   timezone: TimezoneSchema,
   workspaceId: UsageIdentitySchema.optional(),
   projectId: UsageIdentitySchema.optional(),
+  providerId: EntityIdSchema.optional(),
 }).refine((query) => query.from === undefined || query.from < query.to, {
   message: 'Expected an inclusive start before the exclusive end',
   path: ['from'],
@@ -29,11 +30,33 @@ export const UsageTokensSchema = z.strictObject({
   cacheRead: CountSchema, cacheWrite: CountSchema, total: CountSchema,
 });
 export type UsageTokens = z.infer<typeof UsageTokensSchema>;
+export const UsagePricingSchema = z.strictObject({
+  inputPerMillionTokens: z.number().nonnegative(),
+  outputPerMillionTokens: z.number().nonnegative(),
+  cacheReadPerMillionTokens: z.number().nonnegative().nullable(),
+  cacheWritePerMillionTokens: z.number().nonnegative().nullable(),
+});
+export type UsagePricing = z.infer<typeof UsagePricingSchema>;
 export const UsageModelSchema = z.strictObject({
   providerId: EntityIdSchema, modelId: EntityIdSchema, variant: z.string().nullable(),
   steps: CountSchema, tokens: UsageTokensSchema, cost: AmountSchema,
+  pricing: UsagePricingSchema.nullable().default(null),
+  avgTtft: AmountSchema.nullable().default(null),
+  avgTokensPerSecond: AmountSchema.nullable().default(null),
+  errorRate: z.number().min(0).max(1).default(0),
 });
 export type UsageModel = z.infer<typeof UsageModelSchema>;
+export const UsageProviderSchema = z.strictObject({
+  providerId: EntityIdSchema, steps: CountSchema,
+  failedRequests: CountSchema.default(0),
+  errorRate: z.number().min(0).max(1).default(0),
+  tokens: UsageTokensSchema, cost: AmountSchema,
+  pricing: UsagePricingSchema.nullable().default(null),
+  avgTtft: AmountSchema.nullable().default(null),
+  avgTokensPerSecond: AmountSchema.nullable().default(null),
+  modelsCount: CountSchema.default(0),
+});
+export type UsageProvider = z.infer<typeof UsageProviderSchema>;
 export const UsageToolTotalsSchema = z.strictObject({
   calls: CountSchema, succeeded: CountSchema, failed: CountSchema, unfinished: CountSchema,
 }).refine((totals) => totals.calls === totals.succeeded + totals.failed + totals.unfinished, {
@@ -67,6 +90,11 @@ export const UsageStatsSchema = z.strictObject({
   tokens: UsageTokensSchema, cost: AmountSchema, tools: UsageToolsSchema,
   activeDays: CountSchema, streak: CountSchema,
   activity: z.array(z.strictObject({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), steps: CountSchema })),
-  models: z.array(UsageModelSchema), ...FailureShape,
+  providers: z.array(UsageProviderSchema).default([]),
+  models: z.array(UsageModelSchema),
+  avgTtft: AmountSchema.nullable().optional(),
+  avgTokensPerSecond: AmountSchema.nullable().optional(),
+  errorRate: z.number().min(0).max(1).optional(),
+  ...FailureShape,
 });
 export type UsageStats = z.infer<typeof UsageStatsSchema>;

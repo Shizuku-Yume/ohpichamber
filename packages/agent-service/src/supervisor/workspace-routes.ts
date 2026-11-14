@@ -161,7 +161,7 @@ export class WorkspaceRoutes {
         if (result.type !== 'usage.tools') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.tools operation.');
         return { status: 200, body: UsageToolsResponseSchema.parse(result.result) };
       }
-      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query, references });
+      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query });
       if (result.type !== 'usage.stats') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.stats operation.');
       return { status: 200, body: UsageStatsSchema.parse(result.result) };
     }

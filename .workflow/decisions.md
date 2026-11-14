@@ -1155,3 +1155,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** a later task adds an admin pin for one of these endpoints; that needs the `enterprise-mode.js` knob, its test cases, and moving the `boundary` placement to a page.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Untabbed engine settings without OMP copy are hidden, not drawn with raw ids
+
+- **Decided:** the 38 settings that OMP's TUI never shows (untabbed, so no OMP label or description: retry internals, compaction tuning, skills discovery toggles, spotlight experiment, task overrides, thinking budgets) are removed from the placement table, so they default to `hidden`. `modelRoles` stays `engine` because the role editor draws it. A test asserts every `engine` row carries OMP's label and description.
+- **Instead of:** writing locale copy for 38 internal settings in 15 locales, or keeping them as `engine` rows that show raw ids.
+- **Because:** the real-path page drew raw ids such as `thinkingBudgets.high` as row labels. Their copy would be invented, and they are OMP tuning knobs that the page's own footer already says to edit in config.yml.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP ships labels for these settings, or the maintainer wants them in the GUI.
+- **Effort:** ux-feedback-2026-11-12

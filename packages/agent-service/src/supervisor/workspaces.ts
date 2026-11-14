@@ -146,9 +146,32 @@ export class WorkspaceCatalogs {
     // A pure read advances no revision and touches no owner mutation, so it runs
     // beside other reads instead of behind the mutation queue.
     if (isStatelessCatalogRead(operation)) return this.operationNow(workspaceId, operation);
-    return this.serial(workspace.agentDirectoryId, () => this.operationNow(workspaceId, operation));
+    return this.serial(workspace.agentDirectoryId, async () => {
+      const result = await this.operationNow(workspaceId, operation);
+      if (operation.type === 'catalog.settings.write' && result.type === 'catalog.settings.mutated') {
+        await this.reloadSessionWorkersSettings(workspaceId);
+      }
+      return result;
+    });
   }
 
+  async reloadSessionWorkersSettings(workspaceId: string): Promise<void> {
+    const workspace = this.get(workspaceId);
+    const active = this.workers.list().filter(worker => worker.kind === 'session' && (worker.state === 'ready' || worker.state === 'starting'));
+    await Promise.all(active.map(async worker => {
+      const input = this.workers.bootstrap(worker.rootSessionId);
+      if (!input || (input.agentDirectoryId !== workspace.agentDirectoryId && input.workspaceId !== workspaceId)) return;
+      try {
+        await this.workers.request(worker.rootSessionId, {
+          type: 'catalog',
+          revision: this.revision(workspaceId),
+          operation: { type: 'catalog.settings.apply' },
+        }, worker.workerGeneration);
+      } catch {
+        // worker may be busy or stopping
+      }
+    }));
+  }
   /**
    * Boots a spare session worker for this workspace. It is an optimization:
    * a failed or unused spare only means the next session starts as it did

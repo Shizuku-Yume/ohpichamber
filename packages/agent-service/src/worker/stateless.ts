@@ -228,6 +228,8 @@ export class StatelessWorker {
       case 'catalog.warming.persist': result = { type: 'catalog.warming', state: await this.warming.persist(workspaceId, operation.request.mode, revision) }; break;
       case 'catalog.warming.apply':
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Cache warming application requires a live session runtime');
+      case 'catalog.settings.apply':
+        throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Settings application requires a live session runtime');
       case 'catalog.settings.read':
         result = { type: 'catalog.settings', state: await this.settingsStore.read(workspaceId, revision) }; break;
       case 'catalog.settings.write':

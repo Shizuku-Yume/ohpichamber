@@ -22,7 +22,6 @@
 import { subscribeOpenchamberEvents, type PermissionPolicySyncEvent } from '@/lib/openchamberEvents';
 import { useSpacesStore } from '@/lib/spaces/spaces-store';
 import { useAdvisorStore } from './useAdvisorStore';
-import { useAgentMemoryStore } from './useAgentMemoryStore';
 import { useCleanseStore } from './useCleanseStore';
 import { useConfigStore } from './useConfigStore';
 import { useGitIdentitiesStore } from './useGitIdentitiesStore';
@@ -80,14 +79,6 @@ export const SERVER_STATE_BOOT_ENTRIES: readonly ServerStateBootEntry[] = [
       await quota.ensureLoadedForRuntime({ visibleOnly: true });
     },
     reset: () => useQuotaStore.getState().resetForRuntimeSwitch(),
-  },
-  {
-    id: 'agent-memory',
-    // Boot reads the store as it stands (no project yet). The project-scoped
-    // read belongs to `useAgentMemorySync`, which resolves the directory's
-    // project; `maxAgeMs` there keeps the two from reading the same path twice.
-    hydrate: () => useAgentMemoryStore.getState().load(useAgentMemoryStore.getState().projectPath),
-    reset: () => useAgentMemoryStore.getState().reset(),
   },
   {
     id: 'session-folders',

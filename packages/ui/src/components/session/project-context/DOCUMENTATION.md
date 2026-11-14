@@ -14,8 +14,6 @@ drawer.
 | `NoteEditor.tsx` | the note editor: Markdown that reads formatted while you type |
 | `TodosSection.tsx` | todo list, add/toggle/delete/clear, drag reorder |
 | `PlansSection.tsx` | plan list, create, import, pin, share, delete, open |
-| `MemorySection.tsx` | agent memory list, project/global scope switch, new/changed badges, edit, forget, the Tidy up button |
-| `memoryTidy.ts` | starting the tidy-up session: the store as prompt text, the default model, the send |
 | `KnowledgeCard.tsx` | the list card for notes and memory: fixed height, opens on click |
 | `KnowledgeSplit.tsx` | the wide layout: list column and open entry side by side |
 | `KnowledgeEntryView.tsx` | the shell an opened note or memory renders in, in place of the list |
@@ -231,92 +229,12 @@ while a new-session draft is open lives on that draft and transfers only to the
 session created by its first message. Work status lists and detaches draft pins
 before that first message, then reads them from the created session metadata.
 
-## Memory is not a fifth kind of note
+## Agent memory is owned natively by OMP
 
-The first three sections hold what the user wrote. Memory holds what the **agent**
-wrote for itself, in its own store (`packages/web/server/lib/agent-memory`) and
-through its own client (`useAgentMemoryStore`). They share the panel and nothing
-else — keeping the stores apart is what stops an agent mistake from landing in
-the user's notes.
-
-Two consequences shape this tab:
-
-- **Entries are editable.** A memory worded badly enough to mislead should be
-  fixable where it is read; deleting it and hoping the agent learns it again,
-  better, is not a repair. The panel edits through `PATCH`; the agent rewrites
-  through `memory.save`, by wording or by `memoryId`.
-- **Nothing gates the agent, and nothing asks the user to click.** An earlier
-  version had a confirm button. It was theatre: the agent already had the
-  memory whether or not the button was pressed, so the click bought the user
-  nothing. Entries now carry `new` and `changed` badges derived from
-  `createdAt` / `updatedAt` against a per-scope "last looked" mark, and looking
-  at the tab is the acknowledgement. Nothing about review is stored server-side.
-- **The tab opens on a scope with entries.** Starting on an empty Project
-  scope read as "no memory at all" while About you had entries; once the user
-  picks a scope, it stays theirs.
-- **The scopes are a switch, never one merged list.** A claim about the user
-  reaches every project, so which store an entry sits in is the most important
-  thing about it and must not be something the reader has to infer. The switch
-  is a chip group, not a tab strip: it picks which store you are reading, not
-  which view you are in, and the pressed state reads plainly against the
-  panel background.
-
-The mark is frozen while the tab is open and advanced on the way out, or every
-badge would clear the instant the tab appeared — the one moment the user is
-trying to read them. Each project keeps its own mark, so opening one project
-cannot silently clear another's badges.
-
-The store is loaded by `useAgentMemorySync`, called from both app roots (`App.tsx`
-and `apps/MobileApp.tsx`; the phone once had no call, so it showed no memory and
-sent no memory index), and reloads on
-`openchamber:agent-memory-changed`, because the agent writes mid-turn through
-its own tool. It feeds this panel only — what a session is told about memory is
-decided server-side by `packages/web/server/lib/session-knowledge`, so it
-reaches sessions that have no UI at all and survives compaction.
-
-`useProjectContextOwner` is the client authority shared by this panel and the
-memory sync. It resolves managed chat directories to the Chats root and a
-worktree to its project before either consumer touches a store. The server uses
-`agent-memory/project-resolution` for the same worktree rule. Keying by a
-worktree session directory would file memories under a project nothing reads.
-
-Project memory is rendered only when the store's `projectPath` matches the
-panel owner. An owner switch hides the previous project's entries before the
-new request starts. A failed request marks the new owner unavailable instead of
-presenting that hidden list as authoritative empty memory.
-
-Turning the switch back on re-reads the store only after the setting has
-finished being written. The switch flips the client immediately, which makes the
-panel ask the server straight away — and mid-write the server truthfully answers
-"disabled", which used to latch the tab hidden until a restart. Loads are also
-sequenced, so that stale answer cannot land after the good one.
-
-`agentMemoryToolEnabled` is one switch for the whole feature: it removes the
-tool from the agent, this tab from the panel, and the index from new sessions.
-The tab also hides when the server reports the surface disabled, so a stale
-client cannot keep showing memory that is off. A persisted `memory` tab
-selection falls back to `notes` rather than opening a tab that no longer exists.
-
-### Tidy up
-
-Agents save as they work and rarely come back to an entry, while the code and
-decisions under it keep moving. Tidy up, beside the scope chips, starts a new
-session in the project (`memoryTidy.ts`) with the default model and agent
-(`lib/defaultSendSelection.ts`), sends the `memory.tidy` magic prompt with every
-entry of both scopes in full, and switches to that session. The agent checks the
-entries against the project, deletes, merges and rewrites by `memoryId` on its
-own, and ends with a report. A reversed decision is rewritten to the one that
-holds now with a line on what it replaced, never just deleted: the abandoned
-choice and its reason are what the code does not keep. Two contradicting
-entries are settled by their dates when the newer one records a decision; the
-agent asks only when it merely proposes one or the dates cannot tell. Nothing waits
-for approval and nothing is backed up: if the user disputes a change, the agent
-restores it from the text it was given.
-
-The button is disabled until both scopes are loaded for this project and hold at
-least one entry. A scope that failed to load would reach the agent as an empty
-list, and it would tidy against half the store.
-
+Agent memory is owned by OMP's `memory.backend` (local, mnemopi, hindsight) and
+native memory tools (`retain`, `recall`, `reflect`, `learn`, `memory_edit`),
+managed in Settings → Memory. The legacy host-owned store, client store, and
+panel tab were retired.
 ## Data flow
 
 Storage is server-owned; see

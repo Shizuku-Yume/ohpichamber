@@ -1910,11 +1910,11 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
           msgParts.push({
             type: "attachment",
             partId: `part_${globalThis.crypto.randomUUID()}`,
-            attachmentId: attachment.attachmentId,
-            name: attachment.name,
-            mediaType: attachment.mediaType,
+            attachmentId: attachment.id,
+            name: attachment.filename,
+            mediaType: attachment.mimeType,
             size: attachment.size,
-            uri: attachment.uri,
+            uri: attachment.dataUrl,
           })
         }
         draftEchoMessage = {

@@ -12,11 +12,11 @@
 - [x] `ModelRoleEditor` and `ModelSelector` take `loading`, rendering the existing spinner trigger. `DefaultsSettings` and `GitSettings` pass it while their OMP state is null.
 - [x] Give the walkthrough toggle its own label and info keys in all locales.
 
-**Check before:** render test not present; `ModelRoleEditor`/`ModelSelector` had no `loading` prop at base 024cbc63a (verified by `git show`); walkthrough toggle keys missing from locales.
+Check before: no render test existed; `ModelRoleEditor`/`ModelSelector` had no `loading` prop at base 024cbc63a (seen in `git diff`); walkthrough toggle keys were missing from locales.
 
-**Check after:**
+Check after:
 - Render test `packages/ui/src/components/sections/shared/ModelRoleEditor.test.tsx`: 1 pass. Loading trigger ("Loading...") while pending, no placeholder; model label after load. Log: `task07/render-test.log`.
-- `VITEST_MAX_WORKERS=2 bun test src/components/sections src/lib/i18n` (packages/ui): 300 pass, 76 fail, 2 errors in unrelated suites (BehaviorPage, VoiceSettings, PluginsPage, ProjectsPage, AddCatalogDialog, and others). None in changed files. Not verified against base. Log: `task07/sections-tests.log`.
+- `VITEST_MAX_WORKERS=2 node ../../scripts/run-isolated-tests.mjs src/components/sections` (packages/ui, the project's `test` runner): exit 0, 56/56 test files passed. Log: `task07/sections-tests-isolated.log`. A single-process `bun test` over the same tree had 76 failures from shared module state across files (React duplicate copies, store leakage); those are not present under the isolated runner, so they are not counted.
 - `messages.test.ts` + `chinese-token-copy.test.ts`: 19 pass. Log: `task07/locale-tests.log`.
 - `bunx oxlint` on the 5 changed TS/TSX paths: exit 0. Log: `task07/oxlint.log`.
 - `bun run type-check` (packages/ui): exit 1, 11 errors, all in unrelated files (e.g. `UsageStatsView.test.tsx`). Log: `task07/type-check.log`.
@@ -30,8 +30,4 @@
 - Not covered on the real path: a selected model name after load. The isolated HOME has no provider catalog, so the Model list is empty and no model could be picked. The model-shown branch is covered only by the render test.
 - Known, not changed: the "Use default small model" and walkthrough checkboxes render as checked while OMP state is pending, before the real value arrives. This is a checkbox state, not a model trigger, and is outside the spinner requirement.
 
-Review: self-review of `git diff 024cbc63a2bcafee01157aaffc0b229b41b60382`: no blocking findings.
-
-## Done
-
-- [x] Walkthrough toggle label and info keys in every locale.
+Review: pass. Self-review of `git diff 024cbc63a2bcafee01157aaffc0b229b41b60382`: no blocking findings.

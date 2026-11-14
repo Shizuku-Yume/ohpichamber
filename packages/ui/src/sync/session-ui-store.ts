@@ -1598,6 +1598,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
     const pending = createChatDirectory().then(async (directory) => {
       assertSendRuntime(runtimeKey, runtimeRevision)
+      const current = get().newSessionDraft
       const shouldPrepare = (current.open && current.target === "chat" && current.draftId === draft.draftId) || Boolean(draftSnapshot)
       if (shouldPrepare) {
         if (current.open && current.target === "chat" && current.draftId === draft.draftId) {

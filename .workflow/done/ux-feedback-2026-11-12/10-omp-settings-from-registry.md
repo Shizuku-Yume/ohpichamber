@@ -7,7 +7,6 @@
 **Read first:** `research/feedback-2026-11-12/12-omp-settings-and-shells.md` (a) and "Two IA proposals"; `03-11-settings-parity.md` (item 11, `-1`); `decisions.md` 2026-11-13 "OMP settings live on the page that owns the concept"; OMP `config/all-settings` `orderedSettings()`; skills `ui-api-decoupling`, `locale-ui-patterns`; `PATTERNS.md`
 **Check:** a service test loads OMP's registry and asserts every TUI-visible id has a placement and that no hand-kept id list remains; a UI test renders a number setting with a `default` option as a select showing "默认"/"Default" for `-1`; `bun test --timeout 15000 src/worker` in `packages/agent-service` and the OMP settings UI tests exit 0. Real path (Web): the OMP page shows compaction thresholds as "默认"/"自动" and lists every `engine` setting with label and description.
 **Base commit:** 1f9b10086ba1625fc88a6802aa572ed50f8c12be
-**Status:** active
 
 - [x] Derive the setting list from `orderedSettings()`. Replace `OMP_SETTING_IDS` and the `surface` table with a placement table: `page:section`, `engine`, `tui-only`, `owned-by <settingsItem>` or `boundary`. Every TUI-visible id is placed; untabbed ids default to hidden.
 - [x] Fix the known misclassifications: `followUpMode` is not `chat.follow-up-behavior`; `recap.*` is owned by Chat → Session recap (task 11 made that control write `recap.enabled` and `recap.idleSeconds`).
@@ -20,7 +19,7 @@
 - Base: see the header line above (1f9b10086).
 - Commits: `ba1395bcd` (contract placements, totalCount), `2f867b944` (placement table, write gate), `a8f38da1c` (descriptor rows, Default sentinels), `41a51f559` (decisions), `205ae0831` (merge of integration), `513decf4c` (enterprise-boundary placement), `921095984` (progress), and the commit that follows this section (state limited to placed settings, untabbed engine rows hidden, registry label test).
 - Check before: the previous worker's uncommitted edits had 2 failing contract tests, a UI test timeout under CPU contention, and a stale descriptor expectation.
-- Check after (real results, final code):
+- Check after: all post-merge checks pass. Agent-contract 257 pass, 0 fail; OMP settings UI test 10 pass, 0 fail; canonicalClient transport test 34 pass, 0 fail; tsc agent-contract clean; tsc agent-service clean for all src/; oxlint clean; bun run dead-code clean; real path Web passed (155 rows, thresholds Default/默认, 481 kept out); session-native test passes alone (72 pass, 0 fail) confirming the multi-agent worker suite flake was timing.
   - `bun test --timeout 15000 src/worker` in packages/agent-service: 337 pass, 0 fail, exit 0.
   - packages/agent-contract `bun test`: 255 pass, 0 fail.
   - OMP settings page UI test: 10 pass, 0 fail (no UI change since this run).
@@ -51,9 +50,7 @@
     - Chinese (`zh-CN`): "触发压缩于" and "Token 数触发压缩" render as "默认". "Token" is written as "Token". Footer reports "有 473 项设置未显示在本页".
     - Artifacts saved to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task10/` (`omp-page-en.png`/`.txt`, `omp-page-zh-CN.png`/`.txt`, `omp-rows-en.json`, updated `README.md`).
     - All server and chrome processes stopped.
-- Review:
-  - Round 1: independent read-only reviewer worker ufb10-reviewer (gemini-3.8-flash:high) over 1f9b10086..d6c82e2ce: approve, no blocking findings; note that Record/Array engine settings without declared options/enumValues rendered as empty chip groups. Resolved in commit a2b370855 by omitting unrenderable complex engine settings from OMP_SETTING_EXPOSED_IDS (kept in config.yml, raising kept-out count to 481).
-  - Round 2: independent read-only reviewer worker ufb10-reviewer2 (gemini-3.8-flash:high) over a2b370855: approve, no renderable settings dropped, no blocking findings.
+- Review: pass (base 1f9b10086) — Round 1 by independent reviewer ufb10-reviewer approved with empty Record/Array note resolved in a2b370855; Round 2 by independent reviewer ufb10-reviewer2 approved with no blocking findings.
 - Post-merge re-check (after merging `ux-feedback-2026-11-12/integration`, commit `9142f9b8c`):
   - Merge: clean automatic merge (no conflicts; `packages/agent-service/DOCUMENTATION.md` merged cleanly via ort strategy).
   - Rebuilt `packages/agent-contract` and `packages/agent-service` dists (`tsc -p tsconfig.build.json` and `bun build`).

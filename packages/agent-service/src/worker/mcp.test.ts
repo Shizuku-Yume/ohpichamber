@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -275,5 +275,94 @@ describe('MCP configuration management and unmanaged projection', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('user-scope MCP storage in a temp HOME keeps native entries and credentials', () => {
+  const workspaceId = 'workspace-1';
+  async function withHome(run: (paths: { home: string; userPath: string; projectPath: string }) => Promise<void>): Promise<void> {
+    const home = await mkdtemp(join(tmpdir(), 'mcp-home-'));
+    try {
+      const userPath = join(home, '.omp', 'agent', 'mcp.json');
+      await mkdir(join(home, '.omp', 'agent'), { recursive: true });
+      await run({ home, userPath, projectPath: join(home, 'project', '.omp', 'mcp.json') });
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  }
+
+  test('a project save leaves the pre-seeded user mcp.json byte-identical', async () => {
+    await withHome(async ({ userPath, projectPath }) => {
+      const seeded = `${JSON.stringify({
+        mcpServers: {
+          'native-http': { type: 'http', url: 'https://native.example/mcp', headers: { 'X-Key': 'raw-header' }, auth: { type: 'apikey' } },
+          'native-stdio': { command: 'uvx', args: ['mcp-x'], env: { TOKEN: 'raw-env' } },
+        },
+        enabledServers: ['native-stdio'],
+      }, null, 2)}\n`;
+      await writeFile(userPath, seeded, 'utf8');
+      const visible = await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath);
+      if (!visible) throw new Error('seeded configuration must be readable');
+      expect(visible.config.servers.map(server => server.serverId).sort()).toEqual(['native-http', 'native-stdio']);
+      const project = { serverId: 'proj-only', label: 'Project only', enabled: true, scope: 'project' as const, transport: { type: 'stdio' as const, command: 'node', args: ['p.js'] } };
+      await writeNativeMcpConfiguration(projectPath, { workspaceId, persistedRevision: '1', config: { servers: [...visible.config.servers, project] } }, userPath);
+      expect(await readFile(userPath, 'utf8')).toBe(seeded);
+    });
+  });
+
+  test('a global server shadowed by a project server survives, and a user edit keeps native fields', async () => {
+    await withHome(async ({ userPath, projectPath }) => {
+      const seeded = `${JSON.stringify({
+        mcpServers: {
+          shadowed: { type: 'http', url: 'https://global.example/mcp', headers: { 'X-Key': 'raw' } },
+          'native-stdio': { command: 'uvx', args: ['mcp-x'], env: { TOKEN: 'raw-env' } },
+        },
+        enabledServers: ['native-stdio'],
+      }, null, 2)}\n`;
+      const shadowing = { serverId: 'shadowed', label: 'Project shadow', enabled: true, scope: 'project' as const, transport: { type: 'stdio' as const, command: 'proj', args: [] } };
+      await writeNativeMcpConfiguration(projectPath, { workspaceId, persistedRevision: '1', config: { servers: [shadowing] } }, userPath);
+      await writeFile(userPath, seeded, 'utf8');
+      expect(await readFile(userPath, 'utf8')).toBe(seeded);
+
+      const read = await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath);
+      if (!read) throw new Error('configuration must be readable');
+      expect(read.config.servers.map(server => server.serverId).sort()).toEqual(['native-stdio', 'shadowed']);
+      await writeNativeMcpConfiguration(projectPath, {
+        workspaceId,
+        persistedRevision: '2',
+        config: { servers: read.config.servers.map(server => server.serverId === 'native-stdio' ? { ...server, enabled: false } : server) },
+      }, userPath);
+
+      const userRaw = JSON.parse(await readFile(userPath, 'utf8'));
+      expect(userRaw.mcpServers.shadowed).toEqual({ type: 'http', url: 'https://global.example/mcp', headers: { 'X-Key': 'raw' } });
+      expect(userRaw.mcpServers['native-stdio'].env).toEqual({ TOKEN: 'raw-env' });
+      expect(userRaw.enabledServers).toEqual(['native-stdio']);
+      expect(userRaw.disabledServers).toEqual(['native-stdio']);
+    });
+  });
+
+  test('user-scope credential references survive a reread and a second session', async () => {
+    await withHome(async ({ userPath, projectPath }) => {
+      const httpTransport = { type: 'http' as const, url: 'https://mcp.figma.example/mcp', credentialRef: 'credential-figma', headerCredentialRefs: { 'X-Team': 'credential-team' } };
+      const stdioTransport = { type: 'stdio' as const, command: 'node', args: ['s.js'], envCredentialRefs: { TOKEN: 'credential-token' } };
+      const state = {
+        workspaceId,
+        persistedRevision: '1',
+        config: {
+          servers: [
+            { serverId: 'figma', label: 'Figma', enabled: true, scope: 'user' as const, transport: httpTransport },
+            { serverId: 'local-env', label: 'Local env', enabled: true, scope: 'user' as const, transport: stdioTransport },
+          ]
+        },
+      };
+      await writeNativeMcpConfiguration(projectPath, state, userPath);
+      const userRaw = await readFile(userPath, 'utf8');
+      expect(userRaw).not.toContain('secret');
+      const first = await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath);
+      const second = await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath);
+      expect(second).toEqual(first);
+      expect(first?.config.servers.find(server => server.serverId === 'figma')?.transport).toEqual(httpTransport);
+      expect(first?.config.servers.find(server => server.serverId === 'local-env')?.transport).toEqual(stdioTransport);
+    });
   });
 });

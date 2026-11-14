@@ -669,9 +669,14 @@ export function createAutoReviewRuntime({
     }
   };
 
+  let unsubscribeEvent = null;
+  let unsubscribeStatus = null;
+
   const startRuntime = () => {
-    const unsubscribeEvent = globalEventHub.subscribeEvent(processCanonicalEvent);
-    const unsubscribeStatus = globalEventHub.subscribeStatus((hubStatus) => {
+    unsubscribeEvent?.();
+    unsubscribeStatus?.();
+    unsubscribeEvent = globalEventHub?.subscribeEvent(processCanonicalEvent);
+    unsubscribeStatus = globalEventHub?.subscribeStatus((hubStatus) => {
       if (hubStatus?.type === 'connect') reconcileAll();
     });
     void load()
@@ -690,15 +695,30 @@ export function createAutoReviewRuntime({
         markStartupLoadSettled();
       });
     return () => {
-      unsubscribeEvent();
-      unsubscribeStatus();
+      unsubscribeEvent?.();
+      unsubscribeStatus?.();
+      unsubscribeEvent = null;
+      unsubscribeStatus = null;
     };
   };
 
   const stop = () => {
+    if (stopped) return;
     stopped = true;
     for (const timer of timers.values()) clearTimeout(timer);
     timers.clear();
+    unsubscribeEvent?.();
+    unsubscribeStatus?.();
+    unsubscribeEvent = null;
+    unsubscribeStatus = null;
+    for (const release of observed.values()) {
+      try {
+        void release?.();
+      } catch {
+        // Ignored on teardown
+      }
+    }
+    observed.clear();
   };
 
   return {

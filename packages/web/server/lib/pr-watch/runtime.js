@@ -633,10 +633,15 @@ export function createPrWatchRuntime({
     void load().then(syncInterest).catch(() => undefined);
   };
 
+  let unsubscribeEvent = null;
+  let unsubscribeStatus = null;
+
   const start = (globalEventHub) => {
     eventHub = globalEventHub ?? null;
-    const unsubscribeEvent = globalEventHub?.subscribeEvent(processCanonicalEvent);
-    const unsubscribeStatus = globalEventHub?.subscribeStatus((hubStatus) => {
+    unsubscribeEvent?.();
+    unsubscribeStatus?.();
+    unsubscribeEvent = globalEventHub?.subscribeEvent(processCanonicalEvent);
+    unsubscribeStatus = globalEventHub?.subscribeStatus((hubStatus) => {
       if (hubStatus?.type !== 'connect') return;
       for (const [sessionID, entry] of watches) {
         observe(sessionID);
@@ -655,14 +660,30 @@ export function createPrWatchRuntime({
     return () => {
       unsubscribeEvent?.();
       unsubscribeStatus?.();
+      unsubscribeEvent = null;
+      unsubscribeStatus = null;
     };
   };
 
   const stop = () => {
+    if (stopped) return;
     stopped = true;
     unsubscribeTracked?.();
+    unsubscribeTracked = null;
+    unsubscribeEvent?.();
+    unsubscribeStatus?.();
+    unsubscribeEvent = null;
+    unsubscribeStatus = null;
     for (const timer of timers.values()) clearTimeout(timer);
     timers.clear();
+    for (const release of observed.values()) {
+      try {
+        void release?.();
+      } catch {
+        // Ignored on teardown
+      }
+    }
+    observed.clear();
   };
 
   return {

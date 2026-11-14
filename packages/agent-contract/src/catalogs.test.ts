@@ -213,4 +213,22 @@ describe('Canonical catalogs and scoped operations', () => {
     expect(Catalog.ModelSchema.safeParse({ ...model, pricing: { ...model.pricing, inputPerMillionTokens: Infinity } }).success).toBe(false);
     expect(Catalog.MCPToolSchema.safeParse({ ...tool, inputSchema: { execute: () => 'not-json' } }).success).toBe(false);
   });
+
+  test('tool catalog schemas enforce tool tier and entry structure', () => {
+    const entry = {
+      name: 'read',
+      label: 'Read',
+      description: 'Read files in the workspace',
+      tier: 'read' as const,
+      availability: true,
+    };
+    expect(Catalog.ToolCatalogEntrySchema.parse(entry)).toEqual(entry);
+    expect(Catalog.ToolTierSchema.safeParse('exec').success).toBe(true);
+    expect(Catalog.ToolTierSchema.safeParse('other').success).toBe(false);
+    expect(Catalog.ToolCatalogEntrySchema.safeParse({ ...entry, tier: 'other' }).success).toBe(false);
+    expect(Catalog.SessionToolsCatalogSchema.parse({ sessionId: 'session_1', tools: [entry] })).toEqual({
+      sessionId: 'session_1',
+      tools: [entry],
+    });
+  });
 });

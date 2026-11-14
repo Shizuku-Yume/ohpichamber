@@ -22,6 +22,7 @@ import { createModelJobCaptionWriter } from '@oh-my-pi/pi-coding-agent/job-widge
 import { listServicesTolerant, sendService, serviceLogs, stopService } from '@oh-my-pi/pi-coding-agent/launch/services';
 import { cfgAsyncWidgets } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import type { ToolSession } from '@oh-my-pi/pi-coding-agent/tools';
+import { resolveToolTier } from '@oh-my-pi/pi-coding-agent/tools/approval';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
 import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
@@ -2080,6 +2081,29 @@ export class WorkerSession {
       }
       case 'branch':
         return this.selectBranch(operation.request);
+      case 'tools.catalog': {
+        const toolInfos = this.session.getAllToolInfos();
+        const tools = toolInfos.map((info) => {
+          const tool = this.session.getToolByName(info.name);
+          const tier = tool ? resolveToolTier(tool, {}) : 'exec';
+          const label = (typeof tool?.label === 'string' && tool.label) ? tool.label : info.name;
+          const description = (typeof tool?.description === 'string' && tool.description) ? tool.description : (info.description || '');
+          return {
+            name: info.name,
+            label,
+            description,
+            tier,
+            availability: true,
+          };
+        });
+        return {
+          type: 'tools.catalog',
+          catalog: {
+            sessionId: this.sessionId,
+            tools,
+          },
+        };
+      }
       case 'delete':
         if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         await this.bind();

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -8996,7 +8997,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Dziedziczy natywny domyślny zestaw narzędzi.",
   "settings.agents.page.field.allowedToolsEdit": "Edytuj narzędzia",
   "settings.agents.page.field.allowedToolsUseDefault": "Użyj natywnych ustawień domyślnych",
-  "settings.agents.page.field.permissionPreset": "ID presetu uprawnień",
   "settings.gitIdentities.editor.description.editProfile": "Edytuj ustawienia profilu tożsamości",
   "settings.gitIdentities.editor.description.newProfile": "Utwórz nowy profil tożsamości Git",
   "settings.github.page.accountSource.oauth": "OAuth",
@@ -9418,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['pl'],
   ...tooltipsChatI18n['pl'],
   ...m4LaneDI18n.pl,
+    ...agentToolPermissionsI18n["pl"],
   "gitIdentities.state.unknown": "Tożsamości Git nie zostały jeszcze wczytane.",
   "settings.usage.state.unknown": "Użycie nie zostało jeszcze wczytane.",
   "settings.usage.state.error": "Nie udało się wczytać użycia.",

@@ -44,6 +44,9 @@ Host tools (`openchamber`, `openchamber_knowledge`, `web`, `memory`, `notify`, `
 Notices are persisted as native custom entries (`ohpichamber.notice.v1`) on the session branch and restored on cold history reload.
 
 `session.compacted` projects authoritative compaction metadata (`method`: `soft-compacted`, `remote-compacted`, `shaken`, `snap-compacted`, `handed-off`), `tokensBefore`, `tokensAfter`, and markdown summaries.
+## Live tool catalog
+
+`GET /api/agent/v1/sessions/:sessionId/tools` queries the live session worker's registered tools with their OMP tier (`read`, `write`, `exec`) and descriptions. When no live session is running, `GET /api/agent/v1/workspaces/:workspaceId/tools` queries the workspace worker, evaluating built-in tool availability against the native workspace settings via `resolveBuiltinToolPlan` so unavailable capabilities are marked `availability: false`. The Agent tool permissions editor consumes this endpoint to prevent selecting unavailable tools and triggering 422 `UNSUPPORTED_CAPABILITY` on profile activation.
 ## Native session archives
 
 `SessionRegistry.archiveManifest()` is the host-authorized, read-only inventory of native chats. `exportArchive()` emits a bounded uncompressed ustar bundle containing the selected transcript, descendants, tool artifacts, subagent outputs, and referenced blobs; it never parses transcripts in Node. `importArchive()` validates the complete manifest before staging and installs immutable deleted-space references. Imported roots and descendants remain cold until explicitly reopened, and deleted-space mutations return `SESSION_READ_ONLY` (HTTP 409). Archive transfers are bounded to 256 MiB and five minutes per operation; save/restore uses a thirty-minute host window.

@@ -77,9 +77,9 @@ describe('session schemas', () => {
     expect(ProjectSchema.parse(project)).toEqual(project);
     expect(ProjectSchema.safeParse({ ...project, displayPath: '/host/project' }).success).toBe(false);
     expect(AgentSchema.parse(agent)).toEqual(agent);
-    const configured = { ...agent, model: { providerId: 'provider_1', modelId: 'model_1' }, systemPromptOverride: 'Review only.', permissionPresetId: 'preset_readonly' };
+    const configured = { ...agent, model: { providerId: 'provider_1', modelId: 'model_1' }, systemPromptOverride: 'Review only.' };
     expect(AgentSchema.parse(configured)).toEqual(configured);
-    expect(AgentSchema.safeParse({ ...configured, permissionPresetId: '' }).success).toBe(false);
+    expect(AgentSchema.safeParse({ ...configured, permissionPresetId: 'preset' }).success).toBe(false);
     const inherited = { ...agent, allowedTools: null };
     expect(AgentSchema.parse(inherited)).toEqual(inherited);
     expect(AgentSchema.safeParse({ ...agent, allowedTools: undefined }).success).toBe(false);

@@ -1,4 +1,4 @@
-import type { ToolPopupContent } from '@openchamber/agent-contract';
+import type { ToolPopupContent } from '../types';
 import React from 'react';
 
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
@@ -172,7 +172,7 @@ export const EvalStepList: React.FC<EvalStepListProps> = ({
                                 )}
                             >
                                 <Icon
-                                    name={hasError ? 'error-warning' : iconName}
+                                    name={(hasError ? 'error-warning' : iconName) as React.ComponentProps<typeof Icon>['name']}
                                     className="size-3"
                                 />
                             </span>

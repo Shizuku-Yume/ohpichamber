@@ -22,6 +22,7 @@ const registry = (overrides: Partial<SessionRegistry> = {}): SessionRegistry => 
     entries: [{ entryId: 'entry_1', role: 'assistant' as const, text: 'Found the reducer', toolCalls: [], createdAt: 1_700_000_000_000 }],
   }),
   subagentTreeCost: async (id: string) => ({ sessionId: id, directCost: 0.02, treeCost: 0.11 }),
+  tools: async (id: string) => ({ sessionId: id, tools: [{ name: 'read', label: 'Read', description: 'Read files', tier: 'read' as const, availability: true }] }),
   ...overrides,
 } as unknown as SessionRegistry);
 
@@ -30,6 +31,11 @@ describe('sessionSurfaceRoute', () => {
     const response = await sessionSurfaceRoute(registry(), request('GET'), url(`/api/agent/v1/sessions/${sessionId}/recaps`));
     expect(response?.status).toBe(200);
     expect(response?.body).toMatchObject({ recaps: [{ sessionId, recap: 'Sixteen tiles now render on the board' }] });
+  });
+  test('serves tool catalog for an admitted session', async () => {
+    const response = await sessionSurfaceRoute(registry(), request('GET'), url(`/api/agent/v1/sessions/${sessionId}/tools`));
+    expect(response?.status).toBe(200);
+    expect(response?.body).toMatchObject({ sessionId, tools: [{ name: 'read', label: 'Read', tier: 'read', availability: true }] });
   });
 
   test('serves the hub roster, transcript, and tree cost', async () => {

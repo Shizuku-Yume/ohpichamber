@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -9023,7 +9024,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "네이티브 기본 도구 집합을 상속합니다.",
   "settings.agents.page.field.allowedToolsEdit": "도구 편집",
   "settings.agents.page.field.allowedToolsUseDefault": "네이티브 기본값 사용",
-  "settings.agents.page.field.permissionPreset": "권한 프리셋 ID",
   "settings.gitIdentities.editor.description.newProfile": "새 Git 자격 증명 프로필을 생성하세요",
   "settings.gitIdentities.editor.description.editProfile": "Git 자격 증명 프로필 설정을 편집하세요",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR 병합 후",
@@ -9418,6 +9418,7 @@ export const dict = {
   ...tooltipsPanelI18n['ko'],
   ...tooltipsChatI18n['ko'],
   ...m4LaneDI18n.ko,
+    ...agentToolPermissionsI18n["ko"],
   "gitIdentities.state.unknown": "Git ID가 아직 로드되지 않았습니다.",
   "settings.usage.state.unknown": "사용량이 아직 로드되지 않았습니다.",
   "settings.usage.state.error": "사용량을 불러오지 못했습니다.",

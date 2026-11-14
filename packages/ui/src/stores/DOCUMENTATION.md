@@ -679,11 +679,10 @@ next revision, so background refreshes cannot silently authorize a stale edit.
 Agent IDs remain stable across rename; duplicate creates a new ID. Native
 profiles have no legacy scope, mode, hidden, color, sampling or file metadata.
 
-Native profiles expose `allowedTools` and an optional `permissionPresetId`
-directly; those fields are edited through canonical `updateAgent`. There is no
-store read or patch for the retired Host permissions subresource: execution
-authorization belongs to the native SDK/Host approval path. No preset catalog
-or invented preset choices exist in this slice.
+Native profiles expose `allowedTools` directly; that field is edited through
+canonical `updateAgent`. There is no store read or patch for the retired Host
+permissions subresource: execution authorization belongs to the native SDK/Host
+approval path.
 
 Retained command and MCP configuration still use their Host entity routes.
 Command editors read their own stored `…/config` entries rather than resolved

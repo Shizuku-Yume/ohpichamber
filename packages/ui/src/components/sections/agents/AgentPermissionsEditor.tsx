@@ -12,8 +12,8 @@ import {
 import {
   categorizeTool,
   TOOL_PERMISSION_GROUPS,
-  type ToolPermissionGroupKey,
-  TOOL_ONE_LINE_DESCRIPTIONS,
+  GROUP_DESCRIPTIONS,
+  getToolOneLineDescription,
   toolPresentation,
 } from '@/lib/toolPresentation';
 
@@ -24,11 +24,21 @@ export interface AgentPermissionsEditorProps {
   disabled?: boolean;
 }
 
-const TIER_CLASSES: Record<ToolTier, string> = {
+const TIER_CLASSES = {
   read: 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
   write: 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10',
   exec: 'border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/10',
-};
+} as const;
+
+const GROUP_DESC_KEYS = {
+  files_and_search: 'settings.agents.page.toolPermissions.groupDesc.files_and_search',
+  execution: 'settings.agents.page.toolPermissions.groupDesc.execution',
+  web_and_external: 'settings.agents.page.toolPermissions.groupDesc.web_and_external',
+  planning_and_memory: 'settings.agents.page.toolPermissions.groupDesc.planning_and_memory',
+  multi_agent: 'settings.agents.page.toolPermissions.groupDesc.multi_agent',
+  openchamber: 'settings.agents.page.toolPermissions.groupDesc.openchamber',
+  mcp_and_extensions: 'settings.agents.page.toolPermissions.groupDesc.mcp_and_extensions',
+} as const;
 
 const TierChip: React.FC<{ tier: ToolTier }> = ({ tier }) => {
   const { t } = useI18n();
@@ -71,7 +81,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
           list.push({
             name,
             label: presentation.label || name,
-            description: TOOL_ONE_LINE_DESCRIPTIONS[name] || '',
+            description: getToolOneLineDescription(name),
             tier: 'exec',
             availability: false,
           });
@@ -88,20 +98,32 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
 
   // Group tools into the 7 fork-owned categories
   const groupedTools = React.useMemo(() => {
-    const groups: Record<ToolPermissionGroupKey, ToolCatalogEntry[]> = {
-      files_and_search: [],
-      execution: [],
-      web_and_external: [],
-      planning_and_memory: [],
-      multi_agent: [],
-      openchamber: [],
-      mcp_and_extensions: [],
-    };
+    const files_and_search: ToolCatalogEntry[] = [];
+    const execution: ToolCatalogEntry[] = [];
+    const web_and_external: ToolCatalogEntry[] = [];
+    const planning_and_memory: ToolCatalogEntry[] = [];
+    const multi_agent: ToolCatalogEntry[] = [];
+    const openchamber: ToolCatalogEntry[] = [];
+    const mcp_and_extensions: ToolCatalogEntry[] = [];
     for (const tool of tools) {
       const groupKey = categorizeTool(tool.name);
-      groups[groupKey].push(tool);
+      if (groupKey === 'files_and_search') files_and_search.push(tool);
+      else if (groupKey === 'execution') execution.push(tool);
+      else if (groupKey === 'web_and_external') web_and_external.push(tool);
+      else if (groupKey === 'planning_and_memory') planning_and_memory.push(tool);
+      else if (groupKey === 'multi_agent') multi_agent.push(tool);
+      else if (groupKey === 'openchamber') openchamber.push(tool);
+      else mcp_and_extensions.push(tool);
     }
-    return groups;
+    return {
+      files_and_search,
+      execution,
+      web_and_external,
+      planning_and_memory,
+      multi_agent,
+      openchamber,
+      mcp_and_extensions,
+    };
   }, [tools]);
 
   // Determine active quick action
@@ -172,14 +194,17 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
             {
               value: 'inherit',
               label: t('settings.agents.page.toolPermissions.quickActions.inherit'),
+              disabled,
             },
             {
               value: 'all',
               label: t('settings.agents.page.toolPermissions.quickActions.all'),
+              disabled,
             },
             {
               value: 'none',
               label: t('settings.agents.page.toolPermissions.quickActions.none'),
+              disabled,
             },
           ]}
           onChange={handleQuickAction}
@@ -207,6 +232,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
           const groupTiers = Array.from(new Set(groupToolList.map((tool) => tool.tier)));
 
           const groupTitle = t(`settings.agents.page.toolPermissions.group.${groupKey}`);
+          const groupDescription = t(GROUP_DESC_KEYS[groupKey]) || GROUP_DESCRIPTIONS[groupKey];
           const countLabel = t('settings.agents.page.toolPermissions.selectedCount', {
             selected: selectedTools.length,
             total: groupToolList.length,
@@ -251,13 +277,19 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
                     />
                   </div>
 
-                  <span className="text-xs font-medium text-foreground truncate">
-                    {groupTitle}
-                  </span>
-
-                  <span className="text-[11px] text-muted-foreground tabular-nums">
-                    {countLabel}
-                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-foreground truncate">
+                        {groupTitle}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground tabular-nums">
+                        {countLabel}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {groupDescription}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Tier chips summary */}
@@ -273,9 +305,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
                 <div className="divide-y divide-border/20 px-3 py-1 space-y-1">
                   {groupToolList.map((tool) => {
                     const checked = isToolChecked(tool.name);
-                    const descKey = `settings.agents.page.toolPermissions.toolDesc.${tool.name as keyof typeof TOOL_ONE_LINE_DESCRIPTIONS}`;
-                    const translatedDesc = t(descKey as Parameters<typeof t>[0]);
-                    const description = tool.description || (translatedDesc !== descKey ? translatedDesc : '') || TOOL_ONE_LINE_DESCRIPTIONS[tool.name] || '';
+                    const description = tool.description || '';
                     return (
                       <SettingsCheckboxRow
                         key={tool.name}

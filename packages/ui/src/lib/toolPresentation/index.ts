@@ -13,6 +13,7 @@ export {
     TOOL_PERMISSION_GROUPS,
     TOOL_ONE_LINE_DESCRIPTIONS,
     GROUP_DESCRIPTIONS,
+    getToolOneLineDescription,
     type ToolPermissionGroupKey,
 } from './groups';
 export { useEvalView, splitEvalOutput, evalResultSummary, normalizeEvalLanguage, isToolCallStatusEvent } from './toolView';

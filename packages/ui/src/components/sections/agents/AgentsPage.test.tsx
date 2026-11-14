@@ -399,21 +399,31 @@ test('a failed catalog load disables editing and never autosaves an empty list',
 
   await render();
 
-  expect(container.querySelector('[role="status"]')?.textContent).toContain('Unavailable');
+  const statusBanner = container.querySelector('[role="status"]');
+  expect(statusBanner).not.toBeNull();
+  expect(statusBanner?.textContent).toContain('Unavailable');
 
-  const showAll = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Show all');
-  if (showAll) {
-    await act(async () => { showAll.click(); });
+  // Quick action chip buttons must be unconditionally disabled
+  const chipButtons = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')];
+  expect(chipButtons.length).toBeGreaterThan(0);
+  for (const btn of chipButtons) {
+    expect(btn.disabled).toBe(true);
+  }
+  // Checkboxes must be unconditionally disabled
+  const checkboxes = [...container.querySelectorAll<HTMLInputElement>('[data-settings-item="agents.allowed-tools"] input[type="checkbox"]')];
+  for (const cb of checkboxes) {
+    expect(cb.disabled).toBe(true);
   }
 
+  // Editing a field triggers autosave
   await edit(field('initial'), 'Updated description during catalog failure');
 
-  if (writes.length > 0) {
-    expect(writes[0].allowedTools).not.toEqual([]);
-    expect(writes[0].allowedTools).toEqual(initialAgent.allowedTools);
-  }
+  // Must unconditionally write and MUST NOT empty allowedTools
+  expect(writes.length).toBeGreaterThan(0);
+  const lastWrite = writes[writes.length - 1];
+  expect(lastWrite.allowedTools).toEqual(initialAgent.allowedTools);
+  expect(lastWrite.allowedTools).not.toEqual([]);
 });
-
 test('unavailable or unknown tools cannot be selected and are excluded from Show all', async () => {
   const writes: Agent[] = [];
   const agentWithUnknown: Agent = {

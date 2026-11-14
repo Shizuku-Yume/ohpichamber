@@ -155,7 +155,7 @@ export const AgentsPage: React.FC = () => {
   formRef.current = form;
   const [toolsCatalog, setToolsCatalog] = React.useState<ToolCatalogEntry[]>([]);
   const [toolsCatalogError, setToolsCatalogError] = React.useState<string | null>(null);
-
+  const [catalogRetryCount, setCatalogRetryCount] = React.useState(0);
   React.useEffect(() => {
     let active = true;
     const loadCatalog = async () => {
@@ -201,7 +201,7 @@ export const AgentsPage: React.FC = () => {
     };
     void loadCatalog();
     return () => { active = false; };
-  }, [settingsDirectory]);
+  }, [settingsDirectory, catalogRetryCount]);
   const [isCreating, setIsCreating] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -492,8 +492,11 @@ export const AgentsPage: React.FC = () => {
           controlClassName="w-full max-w-none flex-col items-stretch"
         >
           {toolsCatalogError && (
-            <div role="status" className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-              {t('common.unavailable')}
+            <div role="status" className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between gap-2">
+              <span>{t('common.unavailable')}</span>
+              <Button size="xs" variant="outline" onClick={() => setCatalogRetryCount((c) => c + 1)}>
+                {t('settings.agents.page.permissionsEditor.actions.retry')}
+              </Button>
             </div>
           )}
           <AgentPermissionsEditor

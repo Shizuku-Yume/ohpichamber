@@ -52,14 +52,14 @@ Save screenshots and the event log to `/home/shizuku/Project/ohpichamber-omp-art
   - Independent reviewer: separate worker session `ufb21-reviewer` (model `gemini-3.8-flash`). Round 1 verdict `blocked` with 3 P2 findings (`/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task21-review-r1.md`), all 3 closed in code/tests/decisions; Round 2 verdict `approved` (`/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task21-review-r2.md`).
 - Real-path verification:
   - Real-path passed with artifacts in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task21/`: `README.md`, `event-stream.log`, `session-c-history.json`, screenshots `01-initial-workbench.png` through `08-pr-unwatch-completed.png`. Verified auto-review strip mounts, sends review prompt to real provider, and settles clean; verified `pr.watch` created via Host action, strip appears, PR update wakes session with synthetic context, and `pr.unwatch` cleans up. No credentials leaked.
-- Check after:
+- Check after (pre-merge and post-merge with `ux-feedback-2026-11-12/integration`):
   - `VITEST_MAX_WORKERS=2 bun run --cwd packages/web test -- server/lib/auto-review server/lib/pr-watch server/lib/host server/lib/openchamber-control`: exits 0 (77 test files, 752 passed, 1 skipped).
   - `node scripts/upstream-gaps.mjs --check`: exits 0 (654 detected, 654 allowlisted, 0 unallowlisted).
-  - `node --test scripts/upstream-gaps.test.mjs`: exits 0 (9/9 passed, including the three negative cases: deleting a tracker route handler, deleting `setTerminalCloseOnExit` impl while keeping type, and deleting a `create*Runtime` call).
+  - `node --test scripts/upstream-gaps.test.mjs`: exits 0 (9/9 passed, including negative cases: deleting tracker route handler, deleting `setTerminalCloseOnExit` impl while keeping type, deleting `create*Runtime` call).
   - `bun test packages/agent-service/src/worker/host-tool.test.ts`: exits 0 (7/7 passed).
   - `bun test packages/agent-service/src/worker/session-native.test.ts`: exits 0 (72/72 passed).
   - `bun test packages/web/server/lib/dispatch-results/runtime.test.js`: exits 0 (6/6 passed).
-  - Scoped UI tests: `bun test packages/ui/src/sync/auto-review-sync.test.ts packages/ui/src/stores/useAutoReviewStore.test.ts packages/ui/src/lib/openchamberEvents.test.ts`: exits 0 (25 passed).
+  - Scoped UI tests (`auto-review-sync.test.ts`, `useAutoReviewStore.test.ts`, `openchamberEvents.test.ts`, `useCallableModelProviders.test.tsx`, `smallModelRequest.test.ts`): exits 0 (37 passed).
   - Type checks: `bun run --cwd packages/ui type-check` (exit 0), `bun run --cwd packages/web type-check` (exit 0), `bun run --cwd packages/agent-contract type-check` (exit 0), `bun run --cwd packages/agent-service type-check` (exit 0).
   - Agent service build: `bun run --cwd packages/agent-service build`: exits 0.
   - Lint: `bunx oxlint <changed-paths>`: clean (exit 0).

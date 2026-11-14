@@ -3,7 +3,6 @@ import {
   JsonObjectSchema,
   MODEL_ROLE_IDS,
   type OmpSetting,
-  type OmpSettingId,
   type OmpSettingValue,
   type OmpSettingsChange,
   type OmpSettingsState,
@@ -14,6 +13,8 @@ import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   SettingsCheckboxRow,
   SettingsChipGroup,
@@ -62,106 +63,73 @@ const ROLE_LABEL_KEYS: Record<string, { label: I18nKey; desc: I18nKey }> = {
   judge: { label: 'settings.omp.modelRoles.role.judge.label', desc: 'settings.omp.modelRoles.role.judge.desc' },
 };
 
-/** How one row draws its value; every GUI row is a toggle, a number or a short choice. */
-type OmpRowKind = 'toggle' | 'number' | 'chips';
-
-interface OmpRow {
-  readonly id: OmpSettingId;
-  readonly kind: OmpRowKind;
-  /** Localized unit name shown after a number stepper. */
-  readonly unit?: 'percent' | 'seconds' | 'tokens';
-}
-
-interface OmpSection {
+interface ResolvedSection {
   readonly id: string;
-  readonly titleKey: I18nKey;
+  readonly titleKey?: I18nKey;
   readonly descriptionKey?: I18nKey;
-  readonly rows: readonly OmpRow[];
+  readonly label: string;
+  readonly rows: readonly OmpSetting[];
 }
 
-/**
- * The page's row registry. Each row names a setting the app actually renders
- * and the control it takes. A setting the service classified as anything but
- * `gui` never reaches this list, so terminal presentation, internals and the
- * concepts another Settings page owns cannot reappear here by accident.
- */
-const OMP_SECTIONS: readonly OmpSection[] = [
-  {
-    id: 'retry',
+const SECTION_METADATA: Record<string, { titleKey?: I18nKey; descriptionKey?: I18nKey; label: string }> = {
+  retry: {
     titleKey: 'settings.omp.group.retry_fallback.label',
     descriptionKey: 'settings.omp.section.retry.description',
-    rows: [
-      { id: 'retry.enabled', kind: 'toggle' },
-      { id: 'retry.maxRetries', kind: 'number' },
-      { id: 'retry.waitForUsageReset', kind: 'toggle' },
-      { id: 'retry.modelFallback', kind: 'toggle' },
-      { id: 'retry.fallbackOn', kind: 'chips' },
-      { id: 'retry.usageAwareFallback', kind: 'toggle' },
-      { id: 'retry.usageReservePct', kind: 'number', unit: 'percent' },
-      { id: 'retry.usageReservePolicy', kind: 'chips' },
-      { id: 'retry.fallbackRevertPolicy', kind: 'chips' },
-    ],
+    label: 'Retry & Fallback',
   },
-  {
-    id: 'compaction',
+  compaction: {
     titleKey: 'settings.omp.group.compaction.label',
     descriptionKey: 'settings.omp.section.compaction.description',
-    rows: [
-      { id: 'compaction.enabled', kind: 'toggle' },
-      { id: 'compaction.thresholdPercent', kind: 'number', unit: 'percent' },
-      { id: 'compaction.thresholdTokens', kind: 'number', unit: 'tokens' },
-      { id: 'compaction.autoContinue', kind: 'toggle' },
-      { id: 'compaction.idleEnabled', kind: 'toggle' },
-      { id: 'compaction.idleThresholdTokens', kind: 'number', unit: 'tokens' },
-      { id: 'compaction.idleTimeoutSeconds', kind: 'number', unit: 'seconds' },
-    ],
+    label: 'Compaction',
   },
-  {
-    id: 'lsp',
+  lsp: {
     titleKey: 'settings.omp.group.lsp.label',
     descriptionKey: 'settings.omp.section.lsp.description',
-    rows: [
-      { id: 'lsp.enabled', kind: 'toggle' },
-      { id: 'lsp.formatOnWrite', kind: 'toggle' },
-    ],
+    label: 'LSP',
   },
-  {
-    id: 'tasks',
+  tasks: {
     titleKey: 'settings.omp.section.subagents.title',
     descriptionKey: 'settings.omp.section.subagents.description',
-    rows: [
-      { id: 'task.isolation.enabled', kind: 'toggle' },
-      { id: 'task.maxConcurrency', kind: 'number' },
-      { id: 'task.maxRecursionDepth', kind: 'number' },
-    ],
+    label: 'Subagents',
   },
-  {
-    id: 'modes',
+  modes: {
     titleKey: 'settings.omp.group.modes.label',
     descriptionKey: 'settings.omp.section.modes.description',
-    rows: [
-      { id: 'plan.enabled', kind: 'toggle' },
-      { id: 'plan.defaultOnStartup', kind: 'toggle' },
-      { id: 'plan.autosave', kind: 'toggle' },
-      { id: 'goal.enabled', kind: 'toggle' },
-    ],
+    label: 'Modes',
   },
-  {
-    id: 'commands',
+  commands: {
     titleKey: 'settings.omp.group.commands_skills.label',
     descriptionKey: 'settings.omp.section.commands.description',
-    rows: [
-      { id: 'skills.enabled', kind: 'toggle' },
-      { id: 'skills.enableSkillCommands', kind: 'toggle' },
-    ],
+    label: 'Commands & Skills',
   },
-  {
-    id: 'integrations',
+  integrations: {
     titleKey: 'settings.omp.section.integrations.title',
     descriptionKey: 'settings.omp.section.integrations.description',
-    rows: [{ id: 'mcp.enableProjectConfig', kind: 'toggle' }],
+    label: 'Integrations',
   },
-];
+};
+
+function resolveSectionInfo(setting: OmpSetting): { id: string; titleKey?: I18nKey; descriptionKey?: I18nKey; label: string } {
+  if (setting.id.startsWith('retry.')) return { id: 'retry', ...SECTION_METADATA.retry };
+  if (setting.id.startsWith('compaction.') || setting.group === 'Compaction') return { id: 'compaction', ...SECTION_METADATA.compaction };
+  if (setting.id.startsWith('lsp.') || setting.group === 'LSP') return { id: 'lsp', ...SECTION_METADATA.lsp };
+  if (setting.id.startsWith('task.') || setting.group === 'Subagents') return { id: 'tasks', ...SECTION_METADATA.tasks };
+  if (setting.id.startsWith('plan.') || setting.id.startsWith('goal.') || setting.group === 'Modes') return { id: 'modes', ...SECTION_METADATA.modes };
+  if (setting.id.startsWith('skills.') || setting.group === 'Commands & Skills') return { id: 'commands', ...SECTION_METADATA.commands };
+  if (setting.id.startsWith('mcp.') || setting.group === 'Discovery & MCP') return { id: 'integrations', ...SECTION_METADATA.integrations };
+  const slug = optionSlug(setting.group || 'general');
+  return {
+    id: slug,
+    label: setting.group || 'General',
+  };
+}
+
+function inferUnit(id: string): 'percent' | 'seconds' | 'tokens' | undefined {
+  if (id.endsWith('Percent') || id.endsWith('Pct')) return 'percent';
+  if (id.endsWith('Seconds') || id.endsWith('Sec')) return 'seconds';
+  if (id.endsWith('Tokens')) return 'tokens';
+  return undefined;
+}
 
 /** Lower-case, hyphenated slug the option-label keys use. */
 function optionSlug(value: unknown): string {
@@ -171,6 +139,11 @@ function optionSlug(value: unknown): string {
     else if (out.length > 0 && out[out.length - 1] !== '-') out.push('-');
   }
   return out.join('').replace(/^-+|-+$/g, '') || 'opt';
+}
+
+/** OMP's own sentinel: `-1` or `default`, both shown as the Default option. */
+function isSentinelOption(value: string): boolean {
+  return value === 'default' || value === '-1';
 }
 
 /** The native `modelRoles` record read as plain selectors; malformed entries are dropped. */
@@ -189,14 +162,13 @@ function readRoleSelectors(value: OmpSettingValue): Record<string, string> {
 
 type Values = Record<string, OmpSettingValue>;
 
-/** One registry row: label and description from the locale, control from `kind`. */
+/** One registry row: label and description from the locale, control from type/options. */
 const OmpRowControl: React.FC<{
   setting: OmpSetting;
   value: OmpSettingValue;
-  row: OmpRow;
   disabled?: boolean;
   onChange: (value: OmpSettingValue) => void;
-}> = ({ setting, value, row, disabled, onChange }) => {
+}> = ({ setting, value, disabled, onChange }) => {
   const { t } = useI18n();
   const labelKey = `settings.omp.items.${setting.id}.label` as I18nKey;
   const label = t(labelKey) === labelKey ? (setting.label ?? setting.id) : t(labelKey);
@@ -204,7 +176,7 @@ const OmpRowControl: React.FC<{
   const description = t(descriptionKey) === descriptionKey ? setting.description : t(descriptionKey);
   const anchor = `omp.${setting.id}`;
 
-  if (row.kind === 'toggle') {
+  if (setting.type === 'boolean') {
     return (
       <SettingsCheckboxRow
         settingsItem={anchor}
@@ -218,20 +190,77 @@ const OmpRowControl: React.FC<{
     );
   }
 
-  if (row.kind === 'number') {
+  if (setting.type === 'number') {
+    if (setting.options && setting.options.length > 0) {
+      const sentinelOption = setting.options.find((opt) => isSentinelOption(opt.value));
+      const isSentinel = value === -1 || value === 'default' || value === null;
+      const currentValue = isSentinel ? (sentinelOption?.value ?? 'default') : String(value);
+      const selectedOption = setting.options.find((opt) => opt.value === currentValue);
+      const selectedLabel = selectedOption
+        ? (isSentinelOption(selectedOption.value) ? t('settings.omp.value.default') : selectedOption.label)
+        : isSentinel ? t('settings.omp.value.default') : currentValue;
+
+      return (
+        <SettingsStackedField label={label} info={description} settingsItem={anchor}>
+          <Select
+            value={currentValue}
+            onValueChange={(next) => {
+              if (isSentinelOption(next)) {
+                onChange(-1);
+              } else {
+                const num = Number(next);
+                onChange(Number.isNaN(num) ? next : num);
+              }
+            }}
+            disabled={disabled}
+          >
+            <SelectTrigger className="w-48" aria-label={label}>
+              <SelectValue>{selectedLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {setting.options.map((opt) => {
+                const displayLabel = isSentinelOption(opt.value) ? t('settings.omp.value.default') : opt.label;
+                return (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {displayLabel}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </SettingsStackedField>
+      );
+    }
+
+    const unit = inferUnit(setting.id);
     return (
       <SettingsStackedField label={label} info={description} settingsItem={anchor}>
         <div className="flex items-center gap-2">
           <NumberInput
-            value={typeof value === 'number' ? value : undefined}
+            value={typeof value === 'number' && value !== -1 ? value : undefined}
+            placeholder={t('settings.omp.value.default')}
             onValueChange={onChange}
             onClear={() => onChange(null)}
             disabled={disabled}
             className={SETTINGS_NUMBER_INPUT_CLASS}
             aria-label={label}
           />
-          {row.unit ? <span className={SETTINGS_NUMBER_UNIT_CLASS}>{t(`settings.omp.unit.${row.unit}` as I18nKey)}</span> : null}
+          {unit ? <span className={SETTINGS_NUMBER_UNIT_CLASS}>{t(`settings.omp.unit.${unit}` as I18nKey)}</span> : null}
         </div>
+      </SettingsStackedField>
+    );
+  }
+
+  if (setting.type === 'string') {
+    return (
+      <SettingsStackedField label={label} info={description} settingsItem={anchor}>
+        <Input
+          value={value === null || value === undefined ? '' : String(value)}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          className="max-w-md"
+          aria-label={label}
+        />
       </SettingsStackedField>
     );
   }
@@ -383,21 +412,38 @@ export const OmpSettingsPage: React.FC = () => {
     [autosave]
   );
 
-  /** Rows the page can draw: `gui`, present in the snapshot, and their condition holds. */
+  /** Rows the page draws: engine placement, in the snapshot, and condition holds. */
   const visible = React.useMemo(() => {
     if (!state) return null;
     const byId = new Map(state.settings.map((setting) => [setting.id, setting]));
-    const rowsFor = (section: OmpSection) => section.rows.flatMap((row) => {
-      const setting = byId.get(row.id);
-      if (!setting || setting.surface !== 'gui') return [];
-      if (setting.conditionActive === false) return [];
-      return [{ row, setting }];
+    const engineSettings = state.settings.filter((setting) => {
+      if (setting.placement.type !== 'engine') return false;
+      if (setting.conditionActive === false) return false;
+      if (setting.id === 'modelRoles') return false;
+      return true;
     });
+
+    const sectionOrder: string[] = [];
+    const sectionMap = new Map<string, { id: string; titleKey?: I18nKey; descriptionKey?: I18nKey; label: string; rows: OmpSetting[] }>();
+
+    for (const setting of engineSettings) {
+      const info = resolveSectionInfo(setting);
+      if (!sectionMap.has(info.id)) {
+        sectionOrder.push(info.id);
+        sectionMap.set(info.id, { ...info, rows: [] });
+      }
+      sectionMap.get(info.id)!.rows.push(setting);
+    }
+
+    const sections: ResolvedSection[] = sectionOrder.map((id) => sectionMap.get(id)!);
+    const total = state.totalCount;
+    const shownCount = engineSettings.length + (byId.has('modelRoles') ? 1 : 0);
+    const hiddenCount = Math.max(0, total - shownCount);
+
     return {
-      sections: OMP_SECTIONS.map((section) => ({ section, rows: rowsFor(section) }))
-        .filter((entry) => entry.rows.length > 0),
+      sections,
       modelRoles: byId.get('modelRoles'),
-      hiddenCount: state.settings.filter((setting) => setting.surface !== 'gui').length,
+      hiddenCount,
     };
   }, [state]);
 
@@ -487,22 +533,28 @@ export const OmpSettingsPage: React.FC = () => {
           </SettingsTwoColumn>
         </SettingsSection>
 
-        {visible.sections.map(({ section, rows }) => (
+        {visible.sections.map((section) => (
           <SettingsSection
             key={section.id}
-            title={t(section.titleKey)}
-            description={section.descriptionKey === undefined ? undefined : t(section.descriptionKey)}
+            title={section.titleKey ? t(section.titleKey) : section.label}
+            description={section.descriptionKey ? t(section.descriptionKey) : undefined}
             settingsItem={`omp.section.${section.id}`}
           >
             <div className={SETTINGS_OPTION_STACK_CLASS}>
-              {rows.map(({ row, setting }) => (
+              {section.rows.map((setting) => (
                 <OmpRowControl
                   key={setting.id}
                   setting={setting}
-                  row={row}
                   value={form[setting.id] !== undefined ? form[setting.id] : setting.value}
                   disabled={loading}
-                  onChange={(value) => (row.kind === 'number' ? onChange(setting, value) : onImmediate(setting, value))}
+                  onChange={(value) => {
+                    const isSelectNumber = setting.type === 'number' && Boolean(setting.options && setting.options.length > 0);
+                    if (setting.type === 'number' && !isSelectNumber) {
+                      onChange(setting, value);
+                    } else {
+                      onImmediate(setting, value);
+                    }
+                  }}
                 />
               ))}
             </div>

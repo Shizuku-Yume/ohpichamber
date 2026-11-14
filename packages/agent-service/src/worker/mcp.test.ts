@@ -343,6 +343,25 @@ describe('user-scope MCP storage in a temp HOME keeps native entries and credent
     });
   });
 
+  test('adding a project server that shadows a pre-existing global server does not delete the global server', async () => {
+    await withHome(async ({ userPath, projectPath }) => {
+      const seeded = `${JSON.stringify({
+        mcpServers: {
+          figma: { type: 'http', url: 'https://global.figma/mcp', headers: { 'X-Key': 'global-token' } },
+        },
+      }, null, 2)}\n`;
+      await writeFile(userPath, seeded, 'utf8');
+
+      // Add a project-scoped server named 'figma' to a fresh project file
+      const projectServer = { serverId: 'figma', label: 'Project Figma', enabled: true, scope: 'project' as const, transport: { type: 'http' as const, url: 'https://project.figma/mcp' } };
+      await writeNativeMcpConfiguration(projectPath, { workspaceId, persistedRevision: '1', config: { servers: [projectServer] } }, userPath);
+
+      // Global server in userPath must survive intact
+      const userRaw = JSON.parse(await readFile(userPath, 'utf8'));
+      expect(userRaw.mcpServers.figma).toEqual({ type: 'http', url: 'https://global.figma/mcp', headers: { 'X-Key': 'global-token' } });
+    });
+  });
+
   test('user-scope credential references survive a reread and a second session', async () => {
     await withHome(async ({ userPath, projectPath }) => {
       const httpTransport = { type: 'http' as const, url: 'https://mcp.figma.example/mcp', credentialRef: 'credential-figma', headerCredentialRefs: { 'X-Team': 'credential-team' } };

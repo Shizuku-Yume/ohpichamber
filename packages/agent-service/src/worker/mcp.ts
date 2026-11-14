@@ -355,8 +355,10 @@ export async function writeNativeMcpConfiguration(
     throw new NativeMcpError('MCP_CONFIG_WRITE_FAILED', 'Global user MCP storage is unavailable.', true);
   }
   const projectIds = await managedProjectServerIds(configPath, configuration.workspaceId);
+  const committedProjectIds = new Set(configuration.config.servers.filter(server => server.scope !== 'user').map(server => server.serverId));
+  const effectiveProjectIds = new Set([...projectIds, ...committedProjectIds]);
   if (userConfigPath !== undefined) {
-    await writeUserServers(userConfigPath, configuration.workspaceId, userServers.map(stripManaged), projectIds);
+    await writeUserServers(userConfigPath, configuration.workspaceId, userServers.map(stripManaged), effectiveProjectIds);
   }
   await writeProjectServers(configPath, configuration);
   return { ...configuration, config: { servers: configuration.config.servers.map(stripManaged) } };

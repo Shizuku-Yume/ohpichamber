@@ -163,6 +163,7 @@ test('a deferred registration failure surfaces with its cause as a session error
     expect(diagnostic).toBeDefined();
     expect(diagnostic.level).toBe('error');
     expect(diagnostic.rootSessionId).toBe(rootSessionId);
+    expect(diagnostic.message).toContain(sentinelCause);
     // 2. Verify the session runtime surfaces the cause
     // Registration failure calls sessions.registrationFailed(rootSessionId, generation, cause),
     // which marks the journal unavailable with that cause.
@@ -182,6 +183,8 @@ test('a deferred registration failure surfaces with its cause as a session error
       }),
     });
     expect(runRes.status).toBe(503);
+    expect(runRes.body).toMatchObject({ code: 'SERVICE_UNAVAILABLE' });
+    expect(runRes.body.detail).toContain(sentinelCause);
   } finally {
     process.env.HOME = previousHome;
     await service.stop();

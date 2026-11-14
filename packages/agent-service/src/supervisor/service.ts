@@ -257,7 +257,7 @@ export class AgentService {
           const cause = error instanceof Error && error.message.trim() ? error.message : 'The worker catalogs could not be read';
           const code = error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError ? error.code : 'SERVICE_UNAVAILABLE';
           this.sessions.registrationFailed(bootstrap.rootSessionId, generation, cause);
-          this.options.onDiagnostic?.({ level: 'error', rootSessionId: bootstrap.rootSessionId, workerGeneration: generation, message: `Catalog registration failed (${code})` });
+          this.options.onDiagnostic?.({ level: 'error', rootSessionId: bootstrap.rootSessionId, workerGeneration: generation, message: `Catalog registration failed (${code}): ${cause}` });
           await this.workers.stopGeneration(bootstrap.rootSessionId, generation).catch(() => { });
         });
         return result;

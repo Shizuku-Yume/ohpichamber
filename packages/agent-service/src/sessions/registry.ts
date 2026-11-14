@@ -898,7 +898,10 @@ export class SessionRegistry {
       const pendingOpening = this.openings.get(rootSessionId);
       if (pendingOpening) await pendingOpening;
       const runtime = this.runtime(sessionId);
-      if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The session runtime is unavailable');
+      if (runtime.runtimeStatus === 'unavailable') {
+        const reason = this.journal(sessionId).reasonUnavailable();
+        throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', reason ? `The session runtime is unavailable: ${reason}` : 'The session runtime is unavailable');
+      }
       if (runtime.activeRunId !== null || runtime.continuationPending === true) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session already has an active or continuation run');
       const result = await this.workers.request(sessionId, operation);
       if (result.type !== 'prompt') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested prompt operation.');

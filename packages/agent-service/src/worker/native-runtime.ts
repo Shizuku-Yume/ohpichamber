@@ -3,8 +3,7 @@ import { join, dirname, basename, resolve } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { getAgentDir, resolveProfileEnv, setAgentDir, setProfile } from '@oh-my-pi/pi-utils';
 import { getOAuthProviders, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
-import { createAgentSession, discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
-import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
@@ -128,17 +127,6 @@ export function prewarmNativeRuntime(input: { cwd: string; agentDirectory: strin
   prewarmedRuntimePromise = openNativeRuntime(input)
     .then(async runtime => {
       try { await runtime.models.readModels(input.cwd, '0'); } catch { /* best-effort model prewarm */ }
-      try {
-        const sessionsDir = SessionManager.getDefaultSessionDir(input.cwd, input.agentDirectory);
-        const tempManager = SessionManager.create(input.cwd, sessionsDir);
-        const warmSession = await createAgentSession({
-          cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: tempManager,
-          authStorage: runtime.authStorage, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
-          initialModelRefreshStrategy: 'offline', autoTitle: false, enableMCP: false,
-          hasUI: true, disableExtensionDiscovery: true,
-        });
-        await warmSession.session.dispose();
-      } catch { /* best-effort session module graph prewarm */ }
       return { runtime, cwd: canonicalCwd, agentDirectory: canonicalAgentDir };
     })
     .catch(() => undefined);

@@ -977,7 +977,7 @@ export class WorkerRegistry {
     // A session launch adopts a pre-warmed process when one matches: it has
     // already paid the module load, so only the bootstrap remains.
     const adopted = owner.kind === 'session' ? this.adoptSpare(input, environment) : undefined;
-    if (owner.kind === 'session' && !input.cwd.includes('ohpichamber-agent-ready-')) {
+    if (adopted !== undefined) {
       const settled = this.spareRefill;
       void (settled ?? Promise.resolve()).then(() => {
         // Wait for the previous spawn to clear its own guard before asking.

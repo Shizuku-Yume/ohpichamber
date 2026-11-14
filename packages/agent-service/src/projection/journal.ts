@@ -179,13 +179,20 @@ export class SessionJournal {
     this.rebuildIndexes();
   }
 
+  private unavailableReason?: string;
+
   unavailable(reason = 'SDK worker is unavailable'): void {
     if (this.closed) return;
+    this.unavailableReason = reason;
     if (this.activeRunId) this.settleRun(this.activeRunId, 'failed', Date.now(), reason);
     this.resetEpoch();
     this.runtimeStatus = 'unavailable'; this.activeRunId = null;
     this.continuationPending = false;
     this.approvals.clear(); this.questions.clear();
+  }
+
+  reasonUnavailable(): string | undefined {
+    return this.unavailableReason;
   }
 
   close(): void { if (this.closed) return; this.resetEpoch(); this.closed = true; }

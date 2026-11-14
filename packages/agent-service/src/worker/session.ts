@@ -535,7 +535,10 @@ export class WorkerSession {
       isCurrent: () => !owned || !owned.closed && !owned.failed,
     }) : undefined;
     try {
-      await installWebSearchAuthorization(runtime, hostAuthorize);
+      const [, pluginExtensionPaths] = await Promise.all([
+        installWebSearchAuthorization(runtime, hostAuthorize),
+        nativePluginExtensionPaths(input.cwd),
+      ]);
       const directory = input.sessionsDirectory ?? SessionManager.getDefaultSessionDir(input.cwd, input.agentDirectory);
       manager = input.sessionFile
         ? await SessionManager.open(input.sessionFile, directory, undefined, { initialCwd: input.cwd, throwIfMissing: true })
@@ -548,7 +551,6 @@ export class WorkerSession {
         getSessionSpawns: () => '*',
       });
       const subagentEventBus = new EventBus();
-      const pluginExtensionPaths = await nativePluginExtensionPaths(input.cwd);
       const permissionBridge = new NativePermissionBridge(
         (toolCall, options, sessionRuleKey, signal, steeringSignal) => interaction.requestPermission(toolCall, options, sessionRuleKey, signal, steeringSignal),
         toolCall => {
@@ -608,13 +610,13 @@ export class WorkerSession {
         availableToolNames: () => nativeSession.getAllToolInfos().map(tool => tool.name),
         assertProviderEntryAllowed: () => authorize({ type: 'provider-entry' }),
         publishSkills: async staged => {
-          const current = nativeSession.skills;
-          const match = current && staged.length === current.length
-            && staged.every((s, i) => s.name === current[i]?.name);
+          const capture = (skills: typeof staged | typeof nativeSession.skills) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, metadata: skill._source })).sort();
+          const expected = capture(staged);
+          const current = capture(nativeSession.skills);
+          const match = expected.length === current.length && expected.every((desc, i) => desc === current[i]);
           if (!match) {
             await nativeSession.refreshSkills();
-            const capture = (skills: typeof staged | typeof nativeSession.skills) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, metadata: skill._source })).sort();
-            const expected = capture(staged), actual = capture(nativeSession.skills);
+            const actual = capture(nativeSession.skills);
             if (expected.length !== actual.length || expected.some((skill, index) => skill !== actual[index])) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill publication changed during application');
           }
         },
@@ -689,10 +691,15 @@ export class WorkerSession {
       await owned.modeController.goal.reconcile();
       await owned.modeController.restore();
       capturePolicy = async () => {
-        const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId, join(input.agentDirectory, 'mcp.json')) : null;
-        publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
+        try {
+          const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId, join(input.agentDirectory, 'mcp.json')) : null;
+          publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          process.stderr.write(`${JSON.stringify({ type: 'policy.capture.warning', message: message.slice(0, 200) })}\n`);
+        }
       };
-      void capturePolicy();
+      void capturePolicy().catch(() => { });
       projection = owned.projection;
       // External MCP servers can take tens of seconds to handshake; the first
       // prompt must not wait for them. Start the connection in the background,
@@ -734,6 +741,8 @@ export class WorkerSession {
     }
   }
 
+  private lastSelectedOptions?: string;
+
   private async selectOptions(options: CapturedSendOptions): Promise<void> {
     // Root options select only the model and thinking effort; OMP owns root tools.
     const mode = this.modeController.mode();
@@ -742,6 +751,8 @@ export class WorkerSession {
     const providerId = options.providerId ?? fallback?.providerId;
     const modelId = options.modelId ?? fallback?.modelId;
     if (!providerId || !modelId) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model is unavailable');
+    const optionsKey = JSON.stringify({ providerId, modelId, variant: options.variant, reasoningEffort: options.reasoningEffort, agentId: options.agentId });
+    if (this.lastSelectedOptions === optionsKey) return;
     const selected = await this.catalogs.resolveSelection({ providerId, modelId }, { variant: options.variant, reasoningEffort: options.reasoningEffort });
     await this.session.setModelTemporary(selected.nativeModel);
     if (selected.reasoningEffort !== null || options.variant !== null || options.reasoningEffort !== null) {
@@ -758,6 +769,7 @@ export class WorkerSession {
       await this.session.restoreNonMCPToolPresentation(this.defaultToolNames, this.defaultMountedNames, this.defaultRegisteredNames);
     }
     this.admission.profile = profile;
+    this.lastSelectedOptions = optionsKey;
   }
 
   seed(): ProjectionSeed { return this.projection.seed(); }

@@ -280,13 +280,27 @@ export class CatalogCoordinator {
       return result;
     });
   }
+  /** Returns MCP tools for the workspace from active session snapshots, choosing the latest ready generation deterministically. */
   getWorkspaceMcpTools(workspaceId: string): Array<{ name: string; description?: string }> {
-    for (const snapshot of this.mcpSnapshots.values()) {
-      if (snapshot.workerCatalog.worker.workspaceId === workspaceId || snapshot.configuration.workspaceId === workspaceId) {
-        return snapshot.workerCatalog.tools.map(t => ({ name: t.name, description: t.description }));
-      }
-    }
-    return [];
+    const candidates = [...this.mcpSnapshots.values()].filter(
+      snapshot => snapshot.workerCatalog.worker.workspaceId === workspaceId || snapshot.configuration.workspaceId === workspaceId
+    );
+    if (candidates.length === 0) return [];
+    candidates.sort((a, b) => {
+      const aReady = a.workerCatalog.runtimeStatus === 'ready' ? 1 : 0;
+      const bReady = b.workerCatalog.runtimeStatus === 'ready' ? 1 : 0;
+      if (aReady !== bReady) return bReady - aReady;
+      const aApplied = BigInt(a.workerCatalog.appliedRevision ?? '0');
+      const bApplied = BigInt(b.workerCatalog.appliedRevision ?? '0');
+      if (aApplied !== bApplied) return aApplied > bApplied ? -1 : 1;
+      const aCat = BigInt(a.workerCatalog.catalogRevision || '0');
+      const bCat = BigInt(b.workerCatalog.catalogRevision || '0');
+      if (aCat !== bCat) return aCat > bCat ? -1 : 1;
+      const genCmp = b.workerCatalog.worker.workerGeneration.localeCompare(a.workerCatalog.worker.workerGeneration);
+      if (genCmp !== 0) return genCmp;
+      return b.workerCatalog.worker.rootSessionId.localeCompare(a.workerCatalog.worker.rootSessionId);
+    });
+    return candidates[0].workerCatalog.tools.map(t => ({ name: t.name, description: t.description }));
   }
   async pluginRuntime(workspaceId: string): Promise<PluginRuntimeState[]> {
     const targets = await this.snapshotWorkers(worker => worker.identity.workspaceId === workspaceId);

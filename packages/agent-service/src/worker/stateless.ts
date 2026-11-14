@@ -210,20 +210,6 @@ export class StatelessWorker {
           });
         }
       }
-      if (this.mcp) {
-        const mcpTools = this.mcp.getTools();
-        for (const mcpTool of mcpTools) {
-          if (!tools.some((t) => t.name === mcpTool.name)) {
-            tools.push({
-              name: mcpTool.name,
-              label: mcpTool.name,
-              description: mcpTool.description ?? '',
-              tier: 'exec',
-              availability: true,
-            });
-          }
-        }
-      }
 
       return { type: 'tools.catalog', catalog: { workspaceId: this.input.workspaceId, tools } };
     }

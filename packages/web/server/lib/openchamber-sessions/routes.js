@@ -131,7 +131,7 @@ const createCanonicalSessionService = (dependencies) => {
       relocationControls.add(owner.rootSessionId);
       try { await recoverRelocation(owner.rootSessionId); } finally { relocationControls.delete(owner.rootSessionId); }
     }
-    const scope = await resolveSessionScope(sessionId);
+    const scope = (owner && liveRootSessions.has(owner.rootSessionId)) ? await resolveHostSessionScope(sessionId) : await resolveSessionScope(sessionId);
     if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
     return scope;
   };

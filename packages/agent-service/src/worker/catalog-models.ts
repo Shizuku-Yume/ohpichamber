@@ -284,6 +284,7 @@ export class NativeModels {
   * credential generation (auth writes), and the native models file.
   */
  private readonly catalogCache = new Map<'models' | 'providers', { key: string; catalog: ModelCatalog | ProviderCatalog }>();
+ private selectionReady = false;
  /** The native configuration `load()` last read, so a cached read needs no second file pass. */
  private currentConfig: ConfigState['config'] = {};
  constructor(private readonly context: NativeModelsContext) {
@@ -729,8 +730,11 @@ export class NativeModels {
 
  async selection(input: ModelSelection, controls?: Pick<CompletionRequest, 'variant' | 'reasoningEffort'>): Promise<ResolvedModelSelection> {
   await this.load();
-  await this.context.modelRegistry.reapplyModelPolicies();
-  await this.context.authStorage.credentials.reload();
+  if (!this.selectionReady) {
+   await this.context.modelRegistry.reapplyModelPolicies();
+   await this.context.authStorage.credentials.reload();
+   this.selectionReady = true;
+  }
   if (cfgDisabledProviders.get(this.context.settings).includes(input.providerId)) {
    throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider is disabled');
   }

@@ -608,10 +608,15 @@ export class WorkerSession {
         availableToolNames: () => nativeSession.getAllToolInfos().map(tool => tool.name),
         assertProviderEntryAllowed: () => authorize({ type: 'provider-entry' }),
         publishSkills: async staged => {
-          await nativeSession.refreshSkills();
-          const capture = (skills: typeof staged | typeof nativeSession.skills) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, metadata: skill._source })).sort();
-          const expected = capture(staged), actual = capture(nativeSession.skills);
-          if (expected.length !== actual.length || expected.some((skill, index) => skill !== actual[index])) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill publication changed during application');
+          const current = nativeSession.skills;
+          const match = current && staged.length === current.length
+            && staged.every((s, i) => s.name === current[i]?.name);
+          if (!match) {
+            await nativeSession.refreshSkills();
+            const capture = (skills: typeof staged | typeof nativeSession.skills) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, metadata: skill._source })).sort();
+            const expected = capture(staged), actual = capture(nativeSession.skills);
+            if (expected.length !== actual.length || expected.some((skill, index) => skill !== actual[index])) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill publication changed during application');
+          }
         },
         setSkillsRuntimeAvailable: available => { admission.skillsAvailable = available; },
       });
@@ -687,7 +692,7 @@ export class WorkerSession {
         const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId, join(input.agentDirectory, 'mcp.json')) : null;
         publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
       };
-      const policyCapturePromise = capturePolicy();
+      void capturePolicy();
       projection = owned.projection;
       // External MCP servers can take tens of seconds to handshake; the first
       // prompt must not wait for them. Start the connection in the background,
@@ -714,7 +719,6 @@ export class WorkerSession {
       });
       // Reopening a transcript must use the latest workspace preference, not restored session state.
       warming.apply((await warming.read(input.workspaceId, '0')).mode);
-      await policyCapturePromise;
       return owned;
     } catch (error) {
       interaction.close();

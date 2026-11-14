@@ -1127,3 +1127,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OMP SDK supports zero-cost instant session instantiation or when asynchronous session bootstrap becomes a planned architectural migration.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - OMP settings name only verified owners; writes reach placed settings only
+
+- **Decided:** an `owned-by` placement names only a control that writes that OMP key: `recap.enabled` and `recap.idleSeconds` → Chat → Session recap (`chat.session-recap`, task 11), `suggestion.generator` → `chat.suggestion-generator`. `tui.renderMermaid`, `tools.approvalMode` and `enabledModels` have no GUI writer of their OMP keys and are `tui-only`, so they stay off the OMP page and off the writable set. The `enabledModels` row is removed (untabbed, so hidden). The OMP write route accepts only ids present in the placement table, so an unplaced id is refused with 400.
+- **Instead of:** `owned-by` rows for the mermaid, permission-default and providers controls, which write other keys, and the unrestricted write path the rewrite left behind.
+- **Because:** the effort's rule that an `owned-by` row names a real writer could not hold for those three; without the gate, the route accepted every non-credential OMP id, widening the 157-id allowlist it replaced.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** a GUI control starts writing `tools.approvalMode` or `enabledModels`, or task 12 moves the egress endpoints (`collab.*`, `share.*`, `stream.*`) onto a page.
+- **Effort:** ux-feedback-2026-11-12

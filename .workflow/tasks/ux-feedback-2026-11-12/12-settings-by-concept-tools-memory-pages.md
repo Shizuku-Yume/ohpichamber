@@ -28,9 +28,9 @@ Check after:
   * `sessions`: 81 items (47 OMP items: retry, compaction, plan/goal, steering, follow-up, isolation/worktree, title)
   * `chat`: 40 items (15 OMP items: display, thinking, image auto-resize)
   * `behavior`: 9 items (6 OMP items: system prompt, response style, personality)
-  * `agents`: 7 items (2 OMP items: task/subagent role, advisor role)
+  * `agents`: 36 items (31 OMP items: task/subagent role, task options, prewalk, advisor role, advisor options)
   * `tools`: 48 items (37 OMP items; host tools + OMP tools with separate rows for `web` and `browser`)
   * `memory`: 27 items (23 OMP items: `memory.backend` and options for mnemopi, hindsight, sharpshooter)
   * `omp`: 113 items (only long-tail settings)
   * `zh-CN`: `tools-page-zh-CN.png` and `memory-page-zh-CN.png` confirm Token localization and complete rendering.
-Review: independent reviewer round 1 findings addressed (exposed retry.fallbackChains in agent-service, clean capture with full OMP items and no error banners, tightened settingsItemOwnership test, all child processes stopped and verified with lsof).
+Review: independent vibe worker session ufb-12-review, 2 rounds; round-1 findings fixed; round-2 evidence-capture finding fixed

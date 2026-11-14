@@ -138,7 +138,6 @@ const modelRefSchema = z.object({ providerID: z.string(), modelID: z.string() })
 export const modelPreferencesSchema = z.object({
   defaultModel: text,
   defaultVariant: text,
-  defaultAgent: text,
   favoriteModels: z.array(modelRefSchema).catch([]),
   recentModels: z.array(modelRefSchema).catch([]),
 });

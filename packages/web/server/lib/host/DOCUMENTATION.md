@@ -128,6 +128,15 @@ The composed Node Host/Bun scenario has verified these boundaries on Linux, incl
 
 Authentication requires a validated UI cookie (`ui-session` or signed `ui-passwordless`), a paired bearer token, or a tunnel session. URL/Guest asset tokens and `X-Internal-Secret` are not external credentials. Protected routes use `allowAnonymousSession: false`. Mutations and requests with an explicit `Origin` header require `isRequestOriginAllowed(req)`; disallowed or opaque `Origin: null` headers are refused with 403 `INVALID_ORIGIN`. Enterprise mode policy is read at use time and returns 403 `enterprise_mode` for provider entry operations. Responses use `Cache-Control: no-store`.
 
+### Speculative session preparation
+
+`POST /api/agent/v1/sessions/prepare` and `DELETE /api/agent/v1/sessions/prepare` manage bounded speculative preparation for fast new-chat latency:
+- `POST /prepare` accepts `{ projectId, workspaceId }` and starts background session admission and worker warmup. If an admission is already in flight or prepared for the workspace, the existing promise is returned (at most 1 prepared session per workspace).
+- `POST /sessions` checks for an existing preparation in the workspace. If preparation is in flight, `create` joins the in-flight promise and adopts the prepared session once resolved, ensuring single ownership and preventing concurrent admission 409 conflicts. If preparation rejected or does not exist, `create` falls back to normal session creation.
+- Prepared sessions are idle-reaped after 5 minutes using unreferenced timers (`timer.unref?.()`).
+- `DELETE /prepare` discards the speculative session and tears down its admitted worker when the composer draft is closed.
+- Canonical session service lifecycle `close()` clears all pending timers and discards remaining prepared sessions during host shutdown.
+
 ### Explicit credential handoff and private resolution
 
 `POST /api/agent/v1/credentials/preflight` accepts `application/json` (up to 256 KiB) matching `SelectedCredentialHandoffRequestSchema`:

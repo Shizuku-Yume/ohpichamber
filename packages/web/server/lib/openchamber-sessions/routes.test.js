@@ -9,6 +9,8 @@ import { createProjectDirectoryRuntime } from '../host/project-directory-runtime
 import { createHostSessionState } from '../host/session-state.js';
 import { history as historyFixture, runtimeSession, snapshot as snapshotFixture } from '../event-stream/canonical-test-fixtures.js';
 import { mergeMetadataPatch } from './session-metadata-store.js';
+import * as routes from './routes.js';
+
 
 let routeFixture;
 let routeFixtureDataDir;
@@ -55,9 +57,7 @@ const createApp = (overrides = {}) => {
 };
 
 describe('canonical session route contracts', () => {
-  let routes;
   beforeAll(async () => {
-    routes = await import('./routes.js');
     routeFixtureDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-routes-admission-'));
     testWorkspaceDirectory = path.join(routeFixtureDataDir, 'app');
     testAgentDirectory = path.join(testWorkspaceDirectory, '.agents');
@@ -915,13 +915,13 @@ describe('POST /api/agent/v1/sessions/:sessionId/move-to-worktree', () => {
       worktreeMove: {
         getPathsWithoutChanges: async () => [],
         createWorktree: async () => ({ name: 'fix-login', branch: 'fix-login', path: '/repo/app/worktrees/fix-login' }),
-        removeWorktree: async () => {},
+        removeWorktree: async () => { },
         waitForWorktreeReady: async () => ({ setupStillRunning: false }),
         hydrateCheckout: async () => null,
         bootstrapStore: { read: async () => null, write: async () => null },
         stashPush: async () => ({ created: false }),
-        stashApply: async () => {},
-        stashDrop: async () => {},
+        stashApply: async () => { },
+        stashDrop: async () => { },
         listStashes: async () => [],
         getBranches: async () => ({ all: ['main'], defaultBranches: { origin: 'main' } }),
         resolvePrimaryWorktreeRoot: async () => ({ root: '/repo/app' }),
@@ -992,13 +992,13 @@ describe('session.moveToWorktree', () => {
         hydrateCheckout: async () => null,
         bootstrapStore: { read: async () => null, write: async () => null },
         stashPush: async () => ({ created: false }),
-        stashApply: async () => {},
-        stashDrop: async () => {},
+        stashApply: async () => { },
+        stashDrop: async () => { },
         listStashes: async () => [],
         getBranches: async () => ({ all: ['main'], defaultBranches: { origin: 'main' } }),
         resolvePrimaryWorktreeRoot: async () => ({ root: '/repo/app' }),
         moveSession: (id, directory) => { calls.push(['moveSession', id, directory]); return [{ sessionId: id }]; },
-        warn: () => {},
+        warn: () => { },
         ...(overrides.worktreeMove ?? {}),
       },
     });
@@ -1068,5 +1068,255 @@ describe('session.moveToWorktree', () => {
     // The scope's cwd is a different directory than the checkout: refuse.
     await expect(sameProject.service.moveToWorktree('ses_1', { worktree: { name: 'fix-login' } }))
       .rejects.toMatchObject({ statusCode: 503 });
+  });
+});
+
+describe('speculative session preparation', () => {
+  let prepDataDir;
+  let prepState;
+  let prepWorkspace;
+
+  beforeAll(async () => {
+    prepDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routes-prep-'));
+    prepState = createHostSessionState({ dataDir: prepDataDir });
+    await prepState.initialize();
+    const appDir = path.join(prepDataDir, 'app');
+    const agentDir = path.join(appDir, '.agents');
+    fs.mkdirSync(agentDir, { recursive: true });
+    prepWorkspace = await prepState.agentScopeStore.ensureWorkspace({
+      hostProjectId: 'proj_prep',
+      projectId: 'proj_prep',
+      workspaceId: 'ws_prep',
+      projectDirectory: appDir,
+      workspaceDirectory: appDir,
+      agentDirectory: agentDir,
+      name: 'Prep Workspace',
+    });
+  });
+
+  afterAll(async () => {
+    await prepState?.close();
+    if (prepDataDir) fs.rmSync(prepDataDir, { recursive: true, force: true });
+  });
+
+  let workspaceCounter = 0;
+  const createTestWorkspace = async () => {
+    workspaceCounter += 1;
+    const workspaceId = `ws_prep_${workspaceCounter}`;
+    const appDir = path.join(prepDataDir, `app_${workspaceCounter}`);
+    const agentDir = path.join(appDir, '.agents');
+    fs.mkdirSync(agentDir, { recursive: true });
+    return await prepState.agentScopeStore.ensureWorkspace({
+      hostProjectId: `proj_prep_${workspaceCounter}`,
+      projectId: `proj_prep_${workspaceCounter}`,
+      workspaceId,
+      projectDirectory: appDir,
+      workspaceDirectory: appDir,
+      agentDirectory: agentDir,
+      name: `Prep Workspace ${workspaceCounter}`,
+    });
+  };
+
+  const setupApp = (serviceRequest, workspace) => {
+    const app = express();
+    const router = express.Router();
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: prepState.agentScopeStore,
+      service: { request: serviceRequest },
+      resolveWorkspaceScope: async (id) => (id === workspace.workspaceId ? workspace : null),
+      resolveSessionScope: async (id) => {
+        const bound = await prepState.agentScopeStore.getSession(id);
+        if (!bound) return null;
+        return {
+          sessionId: bound.sessionId,
+          rootSessionId: bound.rootSessionId,
+          projectId: workspace.projectId,
+          workspaceId: bound.workspaceId,
+          cwd: workspace.cwd,
+          agentDirectory: workspace.agentDirectory,
+          agentDirectoryId: bound.agentDirectoryId,
+          displayPath: 'app',
+        };
+      },
+      resolveHostSessionScope: async (id) => {
+        const bound = await prepState.agentScopeStore.getSession(id);
+        if (!bound) return null;
+        return {
+          sessionId: bound.sessionId,
+          rootSessionId: bound.rootSessionId,
+          projectId: workspace.projectId,
+          workspaceId: bound.workspaceId,
+          cwd: workspace.cwd,
+          agentDirectory: workspace.agentDirectory,
+          agentDirectoryId: bound.agentDirectoryId,
+          displayPath: 'app',
+        };
+      },
+      registerSessionScope: async (runtime) => {
+        await prepState.agentScopeStore.bindSession({
+          sessionId: runtime.sessionId,
+          rootSessionId: runtime.rootSessionId,
+          workspaceId: runtime.workspaceId,
+          agentDirectoryId: workspace.agentDirectoryId,
+        });
+        return true;
+      },
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      directCommandAdmissionStore: prepState.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
+    return { app, sessionService };
+  };
+
+  it('enforces auth and validation parity on prepare and discard endpoints', async () => {
+    const ws = await createTestWorkspace();
+    const { app, sessionService } = setupApp(async () => Response.json({}), ws);
+    try {
+      await request(app).post('/api/agent/v1/sessions/prepare').send({}).expect(400);
+      await request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId }).expect(400);
+      await request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: 'ws_unknown' }).expect(404);
+      const res = await request(app).delete('/api/agent/v1/sessions/prepare').send({}).expect(200);
+      expect(res.body).toEqual({ ok: false });
+    } finally {
+      await sessionService.close();
+    }
+  });
+
+  it('maintains at most 1 prepared session per workspace and reuses it on create', async () => {
+    const ws = await createTestWorkspace();
+    let createdCount = 0;
+    const { app, sessionService } = setupApp(async (pathname, init) => {
+      if (pathname === '/internal/sessions' && init.method === 'POST') {
+        createdCount += 1;
+        const body = JSON.parse(init.body);
+        return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+      }
+      throw new Error(`Unexpected request: ${pathname}`);
+    }, ws);
+    try {
+      const prep1 = await request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: ws.workspaceId }).expect(200);
+      expect(prep1.body.ok).toBe(true);
+      expect(prep1.body.sessionId).toBeDefined();
+      expect(createdCount).toBe(1);
+
+      const prep2 = await request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: ws.workspaceId }).expect(200);
+      expect(prep2.body.ok).toBe(true);
+      expect(prep2.body.sessionId).toBe(prep1.body.sessionId);
+      expect(createdCount).toBe(1);
+
+      const createRes = await request(app).post('/api/agent/v1/sessions').send({
+        projectId: ws.projectId, workspaceId: ws.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+      }).expect(200);
+      expect(createRes.body.session.sessionId).toBe(prep1.body.sessionId);
+      expect(createdCount).toBe(1);
+
+      const createRes2 = await request(app).post('/api/agent/v1/sessions').send({
+        projectId: ws.projectId, workspaceId: ws.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+      }).expect(200);
+      expect(createRes2.body.session.sessionId).not.toBe(prep1.body.sessionId);
+      expect(createdCount).toBe(2);
+    } finally {
+      await sessionService.close();
+    }
+  });
+
+  it('discards prepared session on DELETE /prepare', async () => {
+    const ws = await createTestWorkspace();
+    let deletedId = null;
+    const { app, sessionService } = setupApp(async (pathname, init) => {
+      if (pathname === '/internal/sessions' && init.method === 'POST') {
+        const body = JSON.parse(init.body);
+        return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+      }
+      if (pathname.startsWith('/internal/workers/') && init.method === 'DELETE') {
+        deletedId = decodeURIComponent(pathname.split('/').pop());
+        return Response.json({ ok: true });
+      }
+      if (pathname.startsWith('/api/agent/v1/sessions/') && init.method === 'DELETE') {
+        deletedId = decodeURIComponent(pathname.split('/').pop());
+        return Response.json({ sessionId: deletedId, deletedSessionIds: [deletedId] });
+      }
+      if (pathname.endsWith('/reopen') && init.method === 'POST') {
+        const id = decodeURIComponent(pathname.split('/').at(-2));
+        return Response.json(runtimeSession({ sessionId: id, rootSessionId: id, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+      }
+      return Response.json({});
+    }, ws);
+    try {
+      const prep = await request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: ws.workspaceId }).expect(200);
+      const discarded = await request(app).delete('/api/agent/v1/sessions/prepare').send({ workspaceId: ws.workspaceId }).expect(200);
+      expect(discarded.body).toEqual({ ok: true });
+      expect(deletedId).toBe(prep.body.sessionId);
+    } finally {
+      await sessionService.close();
+    }
+  });
+
+  it('reaps idle prepared sessions via timer and falls back cleanly on prepare failure', async () => {
+    const ws = await createTestWorkspace();
+    let shouldFail = true;
+    let createAttempts = 0;
+    const { app, sessionService } = setupApp(async (pathname, init) => {
+      if (pathname === '/internal/sessions' && init.method === 'POST') {
+        createAttempts += 1;
+        if (shouldFail) {
+          return Response.json({ type: 'urn:ohpichamber:problem:INVALID_REQUEST', title: 'Refused', status: 400, code: 'INVALID_REQUEST', detail: 'Worker validation failed' }, { status: 400 });
+        }
+        const body = JSON.parse(init.body);
+        return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+      }
+      return Response.json({});
+    }, ws);
+    try {
+      await request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: ws.workspaceId }).expect(400);
+      expect(createAttempts).toBe(1);
+
+      shouldFail = false;
+      const res = await request(app).post('/api/agent/v1/sessions').send({
+        projectId: ws.projectId, workspaceId: ws.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+      }).expect(200);
+      expect(res.body.session.sessionId).toBeDefined();
+      expect(createAttempts).toBe(2);
+    } finally {
+      await sessionService.close();
+    }
+  });
+
+  it('prevents HTTP 409 collision when create races an in-flight prepare', async () => {
+    const ws = await createTestWorkspace();
+    let createdCount = 0;
+    const { promise: delayPromise, resolve: resolveDelay } = Promise.withResolvers();
+    const { app, sessionService } = setupApp(async (pathname, init) => {
+      if (pathname === '/internal/sessions' && init.method === 'POST') {
+        createdCount += 1;
+        await delayPromise;
+        const body = JSON.parse(init.body);
+        return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+      }
+      return Response.json({});
+    }, ws);
+    try {
+      const prepReq = request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: ws.workspaceId });
+      const createReq = request(app).post('/api/agent/v1/sessions').send({
+        projectId: ws.projectId, workspaceId: ws.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
+      });
+
+      resolveDelay();
+
+      const [prepRes, createRes] = await Promise.all([prepReq, createReq]);
+      expect(prepRes.status).toBe(200);
+      expect(createRes.status).toBe(200);
+      expect(createRes.body.session.sessionId).toBe(prepRes.body.sessionId);
+      expect(createdCount).toBe(1);
+    } finally {
+      await sessionService.close();
+    }
   });
 });

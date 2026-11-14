@@ -201,38 +201,43 @@ const createCanonicalSessionService = (dependencies) => {
       const session = await existing.promise;
       return { ok: true, sessionId: session.sessionId };
     }
-    const workspace = await resolveWorkspaceScope(workspaceId);
-    if (!workspace || workspace.projectId !== projectId) throw new OpenChamberControlError('Workspace does not belong to project', 404);
-    assertWritableScope(workspace);
-    const rootSessionId = randomUUID();
-    const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
-    const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
-    const hostTools = await resolveHostTools();
-    const defaultOptions = { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null };
-    const sessionBootstrap = {
-      rootSessionId, projectId, workspaceId,
-      cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId,
-      displayPath, options: defaultOptions, deferred: false,
-      ...(hostTools ? { hostTools } : {}),
-    };
-    if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
-    const promise = withSessionAdmission(workspace, 'create', rootSessionId, async (settled) => {
-      const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sessionBootstrap) });
-      const runtime = RuntimeSessionSchema.parse(body);
-      if (runtime.projectId !== projectId || runtime.workspaceId !== workspaceId || runtime.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
-      if (!await registerSessionScope(runtime)) throw new OpenChamberControlError('Session scope registration failed', 500);
-      settled();
-      rememberLive(runtime.sessionId);
-      return runtime;
-    });
     const timer = setTimeout(() => { void discardPrepared({ workspaceId }); }, 5 * 60 * 1000);
-    speculativeSessions.set(workspaceId, { promise, timer });
+    timer.unref?.();
+    const preparePromise = (async () => {
+      const workspace = await resolveWorkspaceScope(workspaceId);
+      if (!workspace || workspace.projectId !== projectId) throw new OpenChamberControlError('Workspace does not belong to project', 404);
+      assertWritableScope(workspace);
+      const rootSessionId = randomUUID();
+      const workspaceDisplay = z.object({ displayPath: z.string().nullable().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
+      const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
+      const hostTools = await resolveHostTools();
+      const defaultOptions = { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null };
+      const sessionBootstrap = {
+        rootSessionId, projectId, workspaceId,
+        cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId,
+        displayPath, options: defaultOptions, deferred: false,
+        ...(hostTools ? { hostTools } : {}),
+      };
+      if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
+      return await withSessionAdmission(workspace, 'create', rootSessionId, async (settled) => {
+        const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sessionBootstrap) });
+        const runtime = RuntimeSessionSchema.parse(body);
+        if (runtime.projectId !== projectId || runtime.workspaceId !== workspaceId || runtime.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
+        if (!await registerSessionScope(runtime)) throw new OpenChamberControlError('Session scope registration failed', 500);
+        settled();
+        rememberLive(runtime.sessionId);
+        return runtime;
+      });
+    })();
+    speculativeSessions.set(workspaceId, { promise: preparePromise, timer });
     try {
-      const session = await promise;
+      const session = await preparePromise;
       return { ok: true, sessionId: session.sessionId };
     } catch (err) {
-      speculativeSessions.delete(workspaceId);
-      clearTimeout(timer);
+      if (speculativeSessions.get(workspaceId)?.promise === preparePromise) {
+        speculativeSessions.delete(workspaceId);
+        clearTimeout(timer);
+      }
       throw err;
     }
   };
@@ -265,6 +270,7 @@ const createCanonicalSessionService = (dependencies) => {
       }
     }
     if (session) {
+      rememberLive(session.sessionId);
       if (parsed.data.title) {
         const renamed = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(session.sessionId)}/title`, {
           method: 'PATCH', headers: { 'content-type': 'application/json' },
@@ -275,7 +281,7 @@ const createCanonicalSessionService = (dependencies) => {
       }
     } else {
       const rootSessionId = randomUUID();
-      const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
+      const workspaceDisplay = z.object({ displayPath: z.string().nullable().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
       const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
       const hostTools = await resolveHostTools();
       const sessionBootstrap = {
@@ -1000,7 +1006,18 @@ const createCanonicalSessionService = (dependencies) => {
     return moved;
   };
 
-  return { create, prepare, discardPrepared, send, steer, followUp, fork, selectBranch, relocate, moveToWorktree, delete: remove, open, history, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
+  const close = async () => {
+    for (const [workspaceId, entry] of speculativeSessions.entries()) {
+      clearTimeout(entry.timer);
+      try {
+        const session = await entry.promise;
+        await remove(session.sessionId);
+      } catch { }
+    }
+    speculativeSessions.clear();
+  };
+
+  return { create, prepare, discardPrepared, close, send, steer, followUp, fork, selectBranch, relocate, moveToWorktree, delete: remove, open, history, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
 };
 
 

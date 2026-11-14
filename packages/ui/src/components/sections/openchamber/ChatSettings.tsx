@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { NumberInput } from '@/components/ui/number-input';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
-import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import {
   SettingsSection,
   SettingsFieldRow,
@@ -167,6 +168,10 @@ const MessagesTab: React.FC = () => {
     // picks a mode here; retire it so the choice sticks.
     void updateDesktopSettings({ activityRenderMode: mode, chatRenderMode: 'live' });
   };
+  const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('chat');
+  const displaySettings = getSectionSettings('display');
+  const thinkingSettings = getSectionSettings('thinking');
+  const imageSettings = getSectionSettings('images');
 
   return (
     <>
@@ -354,6 +359,63 @@ const MessagesTab: React.FC = () => {
             info={t('settings.openchamber.visual.field.copyMessagesAsPlainTextInfo')}
             settingsItem="chat.copy-plain-text"
           />
+        </div>
+      </SettingsSection>
+
+      {/* Display & Visibility */}
+      <SettingsSection
+        title={t('settings.chat.section.display.title')}
+        description={t('settings.chat.section.display.description')}
+        settingsItem="chat.section.display"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {displaySettings.map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+              disabled={ompLoading}
+              onChange={(val) => void updateOmpSetting(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      {/* Reasoning & Thinking */}
+      <SettingsSection
+        title={t('settings.chat.section.thinking.title')}
+        description={t('settings.chat.section.thinking.description')}
+        settingsItem="chat.section.thinking"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {thinkingSettings.map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+              disabled={ompLoading}
+              onChange={(val) => void updateOmpSetting(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      {/* Image Handling */}
+      <SettingsSection
+        title={t('settings.chat.section.images.title')}
+        description={t('settings.chat.section.images.description')}
+        settingsItem="chat.section.images"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {imageSettings.map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+              disabled={ompLoading}
+              onChange={(val) => void updateOmpSetting(s.id, val)}
+            />
+          ))}
         </div>
       </SettingsSection>
 
@@ -686,12 +748,6 @@ const AssistanceTab: React.FC = () => {
   const sessionReviewOfferEnabled = useUIStore((state) => state.sessionReviewOfferEnabled);
   const setSessionReviewOfferEnabled = useUIStore((state) => state.setSessionReviewOfferEnabled);
   const jevAvailable = useRoutingStore(selectSafetyNetAvailable);
-  const sessionGoalEnabled = useUIStore((state) => state.sessionGoalEnabled);
-  const setSessionGoalEnabled = useUIStore((state) => state.setSessionGoalEnabled);
-  const sessionGoalDefaultBudgetEnabled = useUIStore((state) => state.sessionGoalDefaultBudgetEnabled);
-  const setSessionGoalDefaultBudgetEnabled = useUIStore((state) => state.setSessionGoalDefaultBudgetEnabled);
-  const sessionGoalDefaultBudget = useUIStore((state) => state.sessionGoalDefaultBudget);
-  const setSessionGoalDefaultBudget = useUIStore((state) => state.setSessionGoalDefaultBudget);
 
   return (
     <>
@@ -763,67 +819,21 @@ const AssistanceTab: React.FC = () => {
             aria-label={t('settings.openchamber.visual.field.suggestionGeneratorAria')}
           />
         </SettingsFieldRow>
-  {/* Jev runs on the OpenChamber server, which VS Code does not have.
+        {/* Jev runs on the OpenChamber server, which VS Code does not have.
             The line naming who decides sits under the label, so it reads as
             part of this option rather than text between two checkboxes. */}
-  <SettingsCheckboxRow
-    checked={jevAvailable && sessionReviewOfferEnabled}
-    onChange={setSessionReviewOfferEnabled}
-    disabled={!jevAvailable}
-    label={t('settings.openchamber.visual.field.sessionReviewOffer')}
-    ariaLabel={t('settings.openchamber.visual.field.sessionReviewOffer')}
-    info={t('settings.openchamber.visual.field.sessionReviewOfferInfo')}
-    footer={<JevAccessNote />}
-    settingsItem="chat.session-review-offer"
-  />
+        <SettingsCheckboxRow
+          checked={jevAvailable && sessionReviewOfferEnabled}
+          onChange={setSessionReviewOfferEnabled}
+          disabled={!jevAvailable}
+          label={t('settings.openchamber.visual.field.sessionReviewOffer')}
+          ariaLabel={t('settings.openchamber.visual.field.sessionReviewOffer')}
+          info={t('settings.openchamber.visual.field.sessionReviewOfferInfo')}
+          footer={<JevAccessNote />}
+          settingsItem="chat.session-review-offer"
+        />
       </SettingsSection >
 
-  <SettingsSection
-    title={t('settings.openchamber.visual.goal.sectionTitle')}
-    info={t('settings.openchamber.visual.goal.description')}
-    contentClassName="space-y-3"
-  >
-    <SettingsCheckboxRow
-      checked={sessionGoalEnabled}
-      onChange={setSessionGoalEnabled}
-      label={t('settings.openchamber.visual.field.sessionGoal')}
-      ariaLabel={t('settings.openchamber.visual.field.sessionGoalAria')}
-      settingsItem="chat.session-goal"
-    />
-    <div>
-      <SessionGoalCheckerField disabled={!sessionGoalEnabled} />
-      <SessionGoalMaxTurnsField disabled={!sessionGoalEnabled} />
-      <SettingsFieldRow
-        label={(
-          <SettingsCheckboxRow
-            checked={sessionGoalDefaultBudgetEnabled}
-            onChange={setSessionGoalDefaultBudgetEnabled}
-            disabled={!sessionGoalEnabled}
-            label={t('settings.openchamber.visual.goal.budgetLabel')}
-            ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
-          />
-        )}
-        settingsItem="chat.session-goal-budget"
-      >
-        {/* The field keeps its place while the budget is off, so
-                turning it on does not move the rows around it. */}
-        <NumberInput
-          value={sessionGoalDefaultBudget}
-          onValueChange={(value) => {
-            if (Number.isFinite(value) && value > 0) {
-              setSessionGoalDefaultBudget(Math.floor(value));
-            }
-          }}
-          min={1000}
-          max={100000000}
-          step={50000}
-          disabled={!sessionGoalEnabled || !sessionGoalDefaultBudgetEnabled}
-          className={SETTINGS_NUMBER_INPUT_CLASS}
-          aria-label={t('settings.openchamber.visual.goal.budgetAria')}
-        />
-      </SettingsFieldRow>
-    </div>
-  </SettingsSection>
     </>
   );
 };

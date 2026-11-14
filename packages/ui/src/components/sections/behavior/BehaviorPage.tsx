@@ -33,8 +33,11 @@ import {
   SettingsChipGroup,
   SettingsFieldRow,
   SettingsStackedField,
+  SETTINGS_OPTION_STACK_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 
 const agentsMdResponseSchema = z.object({
   content: z.string(),
@@ -91,6 +94,8 @@ const buildRulesQuery = (scope: RulesScope, directory: string | null) => {
 export const BehaviorPage: React.FC = () => {
   const { t } = useI18n();
   const settingsDirectory = useSettingsDirectory();
+  const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('behavior');
+  const promptSettings = getSectionSettings('prompt');
 
   const [rulesScope, setRulesScope] = React.useState<RulesScope>('global');
   const [globalRules, setGlobalRules] = React.useState('');
@@ -407,6 +412,25 @@ export const BehaviorPage: React.FC = () => {
             />
           </SettingsStackedField>
         ) : null}
+      </SettingsSection>
+
+      {/* OMP Prompt & Personality */}
+      <SettingsSection
+        title={t('settings.behavior.section.prompt.title')}
+        description={t('settings.behavior.section.prompt.description')}
+        settingsItem="behavior.section.prompt"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {promptSettings.map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+              disabled={ompLoading}
+              onChange={(val) => void updateOmpSetting(s.id, val)}
+            />
+          ))}
+        </div>
       </SettingsSection>
     </SettingsPageLayout>
   );

@@ -1,7 +1,5 @@
 import React from 'react';
 import {
-  JsonObjectSchema,
-  MODEL_ROLE_IDS,
   type OmpSetting,
   type OmpSettingValue,
   type OmpSettingsChange,
@@ -9,25 +7,15 @@ import {
 } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
-import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  SettingsCheckboxRow,
-  SettingsChipGroup,
   SettingsSection,
-  SettingsTwoColumn,
-  SettingsStackedField,
   SETTINGS_DESCRIPTION_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_NUMBER_INPUT_CLASS,
-  SETTINGS_NUMBER_UNIT_CLASS,
   SETTINGS_OPTION_STACK_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { NumberInput } from '@/components/ui/number-input';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
   AUTOSAVE_SAVED,
@@ -36,32 +24,9 @@ import {
   useAutosave,
   type AutosaveResult,
 } from '@/components/sections/shared/SettingsAutosave';
-import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { optionSlug } from '@/components/sections/shared/ompRowHelpers';
 import { Icon } from '@/components/icon/Icon';
-
-/**
- * Roles this page assigns. Defaults owns `default`/`smol`/`slow` and Git owns
- * `commit`, so a role here is one no other page draws; the shared
- * `ModelRoleEditor` renders each of them the same way those pages render theirs.
- */
-const PAGE_ROLES = MODEL_ROLE_IDS.filter(
-  (role) => role !== 'default' && role !== 'smol' && role !== 'slow' && role !== 'commit',
-);
-
-const ROLE_LABEL_KEYS: Record<string, { label: I18nKey; desc: I18nKey }> = {
-  vision: { label: 'settings.omp.modelRoles.role.vision.label', desc: 'settings.omp.modelRoles.role.vision.desc' },
-  plan: { label: 'settings.omp.modelRoles.role.plan.label', desc: 'settings.omp.modelRoles.role.plan.desc' },
-  tiny: { label: 'settings.omp.modelRoles.role.tiny.label', desc: 'settings.omp.modelRoles.role.tiny.desc' },
-  memory: { label: 'settings.omp.modelRoles.role.memory.label', desc: 'settings.omp.modelRoles.role.memory.desc' },
-  task: { label: 'settings.omp.modelRoles.role.task.label', desc: 'settings.omp.modelRoles.role.task.desc' },
-  advisor: { label: 'settings.omp.modelRoles.role.advisor.label', desc: 'settings.omp.modelRoles.role.advisor.desc' },
-  widget: { label: 'settings.omp.modelRoles.role.widget.label', desc: 'settings.omp.modelRoles.role.widget.desc' },
-  image: { label: 'settings.omp.modelRoles.role.image.label', desc: 'settings.omp.modelRoles.role.image.desc' },
-  web: { label: 'settings.omp.modelRoles.role.web.label', desc: 'settings.omp.modelRoles.role.web.desc' },
-  speech: { label: 'settings.omp.modelRoles.role.speech.label', desc: 'settings.omp.modelRoles.role.speech.desc' },
-  dictation: { label: 'settings.omp.modelRoles.role.dictation.label', desc: 'settings.omp.modelRoles.role.dictation.desc' },
-  judge: { label: 'settings.omp.modelRoles.role.judge.label', desc: 'settings.omp.modelRoles.role.judge.desc' },
-};
 
 interface ResolvedSection {
   readonly id: string;
@@ -124,164 +89,7 @@ function resolveSectionInfo(setting: OmpSetting): { id: string; titleKey?: I18nK
   };
 }
 
-function inferUnit(id: string): 'percent' | 'seconds' | 'tokens' | undefined {
-  if (id.endsWith('Percent') || id.endsWith('Pct')) return 'percent';
-  if (id.endsWith('Seconds') || id.endsWith('Sec')) return 'seconds';
-  if (id.endsWith('Tokens')) return 'tokens';
-  return undefined;
-}
-
-/** Lower-case, hyphenated slug the option-label keys use. */
-function optionSlug(value: unknown): string {
-  const out: string[] = [];
-  for (const ch of String(value ?? '').toLowerCase()) {
-    if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')) out.push(ch);
-    else if (out.length > 0 && out[out.length - 1] !== '-') out.push('-');
-  }
-  return out.join('').replace(/^-+|-+$/g, '') || 'opt';
-}
-
-/** OMP's own sentinel: `-1` or `default`, both shown as the Default option. */
-function isSentinelOption(value: string): boolean {
-  return value === 'default' || value === '-1';
-}
-
-/** The native `modelRoles` record read as plain selectors; malformed entries are dropped. */
-function readRoleSelectors(value: OmpSettingValue): Record<string, string> {
-  const record = JsonObjectSchema.safeParse(value);
-  if (!record.success) return {};
-  return Object.fromEntries(
-    Object.entries(record.data).flatMap(([role, entry]) => {
-      const selector = typeof entry === 'string'
-        ? entry
-        : Array.isArray(entry) && typeof entry[0] === 'string' ? entry[0] : '';
-      return selector ? [[role, selector]] : [];
-    }),
-  );
-}
-
 type Values = Record<string, OmpSettingValue>;
-
-/** One registry row: label and description from the locale, control from type/options. */
-const OmpRowControl: React.FC<{
-  setting: OmpSetting;
-  value: OmpSettingValue;
-  disabled?: boolean;
-  onChange: (value: OmpSettingValue) => void;
-}> = ({ setting, value, disabled, onChange }) => {
-  const { t } = useI18n();
-  const labelKey = `settings.omp.items.${setting.id}.label` as I18nKey;
-  const label = t(labelKey) === labelKey ? (setting.label ?? setting.id) : t(labelKey);
-  const descriptionKey = `settings.omp.items.${setting.id}.description` as I18nKey;
-  const description = t(descriptionKey) === descriptionKey ? setting.description : t(descriptionKey);
-  const anchor = `omp.${setting.id}`;
-
-  if (setting.type === 'boolean') {
-    return (
-      <SettingsCheckboxRow
-        settingsItem={anchor}
-        checked={value === true}
-        onChange={onChange}
-        disabled={disabled}
-        label={label}
-        info={description}
-        ariaLabel={label}
-      />
-    );
-  }
-
-  if (setting.type === 'number') {
-    if (setting.options && setting.options.length > 0) {
-      const sentinelOption = setting.options.find((opt) => isSentinelOption(opt.value));
-      const isSentinel = value === -1 || value === 'default' || value === null;
-      const currentValue = isSentinel ? (sentinelOption?.value ?? 'default') : String(value);
-      const selectedOption = setting.options.find((opt) => opt.value === currentValue);
-      const selectedLabel = selectedOption
-        ? (isSentinelOption(selectedOption.value) ? t('settings.omp.value.default') : selectedOption.label)
-        : isSentinel ? t('settings.omp.value.default') : currentValue;
-
-      return (
-        <SettingsStackedField label={label} info={description} settingsItem={anchor}>
-          <Select
-            value={currentValue}
-            onValueChange={(next) => {
-              if (isSentinelOption(next)) {
-                onChange(-1);
-              } else {
-                const num = Number(next);
-                onChange(Number.isNaN(num) ? next : num);
-              }
-            }}
-            disabled={disabled}
-          >
-            <SelectTrigger className="w-48" aria-label={label}>
-              <SelectValue>{selectedLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {setting.options.map((opt) => {
-                const displayLabel = isSentinelOption(opt.value) ? t('settings.omp.value.default') : opt.label;
-                return (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {displayLabel}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </SettingsStackedField>
-      );
-    }
-
-    const unit = inferUnit(setting.id);
-    return (
-      <SettingsStackedField label={label} info={description} settingsItem={anchor}>
-        <div className="flex items-center gap-2">
-          <NumberInput
-            value={typeof value === 'number' && value !== -1 ? value : undefined}
-            placeholder={t('settings.omp.value.default')}
-            onValueChange={onChange}
-            onClear={() => onChange(null)}
-            disabled={disabled}
-            className={SETTINGS_NUMBER_INPUT_CLASS}
-            aria-label={label}
-          />
-          {unit ? <span className={SETTINGS_NUMBER_UNIT_CLASS}>{t(`settings.omp.unit.${unit}` as I18nKey)}</span> : null}
-        </div>
-      </SettingsStackedField>
-    );
-  }
-
-  if (setting.type === 'string') {
-    return (
-      <SettingsStackedField label={label} info={description} settingsItem={anchor}>
-        <Input
-          value={value === null || value === undefined ? '' : String(value)}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={disabled}
-          className="max-w-md"
-          aria-label={label}
-        />
-      </SettingsStackedField>
-    );
-  }
-
-  const choices = setting.options ?? (setting.enumValues ?? []).map((choice) => ({ value: choice, label: choice }));
-  const current = value === null || value === undefined ? '' : String(value);
-  return (
-    <SettingsStackedField label={label} info={description} settingsItem={anchor}>
-      <SettingsChipGroup
-        value={current}
-        aria-label={label}
-        options={choices.map((choice) => {
-          const key = `settings.omp.items.${setting.id}.options.${optionSlug(choice.value)}` as I18nKey;
-          const translated = t(key);
-          return { value: String(choice.value), label: translated === key ? choice.label : translated };
-        })}
-        onChange={(next) => onChange(next)}
-      />
-    </SettingsStackedField>
-  );
-};
 
 export const OmpSettingsPage: React.FC = () => {
   const { t } = useI18n();
@@ -294,7 +102,6 @@ export const OmpSettingsPage: React.FC = () => {
   const [reload, setReload] = React.useState(0);
   // The catalog loader already read this directory's models; fetching them
   // again here duplicated the slowest request the page made.
-  const models = useSettingsModels(directory);
   const savedRef = React.useRef<OmpSettingsState | null>(null);
   const scopeGeneration = React.useRef(0);
 
@@ -437,7 +244,7 @@ export const OmpSettingsPage: React.FC = () => {
 
     const sections: ResolvedSection[] = sectionOrder.map((id) => sectionMap.get(id)!);
     const total = state.totalCount;
-    const shownCount = engineSettings.length + (byId.has('modelRoles') ? 1 : 0);
+    const shownCount = engineSettings.length;
     const hiddenCount = Math.max(0, total - shownCount);
 
     return {
@@ -446,27 +253,6 @@ export const OmpSettingsPage: React.FC = () => {
       hiddenCount,
     };
   }, [state]);
-
-  const roles = React.useMemo(
-    () => readRoleSelectors(form.modelRoles !== undefined ? form.modelRoles : null),
-    [form.modelRoles]
-  );
-
-  /** What a role with no level of its own runs at, per OMP's session default. */
-  const globalThinkingLevel = React.useMemo(() => {
-    const value = state?.settings.find((setting) => setting.id === 'defaultThinkingLevel')?.value;
-    return typeof value === 'string' && value.length > 0 ? value : undefined;
-  }, [state]);
-
-  const onRoleChange = React.useCallback((role: string, selector: string) => {
-    setForm((current) => {
-      const nextRoles: Record<string, string> = { ...readRoleSelectors(current.modelRoles ?? null) };
-      if (selector) nextRoles[role] = selector;
-      else delete nextRoles[role];
-      return { ...current, modelRoles: nextRoles };
-    });
-    autosave.requestSave();
-  }, [autosave]);
 
   const revealConfig = React.useCallback(() => {
     const path = state?.configPath;
@@ -503,41 +289,12 @@ export const OmpSettingsPage: React.FC = () => {
       onBlurCapture={autosave.onBlurCapture}
     >
       <div className="space-y-6">
-        <SettingsSection
-          title={t('settings.omp.modelRoles.title')}
-          description={t('settings.omp.modelRoles.description')}
-          divider={false}
-          settingsItem="omp.modelRoles"
-        >
-          <SettingsTwoColumn>
-            {PAGE_ROLES.map((role) => {
-              const keys = ROLE_LABEL_KEYS[role];
-              if (keys === undefined) return null;
-              return (
-                <ModelRoleEditor
-                  key={role}
-                  role={role}
-                  roles={roles}
-                  models={models}
-                  directory={directory ?? undefined}
-                  globalLevel={globalThinkingLevel}
-                  layout="stacked"
-                  disabled={loading}
-                  label={t(keys.label)}
-                  info={t(keys.desc)}
-                  settingsItem={`omp.modelRoles.${role}`}
-                  onChange={(selector) => onRoleChange(role, selector)}
-                />
-              );
-            })}
-          </SettingsTwoColumn>
-        </SettingsSection>
-
-        {visible.sections.map((section) => (
+        {visible.sections.map((section, index) => (
           <SettingsSection
             key={section.id}
             title={section.titleKey ? t(section.titleKey) : section.label}
             description={section.descriptionKey ? t(section.descriptionKey) : undefined}
+            divider={index > 0}
             settingsItem={`omp.section.${section.id}`}
           >
             <div className={SETTINGS_OPTION_STACK_CLASS}>
@@ -560,25 +317,28 @@ export const OmpSettingsPage: React.FC = () => {
             </div>
           </SettingsSection>
         ))}
-
-        <SettingsSection
+        < SettingsSection
           title={t('settings.omp.advanced')}
           settingsItem="omp.advanced"
-          headerAction={state.configPath && files.revealPath ? (
-            <Button variant="outline" size="sm" onClick={revealConfig}>
-              <Icon name="file-text" className="size-3.5 mr-1" />
-              {t('settings.omp.openConfig')}
-            </Button>
-          ) : undefined}
+          headerAction={
+            state.configPath && files.revealPath ? (
+              <Button variant="outline" size="sm" onClick={revealConfig}>
+                <Icon name="file-text" className="size-3.5 mr-1" />
+                {t('settings.omp.openConfig')}
+              </Button>
+            ) : undefined
+          }
         >
           <p className={SETTINGS_DESCRIPTION_CLASS}>
             {t('settings.omp.advancedDescription', { count: visible.hiddenCount })}
           </p>
-          {state.configPath ? (
-            <p className={`${SETTINGS_HELPER_CLASS} font-mono break-all`}>{state.configPath}</p>
-          ) : null}
+          {
+            state.configPath ? (
+              <p className={`${SETTINGS_HELPER_CLASS} font-mono break-all`}>{state.configPath}</p>
+            ) : null
+          }
         </SettingsSection>
       </div>
-    </SettingsPageLayout>
+    </SettingsPageLayout >
   );
 };

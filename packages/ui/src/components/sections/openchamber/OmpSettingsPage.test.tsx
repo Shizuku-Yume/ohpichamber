@@ -227,7 +227,7 @@ test('leaves terminal-only, page and duplicate settings off the page', async () 
     expect(`${id}: ${container.querySelector(`[data-settings-item="omp.${id}"]`) === null}`).toBe(`${id}: true`);
   }
   // The page counts what it left out instead of drawing it.
-  expect(container.textContent).toContain('6 settings');
+  expect(container.textContent).toContain('7 settings');
 });
 
 test('hides a row whose condition is off and keeps one whose condition holds', async () => {
@@ -249,19 +249,14 @@ test('offers the config file for the settings it does not render', async () => {
   expect(revealPath).toHaveBeenCalledWith(CONFIG_PATH);
 });
 
-test('draws each page role once, with the catalog model and its concrete effort', async () => {
+test('model roles live on concept-owning pages and stay off the OMP page', async () => {
   await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
   await settle();
 
-  // Roles another Settings page owns stay out of this one.
-  for (const owned of ['default', 'smol', 'slow', 'commit']) {
-    expect(`${owned}: ${container.querySelector(`[data-settings-item="omp.modelRoles.${owned}"]`) === null}`).toBe(`${owned}: true`);
+  // Model roles are managed on owning pages, not on the OMP page
+  for (const role of ['default', 'smol', 'slow', 'commit', 'vision', 'image', 'memory', 'task', 'advisor']) {
+    expect(`${role}: ${container.querySelector(`[data-settings-item="omp.modelRoles.${role}"]`) === null}`).toBe(`${role}: true`);
   }
-  const visionRow = container.querySelector('[data-settings-item="omp.modelRoles.vision"]');
-  expect(visionRow).not.toBeNull();
-  expect(visionRow?.textContent).toContain('Vision');
-  // The stored level is shown as itself, never as a synthetic Default.
-  expect(visionRow?.textContent).toContain('High');
 });
 
 test('shows a retry path when the settings read fails', async () => {
@@ -316,7 +311,7 @@ test('renders every page row translated in zh-CN with no raw setting id on scree
     await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
     await settle();
 
-    expect(container.textContent).toContain(ompSettingsI18n['zh-CN']['settings.omp.modelRoles.title']);
+    expect(container.textContent).toContain(ompSettingsI18n['zh-CN']['settings.omp.items.lsp.enabled.label']);
     expect(container.textContent).toContain(ompSettingsI18n['zh-CN']['settings.omp.items.compaction.enabled.label']);
     // A section heading is addressed by key like every row, so a heading the
     // vocabulary forgot would render as `settings.omp.group.<id>.label`.

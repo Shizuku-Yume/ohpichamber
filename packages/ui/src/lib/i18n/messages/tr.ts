@@ -2218,6 +2218,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "Varsayılan küçük modeli kullan",
   "settings.openchamber.defaults.smallModel.thinking": "Düşünme",
   "settings.openchamber.defaults.walkthroughModel.title": "Değişiklikler İnceleme Turu Modeli",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Varsayılan inceleme turu modelini kullan",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Kapatırsanız aşağıdan değişiklikler inceleme turu için ayrı bir model seçebilirsiniz.",
   "settings.openchamber.defaults.walkthroughModel.description": "Değişikliklerinizin yapay zekâ incelemesi, yapılandırılmış çıktı ve bir diff'in tamamına yetecek alan ister; bunları ucuz bir küçük model çoğu zaman sağlayamaz. Katalogda yapılandırılmış çıktı üretemez olarak görünen modeller bu seçicide gizlenir. Boş bırakılırsa küçük model kullanılır.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Küçük model",
   "settings.openchamber.defaults.field.openFilesPreviewAria": "Önizlenebilir dosyaları önizleme modunda aç",

@@ -1953,6 +1953,8 @@ export const settingsDict = {
   'settings.openchamber.defaults.smallModel.useDefaultAria': 'Utiliser le petit modèle par défaut',
   'settings.openchamber.defaults.smallModel.thinking': 'Pensée',
   'settings.openchamber.defaults.walkthroughModel.title': 'Modèle du parcours des modifications',
+  'settings.openchamber.defaults.walkthroughModel.useDefault': 'Utiliser le modèle par défaut du parcours',
+  'settings.openchamber.defaults.walkthroughModel.useDefaultInfo': 'Désactivez pour choisir ci-dessous un modèle distinct pour le parcours des modifications.',
   'settings.openchamber.defaults.walkthroughModel.description': 'La revue par IA de vos modifications exige une sortie structurée et de la place pour un diff entier, ce qu’un petit modèle économique ne fournit pas toujours. Les modèles que le catalogue déclare incapables de sortie structurée sont masqués ici. Sans choix explicite, le petit modèle est utilisé.',
   'settings.openchamber.defaults.walkthroughModel.usesSmallModel': 'Petit modèle',
   'settings.openchamber.defaults.field.showDeletionDialog': 'Afficher la boîte de dialogue de suppression',

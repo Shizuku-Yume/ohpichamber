@@ -208,6 +208,7 @@ export const GitSettings: React.FC = () => {
      globalLevel={globalThinkingLevel}
      settingsItem="git.commit-model"
      disabled={isSavingCommitModel || !ompState}
+     loading={!ompState}
      label={t('settings.omp.modelRoles.role.commit.label')}
      info={t('settings.omp.modelRoles.role.commit.desc')}
      onChange={handleCommitRoleChange}

@@ -2285,6 +2285,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "기본 소형 모델 사용",
   "settings.openchamber.defaults.smallModel.thinking": "사고",
   "settings.openchamber.defaults.walkthroughModel.title": "변경 워크스루 모델",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "기본 워크스루 모델 사용",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "끄면 아래에서 변경 워크스루에 사용할 모델을 따로 고를 수 있습니다.",
   "settings.openchamber.defaults.walkthroughModel.description": "변경 사항의 AI 리뷰에는 구조화된 출력과 전체 diff를 담을 여유가 필요한데, 저렴한 스몰 모델로는 부족할 때가 많습니다. 카탈로그가 구조화된 출력을 지원하지 않는다고 알리는 모델은 이 목록에서 숨겨집니다. 선택하지 않으면 스몰 모델이 사용됩니다.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "스몰 모델",
   "settings.openchamber.defaults.field.showDeletionDialog": "삭제 확인 대화상자 표시",

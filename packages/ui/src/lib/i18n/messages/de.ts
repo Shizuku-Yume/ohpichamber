@@ -2830,6 +2830,8 @@ export const dict = {
   "settings.openchamber.desktopNetwork.field.macMenuBar": "OpenChamber in der Menüleiste anzeigen",
   "settings.openchamber.desktopNetwork.field.macMenuBarDescription": "Erfordert einen Neustart der App. Wenn deaktiviert, erstellt OpenChamber weder den Menüleisten-Eintrag noch führt es dessen Sitzungs-, Genehmigungs- und Nutzungsaktualisierungen aus.",
   "settings.openchamber.defaults.walkthroughModel.title": "Walkthrough-Modell ändern",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Standardmodell für den Walkthrough verwenden",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Deaktivieren, um unten ein eigenes Modell für den Walkthrough der Änderungen zu wählen.",
   "settings.openchamber.defaults.walkthroughModel.description": "Die KI-Prüfung deiner Änderungen benötigt strukturierten Output und Platz für einen ganzen Diff, den ein günstiges kleines Modell oft nicht liefern kann. Modelle, die der Katalog als nicht in der Lage zu strukturiertem Output meldet, werden in diesem Auswahlfeld ausgeblendet. Lasse es leer, dann wird das kleine Modell verwendet.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Kleines Modell",
   "settings.voice.page.provider.openai": "OpenAI",

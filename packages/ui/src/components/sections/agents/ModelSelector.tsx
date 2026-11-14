@@ -50,6 +50,11 @@ interface ModelSelectorProps {
      * mouse from the list.
      */
     triggerTooltip?: string;
+    /**
+     * The caller's value is still being read. The trigger shows the loading
+     * state rather than the placeholder that the value replaces a moment later.
+     */
+    loading?: boolean;
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -66,6 +71,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     directory,
     offerAuto = false,
     triggerTooltip,
+    loading = false,
 }) => {
     const { t } = useI18n();
     const autoReady = useRoutingStore(selectAutoReady);
@@ -73,7 +79,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         ? { providerId: AUTO_PROVIDER_ID, modelId: AUTO_MODEL_ID, model: { modelId: AUTO_MODEL_ID, provider: AUTO_PROVIDER_ID, name: t('chat.modelControls.autoModel'), modalities: ['text'], contextWindow: 1, maxOutputTokens: 1, reasoningEffortSupported: false, reasoningOptions: [], variants: [], pricing: null } }
         : null), [autoReady, offerAuto, t]);
     const isAutoSelected = isAutoModel(providerId, modelId);
-    const { isReady, isUnavailable } = useCatalogReadiness('models', directory);
+    const readiness = useCatalogReadiness('models', directory);
+    // A pending value is not ready: the trigger spins and cannot open until it arrives.
+    const isReady = !loading && readiness.isReady;
+    const isUnavailable = !loading && readiness.isUnavailable;
     const catalogProviders = useConfigStore((state) => directory === undefined
         ? state.providers : selectProvidersForDirectory(state, directory));
     const providers: ModelPickerProvider[] = catalogProviders;
@@ -133,7 +142,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }), [placeholder, t]);
 
     const selectedModel = providerId && modelId ? { providerID: providerId, modelID: modelId } : null;
-    const displayReady = isReady || Boolean(selectedModel);
+    const displayReady = isReady || (!loading && Boolean(selectedModel));
     // Show the model's display name (as in the picker list), not the raw provider/model id.
     const triggerLabel = React.useMemo(() => {
         if (!providerId || !modelId) {

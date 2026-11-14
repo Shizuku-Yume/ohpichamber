@@ -6038,6 +6038,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "استخدام النموذج الصغير الافتراضي",
   "settings.openchamber.defaults.smallModel.thinking": "التفكير",
   "settings.openchamber.defaults.walkthroughModel.title": "نموذج جولة شرح التغييرات",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "استخدام نموذج الجولة الافتراضي",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "أوقف هذا الخيار لاختيار نموذج منفصل لجولة شرح التغييرات أدناه.",
   "settings.openchamber.defaults.walkthroughModel.description": "تحتاج مراجعة الذكاء الاصطناعي لتغييراتك إلى مخرجات منظمة ومساحة تتسع لكامل الفروقات، وهو ما لا يوفره غالبًا نموذج صغير منخفض التكلفة. تُخفى من هذه القائمة النماذج التي يذكر الكتالوج أنها لا تستطيع إنتاج مخرجات منظمة. إذا تركته دون تعيين، فسيُستخدم النموذج الصغير.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "النموذج الصغير",
   "settings.openchamber.defaults.field.openFilesPreviewAria": "فتح الملفات القابلة للمعاينة في وضع المعاينة",

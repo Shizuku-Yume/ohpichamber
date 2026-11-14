@@ -9186,6 +9186,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "Резервні постачальники",
   "settings.webSearch.native.fallbackInfo": "Перевіряються в цьому порядку, якщо основний постачальник не спрацює.",
   "settings.webSearch.native.addFallback": "Додати резервного постачальника",
+  "settings.webSearch.native.dragInstructions": "Натисніть Пробіл, щоб взяти постачальника, перемістіть його стрілками та натисніть Пробіл, щоб опустити. Натисніть Escape, щоб скасувати.",
   "settings.webSearch.native.removeFallback": "Вилучити {provider} з резервних постачальників",
   "settings.webSearch.native.timeout": "Час очікування (секунди)",
   "settings.webSearch.native.keyInfo": "Ключі доступні лише для запису. Наявні секрети ніколи не повертаються.",

@@ -117,7 +117,67 @@ describe('agent-runtime resolution and supervisor creation', () => {
       fs.rmSync(dataDir, { recursive: true, force: true });
     }
   });
+  it('admitWorkspace includes hostTools resolved from resolveHostTools in registration request', async () => {
+    const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-rt-tools-'));
+    try {
+      let registeredBody = null;
+      const fakeScope = {
+        workspaceId: 'workspace-test-1',
+        projectId: 'project-test-1',
+        cwd: '/test/cwd',
+        agentDirectory: '/test/agent',
+        agentDirectoryId: 'agent-dir-1',
+      };
+      const runtime = createHostAgentRuntime({
+        dataDir,
+        scopeRuntime: {
+          resolveWorkspaceScope: async () => fakeScope,
+          resolveWorkspaceDirectory: async () => '/test/cwd',
+          resolveSessionScope: async () => null,
+          resolveRepositoryWorkspace: async () => null,
+          resolveRelocationSourceScope: async () => null,
+        },
+        validateDirectoryPath: () => true,
+        getEnvironmentForDirectory: async () => ({ TEST_ENV: '1' }),
+        invokeHostAction: async () => null,
+        enterprisePolicyOptions: {},
+        bunPath: '/custom/bin/bun',
+        entrypoint: '/custom/service/index.js',
+        resolveHostTools: async () => ({
+          web: false,
+          openchamber: false,
+          notify: true,
+        }),
+      });
 
+      runtime.service.request = async (requestPath, options) => {
+        if (requestPath === `/internal/workspaces/${encodeURIComponent(fakeScope.workspaceId)}`) {
+          registeredBody = JSON.parse(options.body);
+          return new Response(JSON.stringify({
+            workspaceId: fakeScope.workspaceId,
+            projectId: fakeScope.projectId,
+            agentDirectoryId: fakeScope.agentDirectoryId,
+            authorizationRootId: 'auth-root-1',
+            catalogRevision: '1',
+          }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({}), { status: 404 });
+      };
+
+      const admitted = await runtime.resolveWorkspaceScope(fakeScope.workspaceId);
+      expect(admitted).toBeDefined();
+      expect(registeredBody).not.toBeNull();
+      expect(registeredBody.hostTools).toEqual({
+        web: false,
+        openchamber: false,
+        notify: true,
+      });
+      expect(registeredBody.projectId).toBe(fakeScope.projectId);
+      expect(registeredBody.agentDirectoryId).toBe(fakeScope.agentDirectoryId);
+    } finally {
+      fs.rmSync(dataDir, { recursive: true, force: true });
+    }
+  });
   it('ensureAgentRuntimeSymlinks does nothing if manifest.json is absent', () => {
     const dummy = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-rt-nosym-'));
     try {

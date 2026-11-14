@@ -120,8 +120,8 @@ describe('canonical queue runtime', () => {
       store,
       service,
       resolveAttachments: async () => [],
-      publishQueue: () => {},
-      reportFailure: () => {},
+      publishQueue: () => { },
+      reportFailure: () => { },
     });
     const queue = await runtime.append({ ...scope, privateToken: 'must-not-reach-store' }, randomUUID(), {
       expectedRevision: '0', content: 'scope-safe', request: { input: { text: 'scope-safe', attachments: [], context: [] }, options },
@@ -148,8 +148,8 @@ describe('canonical queue runtime', () => {
       store,
       service,
       resolveAttachments: async () => [],
-      publishQueue: () => {},
-      reportFailure: () => {},
+      publishQueue: () => { },
+      reportFailure: () => { },
     });
     await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'retry me', request: { input: { text: 'retry me', attachments: [], context: [] }, options } });
     await runtime.dispatch(scope);
@@ -169,7 +169,7 @@ describe('canonical queue runtime', () => {
         return response({ run: { ...run, runId: (await store.getState({ sessionId: SESSION, projectId: PROJECT, workspaceId: WORKSPACE })).items[0].delivery.runId, origin: 'goal' } }, 202);
       },
     };
-    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => {}, reportFailure: () => {} });
+    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => { }, reportFailure: () => { } });
     await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'wait for goal', request: { input: { text: 'wait for goal', attachments: [], context: [] }, options } });
     await runtime.dispatch(scope);
     assert.deepEqual(runCalls, []);
@@ -193,7 +193,7 @@ describe('canonical queue runtime', () => {
       },
     };
     const accepted = Promise.withResolvers();
-    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => {}, reportFailure: () => {}, onPromptAccepted: async () => accepted.resolve() });
+    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => { }, reportFailure: () => { }, onPromptAccepted: async () => accepted.resolve() });
     await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'wait for continuation', request: { input: { text: 'wait for continuation', attachments: [], context: [] }, options } });
 
     await runtime.dispatch(scope);
@@ -220,7 +220,7 @@ describe('canonical queue runtime', () => {
         throw new Error('A queued send must not reach an active goal run');
       },
     };
-    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => {}, reportFailure: () => {} });
+    const runtime = createCanonicalQueueRuntime({ store, service, resolveAttachments: async () => [], publishQueue: () => { }, reportFailure: () => { } });
     await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'respect active goal', request: { input: { text: 'respect active goal', attachments: [], context: [] }, options } });
     await runtime.dispatch(scope);
     assert.deepEqual(calls, [`/api/agent/v1/sessions/${SESSION}`]);
@@ -238,8 +238,8 @@ describe('canonical queue runtime', () => {
       service,
       resolveAttachments: async () => [],
       onPromptAccepted: async () => { throw new Error('receipt unavailable'); },
-      publishQueue: () => {},
-      reportFailure: () => {},
+      publishQueue: () => { },
+      reportFailure: () => { },
     });
     await runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'receipt first', request: { input: { text: 'receipt first', attachments: [], context: [] }, options } });
     await runtime.dispatch(scope).catch(() => undefined);
@@ -258,8 +258,8 @@ describe('canonical queue runtime', () => {
       store,
       service,
       resolveAttachments: async () => [],
-      publishQueue: () => {},
-      reportFailure: () => {},
+      publishQueue: () => { },
+      reportFailure: () => { },
     });
     const app = express();
     app.use(express.json());
@@ -293,8 +293,8 @@ describe('canonical queue runtime', () => {
       store,
       service: createService(),
       resolveAttachments: async () => [],
-      publishQueue: () => {},
-      reportFailure: () => {},
+      publishQueue: () => { },
+      reportFailure: () => { },
       ensureSessionObserved: async (sessionScope) => {
         observed.push(sessionScope.sessionId);
       },
@@ -333,8 +333,8 @@ describe('canonical queue runtime', () => {
       store,
       service: busyService,
       resolveAttachments: async () => [],
-      publishQueue: () => {},
-      reportFailure: () => {},
+      publishQueue: () => { },
+      reportFailure: () => { },
     });
 
     await runtime.append(scope, randomUUID(), {
@@ -354,6 +354,26 @@ describe('canonical queue runtime', () => {
     // Trigger dispatch directly once idle
     await runtime.dispatch(scope);
     assert.equal(dispatchCalled, true);
+    await runtime.stop();
+  });
+
+  it('refuses a root prompt carrying agentId and admits the same prompt on a child session', async () => {
+    const store = storeFor();
+    const service = createService();
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => { },
+      reportFailure: () => { },
+    });
+    const delegated = { input: { text: 'delegate', attachments: [], context: [] }, options: { ...options, agentId: 'task-subagent' } };
+    await assert.rejects(
+      () => runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'delegate', request: delegated }),
+      /Root prompt agentId must be null/,
+    );
+    const child = await runtime.append({ ...scope, parentSessionId: 'ses_parent' }, randomUUID(), { expectedRevision: '0', content: 'delegate', request: delegated });
+    assert.equal(child.items[0].options.agentId, 'task-subagent');
     await runtime.stop();
   });
 });

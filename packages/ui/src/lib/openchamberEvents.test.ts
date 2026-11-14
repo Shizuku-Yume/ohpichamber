@@ -192,6 +192,40 @@ describe('openchamber events', () => {
     }
   });
 
+  test('an auto-review update event reaches subscribers with valid payload', async () => {
+    const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
+    const events: Array<{ type: string; properties?: unknown }> = [];
+    const unsubscribe = subscribeOpenchamberEvents((event) => { events.push(event as never); });
+    const source = MockEventSource.instances[0];
+    const run = {
+      originalSessionID: 'ses_orig',
+      reviewSessionID: 'ses_rev',
+      directory: '/repo',
+      status: 'running',
+      step: 'review',
+      round: 0,
+      maxRounds: 15,
+      startedAt: 1,
+      updatedAt: 1,
+    };
+    try {
+      source.onmessage?.({
+        data: JSON.stringify({
+          type: 'openchamber:auto-review.updated',
+          properties: { revision: 1, originalSessionID: 'ses_orig', directory: '/repo', run },
+        }),
+      });
+      const matched = events.filter((e) => e.type === 'openchamber:auto-review.updated');
+      expect(matched).toHaveLength(1);
+      expect(matched[0]).toMatchObject({
+        type: 'openchamber:auto-review.updated',
+        properties: { revision: 1, originalSessionID: 'ses_orig', run: { status: 'running' } },
+      });
+    } finally {
+      unsubscribe();
+    }
+  });
+
   test('a workflow run announcement carries the run the server wrote, and a removal its identity', async () => {
     const { subscribeOpenchamberEvents } = await import('./openchamberEvents');
     const events: Array<{ type: string }> = [];

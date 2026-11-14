@@ -6,6 +6,7 @@ import { subscribeRuntimeEndpointChanged } from './runtime-switch';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
 import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-watch';
+import { autoReviewUpdatedEventSchema, type AutoReviewUpdatedEvent } from '@/stores/useAutoReviewStore';
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
 import type { SyncEvent } from './opencode/events';
@@ -249,6 +250,7 @@ export type OpenChamberEvent =
  | RoutingSafetySkippedEvent
  | MessageQueueUpdatedEvent
  | PrWatchUpdatedEvent
+ | AutoReviewUpdatedEvent
  | PermissionPolicyEvent
  /** The host follows this space's queue again; what changed in a gap is read from the space. */
  | { type: 'space-queue-stream'; spaceId: string }
@@ -460,7 +462,7 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
  if (envelope.type === 'openchamber:guests-changed') {
   for (const listener of listeners) listener({ type: 'guests-changed' });
   return;
-}
+ }
  if (envelope.type === 'openchamber:terminal-sessions-changed') {
   for (const listener of listeners) listener({ type: 'terminal-sessions-changed' });
   return;
@@ -477,7 +479,7 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   if (runId && parentSessionId) for (const listener of listeners) listener({ type: 'workflow-run-removed', runId, parentSessionId });
   return;
  }
-if (envelope.type === 'openchamber:event-stream-ready') {
+ if (envelope.type === 'openchamber:event-stream-ready') {
   reconnectAttempt = 0;
   const ready = eventStreamReadySchema.safeParse(envelope.properties);
   const connectionId = ready.success ? ready.data.connectionId ?? null : null;
@@ -506,6 +508,14 @@ if (envelope.type === 'openchamber:event-stream-ready') {
  }
  if (envelope.type === 'openchamber:pr-watch.updated') {
   const parsed = prWatchUpdatedEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener(parsed.data);
+  }
+  return;
+ }
+
+ if (envelope.type === 'openchamber:auto-review.updated') {
+  const parsed = autoReviewUpdatedEventSchema.safeParse(envelope);
   if (parsed.success) {
    for (const listener of listeners) listener(parsed.data);
   }

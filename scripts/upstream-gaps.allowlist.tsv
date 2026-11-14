@@ -20,9 +20,7 @@ unused-route-fn	createServerDiagnosticJournal	## 2026-11-10 - Merge upstream Ope
 unused-route-fn	createUnreadBaseline	## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities	Replaced by Host-persisted session unread watermarks in metadata (openchamber.workbench.lastIdleAt/viewedAt)
 unused-route-fn	createWorkNamer	## 2026-10-26 - OMP owns session titles	Replaced by OMP native session and worktree title generation
 unused-route-fn	createWorkMembership	## 2026-11-11 - Repair the merged session sidebar on the fork's session model	OpenCode-dependent session schema; replaced by canonical Session model in sidebar
-unused-route-fn	createLimitFailoverRuntime	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	OpenCode rate-limit failover; replaced by OMP SDK model retry/failover
 unused-route-fn	createMergeFollowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	GitHub merge follow listener for PR watch; disposition depends on PR watch adoption
-ui-call-no-route	/api/openchamber/secret/answer	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; handler crashes if called, but agent tool secret.request is retired and never reaches UI in live turns
 ui-call-no-route	/api/openchamber/secret/fields	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; route missing on server, but agent secret tool is retired and never reaches UI in live turns
 settings-item	agents.color	## 2026-10-18 - Native agent controls and ConfigStore catalog retirement	OpenCode agent JSON model 'agents.color' replaced by OMP canonical agent profiles and subagents.
 settings-item	agents.mode	## 2026-10-18 - Native agent controls and ConfigStore catalog retirement	OpenCode agent JSON model 'agents.mode' replaced by OMP canonical agent profiles and subagents.
@@ -312,7 +310,7 @@ settings-search	voice.tts-endpoint-path	## 2026-11-10 - Merge upstream OpenChamb
 settings-search	web-search.providers	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Active UI control 'web-search.providers' cannot be found or navigated to using the Settings search bar.
 route-deps	registerSpaceRoutes.getDockerSetup	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
 route-deps	registerSpaceRoutes.setMachine	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
-route-deps	featureRoutesRuntime.registerRoutes.sessionWarmingRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
+route-deps	featureRoutesRuntime.registerRoutes.sessionWarmingRuntime	## 2026-10-29 - Delete upstream's per-session warming instead of rewiring it	Per-session warming deleted; replaced by workspace-level warming.
 route-deps	featureRoutesRuntime.registerRoutes.fs	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	featureRoutesRuntime.registerRoutes.onExtensionSessionEventsChanged	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	featureRoutesRuntime.registerRoutes.getOpenCodePluginDelivery	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
@@ -363,7 +361,7 @@ route-deps	registerOpenChamberRoutes.getOpenCodeCompatibility	## 2026-11-11 - Pr
 route-deps	createNotificationTriggerRuntime.buildOpenCodeUrl	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
 route-deps	createNotificationTriggerRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired or superseded in OMP architecture
 route-deps	createNotificationTriggerRuntime.readSessionMetadata	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-route-deps	createNotificationTriggerRuntime.spaceFetchFor	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
+route-deps	createNotificationTriggerRuntime.spaceFetchFor	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Isolated spaces dependency, unreleased.
 route-deps	createOpenChamberControlService.chatsScope	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.chatRoots	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.updateSessionMetadata	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
@@ -378,7 +376,6 @@ route-deps	createOpenChamberControlService.isRenderToolEnabled	## 2026-10-27 - H
 route-deps	createOpenChamberControlService.isSecretToolEnabled	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.onPageWaitChange	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.workNaming	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-route-deps	createOpenChamberControlService.prWatch	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.loadQuota	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createDevTunnelClient	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createDeltaCoalescer	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
@@ -395,42 +392,38 @@ unused-route-fn	createLinearTracker	## 2026-11-10 - Merge upstream OpenChamber w
 unused-route-fn	createFrameEncryptor	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createFrameDecryptor	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createAccountEvents	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	registerGitHubRoutes	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createRepositoryIdResolver	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-unused-route-fn	createTestHost	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
+unused-route-fn	createTestHost	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Isolated spaces module, unreleased; no mounted caller.
 unused-route-fn	createLocalPlace	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
-unused-route-fn	createIdleStop	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
+unused-route-fn	createIdleStop	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Isolated spaces module, unreleased; no mounted caller.
 unused-route-fn	createLiveDockerPlace	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
 unused-route-fn	createFakeDocker	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
 unused-route-fn	createMemoryPlace	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
 ui-call-no-route	/api/info	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/provider	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/active	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/config	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/config/providers	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/project	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/agent	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/model	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID/message	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID/message/:messageID	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID/prompt	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID/command	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID/interrupt	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID/fork	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID/form	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/session/:sessionID/permission	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/provider/:providerID	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/other	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/git	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
+ui-call-no-route	/api/provider	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/active	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/config	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/config/providers	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/project	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/agent	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/model	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID/message	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID/message/:messageID	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID/prompt	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID/command	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID/interrupt	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID/fork	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID/form	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/session/:sessionID/permission	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/provider/:providerID	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
+ui-call-no-route	/api/other	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode proxy route vocabulary in diagnostics export; not a live request.
 ui-call-no-route	/api/openchamber/realtime-proxy/:param	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/spaces	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired or superseded in OMP architecture
 ui-call-no-route	/api/message-queue/sessions/:param	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-ui-call-no-route	/api/guest-files	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createSettingsHelpers.normalizeDirectoryPath	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createSettingsRuntime.chatRoots	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createSettingsRuntime.onManagedPluginSettingsChanged	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
+route-deps	createSettingsRuntime.onManagedPluginSettingsChanged	## 2026-11-11 - Settings sections keep the fork contract surface, not the upstream OpenCode callers	Plugin dependency retired with OpenCode plugins.
 route-deps	createSettingsRuntime.onPermissionDefaultModeChanged	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createSettingsRuntime.onLastDirectoryChanged	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createPushRuntime.getInvalidSessionKeys	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
@@ -448,7 +441,6 @@ route-deps	createSessionAssistRuntime.buildOpenCodeUrl	## 2026-11-11 - Product d
 route-deps	createSessionAssistRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
 route-deps	createSessionAssistRuntime.isSessionArchived	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createSessionAssistRuntime.evaluateTurn	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createSessionAssistRuntime.lineage	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createSessionAssistRuntime.onPendingChange	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createSessionKnowledgeRuntime.readExtensionInstructions	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createSessionKnowledgeRuntime.isMemoryToolAvailable	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired OpenCode runtime dependency or internal function
@@ -465,7 +457,7 @@ route-deps	createGlobalMessageStreamHub.upstreamStallTimeoutMs	## 2026-11-10 - M
 route-deps	createGlobalMessageStreamHub.deltaCoalesceWindowMs	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createRoutingRuntime.buildOpenCodeUrl	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
 route-deps	createRoutingRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
-route-deps	createRoutingRuntime.isSessionWarm	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
+route-deps	createRoutingRuntime.isSessionWarm	## 2026-10-29 - Delete upstream's per-session warming instead of rewiring it	Per-session warming deleted; replaced by workspace-level warming.
 route-deps	createSessionWorkRuntime.buildOpenCodeUrl	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
 route-deps	createSessionWorkRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
 route-deps	createPermissionAutoAcceptRuntime.globalEventHub	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
@@ -473,12 +465,6 @@ route-deps	createPermissionAutoAcceptRuntime.buildOpenCodeUrl	## 2026-11-11 - Pr
 route-deps	createPermissionAutoAcceptRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
 route-deps	createPermissionAutoAcceptRuntime.onPermissionReplied	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createPermissionAutoAcceptRuntime.readDefaultMode	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.globalEventHub	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.sessionKnowledgeRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.broadcastUiEvent	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.onRunSettled	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.onRunEnded	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.routeSend	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createDispatchResultsRuntime.globalEventHub	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createDispatchResultsRuntime.buildOpenCodeUrl	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
 route-deps	createDispatchResultsRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
@@ -489,11 +475,11 @@ route-deps	createServerUtilsRuntime.getUnreadBaseline	## 2026-11-10 - Merge upst
 route-deps	createServerUtilsRuntime.getStoredSessionMetadata	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createServerUtilsRuntime.getMergeSpaceSessionList	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired OpenCode runtime dependency or internal function
 route-deps	createServerUtilsRuntime.getSpaceEventHub	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Retired OpenCode runtime dependency or internal function
-route-deps	createServerUtilsRuntime.openCodeTrust	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
+route-deps	createServerUtilsRuntime.openCodeTrust	## 2026-10-27 - Do not adopt upstream folder trust	OpenCode folder trust dependency; upstream folder trust is not adopted.
 route-deps	createServerUtilsRuntime.mcpOAuthSignIn	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createServerUtilsRuntime.readWorktreeBootstrapStatus	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createServerUtilsRuntime.fs	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createServerUtilsRuntime.openCodeReadyGraceMs	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
+route-deps	createServerUtilsRuntime.openCodeReadyGraceMs	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode runtime dependency retired with the OpenCode runtime.
 route-deps	createServerUtilsRuntime.longRequestTimeoutMs	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createServerUtilsRuntime.getRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createServerUtilsRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
@@ -514,9 +500,9 @@ route-deps	createStaticRoutesRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Prod
 route-deps	createFeatureRoutesRuntime.clientReloadDelayMs	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createFeatureRoutesRuntime.trackers	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createFeatureRoutesRuntime.trackerSessionStatus	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createFeatureRoutesRuntime.pluginSwitchStore	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createFeatureRoutesRuntime.isPluginSwitchAvailable	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createFeatureRoutesRuntime.refreshPluginSwitches	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
+route-deps	createFeatureRoutesRuntime.pluginSwitchStore	## 2026-11-11 - Settings sections keep the fork contract surface, not the upstream OpenCode callers	Plugin dependency retired with OpenCode plugins.
+route-deps	createFeatureRoutesRuntime.isPluginSwitchAvailable	## 2026-11-11 - Settings sections keep the fork contract surface, not the upstream OpenCode callers	Plugin dependency retired with OpenCode plugins.
+route-deps	createFeatureRoutesRuntime.refreshPluginSwitches	## 2026-11-11 - Settings sections keep the fork contract surface, not the upstream OpenCode callers	Plugin dependency retired with OpenCode plugins.
 route-deps	createBootstrapRuntime.registerAgentToolRoutes	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired OpenCode runtime dependency or internal function
 route-deps	createScheduledTasksRuntime.readSessionMetadata	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createScheduledTasksRuntime.resolvePrimaryWorktreeRoot	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
@@ -546,11 +532,9 @@ route-deps	createOpenChamberSessionService.resolveAutoSelection	## 2026-11-10 - 
 route-deps	createOpenChamberSessionService.isAutoReady	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createOpenChamberSessionService.readProjectSetup	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createSessionLinker.trackers	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createGracefulShutdownRuntime.openCodeWatcherRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
+route-deps	createGracefulShutdownRuntime.openCodeWatcherRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode runtime dependency retired with the OpenCode runtime.
 route-deps	createGracefulShutdownRuntime.sessionGoalRuntime	## 2026-10-25 - Use OMP goal mode as the only goal loop	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.sessionWarmingRuntime	## 2026-10-29 - Delete upstream's per-session warming instead of rewiring it	Retired OpenCode runtime dependency or internal function
-route-deps	createGracefulShutdownRuntime.autoReviewRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createGracefulShutdownRuntime.prWatchRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.mergeFollowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.workflowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.getHealthCheckInterval	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
@@ -605,7 +589,6 @@ route-deps	featureRoutesRuntime.registerRoutes.isAgentMemoryEnabled	## 2026-11-1
 route-deps	createSessionKnowledgeRuntime.agentMemoryRuntime	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
 route-deps	createSessionKnowledgeRuntime.isAgentMemoryEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
 route-deps	createOpenChamberControlService.agentMemoryActions	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
-ui-call-no-route	/api/agent-memory	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
 settings-item	sessions.agent-memory-tool	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
 settings-registry	agentImageModel	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
 settings-registry	agentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
@@ -621,3 +604,52 @@ settings-store	useUIStore.setAgentImageModel	## 2026-11-13 - OMP owns image gene
 settings-store	useUIStore.setAgentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
 settings-store	useUIStore.setAgentMemoryToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
 settings-search	sessions.agent-memory-tool	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+runtime-constructor	createOpenCodeTrust	## 2026-10-27 - Do not adopt upstream folder trust	OpenCode folder trust constructor; the fork does not adopt upstream folder trust.
+runtime-constructor	createOpenCodeSessionMetadata	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode session metadata constructor retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeAuthStateRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode auth state runtime retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeNetworkRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode network runtime retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeEnvRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode environment runtime retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeResolutionRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode binary resolution runtime retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeClient	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode SDK client retired; OMP SDK runs in the Agent Service.
+runtime-constructor	createOpenCodeWatcherRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode event watcher retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeLifecycleRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode process lifecycle retired; the Agent Service owns the OMP worker.
+runtime-constructor	createGuestOpenCodeProvider	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode guest provider retired with the OpenCode runtime.
+runtime-constructor	createSessionGoalRuntime	## 2026-10-25 - Use OMP goal mode as the only goal loop	Goal loop replaced by OMP native goal mode.
+runtime-constructor	createSessionWarmingRuntime	## 2026-10-29 - Delete upstream's per-session warming instead of rewiring it	Per-session warming deleted; replaced by workspace-level cache warming.
+runtime-constructor	createAgentMemoryRuntime	## 2026-11-13 - OMP owns image generation and agent memory	OpenChamber agent memory runtime retired in favor of the OMP memory backend.
+runtime-constructor	createAgentMemoryActions	## 2026-11-13 - OMP owns image generation and agent memory	OpenChamber agent memory actions retired in favor of the OMP memory backend.
+runtime-constructor	createAgentToolRuntime	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired OpenCode agent-tools runtime; OMP tools execute through the Agent Service.
+runtime-constructor	createLimitFailoverRuntime	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	OpenCode rate-limit failover replaced by OMP SDK model retry and fallback.
+runtime-constructor	createPluginSwitchStore	## 2026-11-11 - Settings sections keep the fork contract surface, not the upstream OpenCode callers	Retired with OpenCode plugins.
+runtime-constructor	createUnreadBaseline	## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities	Replaced by Host-persisted session unread watermarks.
+runtime-constructor	createMessageQueueRuntime	OMP packages/web/server/lib/message-queue/runtime.js	Upstream queue runtime replaced by the canonical queue runtime in this module.
+runtime-constructor	createMemoryProjectResolver	## 2026-11-13 - OMP owns image generation and agent memory	Agent memory project resolution retired in favor of the OMP memory backend.
+runtime-constructor	createInsideSpaceTaskNaming	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Isolated spaces task naming, unreleased.
+runtime-constructor	notificationTemplateRuntime.createTimeoutSignal	OMP packages/web/server/lib/notifications/template-runtime.js	Method on NotificationTemplateRuntime; fork calls template runtime directly.
+runtime-constructor	createTurnStartReader	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode turn-start reader retired with OpenCode runtime.
+runtime-constructor	createHmrStateRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	HMR state runtime for OpenCode processes retired with OpenCode runtime.
+runtime-constructor	createGuestInstructions	OMP packages/web/server/lib/guests/instructions.js	Upstream index.js constructor; fork host delegates guest instructions through guest runtime.
+runtime-constructor	createGuestAgentContext	OMP packages/web/server/lib/guests/agent-context.js	Upstream index.js constructor; fork host delegates guest agent context through guest runtime.
+runtime-constructor	createTrackerSessionStatus	OMP packages/web/server/lib/trackers/session-status-runtime.js	Renamed in fork to createSessionStatusRuntime and called in extension-tracker.js.
+runtime-constructor	createExtensionSessionEvents	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Extension session events constructor passed OpenCode URL/auth headers; retired.
+runtime-constructor	createServiceLifetime	OMP packages/web/server/lib/guests/service-lifetime.js	Upstream index.js constructor; fork delegates guest service lifetime.
+runtime-constructor	createMergeFollowRuntime	OMP packages/web/server/lib/github/merge-follow.js	PR-watch merge-follow runtime constructor; owned by GitHub/PR-watch subsystem.
+runtime-constructor	createSessionActivityProbe	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode session activity probe retired with OpenCode runtime.
+runtime-constructor	createMcpOAuthSignIn	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode MCP OAuth sign-in constructor retired with OpenCode runtime.
+runtime-constructor	createModelCatalogReader	## 2026-10-18 - Native agent controls and ConfigStore catalog retirement	OpenCode model catalog reader retired in favor of OMP workspace model catalog.
+runtime-constructor	createSecretFiles	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	secret.request host tool retired; secret files manager uninstantiated.
+runtime-constructor	createServiceHostApi	OMP packages/web/server/lib/guests/service-host-api.js	Guest service host API constructor; fork delegates via guest subsystem.
+runtime-constructor	createManagedConfigRuntime	OMP packages/web/server/lib/tunnels/managed-config.js	Renamed in fork to createManagedTunnelConfigRuntime and called in index.js:386.
+runtime-constructor	gitWorktreeCreation.createWorktree	OMP packages/web/server/lib/git/worktree-creation.js	Worktree creation constructor; fork instantiates createWorktreeCreation.
+runtime-constructor	createExtensionQuotaProviders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode extension quota provider constructor retired with OpenCode runtime.
+unused-route-fn	createSessionActivityProbe	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode session activity probe in opencode/session-activity.js retired.
+unused-route-fn	createProviderDescriptors	OMP packages/web/server/lib/source-control/provider-descriptors.js	Factory function; module exports singleton sourceControlProviderDescriptors = createProviderDescriptors().
+unused-route-fn	createPackedToolsSource	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Development build packaging helper in unreleased isolated spaces.
+route-deps	createAutoReviewRuntime.buildOpenCodeUrl	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode URL builder; runtime cut over to canonical sessionService and global hub.
+route-deps	createAutoReviewRuntime.getOpenCodeAuthHeaders	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode auth headers; runtime cut over to canonical sessionService.
+route-deps	createAutoReviewRuntime.sessionKnowledgeRuntime	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode session knowledge; runtime reads canonical sessionService directly.
+route-deps	createAutoReviewRuntime.onRunSettled	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode settled callback; progress published via broadcastUiEvent to useAutoReviewStore.
+route-deps	createAutoReviewRuntime.routeSend	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode prompt route; review prompts sent through sessionService.send.
+route-deps	createPrWatchRuntime.buildOpenCodeUrl	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode URL builder; PR watch cut over to canonical sessionService and tracked-items.
+route-deps	createPrWatchRuntime.getOpenCodeAuthHeaders	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode auth headers; PR watch cut over to canonical sessionService.
+ui-call-no-route	/api/source-control/:param	OMP packages/web/server/lib/source-control/provider-routes.js	Generic route prefix built by uploadUrls(); answered by provider-routes.js route('get', '/uploads/:secret/:filename') mounted per provider.

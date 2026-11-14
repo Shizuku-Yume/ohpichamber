@@ -10,17 +10,16 @@
 // base, it was merged or closed. A wake ends the watch; the agent watches
 // again when it needs to wait once more.
 //
-// Delivery follows `../dispatch-results`: the message waits until the session
-// is not running, its id is minted and saved before the first attempt, and
-// OpenCode refusing a second admission of that id counts as delivered.
+// Delivery follows `../dispatch-results`: the message waits until the session is
+// not running, and its command key is minted and saved before the first attempt,
+// so a retry repeats the same command and the Host never admits it twice.
 
 import fs from 'fs';
 import path from 'path';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { assertOpenCodeApiResponse } from '../opencode/prompt-response.js';
-import { unwrapOpenCodeResponse } from '../opencode/response-envelope.js';
-import { createSessionActivityProbe } from '../opencode/session-activity.js';
-import { createMessageId, escapeAttribute } from '../dispatch-results/runtime.js';
+import { escapeAttribute } from '../dispatch-results/runtime.js';
+import { createCanonicalSessionState, retainSessions } from '../canonical-session-state.js';
 import { parseTrackedItem, threadInstance, trackedItemKey } from '../tracked-items/items.js';
 
 const FILE_NAME = 'pr-watch.json';
@@ -34,8 +33,6 @@ const RETRY_BASE_DELAY_MS = 2_000;
 const RETRY_MAX_DELAY_MS = 60_000;
 // A wake that keeps failing is given up, so a broken session does not retry forever.
 const MAX_DELIVERY_FAILURES = 8;
-const FETCH_TIMEOUT_MS = 15_000;
-export const PR_WATCH_SOURCE = 'openchamber-pr-watch';
 
 /** What the agent is told, in the order it reads best. */
 const EVENT_TEXT = {
@@ -70,7 +67,7 @@ const watchSchema = z.object({
   last: snapshotSchema.nullable(),
   wake: z.object({
     events: z.array(z.enum(EVENTS)).min(1),
-    messageID: z.string().nullable(),
+    commandKey: z.string().nullish(),
     // Read when the wake was decided; a file from before them has none.
     failedChecks: z.array(z.string()).catch([]),
     authors: z.array(z.string()).catch([]),
@@ -90,19 +87,15 @@ const pullStateSchema = z.object({
   checks: z.object({ state: z.enum(['success', 'failure', 'pending', 'unknown']) }).nullable().optional(),
   activity: z.number().int().nonnegative().optional(),
 });
-const statusEventSchema = z.object({
-  type: z.literal('session.status'),
-  properties: z.object({ sessionID: z.string().min(1), status: z.object({ type: z.string().min(1) }) }),
-});
-const deletedEventSchema = z.object({
-  type: z.literal('session.deleted'),
-  properties: z.object({ sessionID: z.string().min(1) }),
-});
 
 const parse = (schema, value) => {
   const parsed = schema.safeParse(value);
   return parsed.success ? parsed.data : null;
 };
+
+const httpStatusOf = (error) => error?.statusCode ?? error?.status;
+// A wake sends no model: the session keeps its own selection, or its Auto routing.
+const KEEP_SESSION_MODEL = { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null };
 
 const httpError = (message, status) => Object.assign(new Error(message), { status });
 
@@ -200,17 +193,7 @@ const buildWakeMessage = (watch) => {
   const next = finished
     ? 'There is nothing more to wait for.'
     : 'You are no longer watching it. Read what changed and act on it; call pr.watch again when you need to wait for it once more.';
-  return {
-    text: `<openchamber-pull-request url="${escapeAttribute(watch.url)}" number="${number}">\nPull request #${number}: ${changes.join('; ')}.\n${next}\n</openchamber-pull-request>`,
-    description: `Pull request #${number}: ${changes.join(', ')}`,
-    metadata: {
-      source: PR_WATCH_SOURCE,
-      url: watch.url,
-      events: watch.wake.events,
-      failedChecks: cleanNames(watch.wake.failedChecks),
-      authors: cleanNames(watch.wake.authors),
-    },
-  };
+  return `<openchamber-pull-request url="${escapeAttribute(watch.url)}" number="${number}">\nPull request #${number}: ${changes.join('; ')}.\n${next}\n</openchamber-pull-request>`;
 };
 
 /** What the composer row shows while the agent waits. */
@@ -234,8 +217,7 @@ const toPublicWatch = (watch) => ({
 });
 
 export function createPrWatchRuntime({
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
+  sessionService,
   broadcastUiEvent,
   dataDir,
   // Whether "Archive a worktree after its PR is merged" is on: then a merge
@@ -244,7 +226,6 @@ export function createPrWatchRuntime({
   isSessionArchived = () => false,
   // The server inside an isolated space has no accounts to read a pull request with.
   insideSpace = false,
-  fetchImpl = fetch,
   now = Date.now,
   quietMs = QUIET_MS,
   retryDelayMs = retryDelay,
@@ -353,25 +334,41 @@ export function createPrWatchRuntime({
     trackedItems.setServerInterest(INTEREST_OWNER, items);
   };
 
-  // --- OpenCode ------------------------------------------------------------
+  // --- canonical session access -------------------------------------------
 
-  const openCodeRequest = async (fetchPath, { method = 'GET', body } = {}) => {
-    const headers = { Accept: 'application/json', ...getOpenCodeAuthHeaders() };
-    const init = { method, headers, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) };
-    if (body) {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
-    }
-    const response = await fetchImpl(buildOpenCodeUrl(fetchPath, ''), init);
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      throw httpError(`OpenCode ${method} ${fetchPath} failed with ${response.status}${detail ? `: ${detail.slice(0, 200)}` : ''}`, response.status);
-    }
-    assertOpenCodeApiResponse(response, `OpenCode ${method} ${fetchPath}`);
-    return unwrapOpenCodeResponse(await response.json().catch(() => null));
+  const sessionState = createCanonicalSessionState({ sessionService });
+
+  // --- observation ---------------------------------------------------------
+
+  // The hub delivers a session's events only while it is observed, and a wake
+  // that waited for a turn to end is delivered by that session's idle event.
+  let eventHub = null;
+  /** sessionID → release of the lease that keeps a watched session observed. */
+  const observed = new Map();
+  const observing = new Set();
+
+  const observe = (sessionID) => {
+    if (!eventHub || stopped || observed.has(sessionID) || observing.has(sessionID)) return;
+    observing.add(sessionID);
+    retainSessions(eventHub, `pr-watch:${sessionID}`, [sessionID])
+      .then((release) => {
+        if (stopped || !watches.has(sessionID)) {
+          void release();
+          return;
+        }
+        observed.set(sessionID, release);
+        // Events before the lease were not delivered: check the session now.
+        arm(sessionID, 0);
+      })
+      .catch((error) => console.warn('[pr-watch] could not observe a watched session:', error?.message ?? error))
+      .finally(() => observing.delete(sessionID));
   };
 
-  const activityProbe = createSessionActivityProbe({ buildOpenCodeUrl, getOpenCodeAuthHeaders, timeoutMs: FETCH_TIMEOUT_MS, fetchImpl });
+  const unobserve = (sessionID) => {
+    const release = observed.get(sessionID);
+    observed.delete(sessionID);
+    return release?.();
+  };
 
   // --- wake ----------------------------------------------------------------
 
@@ -400,6 +397,7 @@ export function createPrWatchRuntime({
     if (!isCurrent(watch)) return;
     watches.delete(watch.sessionID);
     clearTimer(watch.sessionID);
+    void unobserve(watch.sessionID);
     failures.delete(watch.sessionID);
     syncInterest();
     await commit(watch.sessionID);
@@ -437,31 +435,30 @@ export function createPrWatchRuntime({
 
   async function attemptWake(watch) {
     const { sessionID } = watch;
+    observe(sessionID);
     // Never into a running turn: the user may be talking to the agent.
-    const statuses = await activityProbe.fetchActiveSessionStatuses();
+    const state = await sessionState.read(sessionID);
     if (!isCurrent(watch)) return undefined;
-    if (!statuses) return retry(watch, 'OpenCode could not be asked');
-    if (statuses[sessionID]) return undefined; // its idle event arms the next attempt
-    const subagents = await activityProbe.hasWorkingChildren(sessionID, statuses);
-    if (!isCurrent(watch)) return undefined;
-    if (subagents === null) return retry(watch, 'OpenCode could not be asked');
-    if (subagents) return arm(sessionID, subagentRecheckMs);
+    if (state === null) return retry(watch, 'the session could not be read');
+    if (state.kind === 'deleted') return drop(watch);
+    if (state.kind === 'running') return undefined; // its idle event arms the next attempt
+    if (state.kind === 'subagents') return arm(sessionID, subagentRecheckMs);
     const archived = await Promise.resolve(isSessionArchived(sessionID)).catch(() => false) === true;
     if (!isCurrent(watch)) return undefined;
     if (archived) return drop(watch);
-    if (!watch.wake.messageID) {
-      watch.wake.messageID = createMessageId(now());
+    if (!watch.wake.commandKey) {
+      watch.wake.commandKey = randomUUID();
       await persist();
       if (!isCurrent(watch)) return undefined;
     }
     try {
-      await openCodeRequest(`/api/session/${encodeURIComponent(sessionID)}/synthetic`, {
-        method: 'POST',
-        body: { id: watch.wake.messageID, ...buildWakeMessage(watch), delivery: 'steer', resume: true },
-      });
+      await sessionService.send(sessionID, {
+        input: { text: '', attachments: [], context: [{ kind: 'synthetic', text: buildWakeMessage(watch) }] },
+        options: KEEP_SESSION_MODEL,
+      }, watch.wake.commandKey);
     } catch (error) {
-      // 409: an earlier attempt landed. 404: nobody is left to wake.
-      if (error?.status !== 409 && error?.status !== 404) return retry(watch, error?.message ?? String(error));
+      // 404: nobody is left to wake. Anything else retries under the same key.
+      if (httpStatusOf(error) !== 404) return retry(watch, error?.message ?? String(error));
     }
     return drop(watch);
   }
@@ -484,7 +481,7 @@ export function createPrWatchRuntime({
     }).catch(() => null);
     const summary = result?.status === 'ok' ? (result.pulls ?? []).find((pull) => pull?.number === item.number) : null;
     const details = parse(detailsSchema, summary);
-    if (!details || !isCurrent(watch) || !watch.wake || watch.wake.messageID) return;
+    if (!details || !isCurrent(watch) || !watch.wake || watch.wake.commandKey) return;
     if (watch.wake.events.includes('checks-failed')) watch.wake.failedChecks = details.failedChecks;
     if (watch.wake.events.includes('activity')) {
       watch.wake.authors = details.recentActivity.slice(0, Math.max(1, newActivity)).map((entry) => entry.author);
@@ -521,7 +518,7 @@ export function createPrWatchRuntime({
               continue;
             }
           }
-          watch.wake = { events, messageID: null, failedChecks: [], authors: [] };
+          watch.wake = { events, commandKey: null, failedChecks: [], authors: [] };
           // Held from here on: an idle event during the write below must not
           // deliver the wake before its details are in.
           const withDetails = events.includes('checks-failed') || events.includes('activity');
@@ -593,6 +590,7 @@ export function createPrWatchRuntime({
     }
     syncInterest();
     await commit(sessionID);
+    observe(sessionID);
     return {
       watching: toPublicWatch(record),
       next: 'A message arrives in this session when a check fails, every check passes, someone comments or reviews, the branch conflicts or falls behind, or the pull request is merged or closed.',
@@ -609,17 +607,23 @@ export function createPrWatchRuntime({
     return { watching: false, stopped: Boolean(current) };
   };
 
-  const processPayload = (payload) => {
+  /**
+   * A canonical hub event. A deleted session ends its watch, and an idle one
+   * delivers the wake that waited for its turn to end.
+   */
+  const processCanonicalEvent = (event) => {
     if (stopped) return;
-    const deleted = parse(deletedEventSchema, payload);
-    if (deleted) {
-      const current = watches.get(deleted.properties.sessionID);
-      if (current) void drop(current).catch(() => undefined);
+    if (event.type === 'session.deleted') {
+      for (const deletedID of event.deletedSessionIds) {
+        const current = watches.get(deletedID);
+        if (current) void drop(current).catch(() => undefined);
+      }
       return;
     }
-    const status = parse(statusEventSchema, payload);
-    if (!status || status.properties.status.type !== 'idle') return;
-    if (watches.get(status.properties.sessionID)?.wake) arm(status.properties.sessionID);
+    const isIdle = (event.type === 'session.status' && event.runtimeStatus === 'idle')
+      || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled';
+    if (!isIdle) return;
+    if (watches.get(event.sessionId)?.wake) arm(event.sessionId);
   };
 
   /** Connects to the tracked-items service once the routes created it. */
@@ -631,31 +635,57 @@ export function createPrWatchRuntime({
     void load().then(syncInterest).catch(() => undefined);
   };
 
+  let unsubscribeEvent = null;
+  let unsubscribeStatus = null;
+
   const start = (globalEventHub) => {
-    const unsubscribeEvent = globalEventHub?.subscribeEvent((event) => {
-      for (const payload of event?.translated?.() ?? []) processPayload(payload);
-    });
-    const unsubscribeStatus = globalEventHub?.subscribeStatus((hubStatus) => {
+    eventHub = globalEventHub ?? null;
+    unsubscribeEvent?.();
+    unsubscribeStatus?.();
+    unsubscribeEvent = globalEventHub?.subscribeEvent(processCanonicalEvent);
+    unsubscribeStatus = globalEventHub?.subscribeStatus((hubStatus) => {
       if (hubStatus?.type !== 'connect') return;
-      for (const [sessionID, entry] of watches) if (entry.wake) arm(sessionID);
+      for (const [sessionID, entry] of watches) {
+        observe(sessionID);
+        if (entry.wake) arm(sessionID);
+      }
     });
     void load()
       .then(() => {
         syncInterest();
-        for (const [sessionID, entry] of watches) if (entry.wake) arm(sessionID);
+        for (const [sessionID, entry] of watches) {
+          observe(sessionID);
+          if (entry.wake) arm(sessionID);
+        }
       })
       .catch((error) => console.warn('[pr-watch] failed to load watches:', error?.message ?? error));
     return () => {
       unsubscribeEvent?.();
       unsubscribeStatus?.();
+      unsubscribeEvent = null;
+      unsubscribeStatus = null;
     };
   };
 
   const stop = () => {
+    if (stopped) return;
     stopped = true;
     unsubscribeTracked?.();
+    unsubscribeTracked = null;
+    unsubscribeEvent?.();
+    unsubscribeStatus?.();
+    unsubscribeEvent = null;
+    unsubscribeStatus = null;
     for (const timer of timers.values()) clearTimeout(timer);
     timers.clear();
+    for (const release of observed.values()) {
+      try {
+        void release?.();
+      } catch {
+        // Ignored on teardown
+      }
+    }
+    observed.clear();
   };
 
   return {
@@ -664,7 +694,7 @@ export function createPrWatchRuntime({
     watch,
     unwatch,
     attach,
-    processPayload,
+    processCanonicalEvent,
     start,
     stop,
     flush: () => writePromise,

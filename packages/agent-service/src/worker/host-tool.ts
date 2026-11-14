@@ -48,7 +48,10 @@ export function normalizeHostToolEnablement(input?: Record<string, boolean>): Re
 export interface HostToolScope { sessionId: string; rootSessionId: string; workspaceId: string }
 export interface HostToolInvocation extends HostToolScope { request: HostActionRequest; signal: AbortSignal }
 export const HOST_TOOL_DESCRIPTIONS = {
-  openchamber: 'Invoke retained OpenChamber project/model, session, schedule or file.open actions in the captured workspace.',
+  openchamber: 'Invoke retained OpenChamber project/model, session, pull request watch, schedule or file.open actions in the captured workspace. '
+    + 'Pass action parameters inside input, for example {"action":"pr.watch","input":{"url":"https://github.com/owner/repo/pull/123"}} or {"action":"session.list","input":{}}. '
+    + 'pr.watch watches a pull or merge request at url (GitHub/GitLab) for check status, reviews/comments, conflicts, or merge, waking the session with a message on change; requires url, optional sessionId (defaults to calling session) and directory. '
+    + 'pr.unwatch stops watching a pull request for optional sessionId (defaults to calling session) without waking it.',
   openchamber_knowledge: "The project's Notes, Todos and Plans, shown in OpenChamber's Project knowledge panel and shared by its sessions. One action per call. "
     + 'knowledge.list returns everything unless planId or ready narrows it; read it before answering a question the project notes may hold. '
     + 'knowledge.save requires kind and body; with id it replaces, and an update may send only completed, planId or dependsOn. '
@@ -112,8 +115,8 @@ export function createHostToolController({
 
   const registerSingleTool = (api: ExtensionAPI, toolName: HostToolName) => {
     const parameters = api.typebox.Type.Object({
-      action: api.typebox.Type.String(),
-      input: api.typebox.Type.Record(api.typebox.Type.String(), api.typebox.Type.Unknown()),
+      action: api.typebox.Type.String({ description: 'The action to invoke, for example "pr.watch" or "session.list"' }),
+      input: api.typebox.Type.Record(api.typebox.Type.String(), api.typebox.Type.Unknown(), { description: 'Action-specific parameters object, e.g. {"url":"..."}' }),
     });
     api.registerTool<typeof parameters>({
       name: toolName,
@@ -125,14 +128,23 @@ export function createHostToolController({
       async execute(toolCallId, params, signal) {
         const cancellation = signal ?? new AbortController().signal;
         cancellation.throwIfAborted();
-        const input = JsonObjectSchema.parse(params);
-        const action = z.string().safeParse(input.action);
-        const toolInput = JsonObjectSchema.parse(input.input);
+        const input = JsonObjectSchema.safeParse(params);
+        if (!input.success) {
+          throw new Error('Host tool parameters must be an object with "action" and "input", e.g. {"action":"...","input":{}}');
+        }
+        const action = z.string().min(1).safeParse(input.data.action);
+        if (!action.success) {
+          throw new Error('Host tool parameters require a non-empty "action" string, e.g. {"action":"...","input":{}}');
+        }
+        const toolInput = JsonObjectSchema.safeParse(input.data.input);
+        if (!toolInput.success) {
+          throw new Error(`Host tool action "${action.data}" requires an "input" object containing its parameters, e.g. {"action":"${action.data}","input":{...}}`);
+        }
         const parsed = HostActionRequestSchema.parse({
           sessionId: captured.sessionId,
           toolName,
-          action: action.success ? action.data : '',
-          input: toolInput,
+          action: action.data,
+          input: toolInput.data,
           ...(toolName === 'openchamber_render' && toolCallId ? { toolCallId } : {}),
         });
         const value = await invoke({ ...captured, request: parsed, signal: cancellation });

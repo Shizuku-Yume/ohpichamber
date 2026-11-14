@@ -947,21 +947,6 @@ const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
  // reference here would read it before it exists.
  resolveProjectId: (directory) => resolveMemoryProjectId(directory),
  isAgentMemoryEnabled,
- isSessionLinkingAvailable: async () => {
-  const settings = await readSettingsFromDiskMigrated();
-  return settings.agentControlToolEnabled !== false;
- },
- // Both tools are on by default; their guidance is stated only while the
- // session's agent actually has them.
- isPageRenderingAvailable: async () => {
-  const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return settings?.agentRenderToolEnabled !== false;
- },
- isWorkflowAvailable: async () => {
-  if (!isWorkflowFeatureAvailable()) return false;
-  const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return settings?.agentWorkflowToolEnabled !== false;
- },
  readSessionMetadata: readStoredSessionMetadata,
  // Pins and the delivered-signature cursor are read from OpenChamber's own store.
  persistSessionMetadata: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),

@@ -45,7 +45,7 @@ beforeEach(async () => {
     createdSessions.length = 0;
     failMode = false;
     useGlobalSessionsStore.getState().resetForRuntimeSwitch();
-    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo', defaultAgent: 'agent-default' }], activeProjectId: 'project-1' });
+    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo' }], activeProjectId: 'project-1' });
     useSelectionStore.setState({
         sessionModelSelections: new Map(), sessionAgentSelections: new Map(),
         sessionFollowedAgents: new Map(), sessionFollowedModels: new Map(),

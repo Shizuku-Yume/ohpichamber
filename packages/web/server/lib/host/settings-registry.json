@@ -46,9 +46,6 @@
     "sessionGoalMaxAutoTurns": {
       "scope": "profile"
     },
-    "autoApplyAgentModel": {
-      "scope": "profile"
-    },
     "planModeAllowAgents": {
       "scope": "profile"
     },
@@ -437,9 +434,6 @@
     "weekStartPreference": {
       "scope": "profile"
     },
-    "messageStreamTransport": {
-      "scope": "profile"
-    },
     "diffLayoutPreference": {
       "scope": "profile"
     },
@@ -596,9 +590,6 @@
     "shortcutOverrides": {
       "scope": "profile"
     },
-    "defaultAgent": {
-      "scope": "profile"
-    },
     "zenModel": {
       "scope": "profile"
     },
@@ -653,9 +644,6 @@
         "desktop",
         "mobile"
       ]
-    },
-    "sessionWorkKeepInGroup": {
-      "scope": "profile"
     },
     "sessionGoalEnabled": {
       "scope": "profile"

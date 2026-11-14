@@ -27,6 +27,7 @@ const SAME_PAGE_CLAIMS: Readonly<Record<string, string>> = {
   'providers.auth': 'ProvidersPage authenticates the same provider in two places',
   'providers.connect': 'ProviderConnectPicker opens the form ProviderGrid resells',
   'providers.custom': 'ProviderConnectPicker offers custom setup; CustomProviderForm is it',
+  'providers.logo': 'ProvidersPage lists custom provider logos; CustomProviderForm edits them',
   'sessions.small-model': 'The opt-out toggle and the model picker are one setting, disabled together',
 };
 

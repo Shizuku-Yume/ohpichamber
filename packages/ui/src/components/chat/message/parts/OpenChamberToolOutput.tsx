@@ -315,12 +315,11 @@ const ModelPreferencesBody: React.FC<{ data: unknown }> = ({ data }) => {
     const { t } = useI18n();
     const parsed = modelPreferencesSchema.safeParse(data);
     if (!parsed.success) return null;
-    const { defaultModel, defaultVariant, defaultAgent, favoriteModels, recentModels } = parsed.data;
+    const { defaultModel, defaultVariant, favoriteModels, recentModels } = parsed.data;
     const defaults = [defaultModel, defaultVariant].filter(Boolean).join(' · ');
     return (
         <>
             {defaults ? <Field label={t('chat.toolPart.openchamber.field.defaultModel')}>{defaults}</Field> : null}
-            {defaultAgent ? <Field label={t('chat.toolPart.openchamber.field.defaultAgent')}>{defaultAgent}</Field> : null}
             {favoriteModels.length > 0 ? <Field label={t('chat.toolPart.openchamber.field.favorites')}>{favoriteModels.map(modelLabel).join(', ')}</Field> : null}
             {recentModels.length > 0 ? <Field label={t('chat.toolPart.openchamber.field.recent')}>{recentModels.map(modelLabel).join(', ')}</Field> : null}
             <Actions />

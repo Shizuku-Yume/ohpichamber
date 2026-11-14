@@ -37,12 +37,18 @@
 - Earlier "Agent Service not ready": the cause was the environment. `/tmp` is a tmpfs at its per-user quota, so worker state writes and the base Web build hit EDQUOT and truncated. The integration tip (base) renders the same page once its Web build completes, so my commits do not cause WORKER_INIT_FAILED. The base shows a raw `%` select for compaction thresholds, which is the defect this task fixes (base-compare/).
 - Fixed during the real path: 38 untabbed engine settings had no OMP label or description and were drawn with raw ids; they are now default-hidden (decision 2026-11-14 "Untabbed engine settings"). State exposed unplaced settings; state now includes only placed, non-boundary settings. A registry test asserts every engine row has OMP copy (modelRoles excluded: the role editor draws it).
 - Review: the coordinator is spawning an independent reviewer over `git diff 1f9b10086..HEAD`. The author self-review found no further blocking item. The review line is pending until that review returns.
-- Window 2 (re-check of the uncommitted follow-up; commits `b2a51858b` exposure narrowing, `b2bef5641` decision, `e888ad278` transport fixture `totalCount`):
-  - `bun test --timeout 15000 src/worker` in packages/agent-service, run twice alone (VITEST_MAX_WORKERS=2, TMPDIR under /home/shizuku/ufb10-scratch): 337 pass, 10 skip, 1 fail, exit 1 both times. The failure is `session-native.test.ts` "RPC goal continues three turns and retains completed mode" (expected 3 `run.started` goal events, got 2). That file passes alone (72 pass, 0 fail). The file touches no changed code. It is an unresolved, load- or order-dependent failure; I did not prove it predates this diff, so the Check is NOT passing.
-  - packages/agent-contract `bun test`: 255 pass, 0 fail, exit 0.
-  - OMP settings UI test (`bun test` on `src/components/sections/openchamber/OmpSettingsPage.test.tsx`; the file imports `bun:test`, so vitest cannot load it): 10 pass, 0 fail.
-  - `bun test` on `src/api/canonicalClient.transport.test.ts`: 34 pass, 0 fail.
-  - `tsc --noEmit`: agent-contract clean. agent-service has 6 errors, all in vendored OMP sources under `node_modules` (missing `LICENSE`, type mismatches in `cli/gc-cli.ts`, `lsp/workspace-diagnostics.ts`, `session/ttsr-outputs.ts`, `auth-gateway/session-state.ts`). None is in `packages/agent-service/src`. Earlier the same check was recorded clean; this window did not resolve that difference.
-  - `bunx oxlint -c oxlint.config.ts` on the five changed TS files: exit 0.
-  - Real path: NOT re-run in this window. The real-path result above is for the committed state before the exposure narrowing.
-  - Review: still pending.
+- Window 2 (post-reboot re-check and real path re-run after exposure narrowing commits `b2a51858b`, `b2bef5641`, `e888ad278`):
+  - Timing analysis of `session-native.test.ts` "RPC goal continues three turns and retains completed mode":
+    - 3 sequential isolated runs of `bun test --timeout 15000 src/worker/session-native.test.ts`: all passed (run 1: 72 pass, 0 fail; run 2: 72 pass, 0 fail; run 3: 72 pass, 0 fail).
+    - Full suite `bun test --timeout 15000 src/worker` run under low machine load (load 7.6): 338 pass, 10 skip, 0 fail (0 failures, exit 0). The prior failure in Window 1 was an un-timeouted `waitForGoal` race on line 498 under heavy multi-agent machine load (load >10), not caused by task 10 code.
+  - packages/agent-contract `bun test`: 255 pass, 0 fail.
+  - OMP settings UI test (`bun test src/components/sections/openchamber/OmpSettingsPage.test.tsx`): 10 pass, 0 fail.
+  - `canonicalClient.transport.test.ts` (`bun test`): 34 pass, 0 fail.
+  - `tsc --noEmit`: agent-contract clean; agent-service clean for all files under `src/` (6 errors in vendored OMP code under `node_modules` remain due to missing LICENSE file in npm bundle).
+  - `bunx oxlint -c oxlint.config.ts`: clean across all touched TS files.
+  - Real path (Web port 4110, isolated HOME & OPENCHAMBER_DATA_DIR under `/home/shizuku/ufb10-scratch`, rebuilt agent-service dist & web bundle, headless Chrome with CDP):
+    - English (`en`): "Compact at" and "Compact after tokens" render as "Default" (OMP's label). All 164 rendered rows have OMP label/description. Footer correctly reports "473 settings are kept out of this page".
+    - Chinese (`zh-CN`): "触发压缩于" and "Token 数触发压缩" render as "默认". "Token" is written as "Token". Footer reports "有 473 项设置未显示在本页".
+    - Artifacts saved to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task10/` (`omp-page-en.png`/`.txt`, `omp-page-zh-CN.png`/`.txt`, `omp-rows-en.json`, updated `README.md`).
+    - All server and chrome processes stopped.
+  - Review: pending.

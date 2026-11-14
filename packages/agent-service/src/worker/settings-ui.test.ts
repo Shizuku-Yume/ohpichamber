@@ -139,6 +139,10 @@ test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page
   for (const id of ['skills.registryUrl', 'plan.autosaveDir', 'tui.renderSvg', 'steeringMode', 'collab.relayUrl']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
   }
+  // Record/Array engine settings with no generic choices cannot be edited via GUI controls and stay in config.yml
+  for (const id of ['tools.approval', 'retry.fallbackChains', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools']) {
+    expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
+  }
   for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
   }

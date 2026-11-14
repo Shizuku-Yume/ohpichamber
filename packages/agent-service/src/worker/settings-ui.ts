@@ -2,6 +2,7 @@ import {
   parsePlacement,
   type OmpSettingPlacement,
 } from '@openchamber/agent-contract';
+import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { cfgAdvisorEnabled } from '@oh-my-pi/pi-coding-agent/advisor/settings';
 import { cfgComposerPredictions } from '@oh-my-pi/pi-coding-agent/modes/settings';
 import { cfgPlanEnabled } from '@oh-my-pi/pi-coding-agent/plan-mode/settings';
@@ -514,10 +515,40 @@ export const OMP_SETTING_PLACEMENTS: Readonly<Record<string, OmpSettingPlacement
 /** Page placements a GUI control writes today. Any other page placement is drawn by no surface, so it is never exposed. */
 const GUI_WRITTEN_PAGE_KEYS: Readonly<Record<string, true>> = { defaultThinkingLevel: true };
 
+/**
+ * Whether an engine setting has a working GUI control:
+ * booleans become toggles, numbers become steppers, strings/enums/options become chips/selects.
+ * Complex non-primitive settings (Record, Array) with no declared options or enum values
+ * cannot be edited via generic controls and would render as empty chip groups; they stay in config.yml.
+ */
+function isRenderableEngineSetting(setting: {
+  readonly id: string;
+  readonly type: string;
+  readonly options?: readonly unknown[];
+  readonly enumValues?: readonly unknown[];
+}): boolean {
+  if (setting.id === 'modelRoles') return true;
+  if (setting.type === 'boolean' || setting.type === 'number' || setting.type === 'string') return true;
+  const choices = setting.options ?? setting.enumValues ?? [];
+  return choices.length > 0;
+}
+
+const ORDERED_SETTINGS_MAP: ReadonlyMap<string, { type: string; options?: readonly unknown[]; enumValues?: readonly unknown[] }> = new Map(
+  orderedSettings().map((s) => [s.id, { type: s.type, options: s.options, enumValues: s.enumValues }]),
+);
+
 /** The ids the OMP route returns and accepts: rows a GUI owner draws or writes. Every other id is omitted and refused. */
 export const OMP_SETTING_EXPOSED_IDS: ReadonlySet<string> = new Set(
   Object.entries(OMP_SETTING_PLACEMENTS)
-    .filter(([id, placement]) => placement.type === 'engine' || placement.type === 'owned-by' || (placement.type === 'page' && GUI_WRITTEN_PAGE_KEYS[id] === true))
+    .filter(([id, placement]) => {
+      if (placement.type === 'owned-by') return true;
+      if (placement.type === 'page') return GUI_WRITTEN_PAGE_KEYS[id] === true;
+      if (placement.type === 'engine') {
+        const desc = ORDERED_SETTINGS_MAP.get(id);
+        return desc ? isRenderableEngineSetting({ id, ...desc }) : false;
+      }
+      return false;
+    })
     .map(([id]) => id),
 );
 

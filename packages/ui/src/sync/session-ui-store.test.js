@@ -15,7 +15,7 @@ import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/
 import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { ChildStoreManager } from './child-store';
 import { setSyncRefs } from './sync-refs';
-import { setActionRefs } from './session-actions';
+import { setActionRefs, setOptimisticRefs } from './session-actions';
 import { useSessionWorktreeStore } from './session-worktree-store';
 import { routeMessage, useSessionUIStore } from './session-ui-store';
 import { ROOT_SELECTION_AGENT, useSelectionStore } from './selection-store';
@@ -100,7 +100,7 @@ beforeEach(async () => {
   useCommandsStore.setState({ commands: [], commandsByDirectory: {} });
   useProjectsStore.setState({ projects: [], activeProjectId: null });
   useConfigStore.setState({
-    isConnected: true, hasEverConnected: true, activateDirectory: async () => {},
+    isConnected: true, hasEverConnected: true, activateDirectory: async () => { },
     currentProviderId: 'provider-a', currentModelId: 'model-a', currentAgentName: 'build',
     currentVariant: undefined, currentVariantSelection: { override: undefined, inherited: undefined },
   });
@@ -136,6 +136,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   manager.disposeAll();
+  setOptimisticRefs(() => { }, () => { }, () => { });
   for (const restore of restorers.splice(0).reverse()) restore();
   globalThis.fetch = originalFetch;
   useSkillsStore.setState(originalSkills);
@@ -534,10 +535,12 @@ describe('openNewSessionDraft project binding', () => {
     let finishActivation;
     const activation = new Promise((resolve) => { finishActivation = resolve; });
     useConfigStore.setState({ activateDirectory: () => activation, providers: [], agents: [], isConnected: false });
-    useProjectsStore.setState({ projects: [
-      { ...projectA, defaultModel: 'alpha/model' },
-      { ...projectB, defaultModel: 'beta/model' },
-    ] });
+    useProjectsStore.setState({
+      projects: [
+        { ...projectA, defaultModel: 'alpha/model' },
+        { ...projectB, defaultModel: 'beta/model' },
+      ]
+    });
     try {
       useSessionUIStore.getState().openNewSessionDraft({ selectedProjectId: projectA.id });
       useSessionUIStore.getState().openNewSessionDraft({ selectedProjectId: projectB.id });
@@ -655,7 +658,7 @@ describe('openNewSessionDraft project binding', () => {
     const originalActivateDirectory = useConfigStore.getState().activateDirectory;
     const availabilityCalls = [];
     const availabilityResolvers = [];
-    useConfigStore.setState({ activateDirectory: async () => {} });
+    useConfigStore.setState({ activateDirectory: async () => { } });
     hostFilesystem.getDirectoryAvailability = (directory) => {
       availabilityCalls.push(directory);
       return new Promise((resolve) => {
@@ -724,7 +727,7 @@ describe('openNewSessionDraft project binding', () => {
       JSON.stringify({ projectId: projectA.id, directory: '/deleted/worktree', target: 'project' }),
     );
     useDirectoryStore.setState({ currentDirectory: '' });
-    useConfigStore.setState({ activateDirectory: async () => {} });
+    useConfigStore.setState({ activateDirectory: async () => { } });
     hostFilesystem.getDirectoryAvailability = async () => 'missing';
 
     try {
@@ -1111,10 +1114,12 @@ describe('native prompt routing', () => {
     expect(runCalls).toEqual([]);
   });
   test('resolves commands from the addressed workspace rather than a stale directory cache', async () => {
-    useCommandsStore.setState({ commandsByDirectory: {
-      '/repo': [{ commandId: 'root-inspect', name: 'inspect', description: '', content: 'Stale root $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }],
-      '/repo/worktree': [{ commandId: 'worktree-inspect', name: 'inspect', description: '', content: 'Stale worktree $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }],
-    } });
+    useCommandsStore.setState({
+      commandsByDirectory: {
+        '/repo': [{ commandId: 'root-inspect', name: 'inspect', description: '', content: 'Stale root $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }],
+        '/repo/worktree': [{ commandId: 'worktree-inspect', name: 'inspect', description: '', content: 'Stale worktree $ARGUMENTS', scope: 'workspace', source: 'workspace', editable: true }],
+      }
+    });
     const requests = fakeFileResources({
       expand: () => Response.json({ kind: 'command', content: 'Worktree auth' }),
     });
@@ -1263,11 +1268,14 @@ describe('native UI submit lifecycle', () => {
     expect(useSessionUIStore.getState().currentSessionId).toBe('session-a');
   });
   test('keeps draft admission and prompt selection captured across a project switch', async () => {
-    useProjectsStore.setState({ projects: [
-      { id: 'project-alpha', path: '/alpha', label: 'Alpha' },
-      { id: 'project-beta', path: '/beta', label: 'Beta' },
-    ], activeProjectId: 'project-alpha' });
-    useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null,
+    useProjectsStore.setState({
+      projects: [
+        { id: 'project-alpha', path: '/alpha', label: 'Alpha' },
+        { id: 'project-beta', path: '/beta', label: 'Beta' },
+      ], activeProjectId: 'project-alpha'
+    });
+    useSessionUIStore.setState({
+      currentSessionId: null, currentSessionDirectory: null,
       newSessionDraft: { draftId: 42, open: true, target: 'project', selectedProjectId: 'project-alpha', directoryOverride: '/alpha', preserveDirectoryOverride: true },
     });
     const admission = deferred();
@@ -1277,7 +1285,8 @@ describe('native UI submit lifecycle', () => {
     const sending = send('draft message', { reasoningEffort: 'medium' }, 'high');
     await started.promise;
     useProjectsStore.setState({ activeProjectId: 'project-beta' });
-    useSessionUIStore.setState({ currentSessionId: 'existing-beta', currentSessionDirectory: '/beta',
+    useSessionUIStore.setState({
+      currentSessionId: 'existing-beta', currentSessionDirectory: '/beta',
       newSessionDraft: { draftId: 43, open: false, directoryOverride: null },
     });
     admission.resolve({ session: hostSession('materialized-alpha', captured.workspaceId) });
@@ -1306,11 +1315,88 @@ describe('native UI submit lifecycle', () => {
     expect(useSessionUIStore.getState().newSessionDraft).toEqual(draft);
     expect(runCalls).toEqual([]);
   });
+  test('a new chat renders the user bubble before POST /sessions resolves', async () => {
+    const optimisticMessages = new Map();
+    setOptimisticRefs(
+      (input) => {
+        const list = optimisticMessages.get(input.sessionId) ?? [];
+        list.push(input.message);
+        optimisticMessages.set(input.sessionId, list);
+      },
+      (input) => {
+        const list = optimisticMessages.get(input.sessionId) ?? [];
+        optimisticMessages.set(input.sessionId, list.filter(m => m.messageId !== input.messageId));
+      },
+    );
+
+    const draft = { draftId: 42, open: true, target: 'project', directoryOverride: '/alpha', preserveDirectoryOverride: true };
+    useSessionUIStore.setState({ currentSessionId: null, newSessionDraft: draft });
+
+    const admission = deferred();
+    const started = deferred();
+    let captured;
+    stub(canonicalClient, 'createSession', async request => {
+      captured = request;
+      started.resolve();
+      return admission.promise;
+    });
+
+    const sending = send('optimistic echo prompt');
+    await started.promise;
+
+    // Verify: Before POST /sessions resolves, the temporary user bubble is already rendered
+    const temporarySessionId = useSessionUIStore.getState().currentSessionId;
+    expect(temporarySessionId).toBe('draft_42');
+    const pendingEcho = optimisticMessages.get('draft_42');
+    expect(pendingEcho).toHaveLength(1);
+    expect(pendingEcho[0].parts[0].content).toBe('optimistic echo prompt');
+
+    // Settle session creation (POST /sessions resolves)
+    admission.resolve({ session: hostSession('materialized-chat-session', captured.workspaceId) });
+    await sending;
+
+    // Verify: The optimistic bubble is carried over to the created session
+    expect(useSessionUIStore.getState().currentSessionId).toBe('materialized-chat-session');
+    const carried = optimisticMessages.get('materialized-chat-session');
+    expect(carried).toHaveLength(1);
+    expect(carried[0].parts[0].content).toBe('optimistic echo prompt');
+  });
+
+  test('a failed draft send does not override navigation that happened later', async () => {
+    const draft = { draftId: 42, open: true, target: 'project', directoryOverride: '/alpha', preserveDirectoryOverride: true };
+    useSessionUIStore.setState({ currentSessionId: null, newSessionDraft: draft });
+
+    const admission = deferred();
+    const started = deferred();
+    stub(canonicalClient, 'createSession', async () => {
+      started.resolve();
+      return admission.promise;
+    });
+
+    const sending = send('will fail');
+    await started.promise;
+
+    // While POST /sessions is in flight, the user navigates to another session and opens a newer draft
+    useSessionUIStore.setState({
+      currentSessionId: 'newer-selected-session',
+      currentSessionDirectory: '/beta',
+      newSessionDraft: { draftId: 99, open: false, directoryOverride: '/beta' },
+    });
+
+    // Now creation fails
+    admission.reject(new Error('offline failure'));
+    await expect(sending).rejects.toBeInstanceOf(Error);
+
+    // Verify: The newer navigation is NOT overridden by the failed send of draft 42
+    expect(useSessionUIStore.getState().currentSessionId).toBe('newer-selected-session');
+    expect(useSessionUIStore.getState().newSessionDraft.draftId).toBe(99);
+  });
   test('a draft creation completed on an obsolete runtime never admits its prompt', async () => {
     const admission = deferred();
     const started = deferred();
     let captured;
-    useSessionUIStore.setState({ currentSessionId: null,
+    useSessionUIStore.setState({
+      currentSessionId: null,
       newSessionDraft: { draftId: 42, open: true, target: 'project', directoryOverride: '/alpha', preserveDirectoryOverride: true },
     });
     stub(canonicalClient, 'createSession', async request => { captured = request; started.resolve(); return admission.promise; });

@@ -283,7 +283,7 @@ export function registerCanonicalHostRoutes(app, {
  router.use(express.json({ limit: '1mb', strict: true }));
  router.use(async (req, res) => {
   const route = res.locals.canonicalProxyRoute;
-  const resolveRouteSessionScope = route.shellObservation ? resolveHostSessionScope : resolveSessionScope;
+  const resolveRouteSessionScope = (route.shellObservation || route.stream) ? resolveHostSessionScope : resolveSessionScope;
   const controller = new AbortController();
   const disconnect = () => controller.abort();
   req.once('aborted', disconnect);

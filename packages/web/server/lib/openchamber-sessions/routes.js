@@ -141,7 +141,7 @@ const createCanonicalSessionService = (dependencies) => {
       relocationControls.add(owner.rootSessionId);
       try { await recoverRelocation(owner.rootSessionId); } finally { relocationControls.delete(owner.rootSessionId); }
     }
-    const scope = await resolveSessionScope(sessionId);
+    const scope = (owner && liveRootSessions.has(owner.rootSessionId)) ? await resolveHostSessionScope(sessionId) : await resolveSessionScope(sessionId);
     if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
     return scope;
   };
@@ -187,6 +187,66 @@ const createCanonicalSessionService = (dependencies) => {
       else agentScopeStore.markSessionAdmissionUncertain(admission);
     }
   };
+  const speculativeSessions = new Map();
+
+  const discardPrepared = async (payload = {}) => {
+    const workspaceId = payload?.workspaceId;
+    if (!workspaceId) return { ok: false };
+    const existing = speculativeSessions.get(workspaceId);
+    if (!existing) return { ok: true };
+    speculativeSessions.delete(workspaceId);
+    clearTimeout(existing.timer);
+    try {
+      const session = await existing.promise;
+      await remove(session.sessionId);
+    } catch { }
+    return { ok: true };
+  };
+
+  const prepare = async (payload = {}) => {
+    const { projectId, workspaceId } = payload ?? {};
+    if (!projectId || !workspaceId) throw new OpenChamberControlError('Project and workspace identity required', 400);
+    const existing = speculativeSessions.get(workspaceId);
+    if (existing) {
+      const session = await existing.promise;
+      return { ok: true, sessionId: session.sessionId };
+    }
+    const workspace = await resolveWorkspaceScope(workspaceId);
+    if (!workspace || workspace.projectId !== projectId) throw new OpenChamberControlError('Workspace does not belong to project', 404);
+    assertWritableScope(workspace);
+    const rootSessionId = randomUUID();
+    const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
+    const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
+    const hostTools = await resolveHostTools();
+    const defaultOptions = { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null };
+    const sessionBootstrap = {
+      rootSessionId, projectId, workspaceId,
+      cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId,
+      displayPath, options: defaultOptions, deferred: false,
+      ...(hostTools ? { hostTools } : {}),
+    };
+    if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
+    const promise = withSessionAdmission(workspace, 'create', rootSessionId, async (settled) => {
+      const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sessionBootstrap) });
+      const runtime = RuntimeSessionSchema.parse(body);
+      if (runtime.projectId !== projectId || runtime.workspaceId !== workspaceId || runtime.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
+      if (!await registerSessionScope(runtime)) throw new OpenChamberControlError('Session scope registration failed', 500);
+      settled();
+      rememberLive(runtime.sessionId);
+      return runtime;
+    });
+    const timer = setTimeout(() => { void discardPrepared({ workspaceId }); }, 5 * 60 * 1000);
+    speculativeSessions.set(workspaceId, { promise, timer });
+    try {
+      const session = await promise;
+      return { ok: true, sessionId: session.sessionId };
+    } catch (err) {
+      speculativeSessions.delete(workspaceId);
+      clearTimeout(timer);
+      throw err;
+    }
+  };
+
   const create = async (payload = {}) => {
     const parsed = SessionCreateRequestSchema.safeParse(payload);
     if (!parsed.success) throw new OpenChamberControlError('Session create request is invalid', 400);
@@ -203,35 +263,58 @@ const createCanonicalSessionService = (dependencies) => {
       }
       assertWritableScope(parentScope);
     }
-    const rootSessionId = randomUUID();
-    const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
-    const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
-    const hostTools = await resolveHostTools();
-    const sessionBootstrap = {
-      rootSessionId, projectId, workspaceId,
-      cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId,
-      displayPath, options,
-      ...(hostTools ? { hostTools } : {}),
-    };
-    if (parentSessionId !== undefined) sessionBootstrap.parentSessionId = parentSessionId;
-    if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
-    const session = await withSessionAdmission(workspace, 'create', rootSessionId, async (settled) => {
-      const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sessionBootstrap) });
-      const runtime = RuntimeSessionSchema.parse(body);
-      if (runtime.projectId !== projectId || runtime.workspaceId !== workspaceId || runtime.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
-      if (parentSessionId !== undefined && runtime.parentSessionId !== parentSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope parent linkage', 502);
-      if (!await registerSessionScope(runtime)) throw new OpenChamberControlError('Session scope registration failed', 500);
+    const speculative = (parentSessionId === undefined) ? speculativeSessions.get(workspaceId) : undefined;
+    let session;
+    if (speculative) {
+      speculativeSessions.delete(workspaceId);
+      clearTimeout(speculative.timer);
+      try {
+        session = await speculative.promise;
+      } catch {
+        session = null;
+      }
+    }
+    if (session) {
       if (parsed.data.title) {
-        const renamed = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(runtime.sessionId)}/title`, {
+        const renamed = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(session.sessionId)}/title`, {
           method: 'PATCH', headers: { 'content-type': 'application/json' },
           body: JSON.stringify(SessionTitleRequestSchema.parse({ workspaceId, title: parsed.data.title })),
         }));
-        if (renamed.sessionId !== runtime.sessionId || renamed.workspaceId !== workspaceId) throw new OpenChamberControlError('Session title response was out of scope', 502);
-        Object.assign(runtime, renamed);
+        if (renamed.sessionId !== session.sessionId || renamed.workspaceId !== workspaceId) throw new OpenChamberControlError('Session title response was out of scope', 502);
+        Object.assign(session, renamed);
       }
-      settled();
-      return runtime;
-    });
+    } else {
+      const rootSessionId = randomUUID();
+      const workspaceDisplay = z.object({ displayPath: z.string().optional(), env: z.record(z.string(), z.string()).optional() }).passthrough().parse(workspace);
+      const displayPath = workspaceDisplay.displayPath && !workspaceDisplay.displayPath.startsWith('/') && !workspaceDisplay.displayPath.startsWith('\\') && !/^[A-Za-z]:/.test(workspaceDisplay.displayPath) ? workspaceDisplay.displayPath : 'workspace';
+      const hostTools = await resolveHostTools();
+      const sessionBootstrap = {
+        rootSessionId, projectId, workspaceId,
+        cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId,
+        displayPath, options, deferred: true,
+        ...(hostTools ? { hostTools } : {}),
+      };
+      if (parentSessionId !== undefined) sessionBootstrap.parentSessionId = parentSessionId;
+      if (workspaceDisplay.env) sessionBootstrap.env = workspaceDisplay.env;
+      session = await withSessionAdmission(workspace, 'create', rootSessionId, async (settled) => {
+        const body = await request('/internal/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sessionBootstrap) });
+        const runtime = RuntimeSessionSchema.parse(body);
+        if (runtime.projectId !== projectId || runtime.workspaceId !== workspaceId || runtime.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
+        if (parentSessionId !== undefined && runtime.parentSessionId !== parentSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope parent linkage', 502);
+        if (!await registerSessionScope(runtime)) throw new OpenChamberControlError('Session scope registration failed', 500);
+        if (parsed.data.title) {
+          const renamed = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(runtime.sessionId)}/title`, {
+            method: 'PATCH', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(SessionTitleRequestSchema.parse({ workspaceId, title: parsed.data.title })),
+          }));
+          if (renamed.sessionId !== runtime.sessionId || renamed.workspaceId !== workspaceId) throw new OpenChamberControlError('Session title response was out of scope', 502);
+          Object.assign(runtime, renamed);
+        }
+        settled();
+        rememberLive(runtime.sessionId);
+        return runtime;
+      });
+    }
     if (requestedMetadata) await metadata.set(session.sessionId, requestedMetadata, workspace.cwd);
     const stored = await sessionMetadataStore.getState(session.sessionId);
     const result = SessionCreateAckSchema.parse({ session: SessionSchema.parse({ ...session, metadata: stored?.metadata ?? null, metadataRevision: stored?.revision ?? '0', archiveRevision: '0' }) });
@@ -937,7 +1020,7 @@ const createCanonicalSessionService = (dependencies) => {
     return moved;
   };
 
-  return { create, send, steer, followUp, fork, selectBranch, relocate, moveToWorktree, delete: remove, open, history, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
+  return { create, prepare, discardPrepared, send, steer, followUp, fork, selectBranch, relocate, moveToWorktree, delete: remove, open, history, list, listArchivedWorktreeSessions, control, rename, resolveDirectory: async (payload = {}) => { const scope = await resolveWorkspaceScope(payload.workspaceId); if (!scope) throw new OpenChamberControlError('Workspace was not found', 404); return scope.cwd; }, archive, unarchive, getMetadata, setMetadata, setSessionLinks, sessionMetadataStore, archiveStore, unloadWorker, captureWorktreeArchive, prepareWorktreeArchiveRemoval, finishWorktreeArchive, rollbackWorktreeArchive, discardWorktreeArchive, resolveWorktreeArchivePinnedTarget, prepareWorktreeArchiveRestore, pinWorktreeArchiveRestore, markWorktreeArchiveRestoreAttempted, finishWorktreeArchiveRestore, finalizeWorktreeArchiveRestore, releaseWorktreeArchiveRestore, cleanupWorktreeArchiveRestore, prepareWorktreeArchiveDelete, claimWorktreeArchiveDelete, deleteWorktreeArchiveSessions, finalizeWorktreeArchiveDelete, resolveAdmissionRecovery: (owner) => owner.recoveringRemoval, markWorktreeArchiveDeleteCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveDeleteCasCompleted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasStarted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasStarted(owner.key, owner.claimId, revision), markWorktreeArchiveRestoreCasCompleted: (owner, revision) => agentScopeStore.markWorktreeArchiveRestoreCasCompleted(owner.key, owner.claimId, revision) };
 };
 
 
@@ -1077,6 +1160,8 @@ export const registerOpenChamberSessionRoutes = (app, dependencies) => {
 export const registerCanonicalSessionRoutes = (router, service) => {
   const call = async (res, operation, fallback) => { try { res.json(await operation()); } catch (error) { sendServiceError(res, error, fallback); } };
   router.post('/', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.create(req.body || {}), 'Failed to create session'));
+  router.post('/prepare', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.prepare(req.body || {}), 'Failed to prepare session'));
+  router.delete('/prepare', express.json({ limit: '1mb' }), (req, res) => call(res, () => service.discardPrepared(req.body || {}), 'Failed to discard prepared session'));
   router.get('/', (req, res) => call(res, () => {
     const workspace = EntityIdSchema.safeParse(req.query.workspaceId);
     return service.list(workspace.success ? workspace.data : undefined);

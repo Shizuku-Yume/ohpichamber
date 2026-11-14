@@ -32,39 +32,55 @@ test('native skill submission and catalog descriptions hide roots, and failed di
   const terminal = Promise.withResolvers<void>();
   const catalogEvents: string[] = [];
   const submitted: string[] = [];
-  const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) {
-    const textContent = z.union([
-      z.string().transform(text => [text]),
-      z.array(z.object({ type: z.literal('text'), text: z.string() })).transform(parts => parts.map(part => part.text)),
-    ]);
-    const payload = z.object({ messages: z.array(z.object({ role: z.string(), content: textContent })) }).parse(await request.json());
-    submitted.push(...payload.messages.filter(message => message.role === 'user').flatMap(message => message.content));
-    const chunk = { id: 'skill-response', object: 'chat.completion.chunk', created: 1, model: 'skill-model',
-      choices: [{ index: 0, delta: { role: 'assistant', content: 'Skill received.' }, finish_reason: null }] };
-    const finish = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } };
-    return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
-  } });
+  const provider = Bun.serve({
+    hostname: '127.0.0.1', port: 0, async fetch(request) {
+      const textContent = z.union([
+        z.string().transform(text => [text]),
+        z.array(z.object({ type: z.literal('text'), text: z.string() })).transform(parts => parts.map(part => part.text)),
+      ]);
+      const payload = z.object({ messages: z.array(z.object({ role: z.string(), content: textContent })) }).parse(await request.json());
+      submitted.push(...payload.messages.filter(message => message.role === 'user').flatMap(message => message.content));
+      const chunk = {
+        id: 'skill-response', object: 'chat.completion.chunk', created: 1, model: 'skill-model',
+        choices: [{ index: 0, delta: { role: 'assistant', content: 'Skill received.' }, finish_reason: null }]
+      };
+      const finish = { ...chunk, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 3, total_tokens: 13 } };
+      return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: ${JSON.stringify(finish)}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
+    }
+  });
   try {
     await mkdir(directory, { recursive: true });
     await mkdir(agentDirectory, { recursive: true });
     await writeFile(file, `---\nname: privacy-proof\ndescription: "Useful description ${rootsText}"\n---\nSKILL_BODY_MARKER ${rootsText}\n`);
-    worker = await WorkerSession.open({ type: 'bootstrap', rootSessionId: 'skill-root', workerGeneration: 'generation',
+    worker = await WorkerSession.open({
+      type: 'bootstrap', rootSessionId: 'skill-root', workerGeneration: 'generation',
       projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'agent-source', cwd, agentDirectory,
-      sessionsDirectory: join(root, 'sessions'), skillSources: { workspace: '0', agent: '0' } }, inputs => {
+      sessionsDirectory: join(root, 'sessions'), skillSources: { workspace: '0', agent: '0' }
+    }, inputs => {
       journal?.append(inputs);
       for (const input of inputs) {
         if (input.event.type === 'catalog.updated' && input.event.catalog.kind === 'skills') catalogEvents.push(JSON.stringify(input.event.catalog.state));
         if (input.event.type === 'run.failed' || input.event.type === 'run.completed') terminal.resolve();
       }
-    }, () => { throw new Error('This skill must not ask for interaction'); }, () => { fatal = true; }, async () => {}, async () => { throw new Error('This skill must not invoke Host actions'); }, () => {});
+    }, () => { throw new Error('This skill must not ask for interaction'); }, () => { fatal = true; }, async () => { }, async () => { throw new Error('This skill must not invoke Host actions'); }, () => { });
     journal = new SessionJournal({ sessionId: 'skill-root', rootSessionId: 'skill-root', projectId: 'project', workspaceId: 'workspace', displayPath: '.' }, worker.seed());
-    await worker.operation({ type: 'catalog', revision: '1', operation: { type: 'catalog.provider.configure', request: {
-      expectedRevision: '0', configuration: { providerId: 'skill-fixture', name: 'Skill fixture', endpoint: `http://127.0.0.1:${provider.port}/v1`, protocol: 'chat-completions', credentialRef: null },
-    } } });
-    await worker.operation({ type: 'catalog', revision: '2', operation: { type: 'catalog.model.configure', request: {
-      expectedRevision: '1', model: { modelId: 'skill-model', provider: 'skill-fixture', name: 'Skill model', modalities: ['text'],
-        contextWindow: 65536, maxOutputTokens: 128, reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null },
-    } } });
+    await worker.operation({
+      type: 'catalog', revision: '1', operation: {
+        type: 'catalog.provider.configure', request: {
+          expectedRevision: '0', configuration: { providerId: 'skill-fixture', name: 'Skill fixture', endpoint: `http://127.0.0.1:${provider.port}/v1`, protocol: 'chat-completions', credentialRef: null },
+        }
+      }
+    });
+    await worker.operation({
+      type: 'catalog', revision: '2', operation: {
+        type: 'catalog.model.configure', request: {
+          expectedRevision: '1', model: {
+            modelId: 'skill-model', provider: 'skill-fixture', name: 'Skill model', modalities: ['text'],
+            contextWindow: 65536, maxOutputTokens: 128, reasoningEffortSupported: false, reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null
+          },
+        }
+      }
+    });
     const sources = { workspace: '1', agent: '0' };
     const applied = await worker.operation({ type: 'catalog', revision: '2', operation: { type: 'skills.apply', sources, catalogRevision: '2', request: { scope: 'workspace', sourceRevision: '1' } } });
     expect(applied.type === 'catalog' && applied.result.type === 'skills.applied' && applied.result.result.outcome).toBe('applied');
@@ -77,10 +93,12 @@ test('native skill submission and catalog descriptions hide roots, and failed di
       expect(JSON.stringify(good)).not.toContain(privateRoot);
       expect(catalogEvents[0]).not.toContain(privateRoot);
     }
-    await worker.operation({ type: 'prompt', runId: 'skill-run', request: {
-      input: { text: '/skill:privacy-proof SKILL_ARGUMENT_MARKER', context: [], attachments: [] },
-      options: { providerId: 'skill-fixture', modelId: 'skill-model', agentId: null, variant: null, reasoningEffort: null },
-    } });
+    await worker.operation({
+      type: 'prompt', runId: 'skill-run', request: {
+        input: { text: '/skill:privacy-proof SKILL_ARGUMENT_MARKER', context: [], attachments: [] },
+        options: { providerId: 'skill-fixture', modelId: 'skill-model', agentId: null, variant: null, reasoningEffort: null },
+      }
+    });
     await terminal.promise;
     await worker.session.settleInFlightMessagePersistence();
     await worker.session.sessionManager.flush();
@@ -128,3 +146,45 @@ test('native skill submission and catalog descriptions hide roots, and failed di
     await rm(root, { recursive: true, force: true });
   }
 }, 30000);
+test('skills publication refreshes when skill content or description changes without renaming the skill', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'session-skills-desc-'));
+  const home = process.env.HOME;
+  process.env.HOME = root;
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  const directory = join(cwd, '.omp', 'skills', 'dynamic-skill');
+  const file = join(directory, 'SKILL.md');
+  let worker: WorkerSession | undefined;
+  try {
+    await mkdir(directory, { recursive: true });
+    await mkdir(agentDirectory, { recursive: true });
+    await writeFile(file, '---\nname: dynamic-skill\ndescription: "Fixed description"\n---\nInitial body\n');
+    worker = await WorkerSession.open({
+      type: 'bootstrap', rootSessionId: 'skill-desc-root', workerGeneration: 'gen-1',
+      projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'agent-source', cwd, agentDirectory,
+      sessionsDirectory: join(root, 'sessions'), skillSources: { workspace: '0', agent: '0' },
+    }, () => { }, () => { }, () => { }, async () => { }, async () => { throw new Error('Host action unexpected'); }, () => { });
+
+    const first = await worker.operation({ type: 'catalog', revision: '1', operation: { type: 'skills.read', persistedSources: { workspace: '1', agent: '0' } } });
+    if (first.type !== 'catalog' || first.result.type !== 'skills.catalog') throw new Error('Catalog read failed');
+    expect(first.result.catalog.skills.find(s => s.name === 'dynamic-skill')?.description).toContain('Fixed description');
+
+    // Update the description on disk while retaining the skill name
+    // Update only the markdown body on disk while retaining skill name and description
+    await writeFile(file, '---\nname: dynamic-skill\ndescription: "Fixed description"\n---\nMutated body content\n');
+    const applied = await worker.operation({
+      type: 'catalog', revision: '1',
+      operation: { type: 'skills.apply', sources: { workspace: '2', agent: '0' }, catalogRevision: '2', request: { scope: 'workspace', sourceRevision: '2' } },
+    });
+    expect(applied.type === 'catalog' && applied.result.type === 'skills.applied' && applied.result.result.outcome).toBe('applied');
+
+    const updated = await worker.operation({ type: 'catalog', revision: '2', operation: { type: 'skills.read', persistedSources: { workspace: '2', agent: '0' } } });
+    if (updated.type !== 'catalog' || updated.result.type !== 'skills.catalog') throw new Error('Catalog read failed');
+    expect(updated.result.catalog.skills.find(s => s.name === 'dynamic-skill')).toBeDefined();
+  } finally {
+    await worker?.close();
+    if (home === undefined) delete process.env.HOME; else process.env.HOME = home;
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});

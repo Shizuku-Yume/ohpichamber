@@ -258,10 +258,13 @@ export class AgentService {
       try {
         const scope = this.workers.authorizationScope(bootstrap.rootSessionId);
         if (!scope || scope.agentDirectoryId !== agentDirectoryId) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The launched worker was not admitted under the expected agent directory');
-        void this.registerCatalogWorker(bootstrap, scope.workerGeneration).catch(async () => {
-          if (this.workers.authorizationScope(bootstrap.rootSessionId)?.workerGeneration === scope.workerGeneration) {
-            await this.workers.stop(bootstrap.rootSessionId).catch(() => { });
-          }
+        const generation = scope.workerGeneration;
+        void this.registerCatalogWorker(bootstrap, generation).catch(async error => {
+          const cause = error instanceof Error && error.message.trim() ? error.message : 'The worker catalogs could not be read';
+          const code = error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError ? error.code : 'SERVICE_UNAVAILABLE';
+          this.sessions.registrationFailed(bootstrap.rootSessionId, generation, cause);
+          this.options.onDiagnostic?.({ level: 'error', rootSessionId: bootstrap.rootSessionId, workerGeneration: generation, message: `Catalog registration failed (${code}): ${cause}` });
+          await this.workers.stopGeneration(bootstrap.rootSessionId, generation).catch(() => { });
         });
         return result;
       } catch (error) {
@@ -559,13 +562,22 @@ export class AgentService {
         this.assertAdmissionScope(input);
         // A healthy live root is already admitted: return it instead of registering and reconciling again.
         // A reopen without an agent-directory id keeps the admission path, which resolves the id it must compare.
+        const pendingOpening = this.sessions.openingPromise(input.rootSessionId);
+        if (pendingOpening) { respondJson(response, 200, await pendingOpening); return; }
         const live = input.agentDirectoryId === undefined ? undefined : await this.sessions.liveReopenRuntime({ ...input, displayPath });
         if (live) { respondJson(response, 200, live); return; }
         respondJson(response, 200, await this.admit(input, bootstrap => this.sessions.reopen({ ...bootstrap, displayPath })));
         return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/sessions') {
-        const { displayPath, ...input } = await readBody(request, HostSessionBootstrapSchema);
+        const { displayPath, deferred, ...input } = await readBody(request, HostSessionBootstrapSchema);
+        this.workers.assertWorktreeLeaseAllows(input.cwd);
+        if (deferred) {
+          const session = await this.sessions.createInitialSession({ ...input, displayPath }, () =>
+            this.admit(input, bootstrap => this.sessions.openWorker({ ...bootstrap, displayPath }))
+          );
+          respondJson(response, 201, session); return;
+        }
         respondJson(response, 201, await this.admit(input, bootstrap => this.sessions.open({ ...bootstrap, displayPath }))); return;
       }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/sessions') {

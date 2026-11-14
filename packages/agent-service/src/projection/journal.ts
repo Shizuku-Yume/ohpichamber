@@ -61,13 +61,15 @@ export class SessionJournal {
     // Parse the batch before granting any sequence or mutating authoritative state.
     for (const input of persistent) {
       if (next === U64_MAX) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Event sequence is exhausted');
-      events.push(CanonicalEventSchema.parse({ ...input.event, sessionId: this.identity.sessionId,
+      events.push(CanonicalEventSchema.parse({
+        ...input.event, sessionId: this.identity.sessionId,
         epoch: this.epoch, sequence: (++next).toString(), timestamp: input.timestamp,
       }));
     }
     const transientEvents = transient.map(input => {
       if (next === U64_MAX) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Event sequence is exhausted');
-      return CanonicalEventSchema.parse({ ...input.event, sessionId: this.identity.sessionId,
+      return CanonicalEventSchema.parse({
+        ...input.event, sessionId: this.identity.sessionId,
         epoch: this.epoch, sequence: (++next).toString(), timestamp: input.timestamp,
       });
     });
@@ -83,7 +85,8 @@ export class SessionJournal {
   }
 
   runtime(): RuntimeSession {
-    const runtime = { ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
+    const runtime = {
+      ...this.identity, createdAt: this.createdAt, updatedAt: this.updatedAt,
       epoch: this.epoch, headSequence: this.head.toString(), runtimeStatus: this.runtimeStatus, activeRunId: this.activeRunId, mode: this.mode,
       continuationPending: this.continuationPending,
     };
@@ -99,7 +102,8 @@ export class SessionJournal {
     return SessionSnapshotSchema.parse({
       session: this.runtime(), cursor: `${this.epoch}:${this.head}`, activeRun: this.activeRunId ? this.runs.get(this.activeRunId) : null,
       branch: this.branch, selection: this.selection,
-      window: { firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null,
+      window: {
+        firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null,
         firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null,
         hasEarlier: this.turns.length > turns.length,
       }, turns, messages, approvals: [...this.approvals.values()], questions: [...this.questions.values()],
@@ -128,9 +132,10 @@ export class SessionJournal {
     const turnIds = new Set(turns.map(turn => turn.turnId));
     const messages = this.messages.filter(message => turnIds.has(message.turnId));
     const next = start + turns.length;
-    return HistoryPageSchema.parse({ sessionId: this.identity.sessionId, branch: this.branch, turns, messages,
+    return HistoryPageSchema.parse({
+      sessionId: this.identity.sessionId, branch: this.branch, turns, messages,
       nextCursor: next < end ? Buffer.from(JSON.stringify([this.branch.branchId, this.branch.branchVersion,
-        this.branch.leafMessageId, parsed.leafTurnId ?? null, next])).toString('base64url') : null,
+      this.branch.leafMessageId, parsed.leafTurnId ?? null, next])).toString('base64url') : null,
     });
   }
 
@@ -156,6 +161,12 @@ export class SessionJournal {
     this.identity.rootSessionId = rootSessionId;
   }
 
+  replaceInitialSeed(seed: ProjectionSeed): void {
+    this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
+    this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
+    this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
+    this.rebuildIndexes();
+  }
 
   replace(seed: ProjectionSeed): void {
     this.resetEpoch();
@@ -168,13 +179,22 @@ export class SessionJournal {
     this.rebuildIndexes();
   }
 
-  unavailable(): void {
+  private unavailableReason?: string;
+
+  unavailable(reason = 'SDK worker is unavailable'): void {
     if (this.closed) return;
-    if (this.activeRunId) this.settleRun(this.activeRunId, 'failed', Date.now(), 'SDK worker is unavailable');
+    if (!this.unavailableReason || reason !== 'SDK worker is unavailable') {
+      this.unavailableReason = reason;
+    }
+    if (this.activeRunId) this.settleRun(this.activeRunId, 'failed', Date.now(), this.unavailableReason);
     this.resetEpoch();
     this.runtimeStatus = 'unavailable'; this.activeRunId = null;
     this.continuationPending = false;
     this.approvals.clear(); this.questions.clear();
+  }
+
+  reasonUnavailable(): string | undefined {
+    return this.unavailableReason;
   }
 
   close(): void { if (this.closed) return; this.resetEpoch(); this.closed = true; }
@@ -234,7 +254,8 @@ export class SessionJournal {
         return;
       case 'session.status': this.runtimeStatus = event.runtimeStatus; this.activeRunId = event.activeRunId; return;
       case 'turn.started': {
-        const turn: Turn = { turnId: event.turnId, sessionId: this.identity.sessionId, runId: event.runId, userMessageId: event.userMessageId,
+        const turn: Turn = {
+          turnId: event.turnId, sessionId: this.identity.sessionId, runId: event.runId, userMessageId: event.userMessageId,
           status: 'running', startedAt: event.timestamp, assistantMessageIds: [],
         };
         this.turns.push(turn); this.turnById.set(turn.turnId, turn); return;

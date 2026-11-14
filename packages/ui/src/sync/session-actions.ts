@@ -286,13 +286,17 @@ let _getDirectory: () => string = () => ""
 // confirmed stale server-side (see recoverStaleBlockingRequest).
 let _enqueueSessionMaterialization: ((directory: string, sessionID: string, messageID: string) => void) | null = null
 let _ensureSessionStream: ((sessionId: string, directory?: string | null) => void) | null = null
-type OptimisticAddInput = { sessionId: string; directory?: string | null; message: CanonicalMessage }
-type OptimisticRemoveInput = { sessionId: string; directory?: string | null; messageId: string }
-type OptimisticConfirmInput = OptimisticRemoveInput
+export type OptimisticAddInput = { sessionId: string; directory?: string | null; message: CanonicalMessage }
+export type OptimisticRemoveInput = { sessionId: string; directory?: string | null; messageId: string }
+export type OptimisticConfirmInput = OptimisticRemoveInput
 
 let _optimisticAdd: ((input: OptimisticAddInput) => void) | null = null
 let _optimisticRemove: ((input: OptimisticRemoveInput) => void) | null = null
 let _optimisticConfirm: ((input: OptimisticConfirmInput) => void) | null = null
+
+export function optimisticAdd(input: OptimisticAddInput): void { _optimisticAdd?.(input) }
+export function optimisticRemove(input: OptimisticRemoveInput): void { _optimisticRemove?.(input) }
+export function optimisticConfirm(input: OptimisticConfirmInput): void { _optimisticConfirm?.(input) }
 /**
  * Revision patch for one or more sessions changing in the same store write.
  *

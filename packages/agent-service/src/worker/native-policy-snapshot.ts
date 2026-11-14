@@ -5,9 +5,11 @@ import type { NativeAgents } from './catalog-agents.ts';
 
 /** Captures installed native catalog facts, never Host machine grants or credential material. */
 export async function captureNativePolicy(input: { projectId: string; workspaceId: string; cwd: string; agentDirectory: string; agentDirectoryId: string }, runtime: NativeWorkerRuntime, agents: NativeAgents, mcpServers: MCPServerConfig[]): Promise<HostNativePolicySnapshot> {
-  const catalog = await runtime.models.readModels(input.workspaceId, '0');
-  const providersCatalog = await runtime.models.readProviders(input.workspaceId, '0');
-  const profiles = await agents.read(input.workspaceId, '0');
+  const [catalog, providersCatalog, profiles] = await Promise.all([
+    runtime.models.readModels(input.workspaceId, '0'),
+    runtime.models.readProviders(input.workspaceId, '0'),
+    agents.read(input.workspaceId, '0'),
+  ]);
   const models = runtime.modelRegistry.getAll('all');
   const providers: HostNativePolicySnapshot['providers'] = [];
   for (const model of catalog.models) {

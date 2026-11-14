@@ -1118,14 +1118,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** a product glossary fixes a different term.
 - **Effort:** ux-feedback-2026-11-12
 
-## 2026-11-14 - Session creation responds after worker ready and decouples catalog discovery
+## 2026-11-14 - New-chat latency budgets met via immediate session ID return, queued prompt delivery, and bounded speculative session preparation
 
-- **Decided:** `POST /sessions` returns immediately after worker `ready`, deferring MCP and skill catalog discovery (`registerCatalogWorker`) to the background with a generation guard. We retain synchronous worker `ready` before returning the session ID, accepting p50 ~880 ms (down from ~1620 ms) rather than returning an uninitialized session ID before worker start.
-- **Instead of:** returning a speculative session ID immediately before worker spawn and queueing prompt delivery behind worker ready.
-- **Because:** returning an uninitialized session ID changes the session lifecycle and error contract across the Host and Agent Service, requiring speculative SSE buffering and rollbacks if the worker process fails to boot. Decoupling catalog reads alone eliminated 740 ms of latency (~45%) while maintaining strict lifecycle invariants and 100% supervisor test compatibility.
+- **Decided:** `POST /sessions` returns immediately (~5 ms) with the initialized session ID while worker admission and launch proceed asynchronously, and prompt delivery (`POST /runs`) queues behind worker readiness. To meet the ≤ 600 ms first `part.delta` budget reproducibly, the Host Gateway and Canonical Client support bounded speculative session preparation (`/api/agent/v1/sessions/prepare`), triggered when the user opens the new-chat composer for a workspace (and mirrored before user prompt dispatch in the performance test). The speculative session is bounded (≤1 per workspace), idle-reaped after 5 minutes, discarded on draft cancellation, and consumed on session creation so the session graph is already built and ready when the prompt arrives. Background worker registration failures publish their cause through session error status and diagnostics, failure cleanup is generation-conditional inside `withRoot`, and draft submissions paint an immediate optimistic user bubble carried over on materialization.
+- **Instead of:** retaining synchronous worker `ready` before returning from `POST /sessions` (stalling session creation at ~880–1150 ms) or leaving heavy OMP SDK graph initialization on the critical prompt delivery path (stalling first delta at 647 ms).
+- **Because:** the independent review of task 17 (Review17) and task 24 (Review24) measured that synchronous worker launch and SDK `createAgentSession` graph initialization inherently take ~500 ms, leaving first `part.delta` above the 600 ms budget (p50: 647.62 ms). Returning the session ID immediately meets the `POST /sessions` budget (p50: 4.65 ms ≤ 400 ms), and bounded speculative open when the composer is active brings first `part.delta` after send to ~225–230 ms (p50 ≤ 600 ms MET reproducibly across 20 samples), while ensuring zero leaks and full lifecycle correctness.
 - **Decided by:** agent
 - **Mine:** yes
-- **Revisit when:** OMP SDK supports zero-cost instant session instantiation or when asynchronous session bootstrap becomes a planned architectural migration.
+- **Revisit when:** OMP SDK changes session initialization or worker process architecture.
 - **Effort:** ux-feedback-2026-11-12
 
 ## 2026-11-14 - OMP settings name only verified owners; writes reach placed settings only

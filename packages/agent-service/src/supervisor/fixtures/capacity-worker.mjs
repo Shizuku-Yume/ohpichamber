@@ -13,14 +13,18 @@ process.on('message', message => {
     shellJobUntil = Date.now() + Number(process.env.WORKER_SHELL_JOB_MS ?? '0');
     if (process.env.WORKER_LOG) appendFileSync(process.env.WORKER_LOG, `${message.type} ${rootSessionId}\n`);
     if (message.type === 'bootstrap') {
-      send({ type: 'opened', workerGeneration: message.workerGeneration, sessionFile: process.env.WORKER_SESSION_FILE ?? `${process.cwd()}/session.jsonl`, seed: {
-        createdAt: now, updatedAt: now,
-        mode: { kind: 'main' },
-        branch: { branchId: 'branch-fixture', branchVersion: '1', leafMessageId: null },
-        turns: [],
-        messages: [{ messageId: 'message-retained', sessionId: rootSessionId, turnId: 'turn-retained', role: 'user', createdAt: now,
-          parts: [{ type: 'text', partId: 'part-retained', content: 'Retained fixture prompt' }] }],
-      } });
+      send({
+        type: 'opened', workerGeneration: message.workerGeneration, sessionFile: process.env.WORKER_SESSION_FILE ?? `${process.cwd()}/session.jsonl`, seed: {
+          createdAt: now, updatedAt: now,
+          mode: { kind: 'main' },
+          branch: { branchId: 'branch-fixture', branchVersion: '1', leafMessageId: null },
+          turns: [],
+          messages: [{
+            messageId: 'message-retained', sessionId: rootSessionId, turnId: 'turn-retained', role: 'user', createdAt: now,
+            parts: [{ type: 'text', partId: 'part-retained', content: 'Retained fixture prompt' }]
+          }],
+        }
+      });
     }
     send({ type: 'ready', workerGeneration: message.workerGeneration });
     return;
@@ -33,12 +37,20 @@ process.on('message', message => {
         workspaceId: 'workspace', projectId: 'project', command: 'sleep 1', background: true,
         startedAt: now, outputCursor: '0', status: 'running',
       }] : [];
-      const result = { type: 'shell', result: { type: 'snapshot', snapshot: {
-        scope: { kind: 'session', sessionId: rootSessionId }, epoch: 'fixture-epoch', revision: '0',
-        running, ended: [], recovery: { priorEpochs: 'invalidated' },
-      } } };
+      const result = {
+        type: 'shell', result: {
+          type: 'snapshot', snapshot: {
+            scope: { kind: 'session', sessionId: rootSessionId }, epoch: 'fixture-epoch', revision: '0',
+            running, ended: [], recovery: { priorEpochs: 'invalidated' },
+          }
+        }
+      };
       const delay = Number(process.env.WORKER_OPERATION_DELAY_MS ?? '0');
       setTimeout(() => send({ type: 'result', workerGeneration: message.workerGeneration, commandId: message.commandId, result }), delay);
+      return;
+    }
+    if (operation?.type === 'mcp.configuration.read') {
+      send({ type: 'mcp.configuration', workerGeneration: message.workerGeneration, commandId: message.commandId, configuration: { workspaceId: 'workspace', persistedRevision: '0', config: { servers: [] } } });
       return;
     }
     send({ type: 'operation.error', workerGeneration: message.workerGeneration, commandId: message.commandId, code: 'NOT_IMPLEMENTED', status: 501, detail: 'The fixture worker does not implement this operation' });

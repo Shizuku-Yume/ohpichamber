@@ -21,7 +21,6 @@ Real path (Web, real provider, isolated data dir and `HOME`):
 
 Save evidence in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task27/`.
 **Base commit:** 97c34f4f6c083f197f7d7b5b43d086ec95c2ab96
-**Status:** active
 
 - [x] Pass current host-tool enablement on every worker start path, including `reopenNative`.
 - [x] Change the full enabled tool set, not only the top-level active names, and keep the presentation partition.
@@ -71,8 +70,10 @@ Save evidence in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-20
   - Finding 2: Real path (d) rerun with OMP-native `mnemopi` SQLite memory backend; session D1 retained fact via `retain` tool call, new session D2 recalled fact via `recall` tool call (`04-memory-recall-history.json`, `04-memory-recall.png`).
   - Finding 3: Removed deleted memory file rows from `.workflow/upstream-deltas.tsv`; `bun test scripts/upstream-drift.test.mjs` (14 pass) and `bun scripts/upstream-drift.mjs` pass.
   - Finding 4: Added positive control for recap (recap produced when enabled, `05-recap-positive-control.json`), followed by live worker settings toggle and negative control proving cancellation of new recaps (`05-recap-evidence.json`). Mapped native session ID in `registry.listRecaps` and `session.onRecap` to ensure full journal visibility across Host and native session scopes.
-  - Finding 5: Removed orphaned strings/consumers: `unseenTitle` and `unseen` counters from `ProjectNotesTodoPanel.tsx`, `memory.tidy` from `MagicPromptsPage.tsx`, `MagicPromptsSidebar.tsx`, and `packages/ui/src/lib/magicPrompts.ts`, and 39 orphaned locale keys across all 15 locales (825 lines removed).
-
+- Finding 5: Removed orphaned strings/consumers: `unseenTitle` and `unseen` counters from `ProjectNotesTodoPanel.tsx`, `memory.tidy` from `MagicPromptsPage.tsx`, `MagicPromptsSidebar.tsx`, and `packages/ui/src/lib/magicPrompts.ts`, and 39 orphaned locale keys across all 15 locales (825 lines removed).
+- **Review round 2 (ufb-27-reviewer):**
+  - No blocking findings.
+  - Non-blocking observation noted: the recap route returns 2 identical entries because both host and native session ID aliases match in the recap journal query; no fix needed per review round 2.
 Check after:
 - `bun test packages/agent-service/src/worker/session-native.test.ts -t "a cold session reopens with web disabled|toggling notify keeps mounted tools enabled|a live worker turns recap.enabled off"`: 3 pass, 0 fail, 19 expect() calls
 - `bun test packages/agent-service/src/worker/host-tool.test.ts -t "workflow.run"`: 2 pass, 0 fail, 18 expect() calls
@@ -85,4 +86,4 @@ Check after:
 - `bun run dead-code`: exit 1 (knip baseline report verified; zero leftover memory store exports)
 - `bunx oxlint <touched paths>`: 0 findings across all touched/authored files
 - Real path on port 4127 (Web, real provider `CLIProxyAPI/gemini-3.5-flash-lite`, isolated `HOME` and `OPENCHAMBER_DATA_DIR`): all 5 flows verified end-to-end, evidence in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task27/`.
-Review: pending independent review
+Review: pass - reviewer ufb-27-reviewer (good worker session), 2 rounds; round 1 blocking findings (test import/type-check, memory recall backend, upstream-deltas rows, recap control, orphaned strings) fixed; round 2 no blocking findings.

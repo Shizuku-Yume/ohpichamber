@@ -2050,6 +2050,8 @@ export const settingsDict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "Usar el modelo pequeño predeterminado",
   "settings.openchamber.defaults.smallModel.thinking": "Pensamiento",
   "settings.openchamber.defaults.walkthroughModel.title": "Modelo del recorrido de cambios",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Usar el modelo predeterminado del recorrido",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Desactívalo para elegir abajo un modelo propio para el recorrido de cambios.",
   "settings.openchamber.defaults.walkthroughModel.description": "La revisión con IA de tus cambios necesita salida estructurada y espacio para un diff completo, algo que un modelo pequeño y barato a menudo no ofrece. Los modelos que el catálogo declara incapaces de producir salida estructurada se ocultan aquí. Si no eliges nada, se usa el modelo pequeño.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Modelo pequeño",
   "settings.openchamber.defaults.field.showDeletionDialog": "Mostrar diálogo de eliminación",

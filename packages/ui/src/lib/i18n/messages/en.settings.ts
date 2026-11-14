@@ -2074,6 +2074,8 @@ export const settingsDict = {
   'settings.openchamber.defaults.smallModel.useDefaultAria': 'Use default small model',
   'settings.openchamber.defaults.smallModel.thinking': 'Thinking',
   'settings.openchamber.defaults.walkthroughModel.title': 'Changes walkthrough model',
+  'settings.openchamber.defaults.walkthroughModel.useDefault': 'Use default walkthrough model',
+  'settings.openchamber.defaults.walkthroughModel.useDefaultInfo': 'Turn this off to choose a separate model for the changes walkthrough below.',
   'settings.openchamber.defaults.walkthroughModel.description': 'The AI review of your changes needs structured output and room for a whole diff, which a cheap small model often cannot give. Models the catalog reports as unable to produce structured output are hidden from this picker. Leave it unset and the small model is used.',
   'settings.openchamber.defaults.walkthroughModel.usesSmallModel': 'Small model',
   'settings.openchamber.defaults.field.openFilesPreviewAria': 'Open previewable files in preview mode',

@@ -8,7 +8,6 @@
 **Read first:** independent reviews `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/independent-review/{Review08,Review14}.md`; `ContextRailSurfacesDialog` (existing drag-state handling inside a dialog); skills `drag-to-reorder`, `locale-ui-patterns`
 **Check:** UI tests that render `WebSearchPage` inside the real `SettingsWindow`, then:
 **Base commit:** 81e48cd715c2525dad96b3bd360a370063ac5f67
-**Status:** active
 
 - pick up a fallback with Space, move it with ArrowDown and drop it, and assert the saved order;
 - assert that Escape cancels the drag without closing Settings;
@@ -38,4 +37,5 @@ The sections tests exit 0. Real path (Web): keyboard reorder works in the Settin
   - `04-plugins-narrow-empty-catalog.png` is the empty Plugins page before the fixture was added. It proves nothing about chips; kept only as the before state.
   - Observed, not fixed (outside this task): at 360px the Installed heading row overlaps the "Add plugin" and "Restart idle sessions to apply" text.
 - Pre-fix failure (NB1): observed before the fix in the implementing session. The first run of `SettingsWindow.test.tsx` against unchanged `SettingsSortableList`/`SettingsWindow` failed on `saved` (received `[]`, expected `[["searxng","brave"]]`), and the Escape case failed on `aria-pressed` ("not true"). Both failures were recorded then, so no revert was needed.
-- Review: independent worker session `ufb-23-review-fast` (fast, read-only), base 81e48cd71..4cb7e7717, verdict APPROVE, no blocking findings; NB2-NB6 non-blocking and left as is. The good-tier reviewer hit a provider 429, so the fast reviewer ran. The 360px screenshot caveat stands: 600px was checked on screen, and only the 360px wrap is in an image.
+- Review: pass. Independent worker session `ufb-23-review-fast` (fast, read-only), base 81e48cd71..4cb7e7717, verdict APPROVE, no blocking findings; NB2-NB6 non-blocking and left as is. The good-tier reviewer hit a provider 429, so the fast reviewer ran. The 360px screenshot caveat stands: 600px was checked on screen, and only the 360px wrap is in an image.
+- Check after: on the final tree (HEAD before the archive commit, 95f6340d4 includes only this file): `VITEST_MAX_WORKERS=2 bun test` per file from the repo root: SettingsWindow.test.tsx 2/2, PluginsPage.test.tsx 10/10, WebSearchPage.test.tsx 4/4, ContextRailSurfacesDialog.test.tsx 6/6; oxlint on the six changed TS files: no findings. Integration was already contained in the branch (`git merge ux-feedback-2026-11-12/integration`: Already up to date), so no merge changes were needed.

@@ -286,17 +286,12 @@ export const EvalCellBlock: React.FC<EvalCellBlockProps> = ({
                         }
 
                         return (
-                            <div
+                            <pre
                                 key={pIdx}
-                                className="typography-code whitespace-pre-wrap break-words text-xs text-muted-foreground/90 p-1.5 rounded-lg border border-border/20 bg-card/20"
+                                className="typography-code whitespace-pre-wrap break-words text-xs text-foreground/90 font-mono m-0 p-2 rounded-lg border border-border/20 bg-card/30 select-text"
                             >
-                                <WorkerHighlightedCode
-                                    language="text"
-                                    code={renderTerminalOutput(part.text)}
-                                    style={CODE_STYLE}
-                                    wrap
-                                />
-                            </div>
+                                {renderTerminalOutput(part.text)}
+                            </pre>
                         );
                     })}
                 </div>

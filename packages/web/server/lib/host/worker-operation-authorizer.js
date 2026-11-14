@@ -33,8 +33,6 @@ const resolveMcpServerForTool = (toolName, servers) => {
  }
  return best;
 };
-export const PERMISSION_PRESET_IDS = Object.freeze(['ask', 'safety', 'auto']);
-export const isPermissionPresetId = (value) => typeof value === 'string' && PERMISSION_PRESET_IDS.includes(value);
 
 // A refusal names the check that refused, so the person reading it can act on it.
 const denied = (reason, code = 'UNAUTHORIZED', status = 403) => ({ allowed: false, code, status, detail: reason });
@@ -151,8 +149,6 @@ export const createWorkerOperationAuthorizer = ({
    if (request.type === 'shell') return descriptor?.command !== undefined && commandGranted(descriptor.command) ? allowed : denied('The native command has no Host grant');
    if (request.type !== 'tool') return denied('The request type is not authorized for this workspace');
    if (request.agentId !== undefined && !policy.agentIds.includes(request.agentId)) return denied('The agent profile is not in the workspace catalog');
-   if (request.permissionPresetId !== undefined && (!isPermissionPresetId(request.permissionPresetId)
-    || (!request.proposed && !policy.permissionPresetIds.includes(request.permissionPresetId)))) return denied('The permission preset is not available in this workspace');
    if (request.toolName === 'provider.use') {
     const permitted = request.proposed === true
      ? proposedProviderPermitted(descriptor)
@@ -161,11 +157,6 @@ export const createWorkerOperationAuthorizer = ({
     return permitted ? allowed : denied(request.proposed === true
      ? 'The proposed provider and model do not name a complete selection'
      : 'The provider and model are not enabled in this workspace');
-   }
-   if (request.toolName === 'permission.preset') {
-    return request.input.presetId === request.permissionPresetId && isPermissionPresetId(request.input.presetId)
-     && (request.proposed === true || policy.permissionPresetIds.includes(request.input.presetId))
-     ? allowed : denied('The permission preset is not available in this workspace');
    }
    // Native ask only opens a scoped, CAS-protected interaction; it grants no machine capability.
    if (request.toolName === 'ask') return allowed;

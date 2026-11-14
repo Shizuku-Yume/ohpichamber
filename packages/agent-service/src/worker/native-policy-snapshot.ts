@@ -24,5 +24,5 @@ export async function captureNativePolicy(input: { projectId: string; workspaceI
     if (endpoint !== null && endpoint !== undefined) nativeProvider.endpoint = endpoint;
     providers.push(nativeProvider);
   }
-  return HostNativePolicySnapshotSchema.parse({ ...input, providers, mcpServers, agentIds: profiles.agents.map(agent => agent.agentId), permissionPresetIds: [] });
+  return HostNativePolicySnapshotSchema.parse({ ...input, providers, mcpServers, agentIds: profiles.agents.map(agent => agent.agentId) });
 }

@@ -26,10 +26,18 @@ export type NativeAgentsContext = {
   modelRegistry: ModelRegistry;
   settings: Settings;
   extensionRoots: EffectiveExtensionRoots;
-  permissionPreset?: (id: string, proposed: boolean) => Promise<void>;
   availableToolNames: () => readonly string[];
 };
-const ProfileMetadataSchema = z.object({ openchamber: AgentSchema.optional() });
+const ProfileMetadataSchema = z.object({
+  openchamber: z.preprocess((val) => {
+    if (val && typeof val === 'object' && 'permissionPresetId' in val) {
+      const copy = { ...(val as Record<string, unknown>) };
+      delete copy.permissionPresetId;
+      return copy;
+    }
+    return val;
+  }, AgentSchema.optional()),
+});
 
 function profilePath(cwd: string, agentId: string): string {
   return join(cwd, '.omp', 'agents', `profile_${createHash('sha256').update(agentId).digest('hex')}.md`);
@@ -102,7 +110,13 @@ export class NativeAgents {
       try {
         const content = await readFile(definition.filePath, 'utf8');
         const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
-        if (match) metadata = ProfileMetadataSchema.parse(YAML.parse(match[1]));
+        if (match) {
+          const parsed = YAML.parse(match[1]);
+          if (parsed && typeof parsed === 'object' && 'openchamber' in parsed && parsed.openchamber && typeof parsed.openchamber === 'object') {
+            delete (parsed.openchamber as Record<string, unknown>).permissionPresetId;
+          }
+          metadata = ProfileMetadataSchema.parse(parsed);
+        }
       } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile metadata could not be read'); }
     }
     const selector = definition.model?.[0];

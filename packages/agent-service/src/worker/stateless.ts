@@ -1,8 +1,17 @@
 import { dirname, join } from 'node:path';
 import { NativeProviderOAuth } from './provider-oauth.ts';
-import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, MCPConfigurationStateSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
+import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, MCPConfigurationStateSchema, type MCPConfigurationState, type ToolCatalogEntry } from '@openchamber/agent-contract';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
-import { resolveBuiltinToolPlan } from '@oh-my-pi/pi-coding-agent/tools';
+import {
+  BUILTIN_TOOLS, HIDDEN_TOOLS,
+  IdaTool, MemoryEditTool, MemoryRetainTool, MemoryRecallTool, MemoryReflectTool,
+  LearnTool, ManageSkillTool, ContextNotesTool, NewContextTool, AskTool,
+  resolveBuiltinToolPlan,
+  type ToolSession, type ToolFactory,
+} from '@oh-my-pi/pi-coding-agent/tools';
+import { resolveToolTier } from '@oh-my-pi/pi-coding-agent/tools/approval';
+type ToolMetadataSubject = Parameters<typeof resolveToolTier>[0] & { label?: string; description?: string };
+import { HOST_TOOL_NAMES, HOST_TOOL_DESCRIPTIONS, normalizeHostToolEnablement } from './host-tool.ts';
 import { CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, type CatalogResult } from '../catalogs/protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -78,7 +87,6 @@ export class StatelessWorker {
       cwd: input.cwd, agentDirectory: input.agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
       availableToolNames: () => BUILTIN_TOOL_NAMES,
-      permissionPreset: (presetId, proposed) => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId, ...(proposed ? { proposed: true } : {}) }),
     });
     this.completion = new WorkerCompletion(runtime.modelRegistry, input.workspaceId, async (selection, controls) => {
       const resolved = await models.selection(selection, controls);
@@ -114,6 +122,16 @@ export class StatelessWorker {
     if (operation.type === 'web-search') return { type: 'web-search', result: await this.webSearch.operation(operation.operation) };
     if (this.webSearch.requiresRestart) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings require a fresh workspace worker');
     if (operation.type === 'tools.catalog') {
+      const mockSession: ToolSession = {
+        cwd: this.input.cwd,
+        settings: this.runtime.settings,
+        hasUI: true,
+        enableLsp: true,
+        taskDepth: 0,
+        getSessionFile: () => null,
+        getSessionSpawns: () => null,
+      } as unknown as ToolSession;
+
       const plan = await resolveBuiltinToolPlan({
         cwd: this.input.cwd,
         settings: this.runtime.settings,
@@ -123,17 +141,74 @@ export class StatelessWorker {
         getSessionFile: () => null,
         getSessionSpawns: () => null,
       });
-      const tools = BUILTIN_TOOL_NAMES.map(name => {
-        const tier = ['read', 'glob', 'grep', 'find'].includes(name) ? 'read' as const : ['write', 'edit', 'apply_patch'].includes(name) ? 'write' as const : 'exec' as const;
-        const label = name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' ');
-        return {
+
+      const allTools: Record<string, ToolFactory> = { ...BUILTIN_TOOLS, ...HIDDEN_TOOLS };
+      const tools: ToolCatalogEntry[] = [];
+
+      for (const name of BUILTIN_TOOL_NAMES) {
+        let tool: ToolMetadataSubject | null = null;
+        try {
+          const factory = allTools[name];
+          if (factory) tool = await factory(mockSession);
+        } catch {
+          // direct fallback
+        }
+        if (!tool) {
+          try {
+            switch (name) {
+              case 'ida': tool = new IdaTool(mockSession); break;
+              case 'memory_edit': tool = new MemoryEditTool(mockSession); break;
+              case 'retain': tool = new MemoryRetainTool(mockSession); break;
+              case 'recall': tool = new MemoryRecallTool(mockSession); break;
+              case 'reflect': tool = new MemoryReflectTool(mockSession); break;
+              case 'learn': tool = new LearnTool(mockSession); break;
+              case 'manage_skill': tool = new ManageSkillTool(() => Promise.resolve()); break;
+              case 'context_notes': tool = new ContextNotesTool(mockSession); break;
+              case 'new_context': tool = new NewContextTool(mockSession); break;
+              case 'ask': tool = new AskTool(mockSession); break;
+            }
+          } catch {
+            // direct instantiation fallback
+          }
+        }
+        const tier = tool ? resolveToolTier(tool, {}) : 'exec';
+        const label = (typeof tool?.label === 'string' && tool.label) ? tool.label : name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' ');
+        const description = (typeof tool?.description === 'string' && tool.description) ? tool.description : '';
+        tools.push({
           name,
           label,
-          description: '',
+          description,
           tier,
           availability: plan.names.includes(name),
-        };
-      });
+        });
+      }
+
+      // Add Host tools
+      const hostToolsEnablement = normalizeHostToolEnablement(this.input.hostTools);
+      for (const name of HOST_TOOL_NAMES) {
+        tools.push({
+          name,
+          label: name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' '),
+          description: HOST_TOOL_DESCRIPTIONS[name] ?? '',
+          tier: 'exec',
+          availability: hostToolsEnablement[name] ?? false,
+        });
+      }
+
+      // Add MCP tools
+      if (this.mcp) {
+        const mcpTools = this.mcp.getTools();
+        for (const mcpTool of mcpTools) {
+          tools.push({
+            name: mcpTool.name,
+            label: mcpTool.name,
+            description: mcpTool.description ?? '',
+            tier: 'exec',
+            availability: true,
+          });
+        }
+      }
+
       return { type: 'tools.catalog', catalog: { workspaceId: this.input.workspaceId, tools } };
     }
     if (operation.type === 'mcp.configuration.read') return { type: 'mcp.configuration', configuration: await this.readConfiguration() };

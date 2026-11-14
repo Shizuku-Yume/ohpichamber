@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createProjectDirectoryRuntime } from './project-directory-runtime.js';
-import { createWorkerOperationAuthorizer, isPermissionPresetId, PERMISSION_PRESET_IDS } from './worker-operation-authorizer.js';
+import { createWorkerOperationAuthorizer } from './worker-operation-authorizer.js';
 
 const server = { serverId: 'oauth-server', label: 'OAuth server', enabled: true, transport: { type: 'http', url: 'https://mcp.example/tools' } };
 const endpointFields = ['authorizationUrl', 'tokenUrl', 'issuerUrl', 'registrationUrl', 'resourceMetadataUrl', 'redirectUri', 'resource'];
@@ -17,7 +17,7 @@ beforeAll(async () => {
   scope = { rootSessionId: 'root', workerGeneration: 'generation', projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'agent-directory', cwd, agentDirectory };
   const policy = {
     projectId: scope.projectId, workspaceId: scope.workspaceId, agentDirectoryId: scope.agentDirectoryId, cwd, agentDirectory,
-    providers: [], mcpServers: [server], fileTools: [], shellCommands: [], agentIds: [], permissionPresetIds: [], providerEntry: true
+    providers: [], mcpServers: [server], fileTools: [], shellCommands: [], agentIds: [], providerEntry: true
   };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
   authorize = createWorkerOperationAuthorizer({
@@ -62,7 +62,7 @@ async function nativeHarness(rows = [], enterprisePolicyOptions) {
   const nativeScope = { rootSessionId: 'native-root', workerGeneration: 'native-generation', projectId: 'native-project', workspaceId: 'native-workspace', agentDirectoryId: 'native-source', cwd, agentDirectory };
   const policy = {
     projectId: nativeScope.projectId, workspaceId: nativeScope.workspaceId, agentDirectoryId: nativeScope.agentDirectoryId, cwd, agentDirectory,
-    providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }], mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], agentIds: [], permissionPresetIds: [], providerEntry: true
+    providers: [{ providerId: 'fixture', modelId: 'small', endpoint: 'https://fixture.example/v1' }], mcpServers: [], fileTools: ['read', 'write'], shellCommands: [], agentIds: [], providerEntry: true
   };
   const directoryOwner = createProjectDirectoryRuntime({ fsPromises: fs, path, normalizeDirectoryPath: value => value });
   const nativeAuthorize = createWorkerOperationAuthorizer({ resolvePolicy: async () => policy, validateDirectoryPath: directoryOwner.validateDirectoryPath, approvalPolicyStore: { list: () => rows }, enterprisePolicyOptions });
@@ -194,7 +194,6 @@ describe('Host-owned native descriptor authority', () => {
       expect(await harness.authorize(harness.scope, { ...request, toolName: 'custom-question' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, permissionPresetId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
     const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'ask', pattern: JSON.stringify(input) } }]);
     try {
@@ -251,7 +250,6 @@ describe('Host-owned native descriptor authority', () => {
         }
       }
       expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'todo', input: { op: 'init' }, agentId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'todo', input: { op: 'init' }, permissionPresetId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await harness.close(); }
     const input = { op: 'init' };
     const denied = await nativeHarness([{ scope: 'workspace', decision: 'deny', target: { toolName: 'todo', pattern: JSON.stringify(input) } }]);
@@ -269,7 +267,6 @@ describe('Host-owned native descriptor authority', () => {
       expect(await harness.authorize(harness.scope, { ...request, agentId: 'profile' })).toEqual({ allowed: true });
       expect(await harness.authorize({ ...harness.scope, workspaceId: 'foreign' }, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, agentId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, permissionPresetId: 'foreign' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, toolName: 'arbitrary-tool' })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, input: { ...input, isolated: true } })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       expect(await harness.authorize(harness.scope, { ...request, input: { tasks: [{ ...input, isolated: true }] } })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
@@ -282,49 +279,6 @@ describe('Host-owned native descriptor authority', () => {
     try {
       expect(await denied.authorize(denied.scope, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
     } finally { await denied.close(); }
-  });
-  it('validates permissionPresetId and authorizes permission.preset tools against workspace policy', async () => {
-    expect(PERMISSION_PRESET_IDS).toEqual(['ask', 'safety', 'auto']);
-    expect(isPermissionPresetId('ask')).toBe(true);
-    expect(isPermissionPresetId('safety')).toBe(true);
-    expect(isPermissionPresetId('auto')).toBe(true);
-    expect(isPermissionPresetId('invalid')).toBe(false);
-    expect(isPermissionPresetId(null)).toBe(false);
-    expect(isPermissionPresetId(123)).toBe(false);
-
-    const harness = await nativeHarness();
-    try {
-      harness.policy.permissionPresetIds.push('safety');
-      expect(await harness.authorize(harness.scope, {
-        type: 'tool',
-        toolName: 'permission.preset',
-        input: { presetId: 'safety' },
-        permissionPresetId: 'safety',
-      })).toEqual({ allowed: true });
-
-      expect(await harness.authorize(harness.scope, {
-        type: 'tool',
-        toolName: 'permission.preset',
-        input: { presetId: 'invalid' },
-        permissionPresetId: 'invalid',
-      })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-
-      expect(await harness.authorize(harness.scope, {
-        type: 'tool',
-        toolName: 'permission.preset',
-        input: { presetId: 'auto' },
-        permissionPresetId: 'auto',
-      })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-
-      expect(await harness.authorize(harness.scope, {
-        type: 'tool',
-        toolName: 'permission.preset',
-        input: { presetId: 'ask' },
-        permissionPresetId: 'safety',
-      })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-    } finally {
-      await harness.close();
-    }
   });
 });
 
@@ -346,18 +300,6 @@ describe('proposed-state authorization', () => {
     } finally { await harness.close(); }
   });
 
-  it('C3/C4 authorize the permission preset an agent write introduces', async () => {
-    const harness = await nativeHarness();
-    try {
-      const request = { type: 'tool', toolName: 'permission.preset', input: { presetId: 'auto' }, permissionPresetId: 'auto' };
-      expect(await harness.authorize(harness.scope, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, proposed: true })).toEqual({ allowed: true });
-      expect(await harness.authorize(harness.scope, { ...request, proposed: true, input: { presetId: 'safety' } }))
-        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-      expect(await harness.authorize(harness.scope, { ...request, proposed: true, input: { presetId: 'invented' }, permissionPresetId: 'invented' }))
-        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
-    } finally { await harness.close(); }
-  });
 
   it('C5 authorizes the provider and model a completion introduces', async () => {
     const harness = await nativeHarness();

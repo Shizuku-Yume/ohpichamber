@@ -15,7 +15,7 @@ export const HostNativePolicySnapshotSchema = z.strictObject({
   projectId: EntityIdSchema, workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema,
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
   providers: z.array(z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema, endpoint: z.string().url().optional() })),
-  mcpServers: z.array(MCPServerConfigSchema), agentIds: z.array(EntityIdSchema), permissionPresetIds: z.array(EntityIdSchema),
+  mcpServers: z.array(MCPServerConfigSchema), agentIds: z.array(EntityIdSchema),
 });
 export type HostNativePolicySnapshot = z.infer<typeof HostNativePolicySnapshotSchema>;
 const NativeEditModeSchema = z.enum(['apply_patch', 'hashline', 'none', 'patch', 'replace', 'sloppy']);

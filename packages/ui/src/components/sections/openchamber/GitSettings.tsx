@@ -208,8 +208,9 @@ export const GitSettings: React.FC = () => {
      globalLevel={globalThinkingLevel}
      settingsItem="git.commit-model"
      disabled={isSavingCommitModel || !ompState}
+     loading={!ompState}
      label={t('settings.omp.modelRoles.role.commit.label')}
-     description={t('settings.omp.modelRoles.role.commit.desc')}
+     info={t('settings.omp.modelRoles.role.commit.desc')}
      onChange={handleCommitRoleChange}
     />
     {commitModelError ? (
@@ -254,7 +255,7 @@ export const GitSettings: React.FC = () => {
       checked={commitSettings.generateCommitMessages}
       onChange={(checked) => setCommitSetting('generateCommitMessages', checked)}
       label={t('settings.openchamber.git.commitGeneration.generateMessages.label')}
-      description={t('settings.openchamber.git.commitGeneration.generateMessages.desc')}
+      info={t('settings.openchamber.git.commitGeneration.generateMessages.desc')}
       ariaLabel={t('settings.openchamber.git.commitGeneration.generateMessages.label')}
      />
      <SettingsCheckboxRow
@@ -262,7 +263,7 @@ export const GitSettings: React.FC = () => {
       checked={commitSettings.commitMessageReasoning}
       onChange={(checked) => setCommitSetting('commitMessageReasoning', checked)}
       label={t('settings.openchamber.git.commitGeneration.reasoning.label')}
-      description={t('settings.openchamber.git.commitGeneration.reasoning.desc')}
+      info={t('settings.openchamber.git.commitGeneration.reasoning.desc')}
       ariaLabel={t('settings.openchamber.git.commitGeneration.reasoning.label')}
      />
      <SettingsCheckboxRow
@@ -270,7 +271,7 @@ export const GitSettings: React.FC = () => {
       checked={commitSettings.commitMessageNotes}
       onChange={(checked) => setCommitSetting('commitMessageNotes', checked)}
       label={t('settings.openchamber.git.commitGeneration.notes.label')}
-      description={t('settings.openchamber.git.commitGeneration.notes.desc')}
+      info={t('settings.openchamber.git.commitGeneration.notes.desc')}
       ariaLabel={t('settings.openchamber.git.commitGeneration.notes.label')}
      />
      <SettingsCheckboxRow
@@ -278,7 +279,7 @@ export const GitSettings: React.FC = () => {
       checked={commitSettings.commitMessageChangeId}
       onChange={(checked) => setCommitSetting('commitMessageChangeId', checked)}
       label={t('settings.openchamber.git.commitGeneration.changeId.label')}
-      description={t('settings.openchamber.git.commitGeneration.changeId.desc')}
+      info={t('settings.openchamber.git.commitGeneration.changeId.desc')}
       ariaLabel={t('settings.openchamber.git.commitGeneration.changeId.label')}
      />
     </SettingsControlGroup>

@@ -352,6 +352,7 @@ export const DefaultsSettings: React.FC = () => {
             globalLevel={configuredThinkingLevel || undefined}
             settingsItem="sessions.default-model"
             disabled={isSavingOmp || !ompState}
+            loading={!ompState}
             label={t('settings.openchamber.defaults.field.defaultModel')}
             onChange={handleDefaultModelChange}
           />
@@ -437,6 +438,7 @@ export const DefaultsSettings: React.FC = () => {
           globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.small-model"
           disabled={!usesOwnSmallModel || isSavingOmp || !ompState}
+          loading={!ompState}
           label={t('settings.openchamber.defaults.smallModel.title')}
           onChange={(selector) => setRole('smol', selector)}
         />
@@ -448,8 +450,9 @@ export const DefaultsSettings: React.FC = () => {
             setWalkthroughChoice('__pending__');
             setWalkthroughModel(roleSelectors.default ?? '');
           }}
-          label={t('settings.openchamber.defaults.smallModel.useDefault')}
-          ariaLabel={t('settings.openchamber.defaults.smallModel.useDefaultAria')}
+          label={t('settings.openchamber.defaults.walkthroughModel.useDefault')}
+          ariaLabel={t('settings.openchamber.defaults.walkthroughModel.useDefault')}
+          info={t('settings.openchamber.defaults.walkthroughModel.useDefaultInfo')}
         />
         <ModelRoleEditor
           role="slow"
@@ -459,8 +462,9 @@ export const DefaultsSettings: React.FC = () => {
           globalLevel={configuredThinkingLevel || undefined}
           settingsItem="sessions.walkthrough-model"
           disabled={!usesOwnWalkthroughModel || isSavingOmp || !ompState}
+          loading={!ompState}
           label={t('settings.openchamber.defaults.walkthroughModel.title')}
-          description={t('settings.openchamber.defaults.walkthroughModel.description')}
+          info={t('settings.openchamber.defaults.walkthroughModel.description')}
           onChange={(selector) => setWalkthroughModel(selector)}
         />
       </SettingsSection>
@@ -480,7 +484,7 @@ export const DefaultsSettings: React.FC = () => {
             }}
             label={t('settings.openchamber.defaults.field.planModeAllowAgents')}
             ariaLabel={t('settings.openchamber.defaults.field.planModeAllowAgentsAria')}
-            description={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
+            info={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
           />
           {/* Deletion confirmation is configured with deletion itself, on the
               retention section; this page keeps only session-display switches. */}

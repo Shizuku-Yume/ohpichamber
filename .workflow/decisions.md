@@ -1136,4 +1136,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent
 - **Mine:** yes
 - **Revisit when:** a GUI control starts writing `tools.approvalMode` or `enabledModels`, or task 12 moves the egress endpoints (`collab.*`, `share.*`, `stream.*`) onto a page.
+## 2026-11-14 - Agent tool permissions editor queries live tool catalog and groups tools by domain
+
+- **Decided:** the Agent tool permissions editor queries the live session or workspace tool catalog exposing name, label, description, tier (`read`, `write`, `exec`), and availability (`SessionToolsCatalogSchema`). Tools are grouped into 7 fork-owned domains (files and search, execution, web and external, planning and memory, multi-agent, OpenChamber, MCP and extensions) with collapsible sections, header tri-state checkboxes, and tier chips. Quick actions operate over available tools only, preventing 422 `UNSUPPORTED_CAPABILITY` on profile creation/activation. Dead `permissionPresetId` fields and inputs were deleted.
+- **Instead of:** keeping the static flat 2-4 column grid over `OMP_TOOL_NAMES` and free-text permission preset ID.
+- **Because:** `OMP_TOOL_NAMES` includes uninstalled, unconfigured, or gated tools (e.g. `ida`, `checkpoint`, `memory`, `github`), causing "Show all" to select unavailable tools and crashing profile activation with 422. A live catalog reflects real OMP settings and active extensions, allowing safe tool selection and clear user visibility.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP introduces runtime dynamic tool capability negotiation or fine-grained parameter-level permission rules.
 - **Effort:** ux-feedback-2026-11-12

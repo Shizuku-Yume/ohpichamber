@@ -1231,7 +1231,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const resultSummary = React.useMemo(() => {
         if (!result || (result.isError && !isEvalTool(toolName))) return null;
         const summary = isEvalTool(toolName)
-            ? evalResultSummary(resultContent.details, t)
+            ? evalResultSummary(resultContent.details, t as (key: string, params?: Record<string, unknown>) => string)
             : describeToolResult(resultContent.details, toolName);
         return summary && summary !== described.text ? summary : null;
     }, [described.text, result, resultContent.details, t, toolName]);

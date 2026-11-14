@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -6037,6 +6038,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "השתמש במודל הקטן המוגדר כברירת מחדל",
   "settings.openchamber.defaults.smallModel.thinking": "חשיבה",
   "settings.openchamber.defaults.walkthroughModel.title": "מודל לסיור מודרך בשינויים",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "השתמש במודל הסיור המודרך המוגדר כברירת מחדל",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "כבה כדי לבחור למטה מודל נפרד לסיור המודרך בשינויים.",
   "settings.openchamber.defaults.walkthroughModel.description": "סקירת ה-AI של השינויים צריכה פלט מובנה ומקום להבדלים שלמים, ומודל קטן וזול לרוב לא מסוגל לכך. מודלים שהקטלוג מדווח שאינם מפיקים פלט מובנה מוסתרים מהבורר הזה. אם לא מוגדר, נעשה שימוש במודל הקטן.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "מודל קטן",
   "settings.openchamber.defaults.field.openFilesPreviewAria": "פתח קבצים שניתן להציג בתצוגה מקדימה במצב תצוגה מקדימה",
@@ -9078,6 +9081,7 @@ export const dict = {
   ...tooltipsPanelI18n['he'],
   ...tooltipsChatI18n['he'],
   ...m4LaneDI18n['he'],
+    ...agentToolPermissionsI18n["he"],
   "gitIdentities.state.unknown": "זהויות Git טרם נטענו.",
   "settings.usage.state.unknown": "השימוש טרם נטען.",
   "settings.usage.state.error": "טעינת השימוש נכשלה.",

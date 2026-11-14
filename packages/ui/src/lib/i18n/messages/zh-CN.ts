@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2284,6 +2285,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "使用默认小模型",
   "settings.openchamber.defaults.smallModel.thinking": "思考",
   "settings.openchamber.defaults.walkthroughModel.title": "改动导读模型",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "使用默认导读模型",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "关闭后可在下方为改动导读选择单独的模型。",
   "settings.openchamber.defaults.walkthroughModel.description": "AI 评审改动需要结构化输出和容纳整份差异的空间，廉价的小模型往往做不到。目录中标注为不支持结构化输出的模型不会出现在此列表里。 未选择时将使用小模型。",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "小模型",
   "settings.openchamber.defaults.field.showDeletionDialog": "显示删除对话框",
@@ -9023,7 +9026,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "继承原生默认工具集。",
   "settings.agents.page.field.allowedToolsEdit": "编辑工具",
   "settings.agents.page.field.allowedToolsUseDefault": "使用原生默认值",
-  "settings.agents.page.field.permissionPreset": "权限预设 ID",
   "settings.gitIdentities.editor.description.newProfile": "创建新的 Git 身份配置",
   "settings.gitIdentities.editor.description.editProfile": "编辑身份配置设置",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR 合并后",
@@ -9409,6 +9411,7 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-CN'],
   ...openchamberToolOutputI18n['zh-CN'],
   ...m4LaneDI18n['zh-CN'],
+    ...agentToolPermissionsI18n["zh-CN"],
   "gitIdentities.state.unknown": "Git 身份尚未加载。",
   "settings.usage.state.unknown": "用量尚未加载。",
   "settings.usage.state.error": "用量加载失败。",

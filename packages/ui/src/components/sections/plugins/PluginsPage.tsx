@@ -275,8 +275,7 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
           key={setting.key}
           settingsItem="plugins.secret"
           label={t('settings.plugins.field.secret', { name: setting.key })}
-          description={setting.description}
-          descriptionPlacement="after"
+          info={setting.description}
           controlClassName="w-full max-w-none"
         >
           <div className="w-full space-y-1">
@@ -308,7 +307,7 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
         <SettingsStackedField
           settingsItem="plugins.effectiveSettings"
           label={t('settings.plugins.field.effectiveSettings')}
-          description={t('settings.plugins.field.projectOverride')}
+          info={t('settings.plugins.field.projectOverride')}
           controlClassName="w-full max-w-none"
         >
           <Textarea

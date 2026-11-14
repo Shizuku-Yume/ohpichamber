@@ -440,7 +440,7 @@ export const WebSearchPage: React.FC = () => {
   return (
     <SettingsPageLayout
       title={t('settings.page.webSearch.title')}
-      namedBySidebar
+      description={t('settings.page.webSearch.description')}
       showSaveStatus
     >
       {error !== null || failed ? (

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2284,6 +2285,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "Usar el modelo pequeño predeterminado",
   "settings.openchamber.defaults.smallModel.thinking": "Pensamiento",
   "settings.openchamber.defaults.walkthroughModel.title": "Modelo del recorrido de cambios",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Usar el modelo predeterminado del recorrido",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Desactívalo para elegir abajo un modelo propio para el recorrido de cambios.",
   "settings.openchamber.defaults.walkthroughModel.description": "La revisión con IA de tus cambios necesita salida estructurada y espacio para un diff completo, algo que un modelo pequeño y barato a menudo no ofrece. Los modelos que el catálogo declara incapaces de producir salida estructurada se ocultan aquí. Si no eliges nada, se usa el modelo pequeño.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Modelo pequeño",
   "settings.openchamber.defaults.field.showDeletionDialog": "Mostrar diálogo de eliminación",
@@ -9023,7 +9026,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Hereda el conjunto de herramientas nativo predeterminado.",
   "settings.agents.page.field.allowedToolsEdit": "Editar herramientas",
   "settings.agents.page.field.allowedToolsUseDefault": "Usar valores nativos predeterminados",
-  "settings.agents.page.field.permissionPreset": "ID de preajuste de permisos",
   "settings.gitIdentities.editor.description.newProfile": "Crear una nueva identidad Git",
   "settings.gitIdentities.editor.description.editProfile": "Editar la configuración de la identidad",
   "settings.openchamber.mergedWorktreeCleanup.title": "Después de fusionar un PR",
@@ -9418,6 +9420,7 @@ export const dict = {
   ...tooltipsPanelI18n['es'],
   ...tooltipsChatI18n['es'],
   ...m4LaneDI18n.es,
+    ...agentToolPermissionsI18n["es"],
   "gitIdentities.state.unknown": "Las identidades de Git aún no se han cargado.",
   "settings.usage.state.unknown": "El uso aún no se ha cargado.",
   "settings.usage.state.error": "No se pudo cargar el uso.",

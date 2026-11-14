@@ -83,6 +83,8 @@ interface ModelRoleEditorProps {
   /** Accessible name for the effort control when the row's label is not it. */
   effortLabel?: string;
   disabled?: boolean;
+  /** The role's value is still loading; the picker shows its loading trigger, never the inherit placeholder. */
+  loading?: boolean;
   /** Row layout: a field row in a section, or a stacked cell in a two-column grid. */
   layout?: 'row' | 'stacked';
   /** '' clears the role, which is OMP's explicit inherit state. */
@@ -105,7 +107,7 @@ interface ModelRoleEditorProps {
  */
 export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
   role, roles, models, directory, globalLevel, label, description, info, settingsItem, effortLabel,
-  disabled, layout = 'row', onChange,
+  disabled, loading, layout = 'row', onChange,
 }) => {
   const { t } = useI18n();
   const selector = roles[role] ?? '';
@@ -142,6 +144,7 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
         modelId={parsed?.modelId ?? ''}
         onChange={onModelChange}
         directory={directory}
+        loading={loading}
         placeholder={t('settings.omp.modelRoles.inheritFallback')}
         className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
       />

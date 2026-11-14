@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2284,6 +2285,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "Використовувати типову малу модель",
   "settings.openchamber.defaults.smallModel.thinking": "Мислення",
   "settings.openchamber.defaults.walkthroughModel.title": "Модель для розбору змін",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Використовувати типову модель для розбору",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Вимкніть, щоб нижче вибрати окрему модель для розбору змін.",
   "settings.openchamber.defaults.walkthroughModel.description": "AI-розбір ваших змін потребує structured output і місця під увесь diff, чого дешева small model часто дати не може. Моделі, які за каталогом не вміють structured output, у цьому списку приховані. Якщо нічого не обрано, використовується small model.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Small model",
   "settings.openchamber.defaults.field.showDeletionDialog": "Показати діалогове вікно видалення",
@@ -9023,7 +9026,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Успадковує нативний набір інструментів за замовчуванням.",
   "settings.agents.page.field.allowedToolsEdit": "Редагувати інструменти",
   "settings.agents.page.field.allowedToolsUseDefault": "Використовувати нативні стандартні значення",
-  "settings.agents.page.field.permissionPreset": "ID пресету дозволів",
   "settings.gitIdentities.editor.description.newProfile": "Створити новий профіль Git-ідентичності",
   "settings.gitIdentities.editor.description.editProfile": "Редагувати налаштування профілю ідентичності",
   "settings.openchamber.mergedWorktreeCleanup.title": "Після злиття PR",
@@ -9418,6 +9420,7 @@ export const dict = {
   ...tooltipsPanelI18n['uk'],
   ...tooltipsChatI18n['uk'],
   ...m4LaneDI18n.uk,
+    ...agentToolPermissionsI18n["uk"],
   "gitIdentities.state.unknown": "Ідентичності Git ще не завантажено.",
   "settings.usage.state.unknown": "Використання ще не завантажено.",
   "settings.usage.state.error": "Не вдалося завантажити використання.",

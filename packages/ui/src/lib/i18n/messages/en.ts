@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2317,6 +2318,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "Use default small model",
   "settings.openchamber.defaults.smallModel.thinking": "Thinking",
   "settings.openchamber.defaults.walkthroughModel.title": "Changes walkthrough model",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Use default walkthrough model",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Turn this off to choose a separate model for the changes walkthrough below.",
   "settings.openchamber.defaults.walkthroughModel.description": "The AI review of your changes needs structured output and room for a whole diff, which a cheap small model often cannot give. Models the catalog reports as unable to produce structured output are hidden from this picker. Leave it unset and the small model is used.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Small model",
   "settings.openchamber.defaults.field.openFilesPreviewAria": "Open previewable files in preview mode",
@@ -9062,7 +9065,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Inherits the native default tool set.",
   "settings.agents.page.field.allowedToolsEdit": "Edit tools",
   "settings.agents.page.field.allowedToolsUseDefault": "Use native defaults",
-  "settings.agents.page.field.permissionPreset": "Permission preset ID",
   "settings.gitIdentities.editor.description.newProfile": "Create a new Git identity profile",
   "settings.gitIdentities.editor.description.editProfile": "Edit identity profile settings",
   "settings.openchamber.mergedWorktreeCleanup.title": "After a PR is merged",
@@ -9455,6 +9457,7 @@ export const dict = {
   ...tooltipsPanelI18n['en'],
   ...tooltipsChatI18n['en'],
   ...workerRunsI18n.en,
+    ...agentToolPermissionsI18n["en"],
   "gitIdentities.state.unknown": "Git identities have not loaded yet.",
   "settings.usage.state.unknown": "Usage has not loaded yet.",
   "settings.usage.state.error": "Failed to load usage.",

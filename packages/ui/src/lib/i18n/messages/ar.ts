@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -6037,6 +6038,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "استخدام النموذج الصغير الافتراضي",
   "settings.openchamber.defaults.smallModel.thinking": "التفكير",
   "settings.openchamber.defaults.walkthroughModel.title": "نموذج جولة شرح التغييرات",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "استخدام نموذج الجولة الافتراضي",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "أوقف هذا الخيار لاختيار نموذج منفصل لجولة شرح التغييرات أدناه.",
   "settings.openchamber.defaults.walkthroughModel.description": "تحتاج مراجعة الذكاء الاصطناعي لتغييراتك إلى مخرجات منظمة ومساحة تتسع لكامل الفروقات، وهو ما لا يوفره غالبًا نموذج صغير منخفض التكلفة. تُخفى من هذه القائمة النماذج التي يذكر الكتالوج أنها لا تستطيع إنتاج مخرجات منظمة. إذا تركته دون تعيين، فسيُستخدم النموذج الصغير.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "النموذج الصغير",
   "settings.openchamber.defaults.field.openFilesPreviewAria": "فتح الملفات القابلة للمعاينة في وضع المعاينة",
@@ -9078,6 +9081,7 @@ export const dict = {
   ...tooltipsPanelI18n['ar'],
   ...tooltipsChatI18n['ar'],
   ...m4LaneDI18n['ar'],
+    ...agentToolPermissionsI18n["ar"],
   "gitIdentities.state.unknown": "لم يتم تحميل هويات Git بعد.",
   "settings.usage.state.unknown": "لم يتم تحميل الاستخدام بعد.",
   "settings.usage.state.error": "تعذر تحميل الاستخدام.",

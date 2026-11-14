@@ -28,7 +28,7 @@ export const MergedWorktreeCleanupSettings: React.FC = () => {
         checked={archiveOnMerge}
         onChange={setArchiveOnMerge}
         label={t('settings.openchamber.mergedWorktreeCleanup.field.enable')}
-        description={t('settings.openchamber.mergedWorktreeCleanup.field.enableDescription')}
+        info={t('settings.openchamber.mergedWorktreeCleanup.field.enableDescription')}
       />
     </SettingsSection>
   );

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2380,6 +2381,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "Standaard klein model gebruiken",
   "settings.openchamber.defaults.smallModel.thinking": "Denken",
   "settings.openchamber.defaults.walkthroughModel.title": "Model voor wijzigingsrondleiding",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Standaardmodel voor wijzigingsrondleiding gebruiken",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Schakel dit uit om hieronder een eigen model voor de wijzigingsrondleiding te kiezen.",
   "settings.openchamber.defaults.walkthroughModel.description": "De AI-review van uw wijzigingen vraagt gestructureerde output en ruimte voor een volledige diff, wat een goedkoop klein model vaak niet kan bieden. Modellen die de catalogus als ongeschikt voor gestructureerde output meldt, blijven verborgen in deze kiezer. Laat het veld leeg en het kleine model wordt gebruikt.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Klein model",
   "settings.openchamber.defaults.field.openFilesPreviewAria": "Bestanden die een preview hebben, in previewmodus openen",
@@ -9023,7 +9026,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Erft de native standaardset tools.",
   "settings.agents.page.field.allowedToolsEdit": "Hulpmiddelen bewerken",
   "settings.agents.page.field.allowedToolsUseDefault": "Native standaardwaarden gebruiken",
-  "settings.agents.page.field.permissionPreset": "Toestemmingspreset-ID",
   "settings.gitIdentities.editor.description.newProfile": "Maak een nieuw Git-identiteitsprofiel",
   "settings.gitIdentities.editor.description.editProfile": "Instellingen van het identiteitsprofiel bewerken",
   "settings.openchamber.mergedWorktreeCleanup.title": "Nadat een PR is gemerged",
@@ -9418,6 +9420,7 @@ export const dict = {
   ...tooltipsPanelI18n['nl'],
   ...tooltipsChatI18n['nl'],
   ...m4LaneDI18n.nl,
+    ...agentToolPermissionsI18n["nl"],
   "gitIdentities.state.unknown": "Git-identiteiten zijn nog niet geladen.",
   "settings.usage.state.unknown": "Gebruik is nog niet geladen.",
   "settings.usage.state.error": "Kan gebruik niet laden.",

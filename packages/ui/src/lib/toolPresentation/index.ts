@@ -8,6 +8,12 @@ export { normalizeIntent, intentOf } from './intent';
 export type { ToolGroup, ToolPresentation, ToolOutputLanguage } from './types';
 export { KNOWN_TOOL_NAMES } from './presentations';
 export type { KnownToolName } from './presentations';
+export {
+    categorizeTool,
+    TOOL_PERMISSION_GROUPS,
+    TOOL_ONE_LINE_DESCRIPTIONS,
+    type ToolPermissionGroupKey,
+} from './groups';
 export { useEvalView, splitEvalOutput, evalResultSummary, normalizeEvalLanguage, isToolCallStatusEvent } from './toolView';
 export type { EvalLanguage, EvalTableColumn, EvalView, EvalViewEntry, EvalStatusEvent, EvalCellView, EvalViewData, EvalOutputPart } from './toolView';
 

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2186,6 +2187,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "Utiliser le petit modèle par défaut",
   "settings.openchamber.defaults.smallModel.thinking": "Pensée",
   "settings.openchamber.defaults.walkthroughModel.title": "Modèle du parcours des modifications",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Utiliser le modèle par défaut du parcours",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Désactivez pour choisir ci-dessous un modèle distinct pour le parcours des modifications.",
   "settings.openchamber.defaults.walkthroughModel.description": "La revue par IA de vos modifications exige une sortie structurée et de la place pour un diff entier, ce qu’un petit modèle économique ne fournit pas toujours. Les modèles que le catalogue déclare incapables de sortie structurée sont masqués ici. Sans choix explicite, le petit modèle est utilisé.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Petit modèle",
   "settings.openchamber.defaults.field.showDeletionDialog": "Afficher la boîte de dialogue de suppression",
@@ -9023,7 +9026,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Hérite du jeu d’outils natif par défaut.",
   "settings.agents.page.field.allowedToolsEdit": "Modifier les outils",
   "settings.agents.page.field.allowedToolsUseDefault": "Utiliser les valeurs natives par défaut",
-  "settings.agents.page.field.permissionPreset": "ID de préréglage de permissions",
   "settings.gitIdentities.editor.description.newProfile": "Créer un nouveau profil d'identité Git",
   "settings.gitIdentities.editor.description.editProfile": "Modifier les paramètres du profil d'identité",
   "settings.openchamber.mergedWorktreeCleanup.title": "Après la fusion d'une PR",
@@ -9418,6 +9420,7 @@ export const dict = {
   ...tooltipsPanelI18n['fr'],
   ...tooltipsChatI18n['fr'],
   ...m4LaneDI18n.fr,
+    ...agentToolPermissionsI18n["fr"],
   "gitIdentities.state.unknown": "Les identités Git ne sont pas encore chargées.",
   "settings.usage.state.unknown": "L'utilisation n'est pas encore chargée.",
   "settings.usage.state.error": "Échec du chargement de l'utilisation.",

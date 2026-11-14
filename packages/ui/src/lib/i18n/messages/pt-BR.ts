@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2284,6 +2285,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "Usar o modelo pequeno padrão",
   "settings.openchamber.defaults.smallModel.thinking": "Pensamento",
   "settings.openchamber.defaults.walkthroughModel.title": "Modelo do percurso de mudanças",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "Usar o modelo padrão do percurso",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "Desative para escolher abaixo um modelo separado para o percurso de mudanças.",
   "settings.openchamber.defaults.walkthroughModel.description": "A revisão das suas mudanças por IA precisa de saída estruturada e espaço para um diff inteiro, o que um modelo pequeno e barato muitas vezes não oferece. Modelos que o catálogo indica como incapazes de saída estruturada ficam ocultos aqui. Sem escolha, o modelo pequeno é usado.",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "Modelo pequeno",
   "settings.openchamber.defaults.field.showDeletionDialog": "Mostrar diálogo de eliminación",
@@ -9023,7 +9026,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Herda o conjunto nativo de ferramentas padrão.",
   "settings.agents.page.field.allowedToolsEdit": "Editar ferramentas",
   "settings.agents.page.field.allowedToolsUseDefault": "Usar padrões nativos",
-  "settings.agents.page.field.permissionPreset": "ID da predefinição de permissões",
   "settings.gitIdentities.editor.description.newProfile": "Criar uma nova identidade Git",
   "settings.gitIdentities.editor.description.editProfile": "Editar as configurações da identidade",
   "settings.openchamber.mergedWorktreeCleanup.title": "Depois que um PR é mesclado",
@@ -9409,6 +9411,7 @@ export const dict = {
   ...openchamberToolsLayoutI18n['pt-BR'],
   ...openchamberToolOutputI18n['pt-BR'],
   ...m4LaneDI18n['pt-BR'],
+    ...agentToolPermissionsI18n["pt-BR"],
   "gitIdentities.state.unknown": "As identidades do Git ainda não foram carregadas.",
   "settings.usage.state.unknown": "O uso ainda não foi carregado.",
   "settings.usage.state.error": "Falha ao carregar o uso.",

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -2171,6 +2172,8 @@ export const dict = {
   "settings.openchamber.defaults.smallModel.useDefaultAria": "使用預設小模型",
   "settings.openchamber.defaults.smallModel.thinking": "思考",
   "settings.openchamber.defaults.walkthroughModel.title": "變更導讀模型",
+  "settings.openchamber.defaults.walkthroughModel.useDefault": "使用預設導讀模型",
+  "settings.openchamber.defaults.walkthroughModel.useDefaultInfo": "關閉後可在下方為變更導讀選擇獨立的模型。",
   "settings.openchamber.defaults.walkthroughModel.description": "AI 審閱變更需要結構化輸出與容納整份差異的空間，便宜的小模型常常做不到。目錄標示為不支援結構化輸出的模型不會出現在這份清單中。 未選擇時將使用小模型。",
   "settings.openchamber.defaults.walkthroughModel.usesSmallModel": "小模型",
   "settings.openchamber.defaults.field.showDeletionDialog": "顯示刪除對話方塊",
@@ -9023,7 +9026,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "繼承原生預設工具集。",
   "settings.agents.page.field.allowedToolsEdit": "編輯工具",
   "settings.agents.page.field.allowedToolsUseDefault": "使用原生預設值",
-  "settings.agents.page.field.permissionPreset": "權限預設 ID",
   "settings.gitIdentities.editor.description.newProfile": "建立新的 Git 身分設定",
   "settings.gitIdentities.editor.description.editProfile": "編輯身分設定",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR 合併後",
@@ -9409,6 +9411,7 @@ export const dict = {
   ...openchamberToolsLayoutI18n['zh-TW'],
   ...openchamberToolOutputI18n['zh-TW'],
   ...m4LaneDI18n['zh-TW'],
+    ...agentToolPermissionsI18n["zh-TW"],
   "gitIdentities.state.unknown": "Git 身分尚未載入。",
   "settings.usage.state.unknown": "用量尚未載入。",
   "settings.usage.state.error": "用量載入失敗。",

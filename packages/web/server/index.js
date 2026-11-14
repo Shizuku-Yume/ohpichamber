@@ -925,9 +925,7 @@ const sessionAssistRuntime = createSessionAssistRuntime({
  */
 const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
  projectContextRuntime,
- agentMemoryRuntime,
  resolveProjectId: (directory) => resolveProjectContextId(directory),
- isAgentMemoryEnabled,
  readSessionMetadata: readStoredSessionMetadata,
  // Pins and the delivered-signature cursor are read from OpenChamber's own store.
  persistSessionMetadata: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),

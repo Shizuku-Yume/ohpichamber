@@ -524,7 +524,7 @@ export const OmpSettingsPage: React.FC = () => {
                   layout="stacked"
                   disabled={loading}
                   label={t(keys.label)}
-                  description={t(keys.desc)}
+                  info={t(keys.desc)}
                   settingsItem={`omp.modelRoles.${role}`}
                   onChange={(selector) => onRoleChange(role, selector)}
                 />

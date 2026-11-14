@@ -1145,3 +1145,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OMP introduces runtime dynamic tool capability negotiation or fine-grained parameter-level permission rules.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Enterprise-boundary OMP settings are placed `boundary`: never rendered, written or read by a GUI route
+
+- **Decided:** settings that cross the enterprise boundary (relay, share and stream endpoints, collab and browser relay, image URL listeners, memory and search endpoints and API keys, dev autoqa push, OTLP telemetry) get the placement `boundary`. The OMP route omits them from its state, so their values never reach the browser, and refuses writes to them with 400. They stay editable only in `config.yml`, as before this task, when the OMP settings allowlist did not name them.
+- **Instead of:** `tunnel:collab`, `memory:backend` and `chat:images` page placements, which would have let a GUI write egress targets and read secret values back.
+- **Because:** the enterprise-boundary skill classifies these as egress, exposure, provider entry and telemetry. Their enforcement belongs at the crossing, and the mode's pin knobs do not exist yet. Web, Electron and mobile all reach this route through the same Host, so one enforcement point covers them.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** a later task adds an admin pin for one of these endpoints; that needs the `enterprise-mode.js` knob, its test cases, and moving the `boundary` placement to a page.
+- **Effort:** ux-feedback-2026-11-12

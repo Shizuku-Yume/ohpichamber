@@ -14,6 +14,7 @@ import {
   UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema,
   WebSearchUpdateRequestSchema, WebSearchCredentialWriteRequestSchema, WebSearchCredentialDeleteRequestSchema,
   OmpSettingsUpdateRequestSchema,
+  SessionToolsCatalogSchema,
 } from '@openchamber/agent-contract';
 import type { WorkspaceCatalogs } from './workspaces.ts';
 import type { WorkerRegistry } from './workers.ts';
@@ -73,6 +74,23 @@ export class WorkspaceRoutes {
       const result = await this.catalogs.operation(workspaceId, operation);
       if (result.type !== 'extensions.inventory') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested extensions.inventory operation.');
       return { status: 200, body: result.state };
+    }
+    const workspaceTools = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/tools$/.exec(url.pathname);
+    if (workspaceTools && request.method === 'GET') {
+      const workspaceId = id(workspaceTools[1]);
+      const liveWorker = this.workers.list().find(w => {
+        const bootstrap = this.workers.bootstrap(w.rootSessionId);
+        return bootstrap?.workspaceId === workspaceId;
+      });
+      let result;
+      if (liveWorker) {
+        result = await this.workers.request(liveWorker.rootSessionId, { type: 'tools.catalog' });
+      } else {
+        const root = await this.catalogs.stateless(workspaceId);
+        result = await this.workers.request(root, { type: 'tools.catalog' });
+      }
+      if (result.type !== 'tools.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested tools.catalog operation.');
+      return { status: 200, body: SessionToolsCatalogSchema.parse(result.catalog) };
     }
     const plugins = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/plugins(?:\/(.*))?$/.exec(url.pathname);
     if (plugins) {

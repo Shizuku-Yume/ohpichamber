@@ -1,4 +1,4 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
+import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, SessionToolsCatalogSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
 import { GoalControlRequestSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -112,6 +112,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp.configuration.read') }),
   z.strictObject({ type: z.literal('host-tools.toggle'), toolName: z.string().min(1), enabled: z.boolean() }),
   z.strictObject({ type: z.literal('host-tools.configure'), tools: z.record(z.string(), z.boolean()) }),
+  z.strictObject({ type: z.literal('tools.catalog') }),
 ]);
 export type WorkerOperation = z.infer<typeof WorkerOperationSchema> | { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel'; response?: JsonValue };
 const WorkerApprovalInteractionSchema = z.strictObject({
@@ -169,6 +170,7 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp.configuration'), configuration: MCPConfigurationStateSchema.nullable() }),
   z.strictObject({ type: z.literal('host-tools.toggle'), enabled: z.boolean() }),
   z.strictObject({ type: z.literal('host-tools.configure'), configured: z.literal(true) }),
+  z.strictObject({ type: z.literal('tools.catalog'), catalog: SessionToolsCatalogSchema }),
 ]);
 export type WorkerOperationResult = z.infer<typeof WorkerOperationResultSchema>;
 const WorkerOperationCommandSchema = z.strictObject({

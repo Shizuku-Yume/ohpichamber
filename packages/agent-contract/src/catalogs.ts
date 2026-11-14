@@ -649,3 +649,22 @@ export const SkillExpandResultSchema = z.strictObject({
   worker: CatalogWorkerIdentitySchema, skillId: EntityIdSchema, catalogRevision: CounterSchema, message: z.string().min(1),
 });
 export type SkillExpandResult = z.infer<typeof SkillExpandResultSchema>;
+
+export const ToolTierSchema = z.enum(['read', 'write', 'exec']);
+export type ToolTier = z.infer<typeof ToolTierSchema>;
+
+export const ToolCatalogEntrySchema = z.strictObject({
+  name: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string(),
+  tier: ToolTierSchema,
+  availability: z.boolean(),
+});
+export type ToolCatalogEntry = z.infer<typeof ToolCatalogEntrySchema>;
+
+export const SessionToolsCatalogSchema = z.strictObject({
+  sessionId: EntityIdSchema.optional(),
+  workspaceId: EntityIdSchema.optional(),
+  tools: z.array(ToolCatalogEntrySchema),
+});
+export type SessionToolsCatalog = z.infer<typeof SessionToolsCatalogSchema>;

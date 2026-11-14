@@ -7,7 +7,7 @@ import type { SessionInfo } from '@oh-my-pi/pi-coding-agent/session/session-list
 import { FileSessionStorage } from '@oh-my-pi/pi-coding-agent/session/session-storage';
 import { z } from 'zod';
 import { ApprovalReplySchema, QuestionReplySchema, RuntimeSessionSchema, SessionBranchRequestSchema, SubagentSchema } from '@openchamber/agent-contract';
-import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, SessionRecapEntry, SessionSnapshot, Subagent, SubagentTranscriptResponse, SubagentTreeCostResponse, UsageQueryResult } from '@openchamber/agent-contract';
+import type { ApprovalReply, HistoryPageRequest, ProblemCode, QuestionReply, RuntimeSession, SessionBranchRequest, SessionRecapEntry, SessionSnapshot, SessionToolsCatalog, Subagent, SubagentTranscriptResponse, SubagentTreeCostResponse, UsageQueryResult } from '@openchamber/agent-contract';
 import { listSessionRecaps } from '@oh-my-pi/pi-coding-agent/session/session-index';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 import type { UsageSessionReference, WorkerBootstrap, WorkerInteraction, WorkerOperation, WorkerPolicyRequest } from '../protocol.ts';
@@ -112,7 +112,7 @@ export class SessionRegistry {
     if (pending) return pending;
     const operation = this.openResolved(parsed, replace, undefined, true, undefined, forkOf, forkTicketId);
     this.openings.set(parsed.rootSessionId, operation);
-    void operation.finally(() => { this.openings.delete(parsed.rootSessionId); }).catch(() => {});
+    void operation.finally(() => { this.openings.delete(parsed.rootSessionId); }).catch(() => { });
     return operation;
   }
   async reopen(input: SessionBootstrap): Promise<RuntimeSession> {
@@ -214,12 +214,16 @@ export class SessionRegistry {
           const current = this.workers.info(target.rootSessionId);
           if (!current || current.state !== 'ready' || current.workerGeneration === target.workerGeneration)
             throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The replacement worker generation is not ready');
-          outcomes.push({ rootSessionId: target.rootSessionId, previousGeneration: target.workerGeneration,
-            outcome: 'restarted', workerGeneration: current.workerGeneration });
+          outcomes.push({
+            rootSessionId: target.rootSessionId, previousGeneration: target.workerGeneration,
+            outcome: 'restarted', workerGeneration: current.workerGeneration
+          });
         } catch (error) {
-          outcomes.push({ rootSessionId: target.rootSessionId, previousGeneration: target.workerGeneration,
+          outcomes.push({
+            rootSessionId: target.rootSessionId, previousGeneration: target.workerGeneration,
             outcome: 'failed', error: error instanceof WorkerOperationError || error instanceof SessionReferenceError
-              ? { status: error.status, code: error.code } : { status: 503, code: 'SESSION_RESTORE_FAILED' } });
+              ? { status: error.status, code: error.code } : { status: 503, code: 'SESSION_RESTORE_FAILED' }
+          });
         }
       }
       return outcomes;
@@ -339,7 +343,8 @@ export class SessionRegistry {
 
   private withNativeFacts(current: RuntimeSession, info: SessionInfo): RuntimeSession {
     const createdAt = nativeTime(info.created, current.createdAt);
-    const runtime: RuntimeSession = { ...current, createdAt,
+    const runtime: RuntimeSession = {
+      ...current, createdAt,
       updatedAt: Math.max(createdAt, nativeTime(info.modified, current.updatedAt)),
     };
     const title = nativeTitle(info);
@@ -400,8 +405,10 @@ export class SessionRegistry {
         || (query.workspaceId !== undefined && query.workspaceId !== root.workspaceId)
         || (query.projectId !== undefined && query.projectId !== root.projectId)) continue;
       if (this.controls.has(root.rootSessionId) || this.references.relocation(root.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The root session is controlled or relocating');
-      const common = { rootSessionId: root.rootSessionId, workspaceId: root.workspaceId, projectId: root.projectId,
-        cwd: root.cwd, agentDirectory: root.agentDirectory, sessionsDirectory: root.sessionsDirectory };
+      const common = {
+        rootSessionId: root.rootSessionId, workspaceId: root.workspaceId, projectId: root.projectId,
+        cwd: root.cwd, agentDirectory: root.agentDirectory, sessionsDirectory: root.sessionsDirectory
+      };
       result.push({ ...common, sessionId: root.rootSessionId, sessionFile: root.sessionFile, parentSessionId: root.parentSessionId });
       for (const child of this.references.listSubagents(root.rootSessionId)) {
         if (child.rootSessionId !== root.rootSessionId || child.workspaceId !== root.workspaceId || child.projectId !== root.projectId)
@@ -416,7 +423,7 @@ export class SessionRegistry {
     if (this.deleting.has(rootSessionId) || this.controls.has(rootSessionId) || !this.isCurrentSubagentOwner(rootSessionId, generation)) return;
     const previous = this.subagentLifecycleTails.get(rootSessionId) ?? Promise.resolve();
     const operation = previous.then(() => this.persistSubagent(rootSessionId, generation, input));
-    const settled = operation.catch(() => {});
+    const settled = operation.catch(() => { });
     this.subagentLifecycleTails.set(rootSessionId, settled);
     try { await operation; }
     finally { if (this.subagentLifecycleTails.get(rootSessionId) === settled) this.subagentLifecycleTails.delete(rootSessionId); }
@@ -633,7 +640,7 @@ export class SessionRegistry {
       if (opening) return opening;
       const operation = this.openColdSnapshot(sessionId, rootSessionId, entry, child);
       this.coldSnapshotOpenings.set(sessionId, operation);
-      void operation.finally(() => { this.coldSnapshotOpenings.delete(sessionId); }).catch(() => {});
+      void operation.finally(() => { this.coldSnapshotOpenings.delete(sessionId); }).catch(() => { });
       return operation;
     }
     return this.openColdReadSnapshot(sessionId, rootSessionId, entry, child);
@@ -644,8 +651,10 @@ export class SessionRegistry {
     const { projection, manager } = await this.coldProjection(sessionId);
     try {
       if (this.closing || this.deleting.has(rootSessionId) || this.entries.get(rootSessionId) !== entry) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session entry left service while its snapshot was restored');
-      const journal = new SessionJournal({ sessionId, rootSessionId: entry.reference.rootSessionId,
-        parentSessionId: child?.parentSessionId ?? entry.reference.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
+      const journal = new SessionJournal({
+        sessionId, rootSessionId: entry.reference.rootSessionId,
+        parentSessionId: child?.parentSessionId ?? entry.reference.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath
+      }, projection.seed());
       journal.unavailable();
       return journal.snapshot();
     } finally { await manager.close(); }
@@ -657,9 +666,11 @@ export class SessionRegistry {
     const { projection, manager } = await this.coldProjection(sessionId);
     try {
       if (this.closing || this.deleting.has(rootSessionId) || this.nativeCold.get(sessionId) !== native) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session entry left service while its native snapshot was restored');
-      const journal = new SessionJournal({ sessionId, rootSessionId: native.identity.rootSessionId,
+      const journal = new SessionJournal({
+        sessionId, rootSessionId: native.identity.rootSessionId,
         parentSessionId: child?.parentSessionId ?? native.identity.parentSessionId, projectId: native.workspace.projectId,
-        workspaceId: native.workspace.workspaceId, displayPath: 'workspace' }, projection.seed());
+        workspaceId: native.workspace.workspaceId, displayPath: 'workspace'
+      }, projection.seed());
       journal.unavailable();
       return journal.snapshot();
     } finally { await manager.close(); }
@@ -671,8 +682,10 @@ export class SessionRegistry {
       // The journal is cached rather than closed here: the stream that follows
       // this snapshot must replay from the same epoch the cursor names.
       if (this.closing || this.deleting.has(rootSessionId) || this.entries.get(rootSessionId) !== entry) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session entry left service while its cold snapshot was restored');
-      const journal = new SessionJournal({ sessionId, rootSessionId: entry.reference.rootSessionId,
-        parentSessionId: child?.parentSessionId ?? entry.reference.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath }, projection.seed());
+      const journal = new SessionJournal({
+        sessionId, rootSessionId: entry.reference.rootSessionId,
+        parentSessionId: child?.parentSessionId ?? entry.reference.parentSessionId, projectId: entry.reference.projectId, workspaceId: entry.reference.workspaceId, displayPath: entry.reference.displayPath
+      }, projection.seed());
       journal.unavailable();
       this.coldJournals.set(sessionId, journal);
       return journal.snapshot();
@@ -720,77 +733,79 @@ export class SessionRegistry {
       throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The worktree delete request does not match the recorded reference');
     if (saved?.state === 'completed') return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
     this.deleting.add(sessionId);
-    try { return await this.workers.withStoppedRoot(sessionId, async () => {
-      try { await access(reference.cwd); throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The workspace directory is still reachable, so the delete is refused'); }
-      catch (error) {
-        if (error instanceof WorkerOperationError) throw error;
-        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session directory could not be inspected');
-      }
-      const entry = this.entries.get(sessionId);
-      if (entry?.state !== 'unloaded' && entry?.opened?.journal.runtime().activeRunId !== null && entry?.opened) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session has an active run');
-      const rootFile = reference.sessionFile;
-      if (!isAbsolute(rootFile) || !rootFile.endsWith('.jsonl')) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The session file is not an absolute .jsonl path');
-      const storage = reference.sessionsDirectory ?? SessionManager.getDefaultSessionDir(reference.cwd, reference.agentDirectory);
-      const storagePath = await realpath(storage);
-      const storageRelative = relative(storagePath, rootFile);
-      if (!storageRelative || storageRelative === '..' || storageRelative.startsWith(`..${sep}`) || isAbsolute(storageRelative))
-        throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The session file is outside the session storage directory');
-      let rootExists = true;
-      try { await access(rootFile); } catch (error) {
-        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session file could not be inspected');
-        rootExists = false;
-      }
-      if (!rootExists && !saved) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The root session file and its record are both gone');
-      if (rootExists) {
-        if (await realpath(rootFile) !== rootFile) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The session file path is not canonical');
-        const rootIdentity = await this.readSubagentIdentity(rootFile);
-        if (!rootIdentity || (saved && rootIdentity.childSessionId !== saved.nativeSessionId)
-          || this.references.list().items.some(other => other.rootSessionId !== sessionId && other.sessionFile === rootFile))
-          throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The root session identity does not match its recorded reference');
-        const paths = new Map<string, string>([[sessionId, rootFile], ...children.map(child => [child.childSessionId, child.sessionFile] as const)]);
-        const artifacts = rootFile.slice(0, -6);
-        for (const child of children) {
-          const childRelative = relative(artifacts, child.sessionFile);
-          if (!childRelative || childRelative === '..' || childRelative.startsWith(`..${sep}`) || isAbsolute(childRelative)
-            || await realpath(child.sessionFile) !== child.sessionFile) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The subagent session file is outside the artifact directory or not canonical');
-          const identity = await this.readSubagentIdentity(child.sessionFile);
-          if (!identity || identity.childSessionId !== child.childSessionId || identity.parentSessionFile !== paths.get(child.parentSessionId))
-            throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The subagent identity does not match its recorded reference');
+    try {
+      return await this.workers.withStoppedRoot(sessionId, async () => {
+        try { await access(reference.cwd); throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The workspace directory is still reachable, so the delete is refused'); }
+        catch (error) {
+          if (error instanceof WorkerOperationError) throw error;
+          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session directory could not be inspected');
         }
-        if (!saved) {
-          let artifactIdentity = null;
-          try {
-            const stat = await lstat(artifacts, { bigint: true });
-            if (!stat.isDirectory() || await realpath(artifacts) !== artifacts) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The artifact directory is not canonical');
-            artifactIdentity = { device: stat.dev.toString(), inode: stat.ino.toString() };
-          } catch (error) {
-            if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+        const entry = this.entries.get(sessionId);
+        if (entry?.state !== 'unloaded' && entry?.opened?.journal.runtime().activeRunId !== null && entry?.opened) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session has an active run');
+        const rootFile = reference.sessionFile;
+        if (!isAbsolute(rootFile) || !rootFile.endsWith('.jsonl')) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The session file is not an absolute .jsonl path');
+        const storage = reference.sessionsDirectory ?? SessionManager.getDefaultSessionDir(reference.cwd, reference.agentDirectory);
+        const storagePath = await realpath(storage);
+        const storageRelative = relative(storagePath, rootFile);
+        if (!storageRelative || storageRelative === '..' || storageRelative.startsWith(`..${sep}`) || isAbsolute(storageRelative))
+          throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The session file is outside the session storage directory');
+        let rootExists = true;
+        try { await access(rootFile); } catch (error) {
+          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session file could not be inspected');
+          rootExists = false;
+        }
+        if (!rootExists && !saved) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The root session file and its record are both gone');
+        if (rootExists) {
+          if (await realpath(rootFile) !== rootFile) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The session file path is not canonical');
+          const rootIdentity = await this.readSubagentIdentity(rootFile);
+          if (!rootIdentity || (saved && rootIdentity.childSessionId !== saved.nativeSessionId)
+            || this.references.list().items.some(other => other.rootSessionId !== sessionId && other.sessionFile === rootFile))
+            throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The root session identity does not match its recorded reference');
+          const paths = new Map<string, string>([[sessionId, rootFile], ...children.map(child => [child.childSessionId, child.sessionFile] as const)]);
+          const artifacts = rootFile.slice(0, -6);
+          for (const child of children) {
+            const childRelative = relative(artifacts, child.sessionFile);
+            if (!childRelative || childRelative === '..' || childRelative.startsWith(`..${sep}`) || isAbsolute(childRelative)
+              || await realpath(child.sessionFile) !== child.sessionFile) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The subagent session file is outside the artifact directory or not canonical');
+            const identity = await this.readSubagentIdentity(child.sessionFile);
+            if (!identity || identity.childSessionId !== child.childSessionId || identity.parentSessionFile !== paths.get(child.parentSessionId))
+              throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The subagent identity does not match its recorded reference');
           }
-          await this.references.beginWorktreeDelete({ operationId: expected.operationId, nativeSessionId: rootIdentity.childSessionId, reference, children, artifacts: artifactIdentity, state: 'pending' });
+          if (!saved) {
+            let artifactIdentity = null;
+            try {
+              const stat = await lstat(artifacts, { bigint: true });
+              if (!stat.isDirectory() || await realpath(artifacts) !== artifacts) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The artifact directory is not canonical');
+              artifactIdentity = { device: stat.dev.toString(), inode: stat.ino.toString() };
+            } catch (error) {
+              if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+            }
+            await this.references.beginWorktreeDelete({ operationId: expected.operationId, nativeSessionId: rootIdentity.childSessionId, reference, children, artifacts: artifactIdentity, state: 'pending' });
+          }
+          const manager = SessionManager.create(reference.cwd, reference.sessionsDirectory);
+          try { await manager.dropSession(rootFile); } finally { await manager.close(); }
         }
-        const manager = SessionManager.create(reference.cwd, reference.sessionsDirectory);
-        try { await manager.dropSession(rootFile); } finally { await manager.close(); }
-      }
-      // The SDK unlinks the transcript before removing its sibling artifact tree.
-      // Resume that cleanup only for the exact directory captured before deletion.
-      try {
-        const artifactPath = rootFile.slice(0, -6);
-        const stat = await lstat(artifactPath, { bigint: true });
-        const identity = (saved ?? this.references.worktreeDelete(sessionId))?.artifacts;
-        if (!identity || !stat.isDirectory() || stat.dev.toString() !== identity.device || stat.ino.toString() !== identity.inode
-          || await realpath(artifactPath) !== artifactPath) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The artifact path does not match its recorded identity');
-        await rm(artifactPath, { recursive: true });
-      } catch (error) {
-        if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
-      }
-      await this.references.completeWorktreeDelete(sessionId, expected.operationId);
-      this.releaseColdJournals(sessionId, children);
-      if (entry?.state !== 'unloaded') entry?.opened?.journal.close();
-      this.interactions.closeSession(sessionId);
-      this.entries.delete(sessionId);
-      for (const child of children) this.subagents.delete(child.subagentId);
-      return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
-    }); } finally { this.deleting.delete(sessionId); }
+        // The SDK unlinks the transcript before removing its sibling artifact tree.
+        // Resume that cleanup only for the exact directory captured before deletion.
+        try {
+          const artifactPath = rootFile.slice(0, -6);
+          const stat = await lstat(artifactPath, { bigint: true });
+          const identity = (saved ?? this.references.worktreeDelete(sessionId))?.artifacts;
+          if (!identity || !stat.isDirectory() || stat.dev.toString() !== identity.device || stat.ino.toString() !== identity.inode
+            || await realpath(artifactPath) !== artifactPath) throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The artifact path does not match its recorded identity');
+          await rm(artifactPath, { recursive: true });
+        } catch (error) {
+          if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+        }
+        await this.references.completeWorktreeDelete(sessionId, expected.operationId);
+        this.releaseColdJournals(sessionId, children);
+        if (entry?.state !== 'unloaded') entry?.opened?.journal.close();
+        this.interactions.closeSession(sessionId);
+        this.entries.delete(sessionId);
+        for (const child of children) this.subagents.delete(child.subagentId);
+        return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
+      });
+    } finally { this.deleting.delete(sessionId); }
   }
 
   retireWorktreeArchiveDelete(sessionId: string, expected: { operationId: string; projectId: string; workspaceId: string; agentDirectoryId: string; sessionIds: string[] }): Promise<void> {
@@ -943,8 +958,12 @@ export class SessionRegistry {
     this.ensureOpen();
     if (!this.entries.has(sessionId)) throw new WorkerOperationError(404, 'SESSION_NOT_FOUND', 'The session is not listed');
     const intent = this.references.relocation(sessionId);
-    return { relocation: intent ? { transactionId: intent.transactionId, sourceWorkspaceId: intent.source.workspaceId,
-      destinationWorkspaceId: intent.destination.workspaceId } : null };
+    return {
+      relocation: intent ? {
+        transactionId: intent.transactionId, sourceWorkspaceId: intent.source.workspaceId,
+        destinationWorkspaceId: intent.destination.workspaceId
+      } : null
+    };
   }
 
   async prepareRelocation(sessionId: string, input: HostSessionRelocationPrepare, admit: RelocationAdmission) {
@@ -980,10 +999,13 @@ export class SessionRegistry {
       const header = manager.getHeader();
       if (!header) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session header is missing');
       const sessionsDirectory = SessionManager.getDefaultSessionDir(destination.cwd, destination.agentDirectory);
-      intent = { transactionId: request.transactionId, source,
-        destination: { ...source, workspaceId: destination.workspaceId, cwd: destination.cwd,
+      intent = {
+        transactionId: request.transactionId, source,
+        destination: {
+          ...source, workspaceId: destination.workspaceId, cwd: destination.cwd,
           displayPath: destination.displayPath, sessionsDirectory, sessionFile: join(sessionsDirectory, basename(source.sessionFile)),
-          mcpConfigPath: join(destination.cwd, '.omp', 'mcp.json'), updatedAt: Date.now() },
+          mcpConfigPath: join(destination.cwd, '.omp', 'mcp.json'), updatedAt: Date.now()
+        },
         sourceHeader: { id: header.id, cwd: header.cwd, additionalDirectories: header.additionalDirectories, previousSessionFiles: header.previousSessionFiles },
         ...(destination.env ? { environment: destination.env } : undefined),
       };
@@ -1066,9 +1088,13 @@ export class SessionRegistry {
       if (manager.getHeader()?.id !== intent.sourceHeader.id) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The moved session header does not match the source');
       const snapshot = manager.captureState();
       const currentArtifacts = manager.getArtifactsDir();
-      await manager.rollbackMove({ ...snapshot, cwd: intent.source.cwd, sessionDir: dirname(intent.source.sessionFile), sessionFile: intent.source.sessionFile,
-        header: { ...snapshot.header, cwd: intent.sourceHeader.cwd, additionalDirectories: intent.sourceHeader.additionalDirectories,
-          previousSessionFiles: intent.sourceHeader.previousSessionFiles } });
+      await manager.rollbackMove({
+        ...snapshot, cwd: intent.source.cwd, sessionDir: dirname(intent.source.sessionFile), sessionFile: intent.source.sessionFile,
+        header: {
+          ...snapshot.header, cwd: intent.sourceHeader.cwd, additionalDirectories: intent.sourceHeader.additionalDirectories,
+          previousSessionFiles: intent.sourceHeader.previousSessionFiles
+        }
+      });
       const restoredArtifacts = manager.getArtifactsDir();
       if (currentArtifacts && restoredArtifacts) await this.relocateSubagentFiles(id, currentArtifacts, restoredArtifacts, intent.source.workspaceId, intent.source.projectId);
       actual = { ...intent.source, updatedAt: Date.now() };
@@ -1238,6 +1264,13 @@ export class SessionRegistry {
     if (result.type !== 'subagents.tree-cost') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested subagents.tree-cost operation.');
     return result.cost;
   }
+  async tools(sessionId: string): Promise<SessionToolsCatalog> {
+    this.ensureOpen();
+    this.get(sessionId);
+    const result = await this.workers.request(sessionId, { type: 'tools.catalog' });
+    if (result.type !== 'tools.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested tools.catalog operation.');
+    return result.catalog;
+  }
   async reviveSubagent(sessionId: string, subagentId: string, message?: string) {
     this.ensureOpen(); this.assertWritable(sessionId);
     const result = await this.workers.request(sessionId, message === undefined
@@ -1348,11 +1381,13 @@ export class SessionRegistry {
     const journal = entry.opened?.journal;
     if (entry.opened) this.interactions.invalidate(sessionId, entry.opened.generation);
     if (journal) journal.replace(seed);
-    const opened = { generation, sessionFile, journal: journal ?? new SessionJournal({
-      sessionId, rootSessionId: sessionId, projectId: entry.input.projectId,
-      workspaceId: entry.input.workspaceId, displayPath: entry.input.displayPath,
-      parentSessionId: entry.input.parentSessionId,
-    }, seed) };
+    const opened = {
+      generation, sessionFile, journal: journal ?? new SessionJournal({
+        sessionId, rootSessionId: sessionId, projectId: entry.input.projectId,
+        workspaceId: entry.input.workspaceId, displayPath: entry.input.displayPath,
+        parentSessionId: entry.input.parentSessionId,
+      }, seed)
+    };
     entry.opened = opened;
     this.openInteractions(sessionId, opened, entry.input.workspaceId);
   }
@@ -1376,7 +1411,7 @@ export class SessionRegistry {
     }
     catch {
       entry.opened.journal.unavailable();
-      void this.workers.stop(sessionId).catch(() => {});
+      void this.workers.stop(sessionId).catch(() => { });
     }
   }
   onInteraction(sessionId: string, generation: string, interaction: WorkerInteraction): void {
@@ -1387,7 +1422,7 @@ export class SessionRegistry {
     catch {
       this.interactions.invalidate(sessionId, generation);
       entry.opened.journal.unavailable();
-      void this.workers.stop(sessionId).catch(() => {});
+      void this.workers.stop(sessionId).catch(() => { });
     }
   }
 

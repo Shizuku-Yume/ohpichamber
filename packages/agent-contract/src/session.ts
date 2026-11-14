@@ -38,7 +38,7 @@ export const AgentSchema = z.strictObject({
   agentId: EntityIdSchema, name: z.string().min(1), description: z.string(),
   model: z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema }).nullable(),
   allowedTools: z.array(z.string().min(1)).nullable(),
-  systemPromptOverride: z.string().optional(), permissionPresetId: EntityIdSchema.optional(),
+  systemPromptOverride: z.string().optional(),
   thinkingLevel: AgentThinkingLevelSchema.optional(),
   spawns: z.union([z.array(z.string().min(1)), z.literal('*')]).optional(),
   blocking: z.boolean().optional(),

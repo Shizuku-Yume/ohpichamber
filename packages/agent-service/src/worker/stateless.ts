@@ -2,6 +2,7 @@ import { dirname, join } from 'node:path';
 import { NativeProviderOAuth } from './provider-oauth.ts';
 import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, MCPConfigurationStateSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
+import { resolveBuiltinToolPlan } from '@oh-my-pi/pi-coding-agent/tools';
 import { CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, type CatalogResult } from '../catalogs/protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -112,6 +113,29 @@ export class StatelessWorker {
     if (this.closed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Workspace worker is closed');
     if (operation.type === 'web-search') return { type: 'web-search', result: await this.webSearch.operation(operation.operation) };
     if (this.webSearch.requiresRestart) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings require a fresh workspace worker');
+    if (operation.type === 'tools.catalog') {
+      const plan = await resolveBuiltinToolPlan({
+        cwd: this.input.cwd,
+        settings: this.runtime.settings,
+        hasUI: false,
+        enableLsp: true,
+        taskDepth: 0,
+        getSessionFile: () => null,
+        getSessionSpawns: () => null,
+      });
+      const tools = BUILTIN_TOOL_NAMES.map(name => {
+        const tier = ['read', 'glob', 'grep', 'find'].includes(name) ? 'read' as const : ['write', 'edit', 'apply_patch'].includes(name) ? 'write' as const : 'exec' as const;
+        const label = name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' ');
+        return {
+          name,
+          label,
+          description: '',
+          tier,
+          availability: plan.names.includes(name),
+        };
+      });
+      return { type: 'tools.catalog', catalog: { workspaceId: this.input.workspaceId, tools } };
+    }
     if (operation.type === 'mcp.configuration.read') return { type: 'mcp.configuration', configuration: await this.readConfiguration() };
     if (operation.type === 'catalog') return { type: 'catalog', result: await this.catalog(operation.operation, operation.revision) };
     if (operation.type === 'mcp' && operation.operation.type === 'persist') {

@@ -871,6 +871,31 @@ test('actual SDK Host tool executes with Host-supplied first-use MCP storage and
   expect(harness.fatal()).toBe(false);
  } finally { unsubscribe(); await harness.close(); }
 }, 30000);
+test('service returns tool catalog (name, label, description, tier, availability) for a live session', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const result = await harness.worker.operation({ type: 'tools.catalog' });
+  expect(result.type).toBe('tools.catalog');
+  if (result.type !== 'tools.catalog') throw new Error('Expected tools.catalog result');
+  const catalog = result.catalog;
+  expect(catalog.sessionId).toBe(harness.worker.sessionId);
+  expect(catalog.tools.length).toBeGreaterThan(0);
+  const readTool = catalog.tools.find(t => t.name === 'read');
+  expect(readTool).toBeDefined();
+  for (const tool of catalog.tools) {
+   expect(typeof tool.name).toBe('string');
+   expect(typeof tool.label).toBe('string');
+   expect(typeof tool.description).toBe('string');
+   expect(['read', 'write', 'exec']).toContain(tool.tier);
+   expect(tool.availability).toBe(true);
+  }
+  expect(readTool?.name).toBe('read');
+  expect(readTool?.tier).toBe('read');
+  expect(readTool?.availability).toBe(true);
+ } finally {
+  await harness.close();
+ }
+});
 
 test('worker sends plain OMP system and developer context plus only the user pin', async () => {
  const marker = 'PARITY_PROMPT_MARKER';

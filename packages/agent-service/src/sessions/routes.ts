@@ -5,10 +5,12 @@ import {
  SubagentListResponseSchema,
  SubagentTranscriptResponseSchema,
  SubagentTreeCostResponseSchema,
+ SessionToolsCatalogSchema,
  type SessionRecapListResponse,
  type SubagentListResponse,
  type SubagentTranscriptResponse,
  type SubagentTreeCostResponse,
+ type SessionToolsCatalog,
 } from '@openchamber/agent-contract';
 import { WorkerOperationError } from '../supervisor/workers.ts';
 import type { SessionRegistry } from './registry.ts';
@@ -16,7 +18,7 @@ import type { SessionRegistry } from './registry.ts';
 /** Public session read routes owned by the recap and Agent Hub surfaces. */
 export interface SessionSurfaceResponse {
  status: number;
- body: SessionRecapListResponse | SubagentListResponse | SubagentTranscriptResponse | SubagentTreeCostResponse;
+ body: SessionRecapListResponse | SubagentListResponse | SubagentTranscriptResponse | SubagentTreeCostResponse | SessionToolsCatalog;
 }
 
 function identity(value: string): string {
@@ -47,6 +49,11 @@ export async function sessionSurfaceRoute(
  if (recaps) {
   const sessionId = identity(recaps[1]);
   return { status: 200, body: SessionRecapListResponseSchema.parse({ recaps: await sessions.listRecaps(sessionId) }) };
+ }
+ const tools = /^\/api\/agent\/v1\/sessions\/([^/]+)\/tools(?:\/catalog)?$/.exec(url.pathname);
+ if (tools) {
+  const sessionId = identity(tools[1]);
+  return { status: 200, body: SessionToolsCatalogSchema.parse(await sessions.tools(sessionId)) };
  }
  const hub = /^\/api\/agent\/v1\/sessions\/([^/]+)\/subagents(?:\/(.+))?$/.exec(url.pathname);
  if (!hub) return null;

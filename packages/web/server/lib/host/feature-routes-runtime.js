@@ -556,7 +556,9 @@ export const createFeatureRoutesRuntime = () => {
     // A session's turn ended: a followed pull request may have moved, so the
     // tracked items refresh, and the directory is told to look again.
     globalEventHub?.subscribeEvent((event, scope) => {
-      if (event.type !== 'session.status' || event.runtimeStatus !== 'idle') return;
+      const isIdle = (event.type === 'session.status' && event.runtimeStatus === 'idle')
+        || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled';
+      if (!isIdle) return;
       trackedItemsService.noteTurnFinished();
       providerReadCache.clear();
       if (scope?.cwd) announceTurnFinished(scope.cwd);

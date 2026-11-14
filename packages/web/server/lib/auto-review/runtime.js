@@ -657,10 +657,14 @@ export function createAutoReviewRuntime({
       }
       return;
     }
-    if (event.type !== 'session.status') return;
+    const isIdle = (event.type === 'session.status' && event.runtimeStatus === 'idle')
+      || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled';
+    const isBusy = (event.type === 'session.status' && event.runtimeStatus !== 'idle')
+      || event.type === 'run.started';
+    if (!isIdle && !isBusy) return;
     for (const run of runs.values()) {
       if (run.status !== 'running' || watchedSessionOf(run) !== event.sessionId) continue;
-      if (event.runtimeStatus === 'idle') {
+      if (isIdle) {
         settleChecks.delete(run.originalSessionID);
         arm(run.originalSessionID);
       } else {

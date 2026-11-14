@@ -620,7 +620,9 @@ export function createPrWatchRuntime({
       }
       return;
     }
-    if (event.type !== 'session.status' || event.runtimeStatus !== 'idle') return;
+    const isIdle = (event.type === 'session.status' && event.runtimeStatus === 'idle')
+      || event.type === 'run.completed' || event.type === 'run.failed' || event.type === 'run.cancelled';
+    if (!isIdle) return;
     if (watches.get(event.sessionId)?.wake) arm(event.sessionId);
   };
 

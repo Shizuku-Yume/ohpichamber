@@ -198,6 +198,12 @@ const measureCreateRunFirstEvent = async (client, workspace, model, iterations =
   const firstDeltaAfterRunSamples = []
 
   for (let index = 0; index < iterations; index += 1) {
+    // Mirror the UI opening the new-chat composer for the workspace before the user sends
+    await client.json("/api/agent/v1/sessions/prepare", {
+      method: "POST",
+      body: JSON.stringify({ projectId: workspace.projectId, workspaceId: workspace.workspaceId }),
+    })
+
     const sendStarted = performance.now()
     const sessionRes = await timed(() => client.json("/api/agent/v1/sessions", {
       method: "POST",

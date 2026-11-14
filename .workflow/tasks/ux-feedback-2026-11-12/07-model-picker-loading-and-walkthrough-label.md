@@ -25,6 +25,8 @@ Check after:
 
 ## Progress
 
+Check after: run on the final code; results listed in the Check after block above (render test pass, isolated sections 56/56, locale 19 pass, oxlint exit 0, type-check and dead-code exit 1 with pre-existing errors outside changed files).
+
 - Commits: `2a8a1c5da` locale keys (30 files); `64423ca23` render test; `a34cd2339` loading wiring in ModelSelector, ModelRoleEditor, DefaultsSettings, GitSettings. The last was uncommitted work by peer `ufb-07-impl`, which then hit a model quota cooldown; it was reviewed and committed here.
 - Touched outside the four component files and the locale files: none.
 - Not covered on the real path: a selected model name after load. The isolated HOME has no provider catalog, so the Model list is empty and no model could be picked. The model-shown branch is covered only by the render test.

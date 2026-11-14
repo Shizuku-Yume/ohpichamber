@@ -6,7 +6,9 @@ import {
   readNativeMcpConfigurationIfPresent,
   writeNativeMcpConfiguration,
   NativeMcpError,
+  WorkerMcp,
 } from './mcp.ts';
+import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { MCPConfigurationState } from '@openchamber/agent-contract';
 
 describe('MCP configuration management and unmanaged projection', () => {
@@ -364,5 +366,48 @@ describe('user-scope MCP storage in a temp HOME keeps native entries and credent
       expect(first?.config.servers.find(server => server.serverId === 'figma')?.transport).toEqual(httpTransport);
       expect(first?.config.servers.find(server => server.serverId === 'local-env')?.transport).toEqual(stdioTransport);
     });
+  });
+});
+
+describe('user-scope OAuth through WorkerMcp on real files', () => {
+  test('oauth status and disconnect read the user-scope server from userConfigPath', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'mcp-oauth-home-'));
+    try {
+      const agentDir = join(home, '.omp', 'agent');
+      const projectDir = join(home, 'project');
+      await mkdir(agentDir, { recursive: true });
+      await mkdir(projectDir, { recursive: true });
+      const userPath = join(agentDir, 'mcp.json');
+      const projectPath = join(projectDir, '.omp', 'mcp.json');
+      await writeFile(userPath, `${JSON.stringify({
+        mcpServers: { figma: { type: 'http', url: 'https://mcp.figma.example/mcp' } },
+      }, null, 2)}\n`, 'utf8');
+      const configuration = await readNativeMcpConfigurationIfPresent(projectPath, 'workspace-1', userPath);
+      if (!configuration) throw new Error('user-scope server must be readable');
+      expect(configuration.config.servers.map(server => server.serverId)).toEqual(['figma']);
+
+      const authStorage = await discoverAuthStorage(agentDir, { cwd: projectDir });
+      const mcp = new WorkerMcp({
+        cwd: projectDir,
+        configPath: projectPath,
+        userConfigPath: userPath,
+        worker: { rootSessionId: 'root-1', workspaceId: 'workspace-1', workerGeneration: 'generation-1' },
+        authStorage,
+        resolveCredentialRef: async reference => reference,
+        resolveCommand: async command => command.command,
+        authorizeServer: async () => { },
+        authorizeOAuth: async () => { },
+        sanitizeTool: tool => tool,
+        onCatalog: () => { },
+        onRuntimeFailure: () => { },
+        isCurrent: () => true,
+      });
+      const status = await mcp.oauthRead('figma', configuration);
+      expect(status).toMatchObject({ serverId: 'figma', status: 'unauthenticated', authenticated: false });
+      const disconnected = await mcp.oauthExecute('figma', { action: 'disconnect', persistedRevision: configuration.persistedRevision, workerGeneration: 'generation-1' }, configuration);
+      expect(disconnected).toMatchObject({ serverId: 'figma', status: 'unauthenticated' });
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
   });
 });

@@ -1572,9 +1572,10 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     }
 
     void recoverStaleDraftDirectory(nextDraft)
-    const targetProject = selectedProject ?? activeProject
-    if (targetProject) {
-      void canonicalClient.prepareSession({ projectId: targetProject.id, workspaceId: targetProject.id }).catch(() => undefined)
+    if (directory) {
+      void canonicalClient.resolveWorkspace(directory)
+        .then((ws) => canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
+        .catch(() => undefined)
     }
   },
 
@@ -1614,8 +1615,11 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     if (currentDraft.preparedChatDirectory) {
       void deleteChatDirectory(currentDraft.preparedChatDirectory).catch(() => undefined)
     }
-    if (currentDraft.selectedProjectId) {
-      void canonicalClient.discardPreparedSession({ workspaceId: currentDraft.selectedProjectId }).catch(() => undefined)
+    const dir = currentDraft.directoryOverride ?? useDirectoryStore.getState().currentDirectory
+    if (dir) {
+      void canonicalClient.resolveWorkspace(dir)
+        .then((ws) => canonicalClient.discardPreparedSession({ workspaceId: ws.workspaceId }))
+        .catch(() => undefined)
     }
     if (
       !currentDraft.open

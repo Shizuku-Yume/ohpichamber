@@ -164,6 +164,10 @@ test('a deferred registration failure surfaces with its cause as a session error
     expect(diagnostic.level).toBe('error');
     expect(diagnostic.rootSessionId).toBe(rootSessionId);
     expect(diagnostic.message).toContain(sentinelCause);
+    // Wait for the worker to fully exit and trigger onExit before inspecting runtime/submitting run
+    const { promise: delay, resolve: resolveDelay } = Promise.withResolvers<void>();
+    setTimeout(resolveDelay, 150);
+    await delay;
     // 2. Verify the session runtime surfaces the cause
     // Registration failure calls sessions.registrationFailed(rootSessionId, generation, cause),
     // which marks the journal unavailable with that cause.

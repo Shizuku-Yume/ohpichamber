@@ -183,8 +183,10 @@ export class SessionJournal {
 
   unavailable(reason = 'SDK worker is unavailable'): void {
     if (this.closed) return;
-    this.unavailableReason = reason;
-    if (this.activeRunId) this.settleRun(this.activeRunId, 'failed', Date.now(), reason);
+    if (!this.unavailableReason || reason !== 'SDK worker is unavailable') {
+      this.unavailableReason = reason;
+    }
+    if (this.activeRunId) this.settleRun(this.activeRunId, 'failed', Date.now(), this.unavailableReason);
     this.resetEpoch();
     this.runtimeStatus = 'unavailable'; this.activeRunId = null;
     this.continuationPending = false;

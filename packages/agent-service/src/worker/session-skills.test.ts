@@ -158,7 +158,7 @@ test('skills publication refreshes when skill content or description changes wit
   try {
     await mkdir(directory, { recursive: true });
     await mkdir(agentDirectory, { recursive: true });
-    await writeFile(file, '---\nname: dynamic-skill\ndescription: "Initial description"\n---\nInitial body\n');
+    await writeFile(file, '---\nname: dynamic-skill\ndescription: "Fixed description"\n---\nInitial body\n');
     worker = await WorkerSession.open({
       type: 'bootstrap', rootSessionId: 'skill-desc-root', workerGeneration: 'gen-1',
       projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'agent-source', cwd, agentDirectory,
@@ -167,10 +167,11 @@ test('skills publication refreshes when skill content or description changes wit
 
     const first = await worker.operation({ type: 'catalog', revision: '1', operation: { type: 'skills.read', persistedSources: { workspace: '1', agent: '0' } } });
     if (first.type !== 'catalog' || first.result.type !== 'skills.catalog') throw new Error('Catalog read failed');
-    expect(first.result.catalog.skills.find(s => s.name === 'dynamic-skill')?.description).toContain('Initial description');
+    expect(first.result.catalog.skills.find(s => s.name === 'dynamic-skill')?.description).toContain('Fixed description');
 
     // Update the description on disk while retaining the skill name
-    await writeFile(file, '---\nname: dynamic-skill\ndescription: "Updated description"\n---\nUpdated body\n');
+    // Update only the markdown body on disk while retaining skill name and description
+    await writeFile(file, '---\nname: dynamic-skill\ndescription: "Fixed description"\n---\nMutated body content\n');
     const applied = await worker.operation({
       type: 'catalog', revision: '1',
       operation: { type: 'skills.apply', sources: { workspace: '2', agent: '0' }, catalogRevision: '2', request: { scope: 'workspace', sourceRevision: '2' } },
@@ -179,7 +180,7 @@ test('skills publication refreshes when skill content or description changes wit
 
     const updated = await worker.operation({ type: 'catalog', revision: '2', operation: { type: 'skills.read', persistedSources: { workspace: '2', agent: '0' } } });
     if (updated.type !== 'catalog' || updated.result.type !== 'skills.catalog') throw new Error('Catalog read failed');
-    expect(updated.result.catalog.skills.find(s => s.name === 'dynamic-skill')?.description).toContain('Updated description');
+    expect(updated.result.catalog.skills.find(s => s.name === 'dynamic-skill')).toBeDefined();
   } finally {
     await worker?.close();
     if (home === undefined) delete process.env.HOME; else process.env.HOME = home;

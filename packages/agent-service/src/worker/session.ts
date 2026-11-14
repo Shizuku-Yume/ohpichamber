@@ -610,7 +610,8 @@ export class WorkerSession {
         availableToolNames: () => nativeSession.getAllToolInfos().map(tool => tool.name),
         assertProviderEntryAllowed: () => authorize({ type: 'provider-entry' }),
         publishSkills: async staged => {
-          const capture = (skills: typeof staged | typeof nativeSession.skills) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, metadata: skill._source })).sort();
+          type SkillPayload = (typeof staged)[number] & { content?: string };
+          const capture = (skills: readonly SkillPayload[]) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, content: skill.content, metadata: skill._source })).sort();
           const expected = capture(staged);
           const current = capture(nativeSession.skills);
           const match = expected.length === current.length && expected.every((desc, i) => desc === current[i]);

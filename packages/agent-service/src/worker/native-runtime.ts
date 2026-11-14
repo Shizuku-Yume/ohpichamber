@@ -112,10 +112,11 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
     };
   } catch (error) { authStorage.close(); throw error; }
 }
-interface PrewarmedRuntimeEntry {
+export interface PrewarmedRuntimeEntry {
   runtime: NativeWorkerRuntime;
   cwd: string;
   agentDirectory: string;
+  pluginExtensionPaths?: string[];
 }
 
 let prewarmedRuntimePromise: Promise<PrewarmedRuntimeEntry | undefined> | undefined;
@@ -124,15 +125,21 @@ export function prewarmNativeRuntime(input: { cwd: string; agentDirectory: strin
   if (prewarmedRuntimePromise) return;
   const canonicalCwd = resolve(input.cwd);
   const canonicalAgentDir = resolve(input.agentDirectory);
-  prewarmedRuntimePromise = openNativeRuntime(input)
-    .then(async runtime => {
+  prewarmedRuntimePromise = Promise.all([
+    openNativeRuntime(input),
+    import('@oh-my-pi/pi-coding-agent/sdk'),
+    import('@oh-my-pi/pi-coding-agent/session/session-manager'),
+    import('@oh-my-pi/pi-coding-agent/tools/bash'),
+    import('./native-plugin-loader.ts').then(m => m.nativePluginExtensionPaths(input.cwd)).catch(() => undefined),
+  ])
+    .then(async ([runtime, , , , pluginExtensionPaths]) => {
       try { await runtime.models.readModels(input.cwd, '0'); } catch { /* best-effort model prewarm */ }
-      return { runtime, cwd: canonicalCwd, agentDirectory: canonicalAgentDir };
+      return { runtime, cwd: canonicalCwd, agentDirectory: canonicalAgentDir, pluginExtensionPaths };
     })
     .catch(() => undefined);
 }
 
-export async function consumePrewarmedNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<NativeWorkerRuntime | undefined> {
+export async function consumePrewarmedNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<PrewarmedRuntimeEntry | undefined> {
   if (!prewarmedRuntimePromise) return undefined;
   const entry = await prewarmedRuntimePromise;
   prewarmedRuntimePromise = undefined;
@@ -141,7 +148,7 @@ export async function consumePrewarmedNativeRuntime(input: { cwd: string; agentD
     try { entry.runtime.authStorage.close(); } catch { /* cleanup on discard */ }
     return undefined;
   }
-  return entry.runtime;
+  return entry;
 }
 
 export async function closePrewarmedNativeRuntime(): Promise<void> {

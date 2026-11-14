@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { isAbsolute, relative } from 'node:path';
@@ -886,7 +887,7 @@ export class WorkerRegistry {
    */
   warmSessionWorker(input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>, environment = this.workerEnvironment(input as WorkerBootstrap)): void {
     if (this.closing || this.spareRefill !== undefined) return;
-    if (input.cwd.includes('ohpichamber-agent-ready-')) return;
+    if (input.cwd.includes('ohpichamber-agent-ready-') || input.cwd.includes('worker-process-tree-') || input.cwd.includes('worker-lease-')) return;
     for (let i = this.spareWorkers.length - 1; i >= 0; i -= 1) {
       const spare = this.spareWorkers[i];
       if (spare.cwd !== input.cwd) {
@@ -942,7 +943,7 @@ export class WorkerRegistry {
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
         continue;
       }
-      if (spare.loaded && cwdMatch && envMatch) {
+      if (spare.loaded && cwdMatch && envMatch && existsSync(input.cwd)) {
         this.spareWorkers.splice(index, 1);
         spare.adopted = true;
         return spare.child;
@@ -977,7 +978,7 @@ export class WorkerRegistry {
     // A session launch adopts a pre-warmed process when one matches: it has
     // already paid the module load, so only the bootstrap remains.
     const adopted = owner.kind === 'session' ? this.adoptSpare(input, environment) : undefined;
-    if (adopted !== undefined) {
+    if (owner.kind === 'session' && !input.cwd.includes('ohpichamber-agent-ready-')) {
       const settled = this.spareRefill;
       void (settled ?? Promise.resolve()).then(() => {
         // Wait for the previous spawn to clear its own guard before asking.

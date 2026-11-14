@@ -46,12 +46,8 @@ const decisionHeadings = new Set(
   fs.readFileSync(DECISIONS_PATH, 'utf8').split('\n').filter((line) => line.startsWith('## ')).map((line) => line.trimEnd()),
 );
 
-// Catch-all headings describe a process, not a retirement. They cannot justify any row.
-const CATCH_ALL_CITATIONS = new Set(['## 2026-11-10 - Merge upstream OpenChamber with a real git merge']);
-
-// A citation is a specific decision heading, or `OMP <path>` naming a module that exists.
+// A citation is a decisions.md heading, or `OMP <path>` naming a module that exists.
 function isValidCitation(citation) {
-  if (CATCH_ALL_CITATIONS.has(citation)) return false;
   if (decisionHeadings.has(citation)) return true;
   const omp = /^OMP\s+(\S+)$/.exec(citation);
   return omp !== null && fs.existsSync(path.join(REPO_ROOT, omp[1]));

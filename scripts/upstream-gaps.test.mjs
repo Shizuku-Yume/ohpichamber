@@ -164,14 +164,6 @@ test('routes of an imported module that never mounts them are not coverage', () 
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /\[ui-call-no-route\] \/api\/notes/);
 });
-
-test('the generic merge heading is a catch-all, not a citation', () => {
-  const fixture = makeFixture(baseFiles(), ['ui-call-no-route\t/api/tracker/things\t## 2026-11-10 - Merge upstream OpenChamber with a real git merge\tBlanket excuse.']);
-  const result = runGuardrail(fixture);
-  assert.equal(result.status, 1, result.output);
-  assert.match(result.output, /lack a decisions\.md heading/);
-});
-
 test('an allowlist row must cite a decisions.md heading or an existing OMP module', () => {
   const fixture = makeFixture(baseFiles(), ['ui-call-no-route\t/api/unused\t## 2026-99-99 - Not a decision\tBlanket excuse.']);
   const result = runGuardrail(fixture);

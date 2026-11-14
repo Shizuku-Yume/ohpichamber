@@ -29,7 +29,7 @@ import { parseVimMappings } from '@/lib/codemirror/vimMappings';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { setDirectoryShowHidden, useDirectoryShowHidden } from '@/lib/directoryShowHidden';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { subscribeRuntimeEndpointChanged } from '@/lib/runtime-switch';
 import { formatShortcutForDisplay } from '@/lib/shortcuts';
@@ -39,23 +39,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { MobileWorkspaceTabsSettings } from './MobileWorkspaceTabsSettings';
 import { isNewSetting } from '@/lib/settings/newSettings';
 
-const MESSAGE_STREAM_TRANSPORT_OPTIONS: Array<{ id: 'auto' | 'ws' | 'sse'; labelKey: I18nKey; descriptionKey: I18nKey }> = [
-  {
-    id: 'auto',
-    labelKey: 'settings.openchamber.visual.option.messageTransport.auto.label',
-    descriptionKey: 'settings.openchamber.visual.option.messageTransport.auto.description',
-  },
-  {
-    id: 'ws',
-    labelKey: 'settings.openchamber.visual.option.messageTransport.ws.label',
-    descriptionKey: 'settings.openchamber.visual.option.messageTransport.ws.description',
-  },
-  {
-    id: 'sse',
-    labelKey: 'settings.openchamber.visual.option.messageTransport.sse.label',
-    descriptionKey: 'settings.openchamber.visual.option.messageTransport.sse.description',
-  },
-];
 
 /** Files and the editor: keymap, tree side, saving, hidden files, preview. */
 const FilesAndEditorSection: React.FC = () => {
@@ -424,19 +407,11 @@ export const GeneralFilesAndTerminalSettings: React.FC = () => (
   </>
 );
 
-/** The last sections of General: how messages stream in, and usage reports. */
+/** The last section of General: usage reports. */
 export const GeneralConnectionAndPrivacySettings: React.FC = () => {
   const { t } = useI18n();
-  const messageStreamTransport = useConfigStore((state) => state.settingsMessageStreamTransport);
-  const setMessageStreamTransport = useConfigStore((state) => state.setSettingsMessageStreamTransport);
   const reportUsage = useUIStore((state) => state.reportUsage);
   const setReportUsage = useUIStore((state) => state.setReportUsage);
-  const selectedTransport = MESSAGE_STREAM_TRANSPORT_OPTIONS.find((option) => option.id === messageStreamTransport);
-
-  const handleMessageStreamTransportChange = React.useCallback((mode: 'auto' | 'ws' | 'sse') => {
-    setMessageStreamTransport(mode);
-    void updateDesktopSettings({ messageStreamTransport: mode });
-  }, [setMessageStreamTransport]);
 
   // Sync reportUsage changes to server settings
   const handleReportUsageChange = React.useCallback((enabled: boolean) => {
@@ -445,35 +420,15 @@ export const GeneralConnectionAndPrivacySettings: React.FC = () => {
   }, [setReportUsage]);
 
   return (
-    <>
-      <SettingsSection
-        title={t('settings.openchamber.visual.section.messageStreamTransport')}
-        settingsItem="chat.message-transport"
-        contentClassName="space-y-2"
-      >
-        <SettingsChipGroup
-          value={messageStreamTransport}
-          options={MESSAGE_STREAM_TRANSPORT_OPTIONS.map((option) => ({
-            value: option.id,
-            label: t(option.labelKey),
-          }))}
-          onChange={handleMessageStreamTransportChange}
-          aria-label={t('settings.openchamber.visual.section.messageStreamTransport')}
-        />
-        {selectedTransport ? (
-          <p className="typography-meta text-muted-foreground">{t(selectedTransport.descriptionKey)}</p>
-        ) : null}
-      </SettingsSection>
-      <SettingsSection title={t('settings.openchamber.visual.section.privacy')}>
-        <SettingsCheckboxRow
-          checked={reportUsage}
-          onChange={handleReportUsageChange}
-          label={t('settings.openchamber.visual.field.sendAnonymousUsageReports')}
-          info={t('settings.openchamber.visual.field.sendAnonymousUsageReportsHint')}
-          ariaLabel={t('settings.openchamber.visual.field.sendAnonymousUsageReportsAria')}
-          settingsItem="appearance.usage-reports"
-        />
-      </SettingsSection>
-    </>
+    <SettingsSection title={t('settings.openchamber.visual.section.privacy')}>
+      <SettingsCheckboxRow
+        checked={reportUsage}
+        onChange={handleReportUsageChange}
+        label={t('settings.openchamber.visual.field.sendAnonymousUsageReports')}
+        info={t('settings.openchamber.visual.field.sendAnonymousUsageReportsHint')}
+        ariaLabel={t('settings.openchamber.visual.field.sendAnonymousUsageReportsAria')}
+        settingsItem="appearance.usage-reports"
+      />
+    </SettingsSection>
   );
 };

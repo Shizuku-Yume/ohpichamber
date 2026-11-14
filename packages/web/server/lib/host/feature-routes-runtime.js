@@ -553,16 +553,13 @@ export const createFeatureRoutesRuntime = () => {
         }
       }, TURN_SETTLE_MS));
     };
-    // The hub translates v2 wire events into the server's vocabulary once.
-    globalEventHub?.subscribeEvent((event) => {
-      for (const payload of event?.translated?.() ?? []) {
-        if (payload?.type === 'session.idle' || (payload?.type === 'session.status' && payload.properties?.status?.type === 'idle')) {
-          trackedItemsService.noteTurnFinished();
-          providerReadCache.clear();
-          if (event.directory && event.directory !== 'global') announceTurnFinished(event.directory);
-          return;
-        }
-      }
+    // A session's turn ended: a followed pull request may have moved, so the
+    // tracked items refresh, and the directory is told to look again.
+    globalEventHub?.subscribeEvent((event, scope) => {
+      if (event.type !== 'session.status' || event.runtimeStatus !== 'idle') return;
+      trackedItemsService.noteTurnFinished();
+      providerReadCache.clear();
+      if (scope?.cwd) announceTurnFinished(scope.cwd);
     });
     registerTrackedItemsRoutes(app, { service: trackedItemsService });
     const resolveGitIdentity = async (identityId) => {

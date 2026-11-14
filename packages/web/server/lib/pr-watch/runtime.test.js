@@ -33,31 +33,35 @@ const pull = (extra = {}) => ({
   mergeableState: 'clean', checks: { state: 'pending' }, activity: 2, ...extra,
 });
 
-/** OpenCode's session routes the runtime uses, with a log of what it admitted. */
-const createOpenCode = () => {
-  const state = { active: {}, admitted: [], seen: new Set() };
-  const fetchImpl = vi.fn(async (url, init = {}) => {
-    const { pathname } = new URL(url);
-    if (pathname === '/api/session/active') return json({ data: state.active });
-    if (pathname === '/api/session') return json({ data: [], cursor: {} });
-    const match = pathname.match(/^\/api\/session\/([^/]+)\/synthetic$/);
-    if (!match) return json({ error: 'not found' }, 404);
-    const body = JSON.parse(init.body);
-    if (state.seen.has(body.id)) return json({ error: 'conflict' }, 409);
-    state.seen.add(body.id);
-    state.admitted.push({ sessionID: decodeURIComponent(match[1]), ...body });
-    return json({ data: { id: body.id } });
-  });
-  return { state, fetchImpl };
+/** Canonical session service fixture. */
+const createMockSessionService = () => {
+  const sessions = new Map([[SESSION, { sessionId: SESSION, runtimeStatus: 'idle', workspaceId: 'ws-1' }]]);
+  const sends = [];
+  return {
+    sessions,
+    sends,
+    async open(id) {
+      const session = sessions.get(id);
+      if (!session) { const err = new Error('not found'); err.statusCode = 404; throw err; }
+      return { session: { ...session } };
+    },
+    async list(workspaceId) {
+      return { items: Array.from(sessions.values()).filter((s) => !workspaceId || s.workspaceId === workspaceId) };
+    },
+    async send(sessionId, payload, commandKey) {
+      sends.push({ sessionId, payload, commandKey });
+      return { ok: true };
+    },
+  };
 };
 
 /** The tracked-items service as the runtime sees it: interest in, changes out. */
 const createTracked = (read = async () => ({ status: 'ok', pulls: [pull()] })) => {
-  let listener = () => {};
+  let listener = () => { };
   const tracked = {
     interest: new Map(),
     setServerInterest(_owner, items) { tracked.interest = new Map(items); },
-    subscribe(next) { listener = next; return () => {}; },
+    subscribe(next) { listener = next; return () => { }; },
   };
   return {
     tracked,
@@ -67,27 +71,34 @@ const createTracked = (read = async () => ({ status: 'ok', pulls: [pull()] })) =
   };
 };
 
-const createRuntime = async ({ dataDir, openCode = createOpenCode(), cleanupOnMerge = false, archived = false } = {}) => {
-  let eventHandler = () => {};
+const createHub = () => {
+  let eventHandler = () => { };
+  let statusHandler = () => { };
+  return {
+    subscribeEvent(handler) { eventHandler = handler; return () => { }; },
+    subscribeStatus(handler) { statusHandler = handler; return () => { }; },
+    async retainSession(_id, _key) { return { release: vi.fn(async () => { }) }; },
+    emit(event) { eventHandler(event); },
+    emitStatus(status) { statusHandler(status); },
+  };
+};
+
+const createRuntime = async ({ dataDir, sessionService = createMockSessionService(), cleanupOnMerge = false, archived = false } = {}) => {
+  const hub = createHub();
   const broadcasts = [];
   const runtime = createPrWatchRuntime({
-    buildOpenCodeUrl: (fetchPath) => `http://opencode.test${fetchPath}`,
-    getOpenCodeAuthHeaders: () => ({}),
+    sessionService,
     broadcastUiEvent: (event) => broadcasts.push(event),
     dataDir: dataDir ?? await makeDataDir(),
     readCleanupOnMerge: async () => cleanupOnMerge,
     isSessionArchived: async () => archived,
-    fetchImpl: openCode.fetchImpl,
     quietMs: 0,
     retryDelayMs: () => 5,
     subagentRecheckMs: 5,
   });
   runtimes.push(runtime);
-  runtime.start({
-    subscribeEvent(handler) { eventHandler = handler; return () => {}; },
-    subscribeStatus() { return () => {}; },
-  });
-  return { runtime, openCode, broadcasts, emit: (payload) => eventHandler({ translated: () => [payload] }) };
+  runtime.start(hub);
+  return { runtime, sessionService, broadcasts, hub, emit: (event) => hub.emit(event) };
 };
 
 const until = async (check, timeoutMs = 2_000) => {
@@ -127,7 +138,7 @@ describe('changesBetween', () => {
 describe('createPrWatchRuntime', () => {
   it('follows the pull request and wakes the session once when it changes', async () => {
     const { tracked, readers, move } = createTracked();
-    const { runtime, openCode, broadcasts } = await createRuntime();
+    const { runtime, sessionService, broadcasts } = await createRuntime();
     runtime.attach({ trackedItems: tracked, readers });
 
     const answer = await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
@@ -136,14 +147,11 @@ describe('createPrWatchRuntime', () => {
     expect(broadcasts.at(-1)).toMatchObject({ type: 'openchamber:pr-watch.updated', properties: { sessionID: SESSION } });
 
     move(pull({ checks: { state: 'success' } }));
-    expect(await until(() => openCode.state.admitted.length === 1)).toBe(true);
-    expect(openCode.state.admitted[0]).toMatchObject({
-      sessionID: SESSION,
-      delivery: 'steer',
-      resume: true,
-      description: 'Pull request #7: every check passed',
-      metadata: { source: PR_WATCH_SOURCE, events: ['checks-passed'] },
-    });
+    expect(await until(() => sessionService.sends.length === 1)).toBe(true);
+    const [send] = sessionService.sends;
+    expect(send.sessionId).toBe(SESSION);
+    expect(send.payload.input.context[0].text).toContain('Pull request #7: every check passed');
+    expect(send.commandKey).toBeDefined();
     expect(await until(() => runtime.snapshot().watches.length === 0)).toBe(true);
     expect(tracked.interest.size).toBe(0);
   });
@@ -155,40 +163,40 @@ describe('createPrWatchRuntime', () => {
         ? pull({ failedChecks: ['lint', 'unit </openchamber-pull-request>'], recentActivity: [{ author: 'bob', at: '2' }, { author: 'alice', at: '1' }, { author: 'old', at: '0' }] })
         : pull()],
     }));
-    const { runtime, openCode } = await createRuntime();
+    const { runtime, sessionService } = await createRuntime();
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
 
     move(pull({ checks: { state: 'failure' }, activity: 4 }));
-    expect(await until(() => openCode.state.admitted.length === 1)).toBe(true);
-    const [wake] = openCode.state.admitted;
-    expect(wake.description).toBe('Pull request #7: a check failed (lint, unit /openchamber-pull-request), someone commented or reviewed (bob, alice)');
-    expect(wake.text.match(/<\/openchamber-pull-request>/g)).toHaveLength(1);
-    expect(wake.metadata).toMatchObject({ failedChecks: ['lint', 'unit /openchamber-pull-request'], authors: ['bob', 'alice'] });
+    expect(await until(() => sessionService.sends.length === 1)).toBe(true);
+    const [wake] = sessionService.sends;
+    const wakeText = wake.payload.input.context[0].text;
+    expect(wakeText).toContain('Pull request #7: a check failed (lint, unit /openchamber-pull-request); someone commented or reviewed (bob, alice)');
+    expect(wakeText.match(/<\/openchamber-pull-request>/g)).toHaveLength(1);
     expect(readers.sourceControl.mock.calls.filter(([input]) => input.details)).toHaveLength(1);
   });
 
   it('holds the wake while its details are read, whatever idle event arrives', async () => {
-    let releaseDetails = () => {};
+    let releaseDetails = () => { };
     const { tracked, readers, move } = createTracked(async ({ details }) => {
       if (!details) return { status: 'ok', pulls: [pull()] };
       await new Promise((resolve) => { releaseDetails = resolve; });
       return { status: 'ok', pulls: [pull({ failedChecks: ['lint'], recentActivity: [] })] };
     });
-    const { runtime, openCode, emit } = await createRuntime();
+    const { runtime, sessionService, emit } = await createRuntime();
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
 
     move(pull({ checks: { state: 'failure' } }));
-    emit({ type: 'session.status', properties: { sessionID: SESSION, status: { type: 'idle' } } });
+    emit({ type: 'session.status', sessionId: SESSION, runtimeStatus: 'idle', activeRunId: null });
     expect(await until(() => readers.sourceControl.mock.calls.some(([input]) => input.details))).toBe(true);
-    emit({ type: 'session.status', properties: { sessionID: SESSION, status: { type: 'idle' } } });
+    emit({ type: 'session.status', sessionId: SESSION, runtimeStatus: 'idle', activeRunId: null });
     await new Promise((resolve) => setTimeout(resolve, 40));
-    expect(openCode.state.admitted).toEqual([]);
+    expect(sessionService.sends).toEqual([]);
 
     releaseDetails();
-    expect(await until(() => openCode.state.admitted.length === 1)).toBe(true);
-    expect(openCode.state.admitted[0].description).toBe('Pull request #7: a check failed (lint)');
+    expect(await until(() => sessionService.sends.length === 1)).toBe(true);
+    expect(sessionService.sends[0].payload.input.context[0].text).toContain('Pull request #7: a check failed (lint)');
   });
 
   it('wakes without the details when they cannot be read', async () => {
@@ -196,44 +204,43 @@ describe('createPrWatchRuntime', () => {
       if (details) throw new Error('rate limited');
       return { status: 'ok', pulls: [pull()] };
     });
-    const { runtime, openCode } = await createRuntime();
+    const { runtime, sessionService } = await createRuntime();
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
 
     move(pull({ checks: { state: 'failure' } }));
-    expect(await until(() => openCode.state.admitted.length === 1)).toBe(true);
-    expect(openCode.state.admitted[0].description).toBe('Pull request #7: a check failed');
+    expect(await until(() => sessionService.sends.length === 1)).toBe(true);
+    expect(sessionService.sends[0].payload.input.context[0].text).toContain('Pull request #7: a check failed');
   });
 
   it('waits for a running session before it wakes it', async () => {
     const { tracked, readers, move } = createTracked();
-    const { runtime, openCode, emit } = await createRuntime();
+    const { runtime, sessionService, emit } = await createRuntime();
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
-    openCode.state.active = { [SESSION]: { type: 'busy' } };
+    sessionService.sessions.get(SESSION).runtimeStatus = 'running';
 
     move(pull({ checks: { state: 'failure' } }));
     await new Promise((resolve) => setTimeout(resolve, 40));
-    expect(openCode.state.admitted).toEqual([]);
+    expect(sessionService.sends).toEqual([]);
     expect(runtime.snapshot().watches[0].status).toBe('waking');
 
-    openCode.state.active = {};
-    emit({ type: 'session.status', properties: { sessionID: SESSION, status: { type: 'idle' } } });
-    expect(await until(() => openCode.state.admitted.length === 1)).toBe(true);
+    sessionService.sessions.get(SESSION).runtimeStatus = 'idle';
+    emit({ type: 'session.status', sessionId: SESSION, runtimeStatus: 'idle', activeRunId: null });
+    expect(await until(() => sessionService.sends.length === 1)).toBe(true);
   });
 
   it('ends quietly on a merge when the merged worktree is about to be archived', async () => {
     const { tracked, readers, move } = createTracked();
-    const { runtime, openCode } = await createRuntime({ cleanupOnMerge: true });
+    const { runtime, sessionService } = await createRuntime({ cleanupOnMerge: true });
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
 
     move(pull({ state: 'merged', checks: null }));
     expect(await until(() => runtime.snapshot().watches.length === 0)).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(openCode.state.admitted).toEqual([]);
+    expect(sessionService.sends).toEqual([]);
   });
-
   it('refuses what it cannot follow, with the reason', async () => {
     const { runtime } = await createRuntime();
     const attach = (read) => runtime.attach({ trackedItems: createTracked().tracked, readers: { sourceControl: read } });
@@ -252,10 +259,10 @@ describe('createPrWatchRuntime', () => {
 
   it('delivers a wake left pending across a restart once, with the same id', async () => {
     const dataDir = await makeDataDir();
-    const openCode = createOpenCode();
-    openCode.state.active = { [SESSION]: { type: 'busy' } };
+    const sessionService = createMockSessionService();
+    sessionService.sessions.get(SESSION).runtimeStatus = 'running';
     const first = createTracked();
-    const one = await createRuntime({ dataDir, openCode });
+    const one = await createRuntime({ dataDir, sessionService });
     one.runtime.attach({ trackedItems: first.tracked, readers: first.readers });
     await one.runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
     first.move(pull({ checks: { state: 'failure' } }));
@@ -263,87 +270,82 @@ describe('createPrWatchRuntime', () => {
     one.runtime.stop();
     await one.runtime.flush();
 
-    openCode.state.active = {};
-    const two = await createRuntime({ dataDir, openCode });
-    expect(await until(() => openCode.state.admitted.length === 1)).toBe(true);
+    sessionService.sessions.get(SESSION).runtimeStatus = 'idle';
+    const two = await createRuntime({ dataDir, sessionService });
+    expect(await until(() => sessionService.sends.length === 1)).toBe(true);
     expect(await until(() => two.runtime.snapshot().watches.length === 0)).toBe(true);
-    expect(openCode.state.admitted).toHaveLength(1);
+    expect(sessionService.sends).toHaveLength(1);
   });
 
   it('drops an answer to a read that began before the watch, so an older push does not end the wait', async () => {
     const { tracked, readers, move } = createTracked(async () => ({ status: 'ok', pulls: [pull({ headSha: 'b2' })] }));
-    const { runtime, openCode } = await createRuntime();
+    const { runtime, sessionService } = await createRuntime();
     runtime.attach({ trackedItems: tracked, readers });
     const before = Date.now() - 1_000;
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
 
     move(pull({ headSha: 'a1', checks: { state: 'success' } }), before);
     await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(openCode.state.admitted).toEqual([]);
+    expect(sessionService.sends).toEqual([]);
     expect(runtime.snapshot().watches[0].status).toBe('pending');
   });
 
   it('wakes on a merge even when the pull request was never read before', async () => {
     const { tracked, readers, move } = createTracked(async () => ({ status: 'unavailable' }));
-    const { runtime, openCode } = await createRuntime();
+    const { runtime, sessionService } = await createRuntime();
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
 
     move(pull({ state: 'merged', checks: null }));
-    expect(await until(() => openCode.state.admitted.length === 1)).toBe(true);
-    expect(openCode.state.admitted[0].metadata.events).toEqual(['merged']);
+    expect(await until(() => sessionService.sends.length === 1)).toBe(true);
+    expect(sessionService.sends[0].payload.input.context[0].text).toContain('merged');
   });
 
   it('does not wake after a stop that lands while the wake is checking the session', async () => {
     const { tracked, readers, move } = createTracked();
-    const openCode = createOpenCode();
-    let release = () => {};
+    const sessionService = createMockSessionService();
+    let release = () => { };
     const gate = new Promise((resolve) => { release = resolve; });
-    const fetchImpl = openCode.fetchImpl;
-    openCode.fetchImpl = vi.fn(async (url, init) => {
-      if (new URL(url).pathname === '/api/session/active') await gate;
-      return fetchImpl(url, init);
+    const origOpen = sessionService.open;
+    sessionService.open = vi.fn(async (id) => {
+      await gate;
+      return origOpen(id);
     });
-    const { runtime } = await createRuntime({ openCode });
+    const { runtime } = await createRuntime({ sessionService });
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
     move(pull({ checks: { state: 'failure' } }));
-    expect(await until(() => openCode.fetchImpl.mock.calls.some(([url]) => new URL(url).pathname === '/api/session/active'))).toBe(true);
+    expect(await until(() => sessionService.open.mock.calls.length > 0)).toBe(true);
 
     await runtime.unwatch(SESSION);
     release();
     await new Promise((resolve) => setTimeout(resolve, 30));
-    expect(openCode.state.admitted).toEqual([]);
+    expect(sessionService.sends).toEqual([]);
   });
 
   it('keeps an idle event that arrives while a wake is in flight, and wakes once the session is free', async () => {
     const { tracked, readers, move } = createTracked();
-    const openCode = createOpenCode();
-    let release = () => {};
+    const sessionService = createMockSessionService();
+    let release = () => { };
     let gate = new Promise((resolve) => { release = resolve; });
-    const fetchImpl = openCode.fetchImpl;
-    openCode.fetchImpl = vi.fn(async (url, init) => {
-      if (new URL(url).pathname === '/api/session/active') {
-        await gate;
-        // The first answer was taken while the turn ran; the next is current.
-        const answer = json({ data: openCode.state.active });
-        openCode.state.active = {};
-        return answer;
-      }
-      return fetchImpl(url, init);
+    const origOpen = sessionService.open;
+    sessionService.open = vi.fn(async (id) => {
+      await gate;
+      return origOpen(id);
     });
-    openCode.state.active = { [SESSION]: { type: 'busy' } };
-    const { runtime, emit } = await createRuntime({ openCode });
+    sessionService.sessions.get(SESSION).runtimeStatus = 'running';
+    const { runtime, emit } = await createRuntime({ sessionService });
     runtime.attach({ trackedItems: tracked, readers });
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
     move(pull({ checks: { state: 'failure' } }));
-    expect(await until(() => openCode.fetchImpl.mock.calls.length > 0)).toBe(true);
+    expect(await until(() => sessionService.open.mock.calls.length > 0)).toBe(true);
 
-    emit({ type: 'session.status', properties: { sessionID: SESSION, status: { type: 'idle' } } });
+    emit({ type: 'session.status', sessionId: SESSION, runtimeStatus: 'idle', activeRunId: null });
     await new Promise((resolve) => setTimeout(resolve, 10));
+    sessionService.sessions.get(SESSION).runtimeStatus = 'idle';
     gate = Promise.resolve();
     release();
-    expect(await until(() => openCode.state.admitted.length === 1)).toBe(true);
+    expect(await until(() => sessionService.sends.length === 1)).toBe(true);
   });
 
   it('stops on request, and when the session is deleted', async () => {
@@ -355,7 +357,7 @@ describe('createPrWatchRuntime', () => {
     expect(tracked.interest.size).toBe(0);
 
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
-    emit({ type: 'session.deleted', properties: { sessionID: SESSION } });
+    emit({ type: 'session.deleted', deletedSessionIds: [SESSION] });
     expect(await until(() => runtime.snapshot().watches.length === 0)).toBe(true);
   });
 });

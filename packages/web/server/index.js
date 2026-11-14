@@ -948,24 +948,19 @@ const globalMessageStreamHub = createGlobalMessageStreamHub({
 
 autoReviewRuntime = createAutoReviewRuntime({
  globalEventHub: globalMessageStreamHub,
+ sessionService: openChamberSessionService,
+ broadcastUiEvent: broadcastOpenChamberUiEvent,
+ onRunEnded: (ended) => notificationTriggerRuntime.notifyAutoReviewEnded(ended),
  dataDir: OPENCHAMBER_DATA_DIR,
- buildOpenCodeUrl: (fetchPath) => fetchPath,
- getOpenCodeAuthHeaders: () => ({}),
- readSessionMetadata: readStoredSessionMetadata,
- onRunUpdated: ({ run }) => broadcastOpenChamberUiEvent({
-  type: 'openchamber:auto-review-run',
-  properties: { run },
- }),
 });
 autoReviewRuntime.start();
 
 prWatchRuntime = createPrWatchRuntime({
- buildOpenCodeUrl: (fetchPath) => fetchPath,
- getOpenCodeAuthHeaders: () => ({}),
+ sessionService: openChamberSessionService,
  broadcastUiEvent: broadcastOpenChamberUiEvent,
  dataDir: OPENCHAMBER_DATA_DIR,
  readCleanupOnMerge: async () => (await readSettingsFromDiskMigrated())?.mergedWorktreeCleanupEnabled === true,
- isSessionArchived: (sessionID) => openChamberSessionService?.sessionArchive?.isArchived(sessionID) ?? false,
+ isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
  insideSpace: Boolean(process.env.OPENCHAMBER_SPACE_IDLE_STOP_FILE),
 });
 prWatchRuntime.start(globalMessageStreamHub);
@@ -1507,6 +1502,7 @@ const openChamberControlService = createOpenChamberControlService({
   createError: (message, status) => new OpenChamberControlError(message, status),
  }),
  dispatchResults: dispatchResultsRuntime,
+ prWatch: prWatchRuntime,
  archiveStore: openChamberSessionService.archiveStore,
  workflowRuntime: workflowsModule.workflowRuntime,
 });
@@ -1544,6 +1540,8 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  sessionAssistRuntime,
  sessionWorkRuntime,
  contextObligatoryRuntime,
+ autoReviewRuntime,
+ prWatchRuntime,
  messageQueueRuntime,
  dispatchResultsRuntime,
  messageSearchRuntime,

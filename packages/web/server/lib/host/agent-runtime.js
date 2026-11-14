@@ -103,6 +103,7 @@ export function createHostAgentRuntime({
     const env = process.env.BUN_BE_BUN === '1'
       ? { BUN_BE_BUN: '1', ...baseEnv }
       : baseEnv;
+    const hostTools = typeof resolveHostTools === 'function' ? await resolveHostTools().catch(() => null) : null;
     const registration = await readResponse(await service.request(
       `/internal/workspaces/${encodeURIComponent(scope.workspaceId)}`,
       {
@@ -110,6 +111,7 @@ export function createHostAgentRuntime({
         body: JSON.stringify({
           projectId: scope.projectId, cwd: scope.cwd, agentDirectory: scope.agentDirectory,
           agentDirectoryId: scope.agentDirectoryId, env,
+          ...(hostTools ? { hostTools } : {}),
         }),
       },
     ), HostWorkspaceRegisteredSchema);

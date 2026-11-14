@@ -17,6 +17,7 @@ for (const [key, value] of Object.entries({
   navigator: browser.navigator,
   localStorage: browser.localStorage,
   Element: browser.Element,
+  Node: browser.Node,
   HTMLElement: browser.HTMLElement,
   IS_REACT_ACT_ENVIRONMENT: true,
   // happy-dom has no animation frame; base-ui's Collapsible mounts one per panel.
@@ -260,6 +261,60 @@ test('a same-named skill outside the catalog folder does not count as installed'
     ],
   }));
   expect(railText().includes('Installed1')).toBe(true);
+});
+
+const linearProbe = (code: string) => ({ workspaceId: 'workspace', serverId: 'linear', persistedRevision: '1', status: 'failed' as const, error: { code, detail: 'probe', retryable: true } });
+const linearAuthRequiredStatus = { linear: { configuration: linearServer, catalogs: [], probe: linearProbe('MCP_AUTH_REQUIRED') } };
+const linearNotConnectedStatus = { linear: { configuration: linearServer, catalogs: [], probe: linearProbe('MCP_APPLY_FAILED') } };
+const clickButton = async (label: string) => {
+  const button = [...browser.document.body.querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === label);
+  if (!button) throw new Error(`${label} button missing`);
+  await act(async () => button.click());
+};
+
+test('an existing server that needs sign-in shows sign-in required from its own probe', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  useMcpConfigStore.setState({ serversByDirectory: { '/repo': [linearServer] } });
+  useMcpStore.setState({ getStatusForDirectory: () => linearAuthRequiredStatus });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  expect(browser.document.body.textContent?.includes('Sign-in required')).toBe(true);
+});
+
+test('a saved OAuth declaration without runtime evidence is not shown as installed or sign-in required', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  useMcpConfigStore.setState({ serversByDirectory: { '/repo': [linearServer] } });
+  useMcpStore.setState({ getStatusForDirectory: () => EMPTY_RUNTIME_STATUS });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const body = browser.document.body;
+  expect(body.querySelector('aside')?.textContent?.includes('Installed0')).toBe(true);
+  expect(body.textContent?.includes('Sign-in required')).toBe(false);
+});
+
+test('installing an existing server configures it again and does not create it', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  useMcpConfigStore.setState({ serversByDirectory: { '/repo': [linearServer] } });
+  useMcpStore.setState({ getStatusForDirectory: () => linearNotConnectedStatus });
+  const created: string[] = [];
+  const configured: string[] = [];
+  useMcpConfigStore.setState({
+    createMcp: async (config) => { created.push(config.serverId); return { ok: false, error: 'create must not run' }; },
+    updateMcp: async (serverId) => { configured.push(serverId); return appliedMcpMutation(); },
+  });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const linearCard = findClickable([...browser.document.body.querySelectorAll('[role="button"], button')], 'Linear');
+  if (!linearCard) throw new Error('Linear card missing');
+  await act(async () => linearCard.click());
+  // The header Install opens the scope dialog; its confirm is the last Install button in the page.
+  await clickButton('Install');
+
+  const confirm = [...browser.document.body.querySelectorAll('button')].filter((candidate) => candidate.textContent?.trim() === 'Install').at(-1);
+  if (!confirm) throw new Error('Scope dialog confirm missing');
+  await act(async () => confirm.click());
+  expect(configured).toEqual(['linear']);
+  expect(created).toEqual([]);
 });
 
 test('a detail page opens at its top and going back restores the browse scroll', async () => {

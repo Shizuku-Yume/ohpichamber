@@ -486,6 +486,9 @@ for (const file of callerFiles) {
     norm = norm.replace(/:param$/, (m, offset, full) => (full[offset - 1] === '/' ? ':param' : ''));
     if (!norm || norm === '/api') continue;
 
+    // A base prefix constant (`const API_BASE = '/api/git'`) is not a request: its callers
+    // append the rest of the path in a template this audit does not follow.
+    if (/^(export\s+)?const\s+[\w$]+\s*=\s*\[?\s*['"]\/api\/[^'"]*['"]/.test(lineText)) continue;
     apiCalls.push({
       file: rel,
       line,

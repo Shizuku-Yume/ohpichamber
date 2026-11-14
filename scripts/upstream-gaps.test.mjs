@@ -66,7 +66,7 @@ export const useUIStore = create<UIStore>()((set) => ({
 }));
 `;
 
-const DECISIONS = '# Decisions\n\n## 2026-01-01 - Keep the tracker surface\n\nWhy.\n';
+const DECISIONS = '# Decisions\n\n## 2026-01-01 - Keep the tracker surface\n\nWhy.\n\n## 2026-11-10 - Merge upstream OpenChamber with a real git merge\n\nProcess.\n';
 const ALLOWLIST_HEADER = 'class\titem\tcitation\teffect\n';
 
 // Builds the fixture: `files` are committed as upstream and mirrored in the working tree.
@@ -163,6 +163,13 @@ test('routes of an imported module that never mounts them are not coverage', () 
   const result = runGuardrail(fixture);
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /\[ui-call-no-route\] \/api\/notes/);
+});
+
+test('the generic merge heading is a catch-all, not a citation', () => {
+  const fixture = makeFixture(baseFiles(), ['ui-call-no-route\t/api/tracker/things\t## 2026-11-10 - Merge upstream OpenChamber with a real git merge\tBlanket excuse.']);
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /lack a decisions\.md heading/);
 });
 
 test('an allowlist row must cite a decisions.md heading or an existing OMP module', () => {

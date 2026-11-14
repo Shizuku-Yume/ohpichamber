@@ -33,6 +33,7 @@ const { useUIStore } = await import('@/stores/useUIStore');
 const { useMcpConfigStore } = await import('@/stores/useMcpConfigStore');
 const { useMcpStore } = await import('@/stores/useMcpStore');
 const { usePluginsStore } = await import('@/stores/usePluginsStore');
+const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { useSkillsStore } = await import('@/stores/useSkillsStore');
 const { useGuestsStore } = await import('@/lib/guests/store');
 const { IntegrationsCatalogView } = await import('./IntegrationsCatalogView');
@@ -171,8 +172,13 @@ test('the search field ranks matches and reports an empty result', async () => {
   expect(body.textContent?.includes('Linear')).toBe(false);
 });
 
+const atlassianStatus = { atlassian: { configuration: atlassianServer, catalogs: [], probe: { workspaceId: 'workspace', serverId: 'atlassian', persistedRevision: '1', status: 'connected' as const, toolCount: 1 } } };
 test('the rail lists installed integrations and opens one', async () => {
-  useMcpConfigStore.setState({ mcpServers: [atlassianServer] });
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  useMcpConfigStore.setState({ serversByDirectory: { '/repo': [atlassianServer] } });
+  // An installed server carries authoritative runtime evidence; a declaration alone is not installed.
+  useMcpStore.setState({ getStatusForDirectory: () => atlassianStatus });
   await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
   const body = browser.document.body;
   const rail = body.querySelector('aside');
@@ -217,7 +223,9 @@ test('the canonical runtime state shows as installed, failed or switched off', a
   useMcpStore.setState({
     getStatusForDirectory: () => linearReadyStatus,
   });
-  useMcpConfigStore.setState({ mcpServers: [linearServer] });
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  useMcpConfigStore.setState({ serversByDirectory: { '/repo': [linearServer] } });
   await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
   const body = browser.document.body;
   const rail = body.querySelector('aside');
@@ -228,7 +236,7 @@ test('the canonical runtime state shows as installed, failed or switched off', a
 
   await act(async () => {
     useMcpStore.setState({ getStatusForDirectory: () => EMPTY_RUNTIME_STATUS });
-    useMcpConfigStore.setState({ mcpServers: [{ ...linearServer, enabled: false }] });
+    useMcpConfigStore.setState({ serversByDirectory: { '/repo': [{ ...linearServer, enabled: false }] } });
   });
   expect(body.textContent?.includes('Disabled')).toBe(true);
 });

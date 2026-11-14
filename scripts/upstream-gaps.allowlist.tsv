@@ -378,7 +378,6 @@ route-deps	createOpenChamberControlService.isRenderToolEnabled	## 2026-10-27 - H
 route-deps	createOpenChamberControlService.isSecretToolEnabled	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.onPageWaitChange	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.workNaming	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
-route-deps	createOpenChamberControlService.prWatch	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 route-deps	createOpenChamberControlService.loadQuota	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createDevTunnelClient	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
 unused-route-fn	createDeltaCoalescer	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired or superseded in OMP architecture
@@ -473,12 +472,6 @@ route-deps	createPermissionAutoAcceptRuntime.buildOpenCodeUrl	## 2026-11-11 - Pr
 route-deps	createPermissionAutoAcceptRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
 route-deps	createPermissionAutoAcceptRuntime.onPermissionReplied	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createPermissionAutoAcceptRuntime.readDefaultMode	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.globalEventHub	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.sessionKnowledgeRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.broadcastUiEvent	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.onRunSettled	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.onRunEnded	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createAutoReviewRuntime.routeSend	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createDispatchResultsRuntime.globalEventHub	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createDispatchResultsRuntime.buildOpenCodeUrl	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
 route-deps	createDispatchResultsRuntime.getOpenCodeAuthHeaders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	Retired OpenCode runtime dependency or internal function
@@ -549,8 +542,6 @@ route-deps	createSessionLinker.trackers	## 2026-11-10 - Merge upstream OpenChamb
 route-deps	createGracefulShutdownRuntime.openCodeWatcherRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.sessionGoalRuntime	## 2026-10-25 - Use OMP goal mode as the only goal loop	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.sessionWarmingRuntime	## 2026-10-29 - Delete upstream's per-session warming instead of rewiring it	Retired OpenCode runtime dependency or internal function
-route-deps	createGracefulShutdownRuntime.autoReviewRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
-route-deps	createGracefulShutdownRuntime.prWatchRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.mergeFollowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.workflowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
 route-deps	createGracefulShutdownRuntime.getHealthCheckInterval	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Retired OpenCode runtime dependency or internal function
@@ -621,3 +612,21 @@ settings-store	useUIStore.setAgentImageModel	## 2026-11-13 - OMP owns image gene
 settings-store	useUIStore.setAgentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
 settings-store	useUIStore.setAgentMemoryToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
 settings-search	sessions.agent-memory-tool	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+runtime-constructor	createOpenCodeTrust	## 2026-10-27 - Do not adopt upstream folder trust	OpenCode folder trust constructor; the fork does not adopt upstream folder trust.
+runtime-constructor	createOpenCodeSessionMetadata	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode session metadata constructor retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeAuthStateRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode auth state runtime retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeNetworkRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode network runtime retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeEnvRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode environment runtime retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeResolutionRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode binary resolution runtime retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeClient	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode SDK client retired; OMP SDK runs in the Agent Service.
+runtime-constructor	createOpenCodeWatcherRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode event watcher retired with the OpenCode runtime.
+runtime-constructor	createOpenCodeLifecycleRuntime	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode process lifecycle retired; the Agent Service owns the OMP worker.
+runtime-constructor	createGuestOpenCodeProvider	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode guest provider retired with the OpenCode runtime.
+runtime-constructor	createSessionGoalRuntime	## 2026-10-25 - Use OMP goal mode as the only goal loop	Goal loop replaced by OMP native goal mode.
+runtime-constructor	createSessionWarmingRuntime	## 2026-10-29 - Delete upstream's per-session warming instead of rewiring it	Per-session warming deleted; replaced by workspace-level cache warming.
+runtime-constructor	createAgentMemoryRuntime	## 2026-11-13 - OMP owns image generation and agent memory	OpenChamber agent memory runtime retired in favor of the OMP memory backend.
+runtime-constructor	createAgentMemoryActions	## 2026-11-13 - OMP owns image generation and agent memory	OpenChamber agent memory actions retired in favor of the OMP memory backend.
+runtime-constructor	createAgentToolRuntime	## 2026-10-27 - Host tools are essential callable tools, not xd:// devices	Retired OpenCode agent-tools runtime; OMP tools execute through the Agent Service.
+runtime-constructor	createLimitFailoverRuntime	## 2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	OpenCode rate-limit failover replaced by OMP SDK model retry and fallback.
+runtime-constructor	createPluginSwitchStore	## 2026-11-11 - Settings sections keep the fork contract surface, not the upstream OpenCode callers	Retired with OpenCode plugins.
+runtime-constructor	createUnreadBaseline	## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities	Replaced by Host-persisted session unread watermarks.

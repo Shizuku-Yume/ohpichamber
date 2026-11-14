@@ -9186,6 +9186,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "備用供應商",
   "settings.webSearch.native.fallbackInfo": "主要供應商失敗時依顯示順序嘗試。",
   "settings.webSearch.native.addFallback": "新增備用供應商",
+  "settings.webSearch.native.dragInstructions": "按空白鍵拿起供應商，用方向鍵移動，再按空白鍵放下。按 Escape 鍵取消。",
   "settings.webSearch.native.removeFallback": "從備用清單移除 {provider}",
   "settings.webSearch.native.timeout": "逾時（秒）",
   "settings.webSearch.native.keyInfo": "金鑰僅可寫入，不會傳回現有金鑰。",

@@ -9186,6 +9186,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "Dostawcy zapasowi",
   "settings.webSearch.native.fallbackInfo": "Próbowani w tej kolejności, gdy główny dostawca zawiedzie.",
   "settings.webSearch.native.addFallback": "Dodaj dostawcę zapasowego",
+  "settings.webSearch.native.dragInstructions": "Naciśnij Spację, aby podnieść dostawcę, użyj klawiszy strzałek, aby go przesunąć, i naciśnij Spację, aby go upuścić. Naciśnij Escape, aby anulować.",
   "settings.webSearch.native.removeFallback": "Usuń {provider} z dostawców zapasowych",
   "settings.webSearch.native.timeout": "Limit czasu (sekundy)",
   "settings.webSearch.native.keyInfo": "Klucze można tylko zapisywać. Istniejące sekrety nigdy nie są zwracane.",

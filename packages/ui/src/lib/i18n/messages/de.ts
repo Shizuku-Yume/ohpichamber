@@ -9186,6 +9186,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "Ersatzanbieter",
   "settings.webSearch.native.fallbackInfo": "Werden in dieser Reihenfolge versucht, wenn der primäre Anbieter fehlschlägt.",
   "settings.webSearch.native.addFallback": "Ersatzanbieter hinzufügen",
+  "settings.webSearch.native.dragInstructions": "Drücke die Leertaste, um einen Anbieter aufzunehmen, bewege ihn mit den Pfeiltasten und drücke erneut die Leertaste, um ihn abzulegen. Mit Escape abbrechen.",
   "settings.webSearch.native.removeFallback": "{provider} aus Ersatzanbietern entfernen",
   "settings.webSearch.native.timeout": "Zeitlimit (Sekunden)",
   "settings.webSearch.native.keyInfo": "Schlüssel können nur geschrieben werden. Vorhandene Geheimnisse werden nie zurückgegeben.",

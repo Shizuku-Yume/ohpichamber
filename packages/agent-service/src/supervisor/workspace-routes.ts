@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
+import { getAgentDir } from '@oh-my-pi/pi-utils';
 import type { IncomingMessage } from 'node:http';
 import {
   AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema,
@@ -168,20 +169,28 @@ export class WorkspaceRoutes {
       for (const scope of authorizedScopes) {
         if (this.catalogs.get(scope.workspaceId).projectId !== scope.projectId) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The session workspace does not match its catalog project');
       }
-      const references = this.sessions.usageReferences(authorizedScopes, query);
       await mkdir(this.stateDirectory, { recursive: true, mode: 0o700 });
       await this.workers.startUsage({
         rootSessionId: this.usageWorkerId, workspaceId: this.usageWorkerId, projectId: this.usageWorkerId,
-        cwd: this.stateDirectory, agentDirectory: this.stateDirectory, agentDirectoryId: this.usageWorkerId, catalogRevision: '0'
+        cwd: this.stateDirectory, agentDirectory: getAgentDir(), agentDirectoryId: this.usageWorkerId, catalogRevision: '0'
       });
       if (url.pathname === '/internal/usage/tools') {
+        const references = this.sessions.usageReferences(authorizedScopes, query);
         const result = await this.workers.request(this.usageWorkerId, { type: 'usage.tools', query, references });
         if (result.type !== 'usage.tools') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.tools operation.');
         return { status: 200, body: UsageToolsResponseSchema.parse(result.result) };
       }
-      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query });
+      // A workspace or project filter resolves to the sessions folders of its roots. The unscoped view is every OMP session.
+      const scoped = query.workspaceId !== undefined || query.projectId !== undefined;
+      const sessionDirectories = scoped ? this.sessions.usageSessionDirectories(authorizedScopes, query) : undefined;
+      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query, sessionDirectories });
       if (result.type !== 'usage.stats') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.stats operation.');
-      return { status: 200, body: UsageStatsSchema.parse(result.result) };
+      // Accounts fail on their own: their errors are named beside the session errors, never folded into an empty success.
+      const accounts = await this.workers.request(this.usageWorkerId, { type: 'usage.accounts', query });
+      if (accounts.type !== 'usage.accounts') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.accounts operation.');
+      const partial = result.result.partial || Object.keys(accounts.result.errors).length > 0;
+      const errors = { ...result.result.errors, ...accounts.result.errors };
+      return { status: 200, body: UsageStatsSchema.parse({ ...result.result, accounts: accounts.result.accounts, partial, ...(partial ? { errors } : {}) }) };
     }
     const searchRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/web-search(?:\/credentials\/([^/]+))?$/.exec(url.pathname);
     if (searchRoute) {
@@ -253,13 +262,7 @@ export class WorkspaceRoutes {
       const action = mcpRoute[4];
       if (action === 'reconnect' && request.method === 'POST') {
         const body = await readBody(request, MCPApplyRequestSchema);
-        return {
-          status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body, async configuration => {
-            const result = await execute({ type: 'test', serverId, configuration });
-            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp connection test operation.');
-            return result.result;
-          })
-        };
+        return { status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body) };
       }
       if (action === 'test' && request.method === 'POST') {
         const body = await readBody(request, MCPApplyRequestSchema);

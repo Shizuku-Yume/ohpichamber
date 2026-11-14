@@ -9186,6 +9186,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "Yedek sağlayıcılar",
   "settings.webSearch.native.fallbackInfo": "Birincil sağlayıcı başarısız olursa bu sırayla denenir.",
   "settings.webSearch.native.addFallback": "Yedek sağlayıcı ekle",
+  "settings.webSearch.native.dragInstructions": "Bir sağlayıcıyı almak için Boşluk tuşuna basın, ok tuşlarıyla taşıyın ve bırakmak için yeniden Boşluk tuşuna basın. İptal etmek için Escape tuşuna basın.",
   "settings.webSearch.native.removeFallback": "{provider} sağlayıcısını yedeklerden kaldır",
   "settings.webSearch.native.timeout": "Zaman aşımı (saniye)",
   "settings.webSearch.native.keyInfo": "Anahtarlar yalnızca yazılabilir. Mevcut gizli bilgiler asla döndürülmez.",

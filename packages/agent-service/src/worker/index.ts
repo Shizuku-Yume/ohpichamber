@@ -7,7 +7,7 @@ import { StatelessWorker } from './stateless.ts';
 import { WorkerPolicy } from './policy.ts';
 import { NativeMcpError } from './mcp.ts';
 import { WorkerHostActions } from './host-actions.ts';
-import { getUsageStats, getUsageTools } from './usage.ts';
+import { getUsageAccounts, getUsageStats, getUsageTools } from './usage.ts';
 
 /** The cause a thrown value carries, whatever its shape. A thrown string is a
  * cause the worker chose, not a missing one; only a value with nothing readable
@@ -106,14 +106,15 @@ process.on('message', raw => {
   if (command.type === 'operation') {
     if (stopping || command.workerGeneration !== bootstrap?.workerGeneration) return;
     const owned = resources;
-    const usage = command.operation.type === 'usage.stats' || command.operation.type === 'usage.tools';
+    const usage = command.operation.type === 'usage.stats' || command.operation.type === 'usage.tools' || command.operation.type === 'usage.accounts';
     if ((!owned && !usage) || (usage && bootstrap?.type !== 'usage.bootstrap')) {
       send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId, status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'The worker resources needed by this operation are not available' });
       return;
     }
     // Deliberately not serialized: cancel/abort/interactive replies must interrupt active work.
     void (async () => {
-      if (command.operation.type === 'usage.stats') return { type: 'usage.stats' as const, result: await getUsageStats(command.operation.query, command.operation.references) };
+      if (command.operation.type === 'usage.stats') return { type: 'usage.stats' as const, result: await getUsageStats(command.operation.query, command.operation.sessionDirectories) };
+      if (command.operation.type === 'usage.accounts') return { type: 'usage.accounts' as const, result: await getUsageAccounts(command.operation.query) };
       if (command.operation.type === 'usage.tools') return { type: 'usage.tools' as const, result: await getUsageTools(command.operation.query, command.operation.references) };
       if (!owned) throw new Error('Worker resources are unavailable');
       const publishPolicy = owned instanceof StatelessWorker && !isReadOnlyOperation(command.operation);
@@ -125,17 +126,19 @@ process.on('message', raw => {
       send({ type: 'result', workerGeneration: command.workerGeneration, commandId: command.commandId, result });
     }).catch((error: unknown) => {
       const nativeCode = error instanceof NativeMcpError ? ProblemCodeSchema.safeParse(error.code) : undefined;
-      send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
+      send({
+        type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
         status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError ? nativeMcpStatus(error) : 503,
         code: error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE',
-        detail: operationCause(error).slice(0, 200) });
+        detail: operationCause(error).slice(0, 200)
+      });
     });
     return;
   }
   if (bootstrap || stopping) return;
   bootstrap = command;
   if (command.type === 'usage.bootstrap') {
-    // Cold reporting never constructs providers, AuthStorage, a live session, or the policy runtime.
+    // Cold reporting constructs no provider and no live session. Usage reads open OMP's configuration and credential store per request, and send no provider request except the bounded quota probe.
     send({ type: 'lifecycle', workerGeneration: command.workerGeneration, state: 'initialized' });
     send({ type: 'ready', workerGeneration: command.workerGeneration });
     return;

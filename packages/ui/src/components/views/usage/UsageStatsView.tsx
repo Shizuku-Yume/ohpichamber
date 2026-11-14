@@ -489,8 +489,9 @@ function TokenComposition({ stats, formats }: { stats: UsageStats; formats: Form
   );
 }
 
-/** Averages that need the whole report: cache reuse, cost of a session, and
- * how much of the output the model spent reasoning. */
+/** Averages that need the whole report: cache reuse, cost of a session, how
+ * much of the output the model spent reasoning, and the report's latency,
+ * speed and error rate. Rendered for every report, not only comparisons. */
 function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStats; formats: Formats; isFullyUnpriced?: boolean }): React.ReactNode {
   const { t } = useI18n();
   const hitRate = cacheHitRate(stats.tokens);
@@ -499,6 +500,9 @@ function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStat
   const tokensPerSession = averagePer(stats.tokens.total, stats.sessions);
   const stepsPerSession = averagePer(stats.steps, stats.sessions);
   const reasoning = reasoningShare(stats.tokens);
+  const ttft = stats.avgTtft ?? null;
+  const tokensPerSecond = stats.avgTokensPerSecond ?? null;
+  const errorRate = stats.errorRate ?? null;
   return (
     <Section title={t('usageStats.efficiency.title')}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -520,6 +524,12 @@ function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStat
           value={stepsPerSession === null ? '—' : formats.decimal.format(stepsPerSession)}
         />
         <StatTile label={t('usageStats.efficiency.reasoningShare')} value={reasoning === null ? '—' : formats.percent.format(reasoning)} />
+        <StatTile label={t('usageStats.providers.table.ttft')} value={ttft === null ? '—' : formats.milliseconds.format(Math.round(ttft))} />
+        <StatTile
+          label={t('usageStats.providers.table.tps')}
+          value={tokensPerSecond === null ? '—' : `${formats.decimal.format(tokensPerSecond)} tok/s`}
+        />
+        <StatTile label={t('usageStats.providers.table.errorRate')} value={errorRate === null ? '—' : formats.percent.format(errorRate)} />
       </div>
     </Section>
   );

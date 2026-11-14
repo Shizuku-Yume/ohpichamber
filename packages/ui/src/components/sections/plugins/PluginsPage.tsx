@@ -13,12 +13,13 @@ import { CanonicalApiError } from '@/api/canonicalClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Icon } from '@/components/icon/Icon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsBackButton, SettingsCardChip, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
+import { SETTINGS_CARD_GRID_CLASS, SettingsAddCard, SettingsBackButton, SettingsCard, type SettingsCardAction, SettingsCardChip, SettingsCardIcon, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
 import {
   SETTINGS_SELECT_TRIGGER_CLASS,
   SettingsFieldRow,
@@ -95,6 +96,34 @@ const CAPABILITY_LABEL = {
   lspServers: 'settings.plugins.details.lspServers',
   dapAdapters: 'settings.plugins.details.dapAdapters',
 } as const;
+
+const CAPABILITY_KEYS = ['commands', 'agents', 'hooks', 'mcpServers', 'lspServers', 'dapAdapters'] as const;
+
+/** The manifest details of an installed marketplace plugin; a plugin installed from a package has none. */
+const marketplaceDetailsFor = (marketplace: readonly MarketplaceEntry[], plugin: InstalledPluginEntry): MarketplacePluginDetails | undefined => {
+  if (plugin.target.kind !== 'marketplace') return undefined;
+  const target = plugin.target;
+  return marketplace.find(entry => entry.name === target.name && entry.marketplace === target.marketplace)?.details;
+};
+
+/** Declared capability counts as label and number chips. A capability the manifest does not declare is not shown. */
+const CapabilityChips: React.FC<{ details: MarketplacePluginDetails | undefined }> = ({ details }) => {
+  const { t } = useI18n();
+  if (!details) return null;
+  const counted = CAPABILITY_KEYS.map(key => ({ key, count: capabilityCount(details[key]) })).filter(({ count }) => count > 0);
+  if (counted.length === 0) return null;
+  // A shrinkable wrapping row: a card footer with many kinds wraps them instead of running into the enable control.
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+      {counted.map(({ key, count }) => (
+        <SettingsCardChip key={key}>
+          <span>{t(CAPABILITY_LABEL[key])}</span>
+          <span className="tabular-nums">{count}</span>
+        </SettingsCardChip>
+      ))}
+    </div>
+  );
+};
 
 /** Manifest details published by the marketplace catalog; absent details stay absent rather than invented. */
 const MarketplaceDetailsSection: React.FC<{ entry: MarketplaceEntry | undefined }> = ({ entry }) => {
@@ -395,38 +424,6 @@ const LocalExtensionEditor: React.FC<{ extension: LocalExtensionEntry; revision:
   );
 };
 
-/**
- * One installed entry in the catalog list: what it is, where it came from,
- * and the actions a user takes on it. The Skills catalog uses the same row
- * shape, so both content pages read the same way.
- */
-const InstalledRow: React.FC<{
-  title: string;
-  subtitle?: string;
-  description?: string;
-  badges?: React.ReactNode;
-  footer?: React.ReactNode;
-  onOpen: () => void;
-  actions: React.ReactNode;
-}> = ({ title, subtitle, description, badges, footer, onOpen, actions }) => (
-  <div className="flex min-w-0 flex-col gap-2 py-3 @xl:flex-row @xl:items-start @xl:gap-4">
-    <button
-      type="button"
-      onClick={onOpen}
-      className="min-w-0 flex-1 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
-      <span className="flex min-w-0 flex-wrap items-center gap-2">
-        <span className="truncate typography-ui-label text-foreground">{title}</span>
-        {subtitle ? <span className="shrink-0 font-mono typography-micro text-muted-foreground">{subtitle}</span> : null}
-        {badges}
-      </span>
-      {description ? <span className="mt-0.5 block line-clamp-2 typography-micro text-muted-foreground">{description}</span> : null}
-      {footer ? <span className="mt-1 flex flex-wrap items-center gap-2 typography-micro text-muted-foreground">{footer}</span> : null}
-    </button>
-    <div className="flex shrink-0 flex-wrap items-center gap-1.5">{actions}</div>
-  </div>
-);
-
 const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }) => {
   const { t } = useI18n();
   const catalog = usePluginsStore(state => state.catalog);
@@ -446,6 +443,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
   const [marketplaceRefreshing, setMarketplaceRefreshing] = React.useState(false);
   const [marketplaceScope, setMarketplaceScope] = React.useState<'user' | 'project'>('project');
   const [marketplaceQuery, setMarketplaceQuery] = React.useState('');
+  const [marketplaceCategory, setMarketplaceCategory] = React.useState<string | null>(null);
   const [upgradingAll, setUpgradingAll] = React.useState(false);
   const [sourcesOpen, setSourcesOpen] = React.useState(false);
 
@@ -483,9 +481,21 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
     () => rankByQuery(catalog?.marketplace ?? [], marketplaceQuery, entry => [
       entry.name, entry.description, entry.marketplace,
       entry.details?.category ?? '', ...(entry.details?.keywords ?? []), entry.details?.author?.name ?? '',
-    ]),
-    [catalog, marketplaceQuery],
+    ]).filter(entry => marketplaceCategory === null || [entry.details?.category, ...(entry.details?.tags ?? [])].includes(marketplaceCategory)),
+    [catalog, marketplaceQuery, marketplaceCategory],
   );
+  const marketplaceCategories = React.useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of catalog?.marketplace ?? []) {
+      const categories = [entry.details?.category, ...(entry.details?.tags ?? [])].filter((value): value is string => Boolean(value));
+      for (const category of new Set(categories)) counts.set(category, (counts.get(category) ?? 0) + 1);
+    }
+    return [...counts].sort(([left, leftCount], [right, rightCount]) => rightCount - leftCount || left.localeCompare(right));
+  }, [catalog]);
+  // A category the catalog no longer has would filter out every plugin and hide the chip row that holds the reset, so it is cleared.
+  React.useEffect(() => {
+    if (marketplaceCategory !== null && !marketplaceCategories.some(([category]) => category === marketplaceCategory)) setMarketplaceCategory(null);
+  }, [marketplaceCategories, marketplaceCategory]);
   // A marketplace entry is installed only in the scope it was installed into:
   // the same plugin can be installed globally and again for one project.
   const installedMarketplaceKeys = React.useMemo(() => new Set((catalog?.plugins ?? []).flatMap(entry => (
@@ -840,78 +850,65 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           )}
           contentClassName="space-y-0"
         >
-          {installedCount === 0 ? (
-            <p className="py-4 typography-meta text-muted-foreground">{t('settings.plugins.section.installedEmpty')}</p>
-          ) : (
-            <div className="divide-y divide-[var(--surface-subtle)]">
-              {catalog.plugins.map(entry => {
-                const update = updateFor(updates, entry);
-                return (
-                  <InstalledRow
-                    key={entry.id}
-                    title={entry.name}
-                    subtitle={entry.version || undefined}
-                    description={entry.description || undefined}
-                    onOpen={() => setSelection({ kind: 'plugin', id: entry.id })}
-                    badges={(
-                      <>
-                        <SettingsCardPill tone={entry.enabled ? 'success' : 'neutral'}>
-                          {t(entry.enabled ? 'settings.plugins.status.enabled' : 'settings.plugins.status.disabled')}
-                        </SettingsCardPill>
-                        {update ? (
-                          <SettingsCardPill tone="info">
-                            {t('settings.plugins.update.badge', { from: update.from, to: update.to })}
-                          </SettingsCardPill>
-                        ) : null}
-                      </>
-                    )}
-                    footer={(
-                      <>
-                        <ScopeChip scope={entry.scope} />
-                        {entry.target.kind === 'marketplace' ? (
-                          <span className="font-mono">{entry.target.marketplace}</span>
-                        ) : null}
-                      </>
-                    )}
-                    actions={(
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={disabled}
-                          onClick={() => void run(() => usePluginsStore.getState().configurePlugin({ target: entry.target, enabled: !entry.enabled }))}
-                        >
-                          {t(entry.enabled ? 'settings.plugins.action.disable' : 'settings.plugins.action.enable')}
-                        </Button>
-                        {update ? (
-                          <Button variant="outline" size="sm" disabled={disabled} onClick={() => void updatePlugin(entry)}>
-                            {t('settings.plugins.action.update')}
-                          </Button>
-                        ) : null}
-                        <Button variant="ghost" size="sm" className="text-[var(--status-error)] hover:text-[var(--status-error)]" disabled={disabled} onClick={() => requestDelete({ kind: 'plugin', plugin: entry })}>
-                          {t('settings.plugins.action.uninstall')}
-                        </Button>
-                      </>
-                    )}
-                  />
-                );
-              })}
-              {catalog.localExtensions.map(entry => (
-                <InstalledRow
-                  key={entry.extensionId}
-                  title={entry.extensionId}
-                  description={t('settings.plugins.local.title')}
-                  onOpen={() => setSelection({ kind: 'local', extensionId: entry.extensionId })}
-                  footer={<span className="truncate font-mono">{entry.relativePath}</span>}
-                  actions={(
-                    <Button variant="ghost" size="sm" className="text-[var(--status-error)] hover:text-[var(--status-error)]" disabled={disabled} onClick={() => requestDelete({ kind: 'local', extension: entry })}>
-                      {t('settings.common.actions.delete')}
-                    </Button>
+          <div className={SETTINGS_CARD_GRID_CLASS}>
+            {installedCount === 0 ? (
+              <SettingsAddCard
+                label={t('settings.plugins.sidebar.actions.addTitle')}
+                hint={t('settings.plugins.section.installedEmpty')}
+                onClick={() => setAddOpen(true)}
+                settingsItem="plugins.add"
+              />
+            ) : null}
+            {catalog.plugins.map(entry => {
+              const update = updateFor(updates, entry);
+              const uninstall: SettingsCardAction = { label: t('settings.plugins.action.uninstall'), icon: 'delete-bin', destructive: true, onSelect: () => requestDelete({ kind: 'plugin', plugin: entry }) };
+              const actions: SettingsCardAction[] = update
+                ? [{ label: t('settings.plugins.action.update'), icon: 'refresh', onSelect: () => void updatePlugin(entry) }, uninstall]
+                : [uninstall];
+              return (
+                <SettingsCard
+                  key={entry.id}
+                  icon={<SettingsCardIcon name="plug" />}
+                  title={entry.name}
+                  description={entry.description || undefined}
+                  muted={!entry.enabled}
+                  badges={(
+                    <>
+                      {entry.version ? <SettingsCardPill tone="neutral">{entry.version}</SettingsCardPill> : null}
+                      {update ? (
+                        <SettingsCardPill tone="info">{t('settings.plugins.update.badge', { from: update.from, to: update.to })}</SettingsCardPill>
+                      ) : null}
+                      <ScopeChip scope={entry.scope} />
+                    </>
                   )}
+                  footer={<CapabilityChips details={marketplaceDetailsFor(catalog.marketplace, entry)} />}
+                  control={(
+                    <Switch
+                      checked={entry.enabled}
+                      disabled={disabled}
+                      aria-label={t(entry.enabled ? 'settings.extensions.actions.disable.aria' : 'settings.extensions.actions.enable.aria', { name: entry.name })}
+                      onCheckedChange={enabled => void run(() => usePluginsStore.getState().configurePlugin({ target: entry.target, enabled }))}
+                    />
+                  )}
+                  onOpen={() => setSelection({ kind: 'plugin', id: entry.id })}
+                  actionsLabel={t('settings.plugins.grid.actionsAria', { name: entry.name })}
+                  actions={actions}
                 />
-              ))}
-            </div>
-          )}
+              );
+            })}
+            {catalog.localExtensions.map(entry => (
+              <SettingsCard
+                key={entry.extensionId}
+                icon={<SettingsCardIcon name="file-code" />}
+                title={entry.extensionId}
+                description={t('settings.plugins.local.title')}
+                badges={<ScopeChip scope="workspace" />}
+                onOpen={() => setSelection({ kind: 'local', extensionId: entry.extensionId })}
+                actionsLabel={t('settings.plugins.grid.actionsAria', { name: entry.extensionId })}
+                actions={[{ label: t('settings.common.actions.delete'), icon: 'delete-bin', destructive: true, onSelect: () => requestDelete({ kind: 'local', extension: entry }) }]}
+              />
+            ))}
+          </div>
         </SettingsSection>
 
         {/* Capability sources are the extension inventory's own view of the
@@ -982,6 +979,26 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             </Button>
           </div>
 
+          {marketplaceCategories.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button variant="chip" size="xs" aria-pressed={marketplaceCategory === null} onClick={() => setMarketplaceCategory(null)}>
+                {t('settings.plugins.marketplace.allCategories')}
+              </Button>
+              {marketplaceCategories.map(([category, count]) => (
+                <Button
+                  key={category}
+                  variant="chip"
+                  size="xs"
+                  aria-pressed={marketplaceCategory === category}
+                  onClick={() => setMarketplaceCategory(category)}
+                >
+                  {category}
+                  <span className="tabular-nums">{count}</span>
+                </Button>
+              ))}
+            </div>
+          ) : null}
+
           {catalog.marketplace.length === 0 ? (
             <p className="py-2 typography-meta text-muted-foreground">{t('settings.plugins.marketplace.empty')}</p>
           ) : marketplaceEntries.length === 0 ? (
@@ -993,9 +1010,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           <div className="divide-y divide-[var(--surface-subtle)]">
             {marketplaceEntries.map(entry => {
               const installed = installedMarketplaceKeys.has(`${entry.name}@${entry.marketplace}@${marketplaceScope}`);
-              const badges = [entry.details?.category, ...(entry.details?.keywords ?? [])]
-                .filter((value): value is string => Boolean(value))
-                .slice(0, 6);
               return (
                 <div key={`${entry.marketplace}:${entry.name}`} className="flex min-w-0 flex-col gap-2 py-3 @xl:flex-row @xl:items-start @xl:gap-4">
                   <div className="min-w-0 flex-1">
@@ -1008,13 +1022,9 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
                       ) : null}
                     </div>
                     {entry.description ? <p className="line-clamp-2 typography-micro text-muted-foreground">{entry.description}</p> : null}
-                    {badges.length > 0 ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {badges.map(badge => (
-                          <span key={badge} className="oc-tile-inset rounded-full px-2 py-px text-[0.625rem] text-muted-foreground">{badge}</span>
-                        ))}
-                      </div>
-                    ) : null}
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 typography-micro text-muted-foreground">
+                      <CapabilityChips details={entry.details} />
+                    </div>
                   </div>
                   <Button
                     variant={installed ? 'ghost' : 'outline'}

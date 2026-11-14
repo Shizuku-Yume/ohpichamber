@@ -9186,6 +9186,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "Reserveproviders",
   "settings.webSearch.native.fallbackInfo": "Worden in deze volgorde geprobeerd als de primaire provider faalt.",
   "settings.webSearch.native.addFallback": "Reserveprovider toevoegen",
+  "settings.webSearch.native.dragInstructions": "Druk op Spatie om een provider op te pakken, gebruik de pijltjestoetsen om hem te verplaatsen en druk op Spatie om hem los te laten. Druk op Escape om te annuleren.",
   "settings.webSearch.native.removeFallback": "{provider} uit reserveproviders verwijderen",
   "settings.webSearch.native.timeout": "Time-out (seconden)",
   "settings.webSearch.native.keyInfo": "Sleutels kunnen alleen worden geschreven. Bestaande geheimen worden nooit teruggestuurd.",

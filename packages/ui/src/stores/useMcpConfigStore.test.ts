@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { MCPApplyResult, MCPConfigurationState, MCPConfigureRequest, MCPServerConfig } from '@openchamber/agent-contract';
+import { MCPApplyResultSchema } from '@openchamber/agent-contract';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
 const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, scope: 'project' as const, transport: { type: 'stdio', command: 'mcp-tools', args: [] } };
 let current: MCPConfigurationState;
@@ -16,7 +18,14 @@ mock.module('@/api/canonicalClient', () => ({
     getWorkspaceMcpConfig: async () => { if (readFailure) throw readFailure; return pendingRead ?? current; },
     configureWorkspaceMcp: async (_workspaceId: string, request: MCPConfigureRequest): Promise<MCPApplyResult> => {
       captured.push(request);
-      if (writeFailure) throw writeFailure;
+      // The substitute endpoint enforces the workspace owner's compare-and-set revision.
+      if (request.expectedPersistedRevision !== current.persistedRevision) throw new Error('CATALOG_CONFLICT');
+      if (writeFailure) {
+        // A rejected apply that still committed carries its persisted configuration.
+        const persisted = writeFailure instanceof CanonicalApiError ? MCPApplyResultSchema.safeParse(writeFailure.problem.details?.result) : undefined;
+        if (persisted?.success) current = persisted.data.configuration;
+        throw writeFailure;
+      }
       current = { ...current, persistedRevision: String(BigInt(current.persistedRevision) + 1n), config: request.config };
       return { kind: 'mcp', status: 'no-active-workers', configuration: current, workers: [] };
     },
@@ -61,11 +70,11 @@ describe('workspace MCP configuration consumers', () => {
     const result = await useMcpConfigStore.getState().updateMcp('tools', { enabled: false }, '/repo');
     expect(result.ok).toBe(false);
     expect(result.result).toEqual(partial);
-    // publish-on-failure is deleted: store retains previous valid revision
-    expect(useMcpConfigStore.getState().configurationsByDirectory['/repo'].persistedRevision).toBe('4');
+    // the rejected apply advanced persistence; the store adopts that revision as its baseline
+    expect(useMcpConfigStore.getState().configurationsByDirectory['/repo'].persistedRevision).toBe('5');
     writeFailure = null;
     await useMcpConfigStore.getState().updateMcp('tools', { label: 'Renamed' }, '/repo');
-    expect(captured[1].expectedPersistedRevision).toBe('4');
+    expect(captured[1].expectedPersistedRevision).toBe('5');
   });
   test('an older load cannot resurrect a server deleted after that load started', async () => {
     await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
@@ -89,5 +98,28 @@ describe('workspace MCP configuration consumers', () => {
   test('unregistered directory fails instead of silently loading a global workspace', async () => {
     expect(await useMcpConfigStore.getState().loadMcpConfigs({ directory: null })).toBe(false);
     expect(resolveWorkspace).not.toHaveBeenCalled();
+  });
+  test('a saved-not-connected failure refreshes the mutation baseline for the next edit', async () => {
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    const notConnected: MCPApplyResult = {
+      kind: 'mcp', status: 'no-active-workers', outcome: 'saved-not-connected',
+      configuration: { ...current, persistedRevision: '5', config: { servers: [{ ...server, enabled: false }] } }, workers: [],
+    };
+    writeFailure = new CanonicalApiError({ type: 'urn:problem:MCP_APPLY_FAILED', title: 'Not connected', status: 503, detail: 'ECONNREFUSED', code: 'MCP_APPLY_FAILED', retryable: true, details: { result: notConnected } });
+    expect((await useMcpConfigStore.getState().updateMcp('tools', { enabled: false }, '/repo')).ok).toBe(false);
+    writeFailure = null;
+    expect((await useMcpConfigStore.getState().updateMcp('tools', { label: 'Renamed' }, '/repo')).ok).toBe(true);
+    expect(captured[captured.length - 1].expectedPersistedRevision).toBe('5');
+  });
+  test('an unread directory shows no servers of the current directory', async () => {
+    // Static import above: no mock is needed for the directory store.
+    useDirectoryStore.setState({ currentDirectory: '/repo' });
+    try {
+      await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+      expect(useMcpConfigStore.getState().getMcpServersForDirectory('/repo')).toEqual([server]);
+      expect(useMcpConfigStore.getState().getMcpServersForDirectory('/other')).toEqual([]);
+    } finally {
+      useDirectoryStore.setState({ currentDirectory: '' });
+    }
   });
 });

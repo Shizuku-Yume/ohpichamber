@@ -30,6 +30,7 @@ import {
   SettingsFieldRow,
   SettingsSection,
 } from '@/components/sections/shared/SettingsSection';
+import { SettingsSortableList, type SettingsSortableListItem } from '@/components/sections/shared/SettingsSortableList';
 import { getWebSearchScopeKey, useWebSearchStore, type WebSearchSnapshot } from '@/stores/useWebSearchStore';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 
@@ -42,9 +43,6 @@ import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
  * The page opens on the mode (default, off) and a card per provider; a card
  * opens the provider, where its key is added and it is chosen for search.
  */
-
-/** Sentinel for the add-fallback select; it never leaves the control. */
-const ADD_FALLBACK_VALUE = '__add-fallback__';
 
 /** OMP's native `providers.webSearchTimeoutSeconds` default, used by the reset action. */
 const DEFAULT_TIMEOUT_SECONDS = 60;
@@ -174,11 +172,33 @@ const ProviderCard: React.FC<{ provider: WebSearchProviderEntry; snapshot: WebSe
   );
 };
 
+const FallbackStatus: React.FC<{ provider: WebSearchProviderEntry | undefined }> = ({ provider }) => {
+  const { t } = useI18n();
+  if (provider?.requiresCredential && !provider.credentialConfigured) {
+    return <SettingsCardPill tone="warning">{t('settings.webSearch.card.needsKey')}</SettingsCardPill>;
+  }
+  if (!provider?.configured) {
+    return <SettingsCardPill tone="warning">{t('settings.webSearch.card.needsSetup')}</SettingsCardPill>;
+  }
+  return <SettingsCardPill tone="success">{t('settings.webSearch.native.configured')}</SettingsCardPill>;
+};
+
+interface FallbackRow extends SettingsSortableListItem {
+  provider: WebSearchProviderEntry | undefined;
+}
+
 const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
   const { t } = useI18n();
   const { busy, commit } = useChoose(snapshot);
-  const availableFallbacks = snapshot.providers.filter(
-    (provider) => provider.providerId !== snapshot.selectedProviderId
+  const rows: FallbackRow[] = snapshot.fallbackProviderIds.map((providerId) => {
+    const provider = snapshot.providers.find((entry) => entry.providerId === providerId);
+    return { id: providerId, label: provider?.name ?? providerId, provider };
+  });
+  // The primary provider is never offered as a fallback, and an unconfigured
+  // provider cannot be added: the Use action gates on the same flag.
+  const addable = snapshot.providers.filter(
+    (provider) => provider.configured
+      && provider.providerId !== snapshot.selectedProviderId
       && !snapshot.fallbackProviderIds.includes(provider.providerId),
   );
 
@@ -190,48 +210,43 @@ const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapsh
         settingsItem="web-search.fallbacks"
       >
         <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
-          {snapshot.fallbackProviderIds.length > 0 ? (
-            <div className="space-y-2">
-              {snapshot.fallbackProviderIds.map((providerId) => {
-                const fallbackName = snapshot.providers.find((provider) => provider.providerId === providerId)?.name ?? providerId;
-                return (
-                  <div key={providerId} className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="min-w-0 truncate typography-ui-label text-foreground">{fallbackName}</span>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      disabled={busy}
-                      aria-label={t('settings.webSearch.native.removeFallback', { provider: fallbackName })}
-                      onClick={() => void commit({
-                        fallbackProviderIds: snapshot.fallbackProviderIds.filter((value) => value !== providerId),
-                      })}
-                    >
-                      {t('settings.webSearch.keys.remove')}
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
+          <SettingsSortableList
+            items={rows}
+            disabled={busy}
+            dragInstructions={t('settings.webSearch.native.dragInstructions')}
+            onReorder={(providerIds) => void commit({ fallbackProviderIds: providerIds })}
+            renderRow={(row, index) => (
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="typography-meta w-4 shrink-0 text-right tabular-nums text-muted-foreground">{index + 1}</span>
+                <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">{row.label}</span>
+                <FallbackStatus provider={row.provider} />
+                <Button
+                  variant="outline"
+                  size="xs"
+                  disabled={busy}
+                  aria-label={t('settings.webSearch.native.removeFallback', { provider: row.label })}
+                  onClick={() => void commit({
+                    fallbackProviderIds: snapshot.fallbackProviderIds.filter((value) => value !== row.id),
+                  })}
+                >
+                  {t('settings.webSearch.keys.remove')}
+                </Button>
+              </div>
+            )}
+          />
           <Select
-            value={ADD_FALLBACK_VALUE}
-            disabled={busy || availableFallbacks.length === 0}
-            onValueChange={(value) => {
-              if (value === ADD_FALLBACK_VALUE) return;
-              void commit({ fallbackProviderIds: [...snapshot.fallbackProviderIds, value] });
-            }}
+            value=""
+            disabled={busy || addable.length === 0}
+            onValueChange={(providerId) => void commit({ fallbackProviderIds: [...snapshot.fallbackProviderIds, providerId] })}
           >
             <SelectTrigger
               className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
               aria-label={t('settings.webSearch.native.addFallback')}
             >
-              <SelectValue placeholder={t('settings.webSearch.native.addFallback')}>
-                {t('settings.webSearch.native.addFallback')}
-              </SelectValue>
+              <SelectValue placeholder={t('settings.webSearch.native.addFallback')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ADD_FALLBACK_VALUE}>{t('settings.webSearch.native.addFallback')}</SelectItem>
-              {availableFallbacks.map((provider) => (
+              {addable.map((provider) => (
                 <SelectItem key={provider.providerId} value={provider.providerId}>
                   {provider.name}
                 </SelectItem>

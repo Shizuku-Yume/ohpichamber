@@ -270,39 +270,21 @@ test('PluginsPage mounts without infinite re-render loop when catalog is null', 
   expect(container.textContent).toContain('Plugins');
 });
 
-test('Extension Control Center caps row trigger badges and renders full triggers in inspector', async () => {
-  const longTriggers = [
-    'ast:grep($X.foo.bar.baz.qux())',
-    'glob:**/*.test.ts',
-    'glob:**/*.spec.ts',
-    'glob:src/**/*.tsx',
-  ];
-  const itemWithTriggers: ExtensionItem = {
-    id: 'ext_long_rule',
-    kind: 'rule',
-    name: 'long-trigger-rule',
-    providerId: 'agents',
-    providerName: 'Agent Dirs (.agent/.agents)',
-    scope: 'project',
-    path: '<workspace>/.agents/rules/long.md',
-    enabled: true,
-    shadowed: false,
-    toggleable: true,
-    triggers: longTriggers,
-    content: 'Rule body',
-  };
-  const inventoryWithTriggers: ExtensionInventory = {
-    providers: [
-      { id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['rule'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: 1 },
-    ],
-    items: [itemWithTriggers],
-    warnings: [],
-    kinds: [{ kind: 'rule', label: 'Rules' }],
-  };
-
+const ruleItem = (overrides: Partial<ExtensionItem>): ExtensionItem => ({
+  id: 'ext_rule', kind: 'rule', name: 'rule', providerId: 'agents', providerName: 'Agent Dirs (.agent/.agents)',
+  scope: 'project', path: '<workspace>/.agents/rules/rule.md', enabled: true, shadowed: false, toggleable: true, triggers: [],
+  ...overrides,
+});
+const kindInventory = (items: ExtensionItem[]): ExtensionInventory => ({
+  providers: [{ id: 'agents', displayName: 'Agent Dirs (.agent/.agents)', description: '', priority: 1, capabilities: ['rule', 'skill'], enabled: true, userSourceEnabled: true, foreignUserSource: false, itemCount: items.length }],
+  items,
+  warnings: [],
+  kinds: [{ kind: 'rule', label: 'Rules' }, { kind: 'skill', label: 'Skills' }],
+});
+const showCatalog = async (catalog: PluginCatalogState) => {
   usePluginsStore.setState({
-    catalog: { ...emptyCatalog, extensions: inventoryWithTriggers },
-    extensions: inventoryWithTriggers,
+    catalog,
+    extensions: catalog.extensions,
     extensionRevision: '1',
     loadedDirectory: '/repo',
     loadedRuntimeKey: getRuntimeKey(),
@@ -313,26 +295,63 @@ test('Extension Control Center caps row trigger badges and renders full triggers
     lastMutation: null,
     doctor: null,
   });
+  await act(async () => { root.render(<I18nProvider><PluginsPage /></I18nProvider>); });
+  await settle();
+};
+const buttonWith = (text: string) => Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(text));
 
-  await act(async () => {
-    root.render(<I18nProvider><PluginsPage /></I18nProvider>);
+test('capability kind tabs use localized labels instead of the worker English labels', async () => {
+  await useI18nStore.getState().setLocale('fr');
+  await showCatalog({ ...emptyCatalog, extensions: kindInventory([ruleItem({ name: 'project-rule' })]) });
+
+  expect(buttonWith('Règles')).toBeDefined();
+  expect(container.textContent).not.toContain('Rules');
+});
+
+test('bundled capabilities start collapsed behind a count and expand on demand', async () => {
+  await showCatalog({
+    ...emptyCatalog, extensions: kindInventory([
+      ruleItem({ id: 'ext_project', name: 'project-rule' }),
+      ruleItem({ id: 'ext_bundled', name: 'builtin-rule', scope: 'builtin', path: 'builtin-defaults:builtin-rule' }),
+    ])
   });
+
+  expect(container.textContent).toContain('project-rule');
+  expect(container.textContent).not.toContain('builtin-rule');
+  const toggle = buttonWith('Show 1 bundled');
+  if (!toggle) throw new Error('Missing bundled toggle');
+  await act(async () => { toggle.dispatchEvent(new Event('click', { bubbles: true })); });
   await settle();
 
-  // In the row: at most 2 chips rendered, plus +2 overflow badge
-  const rowButton = Array.from(container.querySelectorAll('button'))
-    .find(button => button.textContent?.includes('long-trigger-rule'));
-  expect(rowButton).toBeDefined();
-  const row = rowButton!.closest('.flex');
-  expect(row?.textContent).toContain('long-trigger-rule');
-  expect(row?.textContent).toContain('ast:grep($X.foo.bar.baz.qux())');
-  expect(row?.textContent).toContain('glob:**/*.test.ts');
-  expect(row?.textContent).toContain('+2');
-  expect(row?.textContent).not.toContain('glob:src/**/*.tsx');
+  expect(container.textContent).toContain('builtin-rule');
+});
 
-  // In inspector: full triggers including the 4th trigger are visible
-  expect(container.textContent).toContain('glob:src/**/*.tsx');
-  for (const trigger of longTriggers) {
-    expect(container.textContent).toContain(trigger);
-  }
+test('Extension Control Center keeps raw triggers and paths out of rows and shows them in the inspector', async () => {
+  const longTriggers = [
+    'ast:grep($X.foo.bar.baz.qux())',
+    'glob:**/*.test.ts',
+    'glob:**/*.spec.ts',
+    'glob:src/**/*.tsx',
+  ];
+  await showCatalog({
+    ...emptyCatalog, extensions: kindInventory([
+      ruleItem({ id: 'ext_long_rule', name: 'long-trigger-rule', triggers: longTriggers, content: 'Rule body' }),
+    ])
+  });
+
+  const row = buttonWith('long-trigger-rule')?.closest('.flex');
+  if (!row) throw new Error('Missing capability row');
+  expect(row.textContent).toContain('long-trigger-rule');
+  for (const trigger of longTriggers) expect(row.textContent).not.toContain(trigger);
+  expect(row.textContent).not.toContain('<workspace>/.agents/rules/rule.md');
+
+  expect(container.textContent).toContain('<workspace>/.agents/rules/rule.md');
+  for (const trigger of longTriggers) expect(container.textContent).toContain(trigger);
+});
+
+test('an empty installed list offers an Add plugin card that explains the empty state', async () => {
+  await showCatalog(emptyCatalog);
+
+  expect(container.textContent).toContain('No plugins installed yet.');
+  expect(buttonWith('Add plugin')).toBeDefined();
 });

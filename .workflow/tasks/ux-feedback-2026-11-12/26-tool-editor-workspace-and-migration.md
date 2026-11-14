@@ -38,6 +38,10 @@ Real path (Web, real provider): in a profile with "Show all", start a task subag
 - Anti-slop ratchet: cleaned all type assertions, `typeof` checks, and open dictionary types across `catalog-agents.ts`, `stateless.ts`, `AgentPermissionsEditor.tsx`, `groups.ts`, and test files.
 
 Check after:
+- `bun test packages/agent-service/src/supervisor/service-surface-routes.test.ts`: 3 pass, 0 fail, including 'workspace tools catalog reports enabled MCP tools with no session worker', which admits only a workspace (no session) and reads a tool discovered from the real stdio fixture `scripts/omp-m0/mcp-fixture-server.mjs`.
+- `bun test packages/agent-service/src/worker/catalog-agents.test.ts packages/agent-service/src/worker/stateless.test.ts packages/agent-service/src/worker/stateless-mcp.test.ts packages/agent-service/src/supervisor/catalog-mcp.test.ts packages/agent-service/src/supervisor/workspace-routes-settings.test.ts packages/agent-service/src/supervisor/workspaces-catalog-reads.test.ts`: 30 pass, 0 fail.
+- `bun run --cwd packages/agent-service type-check` and `bun run --cwd packages/agent-contract type-check`: 0 errors.
+- `bunx oxlint` on the twelve changed agent-service files: exit 0.
 - `bun test packages/agent-service/src/worker/catalog-agents.test.ts packages/agent-service/src/worker/stateless.test.ts`: 10 pass, 0 fail (recorded at the branch commit that added them).
 - `VITEST_MAX_WORKERS=2 bun --cwd packages/web test server/lib/host/agent-runtime.test.js server/lib/message-queue/runtime.test.js server/lib/openchamber-sessions/routes.test.js`: 59 pass, 0 fail at `5e195d6d9f`.
 - `node scripts/run-isolated-tests.mjs packages/ui/src/components/sections/agents` / `bun test packages/ui/src/components/sections/agents/AgentsPage.test.tsx`: 13 pass, 0 fail (recorded at the branch commit that added them).

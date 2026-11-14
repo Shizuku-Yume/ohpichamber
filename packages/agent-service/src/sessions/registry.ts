@@ -115,6 +115,69 @@ export class SessionRegistry {
     void operation.finally(() => { this.openings.delete(parsed.rootSessionId); }).catch(() => { });
     return operation;
   }
+  openingPromise(rootSessionId: string): Promise<RuntimeSession> | undefined {
+    return this.openings.get(rootSessionId);
+  }
+  async createInitialSession(input: SessionBootstrap, openPromise: () => Promise<RuntimeSession>): Promise<RuntimeSession> {
+    this.ensureOpen();
+    const parsed = HostSessionBootstrapSchema.parse(input);
+    this.assertBootstrapWritable(parsed);
+    this.assertControlAvailable(parsed.rootSessionId);
+    if (this.deleting.has(parsed.rootSessionId)) throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted');
+
+    const sessionsDir = parsed.sessionsDirectory ?? SessionManager.getDefaultSessionDir(parsed.cwd, parsed.agentDirectory);
+    let sessionFile = parsed.sessionFile;
+    if (!sessionFile) {
+      const diskManager = SessionManager.create(parsed.cwd, sessionsDir);
+      await diskManager.ensureOnDisk();
+      sessionFile = diskManager.getSessionFile() ?? join(sessionsDir, `${parsed.rootSessionId}.jsonl`);
+      await diskManager.close();
+    }
+    const now = Date.now();
+    const seed: ProjectionSeed = {
+      createdAt: now,
+      updatedAt: now,
+      branch: { branchId: 'main', branchVersion: '1', leafMessageId: null },
+      turns: [],
+      messages: [],
+      mode: { kind: 'main' },
+    };
+    const journal = new SessionJournal({
+      sessionId: parsed.rootSessionId, rootSessionId: parsed.rootSessionId, projectId: parsed.projectId,
+      workspaceId: parsed.workspaceId, displayPath: parsed.displayPath,
+      parentSessionId: parsed.parentSessionId,
+    }, seed);
+    const opened: Opened = {
+      generation: '',
+      sessionFile,
+      journal,
+    };
+    const entry: Extract<Entry, { state: 'opening' }> = {
+      state: 'opening',
+      input: parsed,
+      opened,
+    };
+    this.entries.set(parsed.rootSessionId, entry);
+    await this.references.put({
+      rootSessionId: parsed.rootSessionId, projectId: parsed.projectId, workspaceId: parsed.workspaceId,
+      cwd: parsed.cwd, agentDirectory: parsed.agentDirectory,
+      agentDirectoryId: parsed.agentDirectoryId, mcpConfigPath: parsed.mcpConfigPath,
+      sessionsDirectory: sessionsDir, options: parsed.options,
+      sessionFile, displayPath: parsed.displayPath,
+      createdAt: journal.runtime().createdAt, updatedAt: journal.runtime().updatedAt,
+      parentSessionId: parsed.parentSessionId,
+    });
+
+    const operation = openPromise();
+    this.openings.set(parsed.rootSessionId, operation);
+    void operation.finally(() => { this.openings.delete(parsed.rootSessionId); }).catch(() => { });
+
+    return journal.runtime();
+  }
+  async openWorker(input: SessionBootstrap): Promise<RuntimeSession> {
+    const parsed = HostSessionBootstrapSchema.parse(input);
+    return this.openResolved(parsed, false, undefined, true);
+  }
   async reopen(input: SessionBootstrap): Promise<RuntimeSession> {
     this.ensureOpen();
     const parsed = HostSessionBootstrapSchema.parse(input);
@@ -297,6 +360,8 @@ export class SessionRegistry {
 
   async rename(sessionId: string, workspace: SessionWorkspaceScope, title: string): Promise<RuntimeSession> {
     this.ensureOpen();
+    const opening = this.openings.get(sessionId);
+    if (opening) await opening;
     const entry = this.entries.get(sessionId);
     if (entry?.state === 'opening' || this.controls.has(sessionId) || this.references.relocation(sessionId))
       throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is opening, controlled, or relocating');
@@ -847,8 +912,15 @@ export class SessionRegistry {
     if (this.pendingRuns.has(sessionId)) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The same session already has a prompt in flight');
     this.pendingRuns.add(sessionId);
     try {
+      const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+      const rootSessionId = child?.rootSessionId ?? sessionId;
+      const pendingOpening = this.openings.get(rootSessionId);
+      if (pendingOpening) await pendingOpening;
       const runtime = this.runtime(sessionId);
-      if (runtime.runtimeStatus === 'unavailable') throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The session runtime is unavailable');
+      if (runtime.runtimeStatus === 'unavailable') {
+        const reason = this.journal(sessionId).reasonUnavailable();
+        throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', reason ? `The session runtime is unavailable: ${reason}` : 'The session runtime is unavailable');
+      }
       if (runtime.activeRunId !== null || runtime.continuationPending === true) throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session already has an active or continuation run');
       const result = await this.workers.request(sessionId, operation);
       if (result.type !== 'prompt') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested prompt operation.');
@@ -924,6 +996,10 @@ export class SessionRegistry {
     this.ensureOpen();
     this.assertWritable(sessionId);
     this.assertControlAvailable(sessionId);
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    const rootSessionId = child?.rootSessionId ?? sessionId;
+    const pendingOpening = this.openings.get(rootSessionId);
+    if (pendingOpening) await pendingOpening;
     const runtime = this.runtime(sessionId);
     const isDeferredPlan = mode === 'plan' && runtime.activeRunId !== null;
     const isDisarming = mode === 'main' && runtime.mode?.kind === 'plan' && runtime.mode.status === 'armed';
@@ -941,6 +1017,10 @@ export class SessionRegistry {
     this.ensureOpen();
     this.assertWritable(sessionId);
     this.assertControlAvailable(sessionId);
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    const rootSessionId = child?.rootSessionId ?? sessionId;
+    const pendingOpening = this.openings.get(rootSessionId);
+    if (pendingOpening) await pendingOpening;
     const runtime = this.runtime(sessionId);
     if ((operation.op === 'create' || operation.op === 'resume') && (runtime.activeRunId !== null || runtime.continuationPending === true || this.pendingRuns.has(sessionId))) {
       throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The goal needs an idle session');
@@ -1399,7 +1479,10 @@ export class SessionRegistry {
     if (entry?.state !== 'opening') return;
     const journal = entry.opened?.journal;
     if (entry.opened) this.interactions.invalidate(sessionId, entry.opened.generation);
-    if (journal) journal.replace(seed);
+    if (journal) {
+      if (entry.opened?.generation === '') journal.replaceInitialSeed(seed);
+      else journal.replace(seed);
+    }
     const opened = {
       generation, sessionFile, journal: journal ?? new SessionJournal({
         sessionId, rootSessionId: sessionId, projectId: entry.input.projectId,
@@ -1452,6 +1535,13 @@ export class SessionRegistry {
     if (entry?.state === 'unloaded' || entry?.opened?.generation !== generation) return;
     entry.opened.journal.unavailable();
   }
+  /** A catalog registration that failed after admission ends the runtime with its cause, so the active run reports it. */
+  registrationFailed(sessionId: string, generation: string, cause: string): void {
+    if (this.closing) return;
+    const entry = this.entries.get(sessionId);
+    if (entry?.state === 'unloaded' || entry?.opened?.generation !== generation) return;
+    entry.opened.journal.unavailable(cause);
+  }
 
   async close(): Promise<void> {
     this.closing = true;
@@ -1481,7 +1571,7 @@ export class SessionRegistry {
       if (resolved.parentSessionId === undefined && reference.parentSessionId !== undefined) resolved.parentSessionId = reference.parentSessionId;
     }
     const entry: Extract<Entry, { state: 'opening' }> = { state: 'opening', input: resolved };
-    if (previous?.state === 'live') entry.opened = previous.opened;
+    if (previous?.state === 'live' || previous?.state === 'opening') entry.opened = previous.opened;
     this.entries.set(input.rootSessionId, entry);
     let workerStarted = false;
     try {

@@ -8,6 +8,7 @@ import { WorkerPolicy } from './policy.ts';
 import { NativeMcpError } from './mcp.ts';
 import { WorkerHostActions } from './host-actions.ts';
 import { getUsageAccounts, getUsageStats, getUsageTools } from './usage.ts';
+import { closePrewarmedNativeRuntime, prewarmNativeRuntime } from './native-runtime.ts';
 
 /** The cause a thrown value carries, whatever its shape. A thrown string is a
  * cause the worker chose, not a missing one; only a value with nothing readable
@@ -81,6 +82,7 @@ function stop(exitCode: number): Promise<void> {
         await owned.close();
         if (bootstrap && process.connected) send({ type: 'lifecycle', workerGeneration: bootstrap.workerGeneration, state: 'closed' });
       }
+      await closePrewarmedNativeRuntime();
     } catch { exitCode = 1; }
     finally { clearTimeout(deadline); process.exit(exitCode); }
   })();
@@ -188,6 +190,9 @@ process.on('message', raw => {
 // A supervisor that pre-warms a worker adopts it only after this reply, so
 // the adoption cannot claim a process that has not finished loading.
 if (process.connected) send({ type: 'idle' });
+if (process.env.PI_CODING_AGENT_DIR) {
+  prewarmNativeRuntime({ cwd: process.cwd(), agentDirectory: process.env.PI_CODING_AGENT_DIR });
+}
 process.once('disconnect', () => { void stop(0); });
 process.once('SIGTERM', () => { void stop(0); });
 process.once('SIGINT', () => { void stop(0); });

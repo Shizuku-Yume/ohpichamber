@@ -298,6 +298,16 @@ export class CanonicalClient {
     const { projectId, workspaceId } = input;
     return request('/api/agent/v1/sessions', scoped(C.SessionCreateAckSchema, result => result.session.projectId === projectId && result.session.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.SessionCreateRequestSchema, input) });
   }
+  prepareSession(input: { projectId: string; workspaceId: string }): Promise<{ ok: boolean; sessionId?: string }> {
+    return request('/api/agent/v1/sessions/prepare', z.object({ ok: z.boolean(), sessionId: z.string().optional() }), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
+    });
+  }
+  discardPreparedSession(input: { workspaceId: string }): Promise<{ ok: boolean }> {
+    return request('/api/agent/v1/sessions/prepare', z.object({ ok: z.boolean() }), {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
+    });
+  }
   deleteSession(sessionId: string): Promise<SessionDeleteAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}`, scoped(C.SessionDeleteAckSchema, result => result.sessionId === sessionId), { method: 'DELETE' });
   }

@@ -54,7 +54,7 @@ type WorkerEntry = WorkerInput & {
 };
 type ActionHandle = { entry: WorkerEntry; controller: AbortController };
 /** A worker process booted ahead of a session, waiting for a bootstrap. */
-type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; adopted: boolean };
+type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; adopted: boolean; readyPromise?: Promise<void> };
 
 /** The Task17 measurement fixes these production values; tests may override them. */
 export const WORKER_CAPACITY_POLICY = {
@@ -375,6 +375,14 @@ export class WorkerRegistry {
           for (const entry of snapshot) {
             const stopped = await this.stopLeasedWorker(entry, canonicalDirectory);
             if (stopped !== null) lease.released.push(stopped);
+          }
+          for (let i = this.spareWorkers.length - 1; i >= 0; i -= 1) {
+            const spare = this.spareWorkers[i];
+            if (isInsideOrSameDirectory(canonicalDirectory, spare.cwd)
+              || isInsideOrSameDirectory(spare.cwd, canonicalDirectory)) {
+              this.spareWorkers.splice(i, 1);
+              if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
+            }
           }
           return { leaseId, released: [...lease.released] };
         } catch (error) {
@@ -801,6 +809,15 @@ export class WorkerRegistry {
       return entry ? this.stopEntry(entry) : true;
     });
   }
+  async stopGeneration(rootSessionId: string, expectedGeneration: string): Promise<boolean> {
+    return this.withRoot(rootSessionId, async () => {
+      const entry = this.workerEntries.get(rootSessionId);
+      if (!entry || entry.info.workerGeneration !== expectedGeneration) return true;
+      if (this.restartReservations.get(rootSessionId) === entry.info.workerGeneration)
+        throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The restart of this session is already reserved');
+      return this.stopEntry(entry);
+    });
+  }
   async withStoppedRoot<T>(rootSessionId: string, operation: () => Promise<T>): Promise<T> {
     return this.withRoot(rootSessionId, async () => {
       if (this.closing || this.workerEntries.has(rootSessionId) || this.restartReservations.has(rootSessionId))
@@ -869,8 +886,16 @@ export class WorkerRegistry {
    */
   warmSessionWorker(input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>, environment = this.workerEnvironment(input as WorkerBootstrap)): void {
     if (this.closing || this.spareRefill !== undefined) return;
-    // One spare at a time. It is a head start for the next session, not a pool:
-    // a second workspace's spare would cost a process to sit idle.
+    if (input.cwd.includes('ohpichamber-agent-ready-')) return;
+    for (let i = this.spareWorkers.length - 1; i >= 0; i -= 1) {
+      const spare = this.spareWorkers[i];
+      if (spare.cwd !== input.cwd) {
+        this.spareWorkers.splice(i, 1);
+        if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
+      }
+    }
+    const hasMatchingSpare = this.spareWorkers.some(spare => spare.cwd === input.cwd && isDeepStrictEqual(spare.environment, environment));
+    if (hasMatchingSpare) return;
     if (this.spareWorkers.length > 0) return;
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
@@ -880,24 +905,24 @@ export class WorkerRegistry {
         this.assertWorktreeLeaseAllows(input.cwd);
         const child = spawn(workerRuntime, workerArgs, {
           cwd: input.cwd, env: environment, detached: process.platform !== 'win32',
-          windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+          windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         });
-        const spare: SpareWorker = { child, environment, cwd: input.cwd, createdAt: Date.now(), loaded: false, adopted: false };
+        const { promise: readyPromise, resolve: resolveReady } = Promise.withResolvers<void>();
+        const spare: SpareWorker = { child, environment, cwd: input.cwd, createdAt: Date.now(), loaded: false, adopted: false, readyPromise };
+        this.spareWorkers.push(spare);
         const drop = () => {
           const index = this.spareWorkers.indexOf(spare);
           if (index >= 0) this.spareWorkers.splice(index, 1);
+          resolveReady();
         };
         child.once('close', drop);
         child.once('error', drop);
-        // The worker reports `idle` once its module graph is loaded. Until then
-        // it is a process, not a warm worker, so it stays out of the pool, and
-        // a spare that has already been adopted never returns to it.
         child.on('message', raw => {
           if (spare.adopted || WorkerReplySchema.safeParse(raw).data?.type !== 'idle') return;
           spare.loaded = true;
-          if (!this.spareWorkers.includes(spare) && child.connected) this.spareWorkers.push(spare);
+          resolveReady();
         });
-        if (!child.connected) child.kill('SIGKILL');
+        if (!child.connected) { child.kill('SIGKILL'); resolveReady(); }
       } catch { /* a spare is an optimization; the next launch spawns normally */ }
       finally { this.spareRefill = undefined; }
     })();
@@ -909,17 +934,19 @@ export class WorkerRegistry {
     for (let index = this.spareWorkers.length - 1; index >= 0; index -= 1) {
       const spare = this.spareWorkers[index];
       const expired = now - spare.createdAt >= this.spareLifetimeMs;
-      const usable = !expired && spare.loaded && spare.cwd === input.cwd && spare.child.connected
-        && spare.child.exitCode === null && spare.child.signalCode === null
-        && isDeepStrictEqual(spare.environment, environment);
-      this.spareWorkers.splice(index, 1);
-      if (usable) {
-        // From here the process is a session worker; the pool must never see
-        // it again even if a late `idle` reply is still in flight.
+      const cwdMatch = spare.cwd === input.cwd;
+      const envMatch = isDeepStrictEqual(spare.environment, environment);
+      const exitNull = spare.child.exitCode === null && spare.child.signalCode === null;
+      if (expired || !spare.child.connected || !exitNull) {
+        this.spareWorkers.splice(index, 1);
+        if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
+        continue;
+      }
+      if (spare.loaded && cwdMatch && envMatch) {
+        this.spareWorkers.splice(index, 1);
         spare.adopted = true;
         return spare.child;
       }
-      if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
     }
     return undefined;
   }
@@ -938,14 +965,18 @@ export class WorkerRegistry {
     const exited = Promise.withResolvers<void>();
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
+    if (owner.kind === 'session') {
+      const pendingSpare = this.spareWorkers.find(spare => !spare.adopted && spare.cwd === input.cwd);
+      if (pendingSpare && !pendingSpare.loaded && pendingSpare.readyPromise) {
+        await waitWithin(pendingSpare.readyPromise, 1_500).catch(() => { });
+      }
+    }
     // The last synchronous check before `spawn`: a start admitted before the
     // lease cannot materialize a worker here, and no await separates the two.
     this.assertWorktreeLeaseAllows(input.cwd);
     // A session launch adopts a pre-warmed process when one matches: it has
     // already paid the module load, so only the bootstrap remains.
     const adopted = owner.kind === 'session' ? this.adoptSpare(input, environment) : undefined;
-    // An adopted spare leaves the pool empty; boot the next one once the
-    // current spawn settles, so consecutive new sessions both benefit.
     if (adopted !== undefined) {
       const settled = this.spareRefill;
       void (settled ?? Promise.resolve()).then(() => {

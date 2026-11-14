@@ -26,10 +26,10 @@ Real path (Web, isolated `HOME` pre-seeded with a user `mcp.json` containing hea
 Save screenshots and the before/after `mcp.json` in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task25/`.
 
 - [x] Use a scope-specific, locked read-modify-write that preserves untouched native entries and fields.
-- [ ] Pass `userConfigPath` through the OAuth persistence checks. (Code done; no test at WorkerMcp level; not run on the real path.)
+- [x] Pass `userConfigPath` through the OAuth persistence checks. (WorkerMcp test on temp-HOME files; dropping the argument from `#assertPersistedServer` makes it fail with `OAuth requires a configured HTTP or SSE server`. `#assertPersistedFlow` runs only in OAuth start, which needs endpoint discovery; not covered by a test.)
 - [x] Store user-scope credential mappings durably.
 - [x] Report connectivity honestly when no worker is running.
-- [ ] Track an explicit per-server state for "authentication required", and keep "retry configure" separate from "create". (Code done; no DOM test of the install branch; not run on the real path.)
+- [x] Track an explicit per-server state for "authentication required", and keep "retry configure" separate from "create". (View tests: sign-in required from the server's own MCP_AUTH_REQUIRED probe; an OAuth declaration without evidence is not installed; install of an existing server calls updateMcp and not createMcp. Real path not run.)
 - [x] Restore the stable empty fallback for directories that have not been read yet.
 
 ## Progress
@@ -43,4 +43,5 @@ Save screenshots and the before/after `mcp.json` in `/home/shizuku/Project/ohpic
   - `bunx oxlint` on changed TS files: exit 0, no findings.
   - `bun run --cwd packages/agent-service build`: exit 0.
   - Real path: NOT completed. The Web host on 4125 starts, and `GET /auth/session` plus `POST /api/openchamber/directory` work. The Agent Service phase stays `failed` ("readiness timed out", worker "initialization failed (SERVICE_UNAVAILABLE)") under the isolated HOME, even with `OHPICHAMBER_BUN` and an explicit `OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT`. The worker stderr is not logged, so the cause is unknown. No Figma install, sign-in, or reinstall was observed. Evidence: `task25/web-server.log`, `task25/01-add-project.json`, `task25/mcp-before.json` (seeded file).
-- **Review:** not run (per director instruction: no self-review; independent review not performed in this run).
+- **Check after (added):** `bun test src/worker/mcp.test.ts src/supervisor/catalog-mcp.test.ts` 19 pass, 0 fail (combined, one run failed once with a transient SQLite "disk I/O error" on a temp agent.db and passed on rerun; not diagnosed). `bun test src/components/views/IntegrationsCatalogView.test.tsx` 12 pass, 0 fail (test setup gained the `Node` global for the dialog portal). `bunx oxlint` on the touched test files: exit 0.
+- **Real path (attempted again, still NOT completed):** Host on 4125 with isolated HOME, `OPENCHAMBER_DATA_DIR=/tmp/ufb25-data`, `OHPICHAMBER_BUN=/home/shizuku/.bun/bin/bun`, `OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT` set to the built `dist/index.js` (exists; resolves from the web package), `PI_CODING_AGENT_DIR` and XDG dirs under `/tmp`, provider env loaded per common.md with `OMP_SOURCE_DIR` unset. The Agent Service phase stays `failed`: "Worker initialization failed (SERVICE_UNAVAILABLE)" and "Agent service readiness timed out". The worker's stderr is written as "unstructured" and is not logged, so the exact stderr is unknown. Running `dist/index.js` directly refuses without the Host's IPC channel. No Figma install, sign-in, reinstall, screenshots, or after-state were produced. Evidence: `task25/web-server.log`, `task25/01-add-project.json`, `task25/mcp-before.json`, `task25/ui-catalog-view-b.log`, `task25/oxlint-tests.log`.

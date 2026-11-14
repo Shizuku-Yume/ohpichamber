@@ -826,6 +826,8 @@ export const settingsDict = {
   'settings.openchamber.defaults.smallModel.useDefaultAria': 'Używaj domyślnego małego modelu',
   'settings.openchamber.defaults.smallModel.thinking': 'Myślenie',
   'settings.openchamber.defaults.walkthroughModel.title': 'Model przewodnika po zmianach',
+  'settings.openchamber.defaults.walkthroughModel.useDefault': 'Używaj domyślnego modelu przewodnika',
+  'settings.openchamber.defaults.walkthroughModel.useDefaultInfo': 'Wyłącz, aby poniżej wybrać osobny model dla przewodnika po zmianach.',
   'settings.openchamber.defaults.walkthroughModel.description': 'Przegląd zmian przez AI wymaga ustrukturyzowanej odpowiedzi i miejsca na całe różnice, czego tani mały model często nie zapewnia. Modele, które katalog zgłasza jako niezdolne do ustrukturyzowanej odpowiedzi, są tu ukryte. Bez wyboru używany jest mały model.',
   'settings.openchamber.defaults.walkthroughModel.usesSmallModel': 'Mały model',
   'settings.openchamber.defaults.field.thinkingPlaceholder': 'Myślenie',

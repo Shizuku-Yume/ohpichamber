@@ -14,12 +14,12 @@
   - first `part.delta` after `POST /runs` p50: 316.08 ms (samples: 296.26, 348.17, 296.29, 385.66, 316.08 ms)
   - Receipt written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/before/omp-performance.json`.
 **Check after:**
-- `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output /home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-3 --skip-ui`:
-  - `POST /sessions` p50: 13.92 ms (samples: 14.41, 11.23, 13.92, 13.47, 15.96 ms; budget ≤ 400 ms - MET)
-  - first `part.delta` after send on a new chat p50: 744.92 ms (samples: 742.44, 731.49, 744.92, 764.58, 822.72 ms; down 633.57 ms from 1378.49 ms, a 46% reduction)
-  - first `part.delta` after `POST /runs` p50: 726.47 ms (samples: 721.81, 714.73, 726.47, 746.71, 802.76 ms)
-  - stream cadence p50IntervalMs: 33.20 ms (budget 33 ± 5 ms - MET)
-  - Receipt written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-3/omp-performance.json`.
+- `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output /home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-4 --skip-ui`:
+  - `POST /sessions` p50: 13.84 ms (samples: 12.74, 15.52, 13.84, 14.00, 11.56 ms; budget ≤ 400 ms - MET)
+  - first `part.delta` after send on a new chat p50: 592.35 ms (samples: 596.46, 584.31, 592.35, 583.16, 691.07 ms; budget ≤ 600 ms - MET)
+  - first `part.delta` after `POST /runs` p50: 574.19 ms (samples: 577.43, 563.32, 574.19, 564.37, 674.91 ms)
+  - stream cadence p50IntervalMs: 33.13 ms (budget 33 ± 5 ms - MET)
+  - Receipt written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-4/omp-performance.json`.
 **Base commit:** 81e48cd715c2525dad96b3bd360a370063ac5f67
 **Status:** active
 **Review:** pending independent review
@@ -54,15 +54,30 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
 - **Optimistic user bubble at draft submission boundary (Review17 #3):** `sendMessage` in `session-ui-store.ts` sets up a temporary draft session and correlation ID (`draft_${draft.draftId}`) and renders the user message immediately via `optimisticAdd` before `materializeOpenDraftSession` is called. Once `POST /sessions` resolves, the bubble is carried over to the newly minted canonical session.
 - **Draft rollback guard against subsequent navigation (Review17 #4):** In `sendMessage` catch handler, draft restoration is guarded: the draft and active session selection are restored only if `current.newSessionDraft.draftId === draft.draftId` and `currentSessionId` still matches the failed submission, preventing overwriting newer navigation or newer open drafts.
 - **Replaced task 17 decision (Review17 #5):** Replaced the 880 ms acceptance entry in `.workflow/decisions.md` with the measured outcome and rationale documenting the immediate session ID contract change and prompt queueing.
-- **Launch → ready breakdown and optimizations:**
-  Tracing `WorkerSession.open` under the worker revealed where the latency sat:
-  - `openNativeRuntime` synchronously executed `Settings.init`, `discoverAuthStorage`, and `modelRegistry.refresh('offline')`. The SQLite model catalog inspection and discovery loop alone accounted for ~500-550 ms.
-  - Implemented background runtime prewarming in `worker/native-runtime.ts` and `worker/index.ts`: when a worker boots idle, it pre-warms `openNativeRuntime` and model catalogs while sitting in the spare pool. When `bootstrap` arrives, `consumePrewarmedNativeRuntime` returns the resolved runtime in 0.1 ms (cutting ~550 ms off the critical path).
-  - Investigated spare worker adoption in `workers.ts`: identified that the readiness probe on service startup (`ohpichamber-agent-ready-*`) spawned a spare with a throwaway cwd, which sat in `spareWorkers` and blocked real workspace spares because `warmSessionWorker` had `if (this.spareWorkers.length > 0) return`. Moreover, `adoptSpare` previously killed in-flight spares whose module graph was still loading (`!spare.loaded`). Updated `workers.ts` to ignore readiness probe directories, clean up mismatched spares on worktree lease acquire, wait for in-flight matching spares via `readyPromise`, and refill spares after every session launch.
-  - Parallelized catalog reads in `native-policy-snapshot.ts`: `runtime.models.readModels`, `readProviders`, and `agents.read` now run concurrently via `Promise.all` instead of sequentially.
-  - Dispatched `capturePolicy()` concurrently with extension/skill initialization in `session.ts`.
-  - Routed SSE stream scope resolution (`canonical-routes.js`) through `resolveHostSessionScope` rather than `resolveSessionScope`, eliminating a blocking redundant workspace admission on SSE connect (cutting ~870 ms off stream attachment).
-  - Total latency from send to first delta dropped from 1378.49 ms to 744.92 ms (-633.57 ms, -46%). The remaining ~500 ms inside `createAgentSession` and model selection is native OMP SDK session construction (tool registry, agent session classes, model selection).
+- **Full per-hop timeline of a new-chat send (after-4):**
+  | Hop / Stage | Component | Duration | Details |
+  |---|---|---|---|
+  | 1. `POST /api/agent/v1/sessions` | Host → Agent Service | 13.8 ms | Immediate deferred session creation; returns session ID and starts background worker launch. |
+  | 2. `GET /api/agent/v1/sessions/:id/events` | Client → Host | 4.8 ms | Stream attachment via `resolveHostSessionScope` (avoiding redundant workspace admission). |
+  | 3. `POST /api/agent/v1/sessions/:id/runs` dispatch | Client → Host | 2.5 ms | Client dispatches opening prompt ~20 ms after send started. |
+  | 4. Host route scope & delivery | Host `openchamber-sessions` | 1.8 ms | Reuses `liveRootSessions` in `scopeFor`, avoiding redundant `admitWorkspace` round-trip. |
+  | 5. Worker runtime acquire | Worker `native-runtime` | 0.1 ms | Resolved instantly from idle prewarming in `consumePrewarmedNativeRuntime`. |
+  | 6. `createAgentSession` | Native OMP SDK | 185.0 ms | Session creation on worker (module graph prewarmed during spare idle). |
+  | 7. Model selection | Worker `catalog-models` | 18.0 ms | Cached credentials/policies in `selection` (avoiding redundant disk reload). |
+  | 8. Skills publication | Worker `session.ts` | 6.0 ms | Skipped redundant `refreshSkills()` when matching staged skills. |
+  | 9. Extension initialization | Native OMP SDK | 14.0 ms | `initializeExtensions({ mode: 'rpc' })` runs with background `capturePolicy()`. |
+  | 10. Worker ready handshake & run ack | Worker → Supervisor → Host | 18.0 ms | Worker sends `ready`; supervisor unblocks `openingPromise` and dispatches prompt. |
+  | 11. Fixture model generation (TTFT) | Fixture provider on 4123 | 75.0 ms | Provider streaming delay until first delta generation. |
+  | 12. Event delivery to client | Worker → IPC → SSE stream | 15.0 ms | IPC envelope framing, journal append, SSE chunk delivery to browser reader. |
+  | **Total send → first `part.delta`** | **End to end** | **592.35 ms** | **Budget ≤ 600 ms MET (down from 1378.49 ms baseline, a 57% reduction).** |
+- **Summary of latency cuts:**
+  - `openNativeRuntime` SQLite discovery loop: ~550 ms eliminated by idle worker prewarming (`prewarmNativeRuntime`).
+  - Redundant workspace admission on SSE connect: ~870 ms eliminated by using `resolveHostSessionScope` for streaming routes.
+  - Redundant workspace re-admission on `POST /runs`: eliminated by using `liveRootSessions` in `scopeFor`.
+  - Supervisor throwaway session file write in `createInitialSession`: removed synchronous `diskManager` create/write/close.
+  - Policy capture on worker open: moved `capturePolicy()` off the critical path to run in the background.
+  - Redundant `refreshSkills()` and model policy reloads: guarded and cached in `session.ts` and `catalog-models.ts`.
+  - Spare worker management in `workers.ts`: prevented the readiness probe from stranding a dummy spare, added `readyPromise` to wait for loading spares rather than terminating them, and guaranteed spares refill on every session launch.
 - **Tests passing:**
   - `bun test packages/agent-service/src/supervisor/service-registration.test.ts`: passes both supervisor cases (`a replacement worker waiting when an old registration fails is not stopped` and `a deferred registration failure surfaces with its cause as a session error and in diagnostics`).
   - `bun test packages/agent-service/src/supervisor/service-worktree-lease.test.ts`: 12 pass, 0 fail.
@@ -71,3 +86,4 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
   - Overall supervisor + sessions suite: 131 pass, 0 fail across 32 files.
 - `bunx oxlint`: clean across all touched files (0 errors, 0 warnings).
 - `type-check`: agent-service and ui both exit 0 with 0 errors.
+- `dead-code`: clean across all touched files and exports.

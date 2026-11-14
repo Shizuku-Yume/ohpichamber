@@ -18,7 +18,7 @@ export type CanonicalSkillMentions = {
 import type { ContextPartMetadata } from "@/lib/messages/contextParts"
 import { create } from "zustand"
 import type { StoreApi, UseBoundStore } from "zustand"
-import type { FileResourceExpandResult, PromptAttachment, PromptContext, PromptRequest, Session, SessionMetadata } from "@openchamber/agent-contract"
+import type { FileResourceExpandResult, PromptAttachment, PromptContext, PromptRequest, Session, SessionMetadata, Message as CanonicalMessage } from "@openchamber/agent-contract"
 import type { AttachedFile, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import type { WorktreeMetadata } from "@/types/worktree"
 import { runtimeFetch } from "@/lib/runtime-fetch"
@@ -62,6 +62,8 @@ import { setActiveSession } from "./sync-context"
 import {
   createSession as createSessionAction,
   sendMessage as sendMessageAction,
+  optimisticAdd,
+  optimisticRemove,
   type SessionCreateSelection,
   deleteSession as deleteSessionAction,
   deleteSessions as deleteSessionsAction,
@@ -994,8 +996,7 @@ const createSessionWithDraftLifecycle = async (
 
     const current = useSessionUIStore.getState()
     if (current.newSessionDraft.draftId === draft.draftId
-      && current.newSessionDraft.open === draft.open
-      && current.currentSessionId === selectedSessionId) {
+      && (current.currentSessionId === selectedSessionId || current.currentSessionId === `draft_${draft.draftId}`)) {
       current.setCurrentSession(session.sessionId, directory, selectionTransition)
     }
 
@@ -1887,6 +1888,9 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       ? useSessionGoalArmStore.getState().consume()
       : { armed: false, objectiveOverride: null, composerGoal: false }
     let goalApplied = false
+    let temporaryDraftSessionId: string | undefined
+    let temporaryCorrelationId: string | undefined
+    const draftEffectiveDirectory = targetDirectory ?? draft.bootstrapPendingDirectory ?? draft.directoryOverride ?? null
 
     // Resolve the captured destination and selection once; canonical delivery
     // owns connection readiness and request lifecycle.
@@ -1895,7 +1899,43 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       let sessionId = targetSessionId
       let directory = targetDirectory
       let parts: Parameters<SessionUIState['sendMessage']>[6] = submittedParts
+      let draftEchoMessage: CanonicalMessage | undefined
+
       if (createsDraftSession) {
+        temporaryDraftSessionId = `draft_${draft.draftId}`
+        temporaryCorrelationId = `msg_${globalThis.crypto.randomUUID()}`
+        const text = content
+        const msgParts: CanonicalMessage['parts'] = [{ type: "text", partId: `part_${globalThis.crypto.randomUUID()}`, content: text }]
+        for (const attachment of submittedAttachments ?? []) {
+          msgParts.push({
+            type: "attachment",
+            partId: `part_${globalThis.crypto.randomUUID()}`,
+            attachmentId: attachment.attachmentId,
+            name: attachment.name,
+            mediaType: attachment.mediaType,
+            size: attachment.size,
+            uri: attachment.uri,
+          })
+        }
+        draftEchoMessage = {
+          messageId: temporaryCorrelationId,
+          sessionId: temporaryDraftSessionId,
+          turnId: `turn_${globalThis.crypto.randomUUID()}`,
+          role: "user",
+          createdAt: Date.now(),
+          parts: msgParts,
+        }
+        optimisticAdd({
+          sessionId: temporaryDraftSessionId,
+          directory: draftEffectiveDirectory,
+          message: draftEchoMessage,
+        })
+        useSessionUIStore.setState({
+          currentSessionId: temporaryDraftSessionId,
+          currentSessionDirectory: draftEffectiveDirectory,
+          newSessionDraft: { ...draft, open: false },
+        })
+
         const created = await materializeOpenDraftSession({
           providerId: providerID,
           modelId: modelID,
@@ -1909,6 +1949,13 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         directory = created.directory
         if (created.syntheticParts?.length) {
           parts = [...(parts ?? []), ...created.syntheticParts]
+        }
+        if (temporaryDraftSessionId && temporaryCorrelationId) {
+          optimisticRemove({
+            sessionId: temporaryDraftSessionId,
+            directory: draftEffectiveDirectory,
+            messageId: temporaryCorrelationId,
+          })
         }
       }
       if (!sessionId) throw new Error("No session selected for this message")
@@ -2026,8 +2073,21 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       })
       assertSendRuntime(capturedRuntimeKey, capturedRuntimeRevision)
     })().catch((error) => {
-      if (createsDraftSession && getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
-        useSessionUIStore.setState({ newSessionDraft: draft, currentSessionId: targetSessionId ?? null })
+      if (createsDraftSession) {
+        if (temporaryDraftSessionId && temporaryCorrelationId) {
+          optimisticRemove({
+            sessionId: temporaryDraftSessionId,
+            directory: draftEffectiveDirectory,
+            messageId: temporaryCorrelationId,
+          })
+        }
+        if (getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
+          // Restore only while the draft and the selection still belong to this submission; newer navigation keeps its own state.
+          const current = useSessionUIStore.getState()
+          if (current.newSessionDraft.draftId === draft.draftId && (current.currentSessionId === temporaryDraftSessionId || current.currentSessionId === (targetSessionId ?? null))) {
+            useSessionUIStore.setState({ newSessionDraft: draft, currentSessionId: targetSessionId ?? null })
+          }
+        }
       }
       if (goalArm.armed && !goalApplied && getRuntimeKey() === capturedRuntimeKey && getRuntimeSwitchRevision() === capturedRuntimeRevision) {
         useSessionGoalArmStore.getState().setArmed(true, goalArm.objectiveOverride, goalArm.composerGoal)

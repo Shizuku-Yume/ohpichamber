@@ -26,7 +26,6 @@
   - stream cadence p50IntervalMs: 33.16 ms (budget 33 ± 5 ms - MET)
 - Receipts written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-5/` (`run1/omp-performance.json`, `run2/omp-performance.json`, `omp-performance.json`).
 **Base commit:** 81e48cd715c2525dad96b3bd360a370063ac5f67
-**Status:** active
 **Review:** pass (by Reviewer24)
 
 The supervisor tests must cover:
@@ -100,3 +99,11 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
   - **Finding 5 (Skill descriptor comparison in `publishSkills`):** Upgraded `publishSkills` comparison from name-only to full descriptor serialization (`name`, `description`, `filePath`, `baseDir`, `source`, `hide`, `containRoot`, `metadata`). Added test verifying publication refresh when skill description/content updates without name change in `session-skills.test.ts`.
   - **Finding 6 (Surface cause in diagnostic and session/run error):** Added `reasonUnavailable` tracking in `journal.ts`. Causal message is included in `onDiagnostic` error string (`Catalog registration failed (${code}): ${cause}`) and propagated into `WorkerOperationError` detail on run dispatch. `service-registration.test.ts` asserts sentinel cause presence in both diagnostic message and run error detail.
   - **Finding 7 (Residual traces):** Removed all `/tmp/ufb24-*.log` traces and confirmed `git grep ufb24` matches no trace code in source.
+- Review: pass (base 81e48cd715c2525dad96b3bd360a370063ac5f67) — independent reviewer Reviewer24 (ufb-24-impl.Reviewer24) approved; all findings closed and verified.
+- Check after: exits 0 across all test suites, and real path meets all W11 latency budgets pre-merge and post-merge with ux-feedback-2026-11-12/integration:
+  - `POST /sessions` p50: 4.61–4.69 ms (samples across runs: 5.71, 5.31, 5.21, 4.88, 4.69, 4.43, 4.53, 5.71, 4.62, 4.60 ms; budget ≤ 400 ms - MET).
+  - first `part.delta` after send on a new chat p50: 224.35–231.60 ms (samples: 225.97, 221.26, 339.17, 220.22, 231.89, 234.64, 219.02, 224.35, 218.96, 234.41 ms; budget ≤ 600 ms - MET).
+  - stream cadence p50IntervalMs: 33.16–33.18 ms (budget 33 ± 5 ms - MET).
+  - receipts recorded in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-5/`.
+  - all supervisor tests exit 0 (`service-registration.test.ts`, `workers.process-tree.test.ts`, `service-worktree-lease.test.ts`, 91/91 supervisor tests pass).
+  - all UI sync tests exit 0 (`session-ui-store.test.js` 87/87 pass, `session-actions.test.ts` 82/82 pass).

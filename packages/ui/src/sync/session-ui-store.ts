@@ -798,6 +798,7 @@ const DEFAULT_DRAFT: NewSessionDraftState = {
 }
 let nextDraftId = 1
 const pendingChatDirectoryByDraft = new Map<string, Promise<string | null>>()
+const pendingPreparationByDraft = new Map<number, Promise<unknown>>()
 
 const activeSessionByRuntime = new Map<string, string | null>()
 type RuntimeSessionMemory = {
@@ -1087,6 +1088,11 @@ export async function materializeOpenDraftSession(selection: {
 
   await waitForWorktreeBootstrapIfConfigured(draftDirectoryOverride, draftProjectId, runtimeKey, runtimeRevision)
   assertSendRuntime(runtimeKey, runtimeRevision)
+  const pendingPrep = pendingPreparationByDraft.get(draft.draftId)
+  if (pendingPrep) {
+    await pendingPrep.catch(() => undefined)
+    pendingPreparationByDraft.delete(draft.draftId)
+  }
 
   const draftPins = draft.projectContextPins ?? { notes: [], plans: [] }
   // Native admission and the first prompt use the same captured selection.
@@ -1573,9 +1579,10 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
     void recoverStaleDraftDirectory(nextDraft)
     if (directory) {
-      void canonicalClient.resolveWorkspace(directory)
+      const prep = canonicalClient.resolveWorkspace(directory)
         .then((ws) => canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
         .catch(() => undefined)
+      pendingPreparationByDraft.set(nextDraft.draftId, prep)
     }
   },
 
@@ -1594,9 +1601,11 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
       const current = get().newSessionDraft
       if (current.open && current.target === "chat" && current.draftId === draft.draftId) {
         set({ newSessionDraft: { ...current, preparedChatDirectory: directory } })
-        void canonicalClient.resolveWorkspace(directory)
+        const prep = canonicalClient.resolveWorkspace(directory)
           .then((ws) => canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
           .catch(() => undefined)
+        pendingPreparationByDraft.set(draft.draftId, prep)
+        await prep
         return directory
       }
       if (draftSnapshot) return directory
@@ -1618,12 +1627,18 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     if (currentDraft.preparedChatDirectory) {
       void deleteChatDirectory(currentDraft.preparedChatDirectory).catch(() => undefined)
     }
-    const dir = currentDraft.preparedChatDirectory ?? currentDraft.directoryOverride ?? useDirectoryStore.getState().currentDirectory
-    if (dir) {
-      void canonicalClient.resolveWorkspace(dir)
-        .then((ws) => canonicalClient.discardPreparedSession({ workspaceId: ws.workspaceId }))
-        .catch(() => undefined)
+    const pendingPrep = pendingPreparationByDraft.get(currentDraft.draftId)
+    pendingPreparationByDraft.delete(currentDraft.draftId)
+    const discard = () => {
+      const dir = currentDraft.preparedChatDirectory ?? currentDraft.directoryOverride ?? useDirectoryStore.getState().currentDirectory
+      if (dir) {
+        void canonicalClient.resolveWorkspace(dir)
+          .then((ws) => canonicalClient.discardPreparedSession({ workspaceId: ws.workspaceId }))
+          .catch(() => undefined)
+      }
     }
+    if (pendingPrep) void pendingPrep.finally(discard)
+    else discard()
     if (
       !currentDraft.open
       && currentDraft.selectedProjectId == null

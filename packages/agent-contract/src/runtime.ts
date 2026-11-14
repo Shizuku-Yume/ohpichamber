@@ -18,3 +18,12 @@ export const RuntimeCapabilitiesSchema = z.strictObject({
   version: z.literal('1.0.0'), engine: z.literal('omp'), capabilities: RuntimeCapabilitySetSchema,
 });
 export type RuntimeCapabilities = z.infer<typeof RuntimeCapabilitiesSchema>;
+
+export const ProposedWorkflowResultSchema = z.strictObject({
+  ok: z.literal(true),
+  action: z.literal('workflow.run'),
+  data: z.strictObject({
+    runId: z.string().min(1),
+  }).passthrough(),
+});
+export type ProposedWorkflowResult = z.infer<typeof ProposedWorkflowResultSchema>;

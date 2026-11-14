@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { JsonValue } from '@openchamber/agent-contract';
+import { ProposedWorkflowResultSchema, type JsonValue } from '@openchamber/agent-contract';
 import type { CanonicalToolState, CanonicalToolView, RenderedPageAsk, RequestedSecret, RequestedSecretRun } from './toolView';
 
 /**
@@ -87,11 +87,6 @@ const openChamberResultSchema = z
     })
     .catch({});
 
-const proposedWorkflowResultSchema = z.object({
-    ok: z.literal(true),
-    action: z.literal('workflow.run'),
-    data: z.object({ runId: z.string().min(1) }),
-});
 
 const generatedImagesResultSchema = z.object({
     ok: z.literal(true),
@@ -170,8 +165,17 @@ export const renderedPage = (view: CanonicalToolView): ({ html: string; ui?: str
 /** The workflow run an `openchamber_workflow` call proposed, else null. */
 export const proposedWorkflowRunId = (view: CanonicalToolView): string | null => {
     if (view.tool !== OPENCHAMBER_WORKFLOW_TOOL || view.state.status !== 'completed') return null;
-    const envelope = resultEnvelope(view.state, 'ok');
-    const parsed = proposedWorkflowResultSchema.safeParse(envelope);
+    let payload: unknown;
+    if ('metadata' in view.state && view.state.metadata && typeof view.state.metadata === 'object' && Object.keys(view.state.metadata).length > 0) {
+        payload = view.state.metadata;
+    } else if ('output' in view.state && typeof view.state.output === 'string') {
+        try {
+            payload = JSON.parse(view.state.output);
+        } catch {
+            return null;
+        }
+    }
+    const parsed = ProposedWorkflowResultSchema.safeParse(payload);
     return parsed.success ? parsed.data.data.runId : null;
 };
 

@@ -1,7 +1,11 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createOpenChamberSessionService } from '../openchamber-sessions/routes.js';
+import { createHostSessionState } from '../host/session-state.js';
+import { runtimeSession, snapshot as snapshotFixture } from '../event-stream/canonical-test-fixtures.js';
 
 import { trackedItemKey } from '../tracked-items/items.js';
 import { changesBetween, createPrWatchRuntime, parsePullRequestUrl, PR_WATCH_SOURCE } from './runtime.js';
@@ -74,12 +78,26 @@ const createTracked = (read = async () => ({ status: 'ok', pulls: [pull()] })) =
 const createHub = () => {
   let eventHandler = () => { };
   let statusHandler = () => { };
+  const unsubscribed = { event: 0, status: 0 };
+  const activeLeases = [];
   return {
-    subscribeEvent(handler) { eventHandler = handler; return () => { }; },
-    subscribeStatus(handler) { statusHandler = handler; return () => { }; },
-    async retainSession(_id, _key) { return { release: vi.fn(async () => { }) }; },
+    subscribeEvent(handler) {
+      eventHandler = handler;
+      return () => { unsubscribed.event += 1; eventHandler = () => { }; };
+    },
+    subscribeStatus(handler) {
+      statusHandler = handler;
+      return () => { unsubscribed.status += 1; statusHandler = () => { }; };
+    },
+    async retainSession(_id, _key) {
+      const release = vi.fn(async () => { });
+      activeLeases.push(release);
+      return { release };
+    },
     emit(event) { eventHandler(event); },
     emitStatus(status) { statusHandler(status); },
+    unsubscribed,
+    activeLeases,
   };
 };
 
@@ -359,5 +377,167 @@ describe('createPrWatchRuntime', () => {
     await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
     emit({ type: 'session.deleted', deletedSessionIds: [SESSION] });
     expect(await until(() => runtime.snapshot().watches.length === 0)).toBe(true);
+  });
+
+  it('releases observation leases, unsubscribes hub listeners, and ignores events after stop()', async () => {
+    const { runtime, sessionService, hub } = await createRuntime();
+    runtime.attach({ trackedItems: createTracked().tracked, readers: { sourceControl: vi.fn(async () => ({ status: 'ok', pulls: [pull()] })) } });
+    await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
+
+    expect(await until(() => hub.activeLeases.length >= 1)).toBe(true);
+    for (const release of hub.activeLeases) expect(release).not.toHaveBeenCalled();
+
+    runtime.stop();
+    for (const release of hub.activeLeases) expect(release).toHaveBeenCalled();
+    expect(hub.unsubscribed.event).toBe(1);
+    expect(hub.unsubscribed.status).toBe(1);
+
+    hub.emit({ type: 'session.status', sessionId: SESSION, runtimeStatus: 'idle', activeRunId: null });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(sessionService.sends).toHaveLength(0);
+
+    expect(() => runtime.stop()).not.toThrow();
+  });
+
+  it('composes the real createOpenChamberSessionService and proves the wake payload passes canonical admission', async () => {
+    const dataDir = await makeDataDir();
+    const stateDataDir = path.join(dataDir, 'state');
+    await fs.mkdir(stateDataDir, { recursive: true });
+    const hostState = createHostSessionState({ dataDir: stateDataDir });
+    await hostState.initialize();
+
+    const workspaceDir = path.join(dataDir, 'repo');
+    const agentDir = path.join(workspaceDir, '.agents');
+    await fs.mkdir(agentDir, { recursive: true });
+
+    await hostState.agentScopeStore.ensureWorkspace({
+      hostProjectId: 'proj_1',
+      projectId: 'proj_1',
+      workspaceId: 'ws_1',
+      projectDirectory: workspaceDir,
+      workspaceDirectory: workspaceDir,
+      agentDirectory: agentDir,
+      name: 'Project',
+    });
+
+    const scope = (id) => ({
+      sessionId: id,
+      rootSessionId: id,
+      projectId: 'proj_1',
+      workspaceId: 'ws_1',
+      cwd: workspaceDir,
+      agentDirectoryId: 'agent-dir-1',
+      agentDirectory: agentDir,
+      displayPath: 'repo',
+    });
+
+    const requests = [];
+    const service = {
+      request: vi.fn(async (pathname, init = {}) => {
+        requests.push({ pathname, method: init.method ?? 'GET', body: init.body, headers: init.headers });
+        if (pathname.includes('/reopen')) {
+          const id = decodeURIComponent(pathname.split('/').at(-2));
+          return Response.json(runtimeSession({ sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1' }));
+        }
+        if (pathname.includes('/snapshot')) {
+          const id = decodeURIComponent(pathname.split('/').at(-2));
+          return Response.json(snapshotFixture([], [], { sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', runtimeStatus: 'idle' }));
+        }
+        if (pathname.includes('/sessions?workspaceId=')) {
+          return Response.json({
+            items: [runtimeSession({ sessionId: SESSION, rootSessionId: SESSION, projectId: 'proj_1', workspaceId: 'ws_1', runtimeStatus: 'idle' })],
+            errors: [],
+          });
+        }
+        if (pathname.endsWith('/runs')) {
+          const id = decodeURIComponent(pathname.split('/').at(-2));
+          const body = typeof init.body === 'string' ? JSON.parse(init.body) : (init.body ?? {});
+          const runId = body.runId ?? `run-${requests.length}`;
+          return Response.json({
+            run: { runId, sessionId: id, status: 'running', createdAt: Date.now() },
+          });
+        }
+        return Response.json({});
+      }),
+    };
+
+    const sessionMetadataStore = {
+      get: async () => null,
+      getState: async () => null,
+      setSessionMetadata: async () => ({ metadata: {}, revision: '1', changed: false }),
+      updateSessionMetadata: async () => ({ metadata: {}, revision: '1', changed: false }),
+    };
+    const archiveStore = {
+      isArchived: () => false,
+      getState: async () => null,
+      archive: async () => ({ archived: [], failedIds: [] }),
+      unarchive: async () => ({ restored: [], failedIds: [] }),
+    };
+
+    const realSessionService = createOpenChamberSessionService({
+      agentScopeStore: hostState.agentScopeStore,
+      directCommandAdmissionStore: hostState.directCommandAdmissionStore,
+      archiveStore,
+      sessionMetadataStore,
+      service,
+      resolveWorkspaceScope: async () => scope('workspace'),
+      resolveSessionScope: async (id) => scope(id),
+      resolveHostSessionScope: async (id) => scope(id),
+      registerSessionScope: async () => true,
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+    });
+
+    const hub = createHub();
+    const broadcasts = [];
+    const runtime = createPrWatchRuntime({
+      sessionService: realSessionService,
+      broadcastUiEvent: (e) => broadcasts.push(e),
+      dataDir,
+      quietMs: 0,
+      retryDelayMs: () => 5,
+    });
+    runtimes.push(runtime);
+    runtime.start(hub);
+
+    let listener = () => { };
+    const tracked = {
+      setServerInterest: vi.fn(),
+      subscribe(next) { listener = next; return () => { }; },
+    };
+    const readers = {
+      sourceControl: vi.fn(async () => ({
+        status: 'ok',
+        pulls: [pull()],
+      })),
+    };
+    runtime.attach({ trackedItems: tracked, readers });
+
+    await runtime.watch({ sessionID: SESSION, directory: DIRECTORY, url: URL_7 });
+
+    listener([{
+      key: trackedItemKey(parsePullRequestUrl(URL_7)),
+      state: pull({ checks: { state: 'success' } }),
+      requestedAt: Date.now() + 10,
+    }]);
+
+    expect(await until(() => requests.some((r) => r.pathname.endsWith('/runs')))).toBe(true);
+
+    const runReq = requests.find((r) => r.pathname.endsWith('/runs'));
+    expect(runReq).toBeDefined();
+    const body = JSON.parse(runReq.body);
+    expect(body.request.input.context[0].text).toContain('Pull request #7: every check passed');
+    expect(body.request.options).toMatchObject({ providerId: null, modelId: null, agentId: null });
+
+    const db = new DatabaseSync(hostState.databasePath);
+    const commandRows = db.prepare('SELECT * FROM host_direct_command WHERE session_id = ?').all(SESSION);
+    expect(commandRows.length).toBeGreaterThanOrEqual(1);
+    expect(commandRows[0].state).toBe('accepted');
+    expect(commandRows[0].command_id).toBeDefined();
+    db.close();
+
+    await hostState.close();
   });
 });

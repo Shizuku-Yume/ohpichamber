@@ -262,6 +262,33 @@ function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; rang
   // A one-day report makes the daily chart a single bar and leaves active days
   // and the streak at 0 or 1, so today shows the totals without them.
   const today = range === '1d';
+
+  const isScopeFullyUnpriced = React.useMemo(() => {
+    if (stats.models.length === 0) {
+      return stats.cost === 0 && stats.steps > 0;
+    }
+    return stats.models.every((m) => m.pricing === null);
+  }, [stats.models, stats.cost, stats.steps]);
+
+  const isScopeMixedPricing = React.useMemo(() => {
+    if (stats.models.length === 0) return false;
+    const hasPriced = stats.models.some((m) => m.pricing !== null);
+    const hasUnpriced = stats.models.some((m) => m.pricing === null);
+    return hasPriced && hasUnpriced;
+  }, [stats.models]);
+
+  const costValue = isScopeFullyUnpriced ? '—' : formats.cost.format(stats.cost);
+  const costHint = isScopeMixedPricing ? t('usageStats.costPartialHint') : undefined;
+
+  const baseBreakdown = t('usageStats.metric.tokensBreakdown', {
+    input: formats.compact.format(stats.tokens.input),
+    output: formats.compact.format(stats.tokens.output),
+    cache: formats.compact.format(cache),
+  });
+  const tokensHint = stats.tokens.reasoning && stats.tokens.reasoning > 0
+    ? `${baseBreakdown} · ${t('usageStats.tokens.reasoning')} ${formats.compact.format(stats.tokens.reasoning)}`
+    : baseBreakdown;
+
   return (
     <>
       {stats.providers && stats.providers.length > 1 ? (
@@ -277,13 +304,9 @@ function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; rang
         <StatTile
           label={t('usageStats.metric.tokens')}
           value={formats.compact.format(stats.tokens.total)}
-          hint={t('usageStats.metric.tokensBreakdown', {
-            input: formats.compact.format(stats.tokens.input),
-            output: formats.compact.format(stats.tokens.output + (stats.tokens.reasoning ?? 0)),
-            cache: formats.compact.format(cache),
-          })}
+          hint={tokensHint}
         />
-        <StatTile label={t('usageStats.metric.cost')} value={formats.cost.format(stats.cost)} />
+        <StatTile label={t('usageStats.metric.cost')} value={costValue} hint={costHint} />
         {today ? null : (
           <>
             <StatTile label={t('usageStats.metric.activeDays')} value={formats.integer.format(stats.activeDays)} />
@@ -296,7 +319,7 @@ function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; rang
 
       <TokenComposition stats={stats} formats={formats} />
 
-      <EfficiencyTiles stats={stats} formats={formats} />
+      <EfficiencyTiles stats={stats} formats={formats} isFullyUnpriced={isScopeFullyUnpriced} />
 
       <ModelUsage models={stats.models} formats={formats} />
 
@@ -310,7 +333,7 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
     <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-edge bg-[var(--surface-elevated)] px-3 py-2.5">
       <span className="truncate typography-micro text-muted-foreground">{label}</span>
       <span className="truncate text-xl font-semibold tabular-nums text-foreground">{value}</span>
-      {hint ? <span className="truncate typography-micro text-muted-foreground" title={hint}>{hint}</span> : null}
+      {hint ? <span className="typography-micro text-muted-foreground whitespace-normal break-words" title={hint}>{hint}</span> : null}
     </div>
   );
 }
@@ -468,7 +491,7 @@ function TokenComposition({ stats, formats }: { stats: UsageStats; formats: Form
 
 /** Averages that need the whole report: cache reuse, cost of a session, and
  * how much of the output the model spent reasoning. */
-function EfficiencyTiles({ stats, formats }: { stats: UsageStats; formats: Formats }): React.ReactNode {
+function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStats; formats: Formats; isFullyUnpriced?: boolean }): React.ReactNode {
   const { t } = useI18n();
   const hitRate = cacheHitRate(stats.tokens);
   const costPerSession = averagePer(stats.cost, stats.sessions);
@@ -482,11 +505,11 @@ function EfficiencyTiles({ stats, formats }: { stats: UsageStats; formats: Forma
         <StatTile label={t('usageStats.efficiency.cacheHitRate')} value={hitRate === null ? '—' : formats.percent.format(hitRate)} />
         <StatTile
           label={t('usageStats.efficiency.costPerSession')}
-          value={costPerSession === null ? '—' : formats.cost.format(costPerSession)}
+          value={isFullyUnpriced || costPerSession === null ? '—' : formats.cost.format(costPerSession)}
         />
         <StatTile
           label={t('usageStats.efficiency.costPerMillion')}
-          value={perMillion === null ? '—' : formats.cost.format(perMillion)}
+          value={isFullyUnpriced || perMillion === null ? '—' : formats.cost.format(perMillion)}
         />
         <StatTile
           label={t('usageStats.efficiency.tokensPerSession')}

@@ -1304,7 +1304,13 @@ export class SessionRegistry {
     this.ensureOpen(); this.get(sessionId);
     const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
     const reference = this.references.get(child?.rootSessionId ?? sessionId);
-    const rows = listSessionRecaps({ sessionIds: [sessionId], ...(reference ? { cwd: reference.cwd } : {}), limit: 100 });
+    const sessionFile = child?.sessionFile ?? reference?.sessionFile;
+    const sessionIds = [sessionId];
+    if (sessionFile) {
+      const match = /_([a-zA-Z0-9_-]+)\.jsonl$/.exec(sessionFile);
+      if (match && match[1] && !sessionIds.includes(match[1])) sessionIds.push(match[1]);
+    }
+    const rows = listSessionRecaps({ sessionIds, ...(reference ? { cwd: reference.cwd } : {}), limit: 100 });
     return rows.map(row => ({ sessionId, cwd: row.cwd, recap: row.recap, createdAt: row.createdAt * 1000 }));
   }
   async stopLoop(sessionId: string) {

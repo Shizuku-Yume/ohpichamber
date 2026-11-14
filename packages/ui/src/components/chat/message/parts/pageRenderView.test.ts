@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 import { proposedWorkflowRunId, isShownInPlace } from './pageRenderView';
 import type { CanonicalToolView } from './toolView';
 import { ProposedWorkflowResultSchema } from '@openchamber/agent-contract';
@@ -17,6 +17,7 @@ describe('workflow chat card envelope and parser', () => {
     const view: CanonicalToolView = {
       call: { type: 'tool_call', partId: 'part-1', toolCallId: 'call-1', toolName: 'openchamber_workflow', input: { action: 'workflow.run' }, status: 'completed' },
       result: { type: 'tool_result', partId: 'part-2', toolCallId: 'call-1', toolName: 'openchamber_workflow', output: JSON.stringify(envelope), isError: false },
+      id: 'call-1',
       callID: 'call-1',
       tool: 'openchamber_workflow',
       state: {
@@ -38,6 +39,7 @@ describe('workflow chat card envelope and parser', () => {
     const view: CanonicalToolView = {
       call: { type: 'tool_call', partId: 'part-3', toolCallId: 'call-2', toolName: 'openchamber_workflow', input: { action: 'workflow.status' }, status: 'completed' },
       result: { type: 'tool_result', partId: 'part-4', toolCallId: 'call-2', toolName: 'openchamber_workflow', output: JSON.stringify({ ok: true, action: 'workflow.status', data: { runId: 'run-1' } }), isError: false },
+      id: 'call-2',
       callID: 'call-2',
       tool: 'openchamber_workflow',
       state: {

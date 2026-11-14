@@ -16,6 +16,7 @@ import type { AgentSessionHandle } from '@oh-my-pi/pi-coding-agent/session/agent
 import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { recordSessionRecap } from '@oh-my-pi/pi-coding-agent/session/session-index';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { JobWidgets } from '@oh-my-pi/pi-coding-agent/job-widgets/registry';
 import { createModelJobCaptionWriter } from '@oh-my-pi/pi-coding-agent/job-widgets/caption';
@@ -240,6 +241,7 @@ export class WorkerSession {
       isBlocked: () => this.idleRecapBlocked(),
       scheduledTurn: () => this.scheduledTurn(),
       onRecap: recap => {
+        try { recordSessionRecap(this._sessionId, this.cwd, recap); } catch { /* best-effort recap journal */ }
         // Transient: the recap is a hint about the settled turn, not a durable
         // transcript entry, so it must not become part of the history stream.
         this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'session.recap', recap, createdAt: Date.now() } }]);

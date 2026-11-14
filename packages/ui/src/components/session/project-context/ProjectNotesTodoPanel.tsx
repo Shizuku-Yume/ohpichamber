@@ -368,10 +368,10 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
     [projectRef, saveTodos, t]
   );
 
-  const sections: Array<{ id: ProjectContextTab; icon: IconName; label: string; tooltip: string; count: number; unseen: number }> = React.useMemo(() => ([
-    { id: 'notes', icon: 'sticky-note', label: t('rightSidebar.contextNotesTodo.tabs.notes'), tooltip: t('contextTooltips.workspace.section.notes'), count: counts.notes, unseen: 0 },
-    { id: 'todos', icon: 'checkbox-circle', label: t('rightSidebar.contextNotesTodo.tabs.todos'), tooltip: t('contextTooltips.workspace.section.todos'), count: counts.todos, unseen: 0 },
-    { id: 'plans', icon: 'file-text', label: t('rightSidebar.contextNotesTodo.tabs.plans'), tooltip: t('contextTooltips.workspace.section.plans'), count: counts.plans, unseen: 0 },
+  const sections: Array<{ id: ProjectContextTab; icon: IconName; label: string; tooltip: string; count: number }> = React.useMemo(() => ([
+    { id: 'notes', icon: 'sticky-note', label: t('rightSidebar.contextNotesTodo.tabs.notes'), tooltip: t('contextTooltips.workspace.section.notes'), count: counts.notes },
+    { id: 'todos', icon: 'checkbox-circle', label: t('rightSidebar.contextNotesTodo.tabs.todos'), tooltip: t('contextTooltips.workspace.section.todos'), count: counts.todos },
+    { id: 'plans', icon: 'file-text', label: t('rightSidebar.contextNotesTodo.tabs.plans'), tooltip: t('contextTooltips.workspace.section.plans'), count: counts.plans },
   ]), [counts, t]);
 
   if (!projectRef) {
@@ -398,7 +398,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
 
   const renderSectionTab = (section: typeof sections[number], showLabel: boolean, interactive: boolean) => {
     const isActive = activeTab === section.id;
-    const unseenTitle = t('rightSidebar.contextNotesTodo.memory.unseenTitle', { count: section.unseen });
     const tab = (
       <button
         key={section.id}
@@ -418,14 +417,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
         {/* A hidden label stays for screen readers, which would hear only the count. */}
         <span className={showLabel ? 'whitespace-nowrap typography-meta' : 'sr-only'}>{section.label}</span>
         <span className="typography-micro opacity-70">{section.count}</span>
-        {section.unseen > 0 ? (
-          <span
-            className="rounded-full bg-[var(--status-success)]/15 px-1 typography-micro font-medium leading-4 text-[var(--status-success-text)]"
-            aria-label={unseenTitle}
-          >
-            {`+${section.unseen}`}
-          </span>
-        ) : null}
       </button>
     );
     // The strip measured for fit is never shown, so it needs no tooltips.
@@ -435,7 +426,6 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
         <TooltipTrigger asChild>{tab}</TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {section.tooltip}
-          {section.unseen > 0 ? <div className="text-muted-foreground">{unseenTitle}</div> : null}
         </TooltipContent>
       </Tooltip>
     );

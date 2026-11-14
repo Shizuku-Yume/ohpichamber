@@ -122,7 +122,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'tools.approval': 'engine',
   'tools.approvalMode': 'tui-only',
   'tools.restrictedFolders': 'sessions:security',
-  'skills.registryUrl': 'skills:registry',
+  'skills.registryUrl': 'boundary',
   'stt.enabled': 'voice:stt',
   'stt.submitTrigger': 'voice:stt',
   'collab.relayUrl': 'boundary',
@@ -136,8 +136,8 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'stream.redactPatterns': 'boundary',
 
   // --- context (31) ---
-  'workspace.additionalDirectories': 'sessions:context',
-  'contextFiles.extra': 'sessions:context',
+  'workspace.additionalDirectories': 'boundary',
+  'contextFiles.extra': 'boundary',
   'contextPromotion.enabled': 'sessions:context',
   'extendedContext': 'sessions:context',
   'branchSummary.enabled': 'sessions:context',
@@ -216,14 +216,14 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'eval.workpool.freshAgents': 'engine',
   'eval.autoBackground.enabled': 'engine',
   'python.kernelMode': 'engine',
-  'python.interpreter': 'engine',
+  'python.interpreter': 'boundary',
 
   // --- memory (31) ---
   'memory.backend': 'memory:backend',
   'sharpshooter.model': 'memory:backend',
   'autolearn.enabled': 'memory:backend',
   'autolearn.autoContinue': 'memory:backend',
-  'mnemopi.dbPath': 'memory:backend',
+  'mnemopi.dbPath': 'boundary',
   'mnemopi.bank': 'memory:backend',
   'mnemopi.scoping': 'memory:backend',
   'mnemopi.embeddingVariant': 'memory:backend',
@@ -328,8 +328,8 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'worktree.cleanSource': 'sessions:worktree',
   'worktree.onStart': 'sessions:worktree',
   'worktree.onExit': 'sessions:worktree',
-  'worktree.base': 'sessions:worktree',
-  'ovnfs.path': 'sessions:isolation',
+  'worktree.base': 'boundary',
+  'ovnfs.path': 'boundary',
   'task.eager': 'agents:subagents',
   'task.batch': 'agents:subagents',
   'task.file': 'agents:subagents',
@@ -352,7 +352,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'plan.enabled': 'engine',
   'plan.defaultOnStartup': 'engine',
   'plan.autosave': 'engine',
-  'plan.autosaveDir': 'sessions:plan',
+  'plan.autosaveDir': 'boundary',
   'goal.enabled': 'engine',
   'goal.statusInFooter': 'tui-only',
   'goal.continuationModes': 'engine',
@@ -477,10 +477,10 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'browser.tern': 'tools:browser',
   'browser.freezeOnTurnEnd': 'tools:browser',
   'browser.idleCloseSec': 'tools:browser',
-  'browser.screenshotDir': 'tools:browser',
+  'browser.screenshotDir': 'boundary',
   'ida.enabled': 'tools:available',
   'ida.python': 'tools:ida',
-  'ida.installDir': 'tools:ida',
+  'ida.installDir': 'boundary',
   'ida.maxOpen': 'tools:ida',
   'ida.idleCloseSec': 'tools:ida',
   'mcp.enableProjectConfig': 'engine',
@@ -510,6 +510,16 @@ function buildTable(): Readonly<Record<string, OmpSettingPlacement>> {
  * Untabbed IDs default to `{ type: 'hidden' }` unless listed above.
  */
 export const OMP_SETTING_PLACEMENTS: Readonly<Record<string, OmpSettingPlacement>> = buildTable();
+
+/** Page placements a GUI control writes today. Any other page placement is drawn by no surface, so it is never exposed. */
+const GUI_WRITTEN_PAGE_KEYS: Readonly<Record<string, true>> = { defaultThinkingLevel: true };
+
+/** The ids the OMP route returns and accepts: rows a GUI owner draws or writes. Every other id is omitted and refused. */
+export const OMP_SETTING_EXPOSED_IDS: ReadonlySet<string> = new Set(
+  Object.entries(OMP_SETTING_PLACEMENTS)
+    .filter(([id, placement]) => placement.type === 'engine' || placement.type === 'owned-by' || (placement.type === 'page' && GUI_WRITTEN_PAGE_KEYS[id] === true))
+    .map(([id]) => id),
+);
 
 /** Every owner named by an owned-by placement, so a test can check they are real controls. */
 export const OMP_SETTING_OWNER_IDS: readonly string[] = [

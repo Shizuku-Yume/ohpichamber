@@ -11,7 +11,7 @@ import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { lookup, type AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
+import { OMP_SETTING_EXPOSED_IDS, presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
@@ -76,7 +76,7 @@ export class NativeSettings {
 
   private state(workspaceId: string, revision: string): OmpSettingsState {
     const all = orderedSettings();
-    const exposed = all.filter(s => !s.isCredential && Object.hasOwn(OMP_SETTING_PLACEMENTS, s.id) && OMP_SETTING_PLACEMENTS[s.id].type !== 'boundary');
+    const exposed = all.filter(s => !s.isCredential && OMP_SETTING_EXPOSED_IDS.has(s.id));
     return OmpSettingsStateSchema.parse({
       workspaceId,
       revision,
@@ -93,10 +93,10 @@ export class NativeSettings {
 
   async write(workspaceId: string, revision: string, request: OmpSettingsUpdateRequest): Promise<OmpSettingsState> {
     await this.settings.reloadFromDisk();
-    // Only placed settings are exposed: an unplaced id is never written, so the
-    // route cannot reach a setting no GUI surface owns.
+    // Only the settings a GUI owner draws or writes are exposed: any other id is
+    // refused here, so the route cannot reach a setting no surface owns.
     for (const change of request.changes) {
-      if (!Object.hasOwn(OMP_SETTING_PLACEMENTS, change.id) || OMP_SETTING_PLACEMENTS[change.id].type === 'boundary') {
+      if (!OMP_SETTING_EXPOSED_IDS.has(change.id)) {
         throw new ProjectionError(400, 'INVALID_REQUEST', `OMP setting ${change.id} is not exposed`);
       }
     }

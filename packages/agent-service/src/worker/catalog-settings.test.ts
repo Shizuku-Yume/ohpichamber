@@ -6,7 +6,7 @@ import { YAML } from 'bun';
 import './suggestion.ts';
 import * as contract from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
-import { OMP_SETTING_PLACEMENTS } from './settings-ui.ts';
+import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_PLACEMENTS } from './settings-ui.ts';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { cfgCompactionThresholdPercent } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { NativeSettings } from './catalog-settings.ts';
@@ -47,7 +47,7 @@ test('the setting list is derived from orderedSettings and never exposes credent
     }
     const boundaryIds = Object.keys(OMP_SETTING_PLACEMENTS).filter(id => OMP_SETTING_PLACEMENTS[id].type === 'boundary');
     for (const id of boundaryIds) expect(ids.has(id), id).toBe(false);
-    const shown = all.filter(s => !s.isCredential && Object.hasOwn(OMP_SETTING_PLACEMENTS, s.id) && OMP_SETTING_PLACEMENTS[s.id].type !== 'boundary');
+    const shown = all.filter(s => !s.isCredential && OMP_SETTING_EXPOSED_IDS.has(s.id));
     expect(state.settings.length).toBe(shown.length);
     for (const s of all) if (!shown.includes(s)) expect(ids.has(s.id), s.id).toBe(false);
     expect(state.settings.find(s => s.id === 'compaction.thresholdPercent')).toMatchObject({
@@ -95,23 +95,19 @@ test('refuses to write a setting no GUI surface places', async () => {
   } finally { await f.close(); }
 });
 
-test('writes expanded settings: execution flow modes, tui render toggles and tool buffer caps', async () => {
+test('writes engine settings and refuses settings no GUI owner writes', async () => {
   const f = await fixture();
   try {
     const read = await f.native.read('workspace_1', '0');
     const written = await f.native.write('workspace_1', '1', {
       expectedRevision: read.revision,
-      changes: [
-        { id: 'steeringMode', value: 'all' },
-        { id: 'tui.renderSvg', value: false },
-        { id: 'tools.artifactSpillThreshold', value: 80 },
-        { id: 'composer.predictions', value: true },
-      ],
+      changes: [{ id: 'tools.artifactSpillThreshold', value: 80 }],
     });
-    expect(written.settings.find(s => s.id === 'steeringMode')).toMatchObject({ value: 'all', configured: true });
-    expect(written.settings.find(s => s.id === 'tui.renderSvg')).toMatchObject({ value: false, configured: true });
     expect(written.settings.find(s => s.id === 'tools.artifactSpillThreshold')).toMatchObject({ value: 80, configured: true });
-    expect(written.settings.find(s => s.id === 'composer.predictions')).toMatchObject({ value: true, configured: true });
+    for (const change of [{ id: 'steeringMode', value: 'all' }, { id: 'tui.renderSvg', value: false }, { id: 'composer.predictions', value: true }, { id: 'skills.registryUrl', value: 'https://skills.example' }]) {
+      await expect(f.native.write('workspace_1', '1', { expectedRevision: read.revision, changes: [change] }), change.id)
+        .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    }
   } finally { await f.close(); }
 });
 

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import * as contract from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
-import { OMP_SETTING_OWNER_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
+import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_OWNER_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
 import { NativeSettings } from './catalog-settings.ts';
 
 beforeEach(resetSettingsForTest);
@@ -76,9 +76,9 @@ test('reads surface, owner and condition from the pinned definitions', async () 
     const byId = new Map(state.settings.map(setting => [setting.id, setting]));
     expect(byId.get('compaction.thresholdPercent')).toMatchObject({ placement: { type: 'engine' } });
     expect(byId.has('enabledModels')).toBe(false);
-    expect(byId.get('tui.renderMermaid')).toMatchObject({ placement: { type: 'tui-only' } });
+    expect(byId.has('tui.renderMermaid')).toBe(false);
     expect(byId.get('tools.artifactTailLines')).toMatchObject({ placement: { type: 'engine' } });
-    expect(byId.get('cycleOrder')).toMatchObject({ placement: { type: 'tui-only' } });
+    expect(byId.has('cycleOrder')).toBe(false);
     // OMP's own `ui.condition` travels with the descriptor and is evaluated
     // against this worker's settings, not a process-wide singleton.
     expect(byId.get('retry.usageReservePct')).toMatchObject({
@@ -86,13 +86,10 @@ test('reads surface, owner and condition from the pinned definitions', async () 
     });
     // The pinned definition gates both plan rows on plan mode itself;
     // `planAutosaveEnabled` belongs to `plan.autosaveDir`, which the
-    // allowlist does not expose.
+    // no GUI owner draws.
     expect(byId.get('plan.defaultOnStartup')).toMatchObject({ condition: 'planModeEnabled', conditionActive: true });
     expect(byId.get('plan.autosave')).toMatchObject({ condition: 'planModeEnabled', conditionActive: true });
-    expect(byId.get('tier.advisor')).toMatchObject({ condition: 'advisorEnabled', conditionActive: false });
-    expect(byId.get('composer.predictionAlternatives')).toMatchObject({
-      condition: 'composerPredictionsEnabled', conditionActive: false,
-    });
+    expect(byId.get('retry.usageReservePolicy')).toMatchObject({ condition: 'usageAwareFallbackEnabled', conditionActive: false });
     // A setting without a condition never claims one.
     expect(byId.get('compaction.enabled')).not.toHaveProperty('condition');
   } finally { await f.close(); }
@@ -113,7 +110,7 @@ test('a condition turns true when the setting it reads is turned on', async () =
     const byId = new Map(after.settings.map(setting => [setting.id, setting]));
     expect(byId.get('retry.usageReservePct')).toMatchObject({ conditionActive: true });
     expect(byId.get('retry.usageReservePolicy')).toMatchObject({ conditionActive: true });
-    // A condition reading a setting the allowlist does not expose still
+    // A condition reading a setting no GUI owner draws still
     // evaluates against the same handle, so plan mode being off hides its rows.
     expect(byId.get('plan.defaultOnStartup')).toMatchObject({ conditionActive: false });
     expect(byId.get('plan.autosave')).toMatchObject({ conditionActive: false });
@@ -135,5 +132,14 @@ test('every engine placement carries OMP label and description from the pinned r
     if (OMP_SETTING_PLACEMENTS[setting.id]?.type !== 'engine' || setting.id === 'modelRoles') continue; // rendered by the model role editor
     expect(setting.ui?.label, `${setting.id} needs an OMP label`).toBeTruthy();
     expect(setting.ui?.description, `${setting.id} needs an OMP description`).toBeTruthy();
+  }
+});
+
+test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page placements are not', () => {
+  for (const id of ['skills.registryUrl', 'plan.autosaveDir', 'tui.renderSvg', 'steeringMode', 'collab.relayUrl']) {
+    expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
+  }
+  for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles']) {
+    expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
   }
 });

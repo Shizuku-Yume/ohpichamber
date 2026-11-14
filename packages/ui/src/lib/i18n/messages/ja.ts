@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -9020,7 +9021,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "ネイティブのデフォルトツールセットを継承します。",
   "settings.agents.page.field.allowedToolsEdit": "ツールを編集",
   "settings.agents.page.field.allowedToolsUseDefault": "ネイティブのデフォルトを使用",
-  "settings.agents.page.field.permissionPreset": "権限プリセット ID",
   "settings.gitIdentities.editor.description.newProfile": "新しい Git Identity プロファイルを作成",
   "settings.gitIdentities.editor.description.editProfile": "Identity プロファイル設定を編集",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR のマージ後",
@@ -9415,6 +9415,7 @@ export const dict = {
   ...tooltipsPanelI18n['ja'],
   ...tooltipsChatI18n['ja'],
   ...m4LaneDI18n.ja,
+    ...agentToolPermissionsI18n["ja"],
   "gitIdentities.state.unknown": "Git の ID はまだ読み込まれていません。",
   "settings.usage.state.unknown": "使用状況はまだ読み込まれていません。",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "保存されたメモリはまだ読み込まれていません。",

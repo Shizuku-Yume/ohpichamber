@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -9020,7 +9021,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Yerel varsayılan araç kümesini devralır.",
   "settings.agents.page.field.allowedToolsEdit": "Araçları düzenle",
   "settings.agents.page.field.allowedToolsUseDefault": "Yerel varsayılanları kullan",
-  "settings.agents.page.field.permissionPreset": "İzin hazır ayar ID'si",
   "settings.gitIdentities.editor.description.newProfile": "Yeni bir Git kimlik profili oluştur",
   "settings.gitIdentities.editor.description.editProfile": "Kimlik profili ayarlarını düzenle",
   "settings.openchamber.mergedWorktreeCleanup.title": "PR birleştirildikten sonra",
@@ -9415,6 +9415,7 @@ export const dict = {
   ...tooltipsPanelI18n['tr'],
   ...tooltipsChatI18n['tr'],
   ...m4LaneDI18n.tr,
+    ...agentToolPermissionsI18n["tr"],
   "gitIdentities.state.unknown": "Git kimlikleri henüz yüklenmedi.",
   "settings.usage.state.unknown": "Kullanım henüz yüklenmedi.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Kayıtlı bellek henüz yüklenmedi.",

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -9020,7 +9021,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Hereda el conjunto de herramientas nativo predeterminado.",
   "settings.agents.page.field.allowedToolsEdit": "Editar herramientas",
   "settings.agents.page.field.allowedToolsUseDefault": "Usar valores nativos predeterminados",
-  "settings.agents.page.field.permissionPreset": "ID de preajuste de permisos",
   "settings.gitIdentities.editor.description.newProfile": "Crear una nueva identidad Git",
   "settings.gitIdentities.editor.description.editProfile": "Editar la configuración de la identidad",
   "settings.openchamber.mergedWorktreeCleanup.title": "Después de fusionar un PR",
@@ -9415,6 +9415,7 @@ export const dict = {
   ...tooltipsPanelI18n['es'],
   ...tooltipsChatI18n['es'],
   ...m4LaneDI18n.es,
+    ...agentToolPermissionsI18n["es"],
   "gitIdentities.state.unknown": "Las identidades de Git aún no se han cargado.",
   "settings.usage.state.unknown": "El uso aún no se ha cargado.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "La memoria almacenada aún no se ha cargado.",

@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -9075,6 +9076,7 @@ export const dict = {
   ...tooltipsPanelI18n['he'],
   ...tooltipsChatI18n['he'],
   ...m4LaneDI18n['he'],
+    ...agentToolPermissionsI18n["he"],
   "gitIdentities.state.unknown": "זהויות Git טרם נטענו.",
   "settings.usage.state.unknown": "השימוש טרם נטען.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "הזיכרון השמור טרם נטען.",

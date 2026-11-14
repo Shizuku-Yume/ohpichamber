@@ -1,3 +1,4 @@
+import { agentToolPermissionsI18n } from "./agent-tool-permissions.i18n";
 import { documentToolbarI18n } from './document-toolbar.i18n';
 import { uiBlocksI18n } from './ui-blocks.i18n';
 import { updateDialogCanaryI18n } from './update-dialog-canary.i18n';
@@ -9020,7 +9021,6 @@ export const dict = {
   "settings.agents.page.field.allowedToolsInherit": "Erft de native standaardset tools.",
   "settings.agents.page.field.allowedToolsEdit": "Hulpmiddelen bewerken",
   "settings.agents.page.field.allowedToolsUseDefault": "Native standaardwaarden gebruiken",
-  "settings.agents.page.field.permissionPreset": "Toestemmingspreset-ID",
   "settings.gitIdentities.editor.description.newProfile": "Maak een nieuw Git-identiteitsprofiel",
   "settings.gitIdentities.editor.description.editProfile": "Instellingen van het identiteitsprofiel bewerken",
   "settings.openchamber.mergedWorktreeCleanup.title": "Nadat een PR is gemerged",
@@ -9415,6 +9415,7 @@ export const dict = {
   ...tooltipsPanelI18n['nl'],
   ...tooltipsChatI18n['nl'],
   ...m4LaneDI18n.nl,
+    ...agentToolPermissionsI18n["nl"],
   "gitIdentities.state.unknown": "Git-identiteiten zijn nog niet geladen.",
   "settings.usage.state.unknown": "Gebruik is nog niet geladen.",
   "rightSidebar.contextNotesTodo.memory.state.unknown": "Opgeslagen geheugen is nog niet geladen.",

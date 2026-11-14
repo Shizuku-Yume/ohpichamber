@@ -22,9 +22,9 @@ import { getSyncChildStores } from '@/sync/sync-refs';
 
 // Base UI and React DOM detect browser support when imported.
 class TestIntersectionObserver {
-  observe(): void {}
-  disconnect(): void {}
-  unobserve(): void {}
+  observe(): void { }
+  disconnect(): void { }
+  unobserve(): void { }
 }
 const importWindow = new Window();
 Object.defineProperty(globalThis, 'window', { value: importWindow, configurable: true, writable: true });
@@ -68,7 +68,7 @@ const provider: Provider & { models: Model[] } = {
 };
 const agent: Agent = {
   agentId: AGENT_ID, name: 'Build', description: 'Build native projects',
-  model: null, allowedTools: ['read', 'custom-native-tool'], permissionPresetId: 'workspace-review',
+  model: null, allowedTools: ['read', 'custom-native-tool'],
 };
 const planAgent: Agent = { ...agent, agentId: 'profile-plan-29', name: 'Plan' };
 const reviewAgent: Agent = { ...agent, agentId: 'profile-review-31', name: 'Review' };

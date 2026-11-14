@@ -84,6 +84,10 @@ const mcpStatusOf = (state: McpServerRuntimeState | undefined): 'connected' | 'f
   return 'idle';
 };
 
+/** Sign-in is required only when the authoritative stateless probe of this server says so. */
+const mcpAuthRequired = (state: McpServerRuntimeState | undefined): boolean =>
+  state?.probe?.status === 'failed' && state.probe.error.code === 'MCP_AUTH_REQUIRED';
+
 type ConfirmRequest =
   | { kind: 'plugin-install'; entry: CatalogEntry; component?: CatalogComponent }
   | { kind: 'uninstall'; entry: CatalogEntry };
@@ -230,6 +234,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const mcpServers = useMcpConfigStore((state) => open ? selectMcpServersForDirectory(state, settingsDirectory) : EMPTY_MCP_SERVERS);
   const loadMcpConfigs = useMcpConfigStore((state) => state.loadMcpConfigs);
   const createMcp = useMcpConfigStore((state) => state.createMcp);
+  const updateMcp = useMcpConfigStore((state) => state.updateMcp);
   const deleteMcp = useMcpConfigStore((state) => state.deleteMcp);
   const setSelectedMcp = useMcpConfigStore((state) => state.setSelectedMcp);
   const refreshMcpStatus = useMcpStore((state) => state.refresh);
@@ -323,12 +328,9 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const isMcpInstalled = React.useCallback((entry: CatalogEntry): boolean => {
     const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
     if (!server) return false;
-    const runtime = mcpStatusOf(mcpStatuses[entry.id]);
-    if (runtime === 'failed') return false;
-    const mcp = catalogMcpComponent(entry);
-    const isApplied = runtime === 'connected';
-    const isAwaitingAuth = mcp?.auth === 'oauth';
-    return isApplied || isAwaitingAuth;
+    if (!server.enabled) return true;
+    const state = mcpStatuses[entry.id];
+    return mcpStatusOf(state) === 'connected' || state?.probe?.status === 'connected' || mcpAuthRequired(state);
   }, [mcpServers, mcpStatuses]);
   const isPluginInstalled = React.useCallback((component: CatalogPluginComponent): boolean =>
     installedPluginNames.has(catalogPluginPackageName(component.spec)), [installedPluginNames]);
@@ -374,7 +376,9 @@ export function IntegrationsCatalogView(): React.ReactNode {
 
 
   const statusOf = React.useCallback((entry: CatalogEntry): CatalogCardStatus => {
-    const runtime = mcpStatusOf(mcpStatuses[entry.id]);
+    const state = mcpStatuses[entry.id];
+    if (mcpAuthRequired(state)) return { label: t('integrationsCatalog.status.needsAuth'), tone: 'warning' };
+    const runtime = mcpStatusOf(state);
     if (runtime === 'failed') return { label: t('integrationsCatalog.status.failed'), tone: 'warning' };
     if (isEntryInstalled(entry)) {
       const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
@@ -471,7 +475,9 @@ export function IntegrationsCatalogView(): React.ReactNode {
           const values: Record<string, string> = {};
           for (const input of entry.inputs ?? []) values[input.id] = readInput(entry, input.id);
           const config = buildCatalogMcpConfig(entry, component, values, targetScope ?? (hasSelectedProject ? 'project' : 'user'));
-          const attempted = await createMcp(config, settingsDirectory)
+          // An existing server is retried by configuring it again; create is only for a new id.
+          const exists = mcpServers.some((server) => server.serverId === entry.id);
+          const attempted = await (exists ? updateMcp(entry.id, config, settingsDirectory) : createMcp(config, settingsDirectory))
             .then((result) => ({ result }))
             .catch((failure: unknown) => ({ failure }));
           if ('failure' in attempted) {
@@ -503,12 +509,12 @@ export function IntegrationsCatalogView(): React.ReactNode {
             }
           }
           try {
-            await useMcpStore.getState().connect(entry.id, settingsDirectory);
+            // The authoritative probe records this server's own state (connected, sign-in required or failed).
+            await useMcpStore.getState().testConnection(entry.id, settingsDirectory);
           } catch (error) {
-            // A failed connect is expected for an OAuth server: the detail
-            // page's sign-in panel is how the user finishes that install.
             if (component.auth !== 'oauth') toast.error(problemMessage(error, t('integrationsCatalog.connect.failed', { name: entry.name })));
           }
+          await useMcpStore.getState().refresh({ directory: settingsDirectory, silent: true });
           if (component.auth === 'oauth') setSelectedId(entry.id);
         } else if (component.kind === 'plugin') {
           if (isPluginInstalled(component)) continue;
@@ -554,7 +560,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
     } finally {
       setBusyId(null);
     }
-  }, [attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t]);
+  }, [attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp]);
   /** One Uninstall pass: removes the MCP server, the plugin entries, and the installed skills. */
   const uninstallEntry = React.useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);
@@ -942,9 +948,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const renderConnection = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const runtime = mcpStatusOf(mcpStatuses[entry.id]);
     const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
-    const probe = mcpStatuses[entry.id]?.probe;
-    const probeFailedWithAuth = probe?.status === 'failed' && /401|auth|sign-in|unauthorized/i.test(probe.error.detail);
-    const isAwaitingAuth = mcp.auth === 'oauth' || probeFailedWithAuth;
+    const isAwaitingAuth = mcpAuthRequired(mcpStatuses[entry.id]);
     const state: { label: string; tone: IntegrationCatalogStatusTone } = runtime === 'disabled' || (server && !server.enabled)
       ? { label: t('integrationsCatalog.status.disabled'), tone: 'neutral' }
       : runtime === 'connected'

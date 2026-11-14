@@ -106,23 +106,25 @@ describe('costPerMillionTokens', () => {
 });
 
 describe('reasoningShare', () => {
-  test('reasoning over everything the model produced', () => {
-    expect(reasoningShare({ output: 30, reasoning: 10 })).toEqual(0.25);
-    expect(reasoningShare({ output: 0, reasoning: 5 })).toEqual(1);
+  test('reasoning as a share of output, which already includes it', () => {
+    expect(reasoningShare({ output: 40, reasoning: 10 })).toEqual(0.25);
+    expect(reasoningShare({ output: 10, reasoning: 10 })).toEqual(1);
     expect(reasoningShare({ output: 0, reasoning: 0 })).toBeNull();
-    expect(reasoningShare({ output: 30, reasoning: null })).toBeNull();
+    expect(reasoningShare({ output: 40, reasoning: null })).toBeNull();
   });
 });
 
 describe('tokenSegments', () => {
-  test('fixed order with reasoning folded into output, zeros kept for the legend', () => {
-    const segments = tokenSegments({ input: 10, output: 2, reasoning: 3, cacheRead: 30, cacheWrite: 5, total: 50 });
+  test('fixed order with output taken as reported, since it already includes reasoning', () => {
+    const tokens = { input: 10, output: 5, reasoning: 3, cacheRead: 30, cacheWrite: 5, total: 50 };
+    const segments = tokenSegments(tokens);
     expect(segments).toEqual([
       { key: 'input', value: 10 },
       { key: 'output', value: 5 },
       { key: 'cacheRead', value: 30 },
       { key: 'cacheWrite', value: 5 },
     ]);
+    expect(segments.reduce((sum, segment) => sum + segment.value, 0)).toBe(tokens.total);
     expect(tokenSegments({ input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 0 }).map((segment) => segment.key)).toEqual([
       'input',
       'output',

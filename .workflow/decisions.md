@@ -1127,6 +1127,15 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** OMP SDK supports zero-cost instant session instantiation or when asynchronous session bootstrap becomes a planned architectural migration.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - OMP settings name only verified owners; writes reach placed settings only
+
+- **Decided:** an `owned-by` placement names only a control that writes that OMP key: `recap.enabled` and `recap.idleSeconds` → Chat → Session recap (`chat.session-recap`, task 11), `suggestion.generator` → `chat.suggestion-generator`. `tui.renderMermaid`, `tools.approvalMode` and `enabledModels` have no GUI writer of their OMP keys and are `tui-only`, so they stay off the OMP page and off the writable set. The `enabledModels` row is removed (untabbed, so hidden). The OMP write route accepts only ids present in the placement table, so an unplaced id is refused with 400.
+- **Instead of:** `owned-by` rows for the mermaid, permission-default and providers controls, which write other keys, and the unrestricted write path the rewrite left behind.
+- **Because:** the effort's rule that an `owned-by` row names a real writer could not hold for those three; without the gate, the route accepted every non-credential OMP id, widening the 157-id allowlist it replaced.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** a GUI control starts writing `tools.approvalMode` or `enabledModels`, or task 12 moves the egress endpoints (`collab.*`, `share.*`, `stream.*`) onto a page.
 ## 2026-11-14 - Agent tool permissions editor queries live tool catalog and groups tools by domain
 
 - **Decided:** the Agent tool permissions editor queries the live session or workspace tool catalog exposing name, label, description, tier (`read`, `write`, `exec`), and availability (`SessionToolsCatalogSchema`). Tools are grouped into 7 fork-owned domains (files and search, execution, web and external, planning and memory, multi-agent, OpenChamber, MCP and extensions) with collapsible sections, header tri-state checkboxes, and tier chips. Quick actions operate over available tools only, preventing 422 `UNSUPPORTED_CAPABILITY` on profile creation/activation. Dead `permissionPresetId` fields and inputs were deleted.
@@ -1145,4 +1154,42 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent
 - **Mine:** yes
 - **Revisit when:** OMP introduces native turn rollback checkpoints or session-level review transactional boundaries.
+## 2026-11-14 - Enterprise-boundary OMP settings are placed `boundary`: never rendered, written or read by a GUI route
+
+- **Decided:** settings that cross the enterprise boundary (relay, share and stream endpoints, collab and browser relay, image URL listeners, memory and search endpoints and API keys, dev autoqa push, OTLP telemetry) get the placement `boundary`. The OMP route omits them from its state, so their values never reach the browser, and refuses writes to them with 400. They stay editable only in `config.yml`, as before this task, when the OMP settings allowlist did not name them.
+- **Instead of:** `tunnel:collab`, `memory:backend` and `chat:images` page placements, which would have let a GUI write egress targets and read secret values back.
+- **Because:** the enterprise-boundary skill classifies these as egress, exposure, provider entry and telemetry. Their enforcement belongs at the crossing, and the mode's pin knobs do not exist yet. Web, Electron and mobile all reach this route through the same Host, so one enforcement point covers them.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** a later task adds an admin pin for one of these endpoints; that needs the `enterprise-mode.js` knob, its test cases, and moving the `boundary` placement to a page.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Untabbed engine settings without OMP copy are hidden, not drawn with raw ids
+
+- **Decided:** the 38 settings that OMP's TUI never shows (untabbed, so no OMP label or description: retry internals, compaction tuning, skills discovery toggles, spotlight experiment, task overrides, thinking budgets) are removed from the placement table, so they default to `hidden`. `modelRoles` stays `engine` because the role editor draws it. A test asserts every `engine` row carries OMP's label and description.
+- **Instead of:** writing locale copy for 38 internal settings in 15 locales, or keeping them as `engine` rows that show raw ids.
+- **Because:** the real-path page drew raw ids such as `thinkingBudgets.high` as row labels. Their copy would be invented, and they are OMP tuning knobs that the page's own footer already says to edit in config.yml.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP ships labels for these settings, or the maintainer wants them in the GUI.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - The OMP route exposes only the settings a GUI owner draws or writes
+
+- **Decided:** the OMP settings route returns and accepts only `OMP_SETTING_EXPOSED_IDS`: `engine` placements, `owned-by` placements, and `page` placements that a GUI control writes (today `defaultThinkingLevel`, written by Defaults). `tui-only`, untabbed (`hidden`), `boundary` and unwritten page placements are omitted from state and refused on write with 400. The path settings (`plan.autosaveDir`, `workspace.additionalDirectories`, `contextFiles.extra`, `mnemopi.dbPath`, `ovnfs.path`, `worktree.base`, `ida.installDir`, `browser.screenshotDir`, `python.interpreter`) and the off-host `skills.registryUrl` are `boundary`.
+- **Instead of:** the earlier rule that refused only boundary and unplaced ids, which made tui-only ids readable and writable, contrary to the 2026-11-14 owners decision.
+- **Because:** the old contract excluded remote URLs and configurable paths as a second authority and a path escape hatch. A placed row with no reader or writer is an unverified claim. The two decisions now agree.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** task 12 adds a page control that writes another page placement; that key joins `GUI_WRITTEN_PAGE_KEYS` in the same change.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Engine rows without a locale override show OMP's own label and description
+
+- **Decided:** each `engine` row takes its label and description from OMP's registry. The locale overrides in `omp-settings.i18n.ts` cover the rows the page names, and any row without an override shows OMP's English text in every locale. The 131 engine rows are not mass-translated in this effort.
+- **Instead of:** translating every engine row into 15 locales now, or hiding untranslated rows.
+- **Because:** OMP's labels are themselves technical English, and the copy is OMP's own rather than an invented fallback. Mass translation of about 3,900 strings is a separate localization effort the maintainer did not ask for in this effort.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** the maintainer schedules localization of the OMP settings page, or `locale-ui-patterns` is read to forbid English fallback on runtime-sourced copy; then translate or hide the affected rows.
 - **Effort:** ux-feedback-2026-11-12

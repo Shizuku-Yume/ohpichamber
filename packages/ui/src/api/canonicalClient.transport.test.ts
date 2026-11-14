@@ -194,7 +194,7 @@ describe('CanonicalClient real HTTP scope boundary', () => {
   });
 
   test('settings reads and writes verify workspace ownership and the next revision', async () => {
-    const settingsState = { workspaceId, revision: '7', settings: [] };
+    const settingsState = { workspaceId, revision: '7', totalCount: 0, settings: [] };
     respondWith(settingsState);
     expect((await client.getOmpSettings(workspaceId)).revision).toBe('7');
     expect(calls.at(-1)).toBe(`GET /api/agent/v1/workspaces/${workspaceId}/settings`);

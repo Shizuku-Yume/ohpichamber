@@ -13,6 +13,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
 import type { UsageProvider } from '@openchamber/agent-contract';
 import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
+import { buildUsageProviderRows } from './usageProviderRows';
 
 interface UsageSidebarProps {
   onItemSelect?: () => void;
@@ -40,6 +41,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const quotaPhase = useQuotaStore((state) => state.phase);
   const usageDisplayMode = useQuotaStore((state) => state.displayMode);
   const setUsageDisplayMode = useQuotaStore((state) => state.setDisplayMode);
+  const nativeToLogical = useQuotaStore((state) => state.nativeToLogical);
   const configProviders = useConfigStore((state) => state.providers);
   const statsProviders = useUsageStatsStore((state) => {
     for (const key of Object.keys(state.entries)) {
@@ -50,29 +52,12 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   });
   useQuotaAutoRefresh(true, true);
 
-  const activeProviders = React.useMemo(() => {
-    const seen = new Set<string>();
-    const list: Array<{ id: string; name: string; configured: boolean }> = [];
-    for (const p of configProviders) {
-      if (!seen.has(p.providerId)) {
-        seen.add(p.providerId);
-        list.push({ id: p.providerId, name: p.name || p.providerId, configured: true });
-      }
-    }
-    for (const r of results) {
-      if (r.configured && !seen.has(r.providerId)) {
-        seen.add(r.providerId);
-        list.push({ id: r.providerId, name: r.providerName || r.providerId, configured: true });
-      }
-    }
-    for (const sp of statsProviders) {
-      if (!seen.has(sp.providerId)) {
-        seen.add(sp.providerId);
-        list.push({ id: sp.providerId, name: sp.providerId, configured: true });
-      }
-    }
-    return list.sort((a, b) => a.name.localeCompare(b.name));
-  }, [configProviders, results, statsProviders]);
+  const rows = React.useMemo(() => buildUsageProviderRows({
+    configProviders,
+    statsProviders,
+    results,
+    nativeToLogical,
+  }), [configProviders, nativeToLogical, results, statsProviders]);
 
   const persistUsageSettings = React.useCallback(async (changes: { usageDisplayMode?: 'usage' | 'remaining'; usageDropdownProviders?: string[] }) => {
     try {
@@ -97,7 +82,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
       <div className="border-b px-3 pt-4 pb-3">
         <h2 className={`${SETTINGS_SECTION_TITLE_CLASS} mb-3`}>{t('settings.usage.sidebar.title')}</h2>
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('settings.usage.sidebar.total', { count: activeProviders.length })}</span>
+          <span className="typography-meta text-muted-foreground">{t('settings.usage.sidebar.total', { count: rows.length })}</span>
           <div className="flex items-center gap-2">
             <Button size="sm"
               variant="ghost"
@@ -152,15 +137,15 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
           </button>
         </div>
 
-        {quotaPhase === 'unknown' && activeProviders.length === 0 ? (
+        {quotaPhase === 'unknown' && rows.length === 0 ? (
           <p className="typography-meta px-1 text-muted-foreground">{t('settings.usage.state.unknown')}</p>
         ) : null}
-        {activeProviders.map((provider) => {
-          const result = results.find((entry) => entry.providerId === provider.id);
+        {rows.map((row) => {
+          const result = results.find((entry) => entry.providerId === row.quotaProviderId);
           const percent = getUsagePercent(result?.usage);
           const tone = resolveUsageTone(percent);
-          const isSelected = provider.id === selectedProvider;
-          const configured = result?.configured ?? provider.configured;
+          const isSelected = row.statsProviderId === selectedProvider;
+          const configured = result?.configured ?? true;
 
           const statusStyle = !configured
             ? { backgroundColor: 'var(--surface-muted-foreground)', opacity: 0.4 }
@@ -172,7 +157,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
 
           return (
             <div
-              key={provider.id}
+              key={row.quotaProviderId}
               className={cn(
                 'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
                 isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
@@ -181,7 +166,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedProvider(provider.id);
+                  setSelectedProvider(row.statsProviderId);
                   onItemSelect?.();
                 }}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -191,9 +176,9 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
                 ) : (
                   <span className="h-2.5 w-2.5 rounded-full flex-shrink-0 bg-transparent" />
                 )}
-                <ProviderLogo providerId={provider.id} alt={provider.name} className="h-4 w-4 flex-shrink-0" />
+                <ProviderLogo providerId={row.statsProviderId} alt={row.name} className="h-4 w-4 flex-shrink-0" />
                 <span className="typography-ui-label font-normal truncate flex-1 min-w-0 text-foreground">
-                  {provider.name}
+                  {row.name}
                 </span>
               </button>
             </div>

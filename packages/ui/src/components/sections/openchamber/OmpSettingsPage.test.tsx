@@ -46,9 +46,9 @@ const { ompSettingsI18n } = await import('@/lib/i18n/messages/omp-settings.i18n'
 
 const CONFIG_PATH = '/home/user/.omp/agent/config.yml';
 
-/** One row per surface, so the page's filtering is observable. */
+/** One row per placement, so the page's filtering is observable. */
 const setting = (overrides: Partial<OmpSetting> & Pick<OmpSetting, 'id' | 'type'>): OmpSetting => ({
-  value: null, default: null, configured: false, surface: 'gui',
+  value: null, default: null, configured: false, placement: { type: 'engine' },
   ...overrides,
 } as OmpSetting);
 
@@ -56,16 +56,23 @@ const state = {
   workspaceId: 'workspace_1',
   revision: '7',
   configPath: CONFIG_PATH,
+  totalCount: 15,
   settings: [
     setting({ id: 'compaction.enabled', type: 'boolean', value: true, label: 'Auto-Compact', tab: 'context' }),
-    setting({ id: 'compaction.thresholdPercent', type: 'number', value: 50, label: 'Compaction Threshold', tab: 'context' }),
+    setting({
+      id: 'compaction.thresholdPercent', type: 'number', value: 50, label: 'Compaction Threshold', tab: 'context',
+      options: [
+        { value: 'default', label: 'Default' },
+        { value: '50', label: '50%' },
+      ],
+    }),
     // Terminal presentation and internals must not reach the page.
-    setting({ id: 'tui.maxFps', type: 'number', value: 30, surface: 'tui-only', label: 'Max FPS' }),
-    setting({ id: 'cycleOrder', type: 'array', value: ['smol', 'default'], surface: 'tui-only' }),
-    setting({ id: 'tools.artifactTailLines', type: 'number', value: 1000, surface: 'advanced' }),
+    setting({ id: 'tui.maxFps', type: 'number', value: 30, placement: { type: 'tui-only' }, label: 'Max FPS' }),
+    setting({ id: 'cycleOrder', type: 'array', value: ['smol', 'default'], placement: { type: 'tui-only' } }),
+    setting({ id: 'tools.artifactTailLines', type: 'number', value: 1000, placement: { type: 'page', page: 'tools', section: 'limits' } }),
     // A concept another page owns is not drawn here at all.
-    setting({ id: 'enabledModels', type: 'array', value: [], surface: 'duplicate', owner: 'providers.models' }),
-    setting({ id: 'recap.enabled', type: 'boolean', value: true, surface: 'duplicate', owner: 'chat.session-recap' }),
+    setting({ id: 'enabledModels', type: 'array', value: [], placement: { type: 'owned-by', owner: 'providers.models' } }),
+    setting({ id: 'recap.enabled', type: 'boolean', value: true, placement: { type: 'page', page: 'chat', section: 'recap' } }),
     // One row per section, so every heading renders and is checked as prose.
     setting({ id: 'lsp.enabled', type: 'boolean', value: true, label: 'LSP', tab: 'lsp' }),
     setting({ id: 'task.maxConcurrency', type: 'number', value: 3, label: 'Task concurrency' }),
@@ -143,7 +150,7 @@ afterEach(async () => {
   browser.close();
 });
 
-test('renders only the GUI rows and saves a changed value with the captured revision', async () => {
+test('renders only the engine rows and saves a changed value with the captured revision', async () => {
   await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
   await settle();
 
@@ -161,7 +168,58 @@ test('renders only the GUI rows and saves a changed value with the captured revi
   });
 });
 
-test('leaves terminal-only, advanced and duplicate settings off the page', async () => {
+test('renders a number setting with a default option as a select showing Default for -1 and 默认 in zh-CN', async () => {
+  const numberSettingState = {
+    ...state,
+    settings: [
+      setting({
+        id: 'compaction.thresholdPercent',
+        type: 'number',
+        value: -1,
+        default: -1,
+        label: 'Compaction Threshold',
+        tab: 'context',
+        options: [
+          { value: 'default', label: 'Default' },
+          { value: '10', label: '10%' },
+          { value: '50', label: '50%' },
+        ],
+      }),
+    ],
+  };
+  getSettings.mockResolvedValueOnce(numberSettingState as unknown as OmpSettingsState);
+
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+
+  const select = container.querySelector('[data-settings-item="omp.compaction.thresholdPercent"]');
+  expect(select).not.toBeNull();
+  expect(select?.textContent).toContain('Default');
+
+  // In zh-CN
+  await act(async () => {
+    useI18nStore.getState().setLocale('zh-CN');
+  });
+  while (useI18nStore.getState().loadingLocale) {
+    await settle();
+  }
+  try {
+    getSettings.mockResolvedValueOnce(numberSettingState as unknown as OmpSettingsState);
+    await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+    await settle();
+    const selectZh = container.querySelector('[data-settings-item="omp.compaction.thresholdPercent"]');
+    expect(selectZh?.textContent).toContain('默认');
+  } finally {
+    await act(async () => {
+      useI18nStore.getState().setLocale('en');
+    });
+    while (useI18nStore.getState().loadingLocale) {
+      await settle();
+    }
+  }
+});
+
+test('leaves terminal-only, page and duplicate settings off the page', async () => {
   await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
   await settle();
 
@@ -169,7 +227,7 @@ test('leaves terminal-only, advanced and duplicate settings off the page', async
     expect(`${id}: ${container.querySelector(`[data-settings-item="omp.${id}"]`) === null}`).toBe(`${id}: true`);
   }
   // The page counts what it left out instead of drawing it.
-  expect(container.textContent).toContain('5 settings');
+  expect(container.textContent).toContain('6 settings');
 });
 
 test('hides a row whose condition is off and keeps one whose condition holds', async () => {
@@ -248,7 +306,12 @@ test('shows the choices as chips and never a raw control for an enum', async () 
 });
 
 test('renders every page row translated in zh-CN with no raw setting id on screen', async () => {
-  await act(async () => { useI18nStore.getState().setLocale('zh-CN'); });
+  await act(async () => {
+    useI18nStore.getState().setLocale('zh-CN');
+  });
+  while (useI18nStore.getState().loadingLocale) {
+    await settle();
+  }
   try {
     await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
     await settle();
@@ -272,6 +335,11 @@ test('renders every page row translated in zh-CN with no raw setting id on scree
       expect(`${raw}: ${(container.textContent ?? "").includes(raw)}`).toBe(`${raw}: false`);
     }
   } finally {
-    await act(async () => { useI18nStore.getState().setLocale('en'); });
+    await act(async () => {
+      useI18nStore.getState().setLocale('en');
+    });
+    while (useI18nStore.getState().loadingLocale) {
+      await settle();
+    }
   }
 });

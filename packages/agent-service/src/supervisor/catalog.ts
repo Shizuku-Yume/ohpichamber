@@ -49,6 +49,8 @@ export interface CatalogWorker {
 export interface CatalogCoordinatorOptions {
   readMcpConfiguration(workspaceId: string): Promise<MCPConfigurationState | null>;
   commitMcp(workspaceId: string, request: MCPConfigureRequest, configuration: MCPConfigurationState): Promise<void>;
+  /** Stateless isolated handshake for one server; the only connectivity evidence without a live worker. */
+  probeMcp(workspaceId: string, serverId: string, configuration: MCPConfigurationState): Promise<MCPConnectionTestResult>;
 }
 
 export interface CatalogBootstrap {
@@ -425,7 +427,7 @@ export class CatalogCoordinator {
     return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision }, true);
   }
 
-  reconnectWorkspaceMcp(workspaceId: string, serverId: string, request: MCPApplyRequest, probe: (configuration: MCPConfigurationState) => Promise<MCPConnectionTestResult>): Promise<MCPWorkspaceReconnectResult> {
+  reconnectWorkspaceMcp(workspaceId: string, serverId: string, request: MCPApplyRequest): Promise<MCPWorkspaceReconnectResult> {
     return this.withWorkspaceMcp(workspaceId, MCPApplyRequestSchema.parse(request).persistedRevision, async configuration => {
       EntityIdSchema.parse(serverId);
       if (!configuration.config.servers.some(server => server.serverId === serverId && server.enabled)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP server is not configured and enabled', {});
@@ -449,7 +451,7 @@ export class CatalogCoordinator {
       await this.finalizeMcpOutcomes(outcomes);
       const status = aggregate(outcomes);
       const payload: MCPWorkspaceReconnectResult = { workspaceId, serverId, persistedRevision: configuration.persistedRevision, status, workers: outcomes };
-      if (status === 'no-active-workers') payload.probe = await probe(configuration);
+      if (status === 'no-active-workers') payload.probe = await this.options.probeMcp(workspaceId, serverId, configuration);
       const result = MCPWorkspaceReconnectResultSchema.parse(payload);
       if (status === 'partial' || status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', 'The MCP reconnect did not reach every active worker', { result });
       return result;
@@ -469,7 +471,8 @@ export class CatalogCoordinator {
     await this.finalizeMcpOutcomes(outcomes);
     const status = aggregate(outcomes);
     let outcome: MCPApplyOutcome = 'applied';
-    if (status === 'failed' || status === 'partial') {
+    if (status === 'no-active-workers') outcome = await this.unattendedMcpOutcome(configuration);
+    else if (status === 'failed' || status === 'partial') {
       const authNeeded = outcomes.some(o => o.outcome === 'failed' && (
         o.error.code === 'MCP_AUTH_REQUIRED' ||
         o.error.code === 'AUTH_REQUIRED' ||
@@ -851,6 +854,21 @@ export class CatalogCoordinator {
     return current;
   }
 
+
+  /** No live worker: the stateless probe of each enabled server classifies the saved configuration honestly. */
+  private async unattendedMcpOutcome(configuration: MCPConfigurationState): Promise<MCPApplyOutcome> {
+    const results = await Promise.all(configuration.config.servers.filter(server => server.enabled).map(async server => {
+      try {
+        const probe = await this.options.probeMcp(configuration.workspaceId, server.serverId, configuration);
+        return probe.status === 'connected' ? 'connected' : probe.error.code;
+      } catch {
+        return 'MCP_APPLY_FAILED';
+      }
+    }));
+    if (results.includes('MCP_AUTH_REQUIRED')) return 'saved-needs-auth';
+    if (results.some(result => result !== 'connected')) return 'saved-not-connected';
+    return 'applied';
+  }
   private async finalizeMcpOutcomes(outcomes: MCPWorkerApplyOutcome[]): Promise<void> {
     for (let index = 0; index < outcomes.length; index++) {
       const outcome = outcomes[index];

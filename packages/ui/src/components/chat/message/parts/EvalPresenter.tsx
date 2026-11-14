@@ -1,4 +1,5 @@
-import type { ToolCallPart, ToolPopupContent, ToolResultPart } from '@openchamber/agent-contract';
+import type { ToolCallPart, ToolResultPart } from '@openchamber/agent-contract';
+import type { ToolPopupContent } from '../types';
 import React from 'react';
 
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';

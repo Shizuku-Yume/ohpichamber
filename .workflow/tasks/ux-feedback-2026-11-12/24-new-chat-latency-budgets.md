@@ -14,12 +14,17 @@
   - first `part.delta` after `POST /runs` p50: 316.08 ms (samples: 296.26, 348.17, 296.29, 385.66, 316.08 ms)
   - Receipt written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/before/omp-performance.json`.
 **Check after:**
-- `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output /home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-4 --skip-ui`:
-  - `POST /sessions` p50: 13.84 ms (samples: 12.74, 15.52, 13.84, 14.00, 11.56 ms; budget ≤ 400 ms - MET)
-  - first `part.delta` after send on a new chat p50: 592.35 ms (samples: 596.46, 584.31, 592.35, 583.16, 691.07 ms; budget ≤ 600 ms - MET)
-  - first `part.delta` after `POST /runs` p50: 574.19 ms (samples: 577.43, 563.32, 574.19, 564.37, 674.91 ms)
-  - stream cadence p50IntervalMs: 33.13 ms (budget 33 ± 5 ms - MET)
-  - Receipt written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-4/omp-performance.json`.
+- `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output /home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-5/run1 --new-chat-runs 10 --skip-ui` (Run 1, 10 samples):
+  - `POST /sessions` p50: 4.69 ms (samples: 5.71, 5.31, 5.21, 4.88, 4.69, 4.43, 4.53, 5.71, 4.62, 4.60 ms; budget ≤ 400 ms - MET)
+  - first `part.delta` after send on a new chat p50: 224.35 ms (samples: 225.97, 221.26, 339.17, 220.22, 231.89, 234.64, 219.02, 224.35, 218.96, 234.41 ms; budget ≤ 600 ms - MET)
+  - first `part.delta` after `POST /runs` p50: 213.26 ms
+  - stream cadence p50IntervalMs: 33.18 ms (budget 33 ± 5 ms - MET)
+- `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output /home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-5/run2 --new-chat-runs 10 --skip-ui` (Run 2, 10 samples):
+  - `POST /sessions` p50: 4.61 ms (samples: 4.69, 5.61, 4.43, 4.61, 4.66, 4.12, 4.58, 4.86, 4.31, 4.78 ms; budget ≤ 400 ms - MET)
+  - first `part.delta` after send on a new chat p50: 231.60 ms (samples: 235.56, 235.51, 226.43, 231.60, 216.19, 234.15, 245.83, 211.25, 213.96, 235.54 ms; budget ≤ 600 ms - MET)
+  - first `part.delta` after `POST /runs` p50: 221.36 ms
+  - stream cadence p50IntervalMs: 33.16 ms (budget 33 ± 5 ms - MET)
+- Receipts written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-5/` (`run1/omp-performance.json`, `run2/omp-performance.json`, `omp-performance.json`).
 **Base commit:** 81e48cd715c2525dad96b3bd360a370063ac5f67
 **Status:** active
 **Review:** pending independent review
@@ -87,3 +92,11 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
 - `bunx oxlint`: clean across all touched files (0 errors, 0 warnings).
 - `type-check`: agent-service and ui both exit 0 with 0 errors.
 - `dead-code`: clean across all touched files and exports.
+- **Review24 remediation and closure:**
+  - **Finding 1 (Budget ≤ 600 ms p50):** Implemented bounded speculative session preparation via `/api/agent/v1/sessions/prepare` and `canonicalClient.prepareSession`. The UI initiates preparation in the background when the new-chat composer opens for a workspace (`openNewSessionDraft`). Preparation is bounded (≤1 per workspace), idle-reaped after 5 minutes, discarded on draft closure, and logs no content. In `omp-performance.mjs`, preparation mirrors the UI opening the composer before prompt send. Measured across 20 samples in 2 fresh runs: `POST /sessions` p50: 4.61–4.69 ms (budget ≤ 400 ms), first `part.delta` after send p50: 224.35 ms (Run 1) and 231.60 ms (Run 2) with all 20 samples ≤ 340 ms (budget ≤ 600 ms MET reproducibly).
+  - **Finding 2 (Stale credentials/policy caching in `NativeModels.selection`):** Removed `selectionReady` flag. Model selection tracks the exact `catalogState()` fingerprint including `models.yml` stamp, credentials generation, enabled models, disabled providers, thinking levels, and role mappings. All 43 tests in `catalog-models.test.ts` pass without stale state.
+  - **Finding 3 (Floating `void capturePolicy()`):** Wrapped background policy capture in a try/catch logging a bounded diagnostic warning, and attached `.catch(() => {})`. Zero unhandled rejections.
+  - **Finding 4 (Dummy session in `native-runtime.ts`):** Removed `createAgentSession` dummy session prewarming from `native-runtime.ts`, preventing pollution of the SDK agent registry. `session-native.test.ts` passes all 72 tests cleanly without `Agent "Main" was replaced` errors.
+  - **Finding 5 (Skill descriptor comparison in `publishSkills`):** Upgraded `publishSkills` comparison from name-only to full descriptor serialization (`name`, `description`, `filePath`, `baseDir`, `source`, `hide`, `containRoot`, `metadata`). Added test verifying publication refresh when skill description/content updates without name change in `session-skills.test.ts`.
+  - **Finding 6 (Surface cause in diagnostic and session/run error):** Added `reasonUnavailable` tracking in `journal.ts`. Causal message is included in `onDiagnostic` error string (`Catalog registration failed (${code}): ${cause}`) and propagated into `WorkerOperationError` detail on run dispatch. `service-registration.test.ts` asserts sentinel cause presence in both diagnostic message and run error detail.
+  - **Finding 7 (Residual traces):** Removed all `/tmp/ufb24-*.log` traces and confirmed `git grep ufb24` matches no trace code in source.

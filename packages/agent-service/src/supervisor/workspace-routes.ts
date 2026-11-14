@@ -253,13 +253,7 @@ export class WorkspaceRoutes {
       const action = mcpRoute[4];
       if (action === 'reconnect' && request.method === 'POST') {
         const body = await readBody(request, MCPApplyRequestSchema);
-        return {
-          status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body, async configuration => {
-            const result = await execute({ type: 'test', serverId, configuration });
-            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp connection test operation.');
-            return result.result;
-          })
-        };
+        return { status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body) };
       }
       if (action === 'test' && request.method === 'POST') {
         const body = await readBody(request, MCPApplyRequestSchema);

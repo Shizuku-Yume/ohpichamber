@@ -4,6 +4,10 @@ The Agent Service owns workspace MCP configuration and routes sessionless worksp
 
 A session worker applies its initial external MCP configuration off the admission path: `WorkerSession.open` starts the application in the background instead of waiting for the handshake, so a slow or unreachable external server cannot delay the first prompt. Connection failures are reported as `mcp.runtime.failure` diagnostics and never fail the worker; a successful application publishes the ready catalog and its tools through `catalog.updated`. `close()` disconnects the MCP owner before awaiting that background application, so a stalled handshake settles rather than holding the worker's shutdown window.
 
+User-scope servers live in OMP's native `~/.omp/agent/mcp.json`. The write is a locked read-modify-write of that file: only entries whose projection changes are rewritten, and native `env`, `headers`, `auth`, `oauth`, `enabledServers` and any global server shadowed by a project server are kept byte-for-byte. A project save never touches the user file. The user file's credential references (`credentialRef`, `headerCredentialRefs`, `envCredentialRefs`) are kept under one top-level `openchamber` key that OMP ignores; secret values are never written there.
+
+With no live session worker, a configure or apply classifies the saved servers by the stateless `test` probe of each enabled server (`saved-needs-auth` for `MCP_AUTH_REQUIRED`, `saved-not-connected` for any other failure, `applied` only when every probe connects). `CatalogCoordinatorOptions.probeMcp` supplies that probe; reconnect uses the same option.
+
 ## Provider and model catalogs
 
 `GET /api/agent/v1/workspaces/:workspaceId/providers` publishes the complete native provider directory used by Settings: bundled providers, configured `models.yml` providers, stored credentials and OAuth providers. It stays complete so the connection directory can offer a provider that is not configured yet.

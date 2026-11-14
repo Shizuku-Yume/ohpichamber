@@ -280,6 +280,14 @@ export class CatalogCoordinator {
       return result;
     });
   }
+  getWorkspaceMcpTools(workspaceId: string): Array<{ name: string; description?: string }> {
+    for (const snapshot of this.mcpSnapshots.values()) {
+      if (snapshot.workerCatalog.worker.workspaceId === workspaceId || snapshot.configuration.workspaceId === workspaceId) {
+        return snapshot.workerCatalog.tools.map(t => ({ name: t.name, description: t.description }));
+      }
+    }
+    return [];
+  }
   async pluginRuntime(workspaceId: string): Promise<PluginRuntimeState[]> {
     const targets = await this.snapshotWorkers(worker => worker.identity.workspaceId === workspaceId);
     return targets.map(worker => this.pluginSnapshots.get(worker.identity.rootSessionId) ?? {

@@ -91,7 +91,20 @@ export class WorkspaceRoutes {
         result = await this.workers.request(root, { type: 'tools.catalog' });
       }
       if (result.type !== 'tools.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested tools.catalog operation.');
-      return { status: 200, body: SessionToolsCatalogSchema.parse(result.catalog) };
+      const catalog = SessionToolsCatalogSchema.parse(result.catalog);
+      const mcpTools = this.mcp.getWorkspaceMcpTools(workspaceId);
+      for (const mcpTool of mcpTools) {
+        if (!catalog.tools.some(t => t.name === mcpTool.name)) {
+          catalog.tools.push({
+            name: mcpTool.name,
+            label: mcpTool.name,
+            description: mcpTool.description ?? '',
+            tier: 'exec',
+            availability: true,
+          });
+        }
+      }
+      return { status: 200, body: catalog };
     }
     const plugins = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/plugins(?:\/(.*))?$/.exec(url.pathname);
     if (plugins) {

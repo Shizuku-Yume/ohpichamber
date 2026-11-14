@@ -7,7 +7,7 @@ import {
   IdaTool, MemoryEditTool, MemoryRetainTool, MemoryRecallTool, MemoryReflectTool,
   LearnTool, ManageSkillTool, ContextNotesTool, NewContextTool, AskTool,
   resolveBuiltinToolPlan,
-  type ToolSession, type ToolFactory,
+  type ToolSession,
 } from '@oh-my-pi/pi-coding-agent/tools';
 import { resolveToolTier } from '@oh-my-pi/pi-coding-agent/tools/approval';
 type ToolMetadataSubject = Parameters<typeof resolveToolTier>[0] & { label?: string; description?: string };
@@ -76,8 +76,16 @@ export class StatelessWorker {
       worker: { rootSessionId: input.authorizationRootId, workspaceId: input.workspaceId, workerGeneration: input.workerGeneration },
       resolveCredentialRef: reference => this.mcpCredentials.resolve(reference),
       resolveCommand: async transport => transport.command,
-      authorizeServer: (server, proposed) => authorize({ type: 'mcp-server', server, ...(proposed ? { proposed: true } : {}) }),
-      authorizeOAuth: (server, configuration) => authorize({ type: 'mcp-oauth', server, configuration: JsonObjectSchema.parse(Object.fromEntries(Object.entries(MCPOAuthPublicConfigurationSchema.parse(configuration)).filter(([, value]) => value !== undefined))) }),
+      authorizeServer: (server, proposed) => authorize(
+        proposed
+          ? { type: 'mcp-server', server, proposed: true }
+          : { type: 'mcp-server', server }
+      ),
+      authorizeOAuth: (server, configuration) => authorize({
+        type: 'mcp-oauth',
+        server,
+        configuration: JsonObjectSchema.parse(Object.fromEntries(Object.entries(MCPOAuthPublicConfigurationSchema.parse(configuration)).filter(([, value]) => value !== undefined))),
+      }),
       sanitizeTool: tool => tool,
       onCatalog: () => { },
       onRuntimeFailure: error => { process.stderr.write(`${JSON.stringify({ type: 'mcp.runtime.failure', error })}\n`); },
@@ -122,7 +130,7 @@ export class StatelessWorker {
     if (operation.type === 'web-search') return { type: 'web-search', result: await this.webSearch.operation(operation.operation) };
     if (this.webSearch.requiresRestart) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings require a fresh workspace worker');
     if (operation.type === 'tools.catalog') {
-      const mockSession: ToolSession = {
+      const sessionContext: ToolSession = {
         cwd: this.input.cwd,
         settings: this.runtime.settings,
         hasUI: true,
@@ -130,50 +138,45 @@ export class StatelessWorker {
         taskDepth: 0,
         getSessionFile: () => null,
         getSessionSpawns: () => null,
-      } as unknown as ToolSession;
+      };
 
-      const plan = await resolveBuiltinToolPlan({
-        cwd: this.input.cwd,
-        settings: this.runtime.settings,
-        hasUI: false,
-        enableLsp: true,
-        taskDepth: 0,
-        getSessionFile: () => null,
-        getSessionSpawns: () => null,
-      });
+      const plan = await resolveBuiltinToolPlan(sessionContext);
 
-      const allTools: Record<string, ToolFactory> = { ...BUILTIN_TOOLS, ...HIDDEN_TOOLS };
+      const allTools = { ...BUILTIN_TOOLS, ...HIDDEN_TOOLS };
       const tools: ToolCatalogEntry[] = [];
 
       for (const name of BUILTIN_TOOL_NAMES) {
         let tool: ToolMetadataSubject | null = null;
         try {
-          const factory = allTools[name];
-          if (factory) tool = await factory(mockSession);
+          if (Object.hasOwn(allTools, name)) {
+            // SAFETY: Object.hasOwn ensures name is a valid key of allTools
+            const factory = allTools[name as keyof typeof allTools];
+            tool = await factory(sessionContext);
+          }
         } catch {
           // direct fallback
         }
         if (!tool) {
           try {
             switch (name) {
-              case 'ida': tool = new IdaTool(mockSession); break;
-              case 'memory_edit': tool = new MemoryEditTool(mockSession); break;
-              case 'retain': tool = new MemoryRetainTool(mockSession); break;
-              case 'recall': tool = new MemoryRecallTool(mockSession); break;
-              case 'reflect': tool = new MemoryReflectTool(mockSession); break;
-              case 'learn': tool = new LearnTool(mockSession); break;
+              case 'ida': tool = new IdaTool(sessionContext); break;
+              case 'memory_edit': tool = new MemoryEditTool(sessionContext); break;
+              case 'retain': tool = new MemoryRetainTool(sessionContext); break;
+              case 'recall': tool = new MemoryRecallTool(sessionContext); break;
+              case 'reflect': tool = new MemoryReflectTool(sessionContext); break;
+              case 'learn': tool = new LearnTool(sessionContext); break;
               case 'manage_skill': tool = new ManageSkillTool(() => Promise.resolve()); break;
-              case 'context_notes': tool = new ContextNotesTool(mockSession); break;
-              case 'new_context': tool = new NewContextTool(mockSession); break;
-              case 'ask': tool = new AskTool(mockSession); break;
+              case 'context_notes': tool = new ContextNotesTool(sessionContext); break;
+              case 'new_context': tool = new NewContextTool(sessionContext); break;
+              case 'ask': tool = new AskTool(sessionContext); break;
             }
           } catch {
             // direct instantiation fallback
           }
         }
         const tier = tool ? resolveToolTier(tool, {}) : 'exec';
-        const label = (typeof tool?.label === 'string' && tool.label) ? tool.label : name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' ');
-        const description = (typeof tool?.description === 'string' && tool.description) ? tool.description : '';
+        const label = tool?.label || name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' ');
+        const description = tool?.description || '';
         tools.push({
           name,
           label,
@@ -196,9 +199,8 @@ export class StatelessWorker {
       }
 
       // Add MCP tools
-      if (this.mcp) {
-        const mcpTools = this.mcp.getTools();
-        for (const mcpTool of mcpTools) {
+      if (this.input.mcpTools) {
+        for (const mcpTool of this.input.mcpTools) {
           tools.push({
             name: mcpTool.name,
             label: mcpTool.name,
@@ -206,6 +208,20 @@ export class StatelessWorker {
             tier: 'exec',
             availability: true,
           });
+        }
+      }
+      if (this.mcp) {
+        const mcpTools = this.mcp.getTools();
+        for (const mcpTool of mcpTools) {
+          if (!tools.some((t) => t.name === mcpTool.name)) {
+            tools.push({
+              name: mcpTool.name,
+              label: mcpTool.name,
+              description: mcpTool.description ?? '',
+              tier: 'exec',
+              availability: true,
+            });
+          }
         }
       }
 

@@ -204,24 +204,23 @@ test('the stateless workspace catalog reports runtime tool metadata and real tie
     agentDirectoryId: 'agent',
     catalogRevision: '0',
     mcpConfigPath: join(cwd, '.omp', 'mcp.json'),
+    hostTools: {
+      openchamber: true,
+      web: true,
+      openchamber_workflow: true,
+      notify: false,
+    },
+    mcpTools: [
+      {
+        name: 'mcp__custom__tool',
+        description: 'A custom MCP tool for testing',
+      },
+    ],
   };
 
   let worker: StatelessWorker | undefined;
   try {
     worker = await StatelessWorker.open(bootstrap, async () => ({ allowed: true }));
-    // Mock an MCP tool on worker.mcp
-    const mcp = worker['mcp'];
-    if (mcp) {
-      (mcp as unknown as { getTools: () => Array<{ name: string; description: string; parameters: object; mcpServerName: string }> }).getTools = () => [
-        {
-          name: 'mcp__custom__tool',
-          description: 'A custom MCP tool for testing',
-          parameters: { type: 'object', properties: {} },
-          mcpServerName: 'custom',
-        },
-      ];
-    }
-
     const res = await worker.operation({ type: 'tools.catalog' });
     if (res.type !== 'tools.catalog') throw new Error('Expected tools.catalog result');
     const tools = res.catalog.tools;
@@ -252,13 +251,15 @@ test('the stateless workspace catalog reports runtime tool metadata and real tie
     expect(web).toBeDefined();
     expect(web?.tier).toBe('exec');
     expect(web?.availability).toBe(true);
-
     const workflow = tools.find((t) => t.name === 'openchamber_workflow');
     expect(workflow).toBeDefined();
     expect(workflow?.tier).toBe('exec');
     expect(workflow?.availability).toBe(true);
 
-    // 4. MCP tools are included and have tier 'exec'
+    const notify = tools.find((t) => t.name === 'notify');
+    expect(notify).toBeDefined();
+    expect(notify?.tier).toBe('exec');
+    expect(notify?.availability).toBe(false);
     const mcpTool = tools.find((t) => t.name === 'mcp__custom__tool');
     expect(mcpTool).toBeDefined();
     expect(mcpTool?.tier).toBe('exec');

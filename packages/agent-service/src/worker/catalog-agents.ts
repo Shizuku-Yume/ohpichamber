@@ -17,7 +17,7 @@ import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capabili
 import { resolveCliModel } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgTaskDisabledAgents, cfgTaskAgentModelOverrides } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
-import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, formatModelRef } from '@openchamber/agent-contract';
+import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, type AgentThinkingLevel, formatModelRef } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 
 export type NativeAgentsContext = {
@@ -28,17 +28,24 @@ export type NativeAgentsContext = {
   extensionRoots: EffectiveExtensionRoots;
   availableToolNames: () => readonly string[];
 };
-const ProfileMetadataSchema = z.object({
-  openchamber: z.preprocess((val) => {
-    if (val && typeof val === 'object' && 'permissionPresetId' in val) {
-      const copy = { ...(val as Record<string, unknown>) };
-      delete copy.permissionPresetId;
-      return copy;
-    }
-    return val;
-  }, AgentSchema.optional()),
-});
+const LegacyOpenChamberMetadataSchema = z.object({
+  permissionPresetId: z.string().optional(),
+}).passthrough().transform(({ permissionPresetId: _preset, ...rest }) => AgentSchema.parse(rest));
 
+const ProfileMetadataSchema = z.object({
+  openchamber: LegacyOpenChamberMetadataSchema.optional(),
+});
+interface AgentFrontmatterFields {
+  name: string;
+  description: string;
+  openchamber: Agent;
+  tools?: string[];
+  model?: string;
+  thinkingLevel?: AgentThinkingLevel;
+  spawns?: string[] | '*';
+  blocking?: boolean;
+  advisor?: boolean | string;
+}
 function profilePath(cwd: string, agentId: string): string {
   return join(cwd, '.omp', 'agents', `profile_${createHash('sha256').update(agentId).digest('hex')}.md`);
 }
@@ -112,9 +119,6 @@ export class NativeAgents {
         const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
         if (match) {
           const parsed = YAML.parse(match[1]);
-          if (parsed && typeof parsed === 'object' && 'openchamber' in parsed && parsed.openchamber && typeof parsed.openchamber === 'object') {
-            delete (parsed.openchamber as Record<string, unknown>).permissionPresetId;
-          }
           metadata = ProfileMetadataSchema.parse(parsed);
         }
       } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile metadata could not be read'); }
@@ -212,7 +216,7 @@ export class NativeAgents {
     if (agent.model && !this.context.modelRegistry.find(agent.model.providerId, agent.model.modelId)) {
       throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Agent profile model is unavailable');
     }
-    const fields: Record<string, unknown> = { name: agent.agentId, description: agent.description, openchamber: agent };
+    const fields: AgentFrontmatterFields = { name: agent.agentId, description: agent.description, openchamber: agent };
     if (agent.allowedTools !== null) fields.tools = agent.allowedTools;
     if (agent.model) fields.model = formatModelRef({ providerId: agent.model.providerId, modelId: agent.model.modelId });
     if (agent.thinkingLevel !== undefined) fields.thinkingLevel = agent.thinkingLevel;

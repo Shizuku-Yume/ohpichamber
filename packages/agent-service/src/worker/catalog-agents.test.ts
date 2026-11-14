@@ -213,7 +213,7 @@ You are an agent with legacy preset metadata.
     expect(legacy).toBeDefined();
     expect(legacy?.name).toBe('Legacy Preset');
     expect(legacy?.allowedTools).toEqual(['read', 'bash']);
-    expect((legacy as unknown as Record<string, unknown>).permissionPresetId).toBeUndefined();
+    expect(legacy ? 'permissionPresetId' in legacy : false).toBe(false);
 
     // Verify stateless worker starts on this workspace
     const statelessBootstrap = {
@@ -232,7 +232,7 @@ You are an agent with legacy preset metadata.
     await statelessWorker.close();
 
     // Verify session worker starts on this workspace
-    let publishedSnapshot: unknown = null;
+    let publishedSnapshot = false;
     const sessionWorker = await WorkerSession.open({
       type: 'bootstrap',
       rootSessionId: 'legacy-session-root',
@@ -243,9 +243,9 @@ You are an agent with legacy preset metadata.
       cwd,
       agentDirectory,
       sessionsDirectory: join(root, 'sessions'),
-    }, () => { }, () => { }, () => { }, async () => ({ allowed: true }), async () => ({ ok: true }), (snapshot) => { publishedSnapshot = snapshot; }, () => { });
+    }, () => { }, () => { }, () => { }, async () => ({ allowed: true }), async () => ({ ok: true }), (snapshot) => { publishedSnapshot = Boolean(snapshot); }, () => { });
     expect(sessionWorker).toBeDefined();
-    expect(publishedSnapshot).toBeDefined();
+    expect(publishedSnapshot).toBe(true);
     await sessionWorker.close();
   } finally {
     runtime.authStorage.close();

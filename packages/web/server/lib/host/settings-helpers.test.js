@@ -116,6 +116,16 @@ describe('settings helpers', () => {
     expect(helpers.formatSettingsResponse(next).workStatusHiddenSectionsExplicit).toBe(true);
     expect(helpers.sanitizeSettingsUpdate({ workStatusHiddenSectionsExplicit: 'true' }).workStatusHiddenSectionsExplicit).toBeUndefined();
   });
+  it('drops legacy defaultAgent on subsequent writes', () => {
+    const helpers = createTestHelpers();
+    const legacy = {
+      defaultAgent: 'legacy-agent',
+      projects: [{ id: 'proj-1', path: '/repo', defaultAgent: 'proj-agent' }],
+    };
+    const next = helpers.mergePersistedSettings(legacy, { themeId: 'dark' });
+    expect(next.defaultAgent).toBeUndefined();
+    expect(next.projects[0].defaultAgent).toBeUndefined();
+  });
   it('imports from the packed @openchamber/web tarball without escaping the published package', async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'settings-helpers-pack-'));
     const packDir = join(tempRoot, 'pack');
@@ -288,24 +298,13 @@ describe('settings helpers', () => {
     expect(helpers.formatSettingsResponse({ editorFontSize: 20 })).toMatchObject({ editorFontSize: 20 });
   });
 
-  it('accepts messageStreamTransport as a persisted shared setting', () => {
+  it('rejects removed settings: messageStreamTransport, defaultAgent, autoApplyAgentModel, sessionWorkKeepInGroup', () => {
     const helpers = createTestHelpers();
 
-    expect(helpers.sanitizeSettingsUpdate({ messageStreamTransport: 'ws' })).toEqual({
-      messageStreamTransport: 'ws',
-    });
-    expect(helpers.sanitizeSettingsUpdate({ messageStreamTransport: 'sse' })).toEqual({
-      messageStreamTransport: 'sse',
-    });
-    expect(helpers.sanitizeSettingsUpdate({ messageStreamTransport: 'auto' })).toEqual({
-      messageStreamTransport: 'auto',
-    });
-  });
-
-  it('rejects invalid messageStreamTransport values', () => {
-    const helpers = createTestHelpers();
-
-    expect(helpers.sanitizeSettingsUpdate({ messageStreamTransport: 'websocket' })).toEqual({});
+    expect(helpers.sanitizeSettingsUpdate({ messageStreamTransport: 'ws' })).toEqual({});
+    expect(helpers.sanitizeSettingsUpdate({ defaultAgent: 'build' })).toEqual({});
+    expect(helpers.sanitizeSettingsUpdate({ autoApplyAgentModel: true })).toEqual({});
+    expect(helpers.sanitizeSettingsUpdate({ sessionWorkKeepInGroup: true })).toEqual({});
   });
 
   it('accepts inputHistoryScope as a persisted shared setting', () => {
@@ -789,7 +788,7 @@ describe('settings registry gate', () => {
     desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', gitlabClientId: 'gitlab-client', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
     defaultGitIdentityId: 'global', permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
     sessionGoalChecker: 'classifier', sessionGoalMaxAutoTurns: 20,
-    autoApplyAgentModel: true, planModeAllowAgents: true,
+    planModeAllowAgents: true,
     agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentMemoryToolEnabled: true, agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },
     // Registry keys the settings-registry regeneration added; the gate fails
     // without a fixture line for each, and these are their real shapes.
@@ -809,7 +808,7 @@ describe('settings registry gate', () => {
     chatRenderMode: 'live', activityRenderMode: 'summary', mermaidRenderingMode: 'svg', userMessageRenderingMode: 'markdown', collapsibleUserMessages: true,
     stickyUserHeader: true, promptNavigatorEnabled: true, wideChatLayoutEnabled: true, showSplitAssistantMessageActions: true, showToolFileIcons: true,
     codeBlockLineWrap: true, tableCellWrap: true, copyMessagesAsPlainText: true, showTurnChangedFiles: true, toolJsonViewMode: 'raw',
-    timeFormatPreference: '24h', weekStartPreference: 'monday', messageStreamTransport: 'ws', diffLayoutPreference: 'inline', diffWrapLines: true, diffHideWhitespace: true,
+    timeFormatPreference: '24h', weekStartPreference: 'monday', diffLayoutPreference: 'inline', diffWrapLines: true, diffHideWhitespace: true,
     gitChangesViewMode: 'tree', gitmojiEnabled: true, defaultFileViewerPreview: true, directoryShowHidden: true, filesViewShowGitignored: true,
     generateCommitMessages: true, commitMessageReasoning: false, commitMessageNotes: false, commitMessageChangeId: false,
     fileEditorKeymap: 'vim', fileEditorVimMappings: 'inoremap jk <Esc>', autoSaveEnabled: true, confirmFileTreeMove: false, autoCreateWorktree: true, terminalCloseOnExit: true, sessionTabsEnabled: true,
@@ -818,11 +817,11 @@ describe('settings registry gate', () => {
     draftStarters: [{ type: 'command', name: 'plan-feature' }], draftStartersVisible: true, draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true,
     fontSize: 100, chatFontSize: 100, terminalFontSize: 14, editorFontSize: 14, uiFont: 'inter', monoFont: 'jetbrains-mono', customUiFont: 'Maple Mono NF CN', customMonoFont: 'Maple Mono', uiFontWeight: 'regular', padding: 100,
     shortcutOverrides: { 'chat.send': 'mod+enter' },
-    defaultModel: 'anthropic/claude', defaultVariant: 'high', defaultAgent: 'build', zenModel: 'zen/model',
+    defaultModel: 'anthropic/claude', defaultVariant: 'high', zenModel: 'zen/model',
     defaultSessionMode: 'main',
     favoriteModels: [{ providerID: 'anthropic', modelID: 'claude' }], hiddenModels: [{ providerID: 'openai', modelID: 'gpt' }],
     recentModels: [{ providerID: 'anthropic', modelID: 'claude' }], lastSelectedModel: 'anthropic/claude', favoriteAgents: ['build'], providerOrder: ['anthropic'],
-    sessionRecapEnabled: true, suggestionGenerator: 'session', sessionWorkEnabled: true, sessionWorkAutoOpen: true, sessionReviewOfferEnabled: true, sessionWorkKeepInGroup: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
+    sessionRecapEnabled: true, suggestionGenerator: 'session', sessionWorkEnabled: true, sessionWorkAutoOpen: true, sessionReviewOfferEnabled: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
     maxLastMessageLength: 200, showDeletionDialog: true,
     nativeNotificationsEnabled: true, notificationMode: 'always', notifyOnSubtasks: true, notifyOnCompletion: true, notifyOnError: true, notifyOnQuestion: true, notifyOnPullRequests: true,
     notificationTemplates: { completion: { title: 't', message: 'm' } }, reportUsage: true,

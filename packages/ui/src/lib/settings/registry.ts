@@ -249,11 +249,10 @@ export const SETTINGS_REGISTRY = {
  permissionDefaultMode: field({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseOneOf(['ask', 'safety', 'auto']), ui: uiStore('permissionDefaultMode', (v) => useUIStore.getState().setPermissionDefaultMode(v)) }),
  sessionGoalChecker: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseOneOf(['classifier', 'small-model']), ui: uiStore('sessionGoalChecker', (v) => useUIStore.getState().setSessionGoalChecker(v)) }),
  sessionGoalMaxAutoTurns: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseIntegerInRange(1, 200), ui: uiStore('sessionGoalMaxAutoTurns', (v) => useUIStore.getState().setSessionGoalMaxAutoTurns(v)) }),
- autoApplyAgentModel: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('autoApplyAgentModel', (v) => useUIStore.getState().setAutoApplyAgentModel(v)) }),
  planModeAllowAgents: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('planModeAllowAgents', (v) => useUIStore.getState().setPlanModeAllowAgents(v)) }),
  // `provider/model` of an image model; the server checks the shape.
  agentImageModel: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseNonEmptyString, ui: uiStore('agentImageModel', (v) => useUIStore.getState().setAgentImageModel(v)) }),
- agentWorkflowToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentWorkflowToolEnabled', (v) => useUIStore.getState().setAgentWorkflowToolEnabled(v)) }),
+ agentWorkflowToolEnabled: field({ scope: 'instance', effect: ['ui'], parse: parseBoolean, ui: uiStore('agentWorkflowToolEnabled', (v) => useUIStore.getState().setAgentWorkflowToolEnabled(v)) }),
  mobileReturnKeySends: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('mobileReturnKeySends', (v) => useUIStore.getState().setMobileReturnKeySends(v)) }),
 
  // ── Theme (profile, per surface; ThemeSystemContext owns the live copy) ──
@@ -372,7 +371,7 @@ export const SETTINGS_REGISTRY = {
  sessionRetentionOnlyArchived: field({ scope: 'instance', effect: ['store', 'ui'], parse: parseBoolean, ui: uiStore('sessionRetentionOnlyArchived', (v) => useUIStore.getState().setSessionRetentionOnlyArchived(v)) }),
  sessionRetentionIncludeInWork: field({ scope: 'instance', effect: ['ui'], parse: parseBoolean, ui: uiStore('sessionRetentionIncludeInWork', (v) => useUIStore.getState().setSessionRetentionIncludeInWork(v)) }),
  sessionRetentionAction: field({ scope: 'instance', effect: ['store', 'ui'], parse: parseOneOf(['archive', 'delete']), ui: uiStore('sessionRetentionAction', (v) => useUIStore.getState().setSessionRetentionAction(v)) }),
- mergedWorktreeCleanupEnabled: field({ scope: 'instance', effect: ['ui'], parse: parseBoolean, ui: uiStore('mergedWorktreeCleanupEnabled', (v) => useUIStore.getState().setMergedWorktreeCleanupEnabled(v)) }),
+ mergedWorktreeCleanupEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('mergedWorktreeCleanupEnabled', (v) => useUIStore.getState().setMergedWorktreeCleanupEnabled(v)) }),
  terminalShell: field({ scope: 'instance', effect: ['ui'], parse: parseTerminalShell, ui: uiStore('terminalShell', (v) => useUIStore.getState().setTerminalShell(v)) }),
  terminalLoginShells: field({ scope: 'instance', effect: ['ui'], parse: parseTerminalShells(isTerminalShell), ui: uiStore('terminalLoginShells', (v) => useUIStore.getState().setTerminalLoginShells(v)) }),
  openInAppId: field({ scope: 'instance', effect: ['store'], parse: parseNonEmptyTrimmedString }),
@@ -476,7 +475,6 @@ export const SETTINGS_REGISTRY = {
  toolJsonViewMode: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseOneOf(['summary', 'formatted', 'raw']), ui: uiStore('toolJsonViewMode', (v) => useUIStore.getState().setToolJsonViewMode(v)) }),
  timeFormatPreference: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['auto', '12h', '24h']), ui: uiStore('timeFormatPreference', (v) => useUIStore.getState().setTimeFormatPreference(v)) }),
  weekStartPreference: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['auto', 'sunday', 'monday']), ui: uiStore('weekStartPreference', (v) => useUIStore.getState().setWeekStartPreference(v)) }),
- messageStreamTransport: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseOneOf(['auto', 'ws', 'sse']), ui: configField('settingsMessageStreamTransport') }),
  diffLayoutPreference: field({ scope: 'profile', effect: ['ui'], parse: parseOneOf(['dynamic', 'inline', 'side-by-side']), ui: uiStore('diffLayoutPreference', (v) => useUIStore.getState().setDiffLayoutPreference(v)) }),
  diffWrapLines: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('diffWrapLines', (v) => useUIStore.getState().setDiffWrapLines(v)) }),
  diffHideWhitespace: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('diffHideWhitespace', (v) => useUIStore.getState().setDiffHideWhitespace(v)) }),
@@ -489,7 +487,7 @@ export const SETTINGS_REGISTRY = {
  commitMessageReasoning: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean }),
  commitMessageNotes: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean }),
  commitMessageChangeId: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean }),
- defaultFileViewerPreview: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseBoolean }),
+ defaultFileViewerPreview: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseBoolean, ui: configField('settingsDefaultFileViewerPreview') }),
  directoryShowHidden: field({
   scope: 'profile',
   effect: ['ui'],
@@ -539,9 +537,9 @@ export const SETTINGS_REGISTRY = {
  }),
  inputHistoryLimit: field({
   scope: 'profile',
-  effect: ['ui'],
+  effect: ['store', 'ui'],
   parse: parseInputHistoryLimit,
-  ui: { read: () => useInputHistoryStore.getState().entryLimit, write: (v) => useInputHistoryStore.getState().applyEntryLimit(v), autoSave: false },
+  ui: { field: 'entryLimit', read: () => useInputHistoryStore.getState().entryLimit, write: (v) => useInputHistoryStore.getState().applyEntryLimit(v), autoSave: false },
  }),
  draftStarters: field<DraftStarterRef[]>({
   scope: 'profile',
@@ -579,14 +577,13 @@ export const SETTINGS_REGISTRY = {
  // ── Models and agents (profile) ──
  // New-session model and thinking level belong to OMP (`modelRoles.default`,
  // `defaultThinkingLevel`); the app no longer keeps a second default.
- defaultAgent: field({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseNonEmptyString }),
  zenModel: field({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseNonEmptyTrimmedString }),
  // The model-prefs auto-save owns these six with its own debounce.
  favoriteModels: field<ModelRef[]>({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseModelRefs(64), ui: uiStore('favoriteModels', setUi('favoriteModels'), { autoSave: false }) }),
  hiddenModels: field<ModelRef[]>({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseModelRefs(1024), ui: uiStore('hiddenModels', setUi('hiddenModels'), { autoSave: false }) }),
  customProviderIcons: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseCustomProviderIcons, ui: uiStore('customProviderIcons', setUi('customProviderIcons'), { autoSave: false }) }),
  // Written by the server's provider logo routes along with the image file.
- customProviderLogos: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseCustomProviderLogos, ui: uiStore('customProviderLogos', setUi('customProviderLogos'), { autoSave: false }) }),
+ customProviderLogos: field({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseCustomProviderLogos, ui: uiStore('customProviderLogos', setUi('customProviderLogos'), { autoSave: false }) }),
  recentModels: field<ModelRef[]>({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseModelRefs(16), ui: uiStore('recentModels', setUi('recentModels'), { autoSave: false }) }),
  lastSelectedModel: field({ scope: 'profile', effect: ['store'], parse: parseNonEmptyString, ui: uiStore('lastSelectedModel', setUi('lastSelectedModel')) }),
  favoriteAgents: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseStringSet, ui: uiStore('favoriteAgents', setUi('favoriteAgents'), { autoSave: false }) }),
@@ -599,7 +596,6 @@ export const SETTINGS_REGISTRY = {
  sessionWorkEnabled: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('sessionWorkEnabled', (v) => useUIStore.getState().setSessionWorkEnabled(v)) }),
  sessionWorkAutoOpen: field({ scope: 'profile', effect: ['server', 'ui'], surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionWorkAutoOpen', (v) => useUIStore.getState().setSessionWorkAutoOpen(v)) }),
  sessionReviewOfferEnabled: field({ scope: 'profile', effect: ['server', 'ui'], surfaces: ['web', 'desktop', 'mobile'], parse: parseBoolean, ui: uiStore('sessionReviewOfferEnabled', (v) => useUIStore.getState().setSessionReviewOfferEnabled(v)) }),
- sessionWorkKeepInGroup: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('sessionWorkKeepInGroup', (v) => useUIStore.getState().setSessionWorkKeepInGroup(v)) }),
  sessionGoalEnabled: field({ scope: 'profile', effect: ['ui'], parse: parseBoolean, ui: uiStore('sessionGoalEnabled', (v) => useUIStore.getState().setSessionGoalEnabled(v)) }),
  sessionGoalDefaultBudgetEnabled: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('sessionGoalDefaultBudgetEnabled', (v) => useUIStore.getState().setSessionGoalDefaultBudgetEnabled(v)) }),
  sessionGoalDefaultBudget: field({ scope: 'profile', effect: ['server', 'ui'], parse: parsePositiveInteger, ui: uiStore('sessionGoalDefaultBudget', (v) => useUIStore.getState().setSessionGoalDefaultBudget(v)) }),
@@ -765,6 +761,9 @@ export const parseSettingsDocument = (payload: unknown): DesktopSettings | null 
   return null;
  }
  const raw = document.data;
+ if (raw.sessionWorkKeepInGroup !== undefined && raw.sidebarKeepWorkInPlace === undefined) {
+  raw.sidebarKeepWorkInPlace = raw.sessionWorkKeepInGroup;
+ }
  const result: DesktopSettings = {};
  for (const key of SETTINGS_KEYS) {
   const spec = specOf(key);

@@ -32,9 +32,6 @@ const createRuntime = (overrides = {}) => {
   if ('readSessionMetadata' in overrides) dependencies.readSessionMetadata = overrides.readSessionMetadata;
   if ('persistSessionMetadata' in overrides) dependencies.persistSessionMetadata = overrides.persistSessionMetadata;
   if ('isAgentMemoryEnabled' in overrides) dependencies.isAgentMemoryEnabled = overrides.isAgentMemoryEnabled;
-  if ('isSessionLinkingAvailable' in overrides) dependencies.isSessionLinkingAvailable = overrides.isSessionLinkingAvailable;
-  if ('isPageRenderingAvailable' in overrides) dependencies.isPageRenderingAvailable = overrides.isPageRenderingAvailable;
-  if ('isWorkflowAvailable' in overrides) dependencies.isWorkflowAvailable = overrides.isWorkflowAvailable;
   return createSessionKnowledgeRuntime(dependencies);
 };
 
@@ -71,7 +68,6 @@ describe('what the session is owed', () => {
           globalFailed: false, projectFailed: false,
         }),
       },
-      isSessionLinkingAvailable: async () => true,
     });
 
     const { text } = await runtime.resolvePending(DIRECTORY, '', PINS);
@@ -86,7 +82,6 @@ describe('what the session is owed', () => {
     const runtime = createRuntime({
       projectContextRuntime: { readContext: async () => ({ notes: [], todos: [], plans: [] }) },
       agentMemoryRuntime: { readAll: async () => ({ global: [memory()], project: [], globalFailed: false, projectFailed: false }) },
-      isSessionLinkingAvailable: async () => true,
     });
 
     const { text, signature } = await runtime.resolvePending(DIRECTORY, '');
@@ -305,37 +300,11 @@ describe('size', () => {
 });
 
 describe('the tools the session has', () => {
-  test('render, workflow and linking tools never inject prompt guidance into the session', async () => {
-    const withTools = await createRuntime({
-      projectContextRuntime: { readContext: async () => ({ notes: [], todos: [], plans: [] }) },
-      isAgentMemoryEnabled: async () => false,
-      isPageRenderingAvailable: async () => true,
-      isWorkflowAvailable: async () => true,
-      isSessionLinkingAvailable: async () => true,
-    }).resolvePending(DIRECTORY, '');
-
-    expect(withTools.text).toBe('');
-    expect(withTools.signature).toBe('');
-  });
-
   test('switching a tool on or off does not alter the knowledge signature', () => {
     const base = { notes: [note()], plans: [] };
     expect(buildKnowledgeSignature({ ...base, rendering: true })).toBe(buildKnowledgeSignature(base));
     expect(buildKnowledgeSignature({ ...base, workflows: true })).toBe(buildKnowledgeSignature(base));
     expect(buildKnowledgeSignature({ ...base, linking: true })).toBe(buildKnowledgeSignature(base));
-  });
-
-  test('a failing tool availability check never breaks knowledge resolution', async () => {
-    const { text } = await createRuntime({
-      isAgentMemoryEnabled: async () => false,
-      isPageRenderingAvailable: async () => { throw new Error('settings unreadable'); },
-      isWorkflowAvailable: async () => { throw new Error('settings unreadable'); },
-      isSessionLinkingAvailable: async () => { throw new Error('settings unreadable'); },
-    }).resolvePending(DIRECTORY, '', PINS);
-
-    expect(text).toContain('Pinned note body.');
-    expect(text).not.toContain('openchamber_render');
-    expect(text).not.toContain('openchamber_workflow');
   });
 });
 

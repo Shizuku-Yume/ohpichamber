@@ -501,9 +501,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionReviewOfferEnabled === 'boolean') {
       result.sessionReviewOfferEnabled = candidate.sessionReviewOfferEnabled;
     }
-    if (typeof candidate.sessionWorkKeepInGroup === 'boolean') {
-      result.sessionWorkKeepInGroup = candidate.sessionWorkKeepInGroup;
-    }
     if (typeof candidate.sessionGoalEnabled === 'boolean') {
       result.sessionGoalEnabled = candidate.sessionGoalEnabled;
     }
@@ -519,9 +516,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionGoalMaxAutoTurns === 'number' && Number.isSafeInteger(candidate.sessionGoalMaxAutoTurns)
       && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
       result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
-    }
-    if (typeof candidate.autoApplyAgentModel === 'boolean') {
-      result.autoApplyAgentModel = candidate.autoApplyAgentModel;
     }
     if (typeof candidate.planModeAllowAgents === 'boolean') {
       result.planModeAllowAgents = candidate.planModeAllowAgents;
@@ -635,10 +629,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (lastSelectedModel.success) {
       result.lastSelectedModel = lastSelectedModel.data;
     }
-    if (typeof candidate.defaultAgent === 'string') {
-      const trimmed = candidate.defaultAgent.trim();
-      result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
-    }
     if (typeof candidate.defaultSessionMode === 'string') {
       const mode = candidate.defaultSessionMode.trim();
       if (SESSION_MODE_VALUES.has(mode)) {
@@ -738,12 +728,6 @@ export const createSettingsHelpers = (dependencies) => {
       const mode = candidate.chatRenderMode.trim();
       if (mode === 'sorted' || mode === 'live') {
         result.chatRenderMode = mode;
-      }
-    }
-    if (typeof candidate.messageStreamTransport === 'string') {
-      const mode = candidate.messageStreamTransport.trim();
-      if (mode === 'auto' || mode === 'ws' || mode === 'sse') {
-        result.messageStreamTransport = mode;
       }
     }
     if (typeof candidate.activityRenderMode === 'string') {
@@ -1010,7 +994,22 @@ export const createSettingsHelpers = (dependencies) => {
     return result;
   };
 
-  const mergePersistedSettings = (current, changes) => ({ ...current, ...changes });
+  const mergePersistedSettings = (current, changes) => {
+    const merged = { ...current, ...changes };
+    delete merged.defaultAgent;
+    delete merged.sessionWorkKeepInGroup;
+    delete merged.messageStreamTransport;
+    delete merged.savePastedImagesAsFiles;
+    if (Array.isArray(merged.projects)) {
+      merged.projects = merged.projects.map((proj) => {
+        if (!proj || typeof proj !== 'object' || !('defaultAgent' in proj)) return proj;
+        const copy = { ...proj };
+        delete copy.defaultAgent;
+        return copy;
+      });
+    }
+    return merged;
+  };
 
   const formatSettingsResponse = (settings) => {
     const sanitized = sanitizeSettingsUpdate(settings);

@@ -70,10 +70,71 @@ describe('native usage report rendering', () => {
       entries: { [key()]: { stats: reportWithUnpriced, loading: false, error: null, fetchedAt: 1000 } },
     });
     const html = render();
-    // Cost renders "—" for the unpriced model, not "$0.00"
+    // Cost tile and efficiency tiles render "—" for fully unpriced scope, not "$0.00"
     expect(html).toContain('gemini-3.8-flash');
     expect(html).toContain('· —');
     expect(html).not.toContain('· $0.00');
+    // Tokens hint includes reasoning
+    expect(html).toContain('Reasoning 25');
+  });
+
+  test('fully unpriced scope renders dash for Cost tile, cost/session, and cost/million', () => {
+    const unpricedModel = {
+      providerId: 'CLIProxyAPI', modelId: 'gemini-3.8-flash', variant: null, steps: 5,
+      tokens: { input: 100, output: 50, reasoning: 25, cacheRead: 0, cacheWrite: 0, total: 150 },
+      cost: 0, pricing: null, avgTtft: 1200, avgTokensPerSecond: 20, errorRate: 0,
+    };
+    const reportUnpriced: UsageStats = {
+      ...report,
+      cost: 0,
+      tokens: { input: 100, output: 50, reasoning: 25, cacheRead: 0, cacheWrite: 0, total: 150 },
+      models: [unpricedModel],
+      providers: [{
+        providerId: 'CLIProxyAPI', steps: 5, failedRequests: 0, errorRate: 0,
+        tokens: unpricedModel.tokens, cost: 0, pricing: null, avgTtft: 1200, avgTokensPerSecond: 20, modelsCount: 1,
+      }],
+    };
+    Object.assign(serverState, {
+      entries: { [key()]: { stats: reportUnpriced, loading: false, error: null, fetchedAt: 1000 } },
+    });
+    const html = render();
+    // The Cost stat tile has label "Cost" and value "—"
+    expect(html).toMatch(/<span[^>]*>Cost<\/span><span[^>]*>—<\/span>/);
+    // Cost / session and Cost per 1M tokens in EfficiencyTiles render "—"
+    expect(html).toMatch(/<span[^>]*>Cost \/ session<\/span><span[^>]*>—<\/span>/);
+    expect(html).toMatch(/<span[^>]*>Cost per 1M tokens<\/span><span[^>]*>—<\/span>/);
+    // Tokens tile has non-truncated hint with whitespace-normal break-words
+    expect(html).toContain('whitespace-normal break-words');
+  });
+
+  test('mixed pricing scope renders the priced sum with a partial pricing hint', () => {
+    const pricedModel = {
+      providerId: 'anthropic', modelId: 'claude-3-5-sonnet', variant: null, steps: 5,
+      tokens: { input: 100, output: 50, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 150 },
+      cost: 0.05, pricing: { inputCostPerMillionTokens: 3, outputCostPerMillionTokens: 15 }, avgTtft: 500, avgTokensPerSecond: 30, errorRate: 0,
+    };
+    const unpricedModel = {
+      providerId: 'CLIProxyAPI', modelId: 'gemini-3.8-flash', variant: null, steps: 5,
+      tokens: { input: 100, output: 50, reasoning: 25, cacheRead: 0, cacheWrite: 0, total: 150 },
+      cost: 0, pricing: null, avgTtft: 1200, avgTokensPerSecond: 20, errorRate: 0,
+    };
+    const reportMixed: UsageStats = {
+      ...report,
+      cost: 0.05,
+      tokens: { input: 200, output: 100, reasoning: 25, cacheRead: 0, cacheWrite: 0, total: 300 },
+      models: [pricedModel, unpricedModel],
+      providers: [
+        { providerId: 'anthropic', steps: 5, failedRequests: 0, errorRate: 0, tokens: pricedModel.tokens, cost: 0.05, pricing: pricedModel.pricing, avgTtft: 500, avgTokensPerSecond: 30, modelsCount: 1 },
+        { providerId: 'CLIProxyAPI', steps: 5, failedRequests: 0, errorRate: 0, tokens: unpricedModel.tokens, cost: 0, pricing: null, avgTtft: 1200, avgTokensPerSecond: 20, modelsCount: 1 },
+      ],
+    };
+    Object.assign(serverState, {
+      entries: { [key()]: { stats: reportMixed, loading: false, error: null, fetchedAt: 1000 } },
+    });
+    const html = render();
+    // Cost stat tile renders "$0.05" and "Partial pricing" hint
+    expect(html).toMatch(/<span[^>]*>Cost<\/span><span[^>]*>\$0\.05<\/span>/);
+    expect(html).toContain('Partial pricing');
   });
 
   test('renders provider comparison table and bars when multiple providers exist', () => {

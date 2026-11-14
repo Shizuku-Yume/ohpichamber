@@ -594,7 +594,7 @@ only ever sends v2.
 
 | Entity | What the page reads and writes |
 |---|---|
-| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `allowedTools`, `permissionPresetId`, `color` |
+| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `allowedTools`, `color` |
 | Command | `template` (the markdown body), `description`, `agent`, `model` with `#variant`, `subagent` |
 | MCP server | `type` (required), `command` / `url`, `environment`, `headers`, `disabled`, `codemode`, `timeout: { startup, catalog, execution }`, snake_case `oauth` |
 | Provider | `package` with the `aisdk:` prefix, `settings.baseURL`, `headers`, `body`, models keyed by id with `modelID`, `capabilities`, `variants`, `cost.cache.read/write`, `disabled` |
@@ -622,7 +622,7 @@ the documented way to keep a server configured but inactive, and the page's
 
 Settings lists custom agents so their files remain editable, renameable, and deletable. Hidden built-in agents stay out of Settings and out of the composer pickers, and duplicate and rename read the stored entry so its `hidden` flag survives.
 
-Permissions are edited as the agent contract states them, not as an ordered rule list: `allowedTools` (the tools the agent may call) and the optional `permissionPresetId`, both written through `updateAgent`. The ordered `{ action, resource, effect }` rule editor and its translator were retired with the OpenCode engine, so no editor derives rules from built-in defaults.
+Permissions are edited as the agent contract states them, not as an ordered rule list: `allowedTools` (the tools the agent may call), written through `updateAgent`. The ordered `{ action, resource, effect }` rule editor and its translator were retired with the OpenCode engine, so no editor derives rules from built-in defaults.
 
 ### The legacy-format note
 

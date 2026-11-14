@@ -22,6 +22,7 @@ export type CatalogNativeContext = NativeModelsContext & NativeAgentsContext & W
   readonly warming: NativeCacheWarming;
   // Authoritative policy is resolved at each provider-entry mutation, not cached at worker startup.
   readonly assertProviderEntryAllowed: () => void | Promise<void>;
+  readonly session?: { refreshIdleMaintenance?: () => void };
 };
 
 export class WorkerCatalogs {
@@ -83,6 +84,10 @@ export class WorkerCatalogs {
         return { type: 'catalog.settings', state: await this.settingsStore.read(workspaceId, revision) };
       case 'catalog.settings.write':
         return { type: 'catalog.settings.mutated', state: await this.settingsStore.write(workspaceId, revision, operation.request) };
+      case 'catalog.settings.apply':
+        await this.context.settings.reloadFromDisk();
+        this.context.session?.refreshIdleMaintenance?.();
+        return { type: 'catalog.settings.applied' };
       case 'catalog.warming.apply':
         return { type: 'catalog.warming.applied', mode: this.context.warming.apply(operation.mode) };
       case 'catalog.warming.persist':

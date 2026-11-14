@@ -600,6 +600,7 @@ export class WorkerSession {
       const catalogs = new WorkerCatalogs({
         ...nativeModelsContext(runtime, () => nativeSession.sessionManager.getSessionId()), worker,
         warming,
+        session: nativeSession,
         cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration,
         get extensionRoots() { return nativeExtensionRoots(settings, pluginExtensionPaths); },
         get options() { return nativeSkillOptions(settings, pluginExtensionPaths); },

@@ -301,7 +301,8 @@ const showCatalog = async (catalog: PluginCatalogState) => {
 const buttonWith = (text: string) => Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(text));
 
 test('capability kind tabs use localized labels instead of the worker English labels', async () => {
-  await useI18nStore.getState().setLocale('fr');
+  useI18nStore.getState().setLocale('fr');
+  for (let attempt = 0; attempt < 50 && useI18nStore.getState().loadingLocale !== null; attempt += 1) await settle();
   await showCatalog({ ...emptyCatalog, extensions: kindInventory([ruleItem({ name: 'project-rule' })]) });
 
   expect(buttonWith('Règles')).toBeDefined();
@@ -312,7 +313,7 @@ test('bundled capabilities start collapsed behind a count and expand on demand',
   await showCatalog({
     ...emptyCatalog, extensions: kindInventory([
       ruleItem({ id: 'ext_project', name: 'project-rule' }),
-      ruleItem({ id: 'ext_bundled', name: 'builtin-rule', scope: 'builtin', path: 'builtin-defaults:builtin-rule' }),
+      ruleItem({ id: 'ext_bundled', name: 'builtin-rule', providerId: 'builtin-defaults', providerName: 'Builtin Defaults', scope: 'user', path: 'builtin-defaults:builtin-rule' }),
     ])
   });
 

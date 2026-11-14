@@ -40,6 +40,9 @@ const KIND_ICON = {
  ssh: 'terminal-box',
 } as const satisfies Record<ExtensionKind, IconName>;
 
+/** OMP's bundled rule provider id (`BUILTIN_DEFAULTS_PROVIDER_ID` in its capability registry). */
+const BUNDLED_PROVIDER_ID = 'builtin-defaults';
+
 const ScopeChip: React.FC<{ scope: ExtensionScope }> = ({ scope }) => {
  const { t } = useI18n();
  const label = scope === 'builtin'
@@ -189,8 +192,9 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
   .filter(tab => tab.count > 0);
  const activeKind = kind === 'all' || tabs.some(tab => tab.kind === kind) ? kind : 'all';
  const inKind = activeKind === 'all' ? filtered : filtered.filter(item => item.kind === activeKind);
- const visible = inKind.filter(item => item.scope !== 'builtin');
- const bundled = inKind.filter(item => item.scope === 'builtin');
+ // OMP reports its bundled rules under the builtin-defaults provider with user scope, so both mark a bundled row.
+ const visible = inKind.filter(item => item.scope !== 'builtin' && item.providerId !== BUNDLED_PROVIDER_ID);
+ const bundled = inKind.filter(item => item.scope === 'builtin' || item.providerId === BUNDLED_PROVIDER_ID);
  const shown = bundledOpen ? [...visible, ...bundled] : visible;
  // A row from a previous filter, or a bundled row once it collapses, is never inspected.
  const selected = shown.find(item => item.id === selectedId) ?? shown[0] ?? null;

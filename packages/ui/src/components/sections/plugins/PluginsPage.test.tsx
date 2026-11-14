@@ -356,3 +356,51 @@ test('an empty installed list offers an Add plugin card that explains the empty 
   expect(container.textContent).toContain('No plugins installed yet.');
   expect(buttonWith('Add plugin')).toBeDefined();
 });
+
+test('a selected marketplace category resets when its source leaves the catalog, and every remaining plugin is listed', async () => {
+  const lintKit = { marketplace: 'market-a', name: 'lint-kit', description: 'Lint rules', version: '1.0.0', details: { category: 'Quality' } };
+  const docsKit = { marketplace: 'market-b', name: 'docs-kit', description: 'Docs', version: '2.0.0' };
+  const notesKit = { marketplace: 'market-b', name: 'notes-kit', description: 'Notes', version: '0.1.0', details: { category: 'Docs' } };
+  await showCatalog({ ...emptyCatalog, marketplace: [lintKit, docsKit, notesKit] });
+
+  const quality = buttonWith('Quality');
+  if (!quality) throw new Error('Missing category chip');
+  await act(async () => { quality.dispatchEvent(new Event('click', { bubbles: true })); });
+  await settle();
+  expect(container.textContent).not.toContain('docs-kit');
+
+  // market-a is removed: its entries leave the catalog while the selected category is still set.
+  await showCatalog({ ...emptyCatalog, marketplace: [docsKit, notesKit] });
+
+  expect(buttonWith('All categories')?.getAttribute('aria-pressed')).toBe('true');
+  expect(container.textContent).toContain('docs-kit');
+  expect(container.textContent).toContain('notes-kit');
+  expect(container.textContent).not.toContain('lint-kit');
+});
+
+test('installed plugin capability chips sit in one shrinkable, wrapping container in the card footer', async () => {
+  const installed: InstalledPluginEntry = {
+    ...plugin,
+    id: 'plugin_lint_kit',
+    name: 'lint-kit',
+    target: { kind: 'marketplace', name: 'lint-kit', marketplace: 'market-a', scope: 'user' },
+  };
+  await showCatalog({
+    ...emptyCatalog,
+    plugins: [installed],
+    marketplace: [{
+      marketplace: 'market-a',
+      name: 'lint-kit',
+      description: 'Lint rules',
+      version: '1.2.3',
+      details: { commands: ['a'], agents: ['b'], hooks: ['c'], mcpServers: ['d'], lspServers: ['e'] },
+    }],
+  });
+
+  const footer = Array.from(container.querySelectorAll<HTMLElement>('.mt-auto')).find(element => element.querySelectorAll('.oc-tile-inset').length === 5);
+  if (!footer) throw new Error('Missing installed card footer with five capability chips');
+  const wrap = footer.firstElementChild;
+  expect(wrap?.classList.contains('flex-wrap')).toBe(true);
+  expect(wrap?.classList.contains('min-w-0')).toBe(true);
+  expect(wrap?.querySelectorAll('.oc-tile-inset').length).toBe(5);
+});

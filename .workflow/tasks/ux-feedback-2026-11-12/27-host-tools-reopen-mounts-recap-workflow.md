@@ -63,17 +63,26 @@ Save evidence in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-20
   - Scenario (a): Created session A, sent initial turn, disabled `agentWebToolEnabled` (200), evicted worker (DELETE /internal/workers/:id). Sent web fetch prompt; session reopened cold with web absent from tool offerings and fetch refused. History saved in `01-web-refused-history.json`, screenshot in `01-web-disabled.png`.
   - Scenario (b): Created session B, proposed `workflow.run` for `sample` workflow. Tool returned `{ ok, action: 'workflow.run', data: { runId } }`, parsed by card parser. Started existing workflow via `POST /api/openchamber/workflows/start` returning 200. History saved in `02-workflow-history.json`, screenshot in `02-workflow-card.png`.
   - Scenario (c): Created session C, requested image generation. `generate_image` tool was invoked by agent and returned precise provider refusal (`Image generation exhausted the resolved image chain: CLIProxyAPI/gpt-image-2.5-flare`). History saved in `03-generate-image-history.json`, screenshot in `03-generate-image.png`.
-  - Scenario (d): Configured `memory.backend: local`. In session D1, prompted agent to store Project Orion secret code. In new session D2, prompted agent to search memory; agent invoked `recall` tool call and returned the secret. History saved in `04-memory-recall-history.json`, screenshot in `04-memory-recall.png`.
-  - Scenario (e): Configured `recap.enabled: false`, `recap.idleSeconds: 2`. Created session E, prompted turn, waited past idle delay. Queried `/api/agent/v1/sessions/:id/recaps` returning 200 with `{ recaps: [] }` (0 recaps). Evidence saved in `05-recap-evidence.json`, screenshot in `05-recap-disabled.png`.
+  - Scenario (d): Configured `memory.backend: mnemopi`. In session D1, prompted agent to store the secret codeword `ZEPHYR-77` in memory; agent called `retain` tool (`1 memory stored.`). In new session D2 in the same workspace, prompted agent to search memory; agent called `recall` tool (`Found 2 relevant memories: The secret project codeword is ZEPHYR-77 (id: 1c2c6a43dc730761)`). Transcript saved in `04-memory-recall-history.json`, screenshot in `04-memory-recall.png`.
+  - Scenario (e): Configured `recap.enabled: true`, `recap.idleSeconds: 2`. Positive control: prompted turn 1, waited past idle delay; recap generated (`count: 2`), saved in `05-recap-positive-control.json` and `05-recap-positive-control.png`. Live worker toggle: patched `recap.enabled: false` via workspace settings `PATCH` (200); prompted turn 2, waited past idle delay; recaps count remained 2 (no new recaps generated), saved in `05-recap-evidence.json` and `05-recap-disabled.png`.
   - Evidence directory: `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task27/`.
+- **Review round 1 fixes:**
+  - Finding 1: `pageRenderView.test.ts` imports migrated to `bun:test`, added `id` to `CanonicalToolView` test objects; `bun run --cwd packages/ui type-check` passes with 0 errors across 3533 files.
+  - Finding 2: Real path (d) rerun with OMP-native `mnemopi` SQLite memory backend; session D1 retained fact via `retain` tool call, new session D2 recalled fact via `recall` tool call (`04-memory-recall-history.json`, `04-memory-recall.png`).
+  - Finding 3: Removed deleted memory file rows from `.workflow/upstream-deltas.tsv`; `bun test scripts/upstream-drift.test.mjs` (14 pass) and `bun scripts/upstream-drift.mjs` pass.
+  - Finding 4: Added positive control for recap (recap produced when enabled, `05-recap-positive-control.json`), followed by live worker settings toggle and negative control proving cancellation of new recaps (`05-recap-evidence.json`). Mapped native session ID in `registry.listRecaps` and `session.onRecap` to ensure full journal visibility across Host and native session scopes.
+  - Finding 5: Removed orphaned strings/consumers: `unseenTitle` and `unseen` counters from `ProjectNotesTodoPanel.tsx`, `memory.tidy` from `MagicPromptsPage.tsx`, `MagicPromptsSidebar.tsx`, and `packages/ui/src/lib/magicPrompts.ts`, and 39 orphaned locale keys across all 15 locales (825 lines removed).
 
 Check after:
 - `bun test packages/agent-service/src/worker/session-native.test.ts -t "a cold session reopens with web disabled|toggling notify keeps mounted tools enabled|a live worker turns recap.enabled off"`: 3 pass, 0 fail, 19 expect() calls
 - `bun test packages/agent-service/src/worker/host-tool.test.ts -t "workflow.run"`: 2 pass, 0 fail, 18 expect() calls
-- `bunx vitest run packages/ui/src/components/chat/message/parts/pageRenderView.test.ts`: 2 pass, 0 fail
-- `bun test packages/web/server/lib/openchamber-sessions/routes.test.js -t "passes resolved host tools"`: 1 pass, 0 fail
+- `bun test packages/ui/src/components/chat/message/parts/pageRenderView.test.ts`: 2 pass, 0 fail, 4 expect() calls
+- `bun run --cwd packages/web test -- server/lib/openchamber-sessions/routes.test.js -t "passes resolved host tools"`: 1 pass, 0 fail
+- `bun test packages/agent-contract/src/runtime.test.ts`: 3 pass, 0 fail, 6 expect() calls
+- `bun test scripts/upstream-drift.test.mjs`: 14 pass, 0 fail
+- `bun test packages/ui/src/lib/i18n`: 106 pass, 0 fail, 60803 expect() calls across 52 files
+- `bun run --cwd packages/ui type-check`: 0 type errors in 3,533 files across 2 projects
 - `bun run dead-code`: exit 1 (knip baseline report verified; zero leftover memory store exports)
-- `bunx oxlint <touched paths>`: 0 findings
-- Real path on port 4127 (Web, real provider `CLIProxyAPI/gemini-3.5-flash-lite`, isolated `HOME` and `OPENCHAMBER_DATA_DIR`): all 5 flows verified, evidence in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task27/`.
-
+- `bunx oxlint <touched paths>`: 0 findings across all touched/authored files
+- Real path on port 4127 (Web, real provider `CLIProxyAPI/gemini-3.5-flash-lite`, isolated `HOME` and `OPENCHAMBER_DATA_DIR`): all 5 flows verified end-to-end, evidence in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task27/`.
 Review: pending independent review

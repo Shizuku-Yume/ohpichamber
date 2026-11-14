@@ -1,6 +1,12 @@
 import React from 'react';
 import type { AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
-import type { Agent, AgentThinkingLevel, ToolCatalogEntry } from '@openchamber/agent-contract';
+import type { Agent, AgentThinkingLevel, JsonValue, ToolCatalogEntry } from '@openchamber/agent-contract';
+import { CanonicalApiError } from '@/api/canonicalClient';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
+import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,9 +29,9 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
+  SETTINGS_OPTION_STACK_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { Icon } from '@/components/icon/Icon';
 
 interface FormState {
   name: string;
@@ -84,6 +90,46 @@ export const AgentsPage: React.FC = () => {
     updateAgent: state.updateAgent, loadAgents: state.loadAgents,
     agentDraft: state.agentDraft, setAgentDraft: state.setAgentDraft, setSelectedAgent: state.setSelectedAgent,
   })));
+  const models = useSettingsModels(settingsDirectory);
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('agents');
+  const subagentSettings = getSectionSettings('subagents');
+  const prewalkSettings = getSectionSettings('prewalk');
+  const advisorSettings = getSectionSettings('advisor');
+
+  const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
+  const rolesMap = React.useMemo(() => parseRolesRecord(modelRolesSetting?.value), [modelRolesSetting?.value]);
+  const roleSelectors = React.useMemo(
+    () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
+    [rolesMap],
+  );
+
+  const handleRoleChange = React.useCallback(
+    async (role: 'task' | 'advisor', selector: string) => {
+      if (!ompState) return;
+      const nextRoles: Record<string, JsonValue> = { ...rolesMap };
+      if (selector) nextRoles[role] = selector;
+      else delete nextRoles[role];
+      try {
+        await canonicalClient.updateOmpSettings(ompState.workspaceId, {
+          expectedRevision: ompState.revision,
+          changes: [{ id: 'modelRoles', value: nextRoles }],
+        });
+      } catch (err) {
+        if (err instanceof CanonicalApiError && err.problem.status === 409) {
+          const latest = await canonicalClient.getOmpSettings(ompState.workspaceId);
+          const latestRoles = parseRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
+          const merged: Record<string, JsonValue> = { ...latestRoles };
+          if (selector) merged[role] = selector;
+          else delete merged[role];
+          await canonicalClient.updateOmpSettings(latest.workspaceId, {
+            expectedRevision: latest.revision,
+            changes: [{ id: 'modelRoles', value: merged }],
+          });
+        }
+      }
+    },
+    [ompState, rolesMap],
+  );
   const agents = useAgentsStore((state) => selectAgentsForDirectory(state, settingsDirectory));
   const revision = useAgentsStore((state) => state.revisionsByDirectory[directoryKey]);
   const catalogError = useAgentsStore((state) => state.errorsByDirectory[directoryKey]);
@@ -244,15 +290,95 @@ export const AgentsPage: React.FC = () => {
 
   const error = saveError || catalogError;
   if (!selectedAgentName) {
-    return <div className="flex h-full items-center justify-center">
-      <div className="text-center text-muted-foreground">
-        <Icon name="robot-2" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-        {error ? <p role="alert">{error}</p> : <>
-          <p>{t('settings.agents.page.empty.title')}</p>
-          <p className="typography-meta mt-1 opacity-75">{t('settings.agents.page.empty.description')}</p>
-        </>}
-      </div>
-    </div>;
+    return (
+      <SettingsPageLayout
+        title={t('settings.agents.page.globalTitle')}
+        description={t('settings.agents.page.globalDescription')}
+        showSaveStatus
+      >
+        <div className="space-y-6">
+          {/* Subagents */}
+          <SettingsSection
+            title={t('settings.omp.section.subagents.title')}
+            description={t('settings.omp.section.subagents.description')}
+            divider={false}
+            settingsItem="agents.section.subagents"
+          >
+            <div className={SETTINGS_OPTION_STACK_CLASS}>
+              <ModelRoleEditor
+                role="task"
+                roles={roleSelectors}
+                models={models}
+                directory={settingsDirectory ?? undefined}
+                disabled={ompLoading}
+                label={t('settings.omp.modelRoles.role.task.label')}
+                info={t('settings.omp.modelRoles.role.task.desc')}
+                settingsItem="omp.modelRoles.task"
+                onChange={(selector) => void handleRoleChange('task', selector)}
+              />
+              {subagentSettings.map((s) => (
+                <OmpRowControl
+                  key={s.id}
+                  setting={s}
+                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting(s.id, val)}
+                />
+              ))}
+            </div>
+          </SettingsSection>
+
+          {/* Prewalk */}
+          <SettingsSection
+            title={t('settings.agents.section.prewalk.title')}
+            description={t('settings.agents.section.prewalk.description')}
+            settingsItem="agents.section.prewalk"
+          >
+            <div className={SETTINGS_OPTION_STACK_CLASS}>
+              {prewalkSettings.map((s) => (
+                <OmpRowControl
+                  key={s.id}
+                  setting={s}
+                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting(s.id, val)}
+                />
+              ))}
+            </div>
+          </SettingsSection>
+
+          {/* Advisor */}
+          <SettingsSection
+            title={t('settings.agents.section.advisor.title')}
+            description={t('settings.agents.section.advisor.description')}
+            settingsItem="agents.section.advisor"
+          >
+            <div className={SETTINGS_OPTION_STACK_CLASS}>
+              <ModelRoleEditor
+                role="advisor"
+                roles={roleSelectors}
+                models={models}
+                directory={settingsDirectory ?? undefined}
+                disabled={ompLoading}
+                label={t('settings.omp.modelRoles.role.advisor.label')}
+                info={t('settings.omp.modelRoles.role.advisor.desc')}
+                settingsItem="omp.modelRoles.advisor"
+                onChange={(selector) => void handleRoleChange('advisor', selector)}
+              />
+              {advisorSettings.map((s) => (
+                <OmpRowControl
+                  key={s.id}
+                  setting={s}
+                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting(s.id, val)}
+                />
+              ))}
+            </div>
+          </SettingsSection>
+        </div>
+      </SettingsPageLayout>
+    );
   }
 
   return <SettingsPageLayout

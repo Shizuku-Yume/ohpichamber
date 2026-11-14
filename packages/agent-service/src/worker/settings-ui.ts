@@ -142,20 +142,20 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'contextPromotion.enabled': 'sessions:context',
   'extendedContext': 'sessions:context',
   'branchSummary.enabled': 'sessions:context',
-  'compaction.enabled': 'engine',
-  'compaction.experimentalContextManagement': 'engine',
-  'compaction.midTurnEnabled': 'engine',
-  'compaction.methodOrder': 'engine',
-  'compaction.thresholdPercent': 'engine',
-  'compaction.thresholdTokens': 'engine',
-  'compaction.handoffSaveToDisk': 'engine',
-  'compaction.remoteStreamingV2Enabled': 'engine',
-  'compaction.asyncEnabled': 'engine',
-  'compaction.idleEnabled': 'engine',
-  'compaction.idleThresholdTokens': 'engine',
-  'compaction.idleTimeoutSeconds': 'engine',
-  'compaction.supersedeReads': 'engine',
-  'compaction.dropUseless': 'engine',
+  'compaction.enabled': 'sessions:compaction',
+  'compaction.experimentalContextManagement': 'sessions:compaction',
+  'compaction.midTurnEnabled': 'sessions:compaction',
+  'compaction.methodOrder': 'sessions:compaction',
+  'compaction.thresholdPercent': 'sessions:compaction',
+  'compaction.thresholdTokens': 'sessions:compaction',
+  'compaction.handoffSaveToDisk': 'sessions:compaction',
+  'compaction.remoteStreamingV2Enabled': 'sessions:compaction',
+  'compaction.asyncEnabled': 'sessions:compaction',
+  'compaction.idleEnabled': 'sessions:compaction',
+  'compaction.idleThresholdTokens': 'sessions:compaction',
+  'compaction.idleTimeoutSeconds': 'sessions:compaction',
+  'compaction.supersedeReads': 'sessions:compaction',
+  'compaction.dropUseless': 'sessions:compaction',
   'snapcompact.systemPrompt': 'engine',
   'snapcompact.toolResults': 'engine',
   'tools.format': 'engine',
@@ -298,18 +298,18 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'tier.google': 'providers:tiers',
   'tier.subagent': 'providers:tiers',
   'tier.advisor': 'providers:tiers',
-  'retry.maxRetries': 'engine',
-  'retry.maxDelayMs': 'engine',
-  'retry.waitForUsageReset': 'engine',
-  'retry.modelFallback': 'engine',
-  'retry.fallbackOn': 'engine',
-  'retry.rateLimitWalksChain': 'engine',
-  'retry.usageAwareFallback': 'engine',
-  'retry.usageReservePct': 'engine',
-  'retry.usageReservePolicy': 'engine',
-  'retry.fallbackChains': 'engine',
-  'retry.fallbackRevertPolicy': 'engine',
-  'providers.anthropic.serverSideFallback': 'engine',
+  'retry.maxRetries': 'sessions:retry',
+  'retry.maxDelayMs': 'sessions:retry',
+  'retry.waitForUsageReset': 'sessions:retry',
+  'retry.modelFallback': 'sessions:retry',
+  'retry.fallbackOn': 'sessions:retry',
+  'retry.rateLimitWalksChain': 'sessions:retry',
+  'retry.usageAwareFallback': 'sessions:retry',
+  'retry.usageReservePct': 'sessions:retry',
+  'retry.usageReservePolicy': 'sessions:retry',
+  'retry.fallbackChains': 'sessions:retry',
+  'retry.fallbackRevertPolicy': 'sessions:retry',
+  'providers.anthropic.serverSideFallback': 'sessions:retry',
   'advisor.enabled': 'agents:advisor',
   'advisor.syncBacklog': 'agents:advisor',
   'advisor.immuneTurns': 'agents:advisor',
@@ -350,13 +350,13 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'task.softRequestBudgetNotice': 'agents:subagents',
   'task.maxEffort': 'agents:subagents',
   'task.prewalk': 'agents:subagents',
-  'plan.enabled': 'engine',
-  'plan.defaultOnStartup': 'engine',
-  'plan.autosave': 'engine',
+  'plan.enabled': 'sessions:plan',
+  'plan.defaultOnStartup': 'sessions:plan',
+  'plan.autosave': 'sessions:plan',
   'plan.autosaveDir': 'boundary',
-  'goal.enabled': 'engine',
+  'goal.enabled': 'sessions:plan',
   'goal.statusInFooter': 'tui-only',
-  'goal.continuationModes': 'engine',
+  'goal.continuationModes': 'sessions:plan',
   'title.generator': 'sessions:title',
   'title.refreshOnReplan': 'sessions:title',
   'title.refreshAfterPrompts': 'sessions:title',
@@ -512,8 +512,15 @@ function buildTable(): Readonly<Record<string, OmpSettingPlacement>> {
  */
 export const OMP_SETTING_PLACEMENTS: Readonly<Record<string, OmpSettingPlacement>> = buildTable();
 
-/** Page placements a GUI control writes today. Any other page placement is drawn by no surface, so it is never exposed. */
-const GUI_WRITTEN_PAGE_KEYS: Readonly<Record<string, true>> = { defaultThinkingLevel: true };
+/** Pages that have GUI controls rendering their OMP settings. */
+const GUI_WRITTEN_PAGES: Readonly<Record<string, true>> = {
+  sessions: true,
+  chat: true,
+  behavior: true,
+  agents: true,
+  tools: true,
+  memory: true,
+};
 
 /**
  * Whether an engine setting has a working GUI control:
@@ -549,7 +556,12 @@ export const OMP_SETTING_EXPOSED_IDS: ReadonlySet<string> = new Set(
   Object.entries(OMP_SETTING_PLACEMENTS)
     .filter(([id, placement]) => {
       if (placement.type === 'owned-by') return true;
-      if (placement.type === 'page') return GUI_WRITTEN_PAGE_KEYS[id] === true;
+      if (placement.type === 'page') {
+        if (GUI_WRITTEN_PAGES[placement.page] !== true) return false;
+        if (id === 'defaultThinkingLevel' || id === 'retry.fallbackChains') return true;
+        const desc = ORDERED_SETTINGS_MAP.get(id);
+        return desc ? isRenderableEngineSetting({ id, ...desc }) : false;
+      }
       if (placement.type === 'engine') {
         const desc = ORDERED_SETTINGS_MAP.get(id);
         return desc ? isRenderableEngineSetting({ id, ...desc }) : false;

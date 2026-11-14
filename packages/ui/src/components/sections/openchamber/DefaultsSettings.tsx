@@ -1,6 +1,6 @@
 import React from 'react';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
-import { JsonObjectSchema, formatModelRef } from '@openchamber/agent-contract';
+import { formatModelRef } from '@openchamber/agent-contract';
 import type { JsonValue, OmpSettingsChange, OmpSettingsState } from '@openchamber/agent-contract';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -9,11 +9,15 @@ import {
   SettingsCheckboxRow,
   SettingsInset,
   SettingsChipGroup,
+  SETTINGS_NUMBER_INPUT_CLASS,
   SETTINGS_OPTION_STACK_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
+import { NumberInput } from '@/components/ui/number-input';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoalCheckerField';
 import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
-import { formatRoleSelector, modelForSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { changedRoles, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
@@ -34,33 +38,6 @@ const SESSION_MODE_OPTIONS: readonly { value: SessionModeValue; labelKey: I18nKe
 ] as const;
 
 
-/** Every entry the native `modelRoles` record holds, arrays and objects included. */
-function parseRolesRecord(val: unknown): Record<string, JsonValue> {
-  const parsed = JsonObjectSchema.safeParse(val);
-  return parsed.success ? parsed.data : {};
-}
-
-/** The selector shown for a role; native role values may be arrays of fallbacks. */
-function roleSelector(value: JsonValue | undefined): string {
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
-  if (value && typeof value === 'object' && !Array.isArray(value) && typeof value.selector === 'string') return value.selector;
-  return '';
-}
-
-/**
- * The entries `next` really changed relative to `previous`: written values plus
- * the keys it removed. A conflict retry re-applies exactly these, so a role or
- * fallback chain a concurrent edit added is never overwritten or deleted.
- */
-const changedRoles = (previous: Record<string, JsonValue>, next: Record<string, JsonValue>) => {
-  const removed = Object.keys(previous).filter(role => !Object.hasOwn(next, role));
-  const written: Record<string, JsonValue> = {};
-  for (const [role, value] of Object.entries(next)) {
-    if (previous[role] !== value) written[role] = value;
-  }
-  return { written, removed };
-};
 
 export const DefaultsSettings: React.FC = () => {
   const { t } = useI18n();
@@ -339,6 +316,59 @@ export const DefaultsSettings: React.FC = () => {
 
   const planModeAllowAgents = useUIStore((state) => state.planModeAllowAgents);
   const setPlanModeAllowAgents = useUIStore((state) => state.setPlanModeAllowAgents);
+  const sessionGoalDefaultBudgetEnabled = useUIStore((state) => state.sessionGoalDefaultBudgetEnabled);
+  const setSessionGoalDefaultBudgetEnabled = useUIStore((state) => state.setSessionGoalDefaultBudgetEnabled);
+  const sessionGoalDefaultBudget = useUIStore((state) => state.sessionGoalDefaultBudget);
+  const setSessionGoalDefaultBudget = useUIStore((state) => state.setSessionGoalDefaultBudget);
+
+  const handleOmpChange = React.useCallback(
+    async (id: string, value: JsonValue | null) => {
+      const currentState = ompStateRef.current;
+      if (!currentState) return;
+      setIsSavingOmp(true);
+      try {
+        const next = await canonicalClient.updateOmpSettings(currentState.workspaceId, {
+          expectedRevision: currentState.revision,
+          changes: [{ id, value }],
+        });
+        setOmpState(next);
+        if (id === 'goal.enabled') {
+          const enabled = value === true;
+          useUIStore.getState().setSessionGoalEnabled(enabled);
+          void updateDesktopSettings({ sessionGoalEnabled: enabled });
+        }
+      } catch (err) {
+        if (err instanceof CanonicalApiError && err.problem.status === 409) {
+          const latest = await canonicalClient.getOmpSettings(currentState.workspaceId);
+          const next = await canonicalClient.updateOmpSettings(latest.workspaceId, {
+            expectedRevision: latest.revision,
+            changes: [{ id, value }],
+          });
+          setOmpState(next);
+          if (id === 'goal.enabled') {
+            const enabled = value === true;
+            useUIStore.getState().setSessionGoalEnabled(enabled);
+            void updateDesktopSettings({ sessionGoalEnabled: enabled });
+          }
+        } else {
+          console.warn(`Failed to update OMP setting ${id}:`, err);
+        }
+      } finally {
+        setIsSavingOmp(false);
+      }
+    },
+    [],
+  );
+
+  const getSectionRows = React.useCallback(
+    (section: string) => {
+      if (!ompState) return [];
+      return ompState.settings.filter(
+        (s) => s.placement?.type === 'page' && s.placement.page === 'sessions' && s.placement.section === section,
+      );
+    },
+    [ompState],
+  );
 
   return (
     <>
@@ -472,9 +502,22 @@ export const DefaultsSettings: React.FC = () => {
       <SettingsSection title={t('settings.sessions.permissions.defaultMode')} contentClassName="space-y-1">
         <PermissionDefaultModeField />
       </SettingsSection>
-
-      <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')} contentClassName="space-y-1">
-        <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
+      {/* Plan & Goal Modes */}
+      <SettingsSection
+        title={t('settings.omp.group.modes.label')}
+        description={t('settings.omp.section.modes.description')}
+        settingsItem="sessions.plan-goal"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {getSectionRows('plan').map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
           <SettingsCheckboxRow
             settingsItem="sessions.plan-mode-allow-agents"
             checked={planModeAllowAgents}
@@ -486,8 +529,142 @@ export const DefaultsSettings: React.FC = () => {
             ariaLabel={t('settings.openchamber.defaults.field.planModeAllowAgentsAria')}
             info={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
           />
-          {/* Deletion confirmation is configured with deletion itself, on the
-              retention section; this page keeps only session-display switches. */}
+          {ompState?.settings.find((s) => s.id === 'goal.enabled')?.value === true ? (
+            <div className="ps-6 space-y-3 pt-2">
+              <SessionGoalCheckerField />
+              <SessionGoalMaxTurnsField />
+              <SettingsFieldRow
+                label={
+                  <SettingsCheckboxRow
+                    checked={sessionGoalDefaultBudgetEnabled}
+                    onChange={(checked) => {
+                      setSessionGoalDefaultBudgetEnabled(checked);
+                      void updateDesktopSettings({ sessionGoalDefaultBudgetEnabled: checked });
+                    }}
+                    label={t('settings.openchamber.visual.goal.budgetLabel')}
+                    ariaLabel={t('settings.openchamber.visual.goal.budgetAria')}
+                  />
+                }
+                settingsItem="chat.session-goal-budget"
+              >
+                <NumberInput
+                  value={sessionGoalDefaultBudget}
+                  onValueChange={(value) => {
+                    if (Number.isFinite(value) && value > 0) {
+                      setSessionGoalDefaultBudget(Math.floor(value));
+                      void updateDesktopSettings({ sessionGoalDefaultBudget: Math.floor(value) });
+                    }
+                  }}
+                  min={1000}
+                  max={100000000}
+                  step={50000}
+                  disabled={!sessionGoalDefaultBudgetEnabled}
+                  className={SETTINGS_NUMBER_INPUT_CLASS}
+                  aria-label={t('settings.openchamber.visual.goal.budgetAria')}
+                />
+              </SettingsFieldRow>
+            </div>
+          ) : null}
+        </div>
+      </SettingsSection>
+
+      {/* Execution, Steering & Follow-up */}
+      <SettingsSection
+        title={t('settings.sessions.section.execution.title')}
+        description={t('settings.sessions.section.execution.description')}
+        settingsItem="sessions.execution"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {getSectionRows('execution').map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      {/* Context Compaction */}
+      <SettingsSection
+        title={t('settings.omp.group.compaction.label')}
+        description={t('settings.omp.section.compaction.description')}
+        settingsItem="sessions.compaction"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {getSectionRows('compaction').map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      {/* Retry & Model Fallback */}
+      <SettingsSection
+        title={t('settings.omp.group.retry_fallback.label')}
+        description={t('settings.omp.section.retry.description')}
+        settingsItem="sessions.retry"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {getSectionRows('retry').map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      {/* Worktree & Isolation */}
+      <SettingsSection
+        title={t('settings.sessions.section.isolation.title')}
+        description={t('settings.sessions.section.isolation.description')}
+        settingsItem="sessions.isolation"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {[...getSectionRows('isolation'), ...getSectionRows('worktree')].map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      {/* Session Titles */}
+      <SettingsSection
+        title={t('settings.sessions.section.title.title')}
+        description={t('settings.sessions.section.title.description')}
+        settingsItem="sessions.title"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {getSectionRows('title').map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')} contentClassName="space-y-1">
+        <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
           <SessionWarmingCheckbox />
           <SettingsCheckboxRow
             settingsItem="sessions.show-chats"

@@ -16,6 +16,7 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { stripModuleSyntax, usesName } from './source.mjs';
 
 const args = process.argv.slice(2);
 function getFlag(name, fallback) {
@@ -300,7 +301,7 @@ function walkJsFiles(dir) {
       if (entry.name === 'node_modules' || entry.name === 'fixtures' || entry.name === 'test-support') continue;
       out.push(...walkJsFiles(full));
     } else if (entry.isFile() && /\.(js|mjs|cjs)$/.test(entry.name)) {
-      if (/\.(test|spec)\.(js|mjs|cjs)$/.test(entry.name) || /\.fixture\./.test(entry.name)) continue;
+      if (/\.(test|spec)\.(js|mjs|cjs)$/.test(entry.name) || /\.test-support\./.test(entry.name) || /\.fixture\./.test(entry.name)) continue;
       out.push(full);
     }
   }
@@ -316,6 +317,16 @@ const allProductionFiles = [
 const fileContents = new Map();
 for (const f of allProductionFiles) {
   fileContents.set(path.relative(REPO_ROOT, f), fs.readFileSync(f, 'utf8'));
+}
+
+// Every create*/register* call the fork makes anywhere in production server code.
+// A constructor counts as present when some production file calls it.
+const forkAllCallNames = new Set();
+for (const [rel, src] of fileContents.entries()) {
+  for (const c of extractCalls(src, rel)) {
+    forkAllCallNames.add(c.name);
+    forkAllCallNames.add(c.shortName);
+  }
 }
 
 const exportedFns = [];
@@ -346,13 +357,11 @@ for (const f of serverFiles) {
 }
 
 const unusedExports = [];
+const strippedByFile = new Map([...fileContents].map(([rel, src]) => [rel, stripModuleSyntax(src)]));
 for (const exp of exportedFns) {
-  const tokenRe = new RegExp(`\\b${exp.name}\\b`);
-  const callers = [];
-  for (const [otherFile, src] of fileContents.entries()) {
-    if (otherFile === exp.file) continue;
-    if (tokenRe.test(src)) callers.push(otherFile);
-  }
+  // A use is any reference outside import and re-export statements: a call, or a value
+  // such as a default parameter or a dependency object entry. An import alone is not use.
+  const callers = [...strippedByFile.entries()].filter(([otherFile, src]) => otherFile !== exp.file && usesName(src, exp.name));
   if (callers.length === 0) {
     unusedExports.push(exp);
   }
@@ -374,7 +383,7 @@ const report = {
     depDiffs: [],
   },
   createCalls: {
-    onlyUpstream: [...upCreate.keys()].filter((k) => !fkCreate.has(k)).map((k) => ({
+    onlyUpstream: [...upCreate.keys()].filter((k) => !forkAllCallNames.has(k)).map((k) => ({
       name: k,
       upstream: upCreate.get(k).map((x) => `${x.file}:${x.line}`),
       inPremerge: pmCreate.has(k),

@@ -99,12 +99,12 @@ export const toolSuccessRate = (totals: { succeeded: number; failed: number }): 
 export const costPerMillionTokens = (cost: number, tokens: number): number | null =>
   (tokens > 0 ? (cost / tokens) * 1_000_000 : null);
 
-/** Share of reasoning inside everything the model produced; null when it
- * produced nothing. */
+/** Share of reasoning inside the model's output. OMP's `output` already
+ * includes reasoning, so reasoning is a subset of it; null when the model
+ * produced no output or reasoning is unknown. */
 export const reasoningShare = (tokens: Pick<UsageTokens, 'output' | 'reasoning'>): number | null => {
   if (tokens.reasoning === null) return null;
-  const produced = tokens.output + tokens.reasoning;
-  return produced > 0 ? tokens.reasoning / produced : null;
+  return tokens.output > 0 ? tokens.reasoning / tokens.output : null;
 };
 
 export type TokenSegmentKey = 'input' | 'output' | 'cacheRead' | 'cacheWrite';
@@ -112,16 +112,16 @@ export type TokenSegmentKey = 'input' | 'output' | 'cacheRead' | 'cacheWrite';
 /** One stacked-bar slice; zero values stay so legend order is stable. */
 interface TokenSegment {
   key: TokenSegmentKey
-  /** Output merges reasoning: the model's own production. */
+  /** Output already includes reasoning, so it is never added again. */
   value: number
 }
 
 /** Token totals as stacked-bar segments in fixed order: fresh input, model
- * output plus reasoning, cache reads, cache writes. Zero segments stay in the
- * list so legend order is stable; renderers skip them. */
+ * output (reasoning included), cache reads, cache writes. Zero segments stay in
+ * the list so legend order is stable; renderers skip them. */
 export const tokenSegments = (tokens: UsageTokens): TokenSegment[] => [
   { key: 'input', value: tokens.input },
-  { key: 'output', value: tokens.output + (tokens.reasoning ?? 0) },
+  { key: 'output', value: tokens.output },
   { key: 'cacheRead', value: tokens.cacheRead },
   { key: 'cacheWrite', value: tokens.cacheWrite },
 ];

@@ -559,6 +559,15 @@ const STORE_SPECS = [
   { file: 'packages/ui/src/stores/useSessionWarmingStore.ts', store: 'useSessionWarmingStore', typeNames: ['SessionWarmingStore', 'SessionWarmingState'] },
 ];
 
+// Blanks the given [start, end) ranges so declarations no longer match implementation searches.
+function blankRanges(src, ranges) {
+  let out = src;
+  for (const [start, end] of [...ranges].sort((a, b) => b[0] - a[0])) {
+    out = `${out.slice(0, start)}${' '.repeat(end - start)}${out.slice(end)}`;
+  }
+  return out;
+}
+
 function extractStoreMembers(ref) {
   const result = new Map();
 
@@ -568,6 +577,7 @@ function extractStoreMembers(ref) {
     const src = stripComments(raw);
     const fields = new Map(); // name -> { line, isFunctionType }
     const partializeKeys = new Set();
+    const typeRanges = [];
 
     for (const typeName of spec.typeNames) {
       const re = new RegExp(`(?:interface|type)\\s+${typeName}(?:\\s+extends\\s+[^{]+)?\\s*(?:=\\s*)?\\{`);
@@ -576,6 +586,7 @@ function extractStoreMembers(ref) {
       const start = m.index + m[0].length - 1;
       const end = findMatching(src, start, '{', '}');
       if (end <= start) continue;
+      typeRanges.push([start, end + 1]);
       const body = src.slice(start + 1, end);
       for (const entry of splitTopLevel(body, [';', ','])) {
         const trimmed = entry.text.trim();
@@ -620,6 +631,16 @@ function extractStoreMembers(ref) {
       }
     }
 
+    // Implementation = the store's own code. Type declarations are blanked first, so
+    // an interface line such as `setX: (value) => void` is never taken for an implementation.
+    const implementationSrc = blankRanges(src, typeRanges);
+    // Object-literal property or method, a local declaration, or a shorthand property.
+    const isImplemented = (name) =>
+      new RegExp(
+        `(?<![\\w$.])${name}\\s*:|(?<![\\w$.])${name}\\s*\\([^()]*\\)\\s*(?::[^{;]+)?\\{|(?:const|let|var|function)\\s+${name}(?![\\w$])|(?<![\\w$.])${name}\\s*(?=[,}])`,
+      ).test(implementationSrc);
+    const isSetterName = (name) => /^(?:set|apply)[A-Z]/.test(name);
+
     for (const [name, info] of fields.entries()) {
       const pascal = name[0].toUpperCase() + name.slice(1);
       const candidateSetters = [
@@ -627,7 +648,7 @@ function extractStoreMembers(ref) {
         `apply${pascal}`,
         name.startsWith('settings') ? `setSettings${name.slice('settings'.length)}` : null,
       ].filter(Boolean);
-      const foundSetter = candidateSetters.find((s) => fields.has(s)) ?? null;
+      const foundSetter = candidateSetters.find((s) => fields.has(s) && isImplemented(s)) ?? null;
       result.set(`${spec.store}.${name}`, {
         id: `${spec.store}.${name}`,
         store: spec.store,
@@ -638,6 +659,7 @@ function extractStoreMembers(ref) {
         persisted: partializeKeys.has(name),
         hasSetter: info.isFunctionType ? null : Boolean(foundSetter),
         setterName: foundSetter,
+        setterUnimplemented: isSetterName(name) && !isImplemented(name),
       });
     }
   }
@@ -940,6 +962,10 @@ function runInventory(opts) {
         status = 'half-present';
         notes.push('dropped from store partialize');
       }
+    }
+    if (fk?.setterUnimplemented) {
+      status = 'half-present';
+      notes.push('setter is declared in the store type without an implementation');
     }
     inventory.push({
       class: 'settings-store',

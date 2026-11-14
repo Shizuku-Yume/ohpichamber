@@ -27,6 +27,32 @@ describe('HostActionRequestSchema', () => {
     }
   });
 
+  test('parses pr.watch and pr.unwatch in the host action schema under openchamber', () => {
+    const parsedWatch = HostActionRequestSchema.safeParse({
+      sessionId: 'session-123',
+      toolName: 'openchamber',
+      action: 'pr.watch',
+      input: { url: 'https://github.com/acme/app/pull/1' },
+    });
+    expect(parsedWatch.success).toBe(true);
+    if (parsedWatch.success) {
+      expect(parsedWatch.data.toolName).toBe('openchamber');
+      expect(parsedWatch.data.action).toBe('pr.watch');
+    }
+
+    const parsedUnwatch = HostActionRequestSchema.safeParse({
+      sessionId: 'session-123',
+      toolName: 'openchamber',
+      action: 'pr.unwatch',
+      input: {},
+    });
+    expect(parsedUnwatch.success).toBe(true);
+    if (parsedUnwatch.success) {
+      expect(parsedUnwatch.data.toolName).toBe('openchamber');
+      expect(parsedUnwatch.data.action).toBe('pr.unwatch');
+    }
+  });
+
   test('rejects deleted openchamber_image and memory tools', () => {
     expect(HostActionRequestSchema.safeParse({
       sessionId: 'session-123',
@@ -107,6 +133,45 @@ describe('createHostToolExtension & controller', () => {
     expect(registeredTools.has('notify')).toBe(false);
     await controller.toggle('notify', true);
     expect(registeredTools.has('notify')).toBe(true);
+  });
+
+  test('openchamber tool rejects missing input parameter with clear guidance', async () => {
+    const registeredTools = new Map<string, RegisteredToolStub>();
+    const mockApi = {
+      typebox: {
+        Type: {
+          Object: (props: unknown) => ({ type: 'object', properties: props }),
+          String: () => ({ type: 'string' }),
+          Record: () => ({ type: 'object' }),
+          Unknown: () => ({}),
+        },
+      },
+      registerTool: (tool: RegisteredToolStub) => {
+        registeredTools.set(tool.name, tool);
+      },
+    };
+
+    const controller = createHostToolController({
+      scope: { sessionId: 'session-123', rootSessionId: 'root-123', workspaceId: 'ws-123' },
+      invoke: async () => ({ ok: true }),
+    });
+    controller.extension(mockApi as never);
+
+    const openchamberTool = registeredTools.get('openchamber');
+    expect(openchamberTool).toBeDefined();
+
+    // Missing input property (e.g. model put url at top level)
+    await expect(openchamberTool!.execute('call-1', {
+      action: 'pr.watch',
+      url: 'https://github.com/acme/app/pull/1',
+    })).rejects.toThrow('Host tool action "pr.watch" requires an "input" object containing its parameters');
+
+    // Valid input property succeeds
+    const result = await openchamberTool!.execute('call-2', {
+      action: 'pr.watch',
+      input: { url: 'https://github.com/acme/app/pull/1' },
+    });
+    expect(result.details).toEqual({ ok: true });
   });
 
   test('re-registers and deactivates tools on toggle with active session mock', async () => {

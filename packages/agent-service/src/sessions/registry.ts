@@ -459,6 +459,25 @@ export class SessionRegistry {
     } finally { await manager.close(); }
   }
 
+  /**
+   * Sessions folders of the Host-authorized roots in a workspace or project scope. Unlike `usageReferences`
+   * this never refuses an active root: a running session must not hide the usage scope it belongs to.
+   */
+  usageSessionDirectories(authorized: readonly { workspaceId: string; projectId: string }[], query: UsageQueryResult): string[] {
+    this.ensureOpen();
+    const scopes = new Map(authorized.map(scope => [scope.workspaceId, scope.projectId]));
+    const directories = new Set<string>();
+    const inventory = this.references.list();
+    if (inventory.errors.length) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session inventory reported restore errors');
+    for (const root of inventory.items) {
+      if (scopes.get(root.workspaceId) !== root.projectId
+        || (query.workspaceId !== undefined && query.workspaceId !== root.workspaceId)
+        || (query.projectId !== undefined && query.projectId !== root.projectId)) continue;
+      directories.add(root.sessionsDirectory ?? SessionManager.getDefaultSessionDir(root.cwd, root.agentDirectory));
+    }
+    return [...directories];
+  }
+
   usageReferences(authorized: readonly { workspaceId: string; projectId: string }[], query: UsageQueryResult): UsageSessionReference[] {
     this.ensureOpen();
     const scopes = new Map(authorized.map(scope => [scope.workspaceId, scope.projectId]));

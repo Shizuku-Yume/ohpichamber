@@ -1,0 +1,423 @@
+import React from 'react';
+import { useI18n } from '@/lib/i18n';
+import { useUIStore } from '@/stores/useUIStore';
+import { updateDesktopSettings } from '@/lib/persistence';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
+import { useGuestsStore } from '@/lib/guests/store';
+import { loadGuestCatalog } from '@/lib/guests/load-catalog';
+import { BUILTIN_BROWSER_PROVIDER, browserProviderGuests } from '@/lib/guests/browser-providers';
+import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
+import {
+  SettingsCheckboxRow,
+  SettingsSection,
+  SettingsStackedField,
+  SETTINGS_OPTION_STACK_CLASS,
+} from '@/components/sections/shared/SettingsSection';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
+import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
+import type { JsonValue } from '@openchamber/agent-contract';
+
+export const ToolsPage: React.FC = () => {
+  const { t } = useI18n();
+  const directory = useSettingsDirectory();
+  const models = useSettingsModels(directory);
+  const guests = useGuestsStore((state) => state.guests);
+
+  // Host tools state
+  const agentControlToolEnabled = useUIStore((state) => state.agentControlToolEnabled);
+  const setAgentControlToolEnabled = useUIStore((state) => state.setAgentControlToolEnabled);
+  const agentWebToolEnabled = useUIStore((state) => state.agentWebToolEnabled);
+  const setAgentWebToolEnabled = useUIStore((state) => state.setAgentWebToolEnabled);
+  const browserProvider = useUIStore((state) => state.browserProvider);
+  const setBrowserProvider = useUIStore((state) => state.setBrowserProvider);
+  const agentKnowledgeToolEnabled = useUIStore((state) => state.agentKnowledgeToolEnabled);
+  const setAgentKnowledgeToolEnabled = useUIStore((state) => state.setAgentKnowledgeToolEnabled);
+  const agentNotifyToolEnabled = useUIStore((state) => state.agentNotifyToolEnabled);
+  const setAgentNotifyToolEnabled = useUIStore((state) => state.setAgentNotifyToolEnabled);
+  const agentRenderToolEnabled = useUIStore((state) => state.agentRenderToolEnabled);
+  const setAgentRenderToolEnabled = useUIStore((state) => state.setAgentRenderToolEnabled);
+  const agentWorkflowAvailable = useUIStore((state) => state.agentWorkflowFeatureAvailable);
+  const agentWorkflowToolEnabled = useUIStore((state) => state.agentWorkflowToolEnabled);
+  const setAgentWorkflowToolEnabled = useUIStore((state) => state.setAgentWorkflowToolEnabled);
+
+  // OMP tools state
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('tools');
+
+  React.useEffect(() => {
+    void loadGuestCatalog();
+  }, []);
+
+  const providerGuests = React.useMemo(() => browserProviderGuests(guests), [guests]);
+  const providerValue = providerGuests.some((guest) => guest.id === browserProvider)
+    ? browserProvider
+    : BUILTIN_BROWSER_PROVIDER;
+
+  const handleControlToolChange = React.useCallback((checked: boolean) => {
+    setAgentControlToolEnabled(checked);
+    void updateDesktopSettings({ agentControlToolEnabled: checked });
+  }, [setAgentControlToolEnabled]);
+
+  const handleWebToolChange = React.useCallback((checked: boolean) => {
+    setAgentWebToolEnabled(checked);
+    void updateDesktopSettings({ agentWebToolEnabled: checked });
+  }, [setAgentWebToolEnabled]);
+
+  const handleBrowserProviderChange = React.useCallback((val: string) => {
+    setBrowserProvider(val);
+    void updateDesktopSettings({ browserProvider: val });
+  }, [setBrowserProvider]);
+
+  const handleKnowledgeToolChange = React.useCallback((checked: boolean) => {
+    setAgentKnowledgeToolEnabled(checked);
+    void updateDesktopSettings({ agentKnowledgeToolEnabled: checked });
+  }, [setAgentKnowledgeToolEnabled]);
+
+  const handleNotifyToolChange = React.useCallback((checked: boolean) => {
+    setAgentNotifyToolEnabled(checked);
+    void updateDesktopSettings({ agentNotifyToolEnabled: checked });
+  }, [setAgentNotifyToolEnabled]);
+
+  const handleRenderToolChange = React.useCallback((checked: boolean) => {
+    setAgentRenderToolEnabled(checked);
+    void updateDesktopSettings({ agentRenderToolEnabled: checked });
+  }, [setAgentRenderToolEnabled]);
+
+  const handleWorkflowToolChange = React.useCallback((checked: boolean) => {
+    setAgentWorkflowToolEnabled(checked);
+    void updateDesktopSettings({ agentWorkflowToolEnabled: checked });
+  }, [setAgentWorkflowToolEnabled]);
+
+  // Model roles for image tool
+  const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
+  const rolesMap = React.useMemo(() => parseRolesRecord(modelRolesSetting?.value), [modelRolesSetting?.value]);
+  const roleSelectors = React.useMemo(
+    () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
+    [rolesMap],
+  );
+
+  const handleImageRoleChange = React.useCallback(
+    async (selector: string) => {
+      if (!ompState) return;
+      const nextRoles: Record<string, JsonValue> = { ...rolesMap };
+      if (selector) nextRoles.image = selector;
+      else delete nextRoles.image;
+      try {
+        await canonicalClient.updateOmpSettings(ompState.workspaceId, {
+          expectedRevision: ompState.revision,
+          changes: [{ id: 'modelRoles', value: nextRoles }],
+        });
+      } catch (err) {
+        if (err instanceof CanonicalApiError && err.problem.status === 409) {
+          const latest = await canonicalClient.getOmpSettings(ompState.workspaceId);
+          const latestRoles = parseRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
+          const merged: Record<string, JsonValue> = { ...latestRoles };
+          if (selector) merged.image = selector;
+          else delete merged.image;
+          await canonicalClient.updateOmpSettings(latest.workspaceId, {
+            expectedRevision: latest.revision,
+            changes: [{ id: 'modelRoles', value: merged }],
+          });
+        }
+      }
+    },
+    [ompState, rolesMap],
+  );
+
+  const availableSettings = getSectionSettings('available');
+  const availableById = React.useMemo(() => {
+    const map = new Map<string, (typeof availableSettings)[number]>();
+    for (const s of availableSettings) map.set(s.id, s);
+    return map;
+  }, [availableSettings]);
+
+  const browserOptions = getSectionSettings('browser');
+  const todoOptions = getSectionSettings('todo');
+  const grepOptions = getSectionSettings('grep');
+  const computerOptions = getSectionSettings('computer');
+  const githubOptions = getSectionSettings('github');
+  const idaOptions = getSectionSettings('ida');
+
+  return (
+    <SettingsPageLayout
+      title={t('settings.page.tools.title')}
+      description={t('settings.page.tools.description')}
+      showSaveStatus
+    >
+      <div className="space-y-6">
+        {/* OpenChamber Host Tools */}
+        <SettingsSection
+          title={t('settings.tools.section.host.title')}
+          description={t('settings.tools.section.host.description')}
+          divider={false}
+          settingsItem="tools.section.host"
+        >
+          <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <SettingsCheckboxRow
+              settingsItem="sessions.agent-control-tool"
+              checked={agentControlToolEnabled}
+              onChange={handleControlToolChange}
+              label={t('settings.openchamber.tools.field.agentControlTool')}
+              info={t('settings.openchamber.tools.field.agentControlToolInfo')}
+              ariaLabel={t('settings.openchamber.tools.field.agentControlToolAria')}
+            />
+
+            <SettingsCheckboxRow
+              settingsItem="sessions.agent-web-tool"
+              checked={agentWebToolEnabled}
+              onChange={handleWebToolChange}
+              label={t('settings.openchamber.tools.field.agentWebTool')}
+              info={t('settings.openchamber.tools.field.agentWebToolInfo')}
+              ariaLabel={t('settings.openchamber.tools.field.agentWebToolAria')}
+            />
+            {agentWebToolEnabled ? (
+              <div className="ps-6">
+                <SettingsStackedField
+                  settingsItem="sessions.browser-provider"
+                  label={t('settings.openchamber.tools.browserProvider.label')}
+                  info={t('settings.openchamber.tools.browserProvider.info')}
+                >
+                  <Select value={providerValue} onValueChange={handleBrowserProviderChange}>
+                    <SelectTrigger className="w-64" aria-label={t('settings.openchamber.tools.browserProvider.aria')}>
+                      <SelectValue>
+                        {(val) =>
+                          val === BUILTIN_BROWSER_PROVIDER
+                            ? t('settings.openchamber.tools.browserProvider.option.builtin')
+                            : providerGuests.find((g) => g.id === val)?.name ?? null
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={BUILTIN_BROWSER_PROVIDER}>
+                        {t('settings.openchamber.tools.browserProvider.option.builtin')}
+                      </SelectItem>
+                      {providerGuests.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>
+                          {g.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingsStackedField>
+              </div>
+            ) : null}
+
+            <SettingsCheckboxRow
+              settingsItem="sessions.agent-knowledge-tool"
+              checked={agentKnowledgeToolEnabled}
+              onChange={handleKnowledgeToolChange}
+              label={t('settings.openchamber.tools.field.agentKnowledgeTool')}
+              info={t('settings.openchamber.tools.field.agentKnowledgeToolInfo')}
+              ariaLabel={t('settings.openchamber.tools.field.agentKnowledgeToolAria')}
+            />
+
+            <SettingsCheckboxRow
+              settingsItem="sessions.agent-notify-tool"
+              checked={agentNotifyToolEnabled}
+              onChange={handleNotifyToolChange}
+              label={t('settings.openchamber.tools.field.agentNotifyTool')}
+              info={t('settings.openchamber.tools.field.agentNotifyToolInfo')}
+              ariaLabel={t('settings.openchamber.tools.field.agentNotifyToolAria')}
+            />
+
+            <SettingsCheckboxRow
+              settingsItem="sessions.agent-render-tool"
+              checked={agentRenderToolEnabled}
+              onChange={handleRenderToolChange}
+              label={t('settings.openchamber.tools.field.agentRenderTool')}
+              info={t('settings.openchamber.tools.field.agentRenderToolInfo')}
+              ariaLabel={t('settings.openchamber.tools.field.agentRenderToolAria')}
+            />
+
+            {agentWorkflowAvailable ? (
+              <SettingsCheckboxRow
+                settingsItem="sessions.agent-workflow-tool"
+                checked={agentWorkflowToolEnabled}
+                onChange={handleWorkflowToolChange}
+                label={t('settings.openchamber.tools.field.agentWorkflowTool')}
+                info={t('settings.openchamber.tools.field.agentWorkflowToolInfo')}
+                ariaLabel={t('settings.openchamber.tools.field.agentWorkflowToolAria')}
+              />
+            ) : null}
+          </div>
+        </SettingsSection>
+
+        {/* Web & Image Capabilities (OMP Headless Browser & Image Generation) */}
+        <SettingsSection
+          title={t('settings.tools.section.media.title')}
+          description={t('settings.tools.section.media.description')}
+          settingsItem="tools.section.media"
+        >
+          <div className={SETTINGS_OPTION_STACK_CLASS}>
+            {availableById.has('browser.enabled') ? (
+              <>
+                <OmpRowControl
+                  setting={availableById.get('browser.enabled')!}
+                  value={ompForm['browser.enabled'] !== undefined ? ompForm['browser.enabled'] : availableById.get('browser.enabled')!.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting('browser.enabled', val)}
+                />
+                {ompForm['browser.enabled'] !== false && browserOptions.length > 0 ? (
+                  <div className="ps-6 space-y-3">
+                    {browserOptions.map((opt) => (
+                      <OmpRowControl
+                        key={opt.id}
+                        setting={opt}
+                        value={ompForm[opt.id] !== undefined ? ompForm[opt.id] : opt.value}
+                        disabled={ompLoading}
+                        onChange={(val) => void updateOmpSetting(opt.id, val)}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+
+            {availableById.has('generate_image.enabled') ? (
+              <>
+                <OmpRowControl
+                  setting={availableById.get('generate_image.enabled')!}
+                  value={ompForm['generate_image.enabled'] !== undefined ? ompForm['generate_image.enabled'] : availableById.get('generate_image.enabled')!.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting('generate_image.enabled', val)}
+                />
+                {ompForm['generate_image.enabled'] !== false ? (
+                  <div className="ps-6">
+                    <ModelRoleEditor
+                      role="image"
+                      roles={roleSelectors}
+                      models={models}
+                      directory={directory ?? undefined}
+                      disabled={ompLoading}
+                      label={t('settings.omp.modelRoles.role.image.label')}
+                      info={t('settings.omp.modelRoles.role.image.desc')}
+                      settingsItem="omp.modelRoles.image"
+                      onChange={handleImageRoleChange}
+                    />
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </div>
+        </SettingsSection>
+
+        {/* Code & Inspection Tools */}
+        <SettingsSection
+          title={t('settings.tools.section.code.title')}
+          description={t('settings.tools.section.code.description')}
+          settingsItem="tools.section.code"
+        >
+          <div className={SETTINGS_OPTION_STACK_CLASS}>
+            {['todo.enabled', 'find.enabled', 'glob.enabled', 'grep.enabled', 'astGrep.enabled', 'astEdit.enabled', 'debug.enabled', 'launch.enabled'].map((id) => {
+              const s = availableById.get(id);
+              if (!s) return null;
+              return (
+                <React.Fragment key={id}>
+                  <OmpRowControl
+                    setting={s}
+                    value={ompForm[id] !== undefined ? ompForm[id] : s.value}
+                    disabled={ompLoading}
+                    onChange={(val) => void updateOmpSetting(id, val)}
+                  />
+                  {id === 'todo.enabled' && ompForm['todo.enabled'] !== false && todoOptions.length > 0 ? (
+                    <div className="ps-6 space-y-3">
+                      {todoOptions.map((opt) => (
+                        <OmpRowControl
+                          key={opt.id}
+                          setting={opt}
+                          value={ompForm[opt.id] !== undefined ? ompForm[opt.id] : opt.value}
+                          disabled={ompLoading}
+                          onChange={(val) => void updateOmpSetting(opt.id, val)}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {id === 'grep.enabled' && ompForm['grep.enabled'] !== false && grepOptions.length > 0 ? (
+                    <div className="ps-6 space-y-3">
+                      {grepOptions.map((opt) => (
+                        <OmpRowControl
+                          key={opt.id}
+                          setting={opt}
+                          value={ompForm[opt.id] !== undefined ? ompForm[opt.id] : opt.value}
+                          disabled={ompLoading}
+                          onChange={(val) => void updateOmpSetting(opt.id, val)}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </SettingsSection>
+
+        {/* Specialized & External Capabilities */}
+        <SettingsSection
+          title={t('settings.tools.section.specialized.title')}
+          description={t('settings.tools.section.specialized.description')}
+          settingsItem="tools.section.specialized"
+        >
+          <div className={SETTINGS_OPTION_STACK_CLASS}>
+            {['web_search.enabled', 'fetch.enabled', 'github.enabled', 'computer.enabled', 'ratchet.enabled', 'archive.enabled', 'checkpoint.enabled', 'vault.enabled', 'security.enabled', 'ask.enabled', 'out.enabled', 'speechgen.enabled', 'ida.enabled'].map((id) => {
+              const s = availableById.get(id);
+              if (!s) return null;
+              return (
+                <React.Fragment key={id}>
+                  <OmpRowControl
+                    setting={s}
+                    value={ompForm[id] !== undefined ? ompForm[id] : s.value}
+                    disabled={ompLoading}
+                    onChange={(val) => void updateOmpSetting(id, val)}
+                  />
+                  {id === 'computer.enabled' && ompForm['computer.enabled'] !== false && computerOptions.length > 0 ? (
+                    <div className="ps-6 space-y-3">
+                      {computerOptions.map((opt) => (
+                        <OmpRowControl
+                          key={opt.id}
+                          setting={opt}
+                          value={ompForm[opt.id] !== undefined ? ompForm[opt.id] : opt.value}
+                          disabled={ompLoading}
+                          onChange={(val) => void updateOmpSetting(opt.id, val)}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {id === 'github.enabled' && ompForm['github.enabled'] !== false && githubOptions.length > 0 ? (
+                    <div className="ps-6 space-y-3">
+                      {githubOptions.map((opt) => (
+                        <OmpRowControl
+                          key={opt.id}
+                          setting={opt}
+                          value={ompForm[opt.id] !== undefined ? ompForm[opt.id] : opt.value}
+                          disabled={ompLoading}
+                          onChange={(val) => void updateOmpSetting(opt.id, val)}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  {id === 'ida.enabled' && ompForm['ida.enabled'] !== false && idaOptions.length > 0 ? (
+                    <div className="ps-6 space-y-3">
+                      {idaOptions.map((opt) => (
+                        <OmpRowControl
+                          key={opt.id}
+                          setting={opt}
+                          value={ompForm[opt.id] !== undefined ? ompForm[opt.id] : opt.value}
+                          disabled={ompLoading}
+                          onChange={(val) => void updateOmpSetting(opt.id, val)}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </SettingsSection>
+      </div>
+    </SettingsPageLayout>
+  );
+};

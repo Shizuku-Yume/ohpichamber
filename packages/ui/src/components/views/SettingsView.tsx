@@ -25,6 +25,8 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { WebSearchPage } from '@/components/sections/websearch/WebSearchPage';
+import { ToolsPage } from '@/components/sections/tools/ToolsPage';
+import { MemoryPage } from '@/components/sections/memory/MemoryPage';
 import { OmpSettingsPage } from '@/components/sections/openchamber/OmpSettingsPage';
 import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
@@ -144,6 +146,8 @@ const pageOrder: SettingsPageSlug[] = [
   // 'agent' group
   'providers',
   'web-search',
+  'tools',
+  'memory',
   'omp',
   'behavior',
   'agents',
@@ -670,6 +674,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <GitPage />;
       case 'integrations':
         return <IntegrationsPage />;
+      case 'tools':
+        return <ToolsPage />;
+      case 'memory':
+        return <MemoryPage />;
       case 'routing':
         return <RoutingPage />;
       case 'extensions':

@@ -111,7 +111,7 @@ describe('native usage report rendering', () => {
     const pricedModel = {
       providerId: 'anthropic', modelId: 'claude-3-5-sonnet', variant: null, steps: 5,
       tokens: { input: 100, output: 50, reasoning: 0, cacheRead: 0, cacheWrite: 0, total: 150 },
-      cost: 0.05, pricing: { inputCostPerMillionTokens: 3, outputCostPerMillionTokens: 15 }, avgTtft: 500, avgTokensPerSecond: 30, errorRate: 0,
+      cost: 0.05, pricing: { inputPerMillionTokens: 3, outputPerMillionTokens: 15, cacheReadPerMillionTokens: null, cacheWritePerMillionTokens: null }, avgTtft: 500, avgTokensPerSecond: 30, errorRate: 0,
     };
     const unpricedModel = {
       providerId: 'CLIProxyAPI', modelId: 'gemini-3.8-flash', variant: null, steps: 5,
@@ -161,5 +161,41 @@ describe('native usage report rendering', () => {
     expect(html).toContain('anthropic');
     expect(html).toContain('CLIProxyAPI');
     expect(html).toContain('10%');
+  });
+
+  test('a single-provider report still shows TTFT, tok/s and error rate without a comparison', () => {
+    const onlyProvider = {
+      providerId: 'anthropic', steps: 10, failedRequests: 1, errorRate: 0.1,
+      tokens: report.tokens, cost: 0, pricing: null, avgTtft: 800, avgTokensPerSecond: 50, modelsCount: 1,
+    };
+    const reportSingle: UsageStats = {
+      ...report,
+      providers: [onlyProvider],
+      avgTtft: 800,
+      avgTokensPerSecond: 50,
+      errorRate: 0.1,
+    };
+    Object.assign(serverState, {
+      entries: { [key()]: { stats: reportSingle, loading: false, error: null, fetchedAt: 1000 } },
+    });
+    const html = render();
+    expect(html).not.toContain('Provider comparison');
+    expect(html).toMatch(/TTFT<\/span><span[^>]*>800\s?ms<\/span>/);
+    expect(html).toMatch(/Tok\/s<\/span><span[^>]*>50 tok\/s<\/span>/);
+    expect(html).toMatch(/Error rate<\/span><span[^>]*>10%<\/span>/);
+  });
+
+  test('report-wide metrics render dashes, not blanks, when the report has no performance data', () => {
+    Object.assign(serverState, {
+      entries: {
+        [key()]: {
+          stats: { ...report, providers: [], avgTtft: null, avgTokensPerSecond: null, errorRate: undefined },
+          loading: false, error: null, fetchedAt: 1000,
+        },
+      },
+    });
+    const html = render();
+    expect(html).toMatch(/TTFT<\/span><span[^>]*>—<\/span>/);
+    expect(html).toMatch(/Error rate<\/span><span[^>]*>—<\/span>/);
   });
 });

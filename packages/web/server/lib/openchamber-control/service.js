@@ -271,6 +271,9 @@ export const createOpenChamberControlService = (dependencies) => {
   // Delivers a dispatched session's result back to the session that asked
   // (`returnResult`); absent means the server cannot offer it.
   dispatchResults = null,
+  // Watches a pull request for a session and wakes the session on change
+  // (`pr.watch`); absent where pull request watches are not available.
+  prWatch = null,
   // Archive lives in OpenChamber's own store now.
   archiveStore = null,
   // Agent workflows (../workflows/runtime.js); absent where they are not
@@ -1025,6 +1028,17 @@ export const createOpenChamberControlService = (dependencies) => {
      },
      carry: Array.isArray(carry) ? carry : [],
     }, { contextSessionId: options.contextSessionId });
+   }
+   if (action === 'pr.watch' || action === 'pr.unwatch') {
+    if (!prWatch) throw new OpenChamberControlError('Pull request watches are not available on this server', 503);
+    // The watched session is the explicit one, else the calling session.
+    const explicitSessionID = asNonEmptyString(input.sessionId);
+    const sessionID = explicitSessionID || asNonEmptyString(options.contextSessionId);
+    if (action === 'pr.unwatch') return prWatch.unwatch(sessionID);
+    const directory = asNonEmptyString(input.directory)
+     || (explicitSessionID ? await resolveSessionDirectory(explicitSessionID) : null)
+     || asNonEmptyString(contextDirectory);
+    return prWatch.watch({ sessionID, directory, url: input.url });
    }
    if (action === 'session.link') {
     if (!sessionLinks) throw new OpenChamberControlError('Linking is not available on this server', 503);

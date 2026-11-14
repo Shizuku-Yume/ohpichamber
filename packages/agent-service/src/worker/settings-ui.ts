@@ -1,4 +1,8 @@
-import type { OmpSettingId, OmpSettingSurface } from '@openchamber/agent-contract';
+import {
+  parsePlacement,
+  type OmpSettingPlacement,
+} from '@openchamber/agent-contract';
+import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { cfgAdvisorEnabled } from '@oh-my-pi/pi-coding-agent/advisor/settings';
 import { cfgComposerPredictions } from '@oh-my-pi/pi-coding-agent/modes/settings';
 import { cfgPlanEnabled } from '@oh-my-pi/pi-coding-agent/plan-mode/settings';
@@ -6,263 +10,603 @@ import { cfgRetryUsageAwareFallback } from '@oh-my-pi/pi-coding-agent/session/se
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 /**
- * Where one OMP setting belongs on a GUI surface.
+ * Where each OMP setting belongs across GUI surfaces:
+ * - `page:section`: concept-owned placement on an existing OpenChamber page and section.
+ * - `engine`: long-tail settings rendered on the OMP Settings page.
+ * - `tui-only`: terminal presentation or terminal interaction.
+ * - `owned-by <settingsItem>`: an existing OpenChamber control already owns and writes the concept.
+ * - `boundary`: crosses the enterprise boundary (endpoint, key, relay, share, listener or telemetry). Configured in config.yml only; never rendered or written by a GUI route.
  *
- * The OMP settings page once rendered every allowlisted id through one type
- * switch, so a 157-row page mixed observable behaviour, terminal presentation,
- * concepts OpenChamber already owns and internal tuning knobs. The
- * classification is a static per-id table rather than a prefix rule: prefixes
- * (`tui.`, `task.`, `skills.`) each span several surfaces, and a new id has to
- * be placed deliberately instead of inheriting a neighbour's guess.
+ * Every TUI-visible setting from OMP's `orderedSettings()` is placed here.
+ * Untabbed settings default to `hidden` unless explicitly placed below.
  */
-type OmpSettingPlacement =
-  | { readonly surface: 'gui' }
-  | { readonly surface: 'tui-only' }
-  | { readonly surface: 'duplicate'; readonly owner: string }
-  | { readonly surface: 'advanced' };
+const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
+  // --- appearance (50) ---
+  'theme.dark': 'tui-only',
+  'theme.light': 'tui-only',
+  'symbolPreset': 'tui-only',
+  'colorBlindMode': 'tui-only',
+  'composer.shape': 'tui-only',
+  'composer.tokenRate': 'tui-only',
+  'statusLine.preset': 'tui-only',
+  'statusLine.separator': 'tui-only',
+  'statusLine.contextLine': 'tui-only',
+  'statusLine.sessionAccent': 'tui-only',
+  'statusLine.transparent': 'tui-only',
+  'statusLine.compactThinkingLevel': 'tui-only',
+  'statusLine.showHookStatus': 'tui-only',
+  'terminal.showImages': 'tui-only',
+  'images.autoResize': 'chat:images',
+  'images.blockImages': 'chat:images',
+  'tui.resizeScrollback': 'tui-only',
+  'tui.completeScrollback': 'tui-only',
+  'terminal.showProgress': 'tui-only',
+  'terminal.programStatus': 'tui-only',
+  'tui.textSizing': 'tui-only',
+  'tui.colorfulMarkdown': 'tui-only',
+  'tui.renderMermaid': 'tui-only',
+  'tui.renderSvg': 'tui-only',
+  'tui.autoGraph': 'tui-only',
+  'tui.reactions': 'tui-only',
+  'tui.codexResetFireworks': 'tui-only',
+  'tui.titleState': 'tui-only',
+  'tui.titleSpinner': 'tui-only',
+  'tui.spinnerInterval': 'tui-only',
+  'tui.maxFps': 'tui-only',
+  'tui.hyperlinks': 'tui-only',
+  'tui.mouse': 'tui-only',
+  'tui.tight': 'tui-only',
+  'display.shimmer': 'tui-only',
+  'tui.motion': 'tui-only',
+  'display.pinnedAgents': 'tui-only',
+  'display.subagentLivePreview': 'chat:display',
+  'display.smoothStreaming': 'tui-only',
+  'display.hideToolActivity': 'chat:display',
+  'display.showTokenUsage': 'chat:display',
+  'display.showTurnTime': 'chat:display',
+  'display.cacheMissMarker': 'chat:display',
+  'display.shellVisualization': 'tui-only',
+  'display.advisorCollapsedLines': 'chat:display',
+  'display.collapseCompacted': 'chat:display',
+  'showHardwareCursor': 'tui-only',
+  'tui.imeSafeCursor': 'tui-only',
+  'task.showResolvedModelBadge': 'tui-only',
+  'title.icons': 'tui-only',
 
-/** Terminal presentation, terminal interaction and TUI-only input aids. */
-const TUI_ONLY: readonly OmpSettingId[] = [
-  'cycleOrder',
-  'modelPresets',
-  'composer.predictions',
-  'composer.predictionAlternatives',
-  'display.shellVisualization',
-  'update.auto',
-  'extensionRenderers.transcriptPresenters',
-  'tui.colorfulMarkdown',
-  'tui.maxFps',
-  'tui.motion',
-  'tui.spinnerInterval',
-  'tui.renderSvg',
-  'tui.autoGraph',
-];
+  // --- interaction (61) ---
+  'autoResume': 'sessions:general',
+  'git.enabled': 'git:general',
+  'steeringMode': 'sessions:execution',
+  'followUpMode': 'sessions:execution',
+  'interruptMode': 'sessions:execution',
+  'btw.inject': 'chat:btw',
+  'tui.vimMode': 'tui-only',
+  'tui.vimModeDisplay': 'tui-only',
+  'loop.mode': 'sessions:execution',
+  'loop.conditionTimeoutMs': 'tui-only',
+  'composer.recallClearedDrafts': 'tui-only',
+  'doubleEscapeAction': 'tui-only',
+  'input.bareExitOnEmptySession': 'tui-only',
+  'input.bareSlashCommands': 'tui-only',
+  'treeFilterMode': 'tui-only',
+  'autocompleteMaxVisible': 'tui-only',
+  'spelling.typoDetection': 'tui-only',
+  'spelling.autocomplete': 'tui-only',
+  'composer.predictions': 'tui-only',
+  'composer.predictionAlternatives': 'tui-only',
+  'spelling.autocorrect': 'tui-only',
+  'emojiAutocomplete': 'tui-only',
+  'paste.largeMenuThreshold': 'tui-only',
+  'startup.quiet': 'tui-only',
+  'startup.showSplash': 'tui-only',
+  'startup.setupWizard': 'tui-only',
+  'startup.checkUpdate': 'tui-only',
+  'update.channel': 'tui-only',
+  'update.auto': 'tui-only',
+  'marketplace.autoUpdate': 'tui-only',
+  'startup.changelogMode': 'tui-only',
+  'session.worktreeScope': 'sessions:worktree',
+  'magicKeywords.enabled': 'chat:composer',
+  'magicKeywords.ultrathink': 'chat:composer',
+  'magicKeywords.chillax': 'chat:composer',
+  'magicKeywords.orchestrate': 'chat:composer',
+  'magicKeywords.workflow': 'chat:composer',
+  'magicKeywords.jevify': 'chat:composer',
+  'completion.notify': 'notifications:events',
+  'error.notify': 'notifications:events',
+  'ask.timeout': 'engine',
+  'ask.notify': 'notifications:events',
+  'recap.enabled': 'owned-by chat.session-recap',
+  'recap.idleSeconds': 'owned-by chat.session-recap',
+  'power.sleepPrevention': 'general:power',
+  'features.unexpectedStopDetection': 'engine',
+  'tools.approval': 'engine',
+  'tools.approvalMode': 'tui-only',
+  'tools.restrictedFolders': 'sessions:security',
+  'skills.registryUrl': 'boundary',
+  'stt.enabled': 'voice:stt',
+  'stt.submitTrigger': 'voice:stt',
+  'collab.relayUrl': 'boundary',
+  'collab.webUrl': 'boundary',
+  'collab.displayName': 'boundary',
+  'collab.autoStart': 'boundary',
+  'share.serverUrl': 'boundary',
+  'share.store': 'boundary',
+  'share.redactSecrets': 'boundary',
+  'stream.serverUrl': 'boundary',
+  'stream.redactPatterns': 'boundary',
 
-/**
- * Settings whose concept an OpenChamber control already owns. The owner is the
- * settings-item id of that control, so the OMP page can point at it instead of
- * offering a second authority for the same value.
- */
-const DUPLICATES: readonly (readonly [OmpSettingId, string])[] = [
-  ['enabledModels', 'providers.models'],
-  ['tui.renderMermaid', 'chat.mermaid-rendering'],
-  ['followUpMode', 'chat.follow-up-behavior'],
-  ['ask.notify', 'notifications.events'],
-  ['recap.enabled', 'chat.session-recap'],
-  ['recap.idleSeconds', 'chat.session-recap'],
-  ['tools.approvalMode', 'sessions.permission-default'],
-  ['suggestion.generator', 'chat.suggestion-generator'],
-];
+  // --- context (31) ---
+  'workspace.additionalDirectories': 'boundary',
+  'contextFiles.extra': 'boundary',
+  'contextPromotion.enabled': 'sessions:context',
+  'extendedContext': 'sessions:context',
+  'branchSummary.enabled': 'sessions:context',
+  'compaction.enabled': 'sessions:compaction',
+  'compaction.experimentalContextManagement': 'sessions:compaction',
+  'compaction.midTurnEnabled': 'sessions:compaction',
+  'compaction.methodOrder': 'sessions:compaction',
+  'compaction.thresholdPercent': 'sessions:compaction',
+  'compaction.thresholdTokens': 'sessions:compaction',
+  'compaction.handoffSaveToDisk': 'sessions:compaction',
+  'compaction.remoteStreamingV2Enabled': 'sessions:compaction',
+  'compaction.asyncEnabled': 'sessions:compaction',
+  'compaction.idleEnabled': 'sessions:compaction',
+  'compaction.idleThresholdTokens': 'sessions:compaction',
+  'compaction.idleTimeoutSeconds': 'sessions:compaction',
+  'compaction.supersedeReads': 'sessions:compaction',
+  'compaction.dropUseless': 'sessions:compaction',
+  'snapcompact.systemPrompt': 'engine',
+  'snapcompact.toolResults': 'engine',
+  'tools.format': 'engine',
+  'snapcompact.shape': 'engine',
+  'ttsr.enabled': 'engine',
+  'ttsr.judge': 'engine',
+  'ttsr.contextMode': 'engine',
+  'ttsr.interruptMode': 'engine',
+  'ttsr.repeatMode': 'engine',
+  'ttsr.repeatGap': 'engine',
+  'ttsr.builtinRules': 'engine',
+  'ttsr.disabledRules': 'engine',
 
-/**
- * Observable behaviour a GUI user acts on. `defaultThinkingLevel` is here
- * although the Defaults page renders it: the OMP page's registry owns only the
- * rows it draws, and the value belongs to the session-default controls.
- */
-const GUI: readonly OmpSettingId[] = [
-  'modelRoles',
-  'defaultThinkingLevel',
-  'retry.enabled',
-  'retry.maxRetries',
-  'retry.waitForUsageReset',
-  'retry.modelFallback',
-  'retry.fallbackOn',
-  'retry.usageAwareFallback',
-  'retry.usageReservePct',
-  'retry.usageReservePolicy',
-  'retry.fallbackRevertPolicy',
-  'compaction.enabled',
-  'compaction.thresholdPercent',
-  'compaction.thresholdTokens',
-  'compaction.autoContinue',
-  'compaction.idleEnabled',
-  'compaction.idleThresholdTokens',
-  'compaction.idleTimeoutSeconds',
-  'lsp.enabled',
-  'lsp.formatOnWrite',
-  'task.isolation.enabled',
-  'task.maxConcurrency',
-  'task.maxRecursionDepth',
-  'plan.enabled',
-  'plan.defaultOnStartup',
-  'plan.autosave',
-  'goal.enabled',
-  'skills.enabled',
-  'skills.enableSkillCommands',
-  'mcp.enableProjectConfig',
-];
+  // --- files (28) ---
+  'edit.mode': 'engine',
+  'edit.fuzzyMatch': 'engine',
+  'edit.fuzzyThreshold': 'engine',
+  'edit.streamingAbort': 'engine',
+  'edit.recoverInlineEdits': 'engine',
+  'edit.blockAutoGenerated': 'engine',
+  'edit.enforceSeenLines': 'engine',
+  'edit.blackbox.enabled': 'engine',
+  'edit.autoRepair.enabled': 'engine',
+  'readLineNumbers': 'engine',
+  'read.defaultLimit': 'engine',
+  'read.renderMarkdown': 'engine',
+  'read.toolResultPreview': 'engine',
+  'read.summarize.enabled': 'engine',
+  'read.summarize.prose': 'engine',
+  'read.summarize.minBodyLines': 'engine',
+  'read.summarize.minCommentLines': 'engine',
+  'read.summarize.minTotalLines': 'engine',
+  'read.summarize.unfoldUntil': 'engine',
+  'read.summarize.unfoldLimit': 'engine',
+  'lsp.enabled': 'engine',
+  'lsp.lazy': 'engine',
+  'lsp.shared': 'engine',
+  'lsp.formatOnWrite': 'engine',
+  'lsp.diagnosticsOnWrite': 'engine',
+  'lsp.diagnosticsOnEdit': 'engine',
+  'lsp.diagnosticsDeduplicate': 'engine',
+  'lsp.requestTimeout': 'engine',
 
-/**
- * Internal tuning knobs: values that shape how the agent spends tokens or
- * survives failure but that a GUI user does not choose between. Listed
- * explicitly so an id added to the allowlist has to be placed here or in one
- * of the three lists above instead of silently defaulting.
- */
-const ADVANCED: readonly OmpSettingId[] = [
-  'ask.enabled',
-  'ask.timeout',
-  'astEdit.enabled',
-  'astGrep.enabled',
-  'async.enabled',
-  'async.widgets',
-  'checkpoint.enabled',
-  'compaction.asyncEnabled',
-  'compaction.dropUseless',
-  'compaction.experimentalContextManagement',
-  'compaction.handoffSaveToDisk',
-  'compaction.keepRecentTokens',
-  'compaction.methodOrder',
-  'compaction.midTurnEnabled',
-  'compaction.modelThresholds',
-  'compaction.modelThresholdsEnabled',
-  'compaction.remoteStreamingV2Enabled',
-  'compaction.reserveTokens',
-  'compaction.supersedeReads',
-  'compaction.v2RetainedMessageBudget',
-  'glob.enabled',
-  'goal.continuationModes',
-  'grep.enabled',
-  'interruptMode',
-  'lsp.diagnosticsDeduplicate',
-  'lsp.diagnosticsOnEdit',
-  'lsp.diagnosticsOnWrite',
-  'lsp.lazy',
-  'lsp.shared',
-  'mcp.notificationDebounceMs',
-  'mcp.notifications',
-  'mcp.renderMarkdownResults',
-  'mcp.startupTimeoutMs',
-  'modelRoleStorage',
-  'out.enabled',
-  'providers.openaiResponsesWebsockets',
-  'retry.baseDelayMs',
-  'retry.fallbackChains',
-  'retry.maxDelayMs',
-  'skills.enableAgentsProject',
-  'skills.enableAgentsUser',
-  'skills.enableClaudeProject',
-  'skills.enableClaudeUser',
-  'skills.enableCodexUser',
-  'skills.enablePiProject',
-  'skills.enablePiUser',
-  'skills.ignoredSkills',
-  'skills.includeSkills',
-  'skills.manualSkills',
-  'spotlight.experiment.enabled',
-  'spotlight.experiment.holdout',
-  'spotlight.experiment.scoreFree',
-  'spotlight.experiment.tools',
-  'spotlight.model',
-  'spotlight.thinking',
-  'spotlight.timeoutMs',
-  'spotlight.url',
-  'steeringMode',
-  'task.agentAdvisor',
-  'task.agentCompactionThresholdOverrides',
-  'task.agentIdleTtlMs',
-  'task.agentModelOverrides',
-  'task.agentPrewalk',
-  'task.agentServiceTierOverrides',
-  'task.batch',
-  'task.completionProbe',
-  'task.disabledAgents',
-  'task.eager',
-  'task.enableEffort',
-  'task.enableLsp',
-  'task.isolation.apply',
-  'task.isolation.commits',
-  'task.isolation.merge',
-  'task.maxEffort',
-  'task.maxRuntimeMs',
-  'task.prewalk',
-  'task.softRequestBudget',
-  'task.softRequestBudgetNotice',
-  'task.speculativeLaunch',
-  'task.workerThreads',
-  'thinkingBudgets.high',
-  'thinkingBudgets.low',
-  'thinkingBudgets.max',
-  'thinkingBudgets.medium',
-  'thinkingBudgets.minimal',
-  'thinkingBudgets.xhigh',
-  'tier.advisor',
-  'tier.anthropic',
-  'tier.google',
-  'tier.openai',
-  'tier.subagent',
-  'tools.abortOnFabricatedResult',
-  'tools.approval',
-  'tools.artifactHeadBytes',
-  'tools.artifactMaxBytes',
-  'tools.artifactSpillThreshold',
-  'tools.artifactTailBytes',
-  'tools.artifactTailLines',
-  'tools.intentTracing',
-  'tools.maxTimeout',
-  'tools.outputMaxColumns',
-  'tools.speculativeExecution.enabled',
-  'tools.speculativeExecution.maxInFlight',
-  'tools.xdev',
-  'tools.xdevDocs',
-  'tools.xdevInlineDevices',
-  'tools.xdevNotices',
-];
+  // --- shell (18) ---
+  'bash.enabled': 'engine',
+  'bash.allowCompoundCommands': 'engine',
+  'bash.autoBackground.enabled': 'engine',
+  'bash.gitGuard': 'engine',
+  'bash.patterns': 'engine',
+  'bashInterceptor.enabled': 'engine',
+  'bash.direnv': 'engine',
+  'bash.direnvLoadTimeoutMs': 'engine',
+  'shellMinimizer.enabled': 'engine',
+  'shellMinimizer.sourceOutlineLevel': 'engine',
+  'eval.py': 'engine',
+  'eval.js': 'engine',
+  'eval.autoProvision': 'engine',
+  'eval.tools.enabled': 'engine',
+  'eval.workpool.freshAgents': 'engine',
+  'eval.autoBackground.enabled': 'engine',
+  'python.kernelMode': 'engine',
+  'python.interpreter': 'boundary',
 
-function buildTable(): Readonly<Record<OmpSettingId, OmpSettingPlacement>> {
+  // --- memory (31) ---
+  'memory.backend': 'memory:backend',
+  'sharpshooter.model': 'memory:backend',
+  'autolearn.enabled': 'memory:backend',
+  'autolearn.autoContinue': 'memory:backend',
+  'mnemopi.dbPath': 'boundary',
+  'mnemopi.bank': 'memory:backend',
+  'mnemopi.scoping': 'memory:backend',
+  'mnemopi.embeddingVariant': 'memory:backend',
+  'mnemopi.autoRecall': 'memory:backend',
+  'mnemopi.autoRetain': 'memory:backend',
+  'mnemopi.polyphonicRecall': 'memory:backend',
+  'mnemopi.enhancedRecall': 'memory:backend',
+  'mnemopi.proactiveLinking': 'memory:backend',
+  'mnemopi.noEmbeddings': 'memory:backend',
+  'mnemopi.embeddingModel': 'memory:backend',
+  'mnemopi.embeddingApiUrl': 'boundary',
+  'mnemopi.embeddingApiKey': 'boundary',
+  'mnemopi.llmMode': 'memory:backend',
+  'mnemopi.llmBaseUrl': 'boundary',
+  'mnemopi.llmApiKey': 'boundary',
+  'mnemopi.llmModel': 'memory:backend',
+  'hindsight.apiUrl': 'boundary',
+  'hindsight.apiToken': 'boundary',
+  'hindsight.bankId': 'memory:backend',
+  'hindsight.scoping': 'memory:backend',
+  'hindsight.globalScope': 'memory:backend',
+  'hindsight.autoRecall': 'memory:backend',
+  'hindsight.autoRetain': 'memory:backend',
+  'hindsight.retainMode': 'memory:backend',
+  'hindsight.mentalModelsEnabled': 'memory:backend',
+  'hindsight.mentalModelAutoSeed': 'memory:backend',
+
+  // --- model (65) ---
+  'defaultThinkingLevel': 'sessions:defaults',
+  'modelRoleStorage': 'behavior:prompt',
+  'personality': 'behavior:prompt',
+  'inlineToolDescriptors': 'behavior:prompt',
+  'includeModelInPrompt': 'behavior:prompt',
+  'includeWorkspaceTree': 'behavior:prompt',
+  'skillful': 'behavior:prompt',
+  'prewalk.enabled': 'agents:prewalk',
+  'prewalk.from': 'agents:prewalk',
+  'prewalk.into': 'agents:prewalk',
+  'prewalk.auto': 'agents:prewalk',
+  'prewalk.autoTarget': 'agents:prewalk',
+  'images.describeForTextModels': 'chat:images',
+  'images.urls.enabled': 'boundary',
+  'images.urls.backends': 'boundary',
+  'images.urls.command': 'boundary',
+  'images.urls.publicBaseUrl': 'boundary',
+  'images.urls.ttlHours': 'boundary',
+  'images.urls.bindHost': 'boundary',
+  'images.urls.sshTarget': 'boundary',
+  'images.urls.sshRemotePort': 'boundary',
+  'hideThinkingBlock': 'chat:thinking',
+  'expandThinkingBlocks': 'chat:thinking',
+  'proseOnlyThinking': 'chat:thinking',
+  'omitThinking': 'chat:thinking',
+  'externalThinking': 'chat:thinking',
+  'model.loopGuard.enabled': 'engine',
+  'model.loopGuard.checkAssistantContent': 'engine',
+  'model.loopGuard.toolCallReminder': 'engine',
+  'model.toolCallLoopGuard.enabled': 'engine',
+  'model.toolCallLoopGuard.threshold': 'engine',
+  'model.toolCallLoopGuard.exemptTools': 'engine',
+  'providers.autoThinkingMaxEffort': 'engine',
+  'temperature': 'sessions:sampling',
+  'topP': 'sessions:sampling',
+  'topK': 'sessions:sampling',
+  'minP': 'sessions:sampling',
+  'presencePenalty': 'sessions:sampling',
+  'repetitionPenalty': 'sessions:sampling',
+  'textVerbosity': 'sessions:sampling',
+  'tier.openai': 'providers:tiers',
+  'tier.anthropic': 'providers:tiers',
+  'tier.google': 'providers:tiers',
+  'tier.subagent': 'providers:tiers',
+  'tier.advisor': 'providers:tiers',
+  'retry.maxRetries': 'sessions:retry',
+  'retry.maxDelayMs': 'sessions:retry',
+  'retry.waitForUsageReset': 'sessions:retry',
+  'retry.modelFallback': 'sessions:retry',
+  'retry.fallbackOn': 'sessions:retry',
+  'retry.rateLimitWalksChain': 'sessions:retry',
+  'retry.usageAwareFallback': 'sessions:retry',
+  'retry.usageReservePct': 'sessions:retry',
+  'retry.usageReservePolicy': 'sessions:retry',
+  'retry.fallbackChains': 'sessions:retry',
+  'retry.fallbackRevertPolicy': 'sessions:retry',
+  'providers.anthropic.serverSideFallback': 'sessions:retry',
+  'advisor.enabled': 'agents:advisor',
+  'advisor.syncBacklog': 'agents:advisor',
+  'advisor.immuneTurns': 'agents:advisor',
+  'advisor.continueSeverity': 'agents:advisor',
+  'advisor.reviewMode': 'agents:advisor',
+  'advisor.reviewInterval': 'agents:advisor',
+  'advisor.maxNotesPerUpdate': 'agents:advisor',
+  'advisor.evictStaleResults': 'agents:advisor',
+
+  // --- tasks (45) ---
+  'task.isolation.enabled': 'sessions:isolation',
+  'task.isolation.apply': 'sessions:isolation',
+  'task.isolation.merge': 'sessions:isolation',
+  'task.isolation.commits': 'sessions:isolation',
+  'isolation.backend': 'sessions:worktree',
+  'worktree.clone': 'sessions:worktree',
+  'worktree.cleanSource': 'sessions:worktree',
+  'worktree.onStart': 'sessions:worktree',
+  'worktree.onExit': 'sessions:worktree',
+  'worktree.base': 'boundary',
+  'ovnfs.path': 'boundary',
+  'task.eager': 'agents:subagents',
+  'task.batch': 'agents:subagents',
+  'task.file': 'agents:subagents',
+  'task.structured': 'agents:subagents',
+  'task.speculativeLaunch': 'agents:subagents',
+  'task.enableEffort': 'agents:subagents',
+  'task.perCallModel': 'agents:subagents',
+  'task.perCallModelAllow': 'agents:subagents',
+  'task.maxConcurrency': 'engine',
+  'task.workerThreads': 'agents:subagents',
+  'task.enableLsp': 'agents:subagents',
+  'task.maxRecursionDepth': 'engine',
+  'task.maxRuntimeMs': 'agents:subagents',
+  'task.completionProbe': 'agents:subagents',
+  'task.agentIdleTtlMs': 'agents:subagents',
+  'task.softRequestBudget': 'agents:subagents',
+  'task.softRequestBudgetNotice': 'agents:subagents',
+  'task.maxEffort': 'agents:subagents',
+  'task.prewalk': 'agents:subagents',
+  'plan.enabled': 'sessions:plan',
+  'plan.defaultOnStartup': 'sessions:plan',
+  'plan.autosave': 'sessions:plan',
+  'plan.autosaveDir': 'boundary',
+  'goal.enabled': 'sessions:plan',
+  'goal.statusInFooter': 'tui-only',
+  'goal.continuationModes': 'sessions:plan',
+  'title.generator': 'sessions:title',
+  'title.refreshOnReplan': 'sessions:title',
+  'title.refreshAfterPrompts': 'sessions:title',
+  'skills.enableSkillCommands': 'engine',
+  'commands.enableClaudeUser': 'commands:catalog',
+  'commands.enableClaudeProject': 'commands:catalog',
+  'commands.enableOpencodeUser': 'commands:catalog',
+  'commands.enableOpencodeProject': 'commands:catalog',
+
+  // --- providers (41) ---
+  'providers.maxInFlightRequests': 'providers:protocol',
+  'providers.ollama-cloud.maxConcurrency': 'providers:protocol',
+  'providers.webSearchTimeoutSeconds': 'web-search:providers',
+  'providers.antigravityEndpoint': 'boundary',
+  'providers.fireworksTier': 'providers:protocol',
+  'providers.tinyModelDevice': 'providers:protocol',
+  'providers.tinyModelDtype': 'providers:protocol',
+  'providers.kimiApiFormat': 'providers:protocol',
+  'providers.openaiWebsockets': 'providers:protocol',
+  'providers.openaiResponsesWebsockets': 'providers:protocol',
+  'providers.openaiLiveSteering': 'providers:protocol',
+  'providers.muse-code.storeResponses': 'providers:protocol',
+  'providers.openai-codex.daybreak': 'providers:protocol',
+  'providers.cacheRetention': 'providers:protocol',
+  'providers.cacheWarming': 'providers:protocol',
+  'providers.streamFirstEventTimeoutSeconds': 'providers:protocol',
+  'providers.streamIdleTimeoutSeconds': 'providers:protocol',
+  'providers.openrouterVariant': 'providers:protocol',
+  'provider.appendOnlyContext': 'providers:protocol',
+  'telemetry.otlpExportEnabled': 'boundary',
+  'secrets.enabled': 'providers:privacy',
+  'exa.enabled': 'web-search:providers',
+  'exa.searchDelayMs': 'web-search:providers',
+  'searxng.endpoint': 'boundary',
+  'codexResets.autoRedeem': 'usage:resets',
+  'codexResets.minBlockedMinutes': 'usage:resets',
+  'codexResets.keepCredits': 'usage:resets',
+  'codexResets.salvageHorizonHours': 'usage:resets',
+  'claudeResets.autoRedeem': 'usage:resets',
+  'claudeResets.minBlockedMinutes': 'usage:resets',
+  'claudeResets.keepCredits': 'usage:resets',
+  'claudeResets.salvageHorizonHours': 'usage:resets',
+  'live.voice': 'voice:general',
+  'tts.localVoice': 'voice:general',
+  'tts.localSpeed': 'voice:general',
+  'speech.enabled': 'voice:general',
+  'speech.mode': 'voice:general',
+  'speech.enhanced': 'voice:general',
+  'speech.voice': 'voice:general',
+  'speech.speed': 'voice:general',
+  'providers.fetch': 'voice:general',
+
+  // --- tools (80) ---
+  'tools.artifactSpillThreshold': 'engine',
+  'tools.artifactTailBytes': 'engine',
+  'tools.artifactHeadBytes': 'engine',
+  'tools.outputMaxColumns': 'engine',
+  'tools.artifactTailLines': 'engine',
+  'tools.artifactMaxBytes': 'engine',
+  'todo.enabled': 'tools:available',
+  'todo.reminders': 'tools:todo',
+  'todo.remindersMax': 'tools:todo',
+  'todo.eager': 'tools:todo',
+  'tasks.todoClearDelay': 'tools:todo',
+  'glob.enabled': 'tools:available',
+  'grep.enabled': 'tools:available',
+  'grep.contextBefore': 'tools:grep',
+  'grep.contextAfter': 'tools:grep',
+  'astGrep.enabled': 'tools:available',
+  'astEdit.enabled': 'tools:available',
+  'find.enabled': 'tools:available',
+  'debug.enabled': 'tools:available',
+  'launch.enabled': 'tools:available',
+  'speechgen.enabled': 'tools:available',
+  'generate_image.enabled': 'tools:available',
+  'computer.enabled': 'tools:available',
+  'ratchet.enabled': 'tools:available',
+  'archive.enabled': 'tools:available',
+  'computer.display': 'tools:computer',
+  'computer.maxWidth': 'tools:computer',
+  'computer.maxHeight': 'tools:computer',
+  'computer.backgroundFallback': 'tools:computer',
+  'images.questionTimeoutMs': 'engine',
+  'checkpoint.enabled': 'tools:available',
+  'fetch.enabled': 'tools:available',
+  'vault.enabled': 'tools:available',
+  'github.enabled': 'tools:available',
+  'github.cache.enabled': 'tools:github',
+  'github.cache.softTtlSec': 'tools:github',
+  'github.cache.hardTtlSec': 'tools:github',
+  'web_search.enabled': 'tools:available',
+  'security.enabled': 'tools:available',
+  'ask.enabled': 'tools:available',
+  'out.enabled': 'tools:available',
+  'tools.intentTracing': 'engine',
+  'tools.abortOnFabricatedResult': 'engine',
+  'tools.speculativeExecution.enabled': 'engine',
+  'tools.speculativeExecution.maxInFlight': 'engine',
+  'tools.maxTimeout': 'engine',
+  'async.enabled': 'engine',
+  'async.printWake': 'engine',
+  'async.widgets': 'engine',
+  'tools.xdev': 'engine',
+  'tools.xdevDocs': 'engine',
+  'tools.xdevInlineDevices': 'engine',
+  'tools.xdevNotices': 'engine',
+  'dev.autoqa': 'engine',
+  'dev.autoqaPush.endpoint': 'boundary',
+  'extensionHandlers.toolCallTimeoutMs': 'engine',
+  'extensionHandlers.modeControl': 'engine',
+  'extensionRenderers.assistantText': 'engine',
+  'extensionRenderers.transcriptPresenters': 'tui-only',
+  'browser.enabled': 'tools:available',
+  'browser.cdpUrl': 'boundary',
+  'browser.relay': 'boundary',
+  'browser.relayUrl': 'boundary',
+  'browser.headless': 'tools:browser',
+  'browser.cmux': 'tools:browser',
+  'browser.tern': 'tools:browser',
+  'browser.freezeOnTurnEnd': 'tools:browser',
+  'browser.idleCloseSec': 'tools:browser',
+  'browser.screenshotDir': 'boundary',
+  'ida.enabled': 'tools:available',
+  'ida.python': 'tools:ida',
+  'ida.installDir': 'boundary',
+  'ida.maxOpen': 'tools:ida',
+  'ida.idleCloseSec': 'tools:ida',
+  'mcp.enableProjectConfig': 'engine',
+  'mcp.startupTimeoutMs': 'engine',
+  'mcp.renderMarkdownResults': 'engine',
+  'mcp.notifications': 'engine',
+  'mcp.notificationDebounceMs': 'engine',
+  'spotlight.experiment.enabled': 'engine',
+
+  // --- Untabbed settings explicitly placed ---
+  'modelRoles': 'engine',
+  'cycleOrder': 'tui-only',
+  'modelPresets': 'tui-only',
+  'suggestion.generator': 'owned-by chat.suggestion-generator',
+};
+
+function buildTable(): Readonly<Record<string, OmpSettingPlacement>> {
   const table: Record<string, OmpSettingPlacement> = {};
-  for (const id of GUI) table[id] = { surface: 'gui' };
-  for (const id of TUI_ONLY) table[id] = { surface: 'tui-only' };
-  for (const [id, owner] of DUPLICATES) table[id] = { surface: 'duplicate', owner };
-  for (const id of ADVANCED) table[id] = { surface: 'advanced' };
-  return table as Readonly<Record<OmpSettingId, OmpSettingPlacement>>;
+  for (const [id, raw] of Object.entries(RAW_PLACEMENTS)) {
+    table[id] = parsePlacement(raw);
+  }
+  return table;
 }
 
 /**
- * The one classification table. An id the lists above do not place is a
- * programming error, so `presentOmpSetting` asserts instead of returning
- * `undefined`; the surface-classification test walks every `OMP_SETTING_IDS`
- * entry through this table.
+ * The placement table mapping OMP setting IDs to their placement.
+ * Untabbed IDs default to `{ type: 'hidden' }` unless listed above.
  */
-export const OMP_SETTING_PLACEMENTS: Readonly<Record<OmpSettingId, OmpSettingPlacement>> = buildTable();
+export const OMP_SETTING_PLACEMENTS: Readonly<Record<string, OmpSettingPlacement>> = buildTable();
 
-
-/** Every owner named by the table, so a test can check they are real controls. */
-export const OMP_SETTING_OWNER_IDS: readonly string[] = [...new Set(DUPLICATES.map(([, owner]) => owner))];
+/** Pages that have GUI controls rendering their OMP settings. */
+const GUI_WRITTEN_PAGES: Readonly<Record<string, true>> = {
+  sessions: true,
+  chat: true,
+  behavior: true,
+  agents: true,
+  tools: true,
+  memory: true,
+};
 
 /**
- * OMP gates six of its own panel rows on a condition over the live settings.
- * Its `CONDITIONS` map is module-private and reads the process-wide
- * `Settings.instance`, so the same predicates are re-evaluated here against the
- * settings handle this worker owns. The platform- and terminal-derived
- * conditions gate no allowlisted id and are intentionally absent; an unknown
- * name therefore keeps the row rather than hiding a real setting.
+ * Whether an engine setting has a working GUI control:
+ * booleans become toggles, numbers become steppers, strings/enums/options become chips/selects.
+ * Complex non-primitive settings (Record, Array) with no declared options or enum values
+ * cannot be edited via generic controls and would render as empty chip groups; they stay in config.yml.
+ */
+function isRenderableEngineSetting(setting: {
+  readonly id: string;
+  readonly type: string;
+  readonly options?: readonly unknown[];
+  readonly enumValues?: readonly unknown[];
+}): boolean {
+  if (setting.id === 'modelRoles') return true;
+  if (setting.type === 'boolean' || setting.type === 'number' || setting.type === 'string') return true;
+  const choices = setting.options ?? setting.enumValues ?? [];
+  return choices.length > 0;
+}
+function extractChoices(s: object): { options?: readonly unknown[]; enumValues?: readonly unknown[] } {
+  const options = 'options' in s && Array.isArray(s.options) ? s.options : undefined;
+  const enumValues = 'enumValues' in s && Array.isArray(s.enumValues) ? s.enumValues : undefined;
+  return { options, enumValues };
+}
+
+const ORDERED_SETTINGS_MAP: ReadonlyMap<string, { type: string; options?: readonly unknown[]; enumValues?: readonly unknown[] }> = new Map(
+  orderedSettings().map((s) => {
+    const { options, enumValues } = extractChoices(s);
+    return [s.id, { type: s.type, options, enumValues }];
+  }),
+);
+/** The ids the OMP route returns and accepts: rows a GUI owner draws or writes. Every other id is omitted and refused. */
+export const OMP_SETTING_EXPOSED_IDS: ReadonlySet<string> = new Set(
+  Object.entries(OMP_SETTING_PLACEMENTS)
+    .filter(([id, placement]) => {
+      if (placement.type === 'owned-by') return true;
+      if (placement.type === 'page') {
+        if (GUI_WRITTEN_PAGES[placement.page] !== true) return false;
+        if (id === 'defaultThinkingLevel' || id === 'retry.fallbackChains') return true;
+        const desc = ORDERED_SETTINGS_MAP.get(id);
+        return desc ? isRenderableEngineSetting({ id, ...desc }) : false;
+      }
+      if (placement.type === 'engine') {
+        const desc = ORDERED_SETTINGS_MAP.get(id);
+        return desc ? isRenderableEngineSetting({ id, ...desc }) : false;
+      }
+      return false;
+    })
+    .map(([id]) => id),
+);
+
+/** Every owner named by an owned-by placement, so a test can check they are real controls. */
+export const OMP_SETTING_OWNER_IDS: readonly string[] = [
+  ...new Set(
+    Object.values(OMP_SETTING_PLACEMENTS)
+      .flatMap((p) => (p.type === 'owned-by' ? [p.owner] : []))
+  ),
+];
+
+/**
+ * OMP gates several of its panel rows on conditions over live settings.
+ * Unknown condition names leave the row visible.
  */
 const CONDITIONS: Readonly<Record<string, (settings: Settings) => boolean>> = {
   advisorEnabled: (settings) => cfgAdvisorEnabled.get(settings) === true,
   composerPredictionsEnabled: (settings) => cfgComposerPredictions.get(settings) === true,
   usageAwareFallbackEnabled: (settings) => cfgRetryUsageAwareFallback.get(settings) === true,
   planModeEnabled: (settings) => cfgPlanEnabled.get(settings) === true,
+  planAutosaveEnabled: (settings) => cfgPlanEnabled.get(settings) === true,
 };
 
 export interface OmpSettingPresentation {
-  readonly surface: OmpSettingSurface;
-  readonly owner?: string;
+  readonly placement: OmpSettingPlacement;
   readonly condition?: string;
   readonly conditionActive?: boolean;
 }
 
 /**
- * Placement plus OMP's own condition state for one descriptor. A condition the
- * pinned package named but this module does not know leaves the row visible:
- * hiding a setting is a user-visible loss, while showing one an unnamed
- * condition would keep only costs a row.
+ * Placement plus OMP's own condition state for one descriptor.
  */
-export function presentOmpSetting(id: OmpSettingId, condition: string | undefined, settings: Settings): OmpSettingPresentation {
-  const placement = OMP_SETTING_PLACEMENTS[id];
-  if (placement === undefined) throw new Error(`OMP setting ${id} has no GUI surface classification`);
-  const presentation: OmpSettingPresentation = placement.surface === 'duplicate'
-    ? { surface: 'duplicate', owner: placement.owner }
-    : { surface: placement.surface };
+export function presentOmpSetting(
+  id: string,
+  condition: string | undefined,
+  settings: Settings,
+): OmpSettingPresentation {
+  const placement = OMP_SETTING_PLACEMENTS[id] ?? { type: 'hidden' };
+  const presentation: OmpSettingPresentation = { placement };
   if (condition === undefined) return presentation;
   const evaluate = Object.hasOwn(CONDITIONS, condition) ? CONDITIONS[condition] : undefined;
   return {

@@ -6,6 +6,12 @@ import type { MCPConfigurationState, MCPConfigureRequest, MCPCatalogState, MCPWo
 import { CatalogCoordinator, type CatalogWorker } from './catalog.ts';
 
 const server = { serverId: 'tools', label: 'Workspace tools', enabled: true, transport: { type: 'stdio' as const, command: 'workspace-tools', args: [] } };
+const connectedProbe = async (_workspaceId: string, serverId: string, configuration: MCPConfigurationState) => ({
+  workspaceId: 'workspace', serverId, persistedRevision: configuration.persistedRevision, status: 'connected' as const, toolCount: 1,
+});
+const failedProbe = (code: string) => async (_workspaceId: string, serverId: string, configuration: MCPConfigurationState) => ({
+  workspaceId: 'workspace', serverId, persistedRevision: configuration.persistedRevision, status: 'failed' as const, error: { code, detail: 'Probe failed', retryable: true },
+});
 
 function workerFixture(rootSessionId: string, controls: { fail?: boolean; beforeReconnect?: () => Promise<void> } = {}) {
   const identity = { rootSessionId, workspaceId: 'workspace', workerGeneration: `generation-${rootSessionId}` };
@@ -45,7 +51,7 @@ test('workspace MCP config is durable without sessions and rejects concurrent st
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-cas-'));
   let stored: MCPConfigurationState | null = null;
   let writes = 0;
-  const options = { readMcpConfiguration: async () => stored, commitMcp: async (_workspaceId: string, _request: MCPConfigureRequest, next: MCPConfigurationState) => { writes++; stored = next; } };
+  const options = { readMcpConfiguration: async () => stored, probeMcp: connectedProbe, commitMcp: async (_workspaceId: string, _request: MCPConfigureRequest, next: MCPConfigurationState) => { writes++; stored = next; } };
   try {
     const coordinator = new CatalogCoordinator(directory, options);
     await coordinator.initialize();
@@ -68,6 +74,7 @@ test('pending workspace OAuth releases coordinator for cancellation and rejects 
   let stored: MCPConfigurationState | null = null;
   const coordinator = new CatalogCoordinator(directory, {
     readMcpConfiguration: async () => stored,
+    probeMcp: connectedProbe,
     commitMcp: async (_workspaceId, _request, next) => { stored = next; },
   });
   const entered = Promise.withResolvers<void>();
@@ -103,7 +110,7 @@ test('pending workspace OAuth releases coordinator for cancellation and rejects 
 
 test('workspace MCP failed persistence does not advance revision or replace current configuration', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-write-failure-'));
-  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => null, commitMcp: async () => { throw new Error('Disk unavailable'); } });
+  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => null, probeMcp: connectedProbe, commitMcp: async () => { throw new Error('Disk unavailable'); } });
   try {
     await coordinator.initialize();
     await coordinator.registerWorkspace('workspace', 'agent');
@@ -115,7 +122,7 @@ test('workspace MCP failed persistence does not advance revision or replace curr
 test('workspace apply and exact-server reconnect retain partial failures and last good sibling catalogs', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-partial-'));
   let stored: MCPConfigurationState | null = null;
-  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, commitMcp: async (_id, _input, next) => { stored = next; } });
+  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, probeMcp: connectedProbe, commitMcp: async (_id, _input, next) => { stored = next; } });
   const control = { fail: false };
   const first = workerFixture('first');
   const second = workerFixture('second', control);
@@ -127,7 +134,7 @@ test('workspace apply and exact-server reconnect retain partial failures and las
     await coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } });
     control.fail = true;
     await expect(coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '1', config: { servers: [server, { ...server, serverId: 'other' }] } })).rejects.toMatchObject({ code: 'MCP_APPLY_FAILED', details: { result: { status: 'partial', configuration: { persistedRevision: '2' }, workers: [{ outcome: 'applied', revisions: { appliedRevision: '2' } }, { outcome: 'failed', revisions: { appliedRevision: '1' } }] } } });
-    await expect(coordinator.reconnectWorkspaceMcp('workspace', 'tools', { persistedRevision: '2' }, async () => { throw new Error('Must use live roots'); })).rejects.toMatchObject({ code: 'MCP_RECONNECT_FAILED', details: { result: { status: 'partial' } } });
+    await expect(coordinator.reconnectWorkspaceMcp('workspace', 'tools', { persistedRevision: '2' })).rejects.toMatchObject({ code: 'MCP_RECONNECT_FAILED', details: { result: { status: 'partial' } } });
     expect(first.reconnects).toEqual(['tools']);
     expect(second.reconnects).toEqual(['tools']);
     expect((await coordinator.readMcp('second')).workerCatalog.appliedRevision).toBe('1');
@@ -137,12 +144,12 @@ test('workspace apply and exact-server reconnect retain partial failures and las
 test('no-worker reconnect exposes a failed real probe separately from runtime application', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-probe-'));
   let stored: MCPConfigurationState | null = null;
-  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, commitMcp: async (_id, _input, next) => { stored = next; } });
+  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, probeMcp: failedProbe('MCP_RECONNECT_FAILED'), commitMcp: async (_id, _input, next) => { stored = next; } });
   try {
     await coordinator.initialize();
     await coordinator.registerWorkspace('workspace', 'agent');
-    await coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } });
-    const result = await coordinator.reconnectWorkspaceMcp('workspace', 'tools', { persistedRevision: '1' }, async configuration => ({ workspaceId: 'workspace', serverId: 'tools', persistedRevision: configuration.persistedRevision, status: 'failed', error: { code: 'MCP_RECONNECT_FAILED', detail: 'Connection refused', retryable: true } }));
+    await expect(coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } })).rejects.toMatchObject({ code: 'MCP_APPLY_FAILED' });
+    const result = await coordinator.reconnectWorkspaceMcp('workspace', 'tools', { persistedRevision: '1' });
     expect(result).toMatchObject({ status: 'no-active-workers', workers: [], probe: { status: 'failed' } });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
@@ -150,7 +157,7 @@ test('no-worker reconnect exposes a failed real probe separately from runtime ap
 test('reconnect finalizes earlier retired generations and holds new worker admission until fanout settles', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-retirement-'));
   let stored: MCPConfigurationState | null = null;
-  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, commitMcp: async (_id, _input, next) => { stored = next; } });
+  const coordinator = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, probeMcp: connectedProbe, commitMcp: async (_id, _input, next) => { stored = next; } });
   const secondStarted = Promise.withResolvers<void>();
   const releaseSecond = Promise.withResolvers<void>();
   const first = workerFixture('first');
@@ -161,7 +168,7 @@ test('reconnect finalizes earlier retired generations and holds new worker admis
     await coordinator.register(first.worker);
     await coordinator.register(second.worker);
     await coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } });
-    const reconnect = coordinator.reconnectWorkspaceMcp('workspace', 'tools', { persistedRevision: '1' }, async () => { throw new Error('A live root remains'); });
+    const reconnect = coordinator.reconnectWorkspaceMcp('workspace', 'tools', { persistedRevision: '1' });
     await secondStarted.promise;
     let admitted = false;
     const admission = coordinator.admit({ workspaceId: 'workspace', agentDirectoryId: 'agent', catalogRevision: '0' }, async () => ({ workspace: '0', agent: '0' }), async bootstrap => { admitted = true; return bootstrap; });
@@ -179,6 +186,7 @@ test('the generation guard keeps a late registration from overwriting a newer on
   const directory = await mkdtemp(join(tmpdir(), 'catalog-generation-guard-'));
   const coordinator = new CatalogCoordinator(directory, {
     readMcpConfiguration: async () => null,
+    probeMcp: connectedProbe,
     commitMcp: async () => { throw new Error('Unrelated MCP mutation'); },
   });
   await coordinator.initialize();
@@ -249,6 +257,7 @@ test('configureWorkspaceMcp reports applied, saved-needs-auth, and saved-not-con
   let stored: MCPConfigurationState | null = null;
   const coordinator = new CatalogCoordinator(directory, {
     readMcpConfiguration: async () => stored,
+    probeMcp: connectedProbe,
     commitMcp: async (_id, _input, next) => { stored = next; },
   });
 
@@ -330,4 +339,20 @@ test('configureWorkspaceMcp reports applied, saved-needs-auth, and saved-not-con
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('no-worker configure classifies the saved servers by the stateless probe', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-unattended-'));
+  let stored: MCPConfigurationState | null = null;
+  try {
+    const needsAuth = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, probeMcp: failedProbe('MCP_AUTH_REQUIRED'), commitMcp: async (_id, _input, next) => { stored = next; } });
+    await needsAuth.initialize();
+    await needsAuth.registerWorkspace('workspace', 'agent');
+    expect(await needsAuth.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } }))
+      .toMatchObject({ status: 'no-active-workers', outcome: 'saved-needs-auth', workers: [] });
+    const unreachable = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, probeMcp: failedProbe('MCP_APPLY_FAILED'), commitMcp: async (_id, _input, next) => { stored = next; } });
+    await unreachable.initialize();
+    await expect(unreachable.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '1', config: { servers: [server] } }))
+      .rejects.toMatchObject({ code: 'MCP_APPLY_FAILED', details: { result: { status: 'no-active-workers', outcome: 'saved-not-connected' } } });
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

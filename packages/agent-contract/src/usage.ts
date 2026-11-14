@@ -25,6 +25,7 @@ export const UsageQuerySchema = z.strictObject({
 });
 export type UsageQuery = z.input<typeof UsageQuerySchema>;
 export type UsageQueryResult = z.output<typeof UsageQuerySchema>;
+/** `output` already includes reasoning, so `reasoning` is a subset of `output` and is never added to `total`. */
 export const UsageTokensSchema = z.strictObject({
   input: CountSchema, output: CountSchema, reasoning: CountSchema.nullable(),
   cacheRead: CountSchema, cacheWrite: CountSchema, total: CountSchema,
@@ -84,6 +85,50 @@ export const UsageToolsResponseSchema = z.strictObject({
   totals: UsageToolTotalsSchema, usage: z.array(UsageToolUsageSchema), ...FailureShape,
 });
 export type UsageToolsResponse = z.infer<typeof UsageToolsResponseSchema>;
+const UsageStatusSchema = z.enum(['ok', 'warning', 'exhausted', 'unknown']);
+const UsageUnitSchema = z.enum(['percent', 'tokens', 'requests', 'credits', 'usd', 'minutes', 'bytes', 'unknown']);
+const FiniteNumberSchema = z.number().finite();
+/**
+ * One native AuthStorage quota limit, projected to quota and usage fields only.
+ * Account, email, project, organisation, credential and raw provider payloads never cross this boundary.
+ */
+export const UsageAuthLimitSchema = z.strictObject({
+  id: z.string().min(1), label: z.string(),
+  scope: z.strictObject({
+    provider: EntityIdSchema, modelId: z.string().min(1).optional(), tier: z.string().min(1).optional(),
+    windowId: z.string().min(1).optional(), shared: z.boolean().optional(),
+  }),
+  window: z.strictObject({
+    id: z.string().min(1), label: z.string(), durationMs: AmountSchema.optional(), resetsAt: TimestampSchema.optional(),
+  }).optional(),
+  amount: z.strictObject({
+    used: FiniteNumberSchema.optional(), limit: FiniteNumberSchema.optional(), remaining: FiniteNumberSchema.optional(),
+    usedFraction: FiniteNumberSchema.optional(), remainingFraction: FiniteNumberSchema.optional(), unit: UsageUnitSchema,
+  }),
+  status: UsageStatusSchema.optional(),
+});
+export type UsageAuthLimit = z.infer<typeof UsageAuthLimitSchema>;
+export const UsageAuthReportSchema = z.strictObject({
+  provider: EntityIdSchema, fetchedAt: TimestampSchema, limits: z.array(UsageAuthLimitSchema),
+  resetCredits: z.strictObject({ availableCount: CountSchema, redeemableCount: CountSchema.optional() }).optional(),
+});
+export type UsageAuthReport = z.infer<typeof UsageAuthReportSchema>;
+export const UsageAuthHistoryEntrySchema = z.strictObject({
+  recordedAt: TimestampSchema, provider: EntityIdSchema, limitId: z.string().min(1), label: z.string(),
+  windowLabel: z.string().optional(), usedFraction: FiniteNumberSchema.optional(),
+  status: UsageStatusSchema.optional(), resetsAt: TimestampSchema.optional(),
+});
+export type UsageAuthHistoryEntry = z.infer<typeof UsageAuthHistoryEntrySchema>;
+/**
+ * Native AuthStorage usage for the query window, sanitized. A `null` source could not be read:
+ * the stats report's `partial` and `errors` name it, so an unreadable source is never an empty success.
+ */
+export const UsageAccountsSchema = z.strictObject({
+  reports: z.array(UsageAuthReportSchema).nullable(),
+  history: z.array(UsageAuthHistoryEntrySchema).nullable(),
+});
+export type UsageAccounts = z.infer<typeof UsageAccountsSchema>;
+
 export const UsageStatsSchema = z.strictObject({
   range: z.strictObject({ from: TimestampSchema, to: TimestampSchema }).refine((range) => range.from < range.to),
   sessions: CountSchema, subagents: CountSchema, prompts: CountSchema, steps: CountSchema,
@@ -96,6 +141,7 @@ export const UsageStatsSchema = z.strictObject({
   avgTokensPerSecond: AmountSchema.nullable().optional(),
   pricing: UsagePricingSchema.nullable().optional(),
   errorRate: z.number().min(0).max(1).optional(),
+  accounts: UsageAccountsSchema.optional(),
   ...FailureShape,
 });
 export type UsageStats = z.infer<typeof UsageStatsSchema>;

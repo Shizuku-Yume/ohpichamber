@@ -23,6 +23,8 @@ import {
 import { UsageStatsReport } from '@/components/views/usage/UsageStatsView';
 import { useUsageStatsStore } from '@/components/views/usage/usageStatsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { quotaCardProviderIds, hasQuotaData } from './usageProviderRows';
+import { resolveQuotaProviderId } from '@/components/chat/work-status/usageHeadline';
 
 const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPreference) => {
   if (!timestamp) return '-';
@@ -32,7 +34,6 @@ const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPr
     return '-';
   }
 };
-const isQuotaProviderId = (id: string, list: { id: string }[]): id is QuotaProviderId => list.some((p) => p.id === id);
 
 interface ModelInfo {
   name: string;
@@ -228,7 +229,7 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
 
       {usage?.consoleBudgets ? <ConsoleBudgetsSection consoleBudgets={usage.consoleBudgets} /> : null}
 
-      {Object.keys(usage?.windows ?? {}).length === 0 && providerModels.length === 0 && !usage?.consoleBudgets ? (
+      {!error && !hasQuotaData(usage) ? (
         <div>
           <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noQuotaWindowsTitle')}</p>
           <p className="typography-meta text-muted-foreground mt-1">{t('settings.usage.page.state.noQuotaWindowsDescription')}</p>
@@ -249,20 +250,20 @@ export const UsagePage: React.FC = () => {
   const selectedProvider = useUsageStatsStore((state) => state.selectedProvider);
   const quotaProviders = useQuotaProviders();
   const results = useQuotaStore((state) => state.results);
+  const refreshErrors = useQuotaStore((state) => state.refreshErrors);
+  const nativeToLogical = useQuotaStore((state) => state.nativeToLogical);
   const configProviders = useConfigStore((state) => state.providers);
   useQuotaAutoRefresh(true, true);
 
-  const configuredQuotaProviders = React.useMemo(
-    () => results.filter((entry) => entry.configured && entry.usage && Object.keys(entry.usage.windows ?? {}).length > 0).map((entry) => entry.providerId),
-    [results],
+  const quotaCardIds = React.useMemo(
+    () => quotaCardProviderIds(quotaProviders, results, refreshErrors),
+    [quotaProviders, refreshErrors, results],
   );
 
   if (selectedProvider !== null) {
     const cfg = configProviders.find((p) => p.providerId === selectedProvider);
     const providerName = cfg?.name || selectedProvider;
-    const quotaId = isQuotaProviderId(selectedProvider, quotaProviders) ? selectedProvider : null;
-    const selectedResult = quotaId ? results.find((entry) => entry.providerId === quotaId) : undefined;
-    const hasQuota = quotaId && selectedResult?.configured && selectedResult?.usage && Object.keys(selectedResult.usage.windows ?? {}).length > 0;
+    const quotaId = quotaProviders.find((p) => p.id === resolveQuotaProviderId(selectedProvider, nativeToLogical))?.id ?? null;
 
     return (
       <SettingsPageLayout title={providerName} showSaveStatus={false}>
@@ -275,7 +276,7 @@ export const UsagePage: React.FC = () => {
           <UsageStatsReport />
         </SettingsSection>
 
-        {quotaId && hasQuota ? (
+        {quotaId && quotaCardIds.includes(quotaId) ? (
           <ProviderQuota providerId={quotaId} />
         ) : (
           <SettingsSection title={t('settings.usage.page.section.quotas')} settingsItem="usage.quotas">
@@ -297,8 +298,8 @@ export const UsagePage: React.FC = () => {
         <UsageStatsReport />
       </SettingsSection>
 
-      {configuredQuotaProviders.length > 0 ? (
-        configuredQuotaProviders.map((providerId, index) => (
+      {quotaCardIds.length > 0 ? (
+        quotaCardIds.map((providerId, index) => (
           <ProviderQuota
             key={providerId}
             providerId={providerId}

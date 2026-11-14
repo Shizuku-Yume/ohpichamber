@@ -1118,14 +1118,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** a product glossary fixes a different term.
 - **Effort:** ux-feedback-2026-11-12
 
-## 2026-11-14 - Session creation responds after worker ready and decouples catalog discovery
+## 2026-11-14 - New-chat latency budgets met via immediate session ID return and queued prompt delivery
 
-- **Decided:** `POST /sessions` returns immediately after worker `ready`, deferring MCP and skill catalog discovery (`registerCatalogWorker`) to the background with a generation guard. We retain synchronous worker `ready` before returning the session ID, accepting p50 ~880 ms (down from ~1620 ms) rather than returning an uninitialized session ID before worker start.
-- **Instead of:** returning a speculative session ID immediately before worker spawn and queueing prompt delivery behind worker ready.
-- **Because:** returning an uninitialized session ID changes the session lifecycle and error contract across the Host and Agent Service, requiring speculative SSE buffering and rollbacks if the worker process fails to boot. Decoupling catalog reads alone eliminated 740 ms of latency (~45%) while maintaining strict lifecycle invariants and 100% supervisor test compatibility.
+- **Decided:** `POST /sessions` returns immediately with the initialized session ID while worker admission and launch proceed asynchronously, and prompt delivery (`POST /runs`) queues behind worker readiness. Background worker registration failures publish their cause through session error status and diagnostics, failure cleanup is generation-conditional inside `withRoot`, and draft submissions paint an immediate optimistic user bubble carried over on materialization.
+- **Instead of:** retaining synchronous worker `ready` before returning from `POST /sessions`, which stalled session creation at ~880–1150 ms and violated W11 latency budgets.
+- **Because:** the independent review of task 17 (Review17) found both W11 latency budgets undelivered (POST /sessions ≤ 400 ms and first part.delta ≤ 600 ms). Profiling `admit` established that worker spawn and OMP runtime initialization inherently take >900 ms, so synchronous wait on the creation response path cannot meet the 400 ms budget. Returning the session ID immediately and queueing the prompt delivers frame-1 response while preserving full lifecycle and execution correctness.
 - **Decided by:** agent
 - **Mine:** yes
-- **Revisit when:** OMP SDK supports zero-cost instant session instantiation or when asynchronous session bootstrap becomes a planned architectural migration.
+- **Revisit when:** OMP SDK changes session initialization or worker process architecture.
 - **Effort:** ux-feedback-2026-11-12
 ## 2026-11-14 - Agent tool permissions editor queries live tool catalog and groups tools by domain
 

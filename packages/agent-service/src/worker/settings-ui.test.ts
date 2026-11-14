@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { OMP_SETTING_IDS } from '@openchamber/agent-contract';
+import * as contract from '@openchamber/agent-contract';
+import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { OMP_SETTING_OWNER_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
 import { NativeSettings } from './catalog-settings.ts';
@@ -26,28 +27,44 @@ async function fixture() {
   };
 }
 
-test('every allowlisted OMP setting is classified exactly once', () => {
-  expect(Object.keys(OMP_SETTING_PLACEMENTS)).toHaveLength(OMP_SETTING_IDS.length);
-  for (const id of OMP_SETTING_IDS) {
-    const placement = OMP_SETTING_PLACEMENTS[id];
-    expect(placement, id).toBeDefined();
-    expect(['gui', 'tui-only', 'duplicate', 'advanced'], id).toContain(placement.surface);
-    if (placement.surface === 'duplicate') expect(placement.owner.length, id).toBeGreaterThan(0);
-    else expect(placement, id).not.toHaveProperty('owner');
+test('every TUI-visible OMP setting has a placement and no hand-kept id list remains', () => {
+  expect((contract as Record<string, unknown>).OMP_SETTING_IDS).toBeUndefined();
+  const all = orderedSettings();
+  const tuiVisible = all.filter(s => s.ui?.tab !== undefined);
+  expect(tuiVisible.length).toBe(450);
+
+  for (const setting of tuiVisible) {
+    const placement = OMP_SETTING_PLACEMENTS[setting.id];
+    expect(placement, `Missing placement for TUI-visible setting ${setting.id}`).toBeDefined();
+    expect(placement.type, `Placement for ${setting.id} must not be hidden`).not.toBe('hidden');
+    expect(['page', 'engine', 'tui-only', 'owned-by'], setting.id).toContain(placement.type);
+    if (placement.type === 'owned-by') {
+      expect(placement.owner.length, setting.id).toBeGreaterThan(0);
+    }
   }
-  // Nothing outside the allowlist can be classified, so a retired id cannot
-  // linger as a row nobody renders.
-  expect(new Set(Object.keys(OMP_SETTING_PLACEMENTS))).toEqual(new Set(OMP_SETTING_IDS));
+
+  // Untabbed settings default to hidden when not explicitly placed
+  const untabbedHidden = presentOmpSetting('some.unplaced.untabbed.setting', undefined, null as unknown as Settings);
+  expect(untabbedHidden.placement).toEqual({ type: 'hidden' });
 });
 
-test('a duplicate names an owner control, and the four meaningful surfaces stay populated', () => {
-  expect(new Set(OMP_SETTING_OWNER_IDS).size).toBe(OMP_SETTING_OWNER_IDS.length);
-  const counts = { gui: 0, 'tui-only': 0, duplicate: 0, advanced: 0 };
-  for (const id of OMP_SETTING_IDS) counts[OMP_SETTING_PLACEMENTS[id].surface] += 1;
-  expect(counts.gui).toBeGreaterThan(0);
+test('misclassifications are fixed: followUpMode is not a chat owner; recap belongs to Chat → Session recap', () => {
+  expect(OMP_SETTING_PLACEMENTS['followUpMode']).toEqual({ type: 'page', page: 'sessions', section: 'execution' });
+  expect(OMP_SETTING_PLACEMENTS['recap.enabled']).toEqual({ type: 'owned-by', owner: 'chat.session-recap' });
+  expect(OMP_SETTING_PLACEMENTS['recap.idleSeconds']).toEqual({ type: 'owned-by', owner: 'chat.session-recap' });
+  expect(OMP_SETTING_OWNER_IDS).not.toContain('chat.follow-up-behavior');
+});
+
+test('an owned-by placement names an owner control, and all placement types stay populated', () => {
+  expect(OMP_SETTING_OWNER_IDS).toEqual(['chat.session-recap', 'chat.suggestion-generator']);
+  const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, hidden: 0 };
+  for (const placement of Object.values(OMP_SETTING_PLACEMENTS)) {
+    counts[placement.type] += 1;
+  }
+  expect(counts.page).toBeGreaterThan(0);
+  expect(counts.engine).toBeGreaterThan(0);
   expect(counts['tui-only']).toBeGreaterThan(0);
-  expect(counts.duplicate).toBeGreaterThan(0);
-  expect(counts.advanced).toBeGreaterThan(0);
+  expect(counts['owned-by']).toBeGreaterThan(0);
 });
 
 test('reads surface, owner and condition from the pinned definitions', async () => {
@@ -57,11 +74,11 @@ test('reads surface, owner and condition from the pinned definitions', async () 
     // The page needs the file it hides settings from, not a second renderer.
     expect(state.configPath).toBe(join(f.agentDirectory, 'config.yml'));
     const byId = new Map(state.settings.map(setting => [setting.id, setting]));
-    expect(byId.get('compaction.thresholdPercent')).toMatchObject({ surface: 'gui' });
-    expect(byId.get('enabledModels')).toMatchObject({ surface: 'duplicate', owner: 'providers.models' });
-    expect(byId.get('tui.renderMermaid')).toMatchObject({ surface: 'duplicate', owner: 'chat.mermaid-rendering' });
-    expect(byId.get('tools.artifactTailLines')).toMatchObject({ surface: 'advanced' });
-    expect(byId.get('cycleOrder')).toMatchObject({ surface: 'tui-only' });
+    expect(byId.get('compaction.thresholdPercent')).toMatchObject({ placement: { type: 'engine' } });
+    expect(byId.get('enabledModels')).toMatchObject({ placement: { type: 'hidden' } });
+    expect(byId.get('tui.renderMermaid')).toMatchObject({ placement: { type: 'tui-only' } });
+    expect(byId.get('tools.artifactTailLines')).toMatchObject({ placement: { type: 'engine' } });
+    expect(byId.get('cycleOrder')).toMatchObject({ placement: { type: 'tui-only' } });
     // OMP's own `ui.condition` travels with the descriptor and is evaluated
     // against this worker's settings, not a process-wide singleton.
     expect(byId.get('retry.usageReservePct')).toMatchObject({
@@ -107,7 +124,7 @@ test('an unknown condition name keeps the row visible', async () => {
   const f = await fixture();
   try {
     expect(presentOmpSetting('compaction.enabled', 'someClosedSourceCondition', f.settings)).toEqual({
-      surface: 'gui', condition: 'someClosedSourceCondition', conditionActive: true,
+      placement: { type: 'engine' }, condition: 'someClosedSourceCondition', conditionActive: true,
     });
   } finally { await f.close(); }
 });

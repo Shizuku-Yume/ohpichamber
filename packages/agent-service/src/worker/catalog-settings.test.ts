@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { YAML } from 'bun';
 import './suggestion.ts';
-import { lookup } from '@oh-my-pi/pi-coding-agent/config/registry';
-import { OMP_SETTING_IDS } from '@openchamber/agent-contract';
+import * as contract from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { cfgCompactionThresholdPercent } from '@oh-my-pi/pi-coding-agent/session/context-settings';
@@ -31,31 +30,24 @@ async function fixture() {
   };
 }
 
-test('the allowlist is registered by the pinned package and never names a credential', () => {
-  const all = new Map(orderedSettings().map(setting => [setting.id, setting]));
-  for (const id of OMP_SETTING_IDS) {
-    const setting = all.get(id) ?? lookup(id);
-    expect(setting, id).toBeDefined();
-    expect(setting?.isCredential, id).toBe(false);
-  }
-  for (const setting of orderedSettings()) {
-    if (setting.isCredential) expect(OMP_SETTING_IDS).not.toContain(setting.id);
-  }
-});
+test('the setting list is derived from orderedSettings and never exposes credentials', async () => {
+  expect((contract as Record<string, unknown>).OMP_SETTING_IDS).toBeUndefined();
+  const all = orderedSettings();
+  const credentials = all.filter(s => s.isCredential).map(s => s.id);
+  expect(credentials.length).toBeGreaterThan(0);
 
-test('reads metadata from OMP and omits appearance, path, command and credential settings', async () => {
   const f = await fixture();
   try {
     const state = await f.native.read('workspace_1', '0');
-    expect(state.settings.map(setting => setting.id)).toEqual([...OMP_SETTING_IDS]);
-    expect(state.settings.find(setting => setting.id === 'compaction.thresholdPercent')).toMatchObject({
+    expect(state.totalCount).toBe(all.length);
+    const ids = new Set(state.settings.map(s => s.id));
+    for (const cred of credentials) {
+      expect(ids.has(cred)).toBe(false);
+    }
+    expect(state.settings.length).toBe(all.length - credentials.length);
+    expect(state.settings.find(s => s.id === 'compaction.thresholdPercent')).toMatchObject({
       type: 'number', label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
     });
-    const ids = new Set(state.settings.map(setting => setting.id));
-    for (const excluded of ['goal.statusInFooter', 'task.showResolvedModelBadge', 'compaction.remoteEndpoint',
-      'skills.registryUrl', 'skills.customDirectories', 'plan.autosaveDir', 'task.agentAccountPools']) {
-      expect(ids.has(excluded)).toBe(false);
-    }
     expect(JSON.stringify(state)).not.toContain('apiKey');
   } finally { await f.close(); }
 });
@@ -83,6 +75,17 @@ test('writes through OMP Settings, flushes the atomic config file and reloads ex
     expect((await f.native.read('workspace_1', '1')).settings.find(setting => setting.id === 'compaction.thresholdPercent')?.value).toBe(65);
   } finally { await f.close(); }
 });
+test('refuses to write a setting no GUI surface places', async () => {
+  const f = await fixture();
+  try {
+    const read = await f.native.read('workspace_1', '0');
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: read.revision,
+      changes: [{ id: 'enabledProviders', value: [] }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  } finally { await f.close(); }
+});
+
 test('writes expanded settings: execution flow modes, tui render toggles and tool buffer caps', async () => {
   const f = await fixture();
   try {

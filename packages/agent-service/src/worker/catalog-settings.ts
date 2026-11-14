@@ -1,6 +1,5 @@
 import {
   JsonValueSchema,
-  OMP_SETTING_IDS,
   OmpSettingIdSchema,
   OmpSettingSchema,
   OmpSettingsStateSchema,
@@ -12,30 +11,22 @@ import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { lookup, type AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { presentOmpSetting } from './settings-ui.ts';
+import { OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
-/**
- * Contract-driven allowlist of OMP settings exposed through the API.
- * All setting definitions come from the pinned @oh-my-pi/pi-coding-agent package
- * and are constrained by OMP_SETTING_IDS in @openchamber/agent-contract.
- */
-const allowlist = new Set<string>(OMP_SETTING_IDS);
 const byId = new Map<string, AnySetting>();
 
 /**
- * The settings route is a narrow view over OMP's own registry. It never
+ * The settings route is a view over OMP's own registry. It never
  * declares a second schema: ids, types, defaults, enum values and UI metadata
- * come from the pinned package, and only the ids in `OMP_SETTING_IDS` are
- * readable or writable.
+ * come from the pinned package.
  */
 function handle(id: string): AnySetting {
-  if (!allowlist.has(id)) throw new ProjectionError(400, 'INVALID_REQUEST', `OMP setting ${id} is not exposed`);
   let setting = byId.get(id);
   if (setting === undefined) {
     setting = lookup(id) ?? orderedSettings().find(candidate => candidate.id === id);
-    if (setting === undefined) throw new ProjectionError(503, 'INTERNAL_ERROR', `OMP setting ${id} is unavailable`);
+    if (setting === undefined) throw new ProjectionError(400, 'INVALID_REQUEST', `Unknown OMP setting ${id}`);
     if (setting.isCredential) throw new ProjectionError(422, 'UNSUPPORTED_CAPABILITY', `OMP setting ${id} is credential-backed`);
     byId.set(id, setting);
   }
@@ -46,7 +37,7 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
   const ui = setting.ui;
   const options = ui?.options;
   const list = Array.isArray(options)
-    ? options.map(option => ({ value: option.value, label: option.label, description: option.description }))
+    ? options.map(option => ({ value: String(option.value), label: option.label, description: option.description }))
     : undefined;
   const rawValue = setting.layered(settings);
   const rawDefault = setting.definition.default;
@@ -58,9 +49,8 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
     value: rawValue === undefined ? null : JsonValueSchema.parse(rawValue),
     default: rawDefault === undefined ? null : JsonValueSchema.parse(rawDefault),
     configured: setting.isConfigured(settings),
-    surface: presentation.surface,
+    placement: presentation.placement,
   };
-  if (presentation.owner !== undefined) descriptor.owner = presentation.owner;
   if (presentation.condition !== undefined) {
     descriptor.condition = presentation.condition;
     descriptor.conditionActive = presentation.conditionActive ?? true;
@@ -85,10 +75,14 @@ export class NativeSettings {
   }
 
   private state(workspaceId: string, revision: string): OmpSettingsState {
+    const all = orderedSettings();
+    const exposed = all.filter(s => !s.isCredential);
     return OmpSettingsStateSchema.parse({
-      workspaceId, revision,
+      workspaceId,
+      revision,
       ...(this.configFilePath === undefined ? {} : { configPath: this.configFilePath }),
-      settings: OMP_SETTING_IDS.map(id => descriptor(handle(id), this.settings)),
+      totalCount: all.length,
+      settings: exposed.map(s => descriptor(s, this.settings)),
     });
   }
 
@@ -99,6 +93,13 @@ export class NativeSettings {
 
   async write(workspaceId: string, revision: string, request: OmpSettingsUpdateRequest): Promise<OmpSettingsState> {
     await this.settings.reloadFromDisk();
+    // Only placed settings are exposed: an unplaced id is never written, so the
+    // route cannot reach a setting no GUI surface owns.
+    for (const change of request.changes) {
+      if (!Object.hasOwn(OMP_SETTING_PLACEMENTS, change.id)) {
+        throw new ProjectionError(400, 'INVALID_REQUEST', `OMP setting ${change.id} is not exposed`);
+      }
+    }
     // Validate every value against the pinned definition before changing any
     // layer. `assertWritable` runs OMP's own validate/normalize checks, so the
     // route cannot invent a looser schema for numbers, enums, records or arrays.

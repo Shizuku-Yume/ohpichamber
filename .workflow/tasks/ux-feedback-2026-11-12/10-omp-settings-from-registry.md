@@ -54,3 +54,14 @@
 - Review:
   - Round 1: independent read-only reviewer worker ufb10-reviewer (gemini-3.8-flash:high) over 1f9b10086..d6c82e2ce: approve, no blocking findings; note that Record/Array engine settings without declared options/enumValues rendered as empty chip groups. Resolved in commit a2b370855 by omitting unrenderable complex engine settings from OMP_SETTING_EXPOSED_IDS (kept in config.yml, raising kept-out count to 481).
   - Round 2: independent read-only reviewer worker ufb10-reviewer2 (gemini-3.8-flash:high) over a2b370855: approve, no renderable settings dropped, no blocking findings.
+- Post-merge re-check (after merging `ux-feedback-2026-11-12/integration`, commit `9142f9b8c`):
+  - Merge: clean automatic merge (no conflicts; `packages/agent-service/DOCUMENTATION.md` merged cleanly via ort strategy).
+  - Rebuilt `packages/agent-contract` and `packages/agent-service` dists (`tsc -p tsconfig.build.json` and `bun build`).
+  - packages/agent-contract `bun test`: 257 pass, 0 fail.
+  - OMP settings UI test (`bun test src/components/sections/openchamber/OmpSettingsPage.test.tsx`): 10 pass, 0 fail.
+  - `canonicalClient.transport.test.ts` (`bun test`): 34 pass, 0 fail.
+  - `tsc --noEmit`: agent-contract clean; agent-service clean for all files under `src/`.
+  - `bunx oxlint -c oxlint.config.ts` on changed TS files: clean.
+  - `bun run dead-code`: inspected; no dead code introduced in task 10 files.
+  - `bun test --timeout 15000 src/worker` in packages/agent-service: 331 pass, 10 skip, 1 fail under multi-agent machine load (load 10.01). The single failure was the known `session-native.test.ts` "RPC goal continues three turns and retains completed mode" race.
+  - Re-run `session-native.test.ts` alone: 72 pass, 0 fail, exit 0 (135.84s).

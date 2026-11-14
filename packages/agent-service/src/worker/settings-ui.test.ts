@@ -75,7 +75,7 @@ test('reads surface, owner and condition from the pinned definitions', async () 
     expect(state.configPath).toBe(join(f.agentDirectory, 'config.yml'));
     const byId = new Map(state.settings.map(setting => [setting.id, setting]));
     expect(byId.get('compaction.thresholdPercent')).toMatchObject({ placement: { type: 'engine' } });
-    expect(byId.get('enabledModels')).toMatchObject({ placement: { type: 'hidden' } });
+    expect(byId.has('enabledModels')).toBe(false);
     expect(byId.get('tui.renderMermaid')).toMatchObject({ placement: { type: 'tui-only' } });
     expect(byId.get('tools.artifactTailLines')).toMatchObject({ placement: { type: 'engine' } });
     expect(byId.get('cycleOrder')).toMatchObject({ placement: { type: 'tui-only' } });
@@ -127,4 +127,13 @@ test('an unknown condition name keeps the row visible', async () => {
       placement: { type: 'engine' }, condition: 'someClosedSourceCondition', conditionActive: true,
     });
   } finally { await f.close(); }
+});
+
+test('every engine placement carries OMP label and description from the pinned registry', () => {
+  for (const setting of orderedSettings()) {
+    if (setting.isCredential) continue;
+    if (OMP_SETTING_PLACEMENTS[setting.id]?.type !== 'engine' || setting.id === 'modelRoles') continue; // rendered by the model role editor
+    expect(setting.ui?.label, `${setting.id} needs an OMP label`).toBeTruthy();
+    expect(setting.ui?.description, `${setting.id} needs an OMP description`).toBeTruthy();
+  }
 });

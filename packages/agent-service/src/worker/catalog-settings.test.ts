@@ -47,7 +47,9 @@ test('the setting list is derived from orderedSettings and never exposes credent
     }
     const boundaryIds = Object.keys(OMP_SETTING_PLACEMENTS).filter(id => OMP_SETTING_PLACEMENTS[id].type === 'boundary');
     for (const id of boundaryIds) expect(ids.has(id), id).toBe(false);
-    expect(state.settings.length).toBe(all.length - new Set([...credentials, ...boundaryIds]).size);
+    const shown = all.filter(s => !s.isCredential && Object.hasOwn(OMP_SETTING_PLACEMENTS, s.id) && OMP_SETTING_PLACEMENTS[s.id].type !== 'boundary');
+    expect(state.settings.length).toBe(shown.length);
+    for (const s of all) if (!shown.includes(s)) expect(ids.has(s.id), s.id).toBe(false);
     expect(state.settings.find(s => s.id === 'compaction.thresholdPercent')).toMatchObject({
       type: 'number', label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
     });

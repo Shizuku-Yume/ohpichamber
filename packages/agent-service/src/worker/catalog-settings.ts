@@ -76,7 +76,7 @@ export class NativeSettings {
 
   private state(workspaceId: string, revision: string): OmpSettingsState {
     const all = orderedSettings();
-    const exposed = all.filter(s => !s.isCredential && !(Object.hasOwn(OMP_SETTING_PLACEMENTS, s.id) && OMP_SETTING_PLACEMENTS[s.id].type === 'boundary'));
+    const exposed = all.filter(s => !s.isCredential && Object.hasOwn(OMP_SETTING_PLACEMENTS, s.id) && OMP_SETTING_PLACEMENTS[s.id].type !== 'boundary');
     return OmpSettingsStateSchema.parse({
       workspaceId,
       revision,

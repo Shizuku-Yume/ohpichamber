@@ -518,6 +518,8 @@ export async function getUsageStats(input: UsageQuery, references?: readonly Usa
       cacheWrite: report.models.reduce((sum, m) => sum + m.tokens.cacheWrite, 0),
       total: report.models.reduce((sum, m) => sum + m.tokens.total, 0),
     };
+    const allUnpriced = report.models.length > 0 && report.models.every((m) => m.pricing === null);
+    report.pricing = allUnpriced ? null : (report.models.length === 1 ? report.models[0].pricing : null);
 
     try {
       const summaryRow = db!.query(`

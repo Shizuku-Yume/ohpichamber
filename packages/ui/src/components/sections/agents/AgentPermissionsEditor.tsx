@@ -73,7 +73,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
             label: presentation.label || name,
             description: TOOL_ONE_LINE_DESCRIPTIONS[name] || '',
             tier: 'exec',
-            availability: true,
+            availability: false,
           });
         }
       }
@@ -82,7 +82,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
   }, [toolsCatalog, allowedTools]);
 
   const availableTools = React.useMemo(
-    () => tools.filter((tool) => tool.availability),
+    () => tools.filter((tool) => Boolean(tool.availability)),
     [tools],
   );
 
@@ -138,6 +138,8 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
 
   const toggleTool = (toolName: string, checked: boolean) => {
     if (disabled) return;
+    const tool = tools.find((t) => t.name === toolName);
+    if (checked && (!tool || !tool.availability)) return;
     const currentList = allowedTools === null ? availableTools.map((t) => t.name) : [...allowedTools];
     const nextList = checked
       ? [...new Set([...currentList, toolName])]
@@ -223,7 +225,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
                 <div className="flex items-center gap-2.5 min-w-0">
                   <button
                     type="button"
-                    aria-label={isCollapsed ? 'Expand section' : 'Collapse section'}
+                    aria-label={isCollapsed ? t('settings.agents.page.toolPermissions.expandSection') : t('settings.agents.page.toolPermissions.collapseSection')}
                     className="flex items-center justify-center size-5 text-muted-foreground hover:text-foreground transition-transform"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -271,17 +273,24 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
                 <div className="divide-y divide-border/20 px-3 py-1 space-y-1">
                   {groupToolList.map((tool) => {
                     const checked = isToolChecked(tool.name);
-                    const description = tool.description || TOOL_ONE_LINE_DESCRIPTIONS[tool.name] || '';
+                    const descKey = `settings.agents.page.toolPermissions.toolDesc.${tool.name as keyof typeof TOOL_ONE_LINE_DESCRIPTIONS}`;
+                    const translatedDesc = t(descKey as Parameters<typeof t>[0]);
+                    const description = tool.description || (translatedDesc !== descKey ? translatedDesc : '') || TOOL_ONE_LINE_DESCRIPTIONS[tool.name] || '';
                     return (
                       <SettingsCheckboxRow
                         key={tool.name}
                         checked={checked}
-                        disabled={disabled}
+                        disabled={disabled || !tool.availability}
                         onChange={(nextChecked) => toggleTool(tool.name, nextChecked)}
                         label={
                           <span className="flex items-center gap-2">
                             <span className="font-mono text-xs">{tool.label || tool.name}</span>
                             <span className="text-[11px] text-muted-foreground font-mono">({tool.name})</span>
+                            {!tool.availability && (
+                              <span className="text-[10px] uppercase font-mono tracking-wider px-1 py-0.5 rounded border border-border/40 text-muted-foreground bg-muted/20">
+                                {t('common.unavailable')}
+                              </span>
+                            )}
                           </span>
                         }
                         description={description ? <span className="text-xs text-muted-foreground">{description}</span> : undefined}

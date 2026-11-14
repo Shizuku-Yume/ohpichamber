@@ -71,3 +71,12 @@ export const TOOL_ONE_LINE_DESCRIPTIONS: Record<string, string> = {
   openchamber_render: 'Render interactive UI components and views',
   openchamber_knowledge: 'Query project documentation and knowledge context',
 };
+export const GROUP_DESCRIPTIONS: Record<ToolPermissionGroupKey, string> = {
+  files_and_search: 'File reading, editing, and codebase search tools',
+  execution: 'Terminal, code evaluation, LSP, and process execution tools',
+  web_and_external: 'Web browsing, search, and external service integrations',
+  planning_and_memory: 'Task tracking, checkpoints, goals, and agent memory',
+  multi_agent: 'Subagent orchestration and delegation tools',
+  openchamber: 'Host workspace management and presentation tools',
+  mcp_and_extensions: 'Model Context Protocol and third-party extension tools',
+};

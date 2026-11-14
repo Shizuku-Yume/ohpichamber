@@ -1146,6 +1146,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** OMP introduces runtime dynamic tool capability negotiation or fine-grained parameter-level permission rules.
 - **Effort:** ux-feedback-2026-11-12
 
+## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing
+
+- **Decided:** auto-review and PR watch retire OpenCode-specific staged reverts (`revertCommit`), manual queue release hooks (`onRunSettled`), client-driven prompt routing (`routeSend`), and session guidance (`sessionKnowledgeRuntime`), delegating send dispatch, queueing, observation leases, and provider routing exclusively to the canonical session service and global message stream hub.
+- **Instead of:** maintaining OpenCode-shaped revert commit endpoints, manual queue settlement callbacks, or bespoke model-routing interceptors inside the review loop.
+- **Because:** OMP has no staged-revert API, and prompts in the OMP architecture carry `KEEP_SESSION_MODEL` leaving routing to the session's active selection or Auto routing; observation leases (`hub.retainSession`) replace manual queue holds; and prompt context travels directly via synthetic context in `sessionService.send`.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP introduces native turn rollback checkpoints or session-level review transactional boundaries.
 ## 2026-11-14 - Enterprise-boundary OMP settings are placed `boundary`: never rendered, written or read by a GUI route
 
 - **Decided:** settings that cross the enterprise boundary (relay, share and stream endpoints, collab and browser relay, image URL listeners, memory and search endpoints and API keys, dev autoqa push, OTLP telemetry) get the placement `boundary`. The OMP route omits them from its state, so their values never reach the browser, and refuses writes to them with 400. They stay editable only in `config.yml`, as before this task, when the OMP settings allowlist did not name them.

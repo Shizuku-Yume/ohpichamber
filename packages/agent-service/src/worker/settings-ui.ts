@@ -532,11 +532,18 @@ function isRenderableEngineSetting(setting: {
   const choices = setting.options ?? setting.enumValues ?? [];
   return choices.length > 0;
 }
+function extractChoices(s: object): { options?: readonly unknown[]; enumValues?: readonly unknown[] } {
+  const options = 'options' in s && Array.isArray(s.options) ? s.options : undefined;
+  const enumValues = 'enumValues' in s && Array.isArray(s.enumValues) ? s.enumValues : undefined;
+  return { options, enumValues };
+}
 
 const ORDERED_SETTINGS_MAP: ReadonlyMap<string, { type: string; options?: readonly unknown[]; enumValues?: readonly unknown[] }> = new Map(
-  orderedSettings().map((s) => [s.id, { type: s.type, options: s.options, enumValues: s.enumValues }]),
+  orderedSettings().map((s) => {
+    const { options, enumValues } = extractChoices(s);
+    return [s.id, { type: s.type, options, enumValues }];
+  }),
 );
-
 /** The ids the OMP route returns and accepts: rows a GUI owner draws or writes. Every other id is omitted and refused. */
 export const OMP_SETTING_EXPOSED_IDS: ReadonlySet<string> = new Set(
   Object.entries(OMP_SETTING_PLACEMENTS)

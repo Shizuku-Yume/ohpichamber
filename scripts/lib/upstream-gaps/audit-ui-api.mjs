@@ -17,6 +17,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { stripModuleSyntax, usesName } from './source.mjs';
 
 const args = process.argv.slice(2);
 const JSON_OUT = args.includes('--json');
@@ -43,6 +44,25 @@ function lineOf(src, idx) {
   let line = 1;
   for (let i = 0; i < idx; i++) if (src[i] === '\n') line++;
   return line;
+}
+
+function isNotFoundFallback(src, callIdx) {
+  const window = src.slice(callIdx, callIdx + 400);
+  return /^[^\n]*?\(\s*['"`][^'"`]+['"`]\s*,\s*\(?[^)]*\)?\s*=>\s*\{\s*res\.status\(404\)/.test(window);
+}
+
+// Only an explicit `method: '...'` in the call's options constrains the route method.
+function inferMethod(src, litStart) {
+  const window = src.slice(litStart, litStart + 300);
+  const m = /\bmethod\s*:\s*['"`]([A-Za-z]+)['"`]/.exec(window);
+  return m ? m[1].toUpperCase() : null;
+}
+
+function methodMatches(route, method) {
+  if (method === null) return true;
+  if (route.method === 'USE' || route.method === 'ANY' || route.method === 'ALL') return true;
+  if (route.method === 'WS') return method === 'WS';
+  return route.method === method;
 }
 
 function resolveLocalImport(fromFile, spec) {
@@ -74,6 +94,18 @@ function collectReachableServerFiles(entryFile) {
 }
 
 const activeServerFiles = collectReachableServerFiles('packages/web/server/index.js');
+const strippedActiveSrc = new Map(activeServerFiles.map((f) => [f, stripModuleSyntax(fs.readFileSync(f, 'utf8'))]));
+
+// A module that exports routes, factories or register functions mounts its routes only
+// when another active file uses one of its exports outside import statements. An
+// import alone does not mount anything (for example an imported but never-registered route module).
+function isMountedFile(file) {
+  if (file === path.resolve(REPO_ROOT, 'packages/web/server/index.js')) return true;
+  const src = fs.readFileSync(file, 'utf8');
+  const exported = [...src.matchAll(/export\s+(?:async\s+)?(?:function|const|let|var)\s+([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
+  if (exported.length === 0) return true;
+  return exported.some((name) => activeServerFiles.some((other) => other !== file && usesName(strippedActiveSrc.get(other), name)));
+}
 
 const serverRoutes = [];
 function addRoute(method, patternStr, sourceFile, line, kind = 'express') {
@@ -95,7 +127,7 @@ const FILE_PREFIX_MAP = new Map([
   ['packages/web/server/lib/host/skill-catalog-routes.js', '/api/agent/v1'],
 ]);
 
-for (const file of activeServerFiles) {
+for (const file of activeServerFiles.filter(isMountedFile)) {
   const rel = path.relative(REPO_ROOT, file);
   const src = fs.readFileSync(file, 'utf8');
   const filePrefix = FILE_PREFIX_MAP.get(rel) ?? '';
@@ -127,7 +159,9 @@ for (const file of activeServerFiles) {
       }
     }
     if (method === 'use') {
-      if (fullPath.startsWith('/api/')) {
+      // An unconditional 404 responder mounted under a prefix answers every
+      // unknown path; it is not endpoint coverage.
+      if (fullPath.startsWith('/api/') && !isNotFoundFallback(src, m.index)) {
         addRoute('USE', `${fullPath}*`, file, lineOf(src, m.index), 'use');
       }
     } else {
@@ -452,12 +486,16 @@ for (const file of callerFiles) {
     norm = norm.replace(/:param$/, (m, offset, full) => (full[offset - 1] === '/' ? ':param' : ''));
     if (!norm || norm === '/api') continue;
 
+    // A base prefix constant (`const API_BASE = '/api/git'`) is not a request: its callers
+    // append the rest of the path in a template this audit does not follow.
+    if (/^(export\s+)?const\s+[\w$]+\s*=\s*\[?\s*['"]\/api\/[^'"]*['"]/.test(lineText)) continue;
     apiCalls.push({
       file: rel,
       line,
       raw: apiSub,
       normalized: norm,
       lineText,
+      method: inferMethod(src, lit.start),
     });
   }
 }
@@ -465,7 +503,7 @@ for (const file of callerFiles) {
 const unmatched = [];
 for (const call of apiCalls) {
   const probe = call.normalized.replace(/:param/g, 'PARAM_SEGMENT');
-  const hits = compiledServerRoutes.filter((r) => r.regex.test(probe));
+  const hits = compiledServerRoutes.filter((r) => methodMatches(r, call.method) && r.regex.test(probe));
   if (hits.length === 0) {
     unmatched.push(call);
   }

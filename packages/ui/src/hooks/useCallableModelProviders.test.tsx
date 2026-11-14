@@ -46,8 +46,9 @@ test('resolves callable providers from configured catalog and OMP modelRoles', a
         ompSettings: {
           workspaceId: 'ws_1',
           revision: '1',
+          totalCount: 1,
           settings: [
-            { id: 'modelRoles', type: 'record', value: { smol: 'openai/o3-mini:high' }, default: null, configured: true, surface: 'gui' },
+            { id: 'modelRoles', type: 'record', value: { smol: 'openai/o3-mini:high' }, default: null, configured: true, placement: { type: 'engine' } },
           ],
         },
       }));

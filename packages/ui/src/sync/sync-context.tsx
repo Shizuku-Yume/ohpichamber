@@ -28,6 +28,8 @@ import { subscribeMessageQueueSync } from "./message-queue-sync";
 import { subscribeSessionAdmission } from "./session-admission";
 import { subscribeControlStreamSync } from "./control-stream-sync";
 import { subscribeSessionMetadataSync } from "./session-metadata-sync";
+import { subscribePrWatchSync } from "./pr-watch-sync";
+import { subscribeAutoReviewSync } from "./auto-review-sync";
 
 import { SessionMessageLoader, getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
 import { setSyncRefs } from "./sync-refs"
@@ -380,6 +382,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     // Workflow runs and the host snapshot follow the control stream: an SSE
     // client hears a run's progress here, never on its own engine stream.
     const unsubscribeControlStream = subscribeControlStreamSync(props.runtimeKey ?? getRuntimeKey());
+    const unsubscribePrWatchEvents = subscribePrWatchSync(props.runtimeKey ?? getRuntimeKey());
+    const unsubscribeAutoReviewEvents = subscribeAutoReviewSync(props.runtimeKey ?? getRuntimeKey());
     const stopBeforeSwitch = subscribeRuntimeEndpointWillChange((detail) => {
       if (detail.runtimeKey === props.runtimeKey) return
       currentRef.current = false
@@ -438,7 +442,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     document.addEventListener("visibilitychange", visible)
     return () => {
       currentRef.current = false
-      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents(); unsubscribeMetadataEvents(); unsubscribeSessionAdmission(); unsubscribeControlStream();
+      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents(); unsubscribeMetadataEvents(); unsubscribeSessionAdmission(); unsubscribeControlStream(); unsubscribePrWatchEvents(); unsubscribeAutoReviewEvents();
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", offline)
       window.removeEventListener("pageshow", pageshow)

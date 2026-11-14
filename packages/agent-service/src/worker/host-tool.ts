@@ -48,7 +48,9 @@ export function normalizeHostToolEnablement(input?: Record<string, boolean>): Re
 export interface HostToolScope { sessionId: string; rootSessionId: string; workspaceId: string }
 export interface HostToolInvocation extends HostToolScope { request: HostActionRequest; signal: AbortSignal }
 export const HOST_TOOL_DESCRIPTIONS = {
-  openchamber: 'Invoke retained OpenChamber project/model, session, schedule or file.open actions in the captured workspace.',
+  openchamber: 'Invoke retained OpenChamber project/model, session, pull request watch, schedule or file.open actions in the captured workspace. '
+    + 'pr.watch watches a pull or merge request at url (GitHub/GitLab) for check status, reviews/comments, conflicts, or merge, waking the session with a message on change; requires url, optional sessionId (defaults to calling session) and directory. '
+    + 'pr.unwatch stops watching a pull request for optional sessionId (defaults to calling session) without waking it.',
   openchamber_knowledge: "The project's Notes, Todos and Plans, shown in OpenChamber's Project knowledge panel and shared by its sessions. One action per call. "
     + 'knowledge.list returns everything unless planId or ready narrows it; read it before answering a question the project notes may hold. '
     + 'knowledge.save requires kind and body; with id it replaces, and an update may send only completed, planId or dependsOn. '

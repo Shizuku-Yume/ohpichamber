@@ -141,8 +141,11 @@ const createCanonicalSessionService = (dependencies) => {
       relocationControls.add(owner.rootSessionId);
       try { await recoverRelocation(owner.rootSessionId); } finally { relocationControls.delete(owner.rootSessionId); }
     }
-    const scope = (owner && liveRootSessions.has(owner.rootSessionId)) ? await resolveHostSessionScope(sessionId) : await resolveSessionScope(sessionId);
-    if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
+    const resolved = (owner && liveRootSessions.has(owner.rootSessionId)) ? await resolveHostSessionScope(sessionId) : await resolveSessionScope(sessionId);
+    if (!resolved || resolved.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404);
+    const scope = subagentSessions.has(sessionId) && resolved.parentSessionId === undefined
+      ? { ...resolved, parentSessionId: subagentSessions.get(sessionId) }
+      : resolved;
     return scope;
   };
   const hostScopeFor = async (sessionId) => { const scope = await resolveHostSessionScope(sessionId); if (!scope || scope.sessionId !== sessionId) throw new OpenChamberControlError('Session scope was not found', 404); return scope; };
@@ -156,6 +159,7 @@ const createCanonicalSessionService = (dependencies) => {
   const liveRootSessions = new Set();
   const rememberLive = (rootSessionId) => { liveRootSessions.add(rootSessionId); };
   const forgetLive = (rootSessionId) => { liveRootSessions.delete(rootSessionId); };
+  const subagentSessions = new Map();
   const metadata = {
     getState: (id) => sessionMetadataStore.getState(id), set: async (id, patch, directory = '') => {
       if (persistSessionMetadata) return persistSessionMetadata(id, patch, { directory });
@@ -302,6 +306,7 @@ const createCanonicalSessionService = (dependencies) => {
         if (runtime.projectId !== projectId || runtime.workspaceId !== workspaceId || runtime.rootSessionId !== rootSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope session', 502);
         if (parentSessionId !== undefined && runtime.parentSessionId !== parentSessionId) throw new OpenChamberControlError('Agent service returned an out-of-scope parent linkage', 502);
         if (!await registerSessionScope(runtime)) throw new OpenChamberControlError('Session scope registration failed', 500);
+        if (parentSessionId !== undefined) subagentSessions.set(runtime.sessionId, parentSessionId);
         if (parsed.data.title) {
           const renamed = RuntimeSessionSchema.parse(await request(`/api/agent/v1/sessions/${encodeURIComponent(runtime.sessionId)}/title`, {
             method: 'PATCH', headers: { 'content-type': 'application/json' },
@@ -322,7 +327,9 @@ const createCanonicalSessionService = (dependencies) => {
     return result;
   };
   const prepareDelivery = async (scope, requestBody, identity = {}, capturedRequest = null) => {
-    const admitted = assertRootPromptAdmission(capturedRequest ?? await capturePrompt(scope, requestBody));
+    const isRoot = scope.parentSessionId === undefined;
+    const captured = capturedRequest ?? await capturePrompt(scope, requestBody);
+    const admitted = isRoot ? assertRootPromptAdmission(captured) : captured;
     const capture = { ...identity, request: admitted };
     await beforeDispatch(scope, capture);
     try {
@@ -344,13 +351,15 @@ const createCanonicalSessionService = (dependencies) => {
     }
     const requestBody = operation === 'steer' ? SteerRequestSchema.parse({ sessionId, request: parsed.data }).request
       : operation === 'followUp' ? FollowUpRequestSchema.parse({ sessionId, request: parsed.data }).request : parsed.data;
-    assertRootPromptAdmission(requestBody);
+    const isRoot = scope.parentSessionId === undefined;
+    if (isRoot) assertRootPromptAdmission(requestBody);
     if (commandId !== undefined && !EntityIdSchema.safeParse(commandId).success) {
       throw new OpenChamberControlError('Command key is invalid', 400, { code: 'INVALID_REQUEST' });
     }
     const claim = commandId === undefined ? null : await directCommandAdmissionStore.claim(scope, commandId, operation, requestBody);
     if (claim?.state === 'accepted') return claim.acknowledgment;
-    const capturedRequest = assertRootPromptAdmission(await capturePrompt(scope, requestBody));
+    const captured = await capturePrompt(scope, requestBody);
+    const capturedRequest = isRoot ? assertRootPromptAdmission(captured) : captured;
     const deliveryRunId = randomUUID();
     const deliveryIdentity = { deliveryRunId };
     if (operation === 'send') deliveryIdentity.runId = deliveryRunId;

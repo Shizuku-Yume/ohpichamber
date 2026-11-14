@@ -17,7 +17,7 @@ const queueScope = (scope) => ({
 const scopeKey = (scope) => JSON.stringify([scope.projectId, scope.workspaceId, scope.sessionId]);
 
 /** One Host queue dispatcher; service acknowledgements never mean a run is terminal. */
-export function createCanonicalQueueRuntime({ store, service, resolveAttachments, publishQueue, reportFailure, capturePrompt = async (_scope, request) => request, beforeDispatch = async () => {}, onPromptAccepted = async () => {}, onScheduledTaskResult = async () => {}, ensureSessionObserved = async () => {}, now = Date.now }) {
+export function createCanonicalQueueRuntime({ store, service, resolveAttachments, publishQueue, reportFailure, capturePrompt = async (_scope, request) => request, beforeDispatch = async () => { }, onPromptAccepted = async () => { }, onScheduledTaskResult = async () => { }, ensureSessionObserved = async () => { }, now = Date.now }) {
   if (!store || !service || typeof service.request !== 'function') throw new TypeError('canonical queue requires store and Agent service');
   if (typeof resolveAttachments !== 'function' || typeof publishQueue !== 'function' || typeof reportFailure !== 'function') throw new TypeError('canonical queue requires attachments and publication callbacks');
   if (typeof capturePrompt !== 'function' || typeof beforeDispatch !== 'function' || typeof onPromptAccepted !== 'function' || typeof onScheduledTaskResult !== 'function') throw new TypeError('canonical queue requires delivery hooks');
@@ -202,17 +202,18 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       changed(scope, await store.acknowledge(queueScope(scope), capture.leaseId));
     })();
     operations.set(key, operation);
-    void operation.finally(() => operations.delete(key)).catch(() => {});
+    void operation.finally(() => operations.delete(key)).catch(() => { });
     return operation;
   };
 
   return {
     getState: (scope) => store.getState(queueScope(scope)),
     append: async (scope, commandId, request) => {
-      void ensureSessionObserved(scope).catch(() => {});
-      const admitted = { ...request, request: assertRootPromptAdmission(request.request) };
-      const captured = assertRootPromptAdmission(await capturePrompt(scope, admitted.request));
-      const queue = await store.append(queueScope(scope), commandId, { ...admitted, request: captured });
+      void ensureSessionObserved(scope).catch(() => { });
+      const isRoot = scope.parentSessionId === undefined;
+      const admitted = { ...request, request: isRoot ? assertRootPromptAdmission(request.request) : request.request };
+      const captured = await capturePrompt(scope, admitted.request);
+      const queue = await store.append(queueScope(scope), commandId, { ...admitted, request: isRoot ? assertRootPromptAdmission(captured) : captured });
       changed(scope, queue); schedule(scope); return queue;
     },
     remove: async (scope, request) => {
@@ -265,7 +266,7 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
       const listed = await store.list();
       for (const error of listed.errors) reportFailure(error);
       for (const entry of listed.items) {
-        void ensureSessionObserved(entry.scope).catch(() => {});
+        void ensureSessionObserved(entry.scope).catch(() => { });
         schedule(entry.scope);
       }
       return listed;

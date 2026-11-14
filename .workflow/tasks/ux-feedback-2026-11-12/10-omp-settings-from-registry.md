@@ -51,4 +51,6 @@
     - Chinese (`zh-CN`): "触发压缩于" and "Token 数触发压缩" render as "默认". "Token" is written as "Token". Footer reports "有 473 项设置未显示在本页".
     - Artifacts saved to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task10/` (`omp-page-en.png`/`.txt`, `omp-page-zh-CN.png`/`.txt`, `omp-rows-en.json`, updated `README.md`).
     - All server and chrome processes stopped.
-  - Review: pending.
+- Review:
+  - Round 1: independent read-only reviewer worker ufb10-reviewer (gemini-3.8-flash:high) over 1f9b10086..d6c82e2ce: approve, no blocking findings; note that Record/Array engine settings without declared options/enumValues rendered as empty chip groups. Resolved in commit a2b370855 by omitting unrenderable complex engine settings from OMP_SETTING_EXPOSED_IDS (kept in config.yml, raising kept-out count to 481).
+  - Round 2: independent read-only reviewer worker ufb10-reviewer2 (gemini-3.8-flash:high) over a2b370855: approve, no renderable settings dropped, no blocking findings.

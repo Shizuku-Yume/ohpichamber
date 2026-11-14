@@ -63,4 +63,11 @@ const SEARCH_TARGET_TABS = new Map<string, ChatSettingsTab>([
   ['chat.session-goal-budget', 'assistance'],
 ]);
 
-export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | null => SEARCH_TARGET_TABS.get(id) ?? null;
+export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | null => {
+  const tab = SEARCH_TARGET_TABS.get(id);
+  if (tab) return tab;
+  if (id.startsWith('omp.')) {
+    return 'messages';
+  }
+  return null;
+};

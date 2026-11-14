@@ -658,7 +658,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <UsagePage />;
       case 'about':
         return (
-          <SettingsPageLayout title={t('settings.page.about.title')} showSaveStatus={false} namedBySidebar>
+          <SettingsPageLayout title={t('settings.page.about.title')} showSaveStatus={false}>
             <AboutSettings />
           </SettingsPageLayout>
         );

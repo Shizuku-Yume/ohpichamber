@@ -1588,7 +1588,7 @@ export const RemoteInstancesPage: React.FC = () => {
 
   if (!draft) {
     return (
-      <SettingsPageLayout title={t('settings.page.remoteInstances.title')} namedBySidebar>
+      <SettingsPageLayout title={t('settings.page.remoteInstances.title')}>
         {clientAuth ? (
           <SettingsSection
             title={t('settings.remoteInstances.clientAuth.title')}

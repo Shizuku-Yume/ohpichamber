@@ -79,7 +79,7 @@ export const ProjectsPage: React.FC = () => {
 
   if (!selectedProject) {
     return (
-      <SettingsPageLayout title={t('settings.page.projects.title')} showSaveStatus namedBySidebar>
+      <SettingsPageLayout title={t('settings.page.projects.title')} showSaveStatus>
         <p className="typography-meta text-muted-foreground">{t('settings.projects.page.empty.noProjects')}</p>
       </SettingsPageLayout>
     );

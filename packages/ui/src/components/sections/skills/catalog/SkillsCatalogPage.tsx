@@ -384,7 +384,6 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
       <SettingsPageLayout
         title={t('settings.skills.catalog.page.title')}
         showSaveStatus={false}
-        namedBySidebar
       >
         {showModeTabs && (
           <div className="mb-4">

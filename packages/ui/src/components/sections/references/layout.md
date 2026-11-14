@@ -10,7 +10,7 @@ instead of reaching into their private classes or declaring local equivalents.
 ```tsx
 <SettingsPageLayout
   title={t('settings.page.x.title')}
-  namedBySidebar
+  description={t('settings.page.x.description')}
   showSaveStatus
 >
   <SettingsSection title={t('...sectionA')} divider={false}>…</SettingsSection>
@@ -19,7 +19,7 @@ instead of reaching into their private classes or declaring local equivalents.
 ```
 
 - `SettingsPageLayout` owns scrolling, page padding, the `@container` context, and the quiet save indicator (`showSaveStatus`). The entity editors use the autosave contract instead ([save feedback](../PATTERNS.md#save-feedback)).
-- A page opened from the settings sidebar passes `namedBySidebar` and no `description`: the sidebar already names it, so the title stays only for screen readers and focus, and only `headerEnd` actions show. A detail page (one agent, provider, server) keeps its visible title. A line the user must read (a consequence, a warning) goes into the content, not the page description.
+- Every settings page renders its title and description, matching the v2.7.0 release and the fork's own pages. A detail page (one agent, provider, server) keeps its visible title. A line the user must read (a consequence, a warning) goes into the content, not the page description.
 - Sections separate with a top border (`divider`, default true); the first section under the page header passes `divider={false}`.
 - Section titles are real headers (L2). Do not nest an umbrella section around a list of `SettingsControlGroup`s when each group deserves its own header — promote groups to sections instead (see the Chat page precedent).
 

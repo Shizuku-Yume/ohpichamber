@@ -460,7 +460,7 @@ export const DefaultsSettings: React.FC = () => {
           settingsItem="sessions.walkthrough-model"
           disabled={!usesOwnWalkthroughModel || isSavingOmp || !ompState}
           label={t('settings.openchamber.defaults.walkthroughModel.title')}
-          description={t('settings.openchamber.defaults.walkthroughModel.description')}
+          info={t('settings.openchamber.defaults.walkthroughModel.description')}
           onChange={(selector) => setWalkthroughModel(selector)}
         />
       </SettingsSection>
@@ -480,7 +480,7 @@ export const DefaultsSettings: React.FC = () => {
             }}
             label={t('settings.openchamber.defaults.field.planModeAllowAgents')}
             ariaLabel={t('settings.openchamber.defaults.field.planModeAllowAgentsAria')}
-            description={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
+            info={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
           />
           {/* Deletion confirmation is configured with deletion itself, on the
               retention section; this page keeps only session-display switches. */}

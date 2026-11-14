@@ -32,6 +32,8 @@ export default defineConfig({
     // One registry owns tool names and their presentation; this finds literal
     // `toolName === "read"` comparisons outside it.
     "openchamber/no-tool-name-literal": "error",
+    // Explanatory prose on SettingsCheckboxRow and SettingsFieldRow goes behind info=.
+    "openchamber/no-static-row-description": "error",
   },
   overrides: [
     {

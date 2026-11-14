@@ -91,3 +91,14 @@ Save screenshots and the event log to `/home/shizuku/Project/ohpichamber-omp-art
     - `bun test packages/agent-service/src/worker/session-native.test.ts`: exits 0 (72/72 passed).
     - `bun run --cwd packages/agent-service type-check`: exits 0.
     - `bunx oxlint`: clean across changed paths.
+
+- Real-Path Defect Fixes (task21 real-path run, runtime worker).
+  - Defect 1: Fixed `readDispatchOutcome` in `packages/web/server/lib/dispatch-results/runtime.js` to return the terminal assistant reply text across all matching post-dispatch turns rather than the first matching turn. When an agent run executes intermediate tool-call turns without text, `readDispatchOutcome` now extracts the terminal reply text from the subsequent text turn. Added a multi-turn regression test in `dispatch-results/runtime.test.js` and updated the real `createOpenChamberSessionService` composition test in `auto-review/runtime.test.js` to include intermediate tool-call turns, verifying auto-review settles to clean.
+  - Defect 2: Made `HOST_TOOL_DESCRIPTIONS.openchamber` explicit in `packages/agent-service/src/worker/host-tool.ts` that action parameters go inside the `input` object (`{"action":"pr.watch","input":{"url":"..."}}`). Added validation in `execute()` with clear error guidance when `input` is missing, and added test in `host-tool.test.ts`.
+  - Check after:
+    - `VITEST_MAX_WORKERS=2 bun run --cwd packages/web test -- server/lib/auto-review server/lib/pr-watch server/lib/host server/lib/openchamber-control`: exits 0 (77 test files, 752 passed, 1 skipped).
+    - `bun test packages/agent-service/src/worker/host-tool.test.ts`: exits 0 (7/7 passed).
+    - `bun run --cwd packages/agent-service type-check`: exits 0.
+    - `node scripts/upstream-gaps.mjs --check`: exits 0 (654/654 allowlisted).
+    - `bunx oxlint`: clean across changed paths.
+    - `bun run --cwd packages/agent-service build`: rebuilt dist.

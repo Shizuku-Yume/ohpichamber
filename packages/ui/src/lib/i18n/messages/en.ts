@@ -9223,6 +9223,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "Fallback providers",
   "settings.webSearch.native.fallbackInfo": "Tried in the order shown when the primary provider fails.",
   "settings.webSearch.native.addFallback": "Add fallback provider",
+  "settings.webSearch.native.dragInstructions": "Press Space to pick up a provider, use the arrow keys to move it, and press Space to drop. Press Escape to cancel.",
   "settings.webSearch.native.removeFallback": "Remove {provider} from fallbacks",
   "settings.webSearch.native.timeout": "Timeout (seconds)",
   "settings.webSearch.native.keyInfo": "Keys are write-only. Existing secrets are never returned.",

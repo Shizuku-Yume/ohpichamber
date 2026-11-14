@@ -9184,6 +9184,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "대체 공급자",
   "settings.webSearch.native.fallbackInfo": "기본 공급자가 실패하면 표시된 순서대로 시도합니다.",
   "settings.webSearch.native.addFallback": "대체 공급자 추가",
+  "settings.webSearch.native.dragInstructions": "Space 키로 공급자를 집고, 방향 키로 옮긴 뒤 Space 키로 놓으세요. Escape 키를 누르면 취소됩니다.",
   "settings.webSearch.native.removeFallback": "대체 공급자에서 {provider} 제거",
   "settings.webSearch.native.timeout": "제한 시간(초)",
   "settings.webSearch.native.keyInfo": "키는 쓰기 전용입니다. 기존 비밀 값은 반환되지 않습니다.",

@@ -9184,6 +9184,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "Fournisseurs de secours",
   "settings.webSearch.native.fallbackInfo": "Essayés dans cet ordre si le fournisseur principal échoue.",
   "settings.webSearch.native.addFallback": "Ajouter un fournisseur de secours",
+  "settings.webSearch.native.dragInstructions": "Appuyez sur Espace pour saisir un fournisseur, utilisez les flèches pour le déplacer, puis appuyez sur Espace pour le déposer. Appuyez sur Échap pour annuler.",
   "settings.webSearch.native.removeFallback": "Retirer {provider} des fournisseurs de secours",
   "settings.webSearch.native.timeout": "Délai maximal (secondes)",
   "settings.webSearch.native.keyInfo": "Les clés sont en écriture seule. Les secrets existants ne sont jamais renvoyés.",

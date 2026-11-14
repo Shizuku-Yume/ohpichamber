@@ -9184,6 +9184,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "代替プロバイダー",
   "settings.webSearch.native.fallbackInfo": "メインプロバイダーが失敗した場合、この順序で試行します。",
   "settings.webSearch.native.addFallback": "代替プロバイダーを追加",
+  "settings.webSearch.native.dragInstructions": "Space キーでプロバイダーをつかみ、矢印キーで移動して、Space キーで置きます。Escape キーでキャンセルします。",
   "settings.webSearch.native.removeFallback": "代替プロバイダーから {provider} を削除",
   "settings.webSearch.native.timeout": "タイムアウト（秒）",
   "settings.webSearch.native.keyInfo": "キーは書き込み専用です。既存のシークレットは返されません。",

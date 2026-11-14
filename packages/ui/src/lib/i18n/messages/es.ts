@@ -9184,6 +9184,7 @@ export const dict = {
   "settings.webSearch.native.fallbacks": "Proveedores alternativos",
   "settings.webSearch.native.fallbackInfo": "Se prueban en este orden si falla el proveedor principal.",
   "settings.webSearch.native.addFallback": "Añadir proveedor alternativo",
+  "settings.webSearch.native.dragInstructions": "Pulsa Espacio para recoger un proveedor, usa las flechas para moverlo y pulsa Espacio para soltarlo. Pulsa Escape para cancelar.",
   "settings.webSearch.native.removeFallback": "Quitar {provider} de los proveedores alternativos",
   "settings.webSearch.native.timeout": "Tiempo de espera (segundos)",
   "settings.webSearch.native.keyInfo": "Las claves solo se pueden escribir. Los secretos existentes nunca se devuelven.",

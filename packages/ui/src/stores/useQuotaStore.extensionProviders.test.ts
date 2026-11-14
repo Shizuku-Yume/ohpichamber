@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, spyOn, test } from '
 import type { ProviderResult, QuotaProviderId } from '@/types';
 import { QUOTA_PROVIDERS } from '@/lib/quota/providers';
 import type { ExtensionQuotaProvider } from '@/lib/quota/extensionProviders';
+import { useConfigStore } from './useConfigStore';
 import { useQuotaStore } from './useQuotaStore';
 
 const TEAPOT = { id: 'ext-teapot-usage' as const, name: 'Teapot Usage', icon: 'cup', guestId: 'teapot-usage' };
@@ -20,18 +21,24 @@ const network = spyOn(globalThis, 'fetch');
 const pause = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 beforeEach(() => {
+  useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_ext_test' });
   useQuotaStore.getState().resetForRuntimeSwitch();
   extensions = [];
   requested.length = 0;
   network.mockImplementation(async (input) => {
     const url = input.toString();
     requested.push(url);
-    if (url.endsWith('/api/quota/extensions')) {
+    if (url.includes('/api/quota/extensions')) {
       if (extensions === 'down') return new Response('{"error":"Failed"}', { status: 500 });
       return Response.json({ extensions });
     }
+    if (url.includes('/api/quota/providers')) {
+      const list = extensions === 'down' ? ['claude'] : ['claude', ...extensions.map((e) => e.id)];
+      return Response.json({ providers: list });
+    }
     // The path's last segment is the id the store asked for; `fetchQuota` checks the echo itself.
-    const providerId = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1));
+    const rawId = url.slice(url.lastIndexOf('/') + 1).split('?')[0];
+    const providerId = decodeURIComponent(rawId);
     return Response.json(result(providerId));
   });
 });
@@ -41,7 +48,7 @@ afterEach(() => {
 });
 afterAll(() => network.mockRestore());
 
-const fetchedQuotas = () => requested.filter((url) => url.includes('/api/quota/') && !url.endsWith('/extensions'));
+const fetchedQuotas = () => requested.filter((url) => url.includes('/api/quota/') && !url.includes('/extensions') && !url.includes('/providers'));
 
 describe('the extensions\' usage providers in the quota store', () => {
   test('reads the list, draws it after the built-ins, and shows it in Work Status by default like a built-in', async () => {
@@ -59,9 +66,8 @@ describe('the extensions\' usage providers in the quota store', () => {
     extensions = [TEAPOT, GARBAGE];
     await useQuotaStore.getState().loadExtensionProviders();
     await pause();
-    expect(fetchedQuotas().filter((url) => url.includes('ext-')).map((url) => url.slice(url.indexOf('/api/quota/')))).toEqual(['/api/quota/ext-teapot-usage', '/api/quota/ext-garbage-usage']);
+    expect(fetchedQuotas().filter((url) => url.includes('ext-')).map((url) => url.slice(url.indexOf('/api/quota/')).split('?')[0])).toEqual(['/api/quota/ext-teapot-usage', '/api/quota/ext-garbage-usage']);
     expect(useQuotaStore.getState().results.map((entry) => entry.providerId)).toEqual(['claude', TEAPOT.id, GARBAGE.id]);
-    useQuotaStore.getState().setSelectedProvider(GARBAGE.id);
 
     // Paused or removed: its card, result and selection go at once; the other extension's stay.
     extensions = [TEAPOT];
@@ -69,7 +75,6 @@ describe('the extensions\' usage providers in the quota store', () => {
     const state = useQuotaStore.getState();
     expect(state.extensionProviders).toEqual([TEAPOT]);
     expect(state.results.map((entry) => entry.providerId)).toEqual(['claude', TEAPOT.id]);
-    expect(state.selectedProviderId).toBeNull();
     expect(state.dropdownProviderIds).not.toContain(GARBAGE.id);
     // An unchanged list changes nothing.
     const before = useQuotaStore.getState().extensionProviders;

@@ -19,6 +19,7 @@ const report = (prompts: number): UsageStats => ({
   activeDays: 1,
   streak: 1,
   activity: [],
+  providers: [],
   models: [],
   partial: false,
 });

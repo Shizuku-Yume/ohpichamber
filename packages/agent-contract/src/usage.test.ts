@@ -7,11 +7,18 @@ import {
 const tokens = { input: 3, output: 2, reasoning: null, cacheRead: 1, cacheWrite: 0, total: 6 };
 const totals = { calls: 3, succeeded: 1, failed: 1, unfinished: 1 };
 const tool = { name: 'read', ...totals, durationP50: null };
-const model = { providerId: 'provider', modelId: 'model', variant: null, steps: 1, tokens, cost: 0.01 };
+const model = {
+  providerId: 'provider', modelId: 'model', variant: null, steps: 1, tokens, cost: 0.01,
+  pricing: null, avgTtft: null, avgTokensPerSecond: null, errorRate: 0,
+};
+const provider = {
+  providerId: 'provider', steps: 1, failedRequests: 0, errorRate: 0, tokens, cost: 0.01,
+  pricing: null, avgTtft: null, avgTokensPerSecond: null, modelsCount: 1,
+};
 const report = {
   range: { from: 1, to: 100 }, sessions: 1, subagents: 0, prompts: 1, steps: 1,
-  tokens, cost: 0.01, tools: { mode: 'none' }, activeDays: 1, streak: 1,
-  activity: [{ date: '2026-10-18', steps: 1 }], models: [model], partial: false,
+  tokens, cost: 0.01, tools: { mode: 'none' as const }, activeDays: 1, streak: 1,
+  activity: [{ date: '2026-10-18', steps: 1 }], providers: [provider], models: [model], partial: false,
 };
 
 describe('historical usage wire boundaries', () => {
@@ -29,6 +36,7 @@ describe('historical usage wire boundaries', () => {
     expect(UsageQuerySchema.safeParse({ ...query, path: '~/.omp/stats.db' }).success).toBe(false);
     expect(UsageQuerySchema.safeParse({ ...query, range: 'all' }).success).toBe(false);
     expect(UsageQuerySchema.safeParse({ timezone: 'UTC' }).success).toBe(true);
+    expect(UsageQuerySchema.safeParse({ ...query, providerId: 'anthropic' }).success).toBe(true);
   });
 
   it('preserves unavailable reasoning and duration without fabricating zero', () => {

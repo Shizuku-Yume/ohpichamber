@@ -8,8 +8,8 @@ import { loadSessionFile } from '@oh-my-pi/pi-coding-agent/session/session-loade
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { UsageSessionReference } from '../protocol.ts';
 import { getUsageStats, getUsageTools, settleUsageSession } from './usage.ts';
-import { currentDb, initDb } from '@oh-my-pi/omp-stats/db';
-
+import { closeDb, currentDb, initDb } from '@oh-my-pi/omp-stats/db';
+import { setProfile } from '@oh-my-pi/pi-utils';
 let directory: string;
 const start = Date.parse('2026-03-07T05:00:00Z');
 const end = Date.parse('2026-03-10T04:00:00Z');
@@ -17,13 +17,16 @@ const query: UsageQuery = { from: start, to: end, timezone: 'America/New_York' }
 
 beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'native-usage-')); await mkdir(join(directory, 'sessions')); });
 afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
-
 function assistant(id: string, parentId: string | null, time: number, amount = 10, model = 'model-a', provider = 'provider-a'): SessionMessageEntry {
-  return { type: 'message', id, parentId, timestamp: new Date(time).toISOString(), message: {
-    role: 'assistant', api: 'openai-completions', provider, model, stopReason: 'stop', timestamp: time,
-    content: [{ type: 'text', text: 'Persisted native response' }], usage: { input: amount, output: 2, cacheRead: 3, cacheWrite: 1, totalTokens: amount + 6,
-      cost: { input: 0.1, output: 0.02, cacheRead: 0.03, cacheWrite: 0.01, total: 0.16 } },
-  } };
+  return {
+    type: 'message', id, parentId, timestamp: new Date(time).toISOString(), message: {
+      role: 'assistant', api: 'openai-completions', provider, model, stopReason: 'stop', timestamp: time,
+      content: [{ type: 'text', text: 'Persisted native response' }], usage: {
+        input: amount, output: 2, cacheRead: 3, cacheWrite: 1, totalTokens: amount + 6,
+        cost: { input: 0.1, output: 0.02, cacheRead: 0.03, cacheWrite: 0.01, total: 0.16 }
+      },
+    }
+  };
 }
 function user(id: string, parentId: string | null, time: number): SessionMessageEntry {
   return { type: 'message', id, parentId, timestamp: new Date(time).toISOString(), message: { role: 'user', content: 'Persisted native prompt', timestamp: time } };
@@ -33,8 +36,10 @@ async function transcript(id: string, entries: SessionEntry[], options: { parent
   const records: FileEntry[] = [Object.assign({ type: 'session', version: 3, id: `native-${id}`, cwd: directory, timestamp: new Date(start).toISOString() },
     options.parentSession ? { parentSession: options.parentSession } : {}), ...entries];
   await writeFile(sessionFile, records.map(entry => JSON.stringify(entry)).join('\n') + '\n');
-  return { sessionId: id, rootSessionId: options.rootSessionId ?? id, workspaceId: options.workspaceId ?? 'workspace-a', projectId: options.projectId ?? 'project-a',
-    cwd: directory, agentDirectory: join(directory, 'agent'), sessionsDirectory: join(directory, 'sessions'), sessionFile };
+  return {
+    sessionId: id, rootSessionId: options.rootSessionId ?? id, workspaceId: options.workspaceId ?? 'workspace-a', projectId: options.projectId ?? 'project-a',
+    cwd: directory, agentDirectory: join(directory, 'agent'), sessionsDirectory: join(directory, 'sessions'), sessionFile
+  };
 }
 
 test('cold persisted native sessions aggregate accounting and models without changing transcript files', async () => {
@@ -50,8 +55,10 @@ test('cold persisted native sessions aggregate accounting and models without cha
   expect(native.malformedRecords).toBe(0);
   expect(native.invalidHeader).toBe(false);
   const stats = UsageStatsSchema.parse(await getUsageStats(query, [first, second]));
-  expect(stats).toMatchObject({ sessions: 2, subagents: 0, prompts: 2, steps: 3, partial: false, activeDays: 1, streak: 1,
-    tokens: { input: 60, output: 6, cacheRead: 9, cacheWrite: 3, total: 78, reasoning: null }, tools: { mode: 'none' } });
+  expect(stats).toMatchObject({
+    sessions: 2, subagents: 0, prompts: 2, steps: 3, partial: false, activeDays: 1, streak: 1,
+    tokens: { input: 60, output: 6, cacheRead: 9, cacheWrite: 3, total: 78, reasoning: null }, tools: { mode: 'none' }
+  });
   expect(stats.cost).toBeCloseTo(0.48);
   expect(stats.models.map(model => [model.providerId, model.modelId, model.tokens.total, model.variant])).toEqual([
     ['provider-a', 'model-a', 42, null], ['provider-b', 'model-b', 36, null],
@@ -183,9 +190,11 @@ test('registered child direct spend is included once without inflating root prom
   rootTurn.message.content = [{ type: 'toolCall', id: 'task-call', name: 'task', arguments: {} }];
   const childTurn = assistant('child-turn', 'child-user', start + 2, 50);
   if (childTurn.message.role !== 'assistant') throw new Error('fixture assistant expected');
-  const taskResult: SessionMessageEntry = { type: 'message', id: 'task-result', parentId: 'root-turn', timestamp: new Date(start + 3).toISOString(), message: {
-    role: 'toolResult', toolCallId: 'task-call', toolName: 'task', content: [], isError: false, timestamp: start + 3, details: { usage: childTurn.message.usage },
-  } };
+  const taskResult: SessionMessageEntry = {
+    type: 'message', id: 'task-result', parentId: 'root-turn', timestamp: new Date(start + 3).toISOString(), message: {
+      role: 'toolResult', toolCallId: 'task-call', toolName: 'task', content: [], isError: false, timestamp: start + 3, details: { usage: childTurn.message.usage },
+    }
+  };
   const root = await transcript('root', [user('root-user', null, start), rootTurn, taskResult]);
   const child = await transcript('child', [user('child-user', null, start), childTurn], { rootSessionId: root.sessionId });
   const stats = await getUsageStats(query, [root, child]);
@@ -209,7 +218,7 @@ test('tool calls retain successful, failed, synthetic, interrupted, missing and 
       role: 'toolResult', toolCallId: `call-${name}`, toolName: name, isError: name !== 'read' && name !== 'late', timestamp: time,
       content: name === 'recovered' ? [{ type: 'text', text: 'Previous OMP process exited before this tool returned; its outcome is unknown.' }] : [],
     }, name === 'synthetic' ? { details: { __synthetic: true, source: 'assistant_stop_aborted', executed: false } } : {},
-    name === 'interrupted' ? { details: { __interrupted: true, source: 'interrupt_skipped', execution: 'started' } } : {});
+      name === 'interrupted' ? { details: { __interrupted: true, source: 'interrupt_skipped', execution: 'started' } } : {});
     const result: SessionMessageEntry = { type: 'message', id: `result-${name}`, parentId, timestamp: new Date(time).toISOString(), message };
     entries.push(result); parentId = result.id;
   }
@@ -271,9 +280,13 @@ test('invalid semantic records, missing proven IDs, orphan and cyclic lineages c
 });
 
 test('native auxiliary model_usage contributes actual provider usage and cost on the active lineage', async () => {
-  const auxiliary: SessionEntry = { type: 'model_usage', id: 'auxiliary', parentId: null, timestamp: new Date(start).toISOString(), purpose: 'summary',
-    api: 'openai-completions', provider: 'provider-aux', model: 'model-aux', stopReason: 'stop', usage: { input: 5, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 6,
-      cost: { input: 0.01, output: 0.01, cacheRead: 0, cacheWrite: 0, total: 0.02 } } };
+  const auxiliary: SessionEntry = {
+    type: 'model_usage', id: 'auxiliary', parentId: null, timestamp: new Date(start).toISOString(), purpose: 'summary',
+    api: 'openai-completions', provider: 'provider-aux', model: 'model-aux', stopReason: 'stop', usage: {
+      input: 5, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 6,
+      cost: { input: 0.01, output: 0.01, cacheRead: 0, cacheWrite: 0, total: 0.02 }
+    }
+  };
   const source = await transcript('auxiliary', [auxiliary]);
   expect((await getUsageStats(query, [source]))).toMatchObject({ steps: 1, cost: 0.02, tokens: { total: 6 }, models: [{ providerId: 'provider-aux', modelId: 'model-aux' }] });
 });
@@ -296,8 +309,10 @@ test('duplicate native IDs within one persisted transcript fail explicitly rathe
 
 test('exact registered paths without a storage directory cannot redirect through a symlink', async () => {
   const source = await transcript('exact', [assistant('exact', null, start)]);
-  const exact: UsageSessionReference = { sessionId: source.sessionId, rootSessionId: source.rootSessionId, workspaceId: source.workspaceId, projectId: source.projectId,
-    sessionFile: source.sessionFile, cwd: source.cwd, agentDirectory: source.agentDirectory };
+  const exact: UsageSessionReference = {
+    sessionId: source.sessionId, rootSessionId: source.rootSessionId, workspaceId: source.workspaceId, projectId: source.projectId,
+    sessionFile: source.sessionFile, cwd: source.cwd, agentDirectory: source.agentDirectory
+  };
   expect((await getUsageStats(query, [exact])).steps).toBe(1);
   const link = join(directory, 'redirect.jsonl');
   await symlink(source.sessionFile, link);
@@ -337,5 +352,110 @@ test('fork siblings deduplicate inherited tokens and tools when their shared nat
     expect((await getUsageTools(query, [parent, first, second]))).toMatchObject({ totals: { calls: 1, unfinished: 1 }, partial: true });
     expect((await getUsageStats({ ...query, projectId: 'project-a' }, [parent, first, second]))).toMatchObject({ steps: 3, tokens: { input: 60 }, partial: false });
     expect((await getUsageTools({ ...query, projectId: 'project-a' }, [parent, first, second]))).toMatchObject({ totals: { calls: 1, unfinished: 1 }, partial: false });
+  }
+});
+
+test('a service test reads a fixture stats.db and session files and returns per-provider and per-model aggregates (tokens incl. reasoning, cost, TTFT, tok/s, error rate) with pricing: null preserved', async () => {
+  closeDb();
+  const fixtureDir = await mkdtemp(join(tmpdir(), 'fixture-stats-'));
+  process.env.PI_CONFIG_DIR = fixtureDir;
+  setProfile(undefined);
+  try {
+    const db = await initDb();
+    const sessionDir = join(fixtureDir, 'sessions');
+    await mkdir(sessionDir, { recursive: true });
+    const f1 = join(sessionDir, 'gemini-custom.jsonl');
+    const f2 = join(sessionDir, 'anthropic-error.jsonl');
+    const turnTime = start + 1000;
+    await writeFile(f1, JSON.stringify({ type: 'session', id: 's1', version: 3, cwd: directory, timestamp: new Date(turnTime).toISOString() }) + '\n' +
+      JSON.stringify({
+        type: 'message', id: 'm1', parentId: null, timestamp: new Date(turnTime).toISOString(), message: {
+          role: 'assistant', provider: 'CLIProxyAPI', model: 'gemini-3.8-flash', api: 'chat-completions', timestamp: turnTime,
+          usage: { input: 100, output: 50, cacheRead: 10, cacheWrite: 5, totalTokens: 165, reasoningTokens: 25 },
+        }
+      }) + '\n');
+
+    await writeFile(f2, JSON.stringify({ type: 'session', id: 's2', version: 3, cwd: directory, timestamp: new Date(turnTime + 100).toISOString() }) + '\n' +
+      JSON.stringify({
+        type: 'message', id: 'm2', parentId: null, timestamp: new Date(turnTime + 100).toISOString(), message: {
+          role: 'assistant', provider: 'anthropic', model: 'claude-3-5-sonnet', api: 'messages', timestamp: turnTime + 100,
+          usage: { input: 200, output: 100, cacheRead: 20, cacheWrite: 10, totalTokens: 330, reasoningTokens: 40 },
+        }
+      }) + '\n');
+
+    db.run(`
+    INSERT INTO messages (
+      session_file, entry_id, folder, model, provider, api, timestamp, duration, ttft,
+      stop_reason, error_message, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+      total_tokens, premium_requests, cost_input, cost_output, cost_cache_read, cost_cache_write,
+      cost_total, cost_no_cache_input, cost_unpriced, agent_type, service_tier
+    ) VALUES (
+      ?, 'm1', 'p1', 'gemini-3.8-flash', 'CLIProxyAPI', 'chat-completions', ?, 2500, 1200,
+      'stop', NULL, 100, 50, 10, 5, 165, 0, 0, 0, 0, 0, 0, 0, 1, 'main', NULL
+    )
+  `, [f1, turnTime]);
+
+    db.run(`
+    INSERT INTO messages (
+      session_file, entry_id, folder, model, provider, api, timestamp, duration, ttft,
+      stop_reason, error_message, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
+      total_tokens, premium_requests, cost_input, cost_output, cost_cache_read, cost_cache_write,
+      cost_total, cost_no_cache_input, cost_unpriced, agent_type, service_tier
+    ) VALUES (
+      ?, 'm2', 'p1', 'claude-3-5-sonnet', 'anthropic', 'messages', ?, 1500, 800,
+      'error', 'Provider rate limit', 200, 100, 20, 10, 330, 0, 0.03, 0.02, 0, 0, 0.05, 0, 0, 'main', NULL
+    )
+  `, [f2, turnTime + 100]);
+
+    const stats = await getUsageStats({ from: start, to: end, timezone: 'UTC' });
+    const parsed = UsageStatsSchema.parse(stats);
+
+    // Verify per-provider aggregates
+    const cliproxy = parsed.providers.find(p => p.providerId === 'CLIProxyAPI');
+    expect(cliproxy).toBeDefined();
+    expect(cliproxy!.tokens).toMatchObject({ input: 100, output: 50, reasoning: 25, cacheRead: 10, cacheWrite: 5, total: 165 });
+    expect(cliproxy!.cost).toBe(0);
+    expect(cliproxy!.pricing).toBeNull();
+    expect(cliproxy!.avgTtft).toBe(1200);
+    expect(cliproxy!.avgTokensPerSecond).toBe(20);
+    expect(cliproxy!.errorRate).toBe(0);
+
+    const anthropicProvider = parsed.providers.find(p => p.providerId === 'anthropic');
+    expect(anthropicProvider).toBeDefined();
+    expect(anthropicProvider!.tokens).toMatchObject({ input: 200, output: 100, reasoning: 40, cacheRead: 20, cacheWrite: 10, total: 330 });
+    expect(anthropicProvider!.cost).toBe(0.05);
+    expect(anthropicProvider!.avgTtft).toBe(800);
+    expect(anthropicProvider!.avgTokensPerSecond).toBeCloseTo(66.67, 1);
+    expect(anthropicProvider!.errorRate).toBe(1);
+
+    // Verify per-model aggregates
+    const geminiModel = parsed.models.find(m => m.providerId === 'CLIProxyAPI' && m.modelId === 'gemini-3.8-flash');
+    expect(geminiModel).toBeDefined();
+    expect(geminiModel!.tokens).toMatchObject({ input: 100, output: 50, reasoning: 25, cacheRead: 10, cacheWrite: 5, total: 165 });
+    expect(geminiModel!.cost).toBe(0);
+    expect(geminiModel!.pricing).toBeNull();
+    expect(geminiModel!.avgTtft).toBe(1200);
+    expect(geminiModel!.avgTokensPerSecond).toBe(20);
+    expect(geminiModel!.errorRate).toBe(0);
+
+    const claudeModel = parsed.models.find(m => m.providerId === 'anthropic' && m.modelId === 'claude-3-5-sonnet');
+    expect(claudeModel).toBeDefined();
+    expect(claudeModel!.tokens).toMatchObject({ input: 200, output: 100, reasoning: 40, cacheRead: 20, cacheWrite: 10, total: 330 });
+    expect(claudeModel!.cost).toBe(0.05);
+    expect(claudeModel!.avgTtft).toBe(800);
+    expect(claudeModel!.errorRate).toBe(1);
+
+    // Verify overall aggregates
+    expect(parsed.tokens.reasoning).toBe(65);
+    expect(parsed.sessions).toBe(2);
+    expect(parsed.steps).toBe(2);
+    expect(parsed.cost).toBe(0.05);
+    expect(parsed.avgTtft).toBe(1000);
+    expect(parsed.errorRate).toBe(0.5);
+  } finally {
+    closeDb();
+    delete process.env.PI_CONFIG_DIR;
+    setProfile(undefined);
+    await rm(fixtureDir, { recursive: true, force: true });
   }
 });

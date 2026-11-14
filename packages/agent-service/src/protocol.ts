@@ -107,7 +107,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp'), operation: McpOperationSchema }),
   z.strictObject({ type: z.literal('shell'), operation: ShellOperationSchema }),
   z.strictObject({ type: z.literal('completion'), operation: CompletionOperationSchema }),
-  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
+  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema).optional() }),
   z.strictObject({ type: z.literal('usage.tools'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
   z.strictObject({ type: z.literal('mcp.configuration.read') }),
   z.strictObject({ type: z.literal('host-tools.toggle'), toolName: z.string().min(1), enabled: z.boolean() }),

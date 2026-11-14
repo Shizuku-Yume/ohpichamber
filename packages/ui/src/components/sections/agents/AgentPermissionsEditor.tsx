@@ -39,7 +39,40 @@ const GROUP_DESC_KEYS = {
   openchamber: 'settings.agents.page.toolPermissions.groupDesc.openchamber',
   mcp_and_extensions: 'settings.agents.page.toolPermissions.groupDesc.mcp_and_extensions',
 } as const;
+const TOOL_DESC_KEYS = {
+  read: 'settings.agents.page.toolPermissions.toolDesc.read',
+  write: 'settings.agents.page.toolPermissions.toolDesc.write',
+  edit: 'settings.agents.page.toolPermissions.toolDesc.edit',
+  apply_patch: 'settings.agents.page.toolPermissions.toolDesc.apply_patch',
+  ast_grep: 'settings.agents.page.toolPermissions.toolDesc.ast_grep',
+  ast_edit: 'settings.agents.page.toolPermissions.toolDesc.ast_edit',
+  glob: 'settings.agents.page.toolPermissions.toolDesc.glob',
+  grep: 'settings.agents.page.toolPermissions.toolDesc.grep',
+  find: 'settings.agents.page.toolPermissions.toolDesc.find',
+  bash: 'settings.agents.page.toolPermissions.toolDesc.bash',
+  eval: 'settings.agents.page.toolPermissions.toolDesc.eval',
+  debug: 'settings.agents.page.toolPermissions.toolDesc.debug',
+  lsp: 'settings.agents.page.toolPermissions.toolDesc.lsp',
+  task: 'settings.agents.page.toolPermissions.toolDesc.task',
+  wait: 'settings.agents.page.toolPermissions.toolDesc.wait',
+  web_search: 'settings.agents.page.toolPermissions.toolDesc.web_search',
+  github: 'settings.agents.page.toolPermissions.toolDesc.github',
+  todo: 'settings.agents.page.toolPermissions.toolDesc.todo',
+  checkpoint: 'settings.agents.page.toolPermissions.toolDesc.checkpoint',
+  rewind: 'settings.agents.page.toolPermissions.toolDesc.rewind',
+  goal: 'settings.agents.page.toolPermissions.toolDesc.goal',
+  think: 'settings.agents.page.toolPermissions.toolDesc.think',
+  advise: 'settings.agents.page.toolPermissions.toolDesc.advise',
+  notify: 'settings.agents.page.toolPermissions.toolDesc.notify',
+  openchamber: 'settings.agents.page.toolPermissions.toolDesc.openchamber',
+  openchamber_render: 'settings.agents.page.toolPermissions.toolDesc.openchamber_render',
+  openchamber_knowledge: 'settings.agents.page.toolPermissions.toolDesc.openchamber_knowledge',
+} as const;
 
+type DescribedToolName = keyof typeof TOOL_DESC_KEYS;
+
+const isDescribedToolName = (name: string): name is DescribedToolName =>
+  Object.hasOwn(TOOL_DESC_KEYS, name);
 const TierChip: React.FC<{ tier: ToolTier }> = ({ tier }) => {
   const { t } = useI18n();
   const label = t(`settings.agents.page.toolPermissions.tier.${tier}`);
@@ -305,7 +338,9 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
                 <div className="divide-y divide-border/20 px-3 py-1 space-y-1">
                   {groupToolList.map((tool) => {
                     const checked = isToolChecked(tool.name);
-                    const description = tool.description || '';
+                    const descKey = isDescribedToolName(tool.name) ? TOOL_DESC_KEYS[tool.name] : null;
+                    const localizedDesc = descKey ? t(descKey) : null;
+                    const description = localizedDesc || tool.description || '';
                     return (
                       <SettingsCheckboxRow
                         key={tool.name}

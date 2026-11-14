@@ -11,7 +11,6 @@ export type { KnownToolName } from './presentations';
 export {
     categorizeTool,
     TOOL_PERMISSION_GROUPS,
-    TOOL_ONE_LINE_DESCRIPTIONS,
     GROUP_DESCRIPTIONS,
     getToolOneLineDescription,
     type ToolPermissionGroupKey,

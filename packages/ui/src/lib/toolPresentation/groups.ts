@@ -42,7 +42,7 @@ export function categorizeTool(name: string): ToolPermissionGroupKey {
   return 'mcp_and_extensions';
 }
 
-export const TOOL_ONE_LINE_DESCRIPTIONS = {
+const TOOL_ONE_LINE_DESCRIPTIONS = {
   read: 'Read files, images, archives and structured data sources',
   write: 'Create or overwrite files in the workspace',
   edit: 'Edit files in place with hashline patches',

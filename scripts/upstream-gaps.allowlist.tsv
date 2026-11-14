@@ -599,3 +599,25 @@ settings-store	useConfigStore.settingsDefaultAgent	## 2026-10-25 - Replace root 
 settings-store	useConfigStore.settingsMessageStreamTransport	## 2026-11-12 - A dead settings row is deleted, not kept for later	Store field 'useConfigStore.settingsMessageStreamTransport' deleted by dead-settings cleanup.
 settings-search	chat.message-transport	## 2026-11-12 - A dead settings row is deleted, not kept for later	Search entry 'chat.message-transport' deleted by dead-settings cleanup.
 settings-search	projects.default-agent	## 2026-10-25 - Replace root agent selection with session modes	Search entry 'projects.default-agent' retired in OMP-only agent architecture.
+route-registration	registerAgentMemoryRoutes	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool and server routes in favor of OMP memory backend
+route-deps	featureRoutesRuntime.registerRoutes.agentMemoryRuntime	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+route-deps	featureRoutesRuntime.registerRoutes.isAgentMemoryEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+route-deps	createSessionKnowledgeRuntime.agentMemoryRuntime	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+route-deps	createSessionKnowledgeRuntime.isAgentMemoryEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+route-deps	createOpenChamberControlService.agentMemoryActions	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+ui-call-no-route	/api/agent-memory	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-item	sessions.agent-memory-tool	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-registry	agentImageModel	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
+settings-registry	agentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
+settings-registry	agentMemoryToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-sanitizer	agentImageModel	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
+settings-sanitizer	agentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
+settings-sanitizer	agentMemoryToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-sanitizer	agentMemoryViewedAt	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-store	useUIStore.agentImageModel	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
+settings-store	useUIStore.agentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
+settings-store	useUIStore.agentMemoryToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-store	useUIStore.setAgentImageModel	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
+settings-store	useUIStore.setAgentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
+settings-store	useUIStore.setAgentMemoryToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-search	sessions.agent-memory-tool	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend

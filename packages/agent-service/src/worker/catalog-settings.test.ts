@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { YAML } from 'bun';
+import './suggestion.ts';
+import { lookup } from '@oh-my-pi/pi-coding-agent/config/registry';
 import { OMP_SETTING_IDS } from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
@@ -32,7 +34,7 @@ async function fixture() {
 test('the allowlist is registered by the pinned package and never names a credential', () => {
   const all = new Map(orderedSettings().map(setting => [setting.id, setting]));
   for (const id of OMP_SETTING_IDS) {
-    const setting = all.get(id);
+    const setting = all.get(id) ?? lookup(id);
     expect(setting, id).toBeDefined();
     expect(setting?.isCredential, id).toBe(false);
   }

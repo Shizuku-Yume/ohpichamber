@@ -2,6 +2,7 @@ import type { JsonObject, JsonValue } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
 import type { ToolGroup, ToolPresentation } from './types';
+import { evalResultSummary } from './toolView';
 
 /** A JSON field's non-blank text. */
 const text = (value: JsonValue | undefined, max = 160): string | null => {
@@ -200,10 +201,7 @@ export const TOOL_PRESENTATIONS = {
     eval: {
         label: 'Eval', icon: 'code', group: 'call', outputLanguage: 'text',
         describeCall: (input) => inputText(input, 'title', 'language', 'code'),
-        describeResult: (result) => {
-            const cells = z.array(z.unknown()).safeParse(detailValue(result, 'cells')).data;
-            return cells?.length ? `${cells.length} cells` : null;
-        },
+        describeResult: evalResultSummary,
     },
     github: plainTool('GitHub', 'github', ['op', 'repo', 'query']),
     glob: queryTool('Glob', 'file-search', ['path', 'pattern']),
@@ -271,15 +269,35 @@ export const TOOL_PRESENTATIONS = {
         describeCall: (input) => inputText(input, 'path', 'file_path'),
         describeResult: (result) => detailText(result, 'message'),
     },
-    memory_edit: plainTool('Memory edit', 'brain-4', ['op']),
+    generate_image: {
+        label: 'Generate image', icon: 'image', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'prompt', 'subject'),
+        describeResult: (result) => {
+            const count = detailNumber(result, 'imageCount') ?? (Array.isArray(detailValue(result, 'imagePaths')) ? (detailValue(result, 'imagePaths') as unknown[]).length : null);
+            return count !== null ? `${count} ${count === 1 ? 'image' : 'images'}` : null;
+        },
+    },
+    memory_edit: {
+        label: 'Memory edit', icon: 'brain-4', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'op', 'id'),
+        describeResult: (result) => detailText(result, 'status') ?? detailText(result, 'message'),
+    },
     retain: {
         label: 'Retain', icon: 'brain-4', group: 'call', outputLanguage: 'text',
         describeCall: (input) => Array.isArray(input.items) ? `${input.items.length} items` : null,
         describeResult: (result) => detailNumber(result, 'count') !== null ? `${detailNumber(result, 'count')} saved` : null,
     },
-    recall: queryTool('Recall', 'brain-4', ['query'], 'call'),
+    recall: {
+        label: 'Recall', icon: 'brain-4', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'query'),
+        describeResult: (result) => detailNumber(result, 'count') !== null ? `${detailNumber(result, 'count')} memories` : detailText(result, 'status'),
+    },
     reflect: queryTool('Reflect', 'brain-4', ['query'], 'call'),
-    learn: queryTool('Learn', 'lightbulb', ['memory'], 'call'),
+    learn: {
+        label: 'Learn', icon: 'lightbulb', group: 'call', outputLanguage: 'text',
+        describeCall: (input) => inputText(input, 'memory'),
+        describeResult: (result) => detailText(result, 'message') ?? 'lesson saved',
+    },
     manage_skill: {
         label: 'Manage skill', icon: 'book-open', group: 'call', outputLanguage: 'text',
         describeCall: (input) => inputText(input, 'action', 'name'),
@@ -313,18 +331,13 @@ export const TOOL_PRESENTATIONS = {
         describeCall: hostCall,
         describeResult: jsonSummary,
     },
-    memory: {
-        label: 'Memory', icon: 'brain-4', group: 'call', outputLanguage: 'text',
-        describeCall: hostCall,
-        describeResult: jsonSummary,
-    },
     notify: {
         label: 'Notify', icon: 'notification-3', group: 'call', outputLanguage: 'text',
         describeCall: hostCall,
         describeResult: jsonSummary,
     },
-    openchamber_image: {
-        label: 'Image', icon: 'image', group: 'call', outputLanguage: 'text',
+    openchamber_workflow: {
+        label: 'Workflow', icon: 'flow-chart', group: 'call', outputLanguage: 'text',
         describeCall: hostCall,
         describeResult: jsonSummary,
     },

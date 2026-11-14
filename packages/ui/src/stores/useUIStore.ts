@@ -1160,7 +1160,6 @@ interface UIStore {
  messageSearchReasoningEnabled: boolean;
  /** Who answers the agent's browser actions: `builtin` (the in-app view) or an extension id. */
  browserProvider: string;
- agentMemoryToolEnabled: boolean;
  agentKnowledgeToolEnabled: boolean;
  agentNotifyToolEnabled: boolean;
  agentRenderToolEnabled: boolean;
@@ -1172,9 +1171,6 @@ interface UIStore {
  permissionDefaultMode: PermissionMode;
  /** Keep the subagent task tool available while Plan mode is active. */
  planModeAllowAgents: boolean;
- agentImageToolEnabled: boolean;
- /** `provider/model` the image tool draws with; empty until the user picks one. */
- agentImageModel: string;
  agentWorkflowToolEnabled: boolean;
  /** The isolated-spaces switch as saved; the server applies it at its next start. */
  isolatedSpacesEnabled: boolean;
@@ -1458,7 +1454,6 @@ interface UIStore {
  setMessageSearchEnabled: (value: boolean) => void;
  setMessageSearchReasoningEnabled: (value: boolean) => void;
  setBrowserProvider: (value: string) => void;
- setAgentMemoryToolEnabled: (value: boolean) => void;
  setAgentKnowledgeToolEnabled: (value: boolean) => void;
  setAgentNotifyToolEnabled: (value: boolean) => void;
  setAgentRenderToolEnabled: (value: boolean) => void;
@@ -1466,8 +1461,6 @@ interface UIStore {
  setSessionGoalMaxAutoTurns: (value: number) => void;
  setPermissionDefaultMode: (value: PermissionMode) => void;
  setPlanModeAllowAgents: (value: boolean) => void;
- setAgentImageToolEnabled: (value: boolean) => void;
- setAgentImageModel: (value: string) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
  setAgentMemoryFeatureAvailable: (value: boolean) => void;
@@ -1703,7 +1696,6 @@ export const useUIStore = create<UIStore>()(
     messageSearchEnabled: false,
     messageSearchReasoningEnabled: false,
     browserProvider: 'builtin',
-    agentMemoryToolEnabled: false,
     agentKnowledgeToolEnabled: true,
     agentNotifyToolEnabled: false,
     agentRenderToolEnabled: true,
@@ -1711,8 +1703,6 @@ export const useUIStore = create<UIStore>()(
     sessionGoalMaxAutoTurns: DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS,
     permissionDefaultMode: 'ask',
     planModeAllowAgents: false,
-    agentImageToolEnabled: false,
-    agentImageModel: '',
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
     agentMemoryFeatureAvailable: false,
@@ -3271,9 +3261,6 @@ export const useUIStore = create<UIStore>()(
     setBrowserProvider: (value) => {
      set({ browserProvider: value });
     },
-    setAgentMemoryToolEnabled: (value) => {
-     set({ agentMemoryToolEnabled: value });
-    },
     setAgentKnowledgeToolEnabled: (value) => {
      set({ agentKnowledgeToolEnabled: value });
     },
@@ -3302,12 +3289,6 @@ export const useUIStore = create<UIStore>()(
      set({ planModeAllowAgents: value });
     },
 
-    setAgentImageToolEnabled: (value) => {
-     set({ agentImageToolEnabled: value });
-    },
-    setAgentImageModel: (value) => {
-     set({ agentImageModel: value });
-    },
     setAgentWorkflowToolEnabled: (value) => {
      set({ agentWorkflowToolEnabled: value });
      if (value) return;
@@ -3861,12 +3842,9 @@ export const useUIStore = create<UIStore>()(
      messageSearchEnabled: state.messageSearchEnabled,
      messageSearchReasoningEnabled: state.messageSearchReasoningEnabled,
      browserProvider: state.browserProvider,
-     agentMemoryToolEnabled: state.agentMemoryToolEnabled,
      agentKnowledgeToolEnabled: state.agentKnowledgeToolEnabled,
      agentNotifyToolEnabled: state.agentNotifyToolEnabled,
      agentRenderToolEnabled: state.agentRenderToolEnabled,
-     agentImageToolEnabled: state.agentImageToolEnabled,
-     agentImageModel: state.agentImageModel,
      agentWorkflowToolEnabled: state.agentWorkflowToolEnabled,
      isolatedSpacesEnabled: state.isolatedSpacesEnabled,
      agentMemoryViewedAt: state.agentMemoryViewedAt,

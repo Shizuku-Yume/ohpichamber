@@ -838,7 +838,7 @@ describe('settings registry gate', () => {
     responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'Be brief.',
     // Registry keys whose server branch is a pass-through: the registry parser
     // owns their shape, so the fixture is the client's own write shape.
-    agentImageToolEnabled: true, agentImageModel: 'anthropic/claude', sessionRetentionIncludeInWork: true,
+    sessionRetentionIncludeInWork: true,
     dictationAutoSend: true, sttEndpointPath: '/speech_to_text', sttCorrectTranscript: true,
     sidebarSections: [{ kind: 'custom', id: 'g', name: 'Clients', grouping: 'project', links: [] }],
     sidebarPinLists: [{ id: 'pinned', name: 'Pinned' }], sidebarHiddenSections: ['work'],

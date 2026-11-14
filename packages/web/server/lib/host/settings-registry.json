@@ -37,9 +37,6 @@
     "agentRenderToolEnabled": {
       "scope": "instance"
     },
-    "agentImageToolEnabled": {
-      "scope": "instance"
-    },
     "permissionDefaultMode": {
       "scope": "profile"
     },
@@ -51,9 +48,6 @@
     },
     "planModeAllowAgents": {
       "scope": "profile"
-    },
-    "agentImageModel": {
-      "scope": "instance"
     },
     "agentWorkflowToolEnabled": {
       "scope": "instance"
@@ -200,9 +194,6 @@
       "scope": "instance"
     },
     "agentNotifyToolEnabled": {
-      "scope": "instance"
-    },
-    "agentMemoryToolEnabled": {
       "scope": "instance"
     },
     "isolatedSpacesEnabled": {
@@ -865,10 +856,6 @@
       "local": true
     },
     "alwaysShowScrollbars": {
-      "scope": "device",
-      "local": true
-    },
-    "agentMemoryViewedAt": {
       "scope": "device",
       "local": true
     },

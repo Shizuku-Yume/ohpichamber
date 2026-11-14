@@ -191,6 +191,20 @@ const markdownImageSources = (message) => {
       if (source) sources.add(source);
     }
   }
+  for (const part of messageTextParts(message)) {
+    if (part.type === 'tool_result') {
+      const output = part.output;
+      if (output && typeof output === 'object') {
+        const details = output.details;
+        if (details && typeof details === 'object' && Array.isArray(details.imagePaths)) {
+          for (const p of details.imagePaths) if (typeof p === 'string' && p) sources.add(p);
+        }
+        if (Array.isArray(output.images)) {
+          for (const img of output.images) if (typeof img?.path === 'string') sources.add(img.path);
+        }
+      }
+    }
+  }
   return sources;
 };
 
@@ -299,10 +313,14 @@ export const registerMarkdownImageGrantRoutes = (app, dependencies) => {
           prune();
           const grantId = crypto.randomUUID();
           const expiresAt = now() + ttl;
-          grants.set(grantId, { path: inspected.path, source, sessionId, workspaceId: scope.workspaceId,
-            rootSessionId: scope.rootSessionId, cwd: scope.cwd, expiresAt });
-          results.push({ sourceIndex, status: 'ready', expiresAt,
-            assetPath: `/api/openchamber/sessions/${encodeURIComponent(sessionId)}/markdown-image-grants/${grantId}/raw` });
+          grants.set(grantId, {
+            path: inspected.path, source, sessionId, workspaceId: scope.workspaceId,
+            rootSessionId: scope.rootSessionId, cwd: scope.cwd, expiresAt
+          });
+          results.push({
+            sourceIndex, status: 'ready', expiresAt,
+            assetPath: `/api/openchamber/sessions/${encodeURIComponent(sessionId)}/markdown-image-grants/${grantId}/raw`
+          });
         } catch { results.push({ sourceIndex, status: 'error' }); }
       }
       return res.json({ results });

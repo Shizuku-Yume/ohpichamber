@@ -13,6 +13,7 @@ export const registerSettingsRoutes = (app, dependencies) => {
     readSettingsFromDiskMigrated,
     formatSettingsResponse,
     persistSettings,
+    onSettingsUpdated,
   } = dependencies;
 
   app.get('/api/config/settings', async (req, res) => {
@@ -28,6 +29,9 @@ export const registerSettingsRoutes = (app, dependencies) => {
   app.put('/api/config/settings', async (req, res) => {
     try {
       const updated = await persistSettings(req.body ?? {}, { surface: settingsSurfaceOf(req) });
+      if (typeof onSettingsUpdated === 'function') {
+        void onSettingsUpdated(updated).catch(() => { });
+      }
       res.json(updated);
     } catch (error) {
       console.error('Failed to save settings:', error);

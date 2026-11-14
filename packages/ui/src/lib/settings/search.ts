@@ -1,5 +1,4 @@
 import type { I18nKey } from '@/lib/i18n/store';
-import { useUIStore } from '@/stores/useUIStore';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
 import { getCustomizableShortcutActions } from '@/lib/shortcuts';
@@ -889,16 +888,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.tools.field.agentNotifyTool',
     descriptionKey: 'settings.openchamber.tools.field.agentNotifyToolInfo',
     keywords: ['agent', 'tool', 'notify', 'notification', 'alert', 'ping', 'openchamber'],
-  },
-  {
-    id: 'sessions.agent-memory-tool',
-    page: 'general',
-    titleKey: 'settings.openchamber.tools.field.agentMemoryTool',
-    descriptionKey: 'settings.openchamber.tools.field.agentMemoryToolInfo',
-    keywords: ['agent', 'tool', 'memory', 'remember', 'recall', 'preferences', 'openchamber'],
-    // Unreleased: searching for a setting that is not rendered would take the
-    // user to an empty spot on the page.
-    isAvailable: () => useUIStore.getState().agentMemoryFeatureAvailable,
   },
   {
     id: 'git.gitlab-account',

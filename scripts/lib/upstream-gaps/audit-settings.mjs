@@ -295,7 +295,9 @@ function exposedOmpSettingIds(ref) {
     const page = raw.split(':')[0];
     if (page === 'engine') { if (renderable(id)) exposed.push(id); continue; }
     if (!guiPages.has(page)) continue;
-    if (id === 'defaultThinkingLevel' || id === 'retry.fallbackChains' || renderable(id)) exposed.push(id);
+    // `retry.fallbackChains` has no option list of its own: the Sessions
+    // fallback selector writes it and no generic row draws it.
+    if (id === 'defaultThinkingLevel' || renderable(id)) exposed.push(id);
   }
   return exposed;
 }

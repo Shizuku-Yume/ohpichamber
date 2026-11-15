@@ -147,3 +147,28 @@ test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
   }
 });
+
+test('every exposed page row is drawn by the section a GUI owner renders', () => {
+  // A placement on a page section nobody draws makes the row writable but
+  // invisible: the "hollow setting" this effort exists to remove. Sections are
+  // listed here by the component that renders them.
+  const renderedSessionsSections = new Set(['defaults', 'plan', 'execution', 'compaction', 'retry', 'isolation', 'worktree', 'title', 'sampling', 'context', 'general', 'security']);
+  const renderedChatSections = new Set(['display', 'thinking', 'images', 'composer', 'magicKeywords', 'btw']);
+  const unwritten: string[] = [];
+  for (const id of OMP_SETTING_EXPOSED_IDS) {
+    const placement = OMP_SETTING_PLACEMENTS[id];
+    if (placement?.type !== 'page') continue;
+    const drawn = placement.page === 'sessions' ? renderedSessionsSections
+      : placement.page === 'chat' ? renderedChatSections
+        : undefined;
+    if (drawn !== undefined && !drawn.has(placement.section)) unwritten.push(`${id} → ${placement.page}:${placement.section}`);
+  }
+  expect(unwritten).toEqual([]);
+});
+
+test('retry.fallbackChains is writable but drawn by no generic row', () => {
+  // Its value is a per-model record with no option list, so an OmpRowControl
+  // would draw an empty chip group. The Sessions fallback selector writes it.
+  expect(OMP_SETTING_EXPOSED_IDS.has('retry.fallbackChains')).toBe(true);
+  expect(OMP_SETTING_PLACEMENTS['retry.fallbackChains']).toEqual({ type: 'page', page: 'sessions', section: 'retry' });
+});

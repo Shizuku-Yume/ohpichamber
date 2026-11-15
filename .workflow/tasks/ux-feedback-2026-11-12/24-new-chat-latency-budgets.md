@@ -106,7 +106,7 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
 - **`prewarmNativeRuntime` returns its promise** so the worker can report `warm`; behaviour and ordering are otherwise unchanged.
 - **Rejected experiments (measured, then reverted):** a throwaway `createAgentSession` on a separate runtime, gating the worker's `idle` reply on prewarm, `prepare` with `deferred: true`, and skill warm-up inside the spare. The first regressed variant (a) to 1155 ms, the second broke Agent Service startup readiness, the third moved the wait from prepare into send and regressed variant (c) to 842 ms, the fourth measured no improvement (skill preflight stayed 260–290 ms, so the cost is contention with `createAgentSession`, not the plugin read alone).
 - Check after:
-  - Command: `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/ufb24-run/project --output …/after-7/run{1,2} --new-chat-runs 10 --skip-ui`, isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133.
+  - Command: `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/task24-perf/project --output …/after-7/run{1,2} --new-chat-runs 10 --skip-ui`, isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133.
   - `POST /sessions` p50: 13.51 / 12.92 ms (noPrepare), 558.40 / 559.54 ms (prepareImmediate), 6.12 / 6.03 ms (prepareCompleted).
   - first `part.delta` after send p50: (a) **765.48 / 746.47 ms**, (b) 796.12 / 775.74 ms, (c) **223.97 / 227.01 ms**. Variant (c) meets ≤ 600 ms; (a) does not.
   - stream cadence p50: 33.24 ms (budget 33 ± 5 ms, met).

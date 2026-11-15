@@ -448,6 +448,9 @@ const ComposerTab: React.FC = () => {
   const inputHistoryLimit = useInputHistoryStore((state) => state.entryLimit);
   const applyInputHistoryScope = useInputHistoryStore((state) => state.applyScope);
   const applyInputHistoryLimit = useInputHistoryStore((state) => state.applyEntryLimit);
+  const { form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('chat');
+  const composerSettings = getSectionSettings('composer');
+  const btwSettings = getSectionSettings('btw');
   const followUpOptions = useChipOptions(FOLLOW_UP_BEHAVIOR_OPTIONS);
   const historyScopeOptions = useChipOptions(INPUT_HISTORY_SCOPE_OPTIONS);
   const enterSendSelected = enterToSendConfigured ? enterToSend : !isMobile;
@@ -543,6 +546,26 @@ const ComposerTab: React.FC = () => {
           />
         </div>
       </SettingsSection>
+
+      {composerSettings.length > 0 || btwSettings.length > 0 ? (
+        <SettingsSection
+          title={t('settings.chat.section.composerKeywords.title')}
+          description={t('settings.chat.section.composerKeywords.description')}
+          settingsItem="chat.composer-keywords"
+        >
+          <div className={SETTINGS_OPTION_STACK_CLASS}>
+            {[...composerSettings, ...btwSettings].map((s) => (
+              <OmpRowControl
+                key={s.id}
+                setting={s}
+                value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                disabled={ompLoading}
+                onChange={(val) => void updateOmpSetting(s.id, val)}
+              />
+            ))}
+          </div>
+        </SettingsSection>
+      ) : null}
 
       <SettingsSection title={t('settings.layout.chat.section.draftsAndHistory')} contentClassName="space-y-3">
         <div className={SETTINGS_OPTION_STACK_CLASS}>

@@ -1072,12 +1072,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.omp.items.retry.usageReservePolicy.description' as I18nKey,
   },
   {
-    id: 'omp.retry.fallbackChains',
-    page: 'sessions',
-    titleKey: 'settings.omp.items.retry.fallbackChains.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.retry.fallbackChains.description' as I18nKey,
-  },
-  {
     id: 'omp.retry.fallbackRevertPolicy',
     page: 'sessions',
     titleKey: 'settings.omp.items.retry.fallbackRevertPolicy.label' as I18nKey,
@@ -2284,6 +2278,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.defaultThinking',
     keywords: ['thinking', 'reasoning', 'variant'],
+  },
+  {
+    // The fallback chain is an OMP record the generic row cannot draw; this
+    // selector writes it, so a search for the chain lands on the real control.
+    id: 'sessions.fallback-model',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.defaults.field.fallbackModel',
+    descriptionKey: 'settings.openchamber.defaults.field.fallbackModelInfo',
+    keywords: ['fallback', 'retry', 'chain', 'model'],
   },
   {
     id: 'sessions.default-mode',

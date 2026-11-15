@@ -43,7 +43,7 @@ export const SKIP_REPLY = 'NO_PREDICTION';
  * One request either way, a few more output tokens, and the chip shows the
  * most likely line as OMP's ghost text does.
  */
-export const PREDICTION_CHOICES = 3;
+const PREDICTION_CHOICES = 3;
 
 /**
  * Message a prediction is keyed on: the newest message that is not an advisor card.

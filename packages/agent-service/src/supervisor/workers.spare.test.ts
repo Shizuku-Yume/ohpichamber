@@ -12,7 +12,7 @@ import { WorkerRegistry } from './workers.ts';
  * signal the supervisor uses to prefer an already-warm process.
  */
 const SPARE_FIXTURE = [
-  "import { appendFileSync } from 'node:fs';",
+  "import { appendFileSync, existsSync } from 'node:fs';",
   "import { join } from 'node:path';",
   // A worker's environment is the supervisor's allowlist, so the fixture reports
   // into its own working directory's parent, which the test owns.
@@ -20,8 +20,11 @@ const SPARE_FIXTURE = [
   "const note = line => { try { appendFileSync(log, line + '\\n'); } catch { } };",
   "const send = message => { if (process.connected) process.send(message); };",
   "note(`spawn ${process.pid}`);",
-  "send({ type: 'idle' });",
-  "setTimeout(() => { note(`warm ${process.pid}`); send({ type: 'warm' }); }, 50);",
+  "note(`cwd ${process.pid} ${process.cwd()}`);",
+  // A test may drop `../slow` to keep every spare unloaded, which is the state
+  // startup is in when the Host registers a second workspace.
+  "const goIdle = () => { send({ type: 'idle' }); setTimeout(() => { note(`warm ${process.pid}`); send({ type: 'warm' }); }, 50); };",
+  "if (existsSync(join(process.cwd(), '..', 'slow'))) setTimeout(goIdle, 600); else goIdle();",
   "process.on('message', message => {",
   "  if (message?.type === 'bootstrap') { note(`bootstrap ${process.pid}`); send({ type: 'ready', workerGeneration: message.workerGeneration }); }",
   "  if (message?.type === 'stop') process.exit(0);",
@@ -30,13 +33,14 @@ const SPARE_FIXTURE = [
   "process.on('SIGTERM', () => process.exit(0));",
 ].join('\n');
 
-const fixture = async () => {
+const fixture = async (options: { slowLoad?: boolean } = {}) => {
   const root = await mkdtemp(join(tmpdir(), 'worker-spare-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
   const entrypoint = join(root, 'spare-worker.mjs');
   const log = join(root, 'spare.log');
   await Promise.all([mkdir(cwd), mkdir(agentDirectory)]);
+  if (options.slowLoad) await writeFile(join(root, 'slow'), '');
   await writeFile(entrypoint, SPARE_FIXTURE);
   return { root, cwd, agentDirectory, entrypoint, log, remove: () => rm(root, { recursive: true, force: true }) };
 };
@@ -60,6 +64,14 @@ const linePids = async (log: string, prefix: string): Promise<string[]> =>
   (await Bun.file(log).text().catch(() => '')).split('\n').filter(line => line.startsWith(prefix)).map(line => line.slice(prefix.length).trim());
 
 const pids = (log: string): Promise<string[]> => linePids(log, 'spawn ');
+
+/** Pids of spares this fixture started for one workspace directory. */
+const pidsFor = async (log: string, cwd: string): Promise<string[]> =>
+  (await Bun.file(log).text().catch(() => '')).split('\n')
+    .filter(line => line.startsWith('cwd '))
+    .map(line => line.slice(4).split(' '))
+    .filter(([, dir]) => dir === cwd)
+    .map(([pid]) => pid!);
 
 const waitFor = async (predicate: () => Promise<boolean> | boolean, timeoutMs = 10_000): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
@@ -157,6 +169,79 @@ test('a refused refill does not retry from its own settle', async () => {
     expect(await spawnCount(f.log)).toBe(0);
   } finally {
     await registry.releaseWorktreeLease('lease-under-test').catch(() => undefined);
+    await registry.close();
+    await f.remove();
+  }
+}, 30_000);
+
+
+// The Host registers its project and the managed chats root during startup, so
+// two workspaces ask for a pool before either worker finished loading. That cost
+// a real regression: an ask evicted every spare belonging to a *different*
+// workspace, so the two startup registrations killed each other's spares and the
+// workspace the user then typed in paid a cold worker launch on its first prompt
+// (~1.5 s against ~0.65 s once both asks are honoured).
+//
+// The assertion is adoption, which is what the user feels: the session must be
+// served by a process that already existed. A spawn count cannot say that — the
+// refill pads the pool back either way — and process liveness cannot either,
+// because a killed child is still a zombie that answers `kill(pid, 0)` until it
+// is reaped.
+test('a second workspace does not take the first workspace\'s spares', async () => {
+  const f = await fixture({ slowLoad: true });
+  const other = join(f.root, 'other-workspace');
+  await mkdir(other);
+  const registry = registryFor(f.entrypoint);
+  try {
+    // Both startup registrations happen before either worker finishes loading,
+    // which is the state the real service is in.
+    registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
+    await waitFor(async () => (await pidsFor(f.log, f.cwd)).length >= 2, 5_000);
+
+    registry.warmSessionWorker({ cwd: other, agentDirectory: f.agentDirectory });
+    await Bun.sleep(500);
+
+    // The user then starts a chat in the project. It must be handed a worker that
+    // was already spawned, not made to wait out a cold launch.
+    const spawnedBeforeStart = new Set(await pids(f.log));
+    await registry.start(bootstrap('first', f.cwd, f.agentDirectory));
+    expect(registry.info('first')?.state).toBe('ready');
+    const served = (await linePids(f.log, 'bootstrap ')).at(-1);
+    expect(served).toBeDefined();
+    expect(spawnedBeforeStart.has(served!)).toBe(true);
+  } finally {
+    await registry.close();
+    await f.remove();
+  }
+}, 30_000);
+
+// The reported bug lasted because any removal of an unloaded spare was read as a
+// broken spawn target: `drop` then set the refusal that only the 30 s reaper
+// sweep clears, so one eviction left every workspace without a spare for a whole
+// reap interval. A removal the registry chose on purpose must not record that.
+//
+// The lease refusal below is the same signal arriving for a real reason and must
+// still block (pinned by `a refused refill does not retry from its own settle`),
+// so the two cases have to stay distinguishable.
+test('a deliberate eviction does not refuse refills until the next reaper sweep', async () => {
+  const f = await fixture({ slowLoad: true });
+  const other = join(f.root, 'other-workspace');
+  await mkdir(other);
+  const registry = registryFor(f.entrypoint);
+  try {
+    // Fill the first workspace's pool while the spares are still loading, then
+    // let another workspace ask: with a spent total budget that ask evicts, which
+    // is a deliberate removal of an unloaded spare.
+    registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
+    await waitFor(async () => (await pidsFor(f.log, f.cwd)).length >= 2, 5_000);
+    registry.warmSessionWorker({ cwd: other, agentDirectory: f.agentDirectory });
+    await Bun.sleep(500);
+
+    // The refusal must not be set by that eviction. This is the assertion that
+    // separates a chosen removal from a failed spawn, and it is what the 30 s
+    // freeze in the report was.
+    expect((registry as unknown as { spareRefillBlocked: boolean }).spareRefillBlocked).toBe(false);
+  } finally {
     await registry.close();
     await f.remove();
   }

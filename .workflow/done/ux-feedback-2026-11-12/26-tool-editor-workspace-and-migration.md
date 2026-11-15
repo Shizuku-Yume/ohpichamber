@@ -7,7 +7,6 @@
 **Files:** `packages/agent-contract/src/session.ts`; `packages/agent-service/src/worker/{catalog-agents,stateless,session}.ts`, the native agents projection, and Host authorization (the `permission.preset` chain); `packages/ui/src/components/sections/agents/{AgentsPage,AgentPermissionsEditor}.tsx`, `groups.ts`; locale keys
 **Read first:** independent review `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/independent-review/Review13.md` (all eight findings); `.workflow/done/ux-feedback-2026-11-12/13-*.md`; skills `ui-api-decoupling`, `locale-ui-patterns`, `sync-state-invariants`
 **Base commit:** 903457f7205fce607e30a735de8243547ed5c799
-**Status:** active
 **Check:** all of these tests exit 0, and `bun run lint` exits 0:
 - A worker and catalog test loads a profile YAML that still carries `permissionPresetId`. The catalog lists it, and workers start.
 - The stateless workspace catalog reports runtime tool metadata and real tiers (`ast_grep` is read, `ast_edit` is write), including enabled Host and MCP tools.
@@ -57,4 +56,4 @@ Check after:
   - `03-session-task-success.png` (1440×960, opened and inspected) shows the finished chat; `03-session-task-success.txt` is the same render as text (`document.body.innerText`) and contains `56088`, `task26-agent`, and the `Subagents (1)` panel, so the claim is inspectable without a vision model.
   - `real-path-summary.json` records `head: 2f11671e6e63f5321f7d78681f422317e3f01f1d`, `runCompleted: true`, the model, and the completed `task26-agent` subagent. The script is kept as `real-path-task26.mjs` in the same directory. All server and Chrome processes were stopped; the temporary root was removed.
 
-Review: pending
+Review: pass — independent read-only worker session ufb-26-reviewer (deepseek-v4.1-flash), 3 rounds: blocked (6 findings), blocked (5 findings), pass at 7fd1602be9. Non-blocking noted: discovery re-runs per GET /tools without a cache, discovery descriptions are not path-sanitized, and subagentSessions has no delete path, so its fallback is untested.

@@ -58,9 +58,9 @@ const state = {
   configPath: CONFIG_PATH,
   totalCount: 15,
   settings: [
-    setting({ id: 'compaction.enabled', type: 'boolean', value: true, label: 'Auto-Compact', tab: 'context' }),
+    setting({ id: 'compaction.enabled', type: 'boolean', value: true, label: 'Auto-Compact', group: 'Compaction', tab: 'context' }),
     setting({
-      id: 'compaction.thresholdPercent', type: 'number', value: 50, label: 'Compaction Threshold', tab: 'context',
+      id: 'compaction.thresholdPercent', type: 'number', value: 50, label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
       options: [
         { value: 'default', label: 'Default' },
         { value: '50', label: '50%' },
@@ -74,21 +74,23 @@ const state = {
     setting({ id: 'enabledModels', type: 'array', value: [], placement: { type: 'owned-by', owner: 'providers.models' } }),
     setting({ id: 'recap.enabled', type: 'boolean', value: true, placement: { type: 'page', page: 'chat', section: 'recap' } }),
     // One row per section, so every heading renders and is checked as prose.
-    setting({ id: 'lsp.enabled', type: 'boolean', value: true, label: 'LSP', tab: 'lsp' }),
-    setting({ id: 'task.maxConcurrency', type: 'number', value: 3, label: 'Task concurrency' }),
-    setting({ id: 'skills.enabled', type: 'boolean', value: true, label: 'Skills' }),
-    setting({ id: 'mcp.enableProjectConfig', type: 'boolean', value: false, label: 'Project MCP config' }),
+    setting({ id: 'lsp.enabled', type: 'boolean', value: true, label: 'LSP', group: 'LSP', tab: 'lsp' }),
+    setting({ id: 'task.maxConcurrency', type: 'number', value: 3, label: 'Task concurrency', group: 'Subagents' }),
+    setting({ id: 'skills.enabled', type: 'boolean', value: true, label: 'Skills', group: 'Commands & Skills' }),
+    setting({ id: 'mcp.enableProjectConfig', type: 'boolean', value: false, label: 'Project MCP config', group: 'Discovery & MCP' }),
     // OMP's own condition gates these two.
-    setting({ id: 'retry.usageReservePct', type: 'number', value: 15, condition: 'usageAwareFallbackEnabled', conditionActive: false, label: 'Usage reserve' }),
-    setting({ id: 'plan.defaultOnStartup', type: 'boolean', value: false, condition: 'planModeEnabled', conditionActive: true, label: 'Start in plan mode' }),
+    setting({ id: 'retry.usageReservePct', type: 'number', value: 15, condition: 'usageAwareFallbackEnabled', conditionActive: false, label: 'Usage reserve', group: 'Retry & Fallback' }),
+    setting({ id: 'plan.defaultOnStartup', type: 'boolean', value: false, condition: 'planModeEnabled', conditionActive: true, label: 'Start in plan mode', group: 'Modes' }),
     // Chips come from the enumerated options.
     setting({
-      id: 'retry.fallbackOn', type: 'enum', value: 'any', label: 'Fall Back On',
+      id: 'retry.fallbackOn', type: 'enum', value: 'any', label: 'Fall Back On', group: 'Retry & Fallback',
       enumValues: ['any', 'usage-limit', 'except-usage-limit'],
     }),
+    // The role record is drawn by the shared role editor on Defaults, Agents,
+    // Tools and Memory, never by a generic row.
     setting({
       id: 'modelRoles', type: 'record', value: { vision: 'anthropic/claude-3-7-sonnet:high' },
-      label: 'Model Roles',
+      label: 'Model Roles', placement: { type: 'owned-by', owner: 'omp.modelRoles' },
     }),
   ],
 };
@@ -325,6 +327,11 @@ test('renders every page row translated in zh-CN with no raw setting id on scree
       expect(container.textContent, key).toContain(ompSettingsI18n['zh-CN'][key]);
     }
     expect(container.textContent).not.toContain('settings.omp.group.');
+    // Every heading comes from the locale, never from OMP's own group name: a
+    // group the vocabulary missed would show its raw English name here.
+    for (const rawGroup of ['Compaction', 'Subagents', 'Commands & Skills', 'Discovery & MCP', 'Modes', 'Retry & Fallback']) {
+      expect(`${rawGroup}: ${(container.textContent ?? '').includes(rawGroup)}`).toBe(`${rawGroup}: false`);
+    }
     // No raw `setting.id` leaks: the ids are snake/dot vocabulary, never prose.
     for (const raw of ['compaction.enabled', 'compaction.thresholdPercent', 'retry.fallbackOn', 'plan.defaultOnStartup', 'modelRoles']) {
       expect(`${raw}: ${(container.textContent ?? "").includes(raw)}`).toBe(`${raw}: false`);

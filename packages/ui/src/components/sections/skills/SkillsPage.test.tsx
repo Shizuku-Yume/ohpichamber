@@ -59,7 +59,7 @@ test('skill refresh preserves newer editor text while a save is pending and swit
   const skill = { skillId: 'one', authoredSkillId: 'one', name: 'one', content: '', scope: 'agent', source: '.omp/agent/skills', description: 'one', readOnly: false } satisfies DiscoveredSkill;
   let persisted = '---\nname: one\ndescription: one\ncustom: [keep, metadata]\n---\n\ninitial';
   const writes: Array<{ instructions: string; finish: () => void }> = [];
-  useSkillsStore.setState({ selectedSkillName: 'one', selectedAuthoredSkill: null, skills: [skill], skillsByDirectory: { '/project': [skill] }, filesByDirectory: {},
+  useSkillsStore.setState({ selectedSkillName: null, selectedAuthoredSkill: null, skills: [skill], skillsByDirectory: { '/project': [skill] }, filesByDirectory: {},
     getSkillDetail: async (name) => ({ content: persisted.replace('description: one', `description: ${name}`), supportingFiles: [] }),
     updateSkill: async (_name, input) => {
       const { promise, resolve } = Promise.withResolvers<boolean>();
@@ -73,6 +73,10 @@ test('skill refresh preserves newer editor text while a save is pending and swit
     },
   });
   await act(async () => root.render(<I18nProvider><ThemeSystemContext.Provider value={themeContext}><SkillsPage /></ThemeSystemContext.Provider></I18nProvider>));
+  // With nothing selected the page still needs its heading: Settings focuses
+  // `[data-settings-page-heading]` on navigation.
+  expect(container.querySelector('[data-settings-page-heading]')?.textContent).toBe('Skills');
+  await act(async () => useSkillsStore.setState({ selectedSkillName: 'one' }));
   const currentView = () => {
     const editorNode = container.querySelector<HTMLElement>('.cm-editor');
     if (!editorNode) throw new Error('Skill editor missing');

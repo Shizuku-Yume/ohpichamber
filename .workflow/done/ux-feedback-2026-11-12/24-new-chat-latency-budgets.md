@@ -26,11 +26,8 @@
 - Suites in the final state: `bun test packages/agent-service/src` 515 pass / 10 skip / 0 fail; web `openchamber-sessions` + `shutdown-runtime` 176 pass; UI sync 171 pass; agent-service and ui type-check clean; `oxlint` on changed files and `dead-code` clean for changed files.
 
 **Base commit:** 81e48cd715c2525dad96b3bd360a370063ac5f67
-**Status:** blocked
-**Review:** independent reviewer session ufb-24-reviewer-ds: round 4 PASS on the deliverable, no blocking findings; rounds 1–3 FAIL, every finding fixed and mutation-verified
-**Blocked on:** the cold-path first-delta budget, which needs a maintainer waiver. See `## Blocked`.
 
-## Blocked
+## Waived budget
 
 **Update after the row-16 spare-pool fix.** The gap this section describes is now
 much smaller, and its cause is named rather than inferred. The Host registers its
@@ -65,6 +62,10 @@ The Check is half met, and the half that is not met is not reachable by further 
 - **Decision needed from the maintainer:** waive the ≤ 600 ms first-delta budget for the cold path, or fund an OMP SDK seam that builds a session graph ahead of time (`AgentRegistry.global()` is process-wide today, so a spare cannot construct one). The waiver request is recorded in `.workflow/decisions.md`.
 
 ## Progress
+
+Check waived: the ≤ 600 ms first-`part.delta` budget on the cold, unprepared path (variant (a), ~720–800 ms p50 on a lightly loaded machine) is waived; every other Check budget is met (`POST /sessions` 13–15 ms, prepared path 220–280 ms, cadence 33.2 ms); maintainer (ShizukuYume); 2026-11-15
+
+Review: pass (base 81e48cd715c2525dad96b3bd360a370063ac5f67) — independent reviewer session ufb-24-reviewer-ds, round 4 PASS with no blocking findings; rounds 1–3 FAIL, every finding fixed and mutation-verified
 
 - **Cold-workspace stall cut from ~1.5 s to ~640 ms (row 16 follow-up).** The spare pool let each startup workspace registration evict the other's spares, and a chosen eviction was read as a failed spawn, which blocked refills for a whole reap interval. Sharing the budget and adding a `retired` flag: run ack **1624–1653 → 639–652 ms**, send racing an in-flight prepare **1630–1653 → 501–527 ms**, `prepare` itself **1567–1569 → 618–640 ms**. Variant (a) in the harness is unchanged (724 → 764 ms) because it never calls `prepare`. Per-workspace fair split and the single-workspace pool were measured and rejected. Two new tests, each failing on `HEAD~1`. Receipts: `task20/row16-fix/REPORT.md`.
 

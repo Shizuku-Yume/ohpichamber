@@ -1,6 +1,6 @@
 # Maintainer feedback 2026-11-12: merge losses, permissions, settings ownership and chat latency
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** ux-feedback-2026-11-12/integration
 

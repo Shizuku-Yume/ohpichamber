@@ -1233,3 +1233,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** the symlink writer stops writing inside the runtime root, or a packaged-Electron test covers `standalone-loader`'s symlink path so the guard's absence fails loudly.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-15 - The cold-path first-delta budget is waived
+
+- **Decided:** the W11 budget of ≤ 600 ms from send to the first `part.delta` is waived for a new chat that never calls `prepare` (variant (a), measured ~720–800 ms p50 on a lightly loaded machine). Task 24 archives with `Check waived:`, and row 16 of the acceptance matrix stands as accepted.
+- **Instead of:** funding an OMP SDK seam that lets a spare worker build a session graph ahead of the prompt, or holding the effort open until one exists.
+- **Because:** the path users take (`openNewSessionDraft` calls `prepare`) measures 220–280 ms and meets the budget, `POST /sessions` fell from ~1 s to 13–15 ms, and the remaining cold cost is OMP's own `createAgentSession` (~110 ms), agent-loop preparation (~145 ms) and supervisor queueing (~60 ms), which this repository cannot remove while `AgentRegistry.global()` is process-wide.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP exposes a prebuilt or per-process session graph, or the cold path becomes a path users routinely take.
+- **Effort:** ux-feedback-2026-11-12

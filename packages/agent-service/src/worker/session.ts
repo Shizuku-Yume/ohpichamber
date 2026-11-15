@@ -702,7 +702,11 @@ export class WorkerSession {
           process.stderr.write(`${JSON.stringify({ type: 'policy.capture.warning', message: message.slice(0, 200) })}\n`);
         }
       };
-      void capturePolicy().catch(() => { });
+      // The first snapshot must exist before the worker reports ready: a session
+      // start is the only chance to publish it, and readers treat a ready worker
+      // as having one. capturePolicy swallows its own failures, so awaiting it
+      // cannot fail the open; it only orders the publish ahead of readiness.
+      const initialPolicyCapture = capturePolicy();
       projection = owned.projection;
       // External MCP servers can take tens of seconds to handshake; the first
       // prompt must not wait for them. Start the connection in the background,
@@ -730,6 +734,7 @@ export class WorkerSession {
       }));
       postInitTasks.push(warming.read(input.workspaceId, '0').then(w => warming.apply(w.mode)).catch(() => { }));
       await Promise.all(postInitTasks);
+      await initialPolicyCapture;
       return owned;
     } catch (error) {
       interaction.close();

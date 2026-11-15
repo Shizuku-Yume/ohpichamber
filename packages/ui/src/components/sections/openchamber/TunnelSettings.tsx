@@ -16,7 +16,7 @@ import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { useDurationTickerNow, useWaitingBlink } from '@/hooks/useDurationTicker';
-import { SettingsChipGroup, SettingsFieldRow, SettingsSection, SettingsStackedField, SettingsGroupTitle, SETTINGS_FIELD_LABEL_CLASS, SETTINGS_CALLOUT_TITLE_CLASS, SETTINGS_DESCRIPTION_CLASS, SETTINGS_HELPER_CLASS, SETTINGS_WIDTH_SELECT_CLASS } from '@/components/sections/shared/SettingsSection';
+import { SettingsChipGroup, SettingsFieldRow, SettingsSection, SettingsStackedField, SettingsGroupTitle, SETTINGS_FIELD_LABEL_CLASS, SETTINGS_CALLOUT_TITLE_CLASS, SETTINGS_DESCRIPTION_CLASS, SETTINGS_HELPER_CLASS, SETTINGS_WIDTH_SELECT_CLASS, SETTINGS_SPACE_ROW_CLASS, SETTINGS_SPACE_CHECKBOX_CLASS } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { problemMessage } from '@/lib/problemMessage';
 

@@ -34,6 +34,7 @@ mock.module('@/components/sections/shared/SettingsSection', () => ({
   SETTINGS_NUMBER_STEPPER_ROW_CLASS: '',
   SETTINGS_NUMBER_UNIT_CLASS: '',
   SETTINGS_SPACE_CHECKBOX_CLASS: '',
+  SETTINGS_SPACE_ROW_CLASS: '',
 }));
 
 const { SessionRetentionSettings } = await import('./SessionRetentionSettings');

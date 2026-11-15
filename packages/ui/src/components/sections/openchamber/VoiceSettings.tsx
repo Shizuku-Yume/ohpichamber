@@ -22,10 +22,13 @@ import {
     SettingsChipGroup,
     SETTINGS_WIDTH_NUMBER_CLASS,
     SETTINGS_WIDTH_SELECT_CLASS,
+    SETTINGS_WIDTH_SHORT_TEXT_CLASS,
     SETTINGS_WIDTH_LONG_TEXT_CLASS,
     SETTINGS_HELPER_CLASS,
     SETTINGS_ICON_BUTTON_CLASS,
+    SETTINGS_NUMBER_STEPPER_ROW_CLASS,
     SETTINGS_SPACE_CHECKBOX_CLASS,
+    SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { browserVoiceService } from '@/lib/voice/browserVoiceService';
 import { startFocusedReading } from '@/lib/voice/readingAudioFocus';
@@ -1003,9 +1006,10 @@ export const VoiceSettings: React.FC = () => {
         }, setIsCompatiblePreviewPlaying);
     }, [isCompatiblePreviewPlaying, playAudioPreview, openaiCompatibleUrl, openaiCompatibleVoice, openaiCompatibleTtsModel, openaiCompatibleTtsEndpointPath, speechRate, t]);
 
-    // A fixed-width slider with its value beside it, the same on every row,
-    // so the three rows read as one column. Phones get a stepper instead.
-    const sliderClass = "w-40 flex-none h-1.5 bg-[var(--interactive-border)] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0 disabled:opacity-50";
+    // A slider that shares the stacked long-text width with its value beside it,
+    // so the three rows read as one column and end at the row's trailing edge.
+    // Phones get a stepper inside the number row instead.
+    const sliderClass = "min-w-0 flex-1 h-1.5 bg-[var(--interactive-border)] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0 disabled:opacity-50";
     const sliderValueClass = 'typography-ui-label w-12 shrink-0 text-end tabular-nums text-muted-foreground';
     const previewIcon = (playing: boolean) => (playing ? <Icon name="stop" className="w-3.5 h-3.5" /> : <Icon name="play" className="w-3.5 h-3.5" />);
 
@@ -1015,7 +1019,7 @@ export const VoiceSettings: React.FC = () => {
                 settingsItem="voice.playback"
                 title={t('settings.voice.page.section.playbackAndSummary')}
                 divider={false}
-                contentClassName="space-y-3"
+                contentClassName={SETTINGS_SPACE_ROW_CLASS}
             >
                 <SettingsCheckboxRow
                     checked={showMessageTTSButtons}
@@ -1269,7 +1273,9 @@ export const VoiceSettings: React.FC = () => {
 
                             <SettingsFieldRow label={t('settings.voice.page.field.speechRate')}>
                                 {isMobile ? (
-                                    <NumberInput value={speechRate} onValueChange={setSpeechRate} min={0.5} max={2} step={0.1} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                        <NumberInput value={speechRate} onValueChange={setSpeechRate} min={0.5} max={2} step={0.1} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    </div>
                                 ) : (
                                     <div className="flex h-8 items-center gap-2">
                                         <input type="range" min={0.5} max={2} step={0.1} value={speechRate} onChange={(e) => setSpeechRate(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechRate')} />
@@ -1280,7 +1286,9 @@ export const VoiceSettings: React.FC = () => {
 
                             <SettingsFieldRow label={t('settings.voice.page.field.speechPitch')}>
                                 {isMobile ? (
-                                    <NumberInput value={speechPitch} onValueChange={setSpeechPitch} min={0.5} max={2} step={0.1} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                        <NumberInput value={speechPitch} onValueChange={setSpeechPitch} min={0.5} max={2} step={0.1} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    </div>
                                 ) : (
                                     <div className="flex h-8 items-center gap-2">
                                         <input type="range" min={0.5} max={2} step={0.1} value={speechPitch} onChange={(e) => setSpeechPitch(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechPitch')} />
@@ -1291,7 +1299,9 @@ export const VoiceSettings: React.FC = () => {
 
                             <SettingsFieldRow label={t('settings.voice.page.field.speechVolume')}>
                                 {isMobile ? (
-                                    <NumberInput value={Math.round(speechVolume * 100)} onValueChange={(v) => setSpeechVolume(v / 100)} min={0} max={100} step={10} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                        <NumberInput value={Math.round(speechVolume * 100)} onValueChange={(v) => setSpeechVolume(v / 100)} min={0} max={100} step={10} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    </div>
                                 ) : (
                                     <div className="flex h-8 items-center gap-2">
                                         <input type="range" min={0} max={1} step={0.1} value={speechVolume} onChange={(e) => setSpeechVolume(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechVolume')} />
@@ -1343,7 +1353,7 @@ export const VoiceSettings: React.FC = () => {
             <SettingsSection
                 settingsItem="voice.speech-recognition"
                 title={t('settings.voice.page.section.speechRecognition')}
-                contentClassName="space-y-3"
+                contentClassName={SETTINGS_SPACE_ROW_CLASS}
             >
                 <SettingsCheckboxRow
                     checked={dictationEnabled}

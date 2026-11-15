@@ -233,7 +233,7 @@ export const PasskeySettings: React.FC = () => {
 
   return (
     <SettingsSection title={t('settings.openchamber.passkeys.title')}>
-      <div className="space-y-2">
+      <div className={SETTINGS_SPACE_ROW_CLASS}>
         <SettingsFieldRow label={t('settings.openchamber.passkeys.field.currentDevice')}>
           <Button
             type="button"
@@ -274,7 +274,7 @@ export const PasskeySettings: React.FC = () => {
         ) : passkeys.length === 0 ? (
           <p className="typography-meta text-muted-foreground">{t('settings.openchamber.passkeys.state.noneSaved')}</p>
         ) : (
-          <div className="space-y-1 pt-1">
+          <div>
             {passkeys.map((passkey) => {
               const isEditingPasskey = renamingId === passkey.id;
               return (
@@ -305,16 +305,16 @@ export const PasskeySettings: React.FC = () => {
                     <span title={passkey.label}>{passkey.label}</span>
                   )}
                   alignEnd={false}
-                  controlClassName="justify-between sm:flex-1"
+                  controlClassName="justify-between"
                 >
                   <span className="typography-meta text-muted-foreground truncate">
                     {passkey.lastUsedAt
                       ? t('settings.openchamber.passkeys.item.lastUsed', {
-                          time: formatTimestamp(passkey.lastUsedAt, t('settings.openchamber.passkeys.time.neverUsed'), timeFormatPreference),
-                        })
+                        time: formatTimestamp(passkey.lastUsedAt, t('settings.openchamber.passkeys.time.neverUsed'), timeFormatPreference),
+                      })
                       : t('settings.openchamber.passkeys.item.added', {
-                          time: formatTimestamp(passkey.createdAt, t('settings.openchamber.passkeys.time.neverUsed'), timeFormatPreference),
-                        })}
+                        time: formatTimestamp(passkey.createdAt, t('settings.openchamber.passkeys.time.neverUsed'), timeFormatPreference),
+                      })}
                   </span>
                   <div className="flex shrink-0 items-center gap-1">
                     {!isEditingPasskey && (
@@ -350,9 +350,7 @@ export const PasskeySettings: React.FC = () => {
       </div>
 
       {errorMessage && (
-        <div className="mt-1 py-1.5">
-          <p className="typography-meta text-[var(--status-error)]">{errorMessage}</p>
-        </div>
+        <p className="typography-meta text-[var(--status-error)]">{errorMessage}</p>
       )}
     </SettingsSection>
   );

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { openExternalUrl } from '@/lib/url';
 import { useI18n } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { getManagedCredentialSourceLabelKey } from '@/lib/source-control/identity';
 import type { SourceControlProviderDescriptor } from '@/lib/source-control/providers/descriptor';
 import type {
@@ -558,14 +559,14 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
           A switch the server kept for a CLI that cannot answer has no row, so it shows here. */}
       {!serviceOnly && descriptor.auth.methods.includes('cli') && cli && (cli.disabled || cli.active || (connected && cli.available))
         && (cli.disabled || !accounts.some((account) => account.source === 'cli')) && (
-        <div>
-          <SettingsFieldRow label={t(copy.cliLabel, { cli: cliName })} info={t(copy.cliInfo, { cli: cliName })}>
-            <Button size="sm" variant="outline" onClick={toggleCli} disabled={busy}>
-              {cli.disabled ? t(copy.enableCli, { cli: cliName }) : t(copy.disableCli, { cli: cliName })}
-            </Button>
-          </SettingsFieldRow>
-        </div>
-      )}
+          <div>
+            <SettingsFieldRow label={t(copy.cliLabel, { cli: cliName })} info={t(copy.cliInfo, { cli: cliName })}>
+              <Button size="sm" variant="outline" onClick={toggleCli} disabled={busy}>
+                {cli.disabled ? t(copy.enableCli, { cli: cliName }) : t(copy.disableCli, { cli: cliName })}
+              </Button>
+            </SettingsFieldRow>
+          </div>
+        )}
       {sshUrlConfirm.dialog}
     </div>
   );

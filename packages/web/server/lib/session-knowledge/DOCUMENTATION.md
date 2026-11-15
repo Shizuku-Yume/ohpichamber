@@ -5,8 +5,8 @@ plans, and whether it has been told yet.
 
 Memory and session-linking are not prompt background. The model sees what plain
 OMP sends for the same session, plus the user's own pins and attachments and the
-Host tools' descriptions. The panel still reports memory counts and offers its
-CRUD, but no memory index or save/link guidance is copied into a prompt.
+Host tools' descriptions. No memory index or save/link guidance is copied into a
+prompt.
 
 ## Why it is here and not in the UI
 
@@ -31,7 +31,7 @@ attached to that session. Pins never come from project-wide note or plan state.
 A new-session draft passes its pins into this metadata when its first message
 creates the session.
 
-Directories beneath the managed `~/.config/openchamber/chats` root resolve to that root before project context and project memory are read. Every ordinary chat therefore shares one Chats knowledge owner instead of creating an unreachable context store for each dated session directory.
+Directories beneath the managed `~/.config/openchamber/chats` root resolve to that root before project context is read. Every ordinary chat therefore shares one Chats knowledge owner instead of creating an unreachable context store for each dated session directory.
 
 `session.metadata.openchamber.knowledge_context_delivered` holds the signature
 of what the session is carrying. It lives with the session, so it survives the
@@ -39,8 +39,8 @@ tab closing and is visible to every sender, including the ones with no tab.
 
 The signature covers content revisions of the pins, not just identity: editing a
 pinned note must re-send it, not merely renaming one. With no pins the signature
-and the text are empty, so enabled memory or session linking cannot create an
-otherwise empty delivery.
+and the text are empty, so session linking cannot create an otherwise empty
+delivery.
 
 ## Three moments, one delivery
 
@@ -71,8 +71,7 @@ fork's.
 - In OMP, memory indexes and tool guidance (`SESSION_LINK_GUIDANCE`,
   `RENDER_PAGE_GUIDANCE`, `WORKFLOW_GUIDANCE`) are strictly excluded from
   worker prompts to preserve native prompt parity and prevent prompt injection.
-  The UI panel summary still reads memory counts via `collectSummary`, but
-  knowledge delivery (`buildKnowledgeText`) carries only user pins.
+  Knowledge delivery (`buildKnowledgeText`) carries only user pins.
 
 ## Failure behaviour
 
@@ -84,16 +83,7 @@ A source that will not load never blanks the rest: an unreadable plan is marked
 in the block, and a project context that fails to load sends no pins rather than
 failing the send.
 
-While memory is on, every session is told when to save, even with an empty
-store. The tool description alone is read only when the agent already means to
-call it, so agents told nothing here saved only when the user said "remember".
-The session hears "nothing is stored yet" only when both scopes loaded. The save
-rule also says to save before the final reply: the chat shows only the text
-after a turn's last tool call as the answer.
-
-Pinned and memory text are each cut at 8,000 characters and say so. The budget
-is per source, so a huge pinned plan cannot crowd out the memory index or the
-tool guidance.
+Pinned text is cut at 8,000 characters and says so.
 
 An availability check that fails means "no tool": its guidance is left out
 rather than failing the send.
@@ -102,25 +92,8 @@ Delivery is recorded only after the send is accepted. Recording it when the text
 is handed over would leave a failed send believing the agent had context it never
 received.
 
-## Memory stays out of prompts
+## Where memory lives
 
-Memory remains a UI-owned store with its own review and CRUD. `agent-memory/threat-patterns`
-scans on write and again on every read, so an entry written before a pattern
-existed, or edited on disk since, is judged now. A match never deletes: the entry
-is stored, flagged, and shown in the panel with a warning. Silently dropping it
-would hide the attempt from the only person able to judge it.
-
-Those titles and bodies are not indexed into session prompts. The model can use
-the Host memory tool when the session needs it; plain OMP sends no memory
-guidance of its own.
-
-## Shipping dark
-
-Agent memory is complete but unreleased. `OPENCHAMBER_MEMORY_ENABLE` decides
-whether it exists in a given process at all: unset, there is no tool, no routes,
-no settings row and no panel tab — absent rather than switched off, which would
-invite turning on something never announced. The setting itself also defaults to
-off, so setting the variable does not enable memory by itself.
-
-Pinned notes and plans are unaffected by the memory switch and remain scoped to
-the session that pinned them.
+Long-term memory is OMP's own (`packages/agent-service`), not a Host store: no
+memory titles, bodies or guidance are copied into a session prompt. Pinned notes
+and plans remain scoped to the session that pinned them.

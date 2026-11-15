@@ -37,12 +37,9 @@ import {
     prWatchedSchema,
     sessionMessagesSchema,
     sessionStatusSchema,
-    memoryReadSchema,
     knowledgeListedSchema,
     knowledgeSavedSchema,
     linkedSchema,
-    memoriesListedSchema,
-    memorySavedSchema,
     modelPreferencesSchema,
     modelsFoundSchema,
     movedSchema,
@@ -115,46 +112,10 @@ const MovedBody: React.FC<{ data: unknown; call: OpenChamberCallInput }> = ({ da
     );
 };
 
-const useMemoryKind = () => {
-    const { t } = useI18n();
-    return (memory: { type?: 'fact' | 'preference' | 'reference'; scope?: 'global' | 'project' }, replaced?: boolean) => [
-        memory.type === 'fact' ? t('chat.toolPart.openchamber.memory.type.fact')
-            : memory.type === 'preference' ? t('chat.toolPart.openchamber.memory.type.preference')
-                : memory.type === 'reference' ? t('chat.toolPart.openchamber.memory.type.reference') : undefined,
-        memory.scope === 'global' ? t('chat.toolPart.openchamber.memory.scope.global')
-            : memory.scope === 'project' ? t('chat.toolPart.openchamber.memory.scope.project') : undefined,
-        replaced ? t('chat.toolPart.openchamber.memory.replaced') : undefined,
-    ].filter(Boolean).join(' · ');
-};
-
-const openMemory = (directory: string) => {
-    const store = useUIStore.getState();
-    store.setProjectContextTab('memory');
-    store.openContextPanelTab(directory, { mode: 'notes' });
-};
-
 const openKnowledge = (directory: string, tab: 'todos' | 'notes' | 'plans') => {
     const store = useUIStore.getState();
     store.setProjectContextTab(tab);
     store.openContextPanelTab(directory, { mode: 'notes' });
-};
-
-const MemorySavedBody: React.FC<{ data: unknown; call: OpenChamberCallInput; directory: string; isMobile: boolean }> = ({ data, call, directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    const describeKind = useMemoryKind();
-    const parsed = memorySavedSchema.safeParse(data);
-    if (!parsed.success) return null;
-    const { memory, replaced, warning } = parsed.data;
-    const kind = describeKind(memory, replaced);
-    return (
-        <>
-            {kind ? <div className="typography-meta text-muted-foreground">{kind}</div> : null}
-            {call.body ? <div className="typography-meta whitespace-pre-wrap break-words text-foreground">{call.body}</div> : null}
-            <Warning text={warning} />
-            <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: () => openMemory(directory) } : null} />
-        </>
-    );
 };
 
 const KnowledgeSavedBody: React.FC<{ data: unknown; call: OpenChamberCallInput; directory: string; isMobile: boolean }> = ({ data, call, directory, isMobile }) => {
@@ -345,37 +306,6 @@ const ModelsFoundBody: React.FC<{ data: unknown }> = ({ data }) => {
     );
 };
 
-const MemoriesListedBody: React.FC<{ data: unknown; directory: string; isMobile: boolean }> = ({ data, directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    const parsed = memoriesListedSchema.safeParse(data);
-    if (!parsed.success) return null;
-    const { memories, globalUnavailable, projectUnavailable } = parsed.data;
-    const open = () => {
-        const store = useUIStore.getState();
-        store.setProjectContextTab('memory');
-        store.openContextPanelTab(directory, { mode: 'notes' });
-    };
-    return (
-        <>
-            {/* A scope that failed to load is said so, never shown as empty. */}
-            <Warning text={globalUnavailable ? t('chat.toolPart.openchamber.memory.globalUnavailable') : undefined} />
-            <Warning text={projectUnavailable ? t('chat.toolPart.openchamber.memory.projectUnavailable') : undefined} />
-            <List count={memories.length}>
-                {memories.map((memory) => (
-                    <ListRow
-                        key={`${memory.scope ?? ''}:${memory.memoryId}`}
-                        primary={memory.title ?? memory.memoryId}
-                        secondary={memory.scope === 'global' ? t('chat.toolPart.openchamber.memory.scope.global')
-                            : memory.scope === 'project' ? t('chat.toolPart.openchamber.memory.scope.project') : undefined}
-                    />
-                ))}
-            </List>
-            <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: open } : null} />
-        </>
-    );
-};
-
 const KnowledgeListedBody: React.FC<{ data: unknown; call: OpenChamberCallInput; directory: string; isMobile: boolean }> = ({ data, call, directory, isMobile }) => {
     const { t } = useI18n();
     const panels = usePanelsAvailable(isMobile);
@@ -481,32 +411,6 @@ const ScreenshotBody: React.FC<{ data: unknown; part: CanonicalToolView; onShowP
             <Actions />
         </>
     );
-};
-
-/** A memory the agent read: what kind it is, its title and its text. */
-const MemoryReadBody: React.FC<{ data: unknown; directory: string; isMobile: boolean }> = ({ data, directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    const describeKind = useMemoryKind();
-    const parsed = memoryReadSchema.safeParse(data);
-    if (!parsed.success) return null;
-    const { memory } = parsed.data;
-    const kind = describeKind(memory);
-    return (
-        <>
-            {kind ? <div className="typography-meta text-muted-foreground">{kind}</div> : null}
-            {memory.title ? <div className="typography-meta font-medium text-foreground break-words">{memory.title}</div> : null}
-            {memory.body ? <div className="typography-meta whitespace-pre-wrap break-words text-foreground">{memory.body}</div> : null}
-            <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: () => openMemory(directory) } : null} />
-        </>
-    );
-};
-
-/** A call whose description already says what it did: only where to look next. */
-const MemoryDeletedBody: React.FC<{ directory: string; isMobile: boolean }> = ({ directory, isMobile }) => {
-    const { t } = useI18n();
-    const panels = usePanelsAvailable(isMobile);
-    return <Actions open={panels && directory ? { label: t('chat.toolPart.openchamber.open.memory'), icon: 'brain', onOpen: () => openMemory(directory) } : null} />;
 };
 
 const KnowledgeTouchedBody: React.FC<{ call: OpenChamberCallInput; directory: string; isMobile: boolean; tab: 'todos' | 'notes' | 'plans' }> = ({ call, directory, isMobile, tab }) => {
@@ -867,7 +771,7 @@ const WorkflowSavedBody: React.FC<{ data: unknown }> = ({ data }) => {
 
 /**
  * What one of OpenChamber's own tools did, in its own terms: the pull
- * request it linked, the session it started, the memory it saved. `null`
+ * request it linked, the session it started, the note it saved. `null`
  * for an action without its own view, and for an answer this view cannot
  * read, so the row falls back to the plain output.
  */
@@ -902,13 +806,10 @@ const OpenChamberView: React.FC<{
         case 'session.list': return <SessionsListedBody data={data} />;
         case 'models.list': return <ModelPreferencesBody data={data} />;
         case 'models.search': return <ModelsFoundBody data={data} />;
-        case 'memory.list': return <MemoriesListedBody data={data} directory={directory} isMobile={isMobile} />;
         case 'knowledge.list': return <KnowledgeListedBody data={data} call={call} directory={directory} isMobile={isMobile} />;
         case 'schedule.list': return <ScheduleListedBody data={data} call={call} directory={directory} isMobile={isMobile} />;
         case 'browser.open': return <PageOpenedBody data={data} />;
         case 'browser.capture': return <ScreenshotBody data={data} part={part} onShowPopup={onShowPopup} />;
-        case 'memory.read': return <MemoryReadBody data={data} directory={directory} isMobile={isMobile} />;
-        case 'memory.delete': return <MemoryDeletedBody directory={directory} isMobile={isMobile} />;
         case 'knowledge.show': return <KnowledgeTouchedBody call={call} directory={directory} isMobile={isMobile} tab="plans" />;
         case 'knowledge.delete': return <KnowledgeTouchedBody call={call} directory={directory} isMobile={isMobile} tab={call.kind === 'note' ? 'notes' : call.kind === 'plan' ? 'plans' : 'todos'} />;
         case 'session.status': return <SessionStatusBody data={data} />;
@@ -959,7 +860,6 @@ const OpenChamberView: React.FC<{
         case 'session.markDone':
         case 'session.track': return <DispatchedBody data={data} />;
         case 'session.moveToWorktree': return <MovedBody data={data} call={call} />;
-        case 'memory.save': return <MemorySavedBody data={data} call={call} directory={directory} isMobile={isMobile} />;
         case 'knowledge.save': return <KnowledgeSavedBody data={data} call={call} directory={directory} isMobile={isMobile} />;
         case 'schedule.create':
         case 'schedule.update': return <ScheduledBody data={data} call={call} directory={directory} isMobile={isMobile} />;

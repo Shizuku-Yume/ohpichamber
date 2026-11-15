@@ -3,7 +3,7 @@
 Server-owned storage for the Project Notes surface: free-form notes, todos, and
 plan markdown files.
 
-The managed Chats root (`~/.config/openchamber/chats`) is also one context owner. Every dated per-session directory beneath it resolves to that root, so Notes, Todo, Plans, pinned knowledge, and project memory are shared across ordinary chats without registering Chats as a user project.
+The managed Chats root (`~/.config/openchamber/chats`) is also one context owner. Every dated per-session directory beneath it resolves to that root, so Notes, Todo, Plans, and pinned knowledge are shared across ordinary chats without registering Chats as a user project.
 
 ## Ownership
 
@@ -12,15 +12,13 @@ The managed Chats root (`~/.config/openchamber/chats`) is also one context owner
 | `<projectsDir>/<projectId>.json` | `packages/web/server/lib/projects` (`project-setup.js` for the client-owned keys behind `/api/projects/:projectId/config`; `project-config.js` for `version` / `scheduledTasks`), one write lock for both | worktree setup, draft starters, project actions, scheduled tasks |
 | `<projectsDir>/<projectId>/context.json` | **this module, exclusively** | notes, todos, plan manifest |
 | `<projectsDir>/<projectId>/plans/*.md` | **this module, exclusively** | plan bodies |
-| `<projectsDir>/<projectId>/memory.json` | `packages/web/server/lib/agent-memory` | what the agent chose to remember about the project |
 | `<repo>/<plansDir>/*.md` | this module (read, edit, delete, move) when the team config names a `plansDir`; the folder is the team's, any tool may write there | shared plan bodies |
 
 `<projectId>` in these paths is the bounded stem `projectConfigFileStemOf`
 (`packages/web/server/lib/projects/project-id.js`) gives the id: the id itself
 up to 200 characters, `path_sha256_<digest>` beyond that, so a deeply nested
-checkout gets a folder the filesystem accepts. The folder, the config file,
-and the memory file all share that one stem; nothing here composes a path from
-the raw id. The legacy-migration read below looks at the bounded config file
+checkout gets a folder the filesystem accepts. The folder and the config file
+share that one stem; nothing here composes a path from the raw id. The legacy-migration read below looks at the bounded config file
 for the same reason: a read of `<raw id>.json` would fail with ENAMETOOLONG
 and turn an empty project into an error.
 

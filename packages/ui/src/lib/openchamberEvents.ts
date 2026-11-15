@@ -93,17 +93,6 @@ const planOpenRequestSchema = z.object({
 });
 type PlanOpenRequestEvent = { type: 'plan-open-request' } & z.infer<typeof planOpenRequestSchema>;
 
-/**
- * The agent changed what it remembers. Carries only which store moved, not the
- * entries: listeners re-read from the server, so the event cannot go stale
- * between being sent and being handled.
- */
-type AgentMemoryChangedEvent = {
- type: 'agent-memory-changed';
- scope: 'global' | 'project';
- projectId?: string;
-};
-
 const projectContextChangedSchema = z.object({ projectId: z.string().min(1) });
 type ProjectContextChangedEvent = { type: 'project-context-changed' } & z.infer<typeof projectContextChangedSchema>;
 
@@ -268,7 +257,6 @@ export type OpenChamberEvent =
  | ProjectContextChangedEvent
  | SessionFoldersChangedEvent
  | SessionDraftsChangedEvent
- | AgentMemoryChangedEvent
  | SessionMetadataEvent;
 type Listener = (event: OpenChamberEvent) => void;
 
@@ -616,22 +604,6 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
  if (envelope.type === 'openchamber:session-folders-changed') {
   const parsed = sessionFoldersChangedSchema.safeParse(envelope.properties);
   if (parsed.success) for (const listener of listeners) listener({ type: 'session-folders-changed', ...parsed.data });
-  return;
- }
-
- if (envelope.type === 'openchamber:agent-memory-changed') {
-  const properties = getEventProperties(envelope.properties);
-  const scope = properties?.scope === 'project' ? 'project' : 'global';
-  const nextEvent: AgentMemoryChangedEvent = {
-   type: 'agent-memory-changed',
-   scope,
-   ...(typeof properties?.projectId === 'string' && properties.projectId.length > 0
-    ? { projectId: properties.projectId }
-    : {}),
-  };
-  for (const listener of listeners) {
-   listener(nextEvent);
-  }
   return;
  }
 

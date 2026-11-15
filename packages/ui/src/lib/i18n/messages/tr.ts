@@ -8444,7 +8444,6 @@ export const dict = {
   "chat.workStatus.breakdown.pinnedNote": "not",
   "chat.workStatus.breakdown.unpin": "Bağlamdan sabitlemeyi kaldır",
   "chat.workStatus.breakdown.pinnedPlan": "plan",
-  "chat.workStatus.breakdown.memory": "Agent belleği",
   "chat.workStatus.breakdown.pinnedKnowledgeSingle": "{count} sabitlenmiş",
   "chat.workStatus.breakdown.pinnedKnowledgePlural": "{count} sabitlenmiş",
   "chat.workStatus.breakdown.mcp": "MCP sunucuları",

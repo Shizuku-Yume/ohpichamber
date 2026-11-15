@@ -8625,7 +8625,6 @@ export const dict = {
   "chat.workStatus.breakdown.pinnedNote": "нотатка",
   "chat.workStatus.breakdown.unpin": "Відкріпити від контексту",
   "chat.workStatus.breakdown.pinnedPlan": "план",
-  "chat.workStatus.breakdown.memory": "Памʼять агента",
   "chat.workStatus.breakdown.pinnedKnowledgeSingle": "{count} закріплено",
   "chat.workStatus.breakdown.pinnedKnowledgePlural": "{count} закріплено",
   "chat.workStatus.breakdown.mcp": "Сервери MCP",

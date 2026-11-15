@@ -641,9 +641,6 @@
         "mobile"
       ]
     },
-    "sessionGoalEnabled": {
-      "scope": "profile"
-    },
     "sessionGoalDefaultBudgetEnabled": {
       "scope": "profile"
     },
@@ -852,10 +849,6 @@
       "local": true
     },
     "alwaysShowScrollbars": {
-      "scope": "device",
-      "local": true
-    },
-    "agentMemoryViewedAt": {
       "scope": "device",
       "local": true
     },

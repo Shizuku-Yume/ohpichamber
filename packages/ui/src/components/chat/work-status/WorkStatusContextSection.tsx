@@ -84,10 +84,10 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
    * whether or not that panel has ever been opened.
    */
   const [knowledge, setKnowledge] = React.useState<SessionKnowledgeSummary>(
-    { notes: [], plans: [], memory: { global: 0, project: 0 } },
+    { notes: [], plans: [] },
   );
 
-  // Re-read when source content or memory changes, not only when the session does.
+  // Re-read when the source content changes, not only when the session does.
   const contextEntries = useProjectContextStore((state) => state.entries);
   const loadProjectContext = useProjectContextStore((state) => state.load);
 
@@ -154,7 +154,6 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
     });
   }, [directory, isDraft, sessionId, setDraftProjectContextPin]);
 
-  const memoryCount = visibleKnowledge.memory.global + visibleKnowledge.memory.project;
   const pinnedCount = visibleKnowledge.notes.length + visibleKnowledge.plans.length;
 
   const urlMatcher = useRepositoryUrlMatcher();
@@ -232,10 +231,10 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
 
   useReportWorkStatusPresence(
     'context-sources',
-    linked.length > 0 || skills.length > 0 || mcpCount > 0 || pinnedCount > 0 || memoryCount > 0,
+    linked.length > 0 || skills.length > 0 || mcpCount > 0 || pinnedCount > 0,
   );
 
-  if (linked.length === 0 && skills.length === 0 && mcpCount === 0 && pinnedCount === 0 && memoryCount === 0) {
+  if (linked.length === 0 && skills.length === 0 && mcpCount === 0 && pinnedCount === 0) {
     return null;
   }
 
@@ -423,14 +422,6 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
           value={<WorkStatusValue tone="muted">{t('chat.workStatus.breakdown.pinnedPlan')}</WorkStatusValue>}
         />
       ))}
-      {memoryCount > 0 ? (
-        <WorkStatusRow
-          muted
-          label={t('chat.workStatus.breakdown.memory')}
-          value={<WorkStatusValue>{memoryCount}</WorkStatusValue>}
-        />
-      ) : null}
-
       <WorkStatusRow
         muted
         label={t('chat.workStatus.breakdown.skills')}

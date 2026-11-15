@@ -8634,7 +8634,6 @@ export const dict = {
   "chat.workStatus.breakdown.pinnedNote": "노트",
   "chat.workStatus.breakdown.unpin": "컨텍스트에서 고정 해제",
   "chat.workStatus.breakdown.pinnedPlan": "계획",
-  "chat.workStatus.breakdown.memory": "에이전트 메모리",
   "chat.workStatus.breakdown.pinnedKnowledgeSingle": "{count}개 고정",
   "chat.workStatus.breakdown.pinnedKnowledgePlural": "{count}개 고정",
   "chat.workStatus.breakdown.mcp": "MCP 서버",

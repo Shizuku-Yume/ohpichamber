@@ -15,6 +15,7 @@ import {
   SettingsSection,
   SettingsCheckboxRow,
   SettingsStackedField,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useEnterprisePolicyStore } from '@/stores/useEnterprisePolicyStore';
 
@@ -194,7 +195,7 @@ export const DesktopNetworkSettings: React.FC = () => {
   }
 
   return (
-    <SettingsSection title={t('settings.layout.general.network.title')} contentClassName="space-y-4">
+    <SettingsSection title={t('settings.layout.general.network.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
       <SettingsStackedField
         settingsItem="sessions.desktop-ui-password"
         label={(

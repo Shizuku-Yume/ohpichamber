@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SETTINGS_HELPER_CLASS, SettingsCheckboxRow, SettingsStackedField } from '../shared/SettingsSection';
+import { SETTINGS_HELPER_CLASS, SETTINGS_SPACE_ROW_CLASS, SettingsCheckboxRow, SettingsStackedField } from '../shared/SettingsSection';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -196,7 +196,7 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
         {t('settings.sourceControl.ssh.discover')}
       </Button>
     </div>
-    {state.candidates.length ? <div className="space-y-4">
+    {state.candidates.length ? <div className={SETTINGS_SPACE_ROW_CLASS}>
       {state.candidates.map((candidate, index) => 'candidateId' in candidate ? <div key={candidate.candidateId} className="space-y-2 border-t border-edge pt-3">
         <p className="typography-settings-field-label text-foreground">{candidate.label}</p>
         <p className={cn(SETTINGS_HELPER_CLASS, 'break-all')}>{candidate.fingerprint}</p>

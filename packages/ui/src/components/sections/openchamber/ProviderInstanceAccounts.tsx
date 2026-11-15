@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { openExternalUrl } from '@/lib/url';
 import { useI18n } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { getManagedCredentialSourceLabelKey } from '@/lib/source-control/identity';
 import type { SourceControlProviderDescriptor } from '@/lib/source-control/providers/descriptor';
 import type {
@@ -14,8 +15,8 @@ import type {
 import { SourceControlInstanceOtherProviderError } from '@/lib/api/types';
 import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
 import {
-  SETTINGS_CONTROL_CLUSTER_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsChipGroup,
   SettingsFieldRow,
 } from '@/components/sections/shared/SettingsSection';
@@ -370,7 +371,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
   return (
     // One group per instance: the address heads it, its accounts and actions
     // follow. Groups part with a line, never a filled box inside the card.
-    <div className="space-y-3 py-4 first:pt-0 last:pb-0">
+    <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'py-4 first:pt-0 last:pb-0')}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           {/* The address reads as a host; the full URL stays in the tooltip. */}
@@ -398,7 +399,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
             ? t('settings.sourceControl.field.sshUrl.invalid')
             : sshUrlFailed ? t(copy.operationFailed) : undefined}
         >
-          <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+          <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
             <Input
               className="h-8 w-full min-w-0 rounded-md"
               value={sshUrl}
@@ -410,7 +411,6 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
               spellCheck={false}
             />
             <Button
-              className="w-full @xl:w-auto"
               size="sm"
               onClick={() => void saveSshUrl()}
               disabled={busy || savingSshUrl || sshUrl.trim() === (identity.instanceSshUrl ?? '')}
@@ -469,7 +469,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
       )}
 
       {showConnectionMethods && (
-        <div className={SETTINGS_FIELDS_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {connectMethods.length > 1 && !flow && (
             <SettingsFieldRow label={t('settings.sourceControl.method.label')}>
               <SettingsChipGroup<ConnectMethod>
@@ -499,7 +499,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
           )}
           {method === 'pat' && !flow && needsUsername && (
             <SettingsFieldRow label={t('settings.sourceControl.field.username.label')} info={t('settings.sourceControl.field.username.info', { provider })}>
-              <div className={SETTINGS_CONTROL_CLUSTER_CLASS}>
+              <div className={SETTINGS_WIDTH_LONG_TEXT_CLASS}>
                 <Input
                   className="h-8 w-full min-w-0 rounded-md"
                   value={username}
@@ -529,7 +529,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
                 </span>
               ) : undefined}
             >
-              <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+              <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
                 <Input
                   className="h-8 w-full min-w-0 rounded-md"
                   type="password"
@@ -540,7 +540,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
                   // keeps a saved sign-in password out of it.
                   autoComplete="new-password"
                 />
-                <Button className="w-full @xl:w-auto" size="sm" onClick={saveToken} disabled={busy || !token.trim() || (needsUsername && !username.trim())}>{t('settings.common.actions.saveChanges')}</Button>
+                <Button size="sm" onClick={saveToken} disabled={busy || !token.trim() || (needsUsername && !username.trim())}>{t('settings.common.actions.saveChanges')}</Button>
               </div>
             </SettingsFieldRow>
           )}
@@ -558,14 +558,14 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
           A switch the server kept for a CLI that cannot answer has no row, so it shows here. */}
       {!serviceOnly && descriptor.auth.methods.includes('cli') && cli && (cli.disabled || cli.active || (connected && cli.available))
         && (cli.disabled || !accounts.some((account) => account.source === 'cli')) && (
-        <div>
-          <SettingsFieldRow label={t(copy.cliLabel, { cli: cliName })} info={t(copy.cliInfo, { cli: cliName })}>
-            <Button size="sm" variant="outline" onClick={toggleCli} disabled={busy}>
-              {cli.disabled ? t(copy.enableCli, { cli: cliName }) : t(copy.disableCli, { cli: cliName })}
-            </Button>
-          </SettingsFieldRow>
-        </div>
-      )}
+          <div>
+            <SettingsFieldRow label={t(copy.cliLabel, { cli: cliName })} info={t(copy.cliInfo, { cli: cliName })}>
+              <Button size="sm" variant="outline" onClick={toggleCli} disabled={busy}>
+                {cli.disabled ? t(copy.enableCli, { cli: cliName }) : t(copy.disableCli, { cli: cliName })}
+              </Button>
+            </SettingsFieldRow>
+          </div>
+        )}
       {sshUrlConfirm.dialog}
     </div>
   );

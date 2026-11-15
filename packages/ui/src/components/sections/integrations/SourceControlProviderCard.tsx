@@ -8,7 +8,8 @@ import type { SourceControlIdentity } from '@/lib/api/types';
 import type { SourceControlProviderDescriptor } from '@/lib/source-control/providers/descriptor';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import {
-  SETTINGS_CONTROL_CLUSTER_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsControlGroup,
   SettingsFieldRow,
 } from '@/components/sections/shared/SettingsSection';
@@ -143,7 +144,7 @@ export const SourceControlProviderCard: React.FC<{ descriptor: SourceControlProv
             info={t(copy.instanceInfo)}
             description={instanceFailed ? t(copy.operationFailed) : undefined}
           >
-            <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+            <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
               <Input
                 className="h-8 w-full min-w-0 rounded-md"
                 value={instanceInput}
@@ -151,8 +152,8 @@ export const SourceControlProviderCard: React.FC<{ descriptor: SourceControlProv
                 placeholder={instances.placeholder}
                 aria-label={t(copy.instanceLabel, { provider })}
               />
-              <Button className="w-full @xl:w-auto" size="sm" onClick={applyInstance}>{t(copy.useInstance)}</Button>
-              <Button className="w-full @xl:w-auto" size="sm" variant="ghost" onClick={cancelAddInstance}>
+              <Button size="sm" onClick={applyInstance}>{t(copy.useInstance)}</Button>
+              <Button size="sm" variant="ghost" onClick={cancelAddInstance}>
                 {t('settings.common.actions.cancel')}
               </Button>
             </div>
@@ -183,7 +184,7 @@ export const SourceControlProviderCard: React.FC<{ descriptor: SourceControlProv
         {legacyFlow ? (
           <>
             <GitHubComAccountSection />
-            <SettingsControlGroup title={t(copy.instancesTitle)} contentClassName="space-y-3">
+            <SettingsControlGroup title={t(copy.instancesTitle)} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
               {instanceSetup}
             </SettingsControlGroup>
           </>

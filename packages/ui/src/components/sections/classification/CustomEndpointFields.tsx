@@ -5,7 +5,7 @@ import {
   SettingsFieldRow,
   SettingsSection,
   SETTINGS_DESCRIPTION_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useI18n } from '@/lib/i18n';
 import type { CustomEndpointInput } from '@/lib/routing/routingApi';
@@ -91,7 +91,7 @@ export const CustomEndpointFields: React.FC = () => {
       title={t('settings.classification.custom.title')}
       info={t('settings.classification.custom.info')}
     >
-      <div className={SETTINGS_FIELDS_STACK_CLASS}>
+      <div className={SETTINGS_SPACE_ROW_CLASS}>
         <SettingsFieldRow label={t('settings.classification.custom.url.label')} info={t('settings.classification.custom.url.info')}>
           <div className={ROW_CLASS}>
             <Input

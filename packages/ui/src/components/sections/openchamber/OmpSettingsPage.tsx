@@ -14,7 +14,7 @@ import {
   SettingsSection,
   SETTINGS_DESCRIPTION_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
@@ -334,57 +334,55 @@ export const OmpSettingsPage: React.FC = () => {
       description={t('settings.page.omp.description')}
       onBlurCapture={autosave.onBlurCapture}
     >
-      <div className="space-y-6">
-        {visible.sections.map((section, index) => (
-          <SettingsSection
-            key={section.id}
-            title={t(section.titleKey ?? 'settings.omp.advanced')}
-            description={section.descriptionKey ? t(section.descriptionKey) : undefined}
-            divider={index > 0}
-            settingsItem={`omp.section.${section.id}`}
-          >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
-              {section.rows.map((setting) => (
-                <OmpRowControl
-                  key={setting.id}
-                  setting={setting}
-                  value={form[setting.id] !== undefined ? form[setting.id] : setting.value}
-                  disabled={loading}
-                  onChange={(value) => {
-                    const isSelectNumber = setting.type === 'number' && Boolean(setting.options && setting.options.length > 0);
-                    if (setting.type === 'number' && !isSelectNumber) {
-                      onChange(setting, value);
-                    } else {
-                      onImmediate(setting, value);
-                    }
-                  }}
-                />
-              ))}
-            </div>
-          </SettingsSection>
-        ))}
-        < SettingsSection
-          title={t('settings.omp.advanced')}
-          settingsItem="omp.advanced"
-          headerAction={
-            state.configPath && files.revealPath ? (
-              <Button variant="outline" size="sm" onClick={revealConfig}>
-                <Icon name="file-text" className="size-3.5 mr-1" />
-                {t('settings.omp.openConfig')}
-              </Button>
-            ) : undefined
-          }
+      {visible.sections.map((section, index) => (
+        <SettingsSection
+          key={section.id}
+          title={t(section.titleKey ?? 'settings.omp.advanced')}
+          description={section.descriptionKey ? t(section.descriptionKey) : undefined}
+          divider={index > 0}
+          settingsItem={`omp.section.${section.id}`}
         >
-          <p className={SETTINGS_DESCRIPTION_CLASS}>
-            {t('settings.omp.advancedDescription', { count: visible.hiddenCount })}
-          </p>
-          {
-            state.configPath ? (
-              <p className={`${SETTINGS_HELPER_CLASS} font-mono break-all`}>{state.configPath}</p>
-            ) : null
-          }
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
+            {section.rows.map((setting) => (
+              <OmpRowControl
+                key={setting.id}
+                setting={setting}
+                value={form[setting.id] !== undefined ? form[setting.id] : setting.value}
+                disabled={loading}
+                onChange={(value) => {
+                  const isSelectNumber = setting.type === 'number' && Boolean(setting.options && setting.options.length > 0);
+                  if (setting.type === 'number' && !isSelectNumber) {
+                    onChange(setting, value);
+                  } else {
+                    onImmediate(setting, value);
+                  }
+                }}
+              />
+            ))}
+          </div>
         </SettingsSection>
-      </div>
+      ))}
+      < SettingsSection
+        title={t('settings.omp.advanced')}
+        settingsItem="omp.advanced"
+        headerAction={
+          state.configPath && files.revealPath ? (
+            <Button variant="outline" size="sm" onClick={revealConfig}>
+              <Icon name="file-text" className="size-3.5 mr-1" />
+              {t('settings.omp.openConfig')}
+            </Button>
+          ) : undefined
+        }
+      >
+        <p className={SETTINGS_DESCRIPTION_CLASS}>
+          {t('settings.omp.advancedDescription', { count: visible.hiddenCount })}
+        </p>
+        {
+          state.configPath ? (
+            <p className={`${SETTINGS_HELPER_CLASS} font-mono break-all`}>{state.configPath}</p>
+          ) : null
+        }
+      </SettingsSection>
     </SettingsPageLayout >
   );
 };

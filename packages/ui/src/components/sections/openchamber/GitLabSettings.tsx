@@ -15,8 +15,8 @@ import type {
   SourceControlIdentity,
 } from '@/lib/api/types';
 import {
-  SETTINGS_CONTROL_CLUSTER_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsControlGroup,
   SettingsFieldRow,
 } from '@/components/sections/shared/SettingsSection';
@@ -329,7 +329,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
       )}
 
       {showConnectionMethods && (
-        <div className={cn(SETTINGS_FIELDS_STACK_CLASS, INSTANCE_ROW_CLASS, INSTANCE_ROW_DIVIDER_CLASS)}>
+        <div className={cn(SETTINGS_SPACE_ROW_CLASS, INSTANCE_ROW_CLASS, INSTANCE_ROW_DIVIDER_CLASS)}>
           {capabilities?.authenticationMethods.device.available && !flow && (
             <SettingsFieldRow label={t('settings.gitlab.device.label')}>
               <Button size="sm" onClick={startDeviceFlow} disabled={busy}>{t('settings.gitlab.actions.connect')}</Button>
@@ -346,7 +346,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
           )}
           {capabilities?.authenticationMethods.pat.available && (
             <SettingsFieldRow label={t('settings.gitlab.token.label')} info={t('settings.gitlab.token.info')}>
-              <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+              <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
                 <Input
                   className="h-8 w-full min-w-0 rounded-md"
                   type="password"
@@ -354,7 +354,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
                   onChange={(event) => setToken(event.target.value)}
                   aria-label={t('settings.gitlab.token.label')}
                 />
-                <Button className="w-full @xl:w-auto" size="sm" onClick={saveToken} disabled={busy || !token.trim()}>{t('settings.common.actions.saveChanges')}</Button>
+                <Button size="sm" onClick={saveToken} disabled={busy || !token.trim()}>{t('settings.common.actions.saveChanges')}</Button>
               </div>
             </SettingsFieldRow>
           )}
@@ -480,7 +480,7 @@ export const GitLabSettings: React.FC = () => {
         <CollapsibleContent className="border-t border-[var(--interactive-border)] px-4 py-4">
           <SettingsControlGroup
             title={t('settings.gitlab.instances.title')}
-            contentClassName="space-y-3"
+            contentClassName={SETTINGS_SPACE_ROW_CLASS}
             settingsItem="git.gitlab-connect"
           >
             {visibleIdentities.map((item) => (
@@ -499,7 +499,7 @@ export const GitLabSettings: React.FC = () => {
                   info={t('settings.gitlab.instance.customInfo')}
                   description={instanceFailed ? t('settings.gitlab.status.operationFailed') : undefined}
                 >
-                  <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+                  <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
                     <Input
                       className="h-8 w-full min-w-0 rounded-md"
                       value={instanceInput}
@@ -507,8 +507,8 @@ export const GitLabSettings: React.FC = () => {
                       placeholder="https://gitlab.example.com"
                       aria-label={t('settings.gitlab.instance.customLabel')}
                     />
-                    <Button className="w-full @xl:w-auto" size="sm" onClick={applyInstance}>{t('settings.gitlab.actions.useInstance')}</Button>
-                    <Button className="w-full @xl:w-auto" size="sm" variant="ghost" onClick={() => {
+                    <Button size="sm" onClick={applyInstance}>{t('settings.gitlab.actions.useInstance')}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => {
                       setInstanceInput('');
                       setIsAddingInstance(false);
                       setInstanceFailed(false);

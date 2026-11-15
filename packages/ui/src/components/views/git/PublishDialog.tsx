@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
   SettingsControlGroup,
   SettingsStackedField,
@@ -62,7 +62,7 @@ export function PublishDialog({ context, onSelect }: {
           onSelect(targets);
         }}>
           {isSync ? (
-            <SettingsControlGroup title={t('gitView.publish.fetchSource')} contentClassName={SETTINGS_FIELDS_STACK_CLASS}>
+            <SettingsControlGroup title={t('gitView.publish.fetchSource')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
               <SettingsStackedField
                 label={t('settings.sourceControl.transport.remoteLabel')}
                 description={fetchUrl}
@@ -94,7 +94,7 @@ export function PublishDialog({ context, onSelect }: {
           <SettingsControlGroup
             title={t('gitView.publish.pushDestination')}
             className={isSync ? 'border-t border-edge pt-4' : undefined}
-            contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+            contentClassName={SETTINGS_SPACE_ROW_CLASS}
           >
             <SettingsStackedField
               label={t('settings.sourceControl.transport.remoteLabel')}

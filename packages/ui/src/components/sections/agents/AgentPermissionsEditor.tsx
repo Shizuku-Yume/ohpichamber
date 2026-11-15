@@ -8,6 +8,8 @@ import {
   SettingsCheckboxRow,
   SettingsChipGroup,
   SETTINGS_HELPER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_SPACE_SECTION_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import {
   categorizeTool,
@@ -225,7 +227,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className={SETTINGS_SPACE_ROW_CLASS}>
       {/* Quick actions chip group */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <SettingsChipGroup<string>
@@ -258,7 +260,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
       </div>
 
       {/* Collapsible tool groups */}
-      <div className="space-y-3">
+      <div className={SETTINGS_SPACE_SECTION_CLASS}>
         {TOOL_PERMISSION_GROUPS.map((groupKey) => {
           const groupToolList = groupedTools[groupKey];
           if (groupToolList.length === 0) return null;

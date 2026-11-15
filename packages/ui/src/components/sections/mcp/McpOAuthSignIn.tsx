@@ -5,7 +5,13 @@ import { resolveMcpDirectory } from '@/stores/useMcpConfigStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
-import { SettingsFieldRow, SETTINGS_HELPER_CLASS } from '@/components/sections/shared/SettingsSection';
+import {
+  SettingsFieldRow,
+  SETTINGS_HELPER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
+} from '@/components/sections/shared/SettingsSection';
 import { formatSessionActivityDuration } from '@/components/session/sessionActivityDurationFormat';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
@@ -357,7 +363,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
   };
 
   return (
-    <div className="space-y-4">
+    <div className={SETTINGS_SPACE_ROW_CLASS}>
       {error ? (
         <p
           role={error.tone === 'error' ? 'alert' : 'status'}
@@ -373,7 +379,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
           </p>
 
           {state.status === 'pending' ? (
-            <div className="space-y-3">
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               {state.pendingFlow.instructions ? <p className={SETTINGS_HELPER_CLASS}>{state.pendingFlow.instructions}</p> : null}
               {timedOut ? (
                 <div className="space-y-2">
@@ -418,7 +424,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
                   </div>
                 </>
               )}
-              <div className="space-y-2">
+              <div className={SETTINGS_SPACE_ROW_CLASS}>
                 <p className="typography-ui-label text-foreground">{t('settings.mcp.page.auth.manualFallbackTitle')}</p>
                 <p className="typography-micro text-muted-foreground">{t('settings.mcp.page.auth.manualFallbackDescription')}</p>
                 <Input
@@ -426,7 +432,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
                   placeholder={t('settings.mcp.page.auth.callbackInputPlaceholder')}
                   value={callbackInput}
                   onChange={(event) => setCallbackInput(event.target.value)}
-                  className="h-8 w-full max-w-md"
+                  className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
                   disabled={busy}
                 />
                 <Button disabled={busy} onClick={() => workspaceId && void perform('complete', state, workspaceId)} size="xs" className="!font-normal">
@@ -435,7 +441,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               {clientIdHint ? (
                 <p role="status" className="typography-meta text-[var(--status-warning)]">{clientIdHint}</p>
               ) : null}
@@ -446,7 +452,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
                   onChange={(event) => setClientId(event.target.value)}
                   placeholder={t('settings.mcp.page.advanced.oauthClientIdPlaceholder')}
                   aria-label={t('settings.mcp.page.advanced.oauthClientIdPlaceholder')}
-                  className="h-8 w-full max-w-sm"
+                  className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                   disabled={busy}
                 />
               </SettingsFieldRow>
@@ -458,7 +464,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
                   onChange={(event) => setClientSecret(event.target.value)}
                   placeholder={t('settings.mcp.page.advanced.oauthClientSecretPlaceholder')}
                   aria-label={t('settings.mcp.page.advanced.oauthClientSecretPlaceholder')}
-                  className="h-8 w-full max-w-sm"
+                  className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                   disabled={busy}
                 />
               </SettingsFieldRow>
@@ -468,7 +474,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
                   onChange={(event) => setScopes(event.target.value)}
                   placeholder={t('settings.mcp.page.advanced.oauthScopesPlaceholder')}
                   aria-label={t('settings.mcp.page.advanced.oauthScopesPlaceholder')}
-                  className="h-8 w-full max-w-sm"
+                  className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                   disabled={busy}
                 />
               </SettingsFieldRow>
@@ -478,7 +484,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
                   onChange={(event) => setRedirectUri(event.target.value)}
                   placeholder={t('settings.mcp.page.advanced.oauthRedirectUriPlaceholder')}
                   aria-label={t('settings.mcp.page.advanced.oauthRedirectUriPlaceholder')}
-                  className="h-8 w-full max-w-sm"
+                  className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                   disabled={busy}
                 />
               </SettingsFieldRow>

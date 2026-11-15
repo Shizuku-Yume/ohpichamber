@@ -33,8 +33,8 @@ import {
   SettingsChipGroup,
   SettingsFieldRow,
   SettingsStackedField,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
@@ -325,7 +325,7 @@ export const BehaviorPage: React.FC = () => {
           </div>
         )}
         settingsItem="behavior.system-prompt"
-        contentClassName="space-y-3"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <SettingsChipGroup<RulesScope>
           value={rulesScope}
@@ -338,7 +338,7 @@ export const BehaviorPage: React.FC = () => {
         />
         <SettingsStackedField
           label={AGENTS_MD_FILE_NAME}
-          controlClassName="w-full max-w-[40rem] flex-col items-stretch"
+          controlClassName="w-full max-w-none flex-col items-stretch"
         >
           <Textarea
             value={rulesValue}
@@ -356,7 +356,7 @@ export const BehaviorPage: React.FC = () => {
         title={t('settings.behavior.page.section.responseStyle')}
         info={t('settings.behavior.page.responseStyle.tooltip')}
         settingsItem="behavior.response-style"
-        contentClassName="space-y-3"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <SettingsCheckboxRow
           checked={responseStyleEnabled}
@@ -380,7 +380,7 @@ export const BehaviorPage: React.FC = () => {
             }}
             disabled={isLoading || !responseStyleEnabled}
           >
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
               <SelectValue>
                 {(value) => (isResponseStylePreset(value) ? t(RESPONSE_STYLE_OPTION_LABEL_KEYS[value]) : null)}
               </SelectValue>
@@ -398,7 +398,7 @@ export const BehaviorPage: React.FC = () => {
         {responseStylePreset === 'custom' ? (
           <SettingsStackedField
             label={t('settings.behavior.page.responseStyle.option.custom')}
-            controlClassName="w-full max-w-[40rem] flex-col items-stretch"
+            controlClassName="w-full max-w-none flex-col items-stretch"
           >
             <Textarea
               aria-label={t('settings.behavior.page.responseStyle.option.custom')}
@@ -420,7 +420,7 @@ export const BehaviorPage: React.FC = () => {
         description={t('settings.behavior.section.prompt.description')}
         settingsItem="behavior.section.prompt"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {promptSettings.map((s) => (
             <OmpRowControl
               key={s.id}

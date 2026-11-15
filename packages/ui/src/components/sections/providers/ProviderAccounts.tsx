@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ProviderAccounts as Accounts, ProviderAccountMutationRequest } from '@openchamber/agent-contract';
-import { SETTINGS_ICON_BUTTON_CLASS } from '@/components/sections/shared/SettingsSection';
+import { SETTINGS_ICON_BUTTON_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -65,7 +65,7 @@ const RenameField: React.FC<{
         }}
         aria-label={t('settings.providers.accounts.nameAria')}
         inputSize="compact"
-        className="max-w-[18rem]"
+        className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
         maxLength={128}
       />
       <Button type="submit" size="xs">{t('settings.providers.accounts.save')}</Button>

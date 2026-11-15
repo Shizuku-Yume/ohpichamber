@@ -11,6 +11,7 @@ import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
+import { SETTINGS_WIDTH_SHORT_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
 import {
   SETTINGS_CARD_GRID_CLASS,
   SettingsAddCard,
@@ -146,7 +147,7 @@ export const McpGrid: React.FC = () => {
       description={t('settings.mcp.grid.description')}
       headerEnd={(
         <div className="flex w-full items-center gap-2 @xl:w-auto">
-          <SettingsProjectSelector className="min-w-0 flex-1 @xl:w-56 @xl:flex-none" />
+          <SettingsProjectSelector className={`min-w-0 flex-1 @xl:flex-none ${SETTINGS_WIDTH_SHORT_TEXT_CLASS}`} />
           <Button
             variant="ghost"
             size="icon"

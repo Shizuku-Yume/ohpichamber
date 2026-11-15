@@ -19,6 +19,8 @@ import {
   SettingsSection,
   SettingsFieldRow,
   SETTINGS_FIELD_LABEL_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import {
@@ -350,7 +352,7 @@ const SkillsInstalledPage: React.FC = () => {
       <SettingsPageLayout title={pageTitle} showSaveStatus={false}>
         <div className="flex items-center justify-center py-16">
           <div className="max-w-sm text-center text-muted-foreground">
-            <Icon name="book-open" className="mx-auto mb-3 h-10 w-10 sm:h-12 sm:w-12 opacity-50" />
+            <Icon name="book-open" className="mx-auto mb-3 h-10 w-10 @xl:h-12 @xl:w-12 opacity-50" />
             <p>{t('settings.skills.page.empty.title')}</p>
             <p className="typography-meta mt-1 opacity-75">{t('settings.skills.page.empty.description')}</p>
           </div>
@@ -391,7 +393,6 @@ const SkillsInstalledPage: React.FC = () => {
             title={t('settings.skills.page.section.basicInformation')}
             divider={false}
             settingsItem="skills.basic-information"
-            contentClassName="space-y-0"
           >
             <SettingsFieldRow
               label={t('settings.skills.page.field.skillNameLocation')}
@@ -401,7 +402,8 @@ const SkillsInstalledPage: React.FC = () => {
                 value={name}
                 onChange={event => setName(event.target.value.toLowerCase().replace(/\s+/g, '-'))}
                 placeholder={t('settings.skills.page.field.skillNamePlaceholder')}
-                className="h-7 w-40 px-2"
+                inputSize="compact"
+                className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
               />
               <Select
                 value={scope}
@@ -409,7 +411,7 @@ const SkillsInstalledPage: React.FC = () => {
                   if (value === 'workspace' || value === 'agent') setScope(value);
                 }}
               >
-                <SelectTrigger className="w-fit gap-1.5">
+                <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                   {scope === 'agent'
                     ? <Icon name="user-3" className="h-3.5 w-3.5" />
                     : <Icon name="folder" className="h-3.5 w-3.5" />}

@@ -30,10 +30,11 @@ mock.module('@/components/sections/shared/SettingsSection', () => ({
   ),
   SettingsChipGroup: () => null,
   SETTINGS_ICON_BUTTON_CLASS: '',
-  SETTINGS_NUMBER_INPUT_CLASS: '',
+  SETTINGS_WIDTH_NUMBER_CLASS: '',
   SETTINGS_NUMBER_STEPPER_ROW_CLASS: '',
   SETTINGS_NUMBER_UNIT_CLASS: '',
-  SETTINGS_OPTION_STACK_CLASS: '',
+  SETTINGS_SPACE_CHECKBOX_CLASS: '',
+  SETTINGS_SPACE_ROW_CLASS: '',
 }));
 
 const { SessionRetentionSettings } = await import('./SessionRetentionSettings');

@@ -9,6 +9,7 @@ import type { SourceControlProviderDescriptor } from '@/lib/source-control/provi
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import {
   SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsControlGroup,
   SettingsFieldRow,
 } from '@/components/sections/shared/SettingsSection';
@@ -183,7 +184,7 @@ export const SourceControlProviderCard: React.FC<{ descriptor: SourceControlProv
         {legacyFlow ? (
           <>
             <GitHubComAccountSection />
-            <SettingsControlGroup title={t(copy.instancesTitle)} contentClassName="space-y-3">
+            <SettingsControlGroup title={t(copy.instancesTitle)} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
               {instanceSetup}
             </SettingsControlGroup>
           </>

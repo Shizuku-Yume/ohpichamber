@@ -520,7 +520,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               <div key={header.row} className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2`}>
                 <div className="flex items-start gap-2">
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <div>
+                    <div className="flex flex-col gap-1">
                       <label className={SETTINGS_FIELD_LABEL_CLASS}>
                         {t('settings.providers.page.custom.headers.keyLabel')}
                       </label>
@@ -529,15 +529,15 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                         onChange={(event) => setHeader(index, 'name', event.target.value)}
                         disabled={busy}
                         placeholder={t('settings.providers.page.custom.headers.keyPlaceholder')}
-                        className="mt-1 h-7 rounded-md px-3 font-mono text-xs"
+                        className="h-7 rounded-md px-3 font-mono text-xs"
                         aria-invalid={Boolean(headerErrors[index]?.name)}
                         aria-label={t('settings.providers.page.custom.headers.keyLabel')}
                       />
                       {headerErrors[index]?.name ? (
-                        <p className="mt-1 typography-meta text-[var(--status-error)]">{headerErrors[index]?.name}</p>
+                        <p className="typography-meta text-[var(--status-error)]">{headerErrors[index]?.name}</p>
                       ) : null}
                     </div>
-                    <div>
+                    <div className="flex flex-col gap-1">
                       <label className={SETTINGS_FIELD_LABEL_CLASS}>
                         {t('settings.providers.page.custom.headers.valueLabel')}
                       </label>
@@ -548,12 +548,12 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                         disabled={busy}
                         placeholder={t('settings.providers.page.custom.headers.valuePlaceholder')}
                         autoComplete="new-password"
-                        className="mt-1 h-7 rounded-md px-3 font-mono text-xs"
+                        className="h-7 rounded-md px-3 font-mono text-xs"
                         aria-invalid={Boolean(headerErrors[index]?.value)}
                         aria-label={t('settings.providers.page.custom.headers.valueLabel')}
                       />
                       {headerErrors[index]?.value ? (
-                        <p className="mt-1 typography-meta text-[var(--status-error)]">{headerErrors[index]?.value}</p>
+                        <p className="typography-meta text-[var(--status-error)]">{headerErrors[index]?.value}</p>
                       ) : null}
                     </div>
                   </div>

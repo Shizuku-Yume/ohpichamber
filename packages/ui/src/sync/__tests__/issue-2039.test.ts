@@ -515,6 +515,41 @@ describe("issue 2039 draft auto-accept", () => {
     expect(useSessionUIStore.getState().currentSessionDirectory).toBe("/canonical/worktree")
   })
 
+  test("a draft that never sent does not keep its resolved workspace after it closes", async () => {
+    // The per-draft cache must not outlive the draft: a later draft may reuse
+    // the same path after the workspace changed, and a stale resolution would
+    // admit into the old one.
+    spyOn(canonicalClient, "resolveWorkspace").mockRestore()
+    let nextWorkspaceId = "workspace-first"
+    spyOn(canonicalClient, "resolveWorkspace").mockImplementation(async directory => {
+      resolveWorkspaceCalls.push(directory)
+      return { workspaceId: nextWorkspaceId, projectId: "project-1", name: "Workspace", displayPath: "." }
+    })
+    useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: "/canonical/worktree" })
+    await Promise.resolve()
+    useSessionUIStore.getState().closeNewSessionDraft()
+
+    nextWorkspaceId = "workspace-second"
+    useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: "/canonical/worktree" })
+    await materializeOpenDraftSession({ providerId: "provider", modelId: "model" })
+
+    expect(createSessionCalls[0]?.workspaceId).toBe("workspace-second")
+  })
+
+  test("a failed workspace resolution is retried instead of staying cached", async () => {
+    spyOn(canonicalClient, "resolveWorkspace").mockRestore()
+    let attempt = 0
+    spyOn(canonicalClient, "resolveWorkspace").mockImplementation(async directory => {
+      resolveWorkspaceCalls.push(directory)
+      if (attempt++ === 0) throw new Error("host unavailable")
+      return { workspaceId: "workspace-retry", projectId: "project-1", name: "Workspace", displayPath: "." }
+    })
+    useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: "/canonical/worktree" })
+    await materializeOpenDraftSession({ providerId: "provider", modelId: "model" })
+
+    expect(createSessionCalls[0]?.workspaceId).toBe("workspace-retry")
+  })
+
   test("routes the session by its admitted workspace, not a stale requested-path attachment", async () => {
     registerWorkspaceDirectory("workspace-issue-2039", "/canonical/worktree")
     useSessionUIStore.getState().openNewSessionDraft({

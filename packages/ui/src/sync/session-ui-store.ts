@@ -18,7 +18,7 @@ export type CanonicalSkillMentions = {
 import type { ContextPartMetadata } from "@/lib/messages/contextParts"
 import { create } from "zustand"
 import type { StoreApi, UseBoundStore } from "zustand"
-import type { FileResourceExpandResult, PromptAttachment, PromptContext, PromptRequest, Session, SessionMetadata, Message as CanonicalMessage } from "@openchamber/agent-contract"
+import type { FileResourceExpandResult, PromptAttachment, PromptContext, PromptRequest, Session, SessionMetadata, Message as CanonicalMessage, Workspace } from "@openchamber/agent-contract"
 import type { AttachedFile, SessionWorktreeAttachment } from "@/stores/types/sessionTypes"
 import type { WorktreeMetadata } from "@/types/worktree"
 import { runtimeFetch } from "@/lib/runtime-fetch"
@@ -799,6 +799,31 @@ const DEFAULT_DRAFT: NewSessionDraftState = {
 let nextDraftId = 1
 const pendingChatDirectoryByDraft = new Map<string, Promise<string | null>>()
 const pendingPreparationByDraft = new Map<number, Promise<unknown>>()
+/**
+ * Workspace resolutions for a draft, keyed by draft and directory.
+ *
+ * Speculative preparation, session admission and discard each need the same
+ * workspace for the same directory, and each is a Host round trip. Caching the
+ * promise per draft makes one draft resolve once. A rejected resolution is
+ * dropped, so a transient failure is retried instead of poisoning the draft, and
+ * closing the draft clears its entries so a later reuse of the draft cannot
+ * admit a session into a workspace the user has navigated away from.
+ */
+const workspaceByDraftDirectory = new Map<string, Promise<Workspace>>()
+const workspaceDraftKey = (draftId: number, directory: string) => `${draftId}\u0000${directory}`
+const resolveDraftWorkspace = (draftId: number, directory: string): Promise<Workspace> => {
+  const key = workspaceDraftKey(draftId, directory)
+  const cached = workspaceByDraftDirectory.get(key)
+  if (cached) return cached
+  const pending = canonicalClient.resolveWorkspace(directory)
+  workspaceByDraftDirectory.set(key, pending)
+  pending.catch(() => { if (workspaceByDraftDirectory.get(key) === pending) workspaceByDraftDirectory.delete(key) })
+  return pending
+}
+const forgetDraftWorkspaces = (draftId: number): void => {
+  const prefix = `${draftId}\u0000`
+  for (const key of workspaceByDraftDirectory.keys()) if (key.startsWith(prefix)) workspaceByDraftDirectory.delete(key)
+}
 
 const activeSessionByRuntime = new Map<string, string | null>()
 type RuntimeSessionMemory = {
@@ -991,7 +1016,8 @@ const createSessionWithDraftLifecycle = async (
     assertSendRuntime(runtimeKey, runtimeRevision)
     if (resolved.status === "aborted") return null
     const directory = resolved.directory
-    const session = await createSessionAction(title, directory, metadata, selectionTransition, selection, "preserve")
+    const session = await createSessionAction(title, directory, metadata, selectionTransition, selection, "preserve",
+      (target) => resolveDraftWorkspace(draft.draftId, target))
     assertSendRuntime(runtimeKey, runtimeRevision)
     if (!session) return null
 
@@ -1579,7 +1605,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
 
     void recoverStaleDraftDirectory(nextDraft)
     if (directory) {
-      const prep = canonicalClient.resolveWorkspace(directory)
+      const prep = resolveDraftWorkspace(nextDraft.draftId, directory)
         .then((ws) => canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
         .catch(() => undefined)
       pendingPreparationByDraft.set(nextDraft.draftId, prep)
@@ -1604,7 +1630,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         if (current.open && current.target === "chat" && current.draftId === draft.draftId) {
           set({ newSessionDraft: { ...current, preparedChatDirectory: directory } })
         }
-        const prep = canonicalClient.resolveWorkspace(directory)
+        const prep = resolveDraftWorkspace(draft.draftId, directory)
           .then((ws) => canonicalClient.prepareSession({ projectId: ws.projectId, workspaceId: ws.workspaceId }))
           .catch(() => undefined)
         pendingPreparationByDraft.set(draft.draftId, prep)
@@ -1634,13 +1660,18 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
     const discard = () => {
       const dir = currentDraft.preparedChatDirectory ?? currentDraft.directoryOverride ?? useDirectoryStore.getState().currentDirectory
       if (dir) {
-        void canonicalClient.resolveWorkspace(dir)
+        // The same per-draft resolution the open and admission used, so the
+        // discard is the last reader of a workspace already resolved.
+        void resolveDraftWorkspace(currentDraft.draftId, dir)
           .then((ws) => canonicalClient.discardPreparedSession({ workspaceId: ws.workspaceId }))
           .catch(() => undefined)
       }
     }
     if (pendingPrep) void pendingPrep.finally(discard)
     else discard()
+    // The draft is over: nothing may reuse its resolutions, and leaving them
+    // would let a newer draft with a recycled path read a stale workspace.
+    forgetDraftWorkspaces(currentDraft.draftId)
     if (
       !currentDraft.open
       && currentDraft.selectedProjectId == null

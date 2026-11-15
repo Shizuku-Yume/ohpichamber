@@ -13,11 +13,12 @@
 
 | Variant | `POST /sessions` p50 | first `part.delta` after send p50 (light load) | (loaded) | Verdict |
 |---|---|---|---|---|
-| (a) no prepare — cold | 14–27 ms | 720–800 ms | 855–1272 ms | creation MET, first delta **NOT MET** |
+| (a) no prepare — cold | 14–23 ms | 720–800 ms | 855–1521 ms | creation MET, first delta **NOT MET** |
 | (b) prepare then send | 560–939 ms | 780–1020 ms | 1035–1351 ms | both **MISS**, accepted |
-| (c) prepare completed — the product path | 6–11 ms | 220–260 ms | 324–473 ms | both **MET** |
+| (c) prepare completed — the product path | 6–9 ms | 220–260 ms | 324–473 ms | both **MET** |
 
-- Light-load numbers: `task24/after-7`, `after-8` and `after-9/A1,A2`; loaded: `after-9/run1..3` (load average 12–22) and the round-3 and round-4 reviews (927.00 ms cold at load 11).
+- Latest run, after the integration merge: `task24/after-final/omp-performance.json` — (a) creation 22.81 ms / delta 1520.92 ms; (b) 797.01 / 1083.36 ms; (c) 8.04 / **333.04 ms**; cadence 33.3 ms. Recorded at load average 18.66 with 1.1 GB free, which is why its cold number is the worst of the series; every verdict is unchanged.
+- Light-load numbers: `task24/after-7`, `after-8` and `after-9/A1,A2`; loaded: `after-9/run1..3` (load 12–22), `after-final` (18.66) and the round-3 and round-4 reviews (927.00 ms cold at load 11).
 - Stream cadence p50 33.2–33.3 ms (≤ 33 ± 5, MET).
 - Suites in the final state: `bun test packages/agent-service/src` 515 pass / 10 skip / 0 fail; web `openchamber-sessions` + `shutdown-runtime` 176 pass; UI sync 171 pass; agent-service and ui type-check clean; `oxlint` on changed files and `dead-code` clean for changed files.
 
@@ -30,7 +31,7 @@
 
 The Check is half met, and the half that is not met is not reachable by further work on this path.
 
-- **Cold path (variant a, no prepare): first `part.delta` p50 ≈ 720–930 ms against ≤ 600 ms.** Measured 720–800 ms on a lightly loaded machine (`after-7`, `after-8`, `after-9/A1,A2`), 855–934 ms in the round-3 reviewer's runs, 927.00 ms in the round-4 reviewer's run, and 1261–1651 ms in `after-9/run1..3` at load average 12–22. All 10 samples exceed 600 in every reviewer run.
+- **Cold path (variant a, no prepare): first `part.delta` p50 ≈ 720–930 ms against ≤ 600 ms.** Measured 720–800 ms on a lightly loaded machine (`after-7`, `after-8`, `after-9/A1,A2`), 855–934 ms in the round-3 reviewer's runs, 927.00 ms in the round-4 reviewer's run, 1261–1651 ms in `after-9/run1..3` (load 12–22) and 1520.92 ms in `after-final` (load 18.66). All 10 samples exceed 600 in every reviewer run.
 - **Prepared path (variant c): meets it.** 220–280 ms p50 in every run by every party (324–473 ms under heavy load). This is the path a user takes: `openNewSessionDraft` calls `prepare` (`session-ui-store.ts:1579`).
 - **`POST /sessions` ≤ 400 ms: met on (a) 14–27 ms and (c) 6–11 ms.** Variant (b) misses it at 560–939 ms because creation awaits its own in-flight prepare, and misses first delta too; that is an accepted, documented miss, since the only alternative moves the same wait into send.
 - **Per-hop cost holders in the cold path**, from the traced run: `createAgentSession` ≈ 109 ms, serial agent-loop preparation before the provider call ≈ 144 ms, supervisor queueing ≈ 60 ms. The post-init `Promise.all` branches are concurrent, not additive — their CPU time exceeds their own wall time.

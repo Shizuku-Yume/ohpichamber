@@ -15,6 +15,7 @@ Object.assign(globalThis, {
   Element: domWindow.Element,
   HTMLElement: domWindow.HTMLElement,
   HTMLInputElement: domWindow.HTMLInputElement,
+  HTMLTextAreaElement: domWindow.HTMLTextAreaElement,
   HTMLButtonElement: domWindow.HTMLButtonElement,
   customElements: domWindow.customElements,
   MutationObserver: domWindow.MutationObserver,
@@ -99,8 +100,10 @@ mock.module('@/components/sections/agents/ModelSelector', () => ({
   ),
 }));
 
+const saveStateCalls: string[] = [];
+
 mock.module('@/lib/persistence', () => ({
-  reportSettingsSaveState: () => {},
+  reportSettingsSaveState: (state: string) => { saveStateCalls.push(state); },
 }));
 
 const mockModel: Model = {
@@ -132,6 +135,25 @@ const mockProvider: Provider & { models: Model[] } = {
 
 const { RoutingPage } = await import('./RoutingPage');
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const DEBOUNCE_SETTLE_MS = 650;
+
+const setInputValue = async (element: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+  const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+  if (!setter) throw new Error('Missing value setter');
+  await act(async () => {
+    setter.call(element, value);
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+};
+
+const buttonContaining = (text: string): HTMLButtonElement => {
+  const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find((entry) => entry.textContent?.includes(text));
+  if (!button) throw new Error(`Missing button: ${text}`);
+  return button;
+};
+
 describe('RoutingPage', () => {
   let container: HTMLElement;
   let root: Root;
@@ -144,7 +166,7 @@ describe('RoutingPage', () => {
       config: mockConfig,
       builtins: mockConfig.categories,
       load: async () => {},
-      saveConfig: async () => {},
+      saveConfig: mock(async () => {}),
     });
 
     useConfigStore.setState({
@@ -179,6 +201,78 @@ describe('RoutingPage', () => {
     // Thinking efforts and model selector are rendered
     expect(container.textContent).toContain('settings.routing.category.thinking');
     expect(container.textContent).toContain('settings.routing.category.model');
+  });
+
+  test('adding a category without a description keeps the draft idle and saves once it is valid', async () => {
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    const addInput = document.querySelector<HTMLInputElement>('[aria-label="settings.routing.categories.addLabel"]');
+    if (!addInput) throw new Error('Missing add input');
+    await setInputValue(addInput, 'Docs');
+    await act(async () => {
+      buttonContaining('settings.routing.categories.add').click();
+    });
+
+    saveStateCalls.length = 0;
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    const saveConfig = useRoutingStore.getState().saveConfig;
+    expect(saveConfig).toHaveBeenCalledTimes(0);
+    expect(saveStateCalls).not.toContain('error');
+    expect(container.textContent).toContain('settings.routing.category.descriptionRequired');
+
+    const description = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!description) throw new Error('Missing description field');
+    await setInputValue(description, 'Docs and reference writing');
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    expect(saveConfig).toHaveBeenCalledTimes(1);
+    const saved = saveConfig.mock.calls[0][0] as RoutingConfig;
+    const docs = saved.categories.find((category) => category.id === 'docs');
+    expect(docs).toBeDefined();
+    expect(docs?.builtin).toBe(false);
+    expect(docs?.name).toBe('Docs');
+    expect(docs?.description).toBe('Docs and reference writing');
+    expect(saveStateCalls).toContain('saved');
+  });
+
+  test('clearing an existing category description never sends an invalid config', async () => {
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    await act(async () => {
+      buttonContaining('Hard').click();
+    });
+    const description = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!description) throw new Error('Missing description field');
+    await setInputValue(description, '');
+
+    saveStateCalls.length = 0;
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    const saveConfig = useRoutingStore.getState().saveConfig;
+    expect(saveConfig).toHaveBeenCalledTimes(0);
+    expect(saveStateCalls).not.toContain('error');
+    expect(container.textContent).toContain('settings.routing.category.descriptionRequired');
+
+    const name = container.querySelector<HTMLInputElement>('[aria-label="settings.routing.category.name"]');
+    if (!name) throw new Error('Missing name field');
+    await setInputValue(name, '');
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    expect(saveConfig).toHaveBeenCalledTimes(0);
+    expect(container.textContent).toContain('settings.routing.category.nameRequired');
   });
 
   test('thinking select displays reasoning effort options rather than legacy model variants', async () => {

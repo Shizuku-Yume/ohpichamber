@@ -118,6 +118,10 @@ const CategoryRow: React.FC<{
     ? `${category.model.modelID}${shownVariant ? ` / ${shownVariant}` : ''}`
     : t('settings.routing.model.useFallback');
   const summary = modelLabel;
+  const missingName = category.name.trim().length === 0;
+  const missingDescription = category.description.trim().length === 0;
+  const nameError = missingName ? t('settings.routing.category.nameRequired') : undefined;
+  const descriptionError = missingDescription ? t('settings.routing.category.descriptionRequired') : undefined;
   return (
     <div className={cn('py-1', !category.enabled && 'opacity-60')}>
       <div className="flex items-center gap-2">
@@ -140,7 +144,12 @@ const CategoryRow: React.FC<{
       {expanded ? (
         <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'px-1 pb-4 pt-2')}>
           <SettingsTwoColumn>
-            <SettingsStackedField label={t('settings.routing.category.name')} controlClassName="max-w-none">
+            <SettingsStackedField
+              label={t('settings.routing.category.name')}
+              description={nameError}
+              descriptionPlacement="after"
+              controlClassName="max-w-none"
+            >
               <Input
                 value={category.name}
                 onChange={(event) => onChange({ name: event.target.value })}
@@ -172,6 +181,8 @@ const CategoryRow: React.FC<{
           <SettingsStackedField
             label={t('settings.routing.category.description')}
             info={t('settings.routing.category.descriptionInfo')}
+            description={descriptionError}
+            descriptionPlacement="after"
             controlClassName="max-w-none"
           >
             <Textarea
@@ -233,6 +244,12 @@ export const RoutingPage: React.FC = () => {
   const flush = React.useCallback(() => {
     const pending = pendingRef.current;
     if (!pending) return saveChainRef.current;
+    // The server trims both fields and rejects an empty one with a 400. Sending
+    // the draft anyway would report a failure on every keystroke and leave the
+    // config unsaveable, so an invalid draft stays pending for the next edit.
+    if (pending.config.categories.some((category) => category.name.trim().length === 0 || category.description.trim().length === 0)) {
+      return saveChainRef.current;
+    }
     pendingRef.current = null;
     if (pending.runtimeKey !== getRuntimeKey()) return saveChainRef.current;
     savesInFlightRef.current += 1;

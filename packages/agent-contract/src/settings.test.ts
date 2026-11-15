@@ -32,6 +32,9 @@ test('parsePlacement and formatPlacement roundtrip correctly', () => {
   expect(parsePlacement('tui-only')).toEqual({ type: 'tui-only' });
   expect(formatPlacement({ type: 'tui-only' })).toBe('tui-only');
 
+  expect(parsePlacement('config-only')).toEqual({ type: 'config-only' });
+  expect(formatPlacement({ type: 'config-only' })).toBe('config-only');
+
   expect(parsePlacement('hidden')).toEqual({ type: 'hidden' });
   expect(formatPlacement({ type: 'hidden' })).toBe('hidden');
   expect(parsePlacement('boundary')).toEqual({ type: 'boundary' });

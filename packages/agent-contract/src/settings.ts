@@ -8,6 +8,9 @@ import { CounterSchema, EntityIdSchema, JsonValueSchema } from './primitives.ts'
  * - `tui-only`: terminal presentation or terminal interaction.
  * - `owned-by`: an existing OpenChamber control already owns and writes the concept,
  *   named by `owner` (that control's settings-item id).
+ * - `config-only`: a `record`/`array` value no GUI control can edit (no choices to
+ *   render). It is edited in `config.yml` and listed with the OMP page's other
+ *   unrendered settings.
  * - `hidden`: untabbed or intentionally hidden internal setting.
  */
 export const OmpSettingIdSchema = z.string().min(1);
@@ -33,6 +36,9 @@ export const OmpSettingPlacementSchema = z.discriminatedUnion('type', [
     owner: z.string().min(1),
   }),
   z.strictObject({
+    type: z.literal('config-only'),
+  }),
+  z.strictObject({
     type: z.literal('hidden'),
   }),
   z.strictObject({
@@ -44,6 +50,7 @@ export type OmpSettingPlacement = z.infer<typeof OmpSettingPlacementSchema>;
 export function parsePlacement(raw: string): OmpSettingPlacement {
   if (raw === 'engine') return { type: 'engine' };
   if (raw === 'tui-only') return { type: 'tui-only' };
+  if (raw === 'config-only') return { type: 'config-only' };
   if (raw === 'hidden') return { type: 'hidden' };
   if (raw === 'boundary') return { type: 'boundary' };
   if (raw.startsWith('owned-by ')) {
@@ -66,6 +73,7 @@ export function formatPlacement(placement: OmpSettingPlacement): string {
     case 'engine': return 'engine';
     case 'tui-only': return 'tui-only';
     case 'boundary': return 'boundary';
+    case 'config-only': return 'config-only';
     case 'hidden': return 'hidden';
     case 'owned-by': return `owned-by ${placement.owner}`;
     case 'page': return `${placement.page}:${placement.section}`;

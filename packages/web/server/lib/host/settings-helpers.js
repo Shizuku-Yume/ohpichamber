@@ -500,9 +500,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionReviewOfferEnabled === 'boolean') {
       result.sessionReviewOfferEnabled = candidate.sessionReviewOfferEnabled;
     }
-    if (typeof candidate.sessionGoalEnabled === 'boolean') {
-      result.sessionGoalEnabled = candidate.sessionGoalEnabled;
-    }
     if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
       result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
     }

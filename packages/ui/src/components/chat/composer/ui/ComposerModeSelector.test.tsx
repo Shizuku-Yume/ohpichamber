@@ -19,7 +19,7 @@ const render = async (props: Partial<RenderProps>) => {
                 draftOpen
                 runActive={false}
                 planRoleAvailable
-                sessionGoalEnabled
+                goalModeEnabled
                 onDraftModeChange={() => undefined}
                 {...props}
             />

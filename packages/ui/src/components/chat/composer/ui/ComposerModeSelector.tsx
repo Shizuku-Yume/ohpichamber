@@ -43,7 +43,7 @@ type ComposerModeSelectorProps = {
     runActive: boolean;
     /** The workspace model catalog's OMP `plan` role resolution. */
     planRoleAvailable: boolean | undefined;
-    sessionGoalEnabled: boolean;
+    goalModeEnabled: boolean;
     directory?: string;
     isMobile?: boolean;
     /** Starts the picker open; the default is closed. */
@@ -72,7 +72,7 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
     draftGoalObjective,
     runActive,
     planRoleAvailable,
-    sessionGoalEnabled,
+    goalModeEnabled,
     directory,
     isMobile = false,
     defaultOpen = false,
@@ -92,10 +92,10 @@ export const ComposerModeSelector = React.memo(function ComposerModeSelector({
 
     const options = React.useMemo(() => buildModeOptions({
         planRoleAvailable,
-        sessionGoalEnabled,
+        goalModeEnabled,
         selectedKind,
         translate: (key) => t(key),
-    }), [planRoleAvailable, selectedKind, sessionGoalEnabled, t]);
+    }), [planRoleAvailable, selectedKind, goalModeEnabled, t]);
 
     const choose = React.useCallback((value: ComposerModeValue) => {
         if (value === 'goal') {

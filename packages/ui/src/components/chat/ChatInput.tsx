@@ -76,6 +76,7 @@ import { resolveReasoningEffortToSend } from './composer/submit/resolveReasoning
 import { useChatSurfaceMode } from './useChatSurfaceMode';
 import { MobileModelButton } from './MobileModelButton';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
+import { useGoalModeEnabled } from '@/hooks/useSessionGoal';
 import { toast } from '@/components/ui';
 // useMessageStore removed — messages now come from sync system
 import { useTabletLayout } from '@/lib/device';
@@ -3970,7 +3971,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
     // The workspace model catalog is the authoritative source for whether OMP
     // can resolve the project/global `plan` role.
     const planRoleAvailable = useDirectorySync(React.useCallback((state) => state.models?.planRoleAvailable, []), currentSessionDirectoryForSync ?? currentDirectory ?? undefined);
-    const sessionGoalEnabled = useUIStore((state) => state.sessionGoalEnabled);
+    const goalModeEnabled = useGoalModeEnabled();
     const handleDraftModeChange = React.useCallback((next: ComposerModeValue, goal?: DraftGoalObjective | null) => {
         useSessionUIStore.getState().setDraftMode(next, goal ?? null);
     }, []);
@@ -4034,7 +4035,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                 draftGoalObjective={newSessionDraft.goalObjective ?? null}
                 runActive={Boolean(workerRun)}
                 planRoleAvailable={planRoleAvailable}
-                sessionGoalEnabled={sessionGoalEnabled}
+                goalModeEnabled={goalModeEnabled}
                 directory={currentSessionDirectoryForSync ?? currentDirectory}
                 isMobile
                 onDraftModeChange={handleDraftModeChange}
@@ -4468,7 +4469,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({
                                                     draftMode={newSessionDraft.mode}
                                                     draftGoalObjective={newSessionDraft.goalObjective ?? null}
                                                     planRoleAvailable={planRoleAvailable}
-                                                    sessionGoalEnabled={sessionGoalEnabled}
+                                                    goalModeEnabled={goalModeEnabled}
                                                     onDraftModeChange={handleDraftModeChange}
                                                     radius={chatInputRadius}
                                                     footerPaddingClass={footerPaddingClass}

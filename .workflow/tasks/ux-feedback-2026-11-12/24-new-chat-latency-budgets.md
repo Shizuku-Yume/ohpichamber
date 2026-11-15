@@ -7,44 +7,35 @@
 **Files:** `packages/agent-service/src/supervisor/{service,workers,catalog}.ts`; `packages/ui/src/sync/{session-ui-store,session-actions}.ts`; `scripts/perf/omp-performance.mjs`; `.workflow/decisions.md` (the task 17 entry that accepted about 880 ms)
 **Read first:** the independent review of task 17, `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/independent-review/Review17.md` (all five findings); `.workflow/done/ux-feedback-2026-11-12/17-new-chat-latency.md` and its receipts; `research/feedback-2026-11-12/15-16-streaming-latency.md` (cause 2: the steps `admit` runs under the catalog lock); skills `performance-engineering`, `sync-state-invariants`
 **Check:** run `bun run profile:omp` with the `create → run → first event` scenario on the fixture provider. It must record `POST /sessions` p50 ≤ 400 ms and the first `part.delta` ≤ 600 ms after send on a new chat. Spec W11 sets these budgets, and only the maintainer can waive them.
-**Check before:**
-- `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output /home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/before --skip-ui` on base commit `81e48cd715c2525dad96b3bd360a370063ac5f67`:
-  - `POST /sessions` p50: 1022.49 ms (samples: 947.51, 1023.89, 947.5, 1022.49, 1075.17 ms; budget ≤ 400 ms)
-  - first `part.delta` after send on a new chat p50: 1378.49 ms (samples: 1252.81, 1378.49, 1252.2, 1416.9, 1397 ms; budget ≤ 600 ms)
-  - first `part.delta` after `POST /runs` p50: 316.08 ms (samples: 296.26, 348.17, 296.29, 385.66, 316.08 ms)
-  - Receipt written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/before/omp-performance.json`.
-**Check after:**
-- Command: `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/r3/final/project --output …/task24/after-9/run{1,2,3} --new-chat-runs 10 --skip-ui`, isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133. Receipts: `task24/after-9/{run1,run2,run3}/omp-performance.json`.
-- **Load caveat, recorded because it dominates the absolute numbers:** these three runs happened at load average 12–22 with six other worktrees holding idle TypeScript servers and under 2 GB free. The same build measured (c) 220–232 ms earlier at load ~6. Treat the numbers below as the loaded-machine reading and the earlier ones as the floor; the verdict per variant is the same in both.
-- **Prepared path (c) — what the product does, because opening the composer calls `prepare`: MEETS both budgets in every run.** `POST /sessions` p50 8.77 / 10.71 / 7.56 ms (≤ 400). First `part.delta` after send p50 **378 / 473 / 324 ms** (≤ 600), against 220–232 ms on the same build at lower load.
-- **Cold path (a): `POST /sessions` MEETS, first `part.delta` DOES NOT.** `POST /sessions` p50 20.84 / 27.38 / 20.40 ms (≤ 400). First `part.delta` p50 **1261 / 1651 / 1272 ms** here, 720–800 ms at lower load and 855–934 ms in the round-3 review's runs, against ≤ 600. Needs the maintainer waiver recorded in `.workflow/decisions.md`.
-- **Prepare-issued-then-send (b): both budgets MISS, accepted and documented.** `POST /sessions` p50 **848 / 939 / 749 ms** against ≤ 400, because creation awaits its own in-flight prepare; first `part.delta` p50 1170 / 1351 / 1035 ms.
-- Stream cadence p50 33.3 ms (≤ 33 ± 5 MET).
-- Suites: `bun test packages/agent-service/src` 512 pass / 10 skip / 0 fail; web `openchamber-sessions` + `shutdown-runtime` 176 pass; UI sync 171 pass; type-check, `oxlint` on changed files and `dead-code` clean for changed files.
+**Check before:** `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output …/task24/before --skip-ui` on base commit `81e48cd715c2525dad96b3bd360a370063ac5f67`: `POST /sessions` p50 1022.49 ms, first `part.delta` after send p50 1378.49 ms. Receipt: `task24/before/omp-performance.json`.
 
-**Check before:**
-- `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output /home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/before --skip-ui` on base commit `81e48cd715c2525dad96b3bd360a370063ac5f67`:
-  - `POST /sessions` p50: 1022.49 ms (samples: 947.51, 1023.89, 947.5, 1022.49, 1075.17 ms; budget ≤ 400 ms)
-  - first `part.delta` after send on a new chat p50: 1378.49 ms (samples: 1252.81, 1378.49, 1252.2, 1416.9, 1397 ms; budget ≤ 600 ms)
-  - first `part.delta` after `POST /runs` p50: 316.08 ms (samples: 296.26, 348.17, 296.29, 385.66, 316.08 ms)
-  - Receipt written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/before/omp-performance.json`.
-**Check after:**
-- Latest measurement: `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/r3/run/project --output …/task24/after-9/run{1,2} --new-chat-runs 10 --skip-ui`, isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133. Receipts in `task24/after-9/{run1,run2}/omp-performance.json`; the earlier `after-8` and round-3 runs are alongside them.
-- **Prepared path (c) — what the product does, because opening the composer calls `prepare`: meets both budgets.** First `part.delta` p50 ≈ 220–260 ms (≤ 600 MET), `POST /sessions` p50 6–7 ms (≤ 400 MET).
-- **Cold path (a): `POST /sessions` MET, first `part.delta` NOT MET.** p50 ≈ 720–800 ms on a lightly loaded machine, ≈ 855–934 ms under load, against ≤ 600 ms. Keep the maintainer waiver wording in `.workflow/decisions.md`.
-- **Prepare-then-immediate-send (b): both NOT MET, accepted.** `POST /sessions` p50 560–750 ms against ≤ 400 ms, because creation awaits its own in-flight prepare; first `part.delta` p50 ≈ 780–1020 ms. Documented as an accepted miss, not fixed: the alternative would move the same wait into send.
-- Stream cadence p50 ≈ 33.2 ms (≤ 33 ± 5 MET).
-- Full suites: `bun test packages/agent-service/src` 512 pass / 10 skip / 0 fail; UI sync 171 pass; web `openchamber-sessions` 165 pass; type-check, `oxlint` on changed files and `dead-code` clean for changed files.
+**Check after:** `bun run profile:omp -- --url http://127.0.0.1:4124 --dir <scratch>/project --new-chat-runs 10 --skip-ui`, isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider. Load dominates the absolutes here, so both readings are given:
 
-**Check before:**
-- `bun run profile:omp -- --url http://127.0.0.1:4124 --dir /tmp/oc-perf-serve-4124/project --output /home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/before --skip-ui` on base commit `81e48cd715c2525dad96b3bd360a370063ac5f67`:
-  - `POST /sessions` p50: 1022.49 ms (samples: 947.51, 1023.89, 947.5, 1022.49, 1075.17 ms; budget ≤ 400 ms)
-  - first `part.delta` after send on a new chat p50: 1378.49 ms (samples: 1252.81, 1378.49, 1252.2, 1416.9, 1397 ms; budget ≤ 600 ms)
-  - first `part.delta` after `POST /runs` p50: 316.08 ms (samples: 296.26, 348.17, 296.29, 385.66, 316.08 ms)
-  - Receipt written to `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/before/omp-performance.json`.
+| Variant | `POST /sessions` p50 | first `part.delta` after send p50 (light load) | (loaded) | Verdict |
+|---|---|---|---|---|
+| (a) no prepare — cold | 14–27 ms | 720–800 ms | 855–1272 ms | creation MET, first delta **NOT MET** |
+| (b) prepare then send | 560–939 ms | 780–1020 ms | 1035–1351 ms | both **MISS**, accepted |
+| (c) prepare completed — the product path | 6–11 ms | 220–260 ms | 324–473 ms | both **MET** |
+
+- Light-load numbers: `task24/after-7`, `after-8` and `after-9/A1,A2`; loaded: `after-9/run1..3` (load average 12–22) and the round-3 and round-4 reviews (927.00 ms cold at load 11).
+- Stream cadence p50 33.2–33.3 ms (≤ 33 ± 5, MET).
+- Suites in the final state: `bun test packages/agent-service/src` 515 pass / 10 skip / 0 fail; web `openchamber-sessions` + `shutdown-runtime` 176 pass; UI sync 171 pass; agent-service and ui type-check clean; `oxlint` on changed files and `dead-code` clean for changed files.
+
 **Base commit:** 81e48cd715c2525dad96b3bd360a370063ac5f67
-**Status:** active
-**Review:** pending independent re-review (reviewer session ufb-24-reviewer: round 1 FAIL, round 2 FAIL, round 3 FAIL)
+**Status:** blocked
+**Review:** independent reviewer session ufb-24-reviewer-ds: round 4 PASS on the deliverable, no blocking findings; rounds 1–3 FAIL, every finding fixed and mutation-verified
+**Blocked on:** the cold-path first-delta budget, which needs a maintainer waiver. See `## Blocked`.
+
+## Blocked
+
+The Check is half met, and the half that is not met is not reachable by further work on this path.
+
+- **Cold path (variant a, no prepare): first `part.delta` p50 ≈ 720–930 ms against ≤ 600 ms.** Measured 720–800 ms on a lightly loaded machine (`after-7`, `after-8`, `after-9/A1,A2`), 855–934 ms in the round-3 reviewer's runs, 927.00 ms in the round-4 reviewer's run, and 1261–1651 ms in `after-9/run1..3` at load average 12–22. All 10 samples exceed 600 in every reviewer run.
+- **Prepared path (variant c): meets it.** 220–280 ms p50 in every run by every party (324–473 ms under heavy load). This is the path a user takes: `openNewSessionDraft` calls `prepare` (`session-ui-store.ts:1579`).
+- **`POST /sessions` ≤ 400 ms: met on (a) 14–27 ms and (c) 6–11 ms.** Variant (b) misses it at 560–939 ms because creation awaits its own in-flight prepare, and misses first delta too; that is an accepted, documented miss, since the only alternative moves the same wait into send.
+- **Per-hop cost holders in the cold path**, from the traced run: `createAgentSession` ≈ 109 ms, serial agent-loop preparation before the provider call ≈ 144 ms, supervisor queueing ≈ 60 ms. The post-init `Promise.all` branches are concurrent, not additive — their CPU time exceeds their own wall time.
+- **The one named remaining lever:** `catalog-models.ts:730–735` calls `modelRegistry.reapplyModelPolicies()` unconditionally on every selection, and that call forces a full offline catalog rebuild past the mtime gate (`model-registry.ts:887–902`). Measured 57–113 ms in isolation and **≈ 37 ms of a prompt's non-provider wall time**. A settings/credential revision guard would recover that; round 1's staleness tests (`catalog-models.test.ts:133`, `:215`) are exactly the tests that would catch an over-eager skip. On a 720–930 ms path, 37 ms is not decisive.
+- **Decision needed from the maintainer:** waive the ≤ 600 ms first-delta budget for the cold path, or fund an OMP SDK seam that builds a session graph ahead of time (`AgentRegistry.global()` is process-wide today, so a spare cannot construct one). The waiver request is recorded in `.workflow/decisions.md`.
 
 ## Progress
 

@@ -127,6 +127,11 @@ test('the second new chat adopts the replacement instead of spawning a third wor
 // shape here is the reported one: a worktree lease refuses every spawn, so no
 // attempt can ever add a spare and the only thing that can stop the retries is
 // the code under test.
+//
+// Note for whoever breaks this next: with the retry restored the failure shows up
+// as a hang to this file's timeout, not as a red assertion. The retry loop keeps
+// the macrotask queue starved, so `Bun.sleep` and the interval never run and the
+// expectations are never reached. A hang here means the refill spins.
 test('a refused refill does not retry from its own settle', async () => {
   const f = await fixture();
   const registry = registryFor(f.entrypoint);

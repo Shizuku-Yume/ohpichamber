@@ -11,7 +11,7 @@ import {
 } from '@openchamber/agent-service/private-protocol';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { __resetDirsFromEnvForTests } from '@oh-my-pi/pi-utils';
-import type { NativeOperationDescriptor, NativeToolTier } from '../native-policy-protocol.ts';
+import { NativeOperationDescriptorSchema, type NativeOperationDescriptor, type NativeToolTier } from '../native-policy-protocol.ts';
 import { createProjectDirectoryRuntime } from '../../../web/server/lib/host/project-directory-runtime.js';
 import { createWorkerOperationAuthorizer } from '../../../web/server/lib/host/worker-operation-authorizer.js';
 import { describeNativeOperation } from './native-policy-descriptor.ts';
@@ -74,12 +74,19 @@ const AuthorizerDecisionSchema = z.object({
 });
 type AuthorizerDecision = z.infer<typeof AuthorizerDecisionSchema>;
 
-type ToolDecision = { toolName: string; declaredTier: NativeToolTier; decision: AuthorizerDecision };
+type ToolDecision = {
+  toolName: string;
+  declaredTier: NativeToolTier;
+  descriptor: NativeOperationDescriptor;
+  decision: AuthorizerDecision;
+};
 type ModeAudit = { mode: ModeKind; names: string[]; enabled: string[]; decisions: ToolDecision[] };
 
 type Harness = {
   worker: WorkerSession;
   cwd: string;
+  /** A directory beside the workspace: a real path the Host must refuse for a write. */
+  outside: string;
   scope: HostAuthorizationScope;
   authorize: (request: WorkerPolicyRequest, descriptor: NativeOperationDescriptor) => Promise<AuthorizerDecision>;
 };
@@ -127,6 +134,17 @@ function representativeInput(toolName: string): JsonObject {
 const ALLOWED_DESPITE_EXEC_TIER = { task: true } satisfies Record<string, true>;
 /** MCP tools declare a write tier but carry no Host-readable destination, so the Host still asks. */
 const APPROVAL_DESPITE_WRITE_TIER_PREFIX = 'mcp__';
+/**
+ * Tools whose write tier is the Host's own argument-aware reading rather than
+ * the tool's declaration. They are allowed because the Host knows what they
+ * write; `write`/`edit` still pass their destination guard first.
+ */
+const HOST_WRITE_TIER_TOOLS: readonly string[] = ['write', 'edit', 'ast_edit', 'generate_image'];
+/** Argument-aware memory write tiers: the Host decides which branch each call takes. */
+const ARG_AWARE_WRITE_TIER_TOOLS: readonly string[] = ['context_notes', 'retain', 'learn'];
+/** The descriptor's destinations are the only thing the Host can check for containment. */
+const hasCheckableDestination = (descriptor: NativeOperationDescriptor): boolean =>
+  descriptor.destinationPaths.length > 0 || descriptor.fileOps.length > 0;
 
 async function bootHarness(): Promise<void> {
   resetSettingsForTest();
@@ -148,6 +166,9 @@ async function bootHarness(): Promise<void> {
   await mkdir(path.join(workspace, '.omp', 'extensions'), { recursive: true });
   await mkdir(path.join(workspace, 'src'), { recursive: true });
   await mkdir(agentDirectory, { recursive: true });
+  // A real file outside the workspace: the containment check must refuse it.
+  await mkdir(path.join(environmentRoot, 'outside'), { recursive: true });
+  await writeFile(path.join(environmentRoot, 'outside', 'outside.txt'), 'outside\n');
   await writeFile(path.join(workspace, 'src', 'source.ts'), 'source\n');
   await writeFile(path.join(workspace, '.omp', 'extensions', 'tier-probe.ts'), tierProbeExtension);
 
@@ -264,7 +285,7 @@ async function bootHarness(): Promise<void> {
       throw new Error('The Host protocol build is stale and drops declaredTier; run `bun run --cwd packages/agent-service build`');
     }
     harness = {
-      worker: session, cwd, scope,
+      worker: session, cwd, outside: await fs.realpath(path.join(environmentRoot, 'outside')), scope,
       authorize: async (request, descriptor) => AuthorizerDecisionSchema.parse(await hostAuthorize(scope, request, descriptor)),
     };
   } catch (error) {
@@ -292,7 +313,7 @@ async function auditMode(mode: ModeKind): Promise<ModeAudit> {
     // The Host reads the tier off the descriptor, so a schema that dropped it
     // would silently downgrade every unknown tool to exec.
     expect(descriptor.declaredTier).toBe(declaredTier);
-    decisions.push({ toolName, declaredTier, decision: await authorize(request, descriptor) });
+    decisions.push({ toolName, declaredTier, descriptor, decision: await authorize(request, descriptor) });
   }
   return { mode, names, enabled, decisions };
 }
@@ -315,19 +336,36 @@ function expectNoBareDeny(audit: ModeAudit): void {
   }
 }
 
-/** Each decision follows the tier the tool declared for these arguments. */
+/**
+ * Each decision follows the tier the tool declared for these arguments. A write
+ * tier is only actionable when the descriptor names a destination the Host can
+ * check; a declared write with nothing to check is an approval card, never a
+ * silent allow.
+ */
 function expectMatchesDeclaredTier(audit: ModeAudit): void {
-  for (const { toolName, declaredTier, decision } of audit.decisions) {
+  for (const row of audit.decisions) {
+    const { toolName, declaredTier, descriptor, decision } = row;
     if (declaredTier === 'read') {
       expect({ toolName, decision }).toEqual({ toolName, decision: { allowed: true } });
       continue;
     }
     if (declaredTier === 'write') {
+      // MCP first: the MCP branch classifies before any tier is consulted.
       if (toolName.startsWith(APPROVAL_DESPITE_WRITE_TIER_PREFIX)) {
         expect({ toolName, decision }).toEqual({ toolName, decision: expect.objectContaining({ allowed: false, approvalRequired: true }) });
         continue;
       }
-      expect({ toolName, decision }).toEqual({ toolName, decision: { allowed: true } });
+      // The Host's own write-tier readings are allowed as before.
+      if (HOST_WRITE_TIER_TOOLS.includes(toolName) || ARG_AWARE_WRITE_TIER_TOOLS.includes(toolName)) {
+        expect({ toolName, decision }).toEqual({ toolName, decision: { allowed: true } });
+        continue;
+      }
+      // Everything else: a checkable in-workspace destination is the permission.
+      if (hasCheckableDestination(descriptor)) {
+        expect({ toolName, decision }).toEqual({ toolName, decision: { allowed: true } });
+        continue;
+      }
+      expect({ toolName, decision }).toEqual({ toolName, decision: expect.objectContaining({ allowed: false, approvalRequired: true }) });
       continue;
     }
     if (ALLOWED_DESPITE_EXEC_TIER[toolName] === true) {
@@ -379,7 +417,8 @@ test('main mode authorizes every registered builtin, MCP and extension tool', as
   expect(decisionFor(audit, 'eval')).toMatchObject({ allowed: false, approvalRequired: true });
   // A tool that declares no approval at all fails closed to an approval prompt.
   expect(decisionFor(audit, 'run_experiment')).toMatchObject({ allowed: false, approvalRequired: true });
-  expect(decisionFor(audit, WRITE_TIER_EXTENSION_TOOL)).toEqual({ allowed: true });
+  // A declared write with no destination the Host can check is an approval card.
+  expect(decisionFor(audit, WRITE_TIER_EXTENSION_TOOL)).toMatchObject({ allowed: false, approvalRequired: true });
   expect(decisionFor(audit, DYNAMIC_TIER_EXTENSION_TOOL)).toEqual({ allowed: true });
 }, 30_000);
 
@@ -409,6 +448,65 @@ test('vibe mode authorizes its ephemeral tools instead of falling through', asyn
   for (const toolName of ['vibe_wait', 'vibe_kill', 'vibe_list']) {
     expect({ toolName, decision: decisionFor(audit, toolName) }).toEqual({ toolName, decision: { allowed: true } });
   }
+}, 30_000);
+
+/**
+ * The extension probe declares `approval: 'write'` for every call, so the Host's
+ * only remaining question is whether the descriptor names a destination it can
+ * check. These three cases are that question answered three ways.
+ */
+function extensionWriteDescriptor(destinationPaths: string[], fileOps: NativeOperationDescriptor['fileOps'] = []): NativeOperationDescriptor {
+  return NativeOperationDescriptorSchema.parse({
+    toolName: WRITE_TIER_EXTENSION_TOOL, sourcePaths: [], destinationPaths, fileOps, declaredTier: 'write',
+  });
+}
+
+test('a declared write is allowed inside the workspace and refused outside it', async () => {
+  const { worker, cwd, outside, authorize } = requireHarness();
+  await worker.operation({ type: 'mode.set', mode: 'main' });
+  const input: JsonObject = {};
+  expect(resolveDeclaredTier(worker.session, WRITE_TIER_EXTENSION_TOOL, input)).toBe('write');
+
+  // No destination the Host can check: the user must see the call.
+  expect(await authorize({ type: 'tool', toolName: WRITE_TIER_EXTENSION_TOOL, input }, extensionWriteDescriptor([]))).toMatchObject({
+    allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true,
+    detail: `The ${WRITE_TIER_EXTENSION_TOOL} tool declares a file write but names no destination the Host can check, so it requires approval`,
+  });
+
+  // An in-workspace destination is the permission: the declared write goes through.
+  const inside = path.join(cwd, 'src', 'created.ts');
+  expect(await authorize(
+    { type: 'tool', toolName: WRITE_TIER_EXTENSION_TOOL, input },
+    extensionWriteDescriptor([inside], [{ kind: 'write', path: inside }]),
+  )).toEqual({ allowed: true });
+
+  // A destination outside the workspace is a hard denial with no approval path,
+  // even though the tool declares a write tier the workspace would grant.
+  const outsideFile = path.join(outside, 'outside.txt');
+  const escaping = await authorize(
+    { type: 'tool', toolName: WRITE_TIER_EXTENSION_TOOL, input },
+    extensionWriteDescriptor([outsideFile], [{ kind: 'write', path: outsideFile }]),
+  );
+  expect(escaping).toMatchObject({
+    allowed: false, code: 'UNAUTHORIZED', status: 403,
+    detail: `The ${WRITE_TIER_EXTENSION_TOOL} tool targets a path outside the authorized workspace`,
+  });
+  // Not a card: an approval grant cannot widen the workspace.
+  expect(escaping.approvalRequired).toBeUndefined();
+}, 30_000);
+
+test('a rename destination outside the workspace is a hard denial too', async () => {
+  const { cwd, outside, authorize } = requireHarness();
+  // The fileOps destination is checked even when destinationPaths is empty, so a
+  // rename cannot carry the write out of the tree.
+  const insideDir = path.join(cwd, 'src');
+  expect(await authorize(
+    { type: 'tool', toolName: WRITE_TIER_EXTENSION_TOOL, input: {} },
+    extensionWriteDescriptor([], [{ kind: 'rename', path: path.join(insideDir, 'source.ts'), to: path.join(outside, 'moved.ts') }]),
+  )).toMatchObject({
+    allowed: false, code: 'UNAUTHORIZED', status: 403,
+    detail: `The ${WRITE_TIER_EXTENSION_TOOL} tool targets a path outside the authorized workspace`,
+  });
 }, 30_000);
 
 test('an MCP server outside the workspace configuration is a named hard denial, not a bare one', async () => {

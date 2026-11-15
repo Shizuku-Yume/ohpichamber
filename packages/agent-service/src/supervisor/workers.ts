@@ -247,6 +247,15 @@ export class WorkerRegistry {
   /** Loaded-or-loading spares kept per workspace; adopting one still leaves a replacement. */
   private readonly sparePoolSize = 2;
   private spareRefill: Promise<void> | undefined;
+  /** The pool the service wants filled. The pool only ever holds one workspace, so one entry is the whole wish list. */
+  private spareWanted: { input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>; environment: NodeJS.ProcessEnv } | undefined;
+  /**
+   * Set when a refill was refused by a worktree lease or a spawn failed. The
+   * reaper's next sweep clears it. Retrying such an attempt on the settle of the
+   * attempt itself would spin the service's single thread for as long as the
+   * refusal lasts, so the only retry is the sweep.
+   */
+  private spareRefillBlocked = false;
 
   constructor(private readonly options: WorkerRegistryOptions) {
     this.capacityPolicy = options.capacityPolicy ?? WORKER_CAPACITY_POLICY;
@@ -654,6 +663,11 @@ export class WorkerRegistry {
         this.spareWorkers.splice(this.spareWorkers.indexOf(spare), 1);
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
       }
+      // The sweep is also where a blocked or short pool gets its next attempt:
+      // it runs on a fixed interval whether or not anything asked for a spare, so
+      // a refusal costs one attempt per interval instead of one per microtask.
+      this.spareRefillBlocked = false;
+      if (this.spareWanted) this.warmSessionWorker(this.spareWanted.input, this.spareWanted.environment);
     } finally { this.reaping = false; }
   }
 
@@ -901,6 +915,11 @@ export class WorkerRegistry {
     // loading. Filling to `sparePoolSize` is what keeps back-to-back new chats
     // from alternating between an adopted spare and a cold launch: while one
     // session uses a spare, the replacement is already loading.
+    this.spareWanted = { input, environment };
+    // A refusal holds until the reaper's next sweep, so a leased workspace or a
+    // broken spawn target costs one attempt per sweep rather than a retry from
+    // the settle of the attempt that was refused.
+    if (this.spareRefillBlocked) return;
     const claimed = this.spareWorkers.filter(spare => !spare.adopted && spare.cwd === input.cwd && isDeepStrictEqual(spare.environment, environment));
     if (claimed.length >= this.sparePoolSize) return;
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
@@ -908,7 +927,12 @@ export class WorkerRegistry {
     this.spareRefill = (async () => {
       try {
         if (this.closing) return;
-        this.assertWorktreeLeaseAllows(input.cwd);
+        try {
+          this.assertWorktreeLeaseAllows(input.cwd);
+        } catch {
+          this.spareRefillBlocked = true;
+          return;
+        }
         const child = spawn(workerRuntime, workerArgs, {
           cwd: input.cwd, env: environment, detached: process.platform !== 'win32',
           windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
@@ -919,6 +943,11 @@ export class WorkerRegistry {
         const drop = () => {
           const index = this.spareWorkers.indexOf(spare);
           if (index >= 0) this.spareWorkers.splice(index, 1);
+          // A process that died before it finished loading cannot be replaced by
+          // retrying now: whatever stopped it will stop the next one too. Hold
+          // until the reaper's sweep, so a broken spawn target costs one attempt
+          // per sweep instead of a spawn per event-loop turn.
+          if (!spare.loaded) this.spareRefillBlocked = true;
           resolveReady();
         };
         child.once('close', drop);
@@ -932,14 +961,19 @@ export class WorkerRegistry {
           resolveReady();
         });
         if (!child.connected) { child.kill('SIGKILL'); resolveReady(); }
-      } catch { /* a spare is an optimization; the next launch spawns normally */ }
-      finally { this.spareRefill = undefined; }
+      } catch {
+        // A spare is an optimization; the next launch spawns normally. A failed
+        // spawn holds until the next sweep too, so a broken entrypoint cannot
+        // turn into a spawn storm.
+        this.spareRefillBlocked = true;
+      } finally { this.spareRefill = undefined; }
     })();
     void this.spareRefill.then(() => {
-      // The pool may still be short (spawning is serialized, so one call adds one
-      // spare). Ask again once this spawn settled, which also refills after an
-      // adoption that happened while the spawn was in flight.
-      if (!this.closing) this.warmSessionWorker(input, environment);
+      // One serialized attempt adds one spare, so a pool of two needs a second
+      // attempt. Ask again only when this attempt actually added one: a spawn
+      // that failed or was refused has set the block and must wait for the
+      // sweep instead of retrying immediately.
+      if (!this.closing && !this.spareRefillBlocked) this.warmSessionWorker(input, environment);
     });
   }
 
@@ -1000,7 +1034,9 @@ export class WorkerRegistry {
     if (owner.kind === 'session' && !input.cwd.includes('ohpichamber-agent-ready-')) {
       const settled = this.spareRefill;
       void (settled ?? Promise.resolve()).then(() => {
-        // Wait for the previous spawn to clear its own guard before asking.
+        // Wait for the previous spawn to clear its own guard before asking. A
+        // refused attempt stays blocked until the reaper's sweep, so a leased
+        // workspace does not get a new attempt per launch as well.
         if (this.spareRefill === settled) this.spareRefill = undefined;
         this.warmSessionWorker(input, environment);
       });

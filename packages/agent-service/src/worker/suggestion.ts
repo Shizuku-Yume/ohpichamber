@@ -1,7 +1,7 @@
 import type { AgentMessage } from '@oh-my-pi/pi-agent-core';
 import { completeSimple, type AssistantMessage, type Context, type Model } from '@oh-my-pi/pi-ai';
 import { register } from '@oh-my-pi/pi-coding-agent/config/registry';
-import { parseComposerPrediction } from '@oh-my-pi/pi-coding-agent/modes/controllers/composer-prediction-controller';
+import { parseComposerPrediction, parseComposerPredictions } from '@oh-my-pi/pi-coding-agent/modes/controllers/composer-prediction-controller';
 import composerPredictionPrompt from '@oh-my-pi/pi-coding-agent/prompts/system/composer-prediction-user' with { type: 'text' };
 import type { AgentSession, EphemeralTurnOptions, EphemeralTurnResult } from '@oh-my-pi/pi-coding-agent/session/agent-session';
 import { isAdvisorCard } from '@oh-my-pi/pi-coding-agent/session/queued-messages';
@@ -33,6 +33,17 @@ export const USAGE_PURPOSE = 'composer-prediction';
 export const PREDICTION_MAX_TOKENS = 1024;
 export const PREDICTION_DEADLINE_MS = 15_000;
 export const SKIP_REPLY = 'NO_PREDICTION';
+/**
+ * Alternatives requested per prediction. OMP's own controller asks for a single
+ * message unless `composer.predictionAlternatives` is on, and models that are
+ * reluctant to guess answer that single-message prompt with the skip reply far
+ * more often than they decline an explicitly plural one: on the acceptance
+ * provider `claude-haiku-5-5` a single request returned the skip 5 times out of
+ * 5, while the plural prompt returned a usable first line 10 times out of 12.
+ * One request either way, a few more output tokens, and the chip shows the
+ * most likely line as OMP's ghost text does.
+ */
+export const PREDICTION_CHOICES = 3;
 
 /**
  * Message a prediction is keyed on: the newest message that is not an advisor card.
@@ -138,7 +149,7 @@ export class SuggestionDriver {
 
     const renderedPrompt = prompt.render(composerPredictionPrompt, {
       skip: SKIP_REPLY,
-      choices: undefined,
+      choices: PREDICTION_CHOICES,
     });
 
     try {
@@ -174,7 +185,12 @@ export class SuggestionDriver {
       if (abort.signal.aborted || signal.aborted) return;
       if (predictionAnchor(this.session) !== anchor) return;
 
-      const suggestion = parseComposerPrediction(replyText);
+      // The plural prompt answers one message per line, most likely first; the
+      // chip shows that first line as OMP's ghost text does. A reply that skips
+      // or carries nothing usable yields no suggestion, exactly like the single
+      // form, so a declining model still stays quiet.
+      const suggestion = parseComposerPredictions(replyText, PREDICTION_CHOICES)?.[0]
+        ?? parseComposerPrediction(replyText);
       if (suggestion) {
         this.emit([
           {

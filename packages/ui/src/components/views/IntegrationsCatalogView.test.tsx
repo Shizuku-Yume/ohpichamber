@@ -540,11 +540,82 @@ test('a local entry with a required env input keeps Install disabled until it is
   expect(install.disabled).toBe(true);
 });
 
-test('installing a local entry writes env values as credentials and references them from the transport', async () => {
+/** The Grafana install with a scope the workspace resolves, as the user runs it. */
+const fillGrafana = async (values: { url: string; apiKey?: string }) => {
+  await openGrafana();
+  const body = browser.document.body;
+  const urlField = body.querySelector('#catalog-env-grafana-url');
+  if (!urlField) throw new Error('Grafana env fields missing');
+  await setInputValue(urlField, values.url);
+  if (values.apiKey !== undefined) {
+    const keyField = body.querySelector('#catalog-env-grafana-apiKey');
+    if (!keyField) throw new Error('Grafana api key field missing');
+    await setInputValue(keyField, values.apiKey);
+  }
+  return body;
+};
+
+const confirmScopeInstall = async (body: HappyElement) => {
+  await clickButton('Install');
+  const confirm = [...body.querySelectorAll('button')].filter((candidate) => candidate.textContent?.trim() === 'Install').at(-1);
+  if (!confirm) throw new Error('Scope dialog confirm missing');
+  await act(async () => confirm.click());
+  await settle();
+};
+
+test('installing a local entry writes env values before the save and references them from the transport', async () => {
   useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
   useUIStore.setState({ settingsProjectPath: '/repo' });
   const savedServers: Array<Record<string, unknown>> = [];
-  const transports: Array<Record<string, unknown>> = [];
+  const saves: string[] = [];
+  useMcpConfigStore.setState({
+    // A new env-carrying server is first staged disabled so the credential
+    // route has a configured server that cannot fail its own apply.
+    createMcp: async (config) => {
+      saves.push('create');
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+    updateMcp: async (_serverId, config) => {
+      saves.push('update');
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+  });
+
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid', apiKey: 'fake-key-0000' });
+  await confirmScopeInstall(body);
+
+  expect(saves).toEqual(['create', 'update']);
+  expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid', 'fake-key-0000']);
+  // The staging save is disabled and carries no secret; the enabling save
+  // carries only references.
+  const staged = savedServers[0];
+  expect(staged.enabled).toBe(false);
+  const saved = savedServers.at(-1);
+  expect(saved?.enabled).toBe(true);
+  const transport = saved?.transport as Record<string, unknown> | undefined;
+  expect(transport?.type).toBe('stdio');
+  expect(transport?.envCredentialRefs).toEqual({
+    GRAFANA_URL: 'credential-grafana-1',
+    GRAFANA_API_KEY: 'credential-grafana-2',
+  });
+  for (const server of savedServers) {
+    const serialized = JSON.stringify(server);
+    expect(serialized.includes('https://grafana.example.invalid')).toBe(false);
+    expect(serialized.includes('fake-key-0000')).toBe(false);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('a handshake failure after the env credentials are saved keeps the references', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const savedServers: Array<Record<string, unknown>> = [];
   useMcpConfigStore.setState({
     createMcp: async (config) => {
       const merged = { ...grafanaServer, ...config };
@@ -552,37 +623,21 @@ test('installing a local entry writes env values as credentials and references t
       useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
       return appliedMcpMutation();
     },
+    // The final, enabled save is saved but cannot connect: a real handshake
+    // failure, not a missing credential.
     updateMcp: async (_serverId, config) => {
-      const transport = (config as { transport: Record<string, unknown> }).transport;
-      transports.push(transport);
-      savedServers.push({ ...grafanaServer, transport });
-      return appliedMcpMutation();
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return { ok: false as const, outcome: 'saved-not-connected' as const, error: 'HTTP 502 from Grafana' };
     },
   });
 
-  await openGrafana();
-  const body = browser.document.body;
-  const urlField = body.querySelector('#catalog-env-grafana-url');
-  const keyField = body.querySelector('#catalog-env-grafana-apiKey');
-  if (!urlField || !keyField) throw new Error('Grafana env fields missing');
-  await setInputValue(urlField, 'https://grafana.example.invalid');
-  await setInputValue(keyField, 'fake-key-0000');
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
+  await confirmScopeInstall(body);
 
-  await clickButton('Install');
-  const confirm = [...body.querySelectorAll('button')].filter((candidate) => candidate.textContent?.trim() === 'Install').at(-1);
-  if (!confirm) throw new Error('Scope dialog confirm missing');
-  await act(async () => confirm.click());
-  await settle();
-
-  expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid', 'fake-key-0000']);
-  const transport = transports.at(-1);
-  expect(transport?.type).toBe('stdio');
-  expect(transport?.envCredentialRefs).toEqual({
-    GRAFANA_URL: 'credential-grafana-1',
-    GRAFANA_API_KEY: 'credential-grafana-2',
-  });
-  const serialized = JSON.stringify(savedServers.at(-1));
-  expect(serialized.includes('https://grafana.example.invalid')).toBe(false);
-  expect(serialized.includes('fake-key-0000')).toBe(false);
-  expect(errors).toEqual([]);
+  expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid']);
+  const transport = savedServers.at(-1)?.transport as Record<string, unknown> | undefined;
+  expect(transport?.envCredentialRefs).toEqual({ GRAFANA_URL: 'credential-grafana-1' });
+  expect(errors).toEqual(['Could not install Grafana']);
 });

@@ -478,16 +478,17 @@ export function IntegrationsCatalogView(): React.ReactNode {
 
   /**
    * Writes a local server's collected environment values as workspace
-   * credentials and references them from the stdio transport as
-   * `envCredentialRefs`, so the saved config holds references, never secrets.
-   * Like the token path, the credential writes advance the persisted revision,
-   * which is why the config is read first and the store reread afterwards.
+   * credentials and returns their references, keyed by env name. The saved
+   * config gets only those references, never the secrets.
+   *
+   * The credential route addresses an existing server (a write for an unknown
+   * serverId is refused), so the caller saves the server before writing; each
+   * write advances the persisted revision, which the next one carries.
    */
-  const attachMcpEnvValues = React.useCallback(async (
+  const writeMcpEnvCredentials = React.useCallback(async (
     entry: CatalogEntry,
     values: Array<{ envName: string; value: string }>,
-  ): Promise<{ ok: true } | { ok: false; error: string }> => {
-    if (values.length === 0) return { ok: true };
+  ): Promise<{ ok: true; refs: Record<string, string> } | { ok: false; error: string }> => {
     const workspace = await canonicalClient.resolveWorkspace(resolveMcpDirectory(settingsDirectory));
     const configuration = await canonicalClient.getWorkspaceMcpConfig(workspace.workspaceId);
     let persistedRevision = configuration.persistedRevision;
@@ -500,15 +501,10 @@ export function IntegrationsCatalogView(): React.ReactNode {
       persistedRevision = credential.persistedRevision;
       refs[row.envName] = credential.credentialRef;
     }
+    // Each write advanced the persisted revision; the next save's CAS baseline
+    // must be the one the service now holds.
     await useMcpConfigStore.getState().loadMcpConfigs({ directory: settingsDirectory, force: true });
-    const server = useMcpConfigStore.getState().getMcpByName(entry.id, settingsDirectory);
-    if (!server || server.transport.type !== 'stdio') return { ok: false, error: entry.name };
-    const transport: MCPServerConfig['transport'] = {
-      ...server.transport,
-      envCredentialRefs: { ...server.transport.envCredentialRefs, ...refs },
-    };
-    const updated = await useMcpConfigStore.getState().updateMcp(entry.id, { transport }, settingsDirectory);
-    return updated.ok ? { ok: true } : { ok: false, error: updated.error };
+    return { ok: true, refs };
   }, [settingsDirectory]);
 
   /**
@@ -534,13 +530,65 @@ export function IntegrationsCatalogView(): React.ReactNode {
           for (const input of entry.inputs ?? []) values[input.id] = readInput(entry, input.id);
           const config = buildCatalogMcpConfig(entry, component, values, targetScope ?? (hasSelectedProject ? 'project' : 'user'));
           // An existing server is retried by configuring it again; create is only for a new id.
-          const exists = mcpServers.some((server) => server.serverId === entry.id);
-          const attempted = await (exists ? updateMcp(entry.id, config, settingsDirectory) : createMcp(config, settingsDirectory))
+          const existingServer = mcpServers.find((server) => server.serverId === entry.id);
+          const existingEnvRefs = existingServer?.transport.type === 'stdio'
+            ? existingServer.transport.envCredentialRefs ?? {}
+            : {};
+          const filledEnv = component.local && (component.local.envInputs?.length ?? 0) > 0
+            ? readFilledEnvValues(entry, component)
+            : [];
+          // A local server that needs its environment cannot connect before the
+          // values and their references exist, so they are written first. The
+          // credential route addresses a configured server, which for a new id
+          // is a disabled staging save: an apply with nothing enabled cannot
+          // fail, and the next save enables it with the references.
+          let envRefs: Record<string, string> = existingEnvRefs;
+          let staged = false;
+          if (filledEnv.length > 0 && !existingServer) {
+            const staging = await createMcp({ ...config, enabled: false }, settingsDirectory)
+              .then((result) => ({ result }))
+              .catch((failure) => ({ failure }));
+            if ('failure' in staging) {
+              failed = true;
+              errorDetail = staging.failure instanceof Error ? staging.failure.message : String(staging.failure);
+              continue;
+            }
+            if (!staging.result.ok) {
+              failed = true;
+              errorDetail = staging.result.error;
+              continue;
+            }
+            staged = true;
+          }
+          if (filledEnv.length > 0) {
+            try {
+              const written = await writeMcpEnvCredentials(entry, filledEnv);
+              if (!written.ok) {
+                failed = true;
+                errorDetail = written.error;
+                if (staged) await deleteMcp(entry.id, settingsDirectory).catch(() => undefined);
+                continue;
+              }
+              envRefs = { ...envRefs, ...written.refs };
+            } catch (failure) {
+              failed = true;
+              errorDetail = failure instanceof Error ? failure.message : String(failure);
+              if (staged) await deleteMcp(entry.id, settingsDirectory).catch(() => undefined);
+              continue;
+            }
+          }
+          const savedConfig: MCPServerConfig = Object.keys(envRefs).length > 0 && config.transport.type === 'stdio'
+            ? { ...config, transport: { ...config.transport, envCredentialRefs: envRefs } }
+            : config;
+          const attempted = await (staged || existingServer ? updateMcp(entry.id, savedConfig, settingsDirectory) : createMcp(savedConfig, settingsDirectory))
             .then((result) => ({ result }))
             .catch((failure) => ({ failure }));
           if ('failure' in attempted) {
             failed = true;
             errorDetail = attempted.failure instanceof Error ? attempted.failure.message : String(attempted.failure);
+            // The staging save is the catalog's own disabled placeholder; an
+            // enabling save that could not be attempted leaves nothing to keep.
+            if (staged) await deleteMcp(entry.id, settingsDirectory).catch(() => undefined);
             continue;
           }
           // A server saved with authorization pending is a sign-in, not a
@@ -560,20 +608,6 @@ export function IntegrationsCatalogView(): React.ReactNode {
           if (component.auth === 'token') {
             try {
               const attached = await attachMcpToken(entry, component, readToken(entry));
-              if (!attached.ok) {
-                failed = true;
-                errorDetail = attached.error;
-                continue;
-              }
-            } catch (failure) {
-              failed = true;
-              errorDetail = failure instanceof Error ? failure.message : String(failure);
-              continue;
-            }
-          }
-          if (component.local && (component.local.envInputs?.length ?? 0) > 0) {
-            try {
-              const attached = await attachMcpEnvValues(entry, readFilledEnvValues(entry, component));
               if (!attached.ok) {
                 failed = true;
                 errorDetail = attached.error;
@@ -637,7 +671,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
     } finally {
       setBusyId(null);
     }
-  }, [attachMcpEnvValues, attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readFilledEnvValues, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp]);
+  }, [attachMcpToken, createMcp, deleteMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readFilledEnvValues, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp, writeMcpEnvCredentials]);
   /** One Uninstall pass: removes the MCP server, the plugin entries, and the installed skills. */
   const uninstallEntry = React.useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);

@@ -8,6 +8,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     syncToHmrState,
     globalMessageStreamHub,
     hostAgentRuntime,
+    openChamberSessionService,
     sessionRuntime,
     sessionAssistRuntime,
     sessionWorkRuntime,
@@ -77,6 +78,9 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       () => getSpacesHost()?.close(),
       () => getRelayService()?.stop(),
       () => getDictationRuntime()?.stop(),
+      // Discard prepared-but-unused sessions before their workers are stopped, so a
+      // speculative prepare never outlives the Host.
+      () => openChamberSessionService?.close?.(),
       () => sessionRuntime.dispose(),
       () => sessionAssistRuntime?.stop?.(),
       () => sessionWorkRuntime?.stop?.(),

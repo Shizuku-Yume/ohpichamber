@@ -55,13 +55,20 @@ export const selectMcpServersForDirectory = (state: Pick<McpConfigStore, 'server
 
 export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) => {
   const publish = (directory: string, configuration: MCPConfigurationState, result?: MCPApplyResult) => {
-    set(state => ({
-      configurationsByDirectory: { ...state.configurationsByDirectory, [directory]: configuration },
-      serversByDirectory: { ...state.serversByDirectory, [directory]: configuration.config.servers },
-      ...(directory === keyFor() ? { mcpServers: configuration.config.servers } : {}),
-      errorsByDirectory: { ...state.errorsByDirectory, [directory]: undefined },
-      ...(result ? { applyResultsByDirectory: { ...state.applyResultsByDirectory, [directory]: result } } : {}),
-    }));
+    set(state => {
+      const next = {
+        configurationsByDirectory: { ...state.configurationsByDirectory, [directory]: configuration },
+        serversByDirectory: { ...state.serversByDirectory, [directory]: configuration.config.servers },
+        errorsByDirectory: { ...state.errorsByDirectory, [directory]: undefined },
+        mcpServers: state.mcpServers,
+        applyResultsByDirectory: state.applyResultsByDirectory,
+      };
+      // These two mirror the directory only when it is the one the store is
+      // currently read through; another directory's write must not touch them.
+      if (directory === keyFor()) next.mcpServers = configuration.config.servers;
+      if (result) next.applyResultsByDirectory = { ...state.applyResultsByDirectory, [directory]: result };
+      return next;
+    });
   };
   const mutate = async (directory: string | null | undefined, transform?: (servers: MCPServerConfig[]) => MCPServerConfig[]): Promise<McpMutationResult> => {
     const ownerGeneration = generation;
@@ -105,7 +112,8 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
       if (ownerGeneration === generation) {
         set(state => ({ errorsByDirectory: { ...state.errorsByDirectory, [key]: message } }));
       }
-      return { ok: false, error: message, ...(result ? { result, outcome: result.outcome } : {}) };
+      if (!result) return { ok: false, error: message };
+      return { ok: false, error: message, result, outcome: result.outcome };
     }
   };
   return {

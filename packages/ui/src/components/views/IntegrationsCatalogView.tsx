@@ -487,7 +487,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
           const exists = mcpServers.some((server) => server.serverId === entry.id);
           const attempted = await (exists ? updateMcp(entry.id, config, settingsDirectory) : createMcp(config, settingsDirectory))
             .then((result) => ({ result }))
-            .catch((failure: unknown) => ({ failure }));
+            .catch((failure) => ({ failure }));
           if ('failure' in attempted) {
             failed = true;
             errorDetail = attempted.failure instanceof Error ? attempted.failure.message : String(attempted.failure);
@@ -991,6 +991,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
                 serverId={entry.id}
                 directory={settingsDirectory}
                 autoStart={autoStartEntryId === entry.id}
+                onAutoStartConsumed={() => setAutoStartEntryId((current) => (current === entry.id ? null : current))}
                 onConnected={() => { void useMcpStore.getState().connect(entry.id, settingsDirectory); }}
               />
             </div>

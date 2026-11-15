@@ -36,12 +36,20 @@ let reconnects = 0;
 let reads: MCPOAuthResult[] = [];
 /** The failure a `start` submit throws, when the test poses one. */
 let startFailure: Error | null = null;
+/** Failures the poll's own read takes before it answers, as a dropped connection would. */
+let pollFailures = 0;
 const actual = await import('@/api/canonicalClient');
 const { CanonicalApiError } = actual;
 mock.module('@/api/canonicalClient', () => ({
   ...actual, canonicalClient: {
     resolveWorkspace: async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }),
-    getWorkspaceMcpOAuth: async (): Promise<MCPOAuthResult> => (reads.length > 1 ? reads.shift() as MCPOAuthResult : reads[0] ?? unauthenticated),
+    getWorkspaceMcpOAuth: async (): Promise<MCPOAuthResult> => {
+    if (pollFailures > 0) {
+      pollFailures -= 1;
+      throw new Error('The Host connection dropped.');
+    }
+    return reads.length > 1 ? reads.shift() ?? unauthenticated : reads[0] ?? unauthenticated;
+  },
     writeWorkspaceMcpCredential: async (_workspaceId: string, _serverId: string, input: { persistedRevision: string; value: string }) => { credentials.push(input); return { ...owner, credentialRef: 'private_ref' }; },
     submitWorkspaceMcpOAuth: async (_workspaceId: string, _serverId: string, input: MCPOAuthRequest): Promise<MCPOAuthResult> => {
       requests.push(input);
@@ -63,7 +71,7 @@ let root: Root;
 
 beforeEach(() => {
   root = createRoot(container);
-  requests = []; credentials = []; reconnects = 0; reads = [unauthenticated]; startFailure = null;
+  requests = []; credentials = []; reconnects = 0; reads = [unauthenticated]; startFailure = null; pollFailures = 0;
   openSpy.mockClear();
 });
 afterEach(async () => {
@@ -76,8 +84,16 @@ afterAll(() => {
   for (const key of descriptorKeys) Reflect.deleteProperty(globalThis, key);
 });
 
-const render = async (props: { autoStart?: boolean; strict?: boolean } = {}) => {
-  const panel = <McpOAuthSignIn serverId="tools" directory="/repo" autoStart={props.autoStart} onConnected={() => { reconnects += 1; }} />;
+const render = async (props: { autoStart?: boolean; strict?: boolean; onAutoStartConsumed?: () => void } = {}) => {
+  const panel = (
+    <McpOAuthSignIn
+      serverId="tools"
+      directory="/repo"
+      autoStart={props.autoStart}
+      onAutoStartConsumed={props.onAutoStartConsumed}
+      onConnected={() => { reconnects += 1; }}
+    />
+  );
   await act(async () => {
     root.render(<I18nProvider>{props.strict ? <StrictMode>{panel}</StrictMode> : panel}</I18nProvider>);
   });
@@ -178,6 +194,92 @@ test('a cancel the Agent Service accepts still says the sign-in was cancelled', 
   // so the panel has to report it from the accepted action itself.
   expect(container.querySelector('[role="alert"]')).toBeNull();
   expect(container.querySelector('[role="status"]')?.textContent).toBe('Sign-in was cancelled.');
+});
+
+test('a flow that fails after the browser handoff shows the provider cause and stops waiting', async () => {
+  jest.useFakeTimers();
+  const failed: MCPOAuthResult = {
+    ...unauthenticated,
+    error: { code: 'MCP_OAUTH_FAILED', detail: 'The provider refused the token exchange (invalid_grant).', retryable: false },
+  };
+  reads = [unauthenticated, pending, failed];
+  await render({ autoStart: true });
+  await settle();
+  expect(starts()).toHaveLength(1);
+
+  await act(async () => { jest.advanceTimersByTime(1_500); });
+  await settle();
+  await act(async () => { jest.advanceTimersByTime(1_500); });
+  await settle();
+
+  // The failure is the provider's own sentence in red, and the form is back so
+  // the user can retry rather than being left in a silent waiting state.
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe('The provider refused the token exchange (invalid_grant).');
+  expect(container.textContent).not.toContain('Open in browser');
+  expect([...container.querySelectorAll('button')].some(button => button.textContent === 'Authorize')).toBe(true);
+  expect(reconnects).toBe(0);
+  // Polling stopped with the flow: later ticks read nothing and add no request.
+  const before = reads.length;
+  await act(async () => { jest.advanceTimersByTime(10_000); });
+  await settle();
+  expect(reads.length).toBe(before);
+});
+
+test('a transport failure during the poll is not a failed flow', async () => {
+  jest.useFakeTimers();
+  reads = [unauthenticated, pending, authenticated];
+  await render({ autoStart: true });
+  await settle();
+  pollFailures = 1;
+  await act(async () => { jest.advanceTimersByTime(1_500); });
+  await settle();
+  // A dropped read says nothing about the flow: no error, still waiting.
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.textContent).toContain('Open in browser');
+  expect(reconnects).toBe(0);
+  // The dropped read did not consume the flow's state: the next ticks still
+  // arrive, pass the pending result, and then connect.
+  for (let tick = 0; tick < 2; tick += 1) {
+    await act(async () => { jest.advanceTimersByTime(1_500); });
+    await settle();
+  }
+  expect(reconnects).toBe(1);
+});
+
+test('signing in again after clearing the auth connects again', async () => {
+  await render();
+  await click('Authorize');
+  await click('Complete Authorization');
+  expect(reconnects).toBe(1);
+  await click('Clear Auth');
+  await click('Authorize');
+  await click('Complete Authorization');
+  // The one-connection latch is per sign-in, not per panel lifetime.
+  expect(reconnects).toBe(2);
+});
+
+test('the auto-start flag is consumed once so a later visit stays manual', async () => {
+  let consumed = 0;
+  await render({ autoStart: true, onAutoStartConsumed: () => { consumed += 1; } });
+  await settle();
+  expect(consumed).toBe(1);
+  expect(starts()).toHaveLength(1);
+});
+
+test('the elapsed timer stops at the budget instead of ticking forever', async () => {
+  jest.useFakeTimers();
+  reads = [unauthenticated, pending];
+  await render({ autoStart: true });
+  await settle();
+  await act(async () => { jest.advanceTimersByTime(299_000); });
+  await settle();
+  expect(container.textContent).toContain('Waiting');
+  await act(async () => { jest.advanceTimersByTime(2_000); });
+  await settle();
+  expect(container.textContent).toContain('The sign-in timed out. Try again.');
+  await act(async () => { jest.advanceTimersByTime(60_000); });
+  await settle();
+  expect(container.textContent).toContain('The sign-in timed out. Try again.');
 });
 
 test('leaving the panel cancels the flow it was waiting on', async () => {

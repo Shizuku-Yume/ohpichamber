@@ -28,6 +28,8 @@ interface McpOAuthSignInProps {
    * its own, so saving and signing in are one action.
    */
   autoStart?: boolean;
+  /** The owner clears its `autoStart` flag here, so a later visit stays manual. */
+  onAutoStartConsumed?: () => void;
 }
 
 type OAuthErrorTone = 'error' | 'neutral' | 'info';
@@ -37,7 +39,7 @@ type PendingFlowOwner = { workspaceId: string; persistedRevision: string; worker
 type ActionOptions = { openBrowser?: boolean; silent?: boolean };
 
 /** Native MCP OAuth flow: configuration, pending browser handoff and connection state. */
-export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, directory, onConnected, autoStart = false }) => {
+export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, directory, onConnected, autoStart = false, onAutoStartConsumed }) => {
   const { t } = useI18n();
   const [state, setState] = React.useState<MCPOAuthResult | null>(null);
   const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
@@ -62,8 +64,12 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
   const clientIdRef = React.useRef<HTMLInputElement>(null);
   const focusPending = React.useRef(false);
   const onConnectedRef = React.useRef(onConnected);
+  const onAutoStartConsumedRef = React.useRef(onAutoStartConsumed);
 
-  React.useEffect(() => { onConnectedRef.current = onConnected; });
+  React.useEffect(() => {
+    onConnectedRef.current = onConnected;
+    onAutoStartConsumedRef.current = onAutoStartConsumed;
+  });
 
   const connectOnce = React.useCallback(async () => {
     if (notified.current) return;
@@ -97,12 +103,24 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
     }
     activeFlow.current = null;
     setPolling(null);
+    // The latch guards one connection per sign-in, not one per panel: clearing
+    // the auth and signing in again must connect again.
+    if (result.status !== 'authenticated') notified.current = false;
+    // A flow that failed after the browser handoff reports it here; the panel
+    // keeps its form so the user can retry, and stops waiting either way.
+    if (result.status === 'unauthenticated' && result.error) {
+      setError({
+        text: result.error.detail,
+        tone: result.error.code === 'MCP_OAUTH_CANCELLED' ? 'neutral' : 'error',
+      });
+      return;
+    }
     // Either way of finishing (poll or a pasted callback) reaches this one
     // place, so the server connects at most once.
     if (result.status === 'authenticated') void connectOnce();
   }, [connectOnce, openAuthorizationUrlOnce]);
 
-  const handleFailure = React.useCallback(async (failure: unknown, workspace: string) => {
+  const handleFailure = React.useCallback(async (failure: Error, workspace: string) => {
     const code = failure instanceof CanonicalApiError ? failure.problem.code : undefined;
     if (code === 'MCP_OAUTH_CANCELLED') {
       setError({ text: t('integrationsCatalog.oauth.cancelled'), tone: 'neutral' });
@@ -187,17 +205,24 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
       if (action === 'cancel' && options.silent !== true) {
         setError({ text: t('integrationsCatalog.oauth.cancelled'), tone: 'neutral' });
       }
-    } catch (failure) {
+    } catch (caught) {
+      // The transport throws problem documents and nothing else; anything that
+      // is not an Error already lost its cause, so its text is all that is left.
+      const failure = caught instanceof Error ? caught : new Error(String(caught));
       if (owner.current === attempt && options.silent !== true) await handleFailure(failure, workspace);
     } finally {
       if (owner.current === attempt) setBusy(false);
     }
   };
 
-  // The mount load effect runs once; it reads the current action runner, whose
-  // form fields change on every keystroke.
+  // The mount load effect runs once per server and directory; it reads the
+  // current action runner, whose form fields change on every keystroke. The
+  // auto-start flag is read once too, so the owner clearing it afterwards does
+  // not reset the panel mid-flow.
   const performRef = React.useRef(perform);
   React.useEffect(() => { performRef.current = perform; });
+  const applyResultRef = React.useRef(applyResult);
+  React.useEffect(() => { applyResultRef.current = applyResult; });
 
   React.useEffect(() => {
     const attempt = ++owner.current;
@@ -226,25 +251,27 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
         const result = await canonicalClient.getWorkspaceMcpOAuth(workspace.workspaceId, serverId);
         if (owner.current !== attempt || getRuntimeKey() !== runtimeKey) return;
         setWorkspaceId(workspace.workspaceId);
-        applyResult(result, workspace.workspaceId);
-        // One automatic start per mount, even under StrictMode's double effect:
-        // the first run is invalidated by the cleanup above, and only the live
-        // run reaches the guard.
-        if (autoStart && !autoStarted.current && result.status === 'unauthenticated') {
-          autoStarted.current = true;
-          setAutoStarting(true);
-          try {
-            await performRef.current('start', result, workspace.workspaceId, { openBrowser: true });
-          } finally {
-            if (owner.current === attempt) setAutoStarting(false);
-          }
-        }
+        applyResultRef.current(result, workspace.workspaceId);
       } catch (failure) {
         if (owner.current === attempt) setError({ text: failure instanceof Error ? failure.message : String(failure), tone: 'error' });
       }
     })();
     return () => { owner.current += 1; };
-  }, [applyResult, autoStart, directory, serverId]);
+  }, [directory, serverId]);
+
+  // The install's flag can arrive with the panel's first render or just after
+  // it (the saved server is published before the install pass finishes), so the
+  // start is driven by the flag and the loaded state, not by the mount alone.
+  // One start per panel: the guard survives StrictMode and re-renders, and the
+  // owner is told the flag was used so a later visit stays manual.
+  React.useEffect(() => {
+    if (!autoStart || autoStarted.current || !state || !workspaceId || state.status !== 'unauthenticated') return;
+    autoStarted.current = true;
+    onAutoStartConsumedRef.current?.();
+    setAutoStarting(true);
+    void performRef.current('start', state, workspaceId, { openBrowser: true })
+      .finally(() => setAutoStarting(false));
+  }, [autoStart, state, workspaceId]);
 
   // While a flow is pending the panel asks the Agent Service for its real state,
   // so a browser sign-in turns the server connected without another click.
@@ -264,8 +291,8 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
   }, [applyResult, polling, serverId, timedOut, workspaceId]);
 
   React.useEffect(() => {
-    if (!polling) {
-      setElapsedMs(0);
+    if (!polling || timedOut) {
+      if (!polling) setElapsedMs(0);
       return;
     }
     const startedAt = Date.now();
@@ -275,7 +302,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
       if (elapsed >= FLOW_BUDGET_MS) setTimedOut(true);
     }, ELAPSED_TICK_MS);
     return () => clearInterval(timer);
-  }, [polling]);
+  }, [polling, timedOut]);
 
   // Leaving the panel ends the flow it was waiting on; guessing would leave the
   // Agent Service holding a browser handoff nobody is watching.

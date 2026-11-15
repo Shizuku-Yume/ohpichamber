@@ -47,8 +47,8 @@ mock.module('@/api/canonicalClient', () => ({
       oauthReads.push('read');
       return { serverId: 'linear', persistedRevision: '1', worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, status: 'unauthenticated', authenticated: false };
     },
-    submitWorkspaceMcpOAuth: async (_workspaceId: string, serverId: string): Promise<MCPOAuthResult> => {
-      oauthStarts.push(serverId);
+    submitWorkspaceMcpOAuth: async (_workspaceId: string, serverId: string, request: { action: string }): Promise<MCPOAuthResult> => {
+      if (request.action === 'start') oauthStarts.push(serverId);
       return { serverId, persistedRevision: '1', worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, status: 'pending', authenticated: false, pendingFlow: { flowId: 'flow', authorizationUrl: 'https://auth.example.test/authorize' } };
     },
   },
@@ -62,6 +62,7 @@ spyOn(toast, 'error').mockImplementation((message) => { errors.push(String(messa
 const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useMcpConfigStore } = await import('@/stores/useMcpConfigStore');
+import type { McpMutationResult } from '@/stores/useMcpConfigStore';
 const { useMcpStore } = await import('@/stores/useMcpStore');
 const { usePluginsStore } = await import('@/stores/usePluginsStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
@@ -89,18 +90,18 @@ const atlassianServer = {
   scope: 'project' as const,
   transport: { type: 'http' as const, url: 'https://mcp.atlassian.com/v2/mcp' },
 };
-const appliedMcpMutation = () => ({
-  ok: true as const,
-  outcome: 'applied' as const,
+const appliedMcpMutation = (): McpMutationResult => ({
+  ok: true,
+  outcome: 'applied',
   result: {
-    kind: 'mcp' as const,
-    status: 'applied' as const,
-    outcome: 'applied' as const,
-    configuration: { workspaceId: 'workspace', persistedRevision: '1', config: { servers: [] as typeof linearServer[] } },
+    kind: 'mcp',
+    status: 'applied',
+    outcome: 'applied',
+    configuration: { workspaceId: 'workspace', persistedRevision: '1', config: { servers: [] } },
     workers: [],
   },
 });
-const needsAuthMcpMutation = () => ({
+const needsAuthMcpMutation = (): McpMutationResult => ({
   ok: true as const,
   outcome: 'saved-needs-auth' as const,
   result: {
@@ -441,21 +442,27 @@ test('a saved needs-sign-in install opens the connection card and never reports 
   expect(oauthStarts).toEqual(['linear']);
 });
 
-test('a needs-sign-in result that arrives as a refused apply is still a sign-in, not an error', async () => {
+test('the install auto-start is consumed, so re-entering the entry signs in from the button', async () => {
   useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
   useUIStore.setState({ settingsProjectPath: '/repo' });
-  // The store turns this refusal into success-with-action; the view must honour
-  // the outcome rather than the `ok` shape it happened to travel in.
   useMcpConfigStore.setState({
-    createMcp: async () => { saveLinear(); return { ...needsAuthMcpMutation(), ok: false as unknown as true, error: 'MCP_AUTH_REQUIRED' }; },
+    createMcp: async () => { saveLinear(); return needsAuthMcpMutation(); },
   });
   await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
   await installFromBrowse('Linear');
+  expect(oauthStarts).toEqual(['linear']);
 
-  expect(errors).toEqual([]);
-  expect(infos).toEqual(['Linear saved. Sign in to finish.']);
-  expect(successes).toEqual([]);
-  expect(browser.document.body.textContent?.includes('Connection')).toBe(true);
+  // Back to the list, then into the same entry again: the install's flag is
+  // spent, so no second flow starts behind the user's back.
+  const back = findClickable([...browser.document.body.querySelectorAll('nav button')], 'Integrations');
+  if (!back) throw new Error('Back button missing');
+  await act(async () => back.click());
+  await settle();
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'Linear');
+  if (!card) throw new Error('Linear card missing');
+  await act(async () => card.click());
+  await settle();
+  expect(oauthStarts).toEqual(['linear']);
 });
 
 test('reinstalling a saved unauthenticated server never toasts success', async () => {

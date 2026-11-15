@@ -17,7 +17,7 @@ import {
   type PasskeyStatus,
   type StoredPasskey,
 } from '@/lib/passkeys';
-import { SettingsSection, SettingsFieldRow } from '@/components/sections/shared/SettingsSection';
+import { SettingsSection, SettingsFieldRow, SETTINGS_SPACE_ROW_CLASS } from '@/components/sections/shared/SettingsSection';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 

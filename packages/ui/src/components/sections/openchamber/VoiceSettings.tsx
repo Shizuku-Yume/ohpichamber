@@ -1097,7 +1097,7 @@ export const VoiceSettings: React.FC = () => {
                         )}
 
                         {voiceProvider === 'openai-compatible' && (
-                            <div className="space-y-3">
+                            <div className={SETTINGS_SPACE_ROW_CLASS}>
                                 <SettingsStackedField
                                     label={(
                                         <span className={cn(!openaiCompatibleUrl.trim() && 'text-[var(--status-error)]')}>
@@ -1277,7 +1277,7 @@ export const VoiceSettings: React.FC = () => {
                                         <NumberInput value={speechRate} onValueChange={setSpeechRate} min={0.5} max={2} step={0.1} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
                                     </div>
                                 ) : (
-                                    <div className="flex h-8 items-center gap-2">
+                                    <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex h-8 items-center gap-2`}>
                                         <input type="range" min={0.5} max={2} step={0.1} value={speechRate} onChange={(e) => setSpeechRate(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechRate')} />
                                         <span className={sliderValueClass}>{`${speechRate.toFixed(1)}×`}</span>
                                     </div>
@@ -1290,7 +1290,7 @@ export const VoiceSettings: React.FC = () => {
                                         <NumberInput value={speechPitch} onValueChange={setSpeechPitch} min={0.5} max={2} step={0.1} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
                                     </div>
                                 ) : (
-                                    <div className="flex h-8 items-center gap-2">
+                                    <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex h-8 items-center gap-2`}>
                                         <input type="range" min={0.5} max={2} step={0.1} value={speechPitch} onChange={(e) => setSpeechPitch(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechPitch')} />
                                         <span className={sliderValueClass}>{speechPitch.toFixed(1)}</span>
                                     </div>
@@ -1303,7 +1303,7 @@ export const VoiceSettings: React.FC = () => {
                                         <NumberInput value={Math.round(speechVolume * 100)} onValueChange={(v) => setSpeechVolume(v / 100)} min={0} max={100} step={10} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
                                     </div>
                                 ) : (
-                                    <div className="flex h-8 items-center gap-2">
+                                    <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex h-8 items-center gap-2`}>
                                         <input type="range" min={0} max={1} step={0.1} value={speechVolume} onChange={(e) => setSpeechVolume(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechVolume')} />
                                         <span className={sliderValueClass}>{`${Math.round(speechVolume * 100)}%`}</span>
                                     </div>
@@ -1402,7 +1402,7 @@ export const VoiceSettings: React.FC = () => {
                             <SettingsStackedField
                                 label={t('settings.voice.page.field.language')}
                                 info={t('settings.voice.page.field.sttLanguageHint')}
-                                controlClassName="max-w-[8rem]"
+                                controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                             >
                                 <input
                                     type="text"
@@ -1415,7 +1415,7 @@ export const VoiceSettings: React.FC = () => {
                         )}
 
                         {sttProvider === 'openai-compatible' && (
-                            <div className="space-y-3">
+                            <div className={SETTINGS_SPACE_ROW_CLASS}>
                                 <SettingsStackedField
                                     label={(
                                         <span className={cn(!sttServerUrl.trim() && 'text-[var(--status-error)]')}>
@@ -1476,7 +1476,7 @@ export const VoiceSettings: React.FC = () => {
                                 <SettingsStackedField
                                     label={t('settings.voice.page.field.language')}
                                     info={t('settings.voice.page.field.sttLanguageHint')}
-                                    controlClassName="max-w-[8rem]"
+                                    controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                                 >
                                     <input
                                         type="text"

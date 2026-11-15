@@ -132,7 +132,7 @@ export const CommandsPage: React.FC = () => {
     description={isNew ? t('settings.commands.page.subtitle.new') : t('settings.commands.page.subtitle.edit')}
     onBlurCapture={autosave.onBlurCapture}>
     <fieldset className="min-w-0">
-      <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-0">
+      <SettingsSection title={t('settings.commands.page.section.identity')} divider={false}>
         {isNew && <SettingsFieldRow settingsItem="commands.name" label={t('settings.commands.page.field.commandName')}>
           <div className="flex items-center">
             <span className="typography-ui-label text-muted-foreground mr-1">/</span>
@@ -178,7 +178,7 @@ export const CommandsPage: React.FC = () => {
           />
         </SettingsFieldRow>
       </SettingsSection>
-      <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
+      <SettingsSection title={t('settings.commands.page.section.executionContext')}>
         <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
           <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
             directory={directory ?? undefined} onChange={(providerId, modelId) => {

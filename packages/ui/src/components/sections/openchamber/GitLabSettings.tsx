@@ -354,7 +354,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
                   onChange={(event) => setToken(event.target.value)}
                   aria-label={t('settings.gitlab.token.label')}
                 />
-                <Button className="w-full @xl:w-auto" size="sm" onClick={saveToken} disabled={busy || !token.trim()}>{t('settings.common.actions.saveChanges')}</Button>
+                <Button size="sm" onClick={saveToken} disabled={busy || !token.trim()}>{t('settings.common.actions.saveChanges')}</Button>
               </div>
             </SettingsFieldRow>
           )}
@@ -480,7 +480,7 @@ export const GitLabSettings: React.FC = () => {
         <CollapsibleContent className="border-t border-[var(--interactive-border)] px-4 py-4">
           <SettingsControlGroup
             title={t('settings.gitlab.instances.title')}
-            contentClassName="space-y-3"
+            contentClassName={SETTINGS_SPACE_ROW_CLASS}
             settingsItem="git.gitlab-connect"
           >
             {visibleIdentities.map((item) => (
@@ -507,8 +507,8 @@ export const GitLabSettings: React.FC = () => {
                       placeholder="https://gitlab.example.com"
                       aria-label={t('settings.gitlab.instance.customLabel')}
                     />
-                    <Button className="w-full @xl:w-auto" size="sm" onClick={applyInstance}>{t('settings.gitlab.actions.useInstance')}</Button>
-                    <Button className="w-full @xl:w-auto" size="sm" variant="ghost" onClick={() => {
+                    <Button size="sm" onClick={applyInstance}>{t('settings.gitlab.actions.useInstance')}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => {
                       setInstanceInput('');
                       setIsAddingInstance(false);
                       setInstanceFailed(false);

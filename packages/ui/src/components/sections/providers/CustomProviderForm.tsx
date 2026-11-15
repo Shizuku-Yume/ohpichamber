@@ -252,7 +252,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
   };
 
   return (
-    <form onSubmit={submit} className="space-y-0">
+    <form onSubmit={submit}>
       <SettingsSection
         title={isEdit ? t('settings.providers.page.custom.editTitle') : t('settings.providers.page.custom.title')}
         divider={false}
@@ -425,7 +425,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         title={t('settings.providers.page.custom.models.title')}
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
-        <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} space-y-2`}>
+        <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2`}>
           <div className="flex items-center gap-1.5">
             <Button
               type="button"
@@ -496,7 +496,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       >
         <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.headers.description')}</p>
         {isEdit ? (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             {form.headerNames.length > 0 ? (
               <p className="typography-meta text-muted-foreground">
                 {t('settings.providers.native.configuredHeaders', { names: form.headerNames.join(', ') })}
@@ -517,9 +517,9 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         {form.replaceHeaders ? (
           <>
             {form.headers.map((header, index) => (
-              <div key={header.row} className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} space-y-2`}>
+              <div key={header.row} className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2`}>
                 <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <div>
                       <label className={SETTINGS_FIELD_LABEL_CLASS}>
                         {t('settings.providers.page.custom.headers.keyLabel')}

@@ -12,7 +12,7 @@ import { useUsageStatsStore } from '@/components/views/usage/usageStatsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
 import type { UsageProvider } from '@openchamber/agent-contract';
-import { SETTINGS_SECTION_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
+import { SETTINGS_SECTION_TITLE_CLASS, SETTINGS_SELECT_TRIGGER_CLASS } from '@/components/sections/shared/SettingsSection';
 import { buildUsageProviderRows } from './usageProviderRows';
 
 interface UsageSidebarProps {
@@ -99,7 +99,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className="typography-micro text-muted-foreground">{t('settings.usage.sidebar.field.display')}</span>
           <Select value={usageDisplayMode} onValueChange={handleUsageDisplayModeChange}>
-            <SelectTrigger className="w-fit">
+            <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
               <SelectValue>
                 {usageDisplayMode === 'remaining'
                   ? t('settings.usage.sidebar.field.displayModeRemaining')

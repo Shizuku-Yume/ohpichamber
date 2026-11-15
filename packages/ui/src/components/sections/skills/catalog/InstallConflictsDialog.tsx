@@ -16,6 +16,7 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { useI18n } from '@/lib/i18n';
+import { SETTINGS_SELECT_TRIGGER_CLASS } from '@/components/sections/shared/SettingsSection';
 
 export type SkillConflict = {
   skillName: string;
@@ -97,7 +98,7 @@ export const InstallConflictsDialog: React.FC<InstallConflictsDialogProps> = ({
                   value={decisions[conflict.skillName] || 'skip'}
                   onValueChange={(v) => setDecisions((prev) => ({ ...prev, [conflict.skillName]: v as ConflictDecision }))}
                 >
-                  <SelectTrigger className="w-fit">
+                  <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
                     <span className="capitalize">
                       {(decisions[conflict.skillName] || 'skip') === 'overwrite'
                         ? t('settings.skills.catalog.conflicts.decision.overwrite')

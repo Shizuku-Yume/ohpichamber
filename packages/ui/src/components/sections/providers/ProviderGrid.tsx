@@ -15,7 +15,7 @@ import {
   SettingsCardSearch,
   type SettingsCardTone,
 } from '@/components/sections/shared/SettingsCards';
-import { SETTINGS_CALLOUT_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
+import { SETTINGS_CALLOUT_TITLE_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { useRoutingStore } from '@/stores/useRoutingStore';
 import { getProviderCardStatus, type ProviderCardStatus } from './providerAuth';
@@ -28,7 +28,7 @@ import { getProviderCardStatus, type ProviderCardStatus } from './providerAuth';
 const EnterpriseProvidersNotice: React.FC = () => {
   const { t } = useI18n();
   return (
-    <div className="mb-4 flex items-start gap-2 rounded-lg border border-[var(--status-info-border)] bg-[var(--status-info-background)]/30 p-3">
+    <div className="flex items-start gap-2 rounded-lg border border-[var(--status-info-border)] bg-[var(--status-info-background)]/30 p-3">
       <Icon name="information" className="mt-0.5 size-4 shrink-0 text-[var(--status-info)]" aria-hidden />
       <div className="min-w-0 space-y-1.5">
         <p className={SETTINGS_CALLOUT_TITLE_CLASS}>{t('settings.providers.enterpriseTitle')}</p>
@@ -123,11 +123,11 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
     <SettingsPageLayout
       title={t('settings.page.providers.title')}
       description={t('settings.providers.native.description')}
-      headerEnd={<SettingsProjectSelector className="w-full min-w-0 @xl:w-56" />}
+      headerEnd={<SettingsProjectSelector className={SETTINGS_WIDTH_SHORT_TEXT_CLASS} />}
     >
-      {locked ? <EnterpriseProvidersNotice /> : null}
+      {locked ? <div className="mb-4"><EnterpriseProvidersNotice /></div> : null}
       {loadFailed ? (
-        <div className="mb-4 space-y-2">
+        <div className="mb-4 flex flex-col gap-2">
           <p role="alert" className="typography-meta text-[var(--status-error)]">{t('settings.providers.page.state.unableToLoadProviderList')}</p>
           {onRetry ? (
             <Button variant="outline" size="xs" className="!font-normal" onClick={onRetry}>

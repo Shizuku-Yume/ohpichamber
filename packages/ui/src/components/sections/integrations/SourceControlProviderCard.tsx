@@ -151,8 +151,8 @@ export const SourceControlProviderCard: React.FC<{ descriptor: SourceControlProv
                 placeholder={instances.placeholder}
                 aria-label={t(copy.instanceLabel, { provider })}
               />
-              <Button className="w-full @xl:w-auto" size="sm" onClick={applyInstance}>{t(copy.useInstance)}</Button>
-              <Button className="w-full @xl:w-auto" size="sm" variant="ghost" onClick={cancelAddInstance}>
+              <Button size="sm" onClick={applyInstance}>{t(copy.useInstance)}</Button>
+              <Button size="sm" variant="ghost" onClick={cancelAddInstance}>
                 {t('settings.common.actions.cancel')}
               </Button>
             </div>

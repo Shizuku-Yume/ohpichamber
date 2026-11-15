@@ -19,6 +19,7 @@ import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLay
 import {
   SettingsSection,
   SettingsCheckboxRow,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { UsageStatsReport } from '@/components/views/usage/UsageStatsView';
 import { useUsageStatsStore } from '@/components/views/usage/usageStatsStore';
@@ -150,7 +151,7 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
             })
             : t('settings.usage.page.header.lastUpdated', { time: formatTime(lastUpdated, timeFormatPreference) })}
       settingsItem={settingsItem}
-      contentClassName="space-y-3"
+      contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
       <SettingsCheckboxRow
         checked={showInDropdown}
@@ -271,7 +272,6 @@ export const UsagePage: React.FC = () => {
           title={t('usageStats.title')}
           divider={false}
           settingsItem="usage.statistics"
-          contentClassName="space-y-0"
         >
           <UsageStatsReport />
         </SettingsSection>
@@ -293,7 +293,6 @@ export const UsagePage: React.FC = () => {
         title={t('usageStats.title')}
         divider={false}
         settingsItem="usage.statistics"
-        contentClassName="space-y-0"
       >
         <UsageStatsReport />
       </SettingsSection>

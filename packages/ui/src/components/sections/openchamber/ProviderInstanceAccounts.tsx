@@ -371,7 +371,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
   return (
     // One group per instance: the address heads it, its accounts and actions
     // follow. Groups part with a line, never a filled box inside the card.
-    <div className="space-y-3 py-4 first:pt-0 last:pb-0">
+    <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'py-4 first:pt-0 last:pb-0')}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           {/* The address reads as a host; the full URL stays in the tooltip. */}
@@ -411,7 +411,6 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
               spellCheck={false}
             />
             <Button
-              className="w-full @xl:w-auto"
               size="sm"
               onClick={() => void saveSshUrl()}
               disabled={busy || savingSshUrl || sshUrl.trim() === (identity.instanceSshUrl ?? '')}
@@ -541,7 +540,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
                   // keeps a saved sign-in password out of it.
                   autoComplete="new-password"
                 />
-                <Button className="w-full @xl:w-auto" size="sm" onClick={saveToken} disabled={busy || !token.trim() || (needsUsername && !username.trim())}>{t('settings.common.actions.saveChanges')}</Button>
+                <Button size="sm" onClick={saveToken} disabled={busy || !token.trim() || (needsUsername && !username.trim())}>{t('settings.common.actions.saveChanges')}</Button>
               </div>
             </SettingsFieldRow>
           )}

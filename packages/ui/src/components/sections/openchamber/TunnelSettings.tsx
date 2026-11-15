@@ -1221,7 +1221,7 @@ export const TunnelSettings: React.FC = () => {
           </div>
         )}
         divider={false}
-        contentClassName="space-y-4"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         {state === 'not-available' && (
           <div className="flex items-start gap-2 rounded-lg bg-[var(--status-warning)]/10 p-3">
@@ -1369,7 +1369,7 @@ export const TunnelSettings: React.FC = () => {
         )}
 
         {tunnelMode === 'managed-remote' && (
-          <div data-settings-item="tunnel.managed-remote" className="oc-tile space-y-2 rounded-lg p-3">
+          <div data-settings-item="tunnel.managed-remote" className="oc-tile flex flex-col gap-2 rounded-lg p-3">
             {typeof suggestedConnectorPort === 'number' && (
               <div className="rounded-md bg-[var(--status-info-background)]/60 px-2 py-1.5">
                 <p className="typography-meta text-[var(--status-info)]">
@@ -1497,7 +1497,7 @@ export const TunnelSettings: React.FC = () => {
             )}
 
             {isAddingPreset && (
-              <div className="oc-tile-inset space-y-2 rounded-md p-2">
+              <div className="oc-tile-inset flex flex-col gap-2 rounded-md p-2">
                 <Input
                   value={newPresetName}
                   onChange={(event) => setNewPresetName(event.target.value)}
@@ -1569,7 +1569,7 @@ export const TunnelSettings: React.FC = () => {
         )}
 
         {tunnelMode === 'managed-local' && (
-          <div data-settings-item="tunnel.managed-local-config" className="oc-tile space-y-2 rounded-lg p-3">
+          <div data-settings-item="tunnel.managed-local-config" className="oc-tile flex flex-col gap-2 rounded-lg p-3">
             <div className="space-y-1.5">
               <p className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.openchamber.tunnel.field.configurationFile')}</p>
               <input
@@ -1639,7 +1639,7 @@ export const TunnelSettings: React.FC = () => {
       <SettingsSection
         title={t('settings.layout.tunnel.section.connection')}
         settingsItem="tunnel.start"
-        contentClassName="space-y-4"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         {!isSelectedModeTunnelReady && (
           <>
@@ -1833,7 +1833,7 @@ export const TunnelSettings: React.FC = () => {
       </SettingsSection>
 
       {renderedSessionRecords.length > 0 && (
-        <SettingsSection title={t('settings.openchamber.tunnel.section.redeemedAccessLinks')} contentClassName="space-y-1">
+        <SettingsSection title={t('settings.openchamber.tunnel.section.redeemedAccessLinks')} contentClassName={SETTINGS_SPACE_CHECKBOX_CLASS}>
           {renderedSessionRecords.map((record) => {
             const badge = SESSION_BADGES[record.mode];
             const modeBadgeClass = BADGE_TONE_CLASSES[badge.tone].badge;

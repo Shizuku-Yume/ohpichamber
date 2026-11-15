@@ -25,7 +25,7 @@ import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SETTINGS_ICON_BUTTON_CLASS, SettingsSection } from '@/components/sections/shared/SettingsSection';
+import { SETTINGS_ICON_BUTTON_CLASS, SETTINGS_SPACE_ROW_CLASS, SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { SettingsBackButton } from '@/components/sections/shared/SettingsCards';
 import { ClassificationProvidersPage } from '@/components/sections/classification/ClassificationProvidersPage';
@@ -246,7 +246,7 @@ function ProviderDetail({
 
   if (failed) {
     return (
-      <div className="space-y-3">
+      <div className={SETTINGS_SPACE_ROW_CLASS}>
         <p role="alert" className="typography-meta text-[var(--status-error)]">
           {t('settings.providers.page.state.unableToLoadProviderList')}
         </p>
@@ -336,7 +336,7 @@ function ProviderDetail({
           </div>
         )}
         settingsItem="providers.auth"
-        contentClassName="space-y-4"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         {accounts.length > 0 ? (
           <ProviderAccounts
@@ -368,7 +368,7 @@ function ProviderDetail({
             {t('settings.providers.page.auth.loadingMethods')}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {provider.authMethods.includes('api-key') ? (
               <ProviderApiKeyForm
                 key={provider.providerId}
@@ -855,7 +855,7 @@ export const ProvidersPage: React.FC = () => {
             title={t('settings.providers.page.auth.title')}
             divider={false}
             settingsItem="providers.auth"
-            contentClassName="space-y-4"
+            contentClassName={SETTINGS_SPACE_ROW_CLASS}
           >
             {methods === null && !methodsFailed ? (
               <p className="typography-meta text-muted-foreground">

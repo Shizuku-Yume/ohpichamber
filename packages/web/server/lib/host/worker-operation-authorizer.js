@@ -45,6 +45,10 @@ const allowed = { allowed: true };
 // hand-written config the UI must never mutate. Reusing an existing server id is
 // how an edit is expressed, so it is not a refusal.
 const proposedServerPermitted = server => server.enabled && server.managed !== false;
+// A write tier the tool declared itself is only actionable when the descriptor
+// names the path it will touch; otherwise the Host has nothing to check and must
+// ask the user before granting the call.
+const hasCheckableDestination = descriptor => descriptor.destinationPaths.length > 0 || descriptor.fileOps.length > 0;
 // A proposed provider/model must name a complete, well-formed selection: the
 // worker resolves it against the live catalog, and the Host still refuses an
 // empty or query-bearing endpoint rather than authorizing an opaque target.
@@ -201,6 +205,9 @@ export const createWorkerOperationAuthorizer = ({
      case 'write':
      case 'edit':
      case 'ast_edit': return 'write';
+     // A generated image is produced by a provider, not written to a workspace
+     // path the descriptor could name, so this tool's write tier is its own.
+     case 'generate_image': return 'write';
      case 'ast_grep': return 'read';
      case 'debug': return isDebugReadOnly ? 'read' : 'exec';
      case 'github': return isGithubReadOnly ? 'read' : 'exec';
@@ -272,6 +279,12 @@ export const createWorkerOperationAuthorizer = ({
     if (request.toolName === 'edit' && descriptor && descriptor.effectiveMode === undefined) return denied(`The ${request.toolName} tool carries no effective edit mode`);
     if (['write', 'edit'].includes(request.toolName) && descriptor && descriptor.destinationPaths.length === 0 && (!descriptor.fileOps || descriptor.fileOps.length === 0)) {
      return denied(`The ${request.toolName} tool names no writable destination`);
+    }
+    // A write tier the tool declared itself proves only that it will write; when
+    // it names no destination the Host can check, the user must see the call.
+    // Host-known arg-tier writes are not affected here.
+    if (argTier === undefined && !hasCheckableDestination(descriptor)) {
+     return approvalGranted ? allowed : approvalRequired(`The ${request.toolName} tool declares a file write but names no destination the Host can check, so it requires approval`);
     }
     return allowed;
    }

@@ -606,6 +606,45 @@ describe('OMP declared-tier tool authorization', () => {
     }
   });
 
+  it('requires approval for a declared write that names no destination the Host can check', async () => {
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.txt');
+      const outside = path.join(harness.outside, 'outside.txt');
+      await fs.writeFile(inside, 'inside');
+      await fs.writeFile(outside, 'outside');
+
+      // `tts` writes a file it computes itself: the descriptor cannot name it.
+      const input = { text: 'hello', output_path: '~/.ssh/authorized_keys' };
+      const request = { type: 'tool', toolName: 'tts', input, approvalId: 'tts-app', toolCallId: 'tts-call' };
+      const noDestination = { toolName: 'tts', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'write' };
+
+      expect(await harness.authorize(harness.scope, request, noDestination)).toMatchObject({
+        allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true,
+        detail: 'The tts tool declares a file write but names no destination the Host can check, so it requires approval',
+      });
+      // Without a descriptor the worker sent no tier, so the call is exec-tier.
+      expect(await harness.authorize(harness.scope, request)).toMatchObject({ approvalRequired: true, detail: 'The tts tool requires approval' });
+
+      const grant = { approvalId: 'tts-app', toolCallId: 'tts-call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: 'tts', input };
+      expect(await harness.authorize(harness.scope, request, { ...noDestination, approvalGrant: grant })).toEqual({ allowed: true });
+
+      // A destination the Host can check is authorized by the write grant as before.
+      const insideDestination = { ...noDestination, destinationPaths: [inside], fileOps: [{ kind: 'write', path: inside }] };
+      expect(await harness.authorize(harness.scope, request, insideDestination)).toEqual({ allowed: true });
+      const outsideDestination = { ...noDestination, destinationPaths: [outside], fileOps: [{ kind: 'write', path: outside }] };
+      expect(await harness.authorize(harness.scope, request, outsideDestination)).toMatchObject({
+        allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The tts tool targets a path outside the authorized workspace',
+      });
+      expect((await harness.authorize(harness.scope, request, outsideDestination)).approvalRequired).toBeUndefined();
+      // Only a workspace write grant reaches the destination check at all.
+      harness.policy.fileTools = ['read'];
+      expect(await harness.authorize(harness.scope, request, noDestination)).toMatchObject({ allowed: false, detail: 'The workspace does not grant file writes to the tts tool' });
+    } finally {
+      await harness.close();
+    }
+  });
+
   it('keeps argument-aware write-tier specials independent of the declared tier', async () => {
     const harness = await nativeHarness();
     try {
@@ -613,7 +652,10 @@ describe('OMP declared-tier tool authorization', () => {
       expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'context_notes', input: {} })).toEqual({ allowed: true });
       expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'retain', input: { items: [{ scope: 'global', text: 'lesson' }] } })).toEqual({ allowed: true });
       expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'learn', input: { skill: 'review' } })).toEqual({ allowed: true });
-      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'new_context', input: {} }, { toolName: 'new_context', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'write' })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'generate_image', input: { prompt: 'a cat' } }, { toolName: 'generate_image', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'write' })).toEqual({ allowed: true });
+      // `new_context` declares write and names no path; the Host cannot check it.
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'new_context', input: {} }, { toolName: 'new_context', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'write' }))
+        .toMatchObject({ allowed: false, approvalRequired: true, detail: 'The new_context tool declares a file write but names no destination the Host can check, so it requires approval' });
 
       harness.policy.fileTools = ['read'];
       for (const [toolName, input] of [['context_notes', { text: 'note' }], ['retain', { items: [{ scope: 'global' }] }], ['learn', { scope: 'global' }]]) {

@@ -66,51 +66,49 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
 
 ## Progress
 
-- **Earlier rounds, in brief.** Profiling `admit` showed the response path paid a synchronous worker launch (914.5 ms) while the catalog lock cost under 1 ms, so `POST /internal/sessions` gained `deferred: true` and prompts queue behind worker readiness; `POST /sessions` fell from 1022.49 ms to 13–14 ms. `stopGeneration`, causal registration failures, the optimistic draft bubble and the draft-restore guard all landed in those rounds, and both reviews' findings were closed.
-- **Traced per-hop timeline (this round, `after-7`).** Every hop below was measured with temporary `tracePerf` instrumentation across the Host, Agent Service supervisor, worker and fixture provider (wall-clock stamps in one file), then removed before landing. The earlier `after-6` table used estimates and is replaced by this one.
+- **Earlier rounds.** `admit` paid a synchronous worker launch (914.5 ms) under a catalog lock costing under 1 ms, so `POST /internal/sessions` gained `deferred: true` and prompts queue behind readiness; `POST /sessions` fell to 13–14 ms. `stopGeneration`, causal registration failures, the optimistic draft bubble and its restore guard landed then.
+- **Traced per-hop timeline (`after-8`).** Temporary instrumentation stamped one shared wall-clock file from the Host, the supervisor, the worker and the fixture, and repeated the run with `process.cpuUsage()` around each window. All of it is removed again; the raw logs are in `task24/after-8/analysis/`.
 
-  Variant (a), no prepare, the fastest and slowest sample of the traced run. Times are ms after send; each row is the span between its two stamps.
+  Variant (a), no prepare, 12 samples from the first traced run. Times are ms after send.
 
-  | Hop | Fast sample | Slow sample | What it is |
+  | Hop | p50 | Range | What it is |
   |---|---|---|---|
-  | Host `POST /api/agent/v1/sessions` | 5.9 → 13.3 | 5.1 → 12.1 | Host resolves scope, posts `/internal/sessions` with `deferred: true`; Agent Service materializes the session file and answers. |
-  | Client subscribes and posts `/runs` | 14.2 → 20.6 | 13.1 → 18.6 | SSE attach, then the opening prompt. |
-  | Worker bootstrap begins | 19.8 | 19.1 | The Adopted spare starts `WorkerSession.open` while the client is still dispatching. |
-  | Runtime handover | 19.8 → 19.9 | 19.1 → 19.3 | The adopted spare's `AuthStorage`/`ModelRegistry`/`Settings` are already open; nothing is re-read. |
-  | `createAgentSession` | 124.5 → 230.9 (106.4) | 131.9 → 225.4 (93.5) | Native session graph, tool registry, extension roots, system prompt. |
-  | Post-init, run concurrently | 237.1 → 501.9 (264.8) | 231.7 → 514.9 (283.2) | `skills.apply`, `selectOptions` and extension init in one `Promise.all`; the longer branch is what shows. |
-  | — skill preflight | 237.1 → 500.5 (263.4) | 231.7 → 513.5 (281.8) | `WorkerSkills.preflight`: provider-root scan. Its first `listClaudePluginRoots` call costs 208–237 ms cold in a fresh process and ~20 ms warm. |
-  | — `loadSkills` + publish | 0.8 + 0.5 | 0.9 + 0.5 | Reads the roots the scan found. |
-  | — model selection | 238.2 → 350.8 (112.6) | 232.9 → 355.8 (122.9) | `reapplyModelPolicies` + credential reload + credential resolve. |
-  | — `setModelTemporary` | 350.8 → 497.3 (146.5) | 355.8 → 510.2 (154.4) | Native model switch, provider session reset, tool presentation sync. |
-  | Worker `ready` reply | 502.6 | 515.7 | Supervisor unblocks the queued prompt. |
-  | Worker prompt prepare + dispatch | 506.0 → 507.0 | 519.2 → 520.2 | `selectOptions` is already cached; message assembly only. |
-  | Prompt dispatch → provider request | 507.0 → 671.2 (164.2) | 520.2 → 769.1 (248.9) | Agent loop pre-request work, then the provider transport call. |
-  | Provider first byte | 675.7 (4.5) | 774.7 (5.6) | The fixture streams its first chunk immediately; a hosted model adds its own TTFT here. |
-  | Delta relay to client | 678.1 (2.4) | 778.1 (3.4) | Projection → journal → SSE → client reader. |
-  | **Total send → first `part.delta`** | **678.1** | **778.1** | p50 742.1 over the 10 traced samples. |
+  | Host `POST /api/agent/v1/sessions` | 5.6 | 5.1–23.8 | Host scope resolve and the deferred `/internal/sessions` post. |
+  | Client subscribes and posts `/runs` | 6.0 | 4.6–12.2 | SSE attach, then the opening prompt. |
+  | Await worker open | 60.0 | 55.1–127.9 | Supervisor queues the prompt behind `openingPromise`. |
+  | `createAgentSession` | 108.8 | 96.2–237.8 | Native session graph, tool registry, extension roots, system prompt. |
+  | Mode reconcile + restore | 1.0 | 0.2–1.7 | Goal and mode state. |
+  | Post-init `Promise.all` (wall) | 273–316 | 265–450 | Skill apply, model selection, extension init and warming, concurrent. |
+  | Worker `ready` → prompt dispatch | 1.0 | 0.6–4.0 | Queued prompt is admitted. |
+  | Prompt prepare | 1.5 | 0.5–2.4 | `selectOptions` is cached; message assembly and flush. |
+  | Agent-loop prep before the provider call | 143.8 | 128.6–325.1 | `#prepareAgentStart`, prompt assembly, token count, payload transform. |
+  | Provider first byte + relay | 13.0 | 11.0–21.8 | Fixture emits immediately; a hosted model adds its own TTFT. |
+  | **Total send → first `part.delta`** | **761.4 / 769.7** | runs differ by noise | Two traced runs. |
 
-  p50 over 10 traced samples: `createAgentSession` 107.6, skill preflight 280.4, model selection 125.0, `setModelTemporary` 147.8, worker open 499.5, prompt-to-provider 162.9, provider first byte + relay 7.9.
+- **Where the time actually goes, measured with CPU accounting.** `process.cpuUsage()` around each window turns out to exceed the window's wall time in every branch (`post-init` 449 ms CPU / 272 ms wall; skill apply 492/316; extension init 474/307; model selection 217/143). Those branches therefore run **concurrently**, and the wall time each reports is queueing, not its own work:
 
-  Variant (c), same instrumentation: Host create 5.1–7.0 ms (adopts the prepared root), SSE attach + run 5.1 ms, worker prompt prepare 1.0 ms, then the same 162.9 ms to the provider.
+  | Claim from the earlier table | Measurement |
+  |---|---|
+  | Skill preflight ~280 ms is a slow plugin-root scan | `listClaudePluginRoots` is **2.0 ms cold, 0.3 ms warm** when called directly, and its own window inside the worker is 254–268 ms wall at 1.6× CPU. It is waiting for the single JS thread, not scanning disk. |
+  | Model selection ~125 ms plus `setModelTemporary` ~148 ms | `resolveSelection` is 128.6 ms wall / 216.7 ms CPU, and `setModelTemporary` is 154.2 ms wall / 243.6 ms CPU, overlapping the same window. |
+  | Prompt-to-provider ~163 ms | Real and serial: the fixture receives the request **9–13 ms** after `before_provider_request`, so the rest is agent-loop preparation the worker cannot start earlier. |
 
-- **Latency cuts in this task, cumulative:**
-  - `openNativeRuntime` SQLite discovery loop: ~550 ms eliminated by idle worker prewarming (`prewarmNativeRuntime`).
-  - Redundant workspace admission on SSE connect: ~870 ms eliminated by using `resolveHostSessionScope` for streaming routes.
-  - Redundant workspace re-admission on `POST /runs`: eliminated by using `liveRootSessions` in `scopeFor`.
-  - Supervisor throwaway session file write in `createInitialSession`: removed synchronous `diskManager` create/write/close.
-  - Policy capture on worker open: moved `capturePolicy()` off the critical path to run in the background.
-  - Redundant `refreshSkills()` and model policy reloads: guarded and cached in `session.ts` and `catalog-models.ts`.
+  So the two "discovery" windows are starvation behind one busy thread; the genuine serial cost is `createAgentSession` (108.8) plus the agent-loop prep (143.8) plus roughly 60 ms of supervisor queueing.
+
+- **Removable duplicate, measured and reverted:** all 32 post-init `selectOptions` calls resolved to the session's own model, so every `setModelTemporary` reset the provider session, appended a model change to an empty transcript, and rewrote the usage row for nothing; OMP skips the same call in `#restorePlanPreviousModel` for the same reason. Skipping it measured no gain (variant (a) 933.26 and 838.05 ms, inside the same run-to-run spread) because removing 240 ms of CPU from a contended window does not shorten that window. It is a correctness improvement, not a latency one, so it does not belong in this task.
+
+- **Latency cuts landed in this task:** idle-worker runtime prewarming (~550 ms), `resolveHostSessionScope` for SSE attach (~870 ms), `liveRootSessions` on `POST /runs`, the synchronous session-file write in `createInitialSession`, `capturePolicy()` moved off the open path, and the guarded `refreshSkills()`/model-policy reloads.
 - **Spare pool refill (`workers.ts`).** The spare pool now keeps two slots per workspace instead of one, counted over loaded and still-loading processes, spawns are serialized so a refill never competes with a request already in flight, and every settle asks again until the pool is full. Adopting a spare previously left nothing behind, so the next new chat cold-launched: that is exactly the alternating 650/950 ms pattern in `after-6`. `workers.spare.test.ts` proves a second launch adopts instead of spawning.
 - **`warm` reply.** A spare reports `idle` as soon as its module graph is loaded (adoption stays possible) and `warm` once its background prewarm finished. The supervisor prefers a warm spare over a still-loading one, so a session is never handed a process that will finish its warm-up on the user's time. `protocol.ts` carries the new reply.
 - **`prewarmNativeRuntime` returns its promise** so the worker can report `warm`; behaviour and ordering are otherwise unchanged.
-- **Rejected experiments (measured, then reverted):** a throwaway `createAgentSession` on a separate runtime, gating the worker's `idle` reply on prewarm, `prepare` with `deferred: true`, and skill warm-up inside the spare. The first regressed variant (a) to 1155 ms, the second broke Agent Service startup readiness, the third moved the wait from prepare into send and regressed variant (c) to 842 ms, the fourth measured no improvement (skill preflight stayed 260–290 ms, so the cost is contention with `createAgentSession`, not the plugin read alone).
-- **Budget status.** Variant (a) p50 is 746.47–765.48 ms against the 600 ms budget, so the cold path is not met. The traced table above shows where the time goes: 499.5 ms of worker open (`createAgentSession` 107.6, skill preflight 280.4, model selection and `setModelTemporary` overlapping in one `Promise.all`), then 162.9 ms of agent-loop pre-request work before the provider is called. The two remaining levers are the ~280 ms skill preflight, whose cold cost is the first `listClaudePluginRoots` call inside the adopted process, and the ~163 ms between prompt dispatch and the provider request. Moving skill discovery into the spare measured no gain because the cost is CPU contention with `createAgentSession`, not the plugin read alone, so a fix needs either a section reorder in `WorkerSession.open` or an SDK-level change. Variant (c) — what a user gets from the composer, because `openNewSessionDraft` prepares on open — is 223.97–227.01 ms p50 and meets the budget.
-- Check after:
-  - Command: `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/task24-perf/project --output …/after-7/run{1,2} --new-chat-runs 10 --skip-ui`, isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133.
-  - `POST /sessions` p50: 13.51 / 12.92 ms (noPrepare), 558.40 / 559.54 ms (prepareImmediate), 6.12 / 6.03 ms (prepareCompleted).
-  - first `part.delta` after send p50: (a) **765.48 / 746.47 ms**, (b) 796.12 / 775.74 ms, (c) **223.97 / 227.01 ms**. Variant (c) meets ≤ 600 ms; (a) does not.
-  - stream cadence p50: 33.24 ms (budget 33 ± 5 ms, met).
-  - Receipts: `task24/after-7/{run1,run2}/omp-performance.json`; traced hops and rejected experiments in `task24/after-7/`.
+- **Rejected experiments (measured, then reverted):** a throwaway `createAgentSession` on a separate runtime (regressed (a) to 1155 ms and hit an `AgentRegistry.global()` conflict), gating the `idle` reply on prewarm (broke startup readiness), `prepare` with `deferred: true` (moved the wait into send; regressed (c) to 842 ms), and skill warm-up inside the spare (no gain).
+- **Budget status.** Variant (a) is **not met**: 761.41 / 769.69 ms p50 in the cleanly loaded traced runs, 797.28 / 920.85 ms in the two Check runs under memory pressure, against a 600 ms budget. It is not reachable by moving work around: what is left is ~109 ms of `createAgentSession`, ~144 ms of serial agent-loop preparation before the provider call, and ~60 ms of supervisor queueing — real work in one process, on one thread, for a brand-new session. The two windows that looked like removable discovery (`280 ms` skill apply, `128 + 154 ms` model selection) are concurrency artifacts, proven by CPU accounting: their CPU time exceeds their own wall time, and `listClaudePluginRoots` is 2 ms when called directly. Reaching 600 ms on this path needs the native session to be constructible in the spare, which would need an SDK seam that does not exist (`AgentRegistry.global()` is process-wide and a second `createAgentSession` was measured at +1155 ms with a registry conflict). Variant (c) — what the composer produces, because opening a draft calls `prepare` — is 220.38 / 227.29 ms p50 and met the budget in every run since `after-6`.
+- **What variant (b)'s 550 ms `POST /sessions` is.** It is not a regression to fix. The Host's `prepare` adopts a session whose worker open has already finished, so `create` costs 6 ms; variant (b) posts `prepare` and `create` together, so `create` awaits its own in-flight prepare and pays that open. The alternative the assignment suggested — return the prepared session id at once and let the run wait on readiness — is already what the deferred path does, and measuring it was variant (a): 761 ms p50. There is no ordering that both avoids the wait in `create` and keeps the wait out of `send`, because one of them has to hold the open. No change; the three variants stay as they are.
+- Check after (`task24/after-8`):
+  - Command: `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/task24-perf/project --output …/after-8/run{1,2} --new-chat-runs 10 --skip-ui`, isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133. Both runs under heavy machine memory pressure (940 MB free, six other worktrees holding idle `tsc`).
+  - `POST /sessions` p50: 13.74 / 14.31 ms (noPrepare), 742.10 / 739.14 ms (prepareImmediate), 7.03 / 6.59 ms (prepareCompleted). The ≤ 400 ms budget is met by the paths a user takes.
+  - first `part.delta` after send p50: (a) **797.28 / 920.85 ms**, (b) 1019.24 / 995.09 ms, (c) **258.16 / 273.20 ms**. Variant (c) meets ≤ 600 ms; (a) does not, and these two runs are the worst of the traced series because of the memory pressure (the cleanly loaded traced runs of the same build measured (a) 761.41 and 769.69, (c) 220.38 and 227.29).
+  - stream cadence p50: 33.27 / 33.26 ms (budget 33 ± 5 ms, met).
+  - Receipts: `task24/after-8/{run1,run2}/omp-performance.json`; the six traced runs, the raw hop logs and the CPU-accounted logs are in `task24/after-8/{traced,traced2,cpu,branches,samemodel,skipmodel,analysis}/`.
   - `bun test packages/agent-service/src`: 512 pass, 10 skip, 0 fail, 71 files.
-  - UI sync: 171 pass. Web `openchamber-sessions`: 165 pass, 11 files. agent-service type-check and `bunx oxlint`: clean.
+  - UI sync: 171 pass. Web `openchamber-sessions`: 165 pass, 11 files. agent-service type-check, `bunx oxlint` and `bun run dead-code`: clean for the changed files.

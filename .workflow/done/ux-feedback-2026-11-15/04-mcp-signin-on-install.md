@@ -33,3 +33,10 @@
   - `bun run --cwd packages/agent-service type-check` -> exit 0, prepared source-derived declarations for 18 OMP packages.
   - `bun run --cwd packages/agent-contract type-check` -> exit 0.
   - `node scripts/check-changed.mjs --base f68a30f8628fe696ac6c54493a61597e72be890d` -> anti-slop ratchet reports "No new findings"; the command exits 1 only on the known pre-existing dead-code baseline.
+- Post-merge check (after merging `ux-feedback-2026-11-15/integration` at `ccf65a471c` into the branch, no conflicts):
+  - `VITEST_MAX_WORKERS=2 bun test packages/agent-service/src/supervisor/catalog-mcp.test.ts packages/agent-service/src/worker/mcp.test.ts` -> 28 pass, 0 fail.
+  - `bun test scripts/mcp-oauth-fixture/` -> 8 pass, 0 fail.
+  - UI scoped tests (same seven files) -> 62 pass, 0 fail, 4770 expect() calls.
+  - `bun run --cwd packages/ui type-check` -> no type errors in 3,539 files across 2 projects, after rebuilding the ignored `packages/agent-contract/dist` (the merge brought a contract field the stale dist lacked).
+  - `bun run --cwd packages/agent-service type-check` -> exit 0; `bun run --cwd packages/agent-contract type-check` -> exit 0.
+  - `node scripts/check-changed.mjs --base f68a30f8628fe696ac6c54493a61597e72be890d` -> anti-slop ratchet "No new findings"; dead code fails on its pre-existing baseline. The `upstream-gaps` step also fails on two stale `permissionAutoAccept` allowlist rows restored by `33254a7469`, already present on the integration target before this merge.

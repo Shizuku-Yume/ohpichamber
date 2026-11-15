@@ -464,6 +464,110 @@ describe('user-scope OAuth through WorkerMcp on real files', () => {
   });
 });
 
+describe('MCP OAuth failure pass-through through WorkerMcp', () => {
+  /** A loopback authorization server: the MCP endpoint challenges anonymously,
+   * protected-resource metadata names this origin as the issuer, and dynamic
+   * client registration is either closed (`unapproved_client`) or open. */
+  function oauthStub(registration: 'reject' | 'issue') {
+    let base = '';
+    const server = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url);
+        if (url.pathname === '/mcp') {
+          return new Response('unauthorized', {
+            status: 401,
+            headers: { 'WWW-Authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"` },
+          });
+        }
+        if (url.pathname === '/.well-known/oauth-protected-resource') {
+          return Response.json({ resource: `${base}/mcp`, authorization_servers: [base] });
+        }
+        if (url.pathname === '/.well-known/oauth-authorization-server') {
+          return Response.json({
+            issuer: base,
+            authorization_endpoint: `${base}/authorize`,
+            token_endpoint: `${base}/token`,
+            registration_endpoint: `${base}/register`,
+          });
+        }
+        if (url.pathname === '/register' && request.method === 'POST') {
+          return registration === 'reject'
+            ? new Response('unapproved_client', { status: 403 })
+            : Response.json({ client_id: 'stub-client' });
+        }
+        if (url.pathname === '/authorize') return new Response('consent', { status: 200 });
+        return new Response('not found', { status: 404 });
+      },
+    });
+    base = `http://127.0.0.1:${server.port}`;
+    return { server, base };
+  }
+
+  async function withOAuthWorker(
+    registration: 'reject' | 'issue',
+    run: (fixture: { mcp: WorkerMcp; configuration: MCPConfigurationState; base: string }) => Promise<void>,
+  ): Promise<void> {
+    const home = await mkdtemp(join(tmpdir(), 'mcp-oauth-flow-'));
+    const stub = oauthStub(registration);
+    try {
+      const agentDir = join(home, '.omp', 'agent');
+      const projectDir = join(home, 'project');
+      await mkdir(agentDir, { recursive: true });
+      await mkdir(projectDir, { recursive: true });
+      const userPath = join(agentDir, 'mcp.json');
+      const projectPath = join(projectDir, '.omp', 'mcp.json');
+      await writeFile(userPath, `${JSON.stringify({
+        mcpServers: { linear: { type: 'http', url: `${stub.base}/mcp` } },
+      }, null, 2)}\n`, 'utf8');
+      const configuration = await readNativeMcpConfigurationIfPresent(projectPath, 'workspace-1', userPath);
+      if (!configuration) throw new Error('user-scope server must be readable');
+      const authStorage = await discoverAuthStorage(agentDir, { cwd: projectDir });
+      const mcp = new WorkerMcp({
+        cwd: projectDir,
+        configPath: projectPath,
+        userConfigPath: userPath,
+        worker: { rootSessionId: 'root-1', workspaceId: 'workspace-1', workerGeneration: 'generation-1' },
+        authStorage,
+        resolveCredentialRef: async reference => reference,
+        resolveCommand: async command => command.command,
+        authorizeServer: async () => { },
+        authorizeOAuth: async () => { },
+        sanitizeTool: tool => tool,
+        onCatalog: () => { },
+        onRuntimeFailure: () => { },
+        isCurrent: () => true,
+      });
+      await run({ mcp, configuration, base: stub.base });
+    } finally {
+      stub.server.stop(true);
+      await rm(home, { recursive: true, force: true });
+    }
+  }
+
+  /** Attach the rejection handler at creation: a flow call can settle while the
+   * test is still awaiting the next action, and an unobserved rejection reads as
+   * a crash rather than the code under test. */
+  function outcome<T>(promise: Promise<T>): Promise<{ value: T } | { error: unknown }> {
+    return promise.then(value => ({ value }), error => ({ error }));
+  }
+
+  const owner = { persistedRevision: '0', workerGeneration: 'generation-1' };
+
+  test('a closed dynamic client registration keeps the provider message and a stable code', async () => {
+    await withOAuthWorker('reject', async ({ mcp, configuration, base }) => {
+      const rejection = await outcome(mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration));
+      if (!('error' in rejection)) throw new Error('A rejected registration must not produce a pending flow');
+      if (!(rejection.error instanceof NativeMcpError)) throw rejection.error;
+      expect(rejection.error.code).toBe('MCP_OAUTH_CLIENT_REGISTRATION_REJECTED');
+      // The panel pre-fills its client-ID field from this sentence, which names
+      // the endpoint, the status and the provider's own payload: an opaque
+      // "MCP OAuth authentication failed." would erase all three.
+      expect(rejection.error.message).toContain('dynamic client registration was rejected');
+      expect(rejection.error.message).toContain('unapproved_client');
+      expect(rejection.error.message).toContain(`${base}/register`);
+      expect(rejection.error.message).toContain('oauth.clientId');
 
       // The sentence must survive the worker wire, not only this call: the
       // panel reads the problem detail, so the send-site bound has to admit an
@@ -482,3 +586,34 @@ describe('user-scope OAuth through WorkerMcp on real files', () => {
         type: 'operation.error', workerGeneration: 'generation-1', commandId: 'command-1',
         code: 'MCP_APPLY_FAILED', status: 503, detail: operationErrorDetail('MCP_APPLY_FAILED', other),
       }).success).toBe(true);
+    });
+  });
+
+  test('a second start while pending reports in-progress and cancel reports cancellation', async () => {
+    await withOAuthWorker('issue', async ({ mcp, configuration, base }) => {
+      const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const flow = started.pendingFlow;
+      expect(flow.authorizationUrl.startsWith(`${base}/authorize?`)).toBe(true);
+
+      const duplicate = await outcome(mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration));
+      if (!('error' in duplicate)) throw new Error('A second start must not open a second flow');
+      if (!(duplicate.error instanceof NativeMcpError)) throw duplicate.error;
+      expect(duplicate.error.code).toBe('MCP_OAUTH_IN_PROGRESS');
+
+      // A joined completion before the cancel observes the flow's own outcome,
+      // so the panel renders a sign-in that ended rather than a generic failure.
+      const completing = outcome(mcp.oauthExecute('linear', {
+        action: 'complete', ...owner, flowId: flow.flowId,
+      }, configuration));
+      const cancelled = await mcp.oauthExecute('linear', {
+        action: 'cancel', ...owner, flowId: flow.flowId,
+      }, configuration);
+      expect(cancelled).toMatchObject({ serverId: 'linear', status: 'unauthenticated', authenticated: false });
+      const ended = await completing;
+      if (!('error' in ended)) throw new Error('The joined completion must report the cancellation');
+      if (!(ended.error instanceof NativeMcpError)) throw ended.error;
+      expect(ended.error.code).toBe('MCP_OAUTH_CANCELLED');
+    });
+  });
+});

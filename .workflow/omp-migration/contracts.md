@@ -157,7 +157,7 @@ Clients reach this API through the Host Gateway (Node.js/Electron), which authen
 | `POST` | `/api/agent/v1/sessions/:sessionId/mcp/servers/:serverId/reconnect` | Reconnect one configured server in the addressed root worker | Required | Yes (Key) | JSON |
 | `GET` | `/api/agent/v1/sessions/:sessionId/mcp/servers/:serverId/oauth` | Read MCP server OAuth status and any active pending flow for the addressed root worker | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/mcp/servers/:serverId/oauth` | Start, complete, cancel or disconnect MCP server OAuth in the addressed root worker | Required | Yes (Revision/Generation) | JSON |
-| `GET` | `/api/agent/v1/mcp/oauth/callback` | MCP sign-in redirect target: validate the Host-issued state, then complete the flow | Public | No | HTML |
+| `GET` | `/api/agent/v1/mcp/oauth/callback` | MCP sign-in redirect target: validate the Host-issued state, then complete the flow | Public (no UI bearer) | No | HTML |
 | `GET` | `/api/agent/v1/sessions/:sessionId/skills/catalog` | Addressed root worker's installed-source revisions and active skill catalog | Required | Yes | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/skills/apply` | Apply installed workspace or selected-agent source revision across affected roots | Required | Yes (Revision) | JSON |
 | `POST` | `/api/agent/v1/sessions/:sessionId/skills/expand` | Expand from addressed root worker's generation/catalog; does not submit a prompt | Required | Yes | JSON |

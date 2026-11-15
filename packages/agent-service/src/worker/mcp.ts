@@ -32,6 +32,8 @@ import type { MCPConfigFile, MCPHttpServerConfig, MCPSseServerConfig, MCPServerC
 import type { AuthStorage as SDKAuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { withFileLock } from '@oh-my-pi/pi-utils/file-lock';
 import { ProjectionError } from '../projection/journal.ts';
+import { mcpAuthRequired } from '../mcp-auth.ts';
+import { operationErrorDetail } from '../protocol.ts';
 import { MCPDiscoveredToolSchema, MCPToolDiscoverySchema, type MCPDiscoveredTool, type MCPToolDiscovery } from './mcp/protocol.ts';
 
 export * from './mcp/protocol.ts';
@@ -85,16 +87,10 @@ function managedFile(configuration: MCPConfigurationState): ManagedFile {
 }
 
 /** A transport/handshake failure that means the server wants authorization.
- * Hosted MCP servers answer 401 or 403, and an incremental-scope challenge names
- * `insufficient_scope`; the supervisor's own classifier accepts the same signals,
- * because which apply path runs depends only on whether a session is open. */
-function isAuthError(detail: string, config?: unknown): boolean {
-  if (/(?<!\d)(401|403)(?!\d)|unauthorized|insufficient_scope|sign-in|sign in|auth required|needs auth|oauth/i.test(detail)) return true;
-  if (config && typeof config === 'object') {
-    const cfg = config as Record<string, unknown>;
-    if (cfg.auth === 'oauth' || (cfg.oauth && typeof cfg.oauth === 'object')) return true;
-  }
-  return false;
+ * The rule is shared with the supervisor, because which apply path runs depends
+ * only on whether a session is open. */
+function isAuthError(detail: string, config?: SDKMCPServerConfig): boolean {
+  return mcpAuthRequired({ detail, config });
 }
 
 /** Credential references OpenChamber keeps beside a server's native entry (references only, never values). */
@@ -741,6 +737,24 @@ export class WorkerMcp extends MCPManager {
         pendingFlow: entry.pendingFlow,
       });
     }
+    // A flow that fails after the browser handoff settles with an error but has
+    // no request left to throw it from: the panel polls this read and would
+    // otherwise reset with nothing to show. Report the cause here exactly once,
+    // then retire the entry so the next read is a plain unauthenticated answer.
+    // A user cancel keeps its neutral result: #abortEntry retires the entry, so no
+    // settled entry with an error is left to read.
+    const failure = !authenticated && entry?.settled ? entry.error : undefined;
+    if (failure) {
+      if (this.#oauth.get(serverId) === entry) this.#oauth.delete(serverId);
+      return MCPOAuthResultSchema.parse({
+        serverId,
+        worker: this.deps.worker,
+        persistedRevision: configuration.persistedRevision,
+        status: 'unauthenticated',
+        authenticated: false,
+        error: { code: failure.code, detail: operationErrorDetail(failure.code, failure.message), retryable: failure.retryable },
+      });
+    }
     return MCPOAuthResultSchema.parse(
       authenticated
         ? {
@@ -831,7 +845,7 @@ export class WorkerMcp extends MCPManager {
       });
     } catch (error) {
       const wasAborted = entry.abort.signal.aborted;
-      const capturedError = error instanceof NativeMcpError ? error : entry.error;
+      const capturedError = error instanceof Error ? error : entry.error;
       entry.abort.abort();
       await entry.done;
       if (this.#oauth.get(serverId) === entry) this.#oauth.delete(serverId);
@@ -936,7 +950,7 @@ export class WorkerMcp extends MCPManager {
         throw new NativeMcpError('MCP_OAUTH_FAILED', 'MCP OAuth credential persistence failed.', true);
       }
     } catch (error) {
-      const nativeError = this.#toOAuthError(error, entry.abort.signal.aborted, entry.cancelReason);
+      const nativeError = this.#toOAuthError(error instanceof Error ? error : undefined, entry.abort.signal.aborted, entry.cancelReason);
       entry.error = nativeError;
       if (!entry.pendingFlow) {
         if (this.#oauth.get(entry.serverId) === entry) this.#oauth.delete(entry.serverId);
@@ -1429,11 +1443,11 @@ export class WorkerMcp extends MCPManager {
    * issuer mismatch, token exchange, port-in-use and state-mismatch causes for a
    * reader, and replacing them with one opaque line hides the only actionable
    * detail the user has. A native code wins because it carries the status map. */
-  #toOAuthError(error: unknown, aborted: boolean, cancelReason?: NativeMcpError): NativeMcpError {
+  #toOAuthError(error: Error | undefined, aborted: boolean, cancelReason?: NativeMcpError): NativeMcpError {
     if (cancelReason) return cancelReason;
     if (error instanceof NativeMcpError) return error;
     if (aborted) return new NativeMcpError('MCP_OAUTH_CANCELLED', 'MCP OAuth was cancelled.', false);
-    if (error instanceof Error && error.message.trim()) {
+    if (error?.message.trim()) {
       // OMP folds a rejected dynamic client registration into one sentence
       // (`#missingClientIdError`: "…dynamic client registration was rejected
       // (POST … → HTTP 403 — unapproved_client)…"); the stable code lets the

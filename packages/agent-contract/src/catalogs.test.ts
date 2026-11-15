@@ -129,6 +129,13 @@ describe('Canonical catalogs and scoped operations', () => {
     const resultOwner = { serverId: 'server_1', worker, persistedRevision: '2' };
     expect(Catalog.MCPOAuthResultSchema.parse({ ...resultOwner, status: 'authenticated', authenticated: true }).status).toBe('authenticated');
     expect(Catalog.MCPOAuthResultSchema.parse({ ...resultOwner, status: 'unauthenticated', authenticated: false }).status).toBe('unauthenticated');
+    // A failed sign-in reports why it ended; a cancel reports nothing.
+    const oauthFailure = { ...resultOwner, status: 'unauthenticated', authenticated: false, error: { code: 'MCP_OAUTH_FAILED', detail: 'Authorization failed: access_denied', retryable: false } };
+    expect(Catalog.MCPOAuthResultSchema.parse(oauthFailure).error?.detail).toBe('Authorization failed: access_denied');
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...oauthFailure, error: { code: 'MCP_OAUTH_FAILED', detail: '', retryable: false } }).success).toBe(false);
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...oauthFailure, error: { code: 'MCP_OAUTH_FAILED', detail: 'x', retryable: 'yes' } }).success).toBe(false);
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...resultOwner, status: 'authenticated', authenticated: true, error: oauthFailure.error }).success).toBe(false);
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...resultOwner, status: 'pending', authenticated: false, pendingFlow: oauthFlow, error: oauthFailure.error }).success).toBe(false);
     expect(Catalog.MCPOAuthResultSchema.safeParse({ ...resultOwner, status: 'authenticated', authenticated: true, pendingFlow: oauthFlow }).success).toBe(false);
     for (const field of ['authorizationUrl', 'tokenUrl', 'issuerUrl', 'registrationUrl', 'resourceMetadataUrl', 'redirectUri', 'resource']) {
       for (const url of ['ftp://auth.example', 'https://user:secret@auth.example', 'https://auth.example#private']) {

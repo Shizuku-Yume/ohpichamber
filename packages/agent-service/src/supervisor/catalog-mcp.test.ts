@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MCPConfigurationState, MCPConfigureRequest, MCPCatalogState, MCPWorkerApplyOutcome } from '@openchamber/agent-contract';
 import { CatalogCoordinator, type CatalogWorker } from './catalog.ts';
+import { mcpAuthRequired } from '../mcp-auth.ts';
 
 const server = { serverId: 'tools', label: 'Workspace tools', enabled: true, transport: { type: 'stdio' as const, command: 'workspace-tools', args: [] } };
 const connectedProbe = async (_workspaceId: string, serverId: string, configuration: MCPConfigurationState) => ({
@@ -419,7 +420,7 @@ test('a genuinely non-auth probe failure still throws saved-not-connected', asyn
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('the live-worker path and the no-worker probe agree on every auth signal', async () => {
+test('the shared predicate answers identically for every auth signal, and both apply paths use it', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-agreement-'));
   const signals = [
     { code: 'MCP_AUTH_REQUIRED', detail: 'Authorization required' },
@@ -431,6 +432,13 @@ test('the live-worker path and the no-worker probe agree on every auth signal', 
   ];
   try {
     for (const signal of signals) {
+      // The rule itself, before either path: this is the one both import.
+      expect(mcpAuthRequired(signal)).toBe(true);
+      expect(mcpAuthRequired({ code: 'MCP_APPLY_FAILED', detail: 'ECONNREFUSED 127.0.0.1:14032' })).toBe(false);
+      expect(mcpAuthRequired({ code: 'MCP_APPLY_FAILED', detail: 'MCP handshake timed out' })).toBe(false);
+      expect(mcpAuthRequired({ code: 'MCP_APPLY_FAILED', detail: 'unreachable', config: { auth: { type: 'oauth' } } })).toBe(true);
+      expect(mcpAuthRequired({ code: 'MCP_APPLY_FAILED', detail: 'unreachable', config: { oauth: { clientId: 'public' } } })).toBe(true);
+      expect(mcpAuthRequired({ code: 'MCP_APPLY_FAILED', detail: 'unreachable', config: { auth: { type: 'apikey' } } })).toBe(false);
       let stored: MCPConfigurationState | null = null;
       const commitMcp = async (_id: string, _input: MCPConfigureRequest, next: MCPConfigurationState) => { stored = next; };
       const liveDirectory = await mkdtemp(join(tmpdir(), 'workspace-mcp-agreement-live-'));

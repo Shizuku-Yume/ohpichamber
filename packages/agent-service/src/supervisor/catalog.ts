@@ -21,6 +21,7 @@ import type {
 import { MCPWorkspaceReconnectResultSchema } from '@openchamber/agent-contract';
 import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@openchamber/agent-contract';
 import { MCPToolDiscoverySchema, type MCPDiscoveredTool, type MCPToolDiscovery } from '../worker/mcp/protocol.ts';
+import { mcpAuthRequired } from '../mcp-auth.ts';
 import { WorkerOperationError } from './workers.ts';
 import { PluginWorkerApplyOutcomeSchema, type PluginWorkerApplyOutcome, type PluginRuntimeState } from '@openchamber/agent-contract';
 import type { HostSkillSourceCommit } from './file-resources-host-protocol.ts';
@@ -124,21 +125,6 @@ function applyFailureCause(result: { workers: Array<{ outcome: string; error?: {
   return causes.length > 0 ? causes.join('; ') : fallback;
 }
 
-/** Codes a worker or the stateless probe reports when the server wants authorization. */
-const MCP_AUTH_CODES: Record<string, true> = { MCP_AUTH_REQUIRED: true, AUTH_REQUIRED: true, MCP_CREDENTIAL_UNAVAILABLE: true };
-/** A hosted MCP server answers 401/403 or names the scope before it accepts OAuth.
- * The status codes are guarded against adjacent digits so a refused socket's port
- * (`:14032`) cannot read as a 403. */
-const MCP_AUTH_TEXT = /(?<!\d)(401|403)(?!\d)|insufficient_scope|unauthorized|sign-in|sign in|auth/i;
-
-/** One classifier for both apply paths: a saved server that cannot connect because it
- * needs authorization is a sign-in, not a failed install. The live-worker path and the
- * no-worker probe must agree, because which one runs depends only on whether a session
- * happens to be open. */
-export function mcpAuthRequired(error: { code: string; detail: string }): boolean {
-  if (MCP_AUTH_CODES[error.code] === true) return true;
-  return MCP_AUTH_TEXT.test(`${error.code} ${error.detail}`);
-}
 
 function operationError(error: Error | undefined, fallbackCode: string, fallbackDetail: string): CatalogOperationError {
   if (error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError) {

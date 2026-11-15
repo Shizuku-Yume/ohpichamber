@@ -468,7 +468,7 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
   /** A loopback authorization server: the MCP endpoint challenges anonymously,
    * protected-resource metadata names this origin as the issuer, and dynamic
    * client registration is either closed (`unapproved_client`) or open. */
-  function oauthStub(registration: 'reject' | 'issue') {
+  function oauthStub(registration: 'reject' | 'issue', token: 'ok' | 'fail' = 'ok') {
     let base = '';
     const server = Bun.serve({
       hostname: '127.0.0.1',
@@ -498,6 +498,11 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
             : Response.json({ client_id: 'stub-client' });
         }
         if (url.pathname === '/authorize') return new Response('consent', { status: 200 });
+        if (url.pathname === '/token' && request.method === 'POST') {
+          return token === 'fail'
+            ? new Response('invalid_grant: code expired', { status: 400 })
+            : Response.json({ access_token: 'stub-access', refresh_token: 'stub-refresh', expires_in: 3600 });
+        }
         return new Response('not found', { status: 404 });
       },
     });
@@ -508,9 +513,10 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
   async function withOAuthWorker(
     registration: 'reject' | 'issue',
     run: (fixture: { mcp: WorkerMcp; configuration: MCPConfigurationState; base: string }) => Promise<void>,
+    token: 'ok' | 'fail' = 'ok',
   ): Promise<void> {
     const home = await mkdtemp(join(tmpdir(), 'mcp-oauth-flow-'));
-    const stub = oauthStub(registration);
+    const stub = oauthStub(registration, token);
     try {
       const agentDir = join(home, '.omp', 'agent');
       const projectDir = join(home, 'project');
@@ -554,6 +560,18 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
   }
 
   const owner = { persistedRevision: '0', workerGeneration: 'generation-1' };
+
+  /** The flow settles off the request path, so a poll can still observe the
+   * pending flow right after the browser answered. Poll the way the panel does,
+   * with a bounded wait so a hang fails the test instead of stalling it. */
+  async function settledRead(mcp: WorkerMcp, configuration: MCPConfigurationState) {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const result = await mcp.oauthRead('linear', configuration);
+      if (result.status !== 'pending') return result;
+      await Bun.sleep(10);
+    }
+    throw new Error('The OAuth flow never settled');
+  }
 
   test('a closed dynamic client registration keeps the provider message and a stable code', async () => {
     await withOAuthWorker('reject', async ({ mcp, configuration, base }) => {
@@ -610,10 +628,70 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
         action: 'cancel', ...owner, flowId: flow.flowId,
       }, configuration);
       expect(cancelled).toMatchObject({ serverId: 'linear', status: 'unauthenticated', authenticated: false });
+      // A user cancel is neutral: no error for the panel to render as a failure.
+      expect(cancelled).not.toHaveProperty('error');
       const ended = await completing;
       if (!('error' in ended)) throw new Error('The joined completion must report the cancellation');
       if (!(ended.error instanceof NativeMcpError)) throw ended.error;
       expect(ended.error.code).toBe('MCP_OAUTH_CANCELLED');
     });
+  });
+
+  /** The flow fails after the browser handoff: the panel has only oauthRead to
+   * poll, so the cause must arrive there. A raw fetch to the callback server is
+   * the browser; the state nonce comes from the authorization URL. */
+
+  test('a consent denial after the handoff is reported once on the next read', async () => {
+    await withOAuthWorker('issue', async ({ mcp, configuration, base }) => {
+      const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const flow = started.pendingFlow;
+      const authorizationUrl = new URL(flow.authorizationUrl);
+      expect(base.startsWith('http://127.0.0.1:')).toBe(true);
+
+      // The provider's consent screen redirects to the callback server with
+      // error=access_denied; that redirect target is the flow's own redirect_uri.
+      const callbackUrl = new URL(authorizationUrl.searchParams.get('redirect_uri') ?? '');
+      callbackUrl.search = `?error=access_denied&error_description=${encodeURIComponent('The user denied the request')}&state=${authorizationUrl.searchParams.get('state')}`;
+      // The callback server answers a denial with 500; the browser status is not
+      // the outcome — the flow's error is.
+      expect((await fetch(callbackUrl)).status).toBe(500);
+
+      const failing = await outcome(settledRead(mcp, configuration));
+      if ('error' in failing) throw failing.error;
+      if (failing.value.status !== 'unauthenticated') throw new Error('The failing poll must still report unauthenticated');
+      expect(failing.value.error?.code).toBe('MCP_OAUTH_FAILED');
+      expect(failing.value.error?.detail).toContain('Authorization failed');
+      expect(failing.value.error?.detail).toContain('The user denied the request');
+      expect(failing.value.error?.retryable).toBe(false);
+
+      // Exactly once: the failure is retired by the read that reported it.
+      const after = await mcp.oauthRead('linear', configuration);
+      expect(after).toMatchObject({ serverId: 'linear', status: 'unauthenticated', authenticated: false });
+      expect(after).not.toHaveProperty('error');
+    });
+  });
+
+  test('a token exchange failure after the handoff is reported once on the next read', async () => {
+    await withOAuthWorker('issue', async ({ mcp, configuration, base }) => {
+      const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      expect(base.startsWith('http://127.0.0.1:')).toBe(true);
+
+      const callbackUrl = new URL(authorizationUrl.searchParams.get('redirect_uri') ?? '');
+      callbackUrl.search = `?code=stub-code&state=${authorizationUrl.searchParams.get('state')}`;
+      expect((await fetch(callbackUrl)).status).toBe(200);
+
+      const failing = await outcome(settledRead(mcp, configuration));
+      if ('error' in failing) throw failing.error;
+      expect(failing.value.status).toBe('unauthenticated');
+      expect(failing.value.error?.code).toBe('MCP_OAUTH_FAILED');
+      expect(failing.value.error?.detail).toContain('Token exchange failed: 400');
+      expect(failing.value.error?.detail).toContain('invalid_grant');
+
+      const after = await mcp.oauthRead('linear', configuration);
+      expect(after).not.toHaveProperty('error');
+    }, 'fail');
   });
 });

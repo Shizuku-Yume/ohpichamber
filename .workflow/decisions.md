@@ -543,6 +543,7 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** the maintainer schedules a fork release with its own version decision.
 - **Effort:** upstream-refresh
+- **Superseded by:** 2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only
 
 ## 2026-10-27 - Bump the toolchain before refreshing ui and web
 
@@ -1323,3 +1324,31 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** OMP's selector grammar changes.
 - **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - Ship as OhPiChamber with its own identifiers and a fresh data directory
+
+- **Decided:** the product is named OhPiChamber on every user-facing surface (window title, app names, PWA manifest, UI copy), with an About credit "Based on OpenChamber" and the upstream MIT notice. External identifiers move to the `dev.ohpichamber` prefix: Electron `dev.ohpichamber.desktop`, mobile `dev.ohpichamber.app` (extensions under it), CLI `ohpichamber`, URL scheme `ohpichamber://`, data directory `~/.config/ohpichamber`, environment prefix `OHPICHAMBER_*`. Nothing is imported from `~/.config/openchamber`.
+- **Instead of:** keeping the OpenChamber name and identifiers, or renaming but importing selected files from the upstream data directory on first start.
+- **Because:** shared app IDs make an upstream install and this fork overwrite each other, and a shared data directory lets both read one `settings.json` whose schema has diverged. An import path would mean reading OpenCode-era keys, which the no-fallback cutover rule forbids.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** a released OhPiChamber build exists and users report needing their upstream settings.
+
+## 2026-11-16 - Cut the fork off from upstream-hosted services
+
+- **Decided:** desktop auto-update reads GitHub Releases of `Shizuku-Yume/ohpichamber`. The first release disables or hides every other `openchamber.dev` dependency: the CLI update check (`api.openchamber.dev/v1/update/check` and the `@openchamber/web` dist-tags), the changelog API, the APNs push relay, the Linear OAuth broker and the `downloads.openchamber.dev` mirror. Documentation links point at this repository's docs.
+- **Instead of:** disabling desktop auto-update as well, or self-hosting replacements for each service.
+- **Because:** every one of these endpoints belongs to upstream. The updater and CLI update check would replace the fork with upstream's OpenCode build, and the push relay and OAuth broker hold credentials bound to upstream's app IDs. GitHub Releases needs no server, while the other services would each need hosting and credentials (APNs needs an Apple developer account, which M7 does not require).
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** the maintainer decides to host a push relay or an OAuth broker.
+
+## 2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only
+
+- **Decided:** the first fork release is `1.0.0`. The npm package is provisionally `ohpichamber` and the Guest SDK is `ohpichamber-sdk`, both unscoped; the maintainer handles registry publishing at release time. Desktop ships the stable channel only: the canary channel and its icon set are removed.
+- **Instead of:** keeping `3.0.0` and the `@openchamber/*` package names, publishing under a new npm org scope, or keeping a canary channel with a badged icon.
+- **Because:** the `@openchamber` scope belongs to upstream and cannot be published to. Since the package names change anyway, starting from `1.0.0` keeps the fork from looking like the next upstream 3.x release. A single maintainer has no use for a second update channel.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** the npm name `ohpichamber` turns out to be unavailable, or a pre-release channel becomes needed.
+- **Supersedes:** 2026-10-27 - Keep the fork version at 3.0.0

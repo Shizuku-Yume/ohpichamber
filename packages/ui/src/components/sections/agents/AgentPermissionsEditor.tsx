@@ -73,6 +73,13 @@ type DescribedToolName = keyof typeof TOOL_DESC_KEYS;
 
 const isDescribedToolName = (name: string): name is DescribedToolName =>
   Object.hasOwn(TOOL_DESC_KEYS, name);
+
+/**
+ * The row's name for a tool, from the same registry the transcript uses. The
+ * catalog's label is only a case transform of the id, so it read as
+ * `Openchamber` for `openchamber`.
+ */
+const toolPresentationLabel = (name: string): string => toolPresentation(name).label;
 const TierChip: React.FC<{ tier: ToolTier }> = ({ tier }) => {
   const { t } = useI18n();
   const label = t(`settings.agents.page.toolPermissions.tier.${tier}`);
@@ -349,8 +356,17 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
                         onChange={(nextChecked) => toggleTool(tool.name, nextChecked)}
                         label={
                           <span className="flex items-center gap-2">
-                            <span className="font-mono text-xs">{tool.label || tool.name}</span>
-                            <span className="text-[11px] text-muted-foreground font-mono">({tool.name})</span>
+                            {/* The row names the tool the way the transcript
+                                does, from the shared presentation registry. The
+                                catalog's own label is a case transform of the
+                                id, which rendered as `Openchamber`. */}
+                            <span className="font-mono text-xs">{toolPresentationLabel(tool.name)}</span>
+                            {/* The id only adds information when it differs from
+                                the name on screen; `openchamber (openchamber)`
+                                said nothing. */}
+                            {toolPresentationLabel(tool.name) !== tool.name && (
+                              <span className="text-[11px] text-muted-foreground font-mono">({tool.name})</span>
+                            )}
                             {!tool.availability && (
                               <span className="text-[10px] uppercase font-mono tracking-wider px-1 py-0.5 rounded border border-border/40 text-muted-foreground bg-muted/20">
                                 {t('common.unavailable')}

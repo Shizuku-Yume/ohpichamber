@@ -231,6 +231,11 @@ Each session worker owns an unchanged OMP `RpcGoalController`, enables the sessi
 `SessionMode` publishes the objective, native status, optional budget and tokens used. A dropped goal reports Main. Completed goals retain a terminal display record even though OMP exits its active goal mode. Native controls do not write legacy Host supervisor metadata; that supervisor remains for entry points not yet migrated.
 
 
+## Speculative session preparation
+
+`POST /api/agent/v1/sessions/prepare` speculatively admits and boots a session worker for an authorized workspace before prompt dispatch. Preparation is bounded to at most one session per workspace, returns `{ ok: true, sessionId }`, and carries no user content or secrets. `POST /api/agent/v1/sessions` adopts an in-flight or completed prepared session without duplicating admissions or creating conflicting root scopes. Unused prepared sessions are reaped after 5 minutes via an unreferenced timer, and `DELETE /api/agent/v1/sessions/prepare` discards the prepared session when the client draft is closed.
+
+
 ## Session listing and titles
 
 `GET /api/agent/v1/sessions?workspaceId=...` merges the Host-authorized workspace's persisted references with OMP's own directory listing (`SessionManager.getDefaultSessionDir` plus `listSessionsReadOnly`/`isEmptySession` in `session-listing.ts`). Sessions created outside the app appear by their OMP identity and title; a referenced session keeps the Host's opaque `rootSessionId` and is correlated to OMP storage by its session file. Listing reads JSONL headers only and starts no worker. `RuntimeSession.title` carries OMP's title and timestamps come from OMP's file metadata.

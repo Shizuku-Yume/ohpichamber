@@ -46,6 +46,19 @@ describe('graceful shutdown runtime', () => {
     vi.restoreAllMocks();
   });
 
+  it('discards prepared sessions before stopping the agent runtime', async () => {
+    const order = [];
+    const server = { close: vi.fn((callback) => { callback(); }) };
+    const runtime = createRuntime(server, {
+      openChamberSessionService: { close: vi.fn(async () => { order.push('session-service'); }) },
+      hostAgentRuntime: { close: vi.fn(async () => { order.push('agent-runtime'); }) },
+    });
+    await runtime.gracefulShutdown({ exitProcess: false });
+    // A prepared session owns a worker; closing the service first means the
+    // speculative root is discarded rather than left for the runtime to kill.
+    expect(order).toEqual(['session-service', 'agent-runtime']);
+  });
+
   it('clears the server close timeout when the server closes first', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const server = {

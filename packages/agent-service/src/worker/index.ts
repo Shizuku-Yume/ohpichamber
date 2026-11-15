@@ -191,7 +191,12 @@ process.on('message', raw => {
 // the adoption cannot claim a process that has not finished loading.
 if (process.connected) send({ type: 'idle' });
 if (process.env.PI_CODING_AGENT_DIR) {
-  prewarmNativeRuntime({ cwd: process.cwd(), agentDirectory: process.env.PI_CODING_AGENT_DIR });
+  // The `idle` reply above makes this process adoptable at module load. The
+  // warm-up continues either way: a supervisor that can choose prefers the
+  // spare that also reported `warm`, because adopting this one would move the
+  // rest of the work into the session.
+  void prewarmNativeRuntime({ cwd: process.cwd(), agentDirectory: process.env.PI_CODING_AGENT_DIR })
+    .then(warmed => { if (warmed !== undefined && process.connected) send({ type: 'warm' }); });
 }
 process.once('disconnect', () => { void stop(0); });
 process.once('SIGTERM', () => { void stop(0); });

@@ -1114,11 +1114,7 @@ export async function materializeOpenDraftSession(selection: {
 
   await waitForWorktreeBootstrapIfConfigured(draftDirectoryOverride, draftProjectId, runtimeKey, runtimeRevision)
   assertSendRuntime(runtimeKey, runtimeRevision)
-  const pendingPrep = pendingPreparationByDraft.get(draft.draftId)
-  if (pendingPrep) {
-    await pendingPrep.catch(() => undefined)
-    pendingPreparationByDraft.delete(draft.draftId)
-  }
+  pendingPreparationByDraft.delete(draft.draftId)
 
   const draftPins = draft.projectContextPins ?? { notes: [], plans: [] }
   // Native admission and the first prompt use the same captured selection.

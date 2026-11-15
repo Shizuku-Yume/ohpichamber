@@ -138,7 +138,7 @@ const CategoryRow: React.FC<{
         />
       </div>
       {expanded ? (
-        <div className="space-y-4 px-1 pb-4 pt-2">
+        <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'px-1 pb-4 pt-2')}>
           <SettingsTwoColumn>
             <SettingsStackedField label={t('settings.routing.category.name')} controlClassName="max-w-none">
               <Input
@@ -274,8 +274,8 @@ export const RoutingPage: React.FC = () => {
       ...config,
       fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: null },
     }));
-  // `update` is stable; the effect keys on what decides whether to prefill.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // `update` is stable; the effect keys on what decides whether to prefill.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, serverConfig, settingsDefaultModel]);
 
   const update = React.useCallback((mutate: (config: RoutingConfig) => RoutingConfig) => {
@@ -331,14 +331,14 @@ export const RoutingPage: React.FC = () => {
   const removedBuiltins = builtins.filter((builtin) => !draft?.categories.some((category) => category.id === builtin.id));
 
   const readinessText = !draft?.enabled
-      ? t('settings.routing.status.disabled')
-      : !draft.fallback
-        ? t('settings.routing.status.noFallback')
-        : enabledCount < 2
-          ? t('settings.routing.status.tooFewCategories')
-          : autoReady
-            ? t('settings.routing.status.ready')
-            : t('settings.routing.status.notReady');
+    ? t('settings.routing.status.disabled')
+    : !draft.fallback
+      ? t('settings.routing.status.noFallback')
+      : enabledCount < 2
+        ? t('settings.routing.status.tooFewCategories')
+        : autoReady
+          ? t('settings.routing.status.ready')
+          : t('settings.routing.status.notReady');
 
   return (
     <SettingsPageLayout

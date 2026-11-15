@@ -43,6 +43,7 @@ import { useGitIdentity } from '@/stores/useGitStore';
 import {
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
+  SETTINGS_SELECT_TRIGGER_CLASS,
   SettingsControlGroup,
   SettingsGroupTitle,
   SettingsStackedField,
@@ -359,7 +360,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
           setSelectedRequirement('');
           setIdentityChoice(null);
         }} disabled={!read?.binding || saving || recovery.blocked}>
-          <SelectTrigger className="w-fit max-w-[28ch]" aria-label={t('gitView.hydration.parentRemote')}>
+          <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('gitView.hydration.parentRemote')}>
             <SelectValue placeholder={t('settings.sourceControl.transport.remoteLabel')} />
           </SelectTrigger>
           <SelectContent>{read?.binding?.remotes.filter((entry) => entry.readiness === 'ready').map((entry) => (
@@ -371,7 +372,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
       {authorizationNeeded ? <p className={SETTINGS_HELPER_CLASS}>{t('gitView.hydration.authorizationNeeded')}</p> : null}
       {requirements.length ? <SettingsStackedField label={t('gitView.hydration.endpoint')} controlClassName={EDITOR_CONTROL_CLASS}>
         <Select value={selectedRequirement} onValueChange={setSelectedRequirement} disabled={saving}>
-          <SelectTrigger className="w-fit max-w-[28ch]" aria-label={t('gitView.hydration.endpoint')}>
+          <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('gitView.hydration.endpoint')}>
             <SelectValue placeholder={t('gitView.hydration.chooseEndpoint')}>
               {selected ? `${selected.path} · ${kindLabel(selected.kind)} · ${selected.endpoint.displayUrl}` : undefined}
             </SelectValue>

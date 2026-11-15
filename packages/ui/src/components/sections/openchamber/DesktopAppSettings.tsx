@@ -22,6 +22,7 @@ import {
   SettingsCheckboxRow,
   SettingsFieldRow,
   SETTINGS_SPACE_CHECKBOX_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useUIStore } from '@/stores/useUIStore';
 
@@ -299,7 +300,7 @@ export const DesktopAppSettings: React.FC = () => {
   }
 
   return (
-    <SettingsSection title={t('settings.layout.general.desktopApp.title')} contentClassName="space-y-3">
+    <SettingsSection title={t('settings.layout.general.desktopApp.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
       <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
         {launchAtLoginSupported ? (
           <SettingsCheckboxRow
@@ -518,7 +519,7 @@ export const DesktopQuickAccessSettings: React.FC = () => {
     <SettingsSection
       title={t('settings.layout.general.quickAccess.title')}
       info={t('settings.layout.general.quickAccess.info')}
-      contentClassName="space-y-2"
+      contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
       {miniChatGlobalShortcutSupported ? (
         <SettingsFieldRow

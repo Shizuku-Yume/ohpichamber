@@ -22,6 +22,7 @@ import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLay
 import { SETTINGS_CARD_GRID_CLASS, SettingsAddCard, SettingsBackButton, SettingsCard, type SettingsCardAction, SettingsCardChip, SettingsCardIcon, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
 import {
   SETTINGS_SELECT_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsFieldRow,
   SETTINGS_HELPER_CLASS,
   SettingsSection,

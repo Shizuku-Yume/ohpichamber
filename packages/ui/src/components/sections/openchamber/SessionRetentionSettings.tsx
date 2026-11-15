@@ -13,6 +13,7 @@ import {
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
   SETTINGS_SPACE_CHECKBOX_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
@@ -90,7 +91,7 @@ export const SessionRetentionSettings: React.FC = () => {
       info={t(onlyArchived
         ? 'settings.openchamber.sessionRetention.archivedTooltip'
         : 'settings.openchamber.sessionRetention.tooltip')}
-      contentClassName="space-y-2"
+      contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
       <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
         <SettingsCheckboxRow

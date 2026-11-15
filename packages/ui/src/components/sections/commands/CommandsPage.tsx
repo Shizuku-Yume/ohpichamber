@@ -18,6 +18,7 @@ import {
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 interface CommandForm {
@@ -136,7 +137,8 @@ export const CommandsPage: React.FC = () => {
           <div className="flex items-center">
             <span className="typography-ui-label text-muted-foreground mr-1">/</span>
             <Input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })}
-              placeholder={t('settings.commands.page.field.commandNamePlaceholder')} className="h-7 w-40 px-2" />
+              placeholder={t('settings.commands.page.field.commandNamePlaceholder')} inputSize="compact"
+              className={SETTINGS_WIDTH_SHORT_TEXT_CLASS} />
           </div>
           <Select value={form.scope} onValueChange={scope => {
             if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope });
@@ -172,7 +174,7 @@ export const CommandsPage: React.FC = () => {
           <Input value={form.argumentHint} onChange={event => setForm({ ...form, argumentHint: event.target.value })}
             aria-label="$ARGUMENTS"
             inputSize="compact"
-            className="w-64 px-2"
+            className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
           />
         </SettingsFieldRow>
       </SettingsSection>

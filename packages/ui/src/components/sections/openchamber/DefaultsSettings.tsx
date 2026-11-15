@@ -13,6 +13,7 @@ import {
   SETTINGS_SPACE_CHECKBOX_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_NUMBER_STEPPER_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { NumberInput } from '@/components/ui/number-input';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
@@ -372,7 +373,7 @@ export const DefaultsSettings: React.FC = () => {
           `omp.modelRoles` as that record's owner. Stamping the record here is
           what makes that claim name a real control rather than a search entry. */}
       <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false} settingsItem="omp.modelRoles">
-        <div className="space-y-4">
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           <ModelRoleEditor
             role="default"
             roles={roleSelectors}
@@ -443,7 +444,7 @@ export const DefaultsSettings: React.FC = () => {
       </SettingsSection>
 
       {/* Models the app runs on its own: summaries, titles, the walkthrough. */}
-      <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName="space-y-2">
+      <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <SettingsCheckboxRow
           settingsItem="sessions.small-model"
           checked={!usesOwnSmallModel}
@@ -498,7 +499,7 @@ export const DefaultsSettings: React.FC = () => {
         />
       </SettingsSection>
 
-      <SettingsSection title={t('settings.sessions.permissions.defaultMode')} contentClassName="space-y-1">
+      <SettingsSection title={t('settings.sessions.permissions.defaultMode')}>
         <PermissionDefaultModeField />
       </SettingsSection>
       {/* Plan & Goal Modes */}
@@ -529,7 +530,7 @@ export const DefaultsSettings: React.FC = () => {
             info={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
           />
           {ompState?.settings.find((s) => s.id === 'goal.enabled')?.value === true ? (
-            <div className="ps-6 space-y-3 pt-2">
+            <div className={`ps-6 pt-2 ${SETTINGS_SPACE_ROW_CLASS}`}>
               <SessionGoalCheckerField />
               <SessionGoalMaxTurnsField />
               <SettingsFieldRow
@@ -546,21 +547,23 @@ export const DefaultsSettings: React.FC = () => {
                 }
                 settingsItem="chat.session-goal-budget"
               >
-                <NumberInput
-                  value={sessionGoalDefaultBudget}
-                  onValueChange={(value) => {
-                    if (Number.isFinite(value) && value > 0) {
-                      setSessionGoalDefaultBudget(Math.floor(value));
-                      void updateDesktopSettings({ sessionGoalDefaultBudget: Math.floor(value) });
-                    }
-                  }}
-                  min={1000}
-                  max={100000000}
-                  step={50000}
-                  disabled={!sessionGoalDefaultBudgetEnabled}
-                  className={SETTINGS_WIDTH_NUMBER_CLASS}
-                  aria-label={t('settings.openchamber.visual.goal.budgetAria')}
-                />
+                <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                  <NumberInput
+                    value={sessionGoalDefaultBudget}
+                    onValueChange={(value) => {
+                      if (Number.isFinite(value) && value > 0) {
+                        setSessionGoalDefaultBudget(Math.floor(value));
+                        void updateDesktopSettings({ sessionGoalDefaultBudget: Math.floor(value) });
+                      }
+                    }}
+                    min={1000}
+                    max={100000000}
+                    step={50000}
+                    disabled={!sessionGoalDefaultBudgetEnabled}
+                    className={SETTINGS_WIDTH_NUMBER_CLASS}
+                    aria-label={t('settings.openchamber.visual.goal.budgetAria')}
+                  />
+                </div>
               </SettingsFieldRow>
             </div>
           ) : null}
@@ -719,7 +722,7 @@ export const DefaultsSettings: React.FC = () => {
         </div>
       </SettingsSection>
 
-      <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')} contentClassName="space-y-1">
+      <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')}>
         <SettingsInset className={SETTINGS_SPACE_CHECKBOX_CLASS}>
           <SessionWarmingCheckbox />
           <SettingsCheckboxRow

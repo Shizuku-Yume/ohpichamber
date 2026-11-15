@@ -73,7 +73,7 @@ const FilesAndEditorSection: React.FC = () => {
   const showTreeControls = !isVSCode && !isMobile;
 
   return (
-    <SettingsSection title={t('settings.layout.general.files.title')} contentClassName="space-y-4">
+    <SettingsSection title={t('settings.layout.general.files.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
       <div>
         <SettingsFieldRow
           label={t('settings.openchamber.visual.field.fileEditorKeymap')}
@@ -227,7 +227,7 @@ const TerminalSection: React.FC = () => {
   };
 
   return (
-    <SettingsSection title={t('settings.layout.general.terminal.title')} contentClassName="space-y-3">
+    <SettingsSection title={t('settings.layout.general.terminal.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
       <SettingsFieldRow
         label={t('settings.openchamber.visual.field.terminalShell')}
         info={t('settings.openchamber.visual.field.terminalShellHint')}

@@ -13,6 +13,9 @@ import {
   SettingsSection,
   SettingsFieldRow,
   SettingsStackedField,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 
@@ -126,17 +129,18 @@ export const SnippetsPage: React.FC = () => {
       description={selectedSnippet?.source}
       showSaveStatus={false}
     >
-      <SettingsSection divider={false} contentClassName="space-y-0">
+      <SettingsSection divider={false}>
         {isNew ? (
           <SettingsFieldRow label="/">
             <Input
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}
               placeholder={t('settings.snippets.page.field.namePlaceholder')}
-              className="h-7 w-44 px-2"
+              inputSize="compact"
+              className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
             />
             <Select value={draftScope} onValueChange={(value) => setDraftScope(value as SnippetScope)}>
-              <SelectTrigger className="w-fit min-w-[100px]">
+              <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                 <SelectValue>
                   {draftScope === 'agent' ? t('settings.common.scope.global') : t('settings.common.scope.project')}
                 </SelectValue>
@@ -154,7 +158,8 @@ export const SnippetsPage: React.FC = () => {
             readOnly={!isNew && !selectedSnippet?.editable}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('settings.snippets.page.field.descriptionPlaceholder')}
-            className="h-7 w-full max-w-sm px-2"
+            inputSize="compact"
+            className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
           />
         </SettingsStackedField>
       </SettingsSection>

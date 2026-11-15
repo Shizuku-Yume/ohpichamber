@@ -374,11 +374,11 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     ) : null;
 
     return (
-        <div className="space-y-0">
+        <>
 
                 {/* --- Appearance & Themes --- */}
                 {hasAppearanceSettings && (
-                    <div className="space-y-0">
+                    <>
                         {hasThemeSettings && (
                             <ThemeAppearancePicker />
                         )}
@@ -625,7 +625,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             )}
                             </SettingsSection>
                         )}
-                    </div>
+                    </>
                 )}
 
                 {/* --- Density & type --- */}
@@ -954,6 +954,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                     </SettingsSection>
                 )}
 
-            </div>
+            </>
     );
 };

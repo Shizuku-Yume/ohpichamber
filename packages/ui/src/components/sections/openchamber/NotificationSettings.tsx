@@ -16,6 +16,7 @@ import {
   SettingsCheckboxRow,
   SettingsGroupTitle,
   SETTINGS_SPACE_CHECKBOX_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 const DEFAULT_NOTIFICATION_TEMPLATES = {
@@ -586,13 +587,13 @@ export const NotificationSettings: React.FC = () => {
                 </>
               )}
             >
-              <SettingsTwoColumn className="gap-2 md:grid-cols-2 md:gap-3 lg:gap-3">
+              <SettingsTwoColumn className="gap-2 @xl:grid-cols-2 @xl:gap-3">
                 {(['completion', 'subtask', 'error', 'question'] as const).map((event: NotificationTemplateEvent) => (
                   <section key={event} className="p-2">
                     <SettingsGroupTitle className="capitalize">
                       {t(TEMPLATE_EVENT_LABEL_KEYS[event])}
                     </SettingsGroupTitle>
-                    <div className="mt-1.5 space-y-2">
+                    <div className={`mt-1.5 ${SETTINGS_SPACE_ROW_CLASS}`}>
                       <div>
                         <label className="typography-micro text-muted-foreground block mb-1">{t('settings.notifications.page.template.field.title')}</label>
                         <Input

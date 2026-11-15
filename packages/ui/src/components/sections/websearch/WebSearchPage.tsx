@@ -26,6 +26,7 @@ import {
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
   SETTINGS_SELECT_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsChipGroup,
   SettingsFieldRow,
   SettingsSection,
@@ -96,7 +97,7 @@ const ModeSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) =>
     ? null
     : snapshot.providers.find((provider) => provider.providerId === snapshot.selectedProviderId) ?? null;
   // A chosen provider presses neither chip: the two describe the fallback
-    // modes, and the status line names the provider, as on the connect page.
+  // modes, and the status line names the provider, as on the connect page.
   const mode: 'default' | 'off' | 'provider' = !snapshot.enabled
     ? 'off'
     : snapshot.selectedProviderId === null ? 'default' : 'provider';
@@ -343,7 +344,7 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
         </div>
       </SettingsSection>
       <SettingsSection>
-        <div className="space-y-4">
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {enterprise ? <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.keys.enterpriseMode')}</p> : null}
           {!provider.credentialWritable ? (
             <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.detail.noKey')}</p>

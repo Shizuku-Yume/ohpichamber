@@ -26,6 +26,8 @@ import {
   SettingsSection,
   SettingsFieldRow,
   SETTINGS_BRAND_TITLE_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_SPACE_SECTION_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 const GITHUB_URL = 'https://github.com/openchamber/openchamber';
@@ -401,7 +403,7 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
 
   if (isMobile) {
     return (
-      <div className="w-full space-y-6 pb-2">
+      <div className={`w-full pb-2 ${SETTINGS_SPACE_SECTION_CLASS}`}>
         <div className="flex flex-col items-center text-center">
           <AboutLogo size={72} />
           <h2 className={`mt-4 ${SETTINGS_BRAND_TITLE_CLASS}`}>OpenChamber</h2>
@@ -435,7 +437,7 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
               size="sm"
               onClick={checkAll}
               disabled={isChecking}
-              className="w-auto justify-center gap-2"
+              className="justify-center gap-2"
             >
               {isChecking ? <Spinner className="size-4" /> : <Icon name="refresh" className="size-4" />}
               {isChecking
@@ -452,7 +454,7 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
               variant="default"
               size="sm"
               onClick={() => setUpdateDialogOpen(true)}
-              className="w-auto justify-center gap-2"
+              className="justify-center gap-2"
             >
               <Icon name="download" className="size-4" />
               {openChamberUpdateLabel}
@@ -603,7 +605,7 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
         </div>
       </SettingsSection>
 
-      <SettingsSection contentClassName="space-y-4">
+      <SettingsSection contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <div>
           {isDesktopRemote ? (
             <>
@@ -634,7 +636,7 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
           </SettingsFieldRow>
           <InstanceServiceUrls label={t('settings.openchamber.about.field.instanceUrls')} />
         </div>
-        {notes.length > 0 && <div className="space-y-3">{notes}</div>}
+        {notes.length > 0 && <div>{notes}</div>}
       </SettingsSection>
 
       {releaseNotes}

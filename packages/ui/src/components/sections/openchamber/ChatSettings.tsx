@@ -28,6 +28,7 @@ import {
   SETTINGS_NUMBER_UNIT_CLASS,
   SETTINGS_SPACE_CHECKBOX_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
 import { useDeviceInfo } from '@/lib/device';
@@ -176,7 +177,7 @@ const MessagesTab: React.FC = () => {
 
   return (
     <>
-      <SettingsSection title={t('settings.layout.chat.section.activity')} divider={false} contentClassName="space-y-3">
+      <SettingsSection title={t('settings.layout.chat.section.activity')} divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <SettingsFieldRow label={t('settings.openchamber.visual.section.activityDefault')} settingsItem="chat.activity-default">
           <SettingsChipGroup
             value={activityRenderMode}
@@ -303,7 +304,7 @@ const MessagesTab: React.FC = () => {
         <SelectionApprovalField />
       </SettingsSection>
 
-      <SettingsSection title={t('settings.layout.chat.section.formatting')} contentClassName="space-y-3">
+      <SettingsSection title={t('settings.layout.chat.section.formatting')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <div>
           <SettingsFieldRow label={t('settings.openchamber.visual.section.userMessageRendering')} settingsItem="chat.user-message-rendering">
             <SettingsChipGroup
@@ -478,7 +479,7 @@ const ComposerTab: React.FC = () => {
 
   return (
     <>
-      <SettingsSection title={t('settings.layout.chat.section.sending')} divider={false} settingsItem="chat.composer" contentClassName="space-y-5">
+      <SettingsSection title={t('settings.layout.chat.section.sending')} divider={false} settingsItem="chat.composer" contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <div>
           {/* Phones send with the keyboard's own button, so there is no send key to pick. */}
           {isMobile ? null : (
@@ -568,7 +569,7 @@ const ComposerTab: React.FC = () => {
         </SettingsSection>
       ) : null}
 
-      <SettingsSection title={t('settings.layout.chat.section.draftsAndHistory')} contentClassName="space-y-3">
+      <SettingsSection title={t('settings.layout.chat.section.draftsAndHistory')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
           <SettingsCheckboxRow
             checked={persistChatDraft}
@@ -813,7 +814,7 @@ const AssistanceTab: React.FC = () => {
                 }}
               >
                 <SelectTrigger
-                  className="w-auto min-w-[10rem]"
+                  className={SETTINGS_WIDTH_SELECT_CLASS}
                   aria-label={t('settings.openchamber.visual.field.sessionRecapIdleSecondsAria')}
                 >
                   <SelectValue>

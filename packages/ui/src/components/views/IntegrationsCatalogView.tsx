@@ -275,6 +275,8 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const [confirm, setConfirm] = React.useState<ConfirmRequest | null>(null);
   const [inputValues, setInputValues] = React.useState<Record<string, Record<string, string>>>({});
   const [tokenValues, setTokenValues] = React.useState<Record<string, string>>({});
+  /** Secrets for a local server's `envInputs`, keyed by entry and then input. */
+  const [envValues, setEnvValues] = React.useState<Record<string, Record<string, string>>>({});
   const [scopeDialogState, setScopeDialogState] = React.useState<{ entry: CatalogEntry; component?: CatalogComponent } | null>(null);
   const [selectedScope, setSelectedScope] = React.useState<'project' | 'user'>('project');
   React.useEffect(() => {
@@ -297,6 +299,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
       setConfirm(null);
       setInputValues({});
       setTokenValues({});
+      setEnvValues({});
     }
   }, [open]);
 
@@ -311,6 +314,18 @@ export function IntegrationsCatalogView(): React.ReactNode {
 
   const readToken = React.useCallback((entry: CatalogEntry): string => tokenValues[entry.id] ?? '', [tokenValues]);
   const setTokenValue = (entryId: string, value: string) => setTokenValues((prev) => ({ ...prev, [entryId]: value }));
+
+  const readEnvValue = React.useCallback((entry: CatalogEntry, envInputId: string): string =>
+    envValues[entry.id]?.[envInputId] ?? '', [envValues]);
+  const setEnvValue = React.useCallback((entryId: string, envInputId: string, value: string) => {
+    setEnvValues((prev) => ({ ...prev, [entryId]: { ...prev[entryId], [envInputId]: value } }));
+  }, []);
+  /** The entry's `envInputs` values that were filled in, trimmed, as env name → secret. */
+  const readFilledEnvValues = React.useCallback((entry: CatalogEntry, mcp: CatalogMcpComponent): Array<{ envName: string; value: string }> =>
+    (mcp.local?.envInputs ?? []).flatMap((input) => {
+      const value = readEnvValue(entry, input.id).trim();
+      return value === '' ? [] : [{ envName: input.envName, value }];
+    }), [readEnvValue]);
 
   // installedMcp is replaced by runtime-aware isMcpInstalled
   const installedPluginNames = React.useMemo(
@@ -462,6 +477,41 @@ export function IntegrationsCatalogView(): React.ReactNode {
   }, [settingsDirectory]);
 
   /**
+   * Writes a local server's collected environment values as workspace
+   * credentials and references them from the stdio transport as
+   * `envCredentialRefs`, so the saved config holds references, never secrets.
+   * Like the token path, the credential writes advance the persisted revision,
+   * which is why the config is read first and the store reread afterwards.
+   */
+  const attachMcpEnvValues = React.useCallback(async (
+    entry: CatalogEntry,
+    values: Array<{ envName: string; value: string }>,
+  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    if (values.length === 0) return { ok: true };
+    const workspace = await canonicalClient.resolveWorkspace(resolveMcpDirectory(settingsDirectory));
+    const configuration = await canonicalClient.getWorkspaceMcpConfig(workspace.workspaceId);
+    let persistedRevision = configuration.persistedRevision;
+    const refs: Record<string, string> = {};
+    for (const row of values) {
+      const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, entry.id, {
+        persistedRevision,
+        value: row.value,
+      });
+      persistedRevision = credential.persistedRevision;
+      refs[row.envName] = credential.credentialRef;
+    }
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: settingsDirectory, force: true });
+    const server = useMcpConfigStore.getState().getMcpByName(entry.id, settingsDirectory);
+    if (!server || server.transport.type !== 'stdio') return { ok: false, error: entry.name };
+    const transport: MCPServerConfig['transport'] = {
+      ...server.transport,
+      envCredentialRefs: { ...server.transport.envCredentialRefs, ...refs },
+    };
+    const updated = await useMcpConfigStore.getState().updateMcp(entry.id, { transport }, settingsDirectory);
+    return updated.ok ? { ok: true } : { ok: false, error: updated.error };
+  }, [settingsDirectory]);
+
+  /**
    * One Install pass over every component of the entry: the MCP server, the
    * plugin, and the skills. Already-installed components are skipped, so a
    * re-run cannot fail on "already exists". A plugin keeps its explicit
@@ -510,6 +560,20 @@ export function IntegrationsCatalogView(): React.ReactNode {
           if (component.auth === 'token') {
             try {
               const attached = await attachMcpToken(entry, component, readToken(entry));
+              if (!attached.ok) {
+                failed = true;
+                errorDetail = attached.error;
+                continue;
+              }
+            } catch (failure) {
+              failed = true;
+              errorDetail = failure instanceof Error ? failure.message : String(failure);
+              continue;
+            }
+          }
+          if (component.local && (component.local.envInputs?.length ?? 0) > 0) {
+            try {
+              const attached = await attachMcpEnvValues(entry, readFilledEnvValues(entry, component));
               if (!attached.ok) {
                 failed = true;
                 errorDetail = attached.error;
@@ -573,7 +637,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
     } finally {
       setBusyId(null);
     }
-  }, [attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp]);
+  }, [attachMcpEnvValues, attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readFilledEnvValues, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp]);
   /** One Uninstall pass: removes the MCP server, the plugin entries, and the installed skills. */
   const uninstallEntry = React.useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);
@@ -640,6 +704,8 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const canInstallEntry = (entry: CatalogEntry): boolean => {
     const mcp = catalogMcpComponent(entry);
     if (!mcp) return true;
+    const envComplete = (mcp.local?.envInputs ?? []).every((input) => !input.required || readEnvValue(entry, input.id).trim() !== '');
+    if (!envComplete) return false;
     if (mcp.auth === 'token') {
       const token = readToken(entry);
       return token.trim() !== '' || mcp.remote?.tokenOptional === true;
@@ -902,14 +968,15 @@ export function IntegrationsCatalogView(): React.ReactNode {
     </aside>
   );
 
-  /** Token field, picker inputs and prerequisites, shown before the first install. */
+  /** Token field, env values, picker inputs and prerequisites, shown before the first install. */
   const renderSetup = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const needsToken = mcp.auth === 'token' && Boolean(mcp.remote);
+    const envInputs = mcp.local?.envInputs ?? [];
     const notes = [
       ...(mcp.local ? [...(mcp.local.requires ?? []).map((requirement) => t(requiresNoteKey[requirement])), t('integrationsCatalog.local.note'), t('integrationsCatalog.requires.prefix')] : []),
       ...(mcp.auth === 'oauth' && mcp.remote ? [t('integrationsCatalog.oauth.note')] : []),
     ];
-    if (!needsToken && !entry.inputs && notes.length === 0) return null;
+    if (!needsToken && !entry.inputs && envInputs.length === 0 && notes.length === 0) return null;
     return (
       <section className="flex flex-col gap-3">
         <SectionHeading title={t('integrationsCatalog.detail.setup')} />
@@ -951,6 +1018,31 @@ export function IntegrationsCatalogView(): React.ReactNode {
         ) : null}
         {needsToken && mcp.remote?.tokenOptional ? (
           <p className="text-sm text-muted-foreground">{t('integrationsCatalog.token.optional')}</p>
+        ) : null}
+        {envInputs.length > 0 ? (
+          <div className="flex flex-col gap-3 pt-1">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-medium text-foreground">{t('integrationsCatalog.envInputs.heading')}</h3>
+              <p className="text-sm text-muted-foreground">{t('integrationsCatalog.envInputs.note')}</p>
+            </div>
+            {envInputs.map((input) => (
+              <div key={input.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <label htmlFor={`catalog-env-${entry.id}-${input.id}`} className="w-36 shrink-0 text-sm text-muted-foreground">
+                  {t(input.labelKey)}
+                </label>
+                <Input
+                  id={`catalog-env-${entry.id}-${input.id}`}
+                  type="password"
+                  autoComplete="off"
+                  required={input.required}
+                  value={readEnvValue(entry, input.id)}
+                  onChange={(event) => setEnvValue(entry.id, input.id, event.target.value)}
+                  placeholder={input.envName}
+                  className="max-w-xs"
+                />
+              </div>
+            ))}
+          </div>
         ) : null}
         {notes.length > 0 ? <p className="text-sm text-muted-foreground">{notes.join(' ')}</p> : null}
       </section>

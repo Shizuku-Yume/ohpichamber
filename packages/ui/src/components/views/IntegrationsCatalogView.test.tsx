@@ -37,12 +37,23 @@ const infos: string[] = [];
 const successes: string[] = [];
 const errors: string[] = [];
 const oauthReads: string[] = [];
+const credentialWrites: Array<{ serverId: string; value: string; persistedRevision: string }> = [];
 const actualClient = await import('@/api/canonicalClient');
 mock.module('@/api/canonicalClient', () => ({
   ...actualClient,
   canonicalClient: {
     ...actualClient.canonicalClient,
     resolveWorkspace: async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }),
+    getWorkspaceMcpConfig: async () => ({ workspaceId: 'workspace', persistedRevision: '1', config: { servers: [] } }),
+    writeWorkspaceMcpCredential: async (workspaceId: string, serverId: string, input: { persistedRevision: string; value: string }) => {
+      credentialWrites.push({ serverId, value: input.value, persistedRevision: input.persistedRevision });
+      return {
+        workspaceId,
+        serverId,
+        persistedRevision: String(Number(input.persistedRevision) + 1),
+        credentialRef: `credential-${serverId}-${credentialWrites.length}`,
+      };
+    },
     getWorkspaceMcpOAuth: async (): Promise<MCPOAuthResult> => {
       oauthReads.push('read');
       return { serverId: 'linear', persistedRevision: '1', worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, status: 'unauthenticated', authenticated: false };
@@ -140,6 +151,7 @@ beforeEach(() => {
   });
   oauthStarts.length = 0;
   oauthReads.length = 0;
+  credentialWrites.length = 0;
   connects.length = 0;
   infos.length = 0;
   successes.length = 0;
@@ -481,4 +493,96 @@ test('reinstalling a saved unauthenticated server never toasts success', async (
   expect(successes).toEqual([]);
   expect(errors).toEqual([]);
   expect(infos).toEqual(['Linear saved. Sign in to finish.']);
+});
+
+/** The local server the catalog creates for Grafana, before credentials are referenced. */
+const grafanaServer = {
+  serverId: 'grafana',
+  label: 'Grafana',
+  enabled: true as const,
+  scope: 'project' as const,
+  transport: { type: 'stdio' as const, command: 'uvx', args: ['mcp-grafana'] },
+};
+
+const openGrafana = async () => {
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'Grafana');
+  if (!card) throw new Error('Grafana card missing');
+  await act(async () => card.click());
+  await settle();
+};
+
+const setInputValue = async (input: HappyElement, value: string) => {
+  const setValue = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new browser.Event('input', { bubbles: true }));
+  });
+};
+
+test('a local entry with a required env input keeps Install disabled until it is filled', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  await openGrafana();
+
+  const body = browser.document.body;
+  expect(body.textContent?.includes('Environment values')).toBe(true);
+  const urlField = body.querySelector('#catalog-env-grafana-url');
+  if (!urlField) throw new Error('GRAFANA_URL field missing');
+  expect(urlField.hasAttribute('required')).toBe(true);
+  expect(urlField.getAttribute('type')).toBe('password');
+  expect(urlField.getAttribute('placeholder')).toBe('GRAFANA_URL');
+  const optionalField = body.querySelector('#catalog-env-grafana-apiKey');
+  expect(optionalField?.hasAttribute('required')).toBe(false);
+
+  const install = [...body.querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === 'Install');
+  if (!install) throw new Error('Install button missing');
+  expect(install.disabled).toBe(true);
+});
+
+test('installing a local entry writes env values as credentials and references them from the transport', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const savedServers: Array<Record<string, unknown>> = [];
+  const transports: Array<Record<string, unknown>> = [];
+  useMcpConfigStore.setState({
+    createMcp: async (config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+    updateMcp: async (_serverId, config) => {
+      const transport = (config as { transport: Record<string, unknown> }).transport;
+      transports.push(transport);
+      savedServers.push({ ...grafanaServer, transport });
+      return appliedMcpMutation();
+    },
+  });
+
+  await openGrafana();
+  const body = browser.document.body;
+  const urlField = body.querySelector('#catalog-env-grafana-url');
+  const keyField = body.querySelector('#catalog-env-grafana-apiKey');
+  if (!urlField || !keyField) throw new Error('Grafana env fields missing');
+  await setInputValue(urlField, 'https://grafana.example.invalid');
+  await setInputValue(keyField, 'fake-key-0000');
+
+  await clickButton('Install');
+  const confirm = [...body.querySelectorAll('button')].filter((candidate) => candidate.textContent?.trim() === 'Install').at(-1);
+  if (!confirm) throw new Error('Scope dialog confirm missing');
+  await act(async () => confirm.click());
+  await settle();
+
+  expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid', 'fake-key-0000']);
+  const transport = transports.at(-1);
+  expect(transport?.type).toBe('stdio');
+  expect(transport?.envCredentialRefs).toEqual({
+    GRAFANA_URL: 'credential-grafana-1',
+    GRAFANA_API_KEY: 'credential-grafana-2',
+  });
+  const serialized = JSON.stringify(savedServers.at(-1));
+  expect(serialized.includes('https://grafana.example.invalid')).toBe(false);
+  expect(serialized.includes('fake-key-0000')).toBe(false);
+  expect(errors).toEqual([]);
 });

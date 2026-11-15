@@ -336,8 +336,8 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
       downloaded={false}
       progress={null}
       error={remoteHostUpdate.error}
-      onDownload={() => {}}
-      onRestart={() => {}}
+      onDownload={() => { }}
+      onRestart={() => { }}
       runtimeType="web"
     />
   ) : null;
@@ -564,8 +564,10 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
     <span className="typography-meta font-mono text-muted-foreground">{version}</span>
   );
   // Rows without a button keep the height of rows with one; in a narrow pane
-  // a version and its update button wrap instead of overflowing.
-  const valueRow = 'min-h-8 flex-wrap @xl:flex-initial';
+  // a version and its update button wrap instead of overflowing. The column
+  // keeps the primitive's `flex-1`, so the row's trailing alignment still has
+  // free space to push the value and its button against the right edge.
+  const valueRow = 'min-h-8 flex-wrap';
   const notes = [
     manualUpdateNotice,
     remoteHostUpdateNotice,
@@ -636,7 +638,7 @@ export const AboutSettings: React.FC<AboutSettingsProps> = ({ initialUpdateDialo
           </SettingsFieldRow>
           <InstanceServiceUrls label={t('settings.openchamber.about.field.instanceUrls')} />
         </div>
-        {notes.length > 0 && <div>{notes}</div>}
+        {notes.length > 0 && <div className={SETTINGS_SPACE_ROW_CLASS}>{notes}</div>}
       </SettingsSection>
 
       {releaseNotes}

@@ -39,7 +39,8 @@ import {
     SettingsChipGroup,
     SETTINGS_SELECT_TRIGGER_CLASS,
     SETTINGS_ICON_BUTTON_CLASS,
-    SETTINGS_WIDTH_LONG_TEXT_CLASS,
+    SETTINGS_WIDTH_SHORT_TEXT_CLASS,
+    SETTINGS_WIDTH_SELECT_CLASS,
     SETTINGS_NUMBER_STEPPER_ROW_CLASS,
     SETTINGS_NUMBER_UNIT_CLASS,
     SETTINGS_WIDTH_NUMBER_CLASS,
@@ -495,8 +496,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     label={t('settings.openchamber.visual.field.installAppName')}
                                     info={t('settings.openchamber.visual.field.installAppNameHint')}
                                     settingsItem="appearance.pwa-install-name"
-                                    alignEnd={false}
-                                    controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
                                 >
                                     <Input
                                         value={pwaInstallName}
@@ -512,7 +511,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 void applyPwaInstallName(pwaInstallName);
                                             }
                                         }}
-                                        className="min-w-0 flex-1"
+                                        className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                                         maxLength={64}
                                         aria-label={t('settings.openchamber.visual.field.pwaInstallAppNameAria')}
                                     />
@@ -537,8 +536,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     label={t('settings.openchamber.visual.field.installOrientation')}
                                     description={t('settings.openchamber.visual.field.installOrientationHint')}
                                     settingsItem="appearance.pwa-orientation"
-                                    alignEnd={false}
-                                    controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
                                 >
                                     <Select
                                         value={pwaOrientation}
@@ -548,7 +545,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             void applyPwaOrientation(orientation);
                                         }}
                                     >
-                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.pwaInstallOrientationAria')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
+                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.pwaInstallOrientationAria')} className={SETTINGS_WIDTH_SELECT_CLASS}>
                                             <SelectValue placeholder={t('settings.openchamber.visual.field.selectOrientationPlaceholder')}>
                                                 {selectedPwaOrientationLabel}
                                             </SelectValue>
@@ -583,8 +580,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     label={t('settings.openchamber.visual.field.mobileKeyboardMode')}
                                     info={t('settings.openchamber.visual.field.mobileKeyboardModeHint')}
                                     settingsItem="appearance.mobile-keyboard-mode"
-                                    alignEnd={false}
-                                    controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
                                 >
                                     <Select
                                         value={mobileKeyboardMode}
@@ -594,7 +589,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             void updateDesktopSettings({ mobileKeyboardMode: mode });
                                         }}
                                     >
-                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.mobileKeyboardModeAria')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
+                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.mobileKeyboardModeAria')} className={SETTINGS_WIDTH_SELECT_CLASS}>
                                             <SelectValue placeholder={t('settings.openchamber.visual.field.selectMobileKeyboardModePlaceholder')}>
                                                 {selectedMobileKeyboardModeLabel}
                                             </SelectValue>

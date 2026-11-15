@@ -15,7 +15,7 @@ import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { UsageHistoryEntry, UsageLimit, UsageReport } from '@oh-my-pi/pi-ai';
 import { getAgentDir, getProjectDir } from '@oh-my-pi/pi-utils';
-import type { UsageSessionReference } from '../protocol.ts';
+import type { UsageScopeFile, UsageSessionReference } from '../protocol.ts';
 import { initDb } from '@oh-my-pi/omp-stats/db';
 import { syncAllSessions } from '@oh-my-pi/omp-stats';
 import { getModelPricingStatus } from '@oh-my-pi/pi-catalog';
@@ -252,23 +252,22 @@ type Binding = string | number;
 interface WindowFilter { where: string; params: Binding[] }
 
 /**
- * The query window and scope as one SQL filter over `messages` and `user_messages`.
- * `sessionDirectories` undefined means every OMP session. A list means only
- * transcripts under those project sessions folders, including nested subagent
- * transcripts, which is how OMP itself assigns a session to a project. An empty
- * list matches nothing.
+ * The window and scope of one aggregate. `scopeFiles` undefined means no
+ * project scope; a list is the exact set the Host authorized, so a sessions
+ * folder shared with another workspace cannot leak its transcripts into this
+ * report.
  */
-function windowFilter(query: UsageQueryResult, sessionDirectories: readonly string[] | undefined): WindowFilter {
+function windowFilter(query: UsageQueryResult, scopeFiles: readonly UsageScopeFile[] | undefined, role: 'root' | 'subagent' | 'any' = 'any'): WindowFilter {
   const clauses = ['timestamp < ?'];
   const params: Binding[] = [query.to];
   if (query.from !== undefined) { clauses.push('timestamp >= ?'); params.push(query.from); }
   if (query.providerId !== undefined) { clauses.push('provider = ?'); params.push(query.providerId); }
-  if (sessionDirectories !== undefined) {
-    if (sessionDirectories.length === 0) clauses.push('0');
+  if (scopeFiles !== undefined) {
+    const scoped = role === 'any' ? scopeFiles : scopeFiles.filter(entry => entry.role === role);
+    if (scoped.length === 0) clauses.push('0');
     else {
-      const prefixes = sessionDirectories.map(directory => resolve(directory) + sep);
-      clauses.push(`(${prefixes.map(() => 'substr(session_file, 1, length(?)) = ?').join(' OR ')})`);
-      for (const prefix of prefixes) params.push(prefix, prefix);
+      clauses.push(`session_file IN (${scoped.map(() => '?').join(', ')})`);
+      params.push(...scoped.map(entry => resolve(entry.file)));
     }
   }
   return { where: `WHERE ${clauses.join(' AND ')}`, params };
@@ -364,6 +363,25 @@ async function readReasoning(requests: readonly z.infer<typeof RequestRow>[]): P
   return { byModel, errors };
 }
 
+/**
+ * Validate every authorized transcript, keyed by session identity. The sync
+ * ingests what it can parse, so this is what tells a viewer that a session it
+ * asked about could not be read — never an empty success.
+ */
+async function validateScopeFiles(scopeFiles: readonly UsageScopeFile[]): Promise<Record<string, string>> {
+  const errors: Record<string, string> = Object.create(null);
+  for (const entry of scopeFiles) {
+    try {
+      const loaded = await loadSessionFile(entry.file, undefined, { throwIfMissing: true });
+      if (loaded.malformedRecords > 0 || loaded.invalidHeader || loaded.sourceSize === null || loaded.entries.length === 0
+        || !Header.safeParse(loaded.entries[0]).success) throw new CorruptSession();
+    } catch (error) {
+      errors[entry.sessionId] = error instanceof CorruptSession ? 'USAGE_SESSION_CORRUPT' : 'USAGE_SESSION_UNREADABLE';
+    }
+  }
+  return errors;
+}
+
 export interface UsageAccountsResult {
   accounts: UsageAccounts;
   /** Sources that could not be read, keyed by a source name. Their absence from `accounts` is never an empty success. */
@@ -377,17 +395,22 @@ export interface UsageAccountsResult {
  * window and scope. A failed database read or sync throws; it is never reported
  * as an empty result.
  *
- * `sessionDirectories` undefined means no project scope. A list is the resolved
- * project scope: the sessions folders of the Host-authorized workspaces or
- * projects the viewer selected.
+ * `sessionFiles` undefined means no project scope. A list is the resolved project
+ * scope: the exact transcripts of the Host-authorized roots and their subagents
+ * in the workspaces or projects the viewer selected.
  */
-export async function getUsageStats(input: UsageQuery, sessionDirectories?: readonly string[]): Promise<UsageStats> {
+export async function getUsageStats(input: UsageQuery, scopeFiles?: readonly UsageScopeFile[]): Promise<UsageStats> {
   const query = UsageQuerySchema.parse(input);
-  await syncAllSessions();
+  // The sync follows the report's scope. OMP's own sync walks only its default
+  // sessions folder, and a project's transcripts live under that workspace's
+  // agent directory — a worktree, an imported project, an isolated data
+  // directory — which nothing else ever ingests. Reading the database after an
+  // unscoped sync reported zero for sessions that plainly exist.
+  await syncAllSessions(scopeFiles === undefined ? undefined : { files: scopeFiles.map(entry => entry.file), workers: 1 });
   const db = await initDb();
   const runtime = await openUsageRuntime();
   try {
-    const filter = windowFilter(query, sessionDirectories);
+    const filter = windowFilter(query, scopeFiles);
     const modelRows = z.array(ModelRow).parse(db.query(`
       SELECT provider, model,
         COUNT(*) AS steps,
@@ -406,18 +429,45 @@ export async function getUsageStats(input: UsageQuery, sessionDirectories?: read
       FROM messages ${filter.where}
       GROUP BY provider, model
     `).all(...filter.params));
-    const summary = SummaryRow.parse(db.query(`
-      SELECT COUNT(DISTINCT session_file) AS sessions,
-        COALESCE(SUM(CASE WHEN agent_type = 'subagent' THEN 1 ELSE 0 END), 0) AS subagents
-      FROM messages ${filter.where}
-    `).get(...filter.params));
+    // The Host already said which of its authorized files are subagent
+    // transcripts. OMP's own `agent_type` is a path-depth guess, and a subagent
+    // written beside its root in the same folder reads as a main session there,
+    // so a scoped report counts by the authoritative role instead. The unscoped
+    // form keeps OMP's classification, which is all it has.
+    const scopeRoles = scopeFiles === undefined
+      ? undefined
+      : new Map(scopeFiles.map(entry => [resolve(entry.file), entry.role]));
+    const summary = scopeRoles === undefined
+      ? SummaryRow.parse(db.query(`
+        SELECT COUNT(DISTINCT session_file) AS sessions,
+          COALESCE(SUM(CASE WHEN agent_type = 'subagent' THEN 1 ELSE 0 END), 0) AS subagents
+        FROM messages ${filter.where}
+      `).get(...filter.params))
+      : (() => {
+        const present = z.array(z.object({ session_file: z.string().min(1) })).parse(db.query(`
+          SELECT DISTINCT session_file FROM messages ${filter.where}
+        `).all(...filter.params));
+        let sessions = 0; let subagents = 0;
+        for (const { session_file } of present) {
+          if (scopeRoles.get(resolve(session_file)) === 'subagent') subagents += 1; else sessions += 1;
+        }
+        return { sessions, subagents };
+      })();
+    // Turn-level counts describe what the user did; usage totals also include
+    // the subagent work those turns spawned. OMP's own report keeps the same
+    // split, so `steps`/`prompts`/`activity` count main-session turns while
+    // tokens, cost and per-model usage cover the whole authorized scope.
+    const turnFilter = windowFilter(query, scopeFiles, 'root');
     const requests = z.array(RequestRow).parse(db.query(`
-      SELECT session_file, entry_id, provider, model, timestamp FROM messages ${filter.where}
-    `).all(...filter.params));
+      SELECT session_file, entry_id, provider, model, timestamp FROM messages ${turnFilter.where}
+    `).all(...turnFilter.params));
     const prompts = z.object({ prompts: Count }).parse(db.query(`
-      SELECT COUNT(*) AS prompts FROM user_messages ${windowFilter(query, sessionDirectories).where}
-    `).get(...filter.params));
-    const reasoning = await readReasoning(requests);
+      SELECT COUNT(*) AS prompts FROM user_messages ${turnFilter.where}
+    `).get(...turnFilter.params));
+    const reasoning = await readReasoning(
+      z.array(RequestRow).parse(db.query(`
+        SELECT session_file, entry_id, provider, model, timestamp FROM messages ${filter.where}
+      `).all(...filter.params)));
 
     const samples = new Map<string, Sample>();
     const modelsByProvider = new Map<string, Sample[]>();
@@ -471,17 +521,26 @@ export async function getUsageStats(input: UsageQuery, sessionDirectories?: read
       previous = ordinal;
     }
     const allUnpriced = models.length > 0 && models.every(model => model.pricing === null);
-    const partial = Object.keys(reasoning.errors).length > 0;
+    // A scoped report validates every authorized transcript, so a corrupt one is
+    // named beside the numbers instead of silently disappearing from them: the
+    // sync indexes what it can parse, and a session whose file it skipped would
+    // otherwise look like a session with no activity.
+    const sourceErrors = scopeFiles === undefined ? {} : await validateScopeFiles(scopeFiles);
+    // A scope whose every transcript is unreadable is a failed read, not a scope
+    // with no activity: returning zeros would present an outage as an answer.
+    if (scopeFiles !== undefined && scopeFiles.length > 0 && Object.keys(sourceErrors).length === scopeFiles.length)
+      throw new Error('USAGE_UNAVAILABLE');
+    const partial = Object.keys(reasoning.errors).length > 0 || Object.keys(sourceErrors).length > 0;
     const report: UsageStats = {
       range: { from: query.from ?? minTimestamp ?? query.to - 1, to: query.to },
-      sessions: summary.sessions, subagents: summary.subagents, prompts: prompts.prompts, steps: total.steps,
+      sessions: summary.sessions, subagents: summary.subagents, prompts: prompts.prompts, steps: requests.length,
       tokens: tokensOf(total), cost: total.cost, tools: { mode: 'none' },
       activeDays: days.size, streak: longest, activity, providers, models,
       avgTtft: averageTtft(total), avgTokensPerSecond: tokensPerSecond(total), errorRate: errorRate(total),
       pricing: allUnpriced ? null : (models.length === 1 ? models[0]!.pricing : null),
       partial,
     };
-    if (partial) report.errors = reasoning.errors;
+    if (partial) report.errors = { ...sourceErrors, ...reasoning.errors };
     return report;
   } finally {
     runtime.authStorage.close();

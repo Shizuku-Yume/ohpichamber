@@ -58,6 +58,9 @@ const UsageSessionReferenceSchema = z.strictObject({
   sessionsDirectory: PrivatePathSchema.optional(), parentSessionId: EntityIdSchema.optional(),
 });
 export type UsageSessionReference = z.infer<typeof UsageSessionReferenceSchema>;
+/** One authorized transcript: its session identity, and whether it is a root session or a subagent's. */
+export const UsageScopeFileSchema = z.strictObject({ file: PrivatePathSchema, sessionId: EntityIdSchema, role: z.enum(['root', 'subagent']) });
+export type UsageScopeFile = z.infer<typeof UsageScopeFileSchema>;
 export const UsageAuthorizationSchema = z.array(z.strictObject({ workspaceId: EntityIdSchema, projectId: EntityIdSchema }));
 
 /** `proposed` marks a value the authorized operation itself introduces. The authorizer then
@@ -108,7 +111,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp'), operation: McpOperationSchema }),
   z.strictObject({ type: z.literal('shell'), operation: ShellOperationSchema }),
   z.strictObject({ type: z.literal('completion'), operation: CompletionOperationSchema }),
-  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, sessionDirectories: z.array(PrivatePathSchema).optional() }),
+  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, sessionFiles: z.array(UsageScopeFileSchema).optional() }),
   z.strictObject({ type: z.literal('usage.tools'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
   z.strictObject({ type: z.literal('usage.accounts'), query: UsageQuerySchema }),
   z.strictObject({ type: z.literal('mcp.configuration.read') }),

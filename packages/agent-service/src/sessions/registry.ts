@@ -460,22 +460,32 @@ export class SessionRegistry {
   }
 
   /**
-   * Sessions folders of the Host-authorized roots in a workspace or project scope. Unlike `usageReferences`
-   * this never refuses an active root: a running session must not hide the usage scope it belongs to.
+   * Transcripts of the Host-authorized roots and their subagents in a workspace or project scope.
+   *
+   * The scope is an exact file set, not the folders those files sit in: a sessions folder can hold
+   * transcripts of workspaces the caller was not authorized for, and a directory prefix would sweep
+   * them in. Unlike `usageReferences` this never refuses an active root — a running session must not
+   * hide the usage scope it belongs to — and it never refuses a relocating root for the same reason.
    */
-  usageSessionDirectories(authorized: readonly { workspaceId: string; projectId: string }[], query: UsageQueryResult): string[] {
+  usageSessionFiles(authorized: readonly { workspaceId: string; projectId: string }[], query: UsageQueryResult): { file: string; sessionId: string; role: 'root' | 'subagent' }[] {
     this.ensureOpen();
     const scopes = new Map(authorized.map(scope => [scope.workspaceId, scope.projectId]));
-    const directories = new Set<string>();
+    const files = new Map<string, { sessionId: string; role: 'root' | 'subagent' }>();
     const inventory = this.references.list();
     if (inventory.errors.length) throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The session inventory reported restore errors');
     for (const root of inventory.items) {
       if (scopes.get(root.workspaceId) !== root.projectId
         || (query.workspaceId !== undefined && query.workspaceId !== root.workspaceId)
         || (query.projectId !== undefined && query.projectId !== root.projectId)) continue;
-      directories.add(root.sessionsDirectory ?? SessionManager.getDefaultSessionDir(root.cwd, root.agentDirectory));
+      files.set(root.sessionFile, { sessionId: root.rootSessionId, role: 'root' });
+      for (const child of this.references.listSubagents(root.rootSessionId)) {
+        if (child.rootSessionId !== root.rootSessionId || child.workspaceId !== root.workspaceId || child.projectId !== root.projectId)
+          throw new WorkerOperationError(503, 'SESSION_RESTORE_FAILED', 'The subagent reference does not belong to this root session');
+        // A fork's child transcript can share a file with its root; the root role wins.
+        if (files.get(child.sessionFile)?.role !== 'root') files.set(child.sessionFile, { sessionId: child.childSessionId, role: 'subagent' });
+      }
     }
-    return [...directories];
+    return [...files].map(([file, entry]) => ({ file, sessionId: entry.sessionId, role: entry.role }));
   }
 
   usageReferences(authorized: readonly { workspaceId: string; projectId: string }[], query: UsageQueryResult): UsageSessionReference[] {

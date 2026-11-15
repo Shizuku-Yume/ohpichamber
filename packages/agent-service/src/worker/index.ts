@@ -115,7 +115,7 @@ process.on('message', raw => {
     }
     // Deliberately not serialized: cancel/abort/interactive replies must interrupt active work.
     void (async () => {
-      if (command.operation.type === 'usage.stats') return { type: 'usage.stats' as const, result: await getUsageStats(command.operation.query, command.operation.sessionDirectories) };
+      if (command.operation.type === 'usage.stats') return { type: 'usage.stats' as const, result: await getUsageStats(command.operation.query, command.operation.sessionFiles) };
       if (command.operation.type === 'usage.accounts') return { type: 'usage.accounts' as const, result: await getUsageAccounts(command.operation.query) };
       if (command.operation.type === 'usage.tools') return { type: 'usage.tools' as const, result: await getUsageTools(command.operation.query, command.operation.references) };
       if (!owned) throw new Error('Worker resources are unavailable');

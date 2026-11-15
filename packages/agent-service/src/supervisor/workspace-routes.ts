@@ -189,10 +189,12 @@ export class WorkspaceRoutes {
         if (result.type !== 'usage.tools') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.tools operation.');
         return { status: 200, body: UsageToolsResponseSchema.parse(result.result) };
       }
-      // A workspace or project filter resolves to the sessions folders of its roots. The unscoped view is every OMP session.
-      const scoped = query.workspaceId !== undefined || query.projectId !== undefined;
-      const sessionDirectories = scoped ? this.sessions.usageSessionDirectories(authorizedScopes, query) : undefined;
-      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query, sessionDirectories });
+      // Every report is bounded by the Host-authorized inventory: the exact transcripts of the
+      // roots in scope plus their subagents. A query with neither filter means that whole
+      // inventory, never every file under a sessions folder — one folder can hold another
+      // workspace's transcripts, and OMP's default folder discovery cannot see a root's own.
+      const sessionFiles = this.sessions.usageSessionFiles(authorizedScopes, query);
+      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query, sessionFiles });
       if (result.type !== 'usage.stats') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.stats operation.');
       // Accounts fail on their own: their errors are named beside the session errors, never folded into an empty success.
       const accounts = await this.workers.request(this.usageWorkerId, { type: 'usage.accounts', query });

@@ -101,6 +101,7 @@ mock.module('@/components/sections/agents/ModelSelector', () => ({
 }));
 
 const saveStateCalls: string[] = [];
+const saveCalls: RoutingConfig[] = [];
 
 mock.module('@/lib/persistence', () => ({
   reportSettingsSaveState: (state: string) => { saveStateCalls.push(state); },
@@ -159,6 +160,8 @@ describe('RoutingPage', () => {
   let root: Root;
 
   beforeEach(() => {
+    saveCalls.length = 0;
+    saveStateCalls.length = 0;
     useRoutingStore.setState({
       available: true,
       loaded: true,
@@ -166,7 +169,7 @@ describe('RoutingPage', () => {
       config: mockConfig,
       builtins: mockConfig.categories,
       load: async () => {},
-      saveConfig: mock(async () => {}),
+      saveConfig: async (config: RoutingConfig) => { saveCalls.push(config); },
     });
 
     useConfigStore.setState({
@@ -216,25 +219,25 @@ describe('RoutingPage', () => {
     });
 
     saveStateCalls.length = 0;
+    saveCalls.length = 0;
     await act(async () => {
       await sleep(DEBOUNCE_SETTLE_MS);
     });
 
-    const saveConfig = useRoutingStore.getState().saveConfig;
-    expect(saveConfig).toHaveBeenCalledTimes(0);
+    expect(saveCalls.length).toBe(0);
     expect(saveStateCalls).not.toContain('error');
     expect(container.textContent).toContain('settings.routing.category.descriptionRequired');
 
     const description = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
     if (!description) throw new Error('Missing description field');
+    expect(document.activeElement).toBe(description);
     await setInputValue(description, 'Docs and reference writing');
     await act(async () => {
       await sleep(DEBOUNCE_SETTLE_MS);
     });
 
-    expect(saveConfig).toHaveBeenCalledTimes(1);
-    const saved = saveConfig.mock.calls[0][0] as RoutingConfig;
-    const docs = saved.categories.find((category) => category.id === 'docs');
+    expect(saveCalls.length).toBe(1);
+    const docs = saveCalls[0].categories.find((category) => category.id === 'docs');
     expect(docs).toBeDefined();
     expect(docs?.builtin).toBe(false);
     expect(docs?.name).toBe('Docs');
@@ -255,12 +258,12 @@ describe('RoutingPage', () => {
     await setInputValue(description, '');
 
     saveStateCalls.length = 0;
+    saveCalls.length = 0;
     await act(async () => {
       await sleep(DEBOUNCE_SETTLE_MS);
     });
 
-    const saveConfig = useRoutingStore.getState().saveConfig;
-    expect(saveConfig).toHaveBeenCalledTimes(0);
+    expect(saveCalls.length).toBe(0);
     expect(saveStateCalls).not.toContain('error');
     expect(container.textContent).toContain('settings.routing.category.descriptionRequired');
 
@@ -271,7 +274,7 @@ describe('RoutingPage', () => {
       await sleep(DEBOUNCE_SETTLE_MS);
     });
 
-    expect(saveConfig).toHaveBeenCalledTimes(0);
+    expect(saveCalls.length).toBe(0);
     expect(container.textContent).toContain('settings.routing.category.nameRequired');
   });
 

@@ -78,13 +78,13 @@ describe('Host-owned native descriptor authority', () => {
       await fs.writeFile(inside, 'inside');
       await fs.writeFile(outside, 'outside');
       const read = { type: 'tool', toolName: 'read', input: { path: 'inside.txt:2-8' } };
-      const descriptor = { toolName: 'read', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
+      const descriptor = { toolName: 'read', sourcePaths: [inside], destinationPaths: [], fileOps: [], declaredTier: 'read' };
       expect(await harness.authorize(harness.scope, read)).toMatchObject({ allowed: false, code: 'INVALID_REQUEST', status: 400 });
       expect(await harness.authorize(harness.scope, read, descriptor)).toEqual({ allowed: true });
       expect(await harness.authorize(harness.scope, read, { ...descriptor, sourcePaths: [outside] })).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
       for (const effectiveMode of ['apply_patch', 'hashline', 'patch', 'replace', 'sloppy']) {
         const request = { type: 'tool', toolName: 'edit', input: { changes: 'source-owned native edit input' } };
-        const edit = { toolName: 'edit', effectiveMode, sourcePaths: [inside], destinationPaths: [inside], fileOps: [{ kind: 'rename', path: inside, to: outside }] };
+        const edit = { toolName: 'edit', effectiveMode, sourcePaths: [inside], destinationPaths: [inside], fileOps: [{ kind: 'rename', path: inside, to: outside }], declaredTier: 'write' };
         expect(await harness.authorize(harness.scope, request, edit)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403 });
         expect(await fs.readFile(outside, 'utf8')).toBe('outside');
       }
@@ -110,7 +110,7 @@ describe('Host-owned native descriptor authority', () => {
       const inside = path.join(harness.scope.cwd, 'inside.txt');
       await fs.writeFile(inside, 'inside');
       const internalRead = { type: 'tool', toolName: 'read', input: { path: 'agent://native' } };
-      const internalDescriptor = { toolName: 'read', sourcePaths: [], destinationPaths: [], fileOps: [], internalReadUrls: ['agent://native'] };
+      const internalDescriptor = { toolName: 'read', sourcePaths: [], destinationPaths: [], fileOps: [], internalReadUrls: ['agent://native'], declaredTier: 'read' };
       expect(await harness.authorize(harness.scope, internalRead, internalDescriptor)).toEqual({ allowed: true });
       for (const scheme of ['agent', 'history', 'artifact', 'local', 'proc', 'skill', 'xd', 'mcp', 'omp', 'issue', 'pr']) {
         expect(await harness.authorize(harness.scope, internalRead, { ...internalDescriptor, internalReadUrls: [`${scheme}://native`] })).toEqual({ allowed: true });
@@ -507,87 +507,177 @@ describe('Host-owned native LSP tool authorization', () => {
   });
 });
 
-describe('OMP 18.18.0 tier-based tool authorization', () => {
-  it('loads OMP 18.18.0 built-in tool list from the pinned package and asserts decisions matching OMP tiers', async () => {
-    const builtinPath = fileURLToPath(new URL('../../../../../packages/agent-service/node_modules/@oh-my-pi/pi-coding-agent/src/tools/builtin-names.ts', import.meta.url));
-    const { BUILTIN_TOOL_NAMES } = await import(builtinPath);
-    expect(BUILTIN_TOOL_NAMES.length).toBeGreaterThan(20);
-
+describe('OMP declared-tier tool authorization', () => {
+  it('classifies ephemeral vibe tools by the tier each declares', async () => {
     const harness = await nativeHarness();
     try {
-      const inside = path.join(harness.scope.cwd, 'inside.txt');
-      await fs.writeFile(inside, 'inside');
+      const spawnInput = { task: 'Write the file', cli: 'fast' };
+      const spawn = { type: 'tool', toolName: 'vibe_spawn', input: spawnInput, approvalId: 'vibe-app', toolCallId: 'vibe-call' };
+      const spawnDescriptor = { toolName: 'vibe_spawn', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'exec' };
 
-      const readTier = new Set(['read', 'grep', 'glob', 'find', 'ast_grep', 'checkpoint', 'rewind', 'memory_edit', 'recall', 'reflect', 'think', 'ask', 'todo', 'wait']);
-      const writeTier = new Set(['write', 'edit', 'ast_edit', 'new_context', 'manage_skill']);
-      const execTier = new Set(['eval', 'debug', 'ida', 'github', 'security_scan', 'bash']);
+      const unapproved = await harness.authorize(harness.scope, spawn, spawnDescriptor);
+      expect(unapproved).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The vibe_spawn tool requires approval' });
 
-      for (const toolName of BUILTIN_TOOL_NAMES) {
-        if (toolName === 'task') {
-          const res = await harness.authorize(harness.scope, { type: 'tool', toolName: 'task', input: { name: 'child', task: 'do' } });
-          expect(res).toEqual({ allowed: true });
-          continue;
-        }
-        if (toolName === 'web_search') {
-          const res = await harness.authorize(harness.scope, { type: 'web-search' });
-          expect(res).toEqual({ allowed: true });
-          continue;
-        }
-        if (toolName === 'context_notes') {
-          const readRes = await harness.authorize(harness.scope, { type: 'tool', toolName, input: {} });
-          expect(readRes).toEqual({ allowed: true });
-          const writeRes = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { text: 'note' } });
-          expect(writeRes).toEqual({ allowed: true });
-          continue;
-        }
-        if (toolName === 'retain' || toolName === 'learn') {
-          const readRes = await harness.authorize(harness.scope, { type: 'tool', toolName, input: {} });
-          expect(readRes).toEqual({ allowed: true });
-          continue;
-        }
-        if (toolName === 'lsp') {
-          const lspDesc = { toolName: 'lsp', lspAction: 'hover', sourcePaths: [inside], destinationPaths: [], fileOps: [] };
-          const res = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { action: 'hover' } }, lspDesc);
-          expect(res).toEqual({ allowed: true });
-          continue;
-        }
+      const grant = { approvalId: 'vibe-app', toolCallId: 'vibe-call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: 'vibe_spawn', input: spawnInput };
+      expect(await harness.authorize(harness.scope, spawn, { ...spawnDescriptor, approvalGrant: grant })).toEqual({ allowed: true });
 
-        if (readTier.has(toolName)) {
-          const descriptor = ['read', 'grep', 'glob'].includes(toolName)
-            ? { toolName, sourcePaths: [inside], destinationPaths: [], fileOps: [] }
-            : undefined;
-          const res = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { path: 'inside.txt' } }, descriptor);
-          expect(res.allowed).toBe(true);
-        } else if (writeTier.has(toolName)) {
-          const descriptor = ['write', 'edit'].includes(toolName)
-            ? { toolName, sourcePaths: [inside], destinationPaths: [inside], fileOps: [], effectiveMode: 'replace' }
-            : undefined;
-          const res = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { path: 'inside.txt' } }, descriptor);
-          expect(res.allowed).toBe(true);
-        } else if (execTier.has(toolName)) {
-          const descriptor = toolName === 'bash'
-            ? { toolName: 'bash', command: 'echo 1', sourcePaths: [harness.scope.cwd], destinationPaths: [], fileOps: [] }
-            : undefined;
-          const res = await harness.authorize(harness.scope, { type: 'tool', toolName, input: { command: 'echo 1' } }, descriptor);
-          expect(res.allowed).toBe(false);
-          expect(res.approvalRequired).toBe(true);
-        }
+      for (const toolName of ['vibe_list', 'vibe_wait', 'vibe_kill']) {
+        const request = { type: 'tool', toolName, input: {} };
+        expect(await harness.authorize(harness.scope, request, { toolName, sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'read' })).toEqual({ allowed: true });
       }
+      const send = { type: 'tool', toolName: 'vibe_send', input: { session: 'vibe-1', message: 'continue' } };
+      expect(await harness.authorize(harness.scope, send, { toolName: 'vibe_send', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'exec' })).toMatchObject({ allowed: false, approvalRequired: true });
     } finally {
       await harness.close();
     }
   });
 
+  it('classifies an unknown tool by its declared tier and contains write targets in the workspace', async () => {
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.txt');
+      const outside = path.join(harness.outside, 'outside.txt');
+      await fs.writeFile(inside, 'inside');
+      await fs.writeFile(outside, 'outside');
+
+      const request = { type: 'tool', toolName: 'autoresearch_log_experiment', input: { note: 'x' } };
+      expect(await harness.authorize(harness.scope, request)).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The autoresearch_log_experiment tool requires approval' });
+      const undeclared = { toolName: 'autoresearch_log_experiment', sourcePaths: [], destinationPaths: [], fileOps: [] };
+      expect(await harness.authorize(harness.scope, request, undeclared)).toMatchObject({ allowed: false, approvalRequired: true, detail: 'The autoresearch_log_experiment tool requires approval' });
+
+      const insideDescriptor = { toolName: 'autoresearch_log_experiment', sourcePaths: [], destinationPaths: [inside], fileOps: [{ kind: 'write', path: inside }], declaredTier: 'write' };
+      expect(await harness.authorize(harness.scope, request, insideDescriptor)).toEqual({ allowed: true });
+
+      const outsideDescriptor = { ...insideDescriptor, destinationPaths: [outside], fileOps: [{ kind: 'write', path: outside }] };
+      expect(await harness.authorize(harness.scope, request, outsideDescriptor)).toMatchObject({
+        allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The autoresearch_log_experiment tool targets a path outside the authorized workspace',
+      });
+      expect((await harness.authorize(harness.scope, request, outsideDescriptor)).approvalRequired).toBeUndefined();
+
+      harness.policy.fileTools = ['read'];
+      expect(await harness.authorize(harness.scope, request, insideDescriptor)).toMatchObject({
+        allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The workspace does not grant file writes to the autoresearch_log_experiment tool',
+      });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('keeps old read-tier names allowed only through their declared tier and requires the read grant', async () => {
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.txt');
+      await fs.writeFile(inside, 'inside');
+
+      for (const toolName of ['checkpoint', 'rewind', 'think', 'recall', 'reflect', 'memory_edit', 'find']) {
+        const request = { type: 'tool', toolName, input: { path: 'inside.txt' } };
+        const descriptor = { toolName, sourcePaths: [inside], destinationPaths: [], fileOps: [], declaredTier: 'read' };
+        expect(await harness.authorize(harness.scope, request, descriptor)).toEqual({ allowed: true });
+      }
+
+      const descriptorless = (await harness.authorize(harness.scope, { type: 'tool', toolName: 'checkpoint', input: {} })).allowed;
+      expect(descriptorless).toBe(false);
+
+      harness.policy.fileTools = ['write'];
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'checkpoint', input: {} }, { toolName: 'checkpoint', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'read' }))
+        .toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The workspace does not grant file reads to the checkpoint tool' });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('keeps the read-only debug, github and ida forms allowed and their other actions approval-gated', async () => {
+    const harness = await nativeHarness();
+    try {
+      const cases = [
+        ['debug', { action: 'stack_trace' }, { action: 'launch' }],
+        ['github', { op: 'repo_view' }, { op: 'pr_create' }],
+        ['ida', { action: 'list' }, { action: 'exec' }],
+      ];
+      for (const [toolName, readInput, execInput] of cases) {
+        expect(await harness.authorize(harness.scope, { type: 'tool', toolName, input: readInput })).toEqual({ allowed: true });
+        expect(await harness.authorize(harness.scope, { type: 'tool', toolName, input: execInput }))
+          .toMatchObject({ allowed: false, approvalRequired: true, detail: `The ${toolName} tool requires approval` });
+      }
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'security_scan', input: {} }))
+        .toMatchObject({ allowed: false, approvalRequired: true, detail: 'The security_scan tool requires approval' });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('requires approval for a declared write that names no destination the Host can check', async () => {
+    const harness = await nativeHarness();
+    try {
+      const inside = path.join(harness.scope.cwd, 'inside.txt');
+      const outside = path.join(harness.outside, 'outside.txt');
+      await fs.writeFile(inside, 'inside');
+      await fs.writeFile(outside, 'outside');
+
+      // `tts` writes a file it computes itself: the descriptor cannot name it.
+      const input = { text: 'hello', output_path: '~/.ssh/authorized_keys' };
+      const request = { type: 'tool', toolName: 'tts', input, approvalId: 'tts-app', toolCallId: 'tts-call' };
+      const noDestination = { toolName: 'tts', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'write' };
+
+      expect(await harness.authorize(harness.scope, request, noDestination)).toMatchObject({
+        allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true,
+        detail: 'The tts tool declares a file write but names no destination the Host can check, so it requires approval',
+      });
+      // Without a descriptor the worker sent no tier, so the call is exec-tier.
+      expect(await harness.authorize(harness.scope, request)).toMatchObject({ approvalRequired: true, detail: 'The tts tool requires approval' });
+
+      const grant = { approvalId: 'tts-app', toolCallId: 'tts-call', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: 'tts', input };
+      expect(await harness.authorize(harness.scope, request, { ...noDestination, approvalGrant: grant })).toEqual({ allowed: true });
+
+      // A destination the Host can check is authorized by the write grant as before.
+      const insideDestination = { ...noDestination, destinationPaths: [inside], fileOps: [{ kind: 'write', path: inside }] };
+      expect(await harness.authorize(harness.scope, request, insideDestination)).toEqual({ allowed: true });
+      const outsideDestination = { ...noDestination, destinationPaths: [outside], fileOps: [{ kind: 'write', path: outside }] };
+      expect(await harness.authorize(harness.scope, request, outsideDestination)).toMatchObject({
+        allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The tts tool targets a path outside the authorized workspace',
+      });
+      expect((await harness.authorize(harness.scope, request, outsideDestination)).approvalRequired).toBeUndefined();
+      // Only a workspace write grant reaches the destination check at all.
+      harness.policy.fileTools = ['read'];
+      expect(await harness.authorize(harness.scope, request, noDestination)).toMatchObject({ allowed: false, detail: 'The workspace does not grant file writes to the tts tool' });
+    } finally {
+      await harness.close();
+    }
+  });
+
+  it('keeps argument-aware write-tier specials independent of the declared tier', async () => {
+    const harness = await nativeHarness();
+    try {
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'context_notes', input: { text: 'note' } })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'context_notes', input: {} })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'retain', input: { items: [{ scope: 'global', text: 'lesson' }] } })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'learn', input: { skill: 'review' } })).toEqual({ allowed: true });
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'generate_image', input: { prompt: 'a cat' } }, { toolName: 'generate_image', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'write' })).toEqual({ allowed: true });
+      // `new_context` declares write and names no path; the Host cannot check it.
+      expect(await harness.authorize(harness.scope, { type: 'tool', toolName: 'new_context', input: {} }, { toolName: 'new_context', sourcePaths: [], destinationPaths: [], fileOps: [], declaredTier: 'write' }))
+        .toMatchObject({ allowed: false, approvalRequired: true, detail: 'The new_context tool declares a file write but names no destination the Host can check, so it requires approval' });
+
+      harness.policy.fileTools = ['read'];
+      for (const [toolName, input] of [['context_notes', { text: 'note' }], ['retain', { items: [{ scope: 'global' }] }], ['learn', { scope: 'global' }]]) {
+        expect(await harness.authorize(harness.scope, { type: 'tool', toolName, input })).toMatchObject({ allowed: false, detail: `The workspace does not grant file writes to the ${toolName} tool` });
+      }
+    } finally {
+      await harness.close();
+    }
+  });
+});
+
+describe('OMP declared-tier tool authorization edge cases', () => {
   it('out-of-workspace read returns approvalRequired and succeeds with approvalGrant', async () => {
     const harness = await nativeHarness();
     try {
       const outside = path.join(harness.outside, 'outside.txt');
       await fs.writeFile(outside, 'outside');
       const req = { type: 'tool', toolName: 'read', input: { path: outside }, approvalId: 'app-out', toolCallId: 'call-out' };
-      const desc = { toolName: 'read', sourcePaths: [outside], destinationPaths: [], fileOps: [] };
+      const desc = { toolName: 'read', sourcePaths: [outside], destinationPaths: [], fileOps: [], declaredTier: 'read' };
 
       const unapproved = await harness.authorize(harness.scope, req, desc);
-      expect(unapproved).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The operation targets a path outside the authorized workspace' });
+      expect(unapproved).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The read tool targets a path outside the authorized workspace and needs approval' });
 
       const grant = { approvalId: 'app-out', toolCallId: 'call-out', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: 'read', input: req.input };
       const approved = await harness.authorize(harness.scope, req, { ...desc, approvalGrant: grant });
@@ -603,11 +693,11 @@ describe('OMP 18.18.0 tier-based tool authorization', () => {
       const outside = path.join(harness.outside, 'outside.txt');
       await fs.writeFile(outside, 'outside');
       const req = { type: 'tool', toolName: 'write', input: { path: outside, content: 'evil' }, approvalId: 'app-out', toolCallId: 'call-out' };
-      const desc = { toolName: 'write', sourcePaths: [], destinationPaths: [outside], fileOps: [{ kind: 'write', path: outside }] };
+      const desc = { toolName: 'write', sourcePaths: [], destinationPaths: [outside], fileOps: [{ kind: 'write', path: outside }], declaredTier: 'write' };
       const grant = { approvalId: 'app-out', toolCallId: 'call-out', rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: 'write', input: req.input };
 
       const res = await harness.authorize(harness.scope, req, { ...desc, approvalGrant: grant });
-      expect(res).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The operation targets a path outside the authorized workspace' });
+      expect(res).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The write tool targets a path outside the authorized workspace' });
       expect(res.approvalRequired).toBeUndefined();
     } finally {
       await harness.close();
@@ -624,7 +714,7 @@ describe('OMP 18.18.0 tier-based tool authorization', () => {
       const req = { type: 'tool', toolName: 'mcp__github_mcp_search', input, approvalId, toolCallId };
 
       const unapproved = await harness.authorize(harness.scope, req);
-      expect(unapproved).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The MCP tool requires approval' });
+      expect(unapproved).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, approvalRequired: true, detail: 'The mcp__github_mcp_search tool requires approval' });
 
       const grant = { approvalId, toolCallId, rootSessionId: harness.scope.rootSessionId, workerGeneration: harness.scope.workerGeneration, epoch: 'epoch-1', toolName: req.toolName, input };
       const desc = { toolName: req.toolName, sourcePaths: [], destinationPaths: [], fileOps: [], approvalGrant: grant };
@@ -633,7 +723,7 @@ describe('OMP 18.18.0 tier-based tool authorization', () => {
 
       const unconfReq = { type: 'tool', toolName: 'mcp__unknown_server_tool', input: {} };
       const unconfRes = await harness.authorize(harness.scope, unconfReq);
-      expect(unconfRes).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The MCP server is not in the workspace configuration' });
+      expect(unconfRes).toMatchObject({ allowed: false, code: 'UNAUTHORIZED', status: 403, detail: 'The mcp__unknown_server_tool tool names an MCP server that is not in the workspace configuration' });
     } finally {
       await harness.close();
     }

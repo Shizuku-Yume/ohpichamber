@@ -19,8 +19,12 @@ export const HostNativePolicySnapshotSchema = z.strictObject({
 });
 export type HostNativePolicySnapshot = z.infer<typeof HostNativePolicySnapshotSchema>;
 const NativeEditModeSchema = z.enum(['apply_patch', 'hashline', 'none', 'patch', 'replace', 'sloppy']);
+/** Capability tier the tool declares for itself; the Host classifies unknown tools by it. */
+const NativeToolTierSchema = z.enum(['read', 'write', 'exec']);
+export type NativeToolTier = z.infer<typeof NativeToolTierSchema>;
 export const NativePolicyContextSchema = z.strictObject({
   editMode: NativeEditModeSchema,
+  declaredTier: NativeToolTierSchema,
   providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
 });
 export type NativePolicyContext = z.infer<typeof NativePolicyContextSchema>;
@@ -50,7 +54,7 @@ export const NativeOperationDescriptorSchema = z.strictObject({
   /** Read targets OMP resolves itself; never filesystem paths. */
   internalReadUrls: z.array(OmpInternalUrlSchema).optional(),
   fileOps: z.array(z.strictObject({ kind: z.string().min(1), path: PrivatePathSchema, to: PrivatePathSchema.optional() })),
-  command: z.string().optional(), providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
+  command: z.string().optional(), declaredTier: NativeToolTierSchema.optional(), providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
   approvalGrant: NativeApprovalGrantSchema.optional(),
   lspAction: z.string().min(1).optional(),
   lspMethod: z.string().min(1).optional(),

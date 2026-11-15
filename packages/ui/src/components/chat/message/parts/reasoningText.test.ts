@@ -36,8 +36,28 @@ describe('cleanReasoningText', () => {
         expect(cleanReasoningText('A\n\n<!-- -->\n\nB')).toBe('A\n\nB');
     });
 
-    test('removes an inline empty comment from prose', () => {
-        expect(cleanReasoningText('Plan the work <!-- --> now')).toBe('Plan the work  now');
+    test('keeps an empty comment that shares its line with prose', () => {
+        expect(cleanReasoningText('Plan the work <!-- --> now')).toBe('Plan the work <!-- --> now');
+        expect(cleanReasoningText('The sentinel `<!-- -->` is appended')).toBe('The sentinel `<!-- -->` is appended');
+    });
+
+    test('closes a fence opened inside a blockquote and de-quotes its body', () => {
+        const input = "> Here's why:\n> ```ts\n> const a = 1;\n> ```\n> Done\n\nNext paragraph\n\n<!-- -->\nTail";
+        expect(cleanReasoningText(input)).toBe("Here's why:\n```ts\nconst a = 1;\n```\nDone\n\nNext paragraph\n\nTail");
+    });
+
+    test('treats a backtick opener with a backtick in its info string as prose', () => {
+        // Not a CommonMark fence, so the sentinel line below it is prose and goes.
+        expect(cleanReasoningText('```js`b\n<!-- -->\nB')).toBe('```js`b\nB');
+        // A tilde fence has no such restriction.
+        expect(cleanReasoningText('~~~js`b\n<!-- -->\nB')).toBe('~~~js`b\n<!-- -->\nB');
+    });
+
+    test('normalizes CRLF and lone CR line endings, fenced block included', () => {
+        expect(cleanReasoningText('A\r\n\r\nB\rC')).toBe('A\n\nB\nC');
+        expect(cleanReasoningText('Before\r\n```\r\nline 1\r\n\r\nline 3\r\n```\r\nAfter')).toBe(
+            'Before\n```\nline 1\n\nline 3\n```\nAfter',
+        );
     });
 
     test('strips a leading blockquote marker from each line', () => {

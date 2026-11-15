@@ -584,14 +584,19 @@ describe('ReasoningPart body structure', () => {
   };
 
   const renderReasoning = async (text: string, streaming: boolean, expectedParagraphs: number): Promise<RenderedReasoning> => {
-    const dom = installDomStub();
-    const root = createRoot(dom.container);
     const previousExpansion = useUIStore.getState().expandReasoningWhileStreaming;
-    useUIStore.setState({ expandReasoningWhileStreaming: true });
-    const part: ReasoningPartFixture = { type: 'reasoning', partId: 'prt_structure', content: text };
+    // A throw anywhere after the stub installs must still restore the DOM
+    // globals and the store flag for the tests that follow.
+    let dom: ReturnType<typeof installDomStub> | null = null;
+    let root: ReturnType<typeof createRoot> | null = null;
     try {
+      dom = installDomStub();
+      const container = dom.container;
+      root = createRoot(container);
+      useUIStore.setState({ expandReasoningWhileStreaming: true });
+      const part: ReasoningPartFixture = { type: 'reasoning', partId: 'prt_structure', content: text };
       await act(async () => {
-        root.render(
+        root?.render(
           <TestProviders>
             <ReasoningPart
               part={part}
@@ -603,18 +608,21 @@ describe('ReasoningPart body structure', () => {
       });
       if (!streaming) {
         // Settled blocks start folded; a reader opens the body.
-        const toggle = dom.container.querySelector<HTMLElement>('[role="button"]');
+        const toggle = container.querySelector<HTMLElement>('[role="button"]');
         if (!toggle) throw new Error('Expected the reasoning toggle');
         await act(async () => {
           toggle.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
         });
       }
-      await waitForParagraphs(dom.container, expectedParagraphs);
-      return readRenderedReasoning(dom.container);
+      await waitForParagraphs(container, expectedParagraphs);
+      return readRenderedReasoning(container);
     } finally {
-      await act(async () => { root.unmount(); });
+      if (root) {
+        const mounted = root;
+        await act(async () => { mounted.unmount(); });
+      }
       useUIStore.setState({ expandReasoningWhileStreaming: previousExpansion });
-      dom.restore();
+      dom?.restore();
     }
   };
 

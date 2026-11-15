@@ -6,8 +6,7 @@ import { isInvisibleText } from '@/lib/invisibleText';
 // thinking display.
 const EMPTY_COMMENT_RE = /^<!--\s*-->$/;
 const OPEN_COMMENT_RE = /^<!--\s*$/;
-const INLINE_COMMENT_RE = /<!--\s*-->/g;
-const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/;
+const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const FENCE_CLOSE_RE = /^ {0,3}(`{3,}|~{3,})\s*$/;
 
 /** An empty HTML comment, or its still-unterminated `<!--` prefix on the last line while streaming. */
@@ -19,6 +18,24 @@ const isCommentNoise = (line: string, isLastLine: boolean): boolean => {
 type Fence = {
     char: string;
     length: number;
+    /** Opened on a de-quoted blockquote line, so its body is de-quoted too. */
+    quoted: boolean;
+};
+
+/**
+ * A CommonMark fence opener: three or more backticks or tildes, at most three
+ * leading spaces, and — for backticks — an info string without a backtick.
+ */
+const fenceOpener = (line: string): { char: string; length: number } | null => {
+    const match = FENCE_OPEN_RE.exec(line);
+    if (!match) {
+        return null;
+    }
+    const marker = match[1];
+    if (marker[0] === '`' && match[2].includes('`')) {
+        return null;
+    }
+    return { char: marker[0], length: marker.length };
 };
 
 /**
@@ -29,16 +46,17 @@ type Fence = {
  * running paragraph. Genuinely empty lines survive; invisible-only lines
  * (zero-width space and friends) become empty lines instead of being deleted,
  * keeping the anti-blank-line intent of #5215 without joining paragraphs; runs
- * of blank lines collapse to one. `<!-- -->` sentinel lines are removed
- * outside fenced code, and a leading `> ` blockquote marker is stripped.
- * Fenced code stays verbatim.
+ * of blank lines collapse to one. A whole line holding nothing but an empty
+ * HTML comment is removed outside fenced code, and a leading `> ` blockquote
+ * marker is stripped. Fenced code stays verbatim (de-quoted when the fence
+ * itself sits in a blockquote); indented code blocks are not special-cased.
  */
 export const cleanReasoningText = (text: string): string => {
     if (isInvisibleText(text)) {
         return '';
     }
 
-    const lines = text.split('\n');
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
     const out: string[] = [];
     let pendingBlank = false;
     let fence: Fence | null = null;
@@ -59,8 +77,9 @@ export const cleanReasoningText = (text: string): string => {
         const unquoted = raw.replace(/^>\s?/, '');
 
         if (fence) {
-            out.push(raw);
-            const close = FENCE_CLOSE_RE.exec(raw.trimEnd());
+            const body = fence.quoted ? unquoted : raw;
+            out.push(body);
+            const close = FENCE_CLOSE_RE.exec(body.trimEnd());
             if (close && close[1][0] === fence.char && close[1].length >= fence.length) {
                 fence = null;
             }
@@ -68,10 +87,10 @@ export const cleanReasoningText = (text: string): string => {
         }
 
         const line = unquoted.trimEnd();
-        const open = FENCE_OPEN_RE.exec(line);
+        const open = fenceOpener(line);
         if (open) {
             pushLine(line);
-            fence = { char: open[1][0], length: open[1].length };
+            fence = { ...open, quoted: raw !== unquoted };
             continue;
         }
 
@@ -79,13 +98,12 @@ export const cleanReasoningText = (text: string): string => {
             continue;
         }
 
-        const withoutSentinel = line.replace(INLINE_COMMENT_RE, '').trimEnd();
-        if (isInvisibleText(withoutSentinel)) {
+        if (isInvisibleText(line)) {
             pushBlank();
             continue;
         }
 
-        pushLine(withoutSentinel);
+        pushLine(line);
     }
 
     return out.join('\n').trim();

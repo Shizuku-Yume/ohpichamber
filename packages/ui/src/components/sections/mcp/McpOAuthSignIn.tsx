@@ -181,6 +181,12 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
       setClientIdHint(null);
       setCallbackInput('');
       applyResult(result, workspace, { openBrowser: options.openBrowser === true });
+      // A cancel the Agent Service accepted answers with the plain unauthenticated
+      // state, so the refusal path never runs: say what happened here instead of
+      // letting the panel silently return to its form.
+      if (action === 'cancel' && options.silent !== true) {
+        setError({ text: t('integrationsCatalog.oauth.cancelled'), tone: 'neutral' });
+      }
     } catch (failure) {
       if (owner.current === attempt && options.silent !== true) await handleFailure(failure, workspace);
     } finally {
@@ -379,7 +385,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
                     <p className="typography-micro text-muted-foreground">
                       {t('integrationsCatalog.oauth.elapsed', { time: formatSessionActivityDuration(elapsedMs, t) })}
                     </p>
-                              <Button variant="ghost" disabled={busy} onClick={() => workspaceId && void perform('cancel', state, workspaceId)} size="xs" className="!font-normal">
+                    <Button variant="ghost" disabled={busy} onClick={() => workspaceId && void perform('cancel', state, workspaceId)} size="xs" className="!font-normal">
                       {t('settings.common.actions.cancel')}
                     </Button>
                   </div>

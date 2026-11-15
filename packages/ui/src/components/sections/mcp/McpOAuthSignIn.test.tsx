@@ -169,6 +169,17 @@ test('a pasted callback and a completing poll cannot connect twice', async () =>
   expect(reconnects).toBe(1);
 });
 
+test('a cancel the Agent Service accepts still says the sign-in was cancelled', async () => {
+  await render();
+  await click('Authorize');
+  await click('Cancel');
+  await settle();
+  // The worker answers a cancel with the unauthenticated state, not a problem,
+  // so the panel has to report it from the accepted action itself.
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.querySelector('[role="status"]')?.textContent).toBe('Sign-in was cancelled.');
+});
+
 test('leaving the panel cancels the flow it was waiting on', async () => {
   reads = [unauthenticated];
   await render();

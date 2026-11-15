@@ -19,8 +19,8 @@ shape is genuinely missing.
 
 - Flat hierarchy through spacing and typography; no cards, boxed backgrounds, or row chrome.
 - Secondary helper text is hidden behind an info icon (`info` prop) by default; the default view stays quiet.
-- Controls take their chrome from the shared primitives (`dropdownTriggerVariants()` for selects; no per-call size) and their width from the named width classes — no full-bleed inputs and no per-call `w-*`. See [widths](references/layout.md#widths) for which class each control takes and [control sizing](references/controls.md#standard-sizes-and-widths) for inputs beside dropdowns.
-- Layouts respond to the settings pane width via container queries (`@xl:` / `@3xl:`), never viewport `sm:`/`md:`/`lg:` breakpoints (the pane is much narrower than the viewport inside the dialog).
+- Controls take their chrome from the shared primitives (`dropdownTriggerVariants()` for selects; no per-call size) and their width from the named width classes. A control carries no raw `w-*`/`max-w-*`/`min-w-[…]`, and neither does a `controlClassName`; `w-full`, `min-w-0`, `max-w-none` and `max-w-full` are the allowed fill/shrink tokens. See [widths](references/layout.md#widths) for which class each control takes and [control sizing](references/controls.md#standard-sizes-and-widths) for inputs beside dropdowns.
+- Layouts respond to the settings pane width via container queries (`@xl:` / `@3xl:`), never viewport `sm:`–`2xl:` breakpoints (the pane is much narrower than the viewport inside the dialog). Dialog bodies and hover-only opacity affordances are the sanctioned exceptions.
 - Checkbox/radio state comes before labels; selected states are subtle.
 
 ## References by topic
@@ -52,11 +52,16 @@ Consult only the branches affected by the change; these are ordinary module refe
 `SettingsFieldRow` is the row for every control; `SettingsStackedField` is
 only for two-column cells and controls too wide for a row. Row shapes, the
 width class each control takes, and the section/row/checkbox spacing classes
-are defined once in [layout](references/layout.md). A component
-under `components/sections` therefore declares no raw width or spacing
-utility, no viewport breakpoint inside the pane, and no page padding override
-on `SettingsPageLayout` (the page cap stays `max-w-[840px]`). The settings
-layout guard test under `packages/ui` rejects a regression.
+are defined once in [layout](references/layout.md).
+
+`settingsLayoutGuard.test.ts` under `packages/ui` enforces the mechanical
+part and reports `file:line`: no raw width on a settings control or in a
+`controlClassName`, no non-zero `space-y-*` on a wrapper around sections, no
+page padding on `SettingsPageLayout` (the page cap stays `max-w-[840px]`), no
+viewport breakpoint in pane content, `SETTINGS_WIDTH_NUMBER_CLASS` only
+inside its stepper row, and no margin/gap/stack on a control or row
+primitive. [Layout guard](references/layout.md#layout-guard) lists every rule
+and its sanctioned exceptions.
 
 Do not introduce raw `<Tooltip>`-based info icons.
 
@@ -93,6 +98,6 @@ Dynamic entity rows normally are not indexed. See [search registry rules](refere
 - Built from shared primitives; no ad-hoc page/section/row markup.
 - Description placement follows the policy above; warnings/syntax/status remain visible.
 - Container-query (`@xl:`/`@3xl:`) responsiveness — no viewport breakpoints in pane content.
-- Rows follow the one row pattern; widths and section spacing come from the named classes, not per-call utilities ([layout](references/layout.md#rows)).
+- Rows follow the one row pattern; control widths and section stacks come from the named classes, and `settingsLayoutGuard.test.ts` passes ([layout guard](references/layout.md#layout-guard)).
 - Search registry, anchor, page, localization, and availability agree.
 - Nearby Settings precedent and relevant tests remain consistent.

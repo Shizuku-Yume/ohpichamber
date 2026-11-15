@@ -15,11 +15,13 @@ Use the shared control class constants; every desktop dropdown footprint is
 - Text `Input` next to dropdowns: `size="compact"` (h-7), matching the trigger footprint.
 - Icon action next to a control: `SETTINGS_ICON_BUTTON_CLASS`.
 
-Widths are capped and come from the named classes — never let controls span
-the pane, and give an individual control no width utility of its own.
-[Widths](layout.md#widths) owns the class-per-control table. Genuinely
-full-width content (dialog textareas) opts out with
-`controlClassName="w-full max-w-none"`.
+Widths come from the named classes — never let controls span the pane, and
+give an individual control no raw width utility of its own. `w-full`,
+`min-w-0`, `max-w-none` and `max-w-full` are the allowed fill/shrink tokens,
+so genuinely full-width content (dialog textareas) opts out with
+`controlClassName="w-full max-w-none"`. [Widths](layout.md#widths) owns the
+class-per-control table and [layout guard](layout.md#layout-guard) lists the
+rejected utilities.
 
 ## Field Rows
 

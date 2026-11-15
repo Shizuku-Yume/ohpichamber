@@ -1217,3 +1217,19 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream rewrites one of these files on a contract the fork also accepts.
 - **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - Row 16 ships PARTIAL with task 24 blocked on the 600 ms variant-(a) budget
+
+- **Decided:** task 20 closes with row 16 recorded as PARTIAL, and task 24 keeps `Status: blocked` on its cold-path first-delta budget (variant (a), the new chat that never calls `prepare`: ~760 ms against ≤ 600 ms). The cold-prompt stall the maintainer reported is fixed and measured on both surfaces (501 ms Web / 495 ms Electron against 1529 / 1568 ms before); the remaining number is the harness variant only.
+- **Instead of:** marking row 16 PASS on the strength of the fixed user path, or clearing task 24's blocked status by redefining the budget to the variant the product actually uses.
+- **Because:** the Check names first `part.delta` on a new chat explicitly and only the maintainer can waive a budget, so a green row would be a claim the receipt does not support. The measured remainder is real work in one process on one thread — `createAgentSession`, serial agent-loop preparation before the provider call, and supervisor queueing — and the alternative is an OMP SDK seam that builds a session graph ahead of the call, which is a design decision, not an acceptance one.
+- **Mine:** yes
+- **Revisit when:** the maintainer waives the 600 ms budget for the cold variant, or the OMP SDK exposes a prebuilt session graph so a spare can construct one ahead of the prompt.
+- **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - Task 02's asar-guard revert stays unlanded
+
+- **Decided:** `16199d2a6b` (`revert(web): drop unneeded asar guard in standalone-loader symlinks`) is left out of the integration branch.
+- **Instead of:** landing it because the guard looked like dead code in a development tree.
+- **Because:** it is load-bearing for the packaged app: `ensureAgentRuntimeSymlinks` writes inside the runtime root, `packages/electron/package.json` stages `resources/agent-runtime`, and the asar copy of `@openchamber/web/resources` is read too. The commit also removed a `try/catch` around `mkdirSync`, packaged Electron was verified working **with** the guard, and no test under `packages/web/server/**/*.test.js` imports `standalone-loader` — so nothing in the suite would have caught the breakage.
+- **Mine:** yes
+- **Revisit when:** the symlink writer stops writing inside the runtime root, or a packaged-Electron test covers `standalone-loader`'s symlink path so the guard's absence fails loudly.
+- **Effort:** ux-feedback-2026-11-12

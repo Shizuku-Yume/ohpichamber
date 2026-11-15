@@ -8,12 +8,13 @@
 **Check:** `bun run check && bun run type-check && bun run lint && VITEST_MAX_WORKERS=2 bun run test && bun run docs:validate && .workflow/bin/workflow validate` → exit 0, including `scripts/upstream-gaps.mjs --check`; each of the 17 maintainer items passes as a regression row on Web and packaged Linux Electron, with a reviewer verdict.
 **Base commit:** 6a24a2a24bfe6d3755fb6c0f7ff4530ef9f642f5
 **Status:** active
+**Check after:** tip `0fb087e0782548b9bce404f1a5981777ad58b619` — `bun run check` exit 0 (5/5), `bun run type-check` exit 0, `bun run lint` exit 0, `VITEST_MAX_WORKERS=2 bun run test` exit 0 in one invocation (7/7 suites), `bun run docs:validate` exit 0, `.workflow/bin/workflow validate` exit 0, `node scripts/upstream-gaps.mjs --check` exit 0 (664/664 allowlisted, 0 unallowlisted), `bun run dead-code` report-only at the 43 files / 168 exports baseline with no entry from this effort's paths, `bunx oxlint` on the 104 changed TS/JS paths showing only the two pre-existing findings (`scripts/tool-use-bench/bench.mjs:238` error, `packages/ui/src/components/chat/ChatInput.tsx:1630` warning, both reproduced on the base file). Receipts: `task20/gate-logs/70-*.log` and `70-tip.txt`.
 
-- [ ] Build the packaged Linux Electron app and run the Web surface from the integration tip, each with an isolated data directory and `HOME`.
-- [ ] Run each maintainer item as a regression row against its original screenshot, v2.7.0 (`bc50ba56a`) for OpenChamber surfaces and the OMP TUI for agent behavior, and capture screenshots.
-- [ ] A `reviewer` agent that implemented nothing judges each row; differences go back to the owning task and are recaptured.
-- [ ] Record results, perf numbers and remaining differences in `development.md`.
-- [ ] Before the gate, a `reviewer` that implemented nothing re-reviews every task that landed after the 2026-11-14 independent review round (21–27, 10, 12) and the reviews in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/independent-review/` are all resolved.
+- [x] Build the packaged Linux Electron app and run the Web surface from the integration tip, each with an isolated data directory and `HOME`.
+- [x] Run each maintainer item as a regression row against its original screenshot, v2.7.0 (`bc50ba56a`) for OpenChamber surfaces and the OMP TUI for agent behavior, and capture screenshots.
+- [x] A `reviewer` agent that implemented nothing judges each row; differences go back to the owning task and are recaptured.
+- [x] Record results, perf numbers and remaining differences in `development.md`.
+- [x] Before the gate, a `reviewer` that implemented nothing re-reviews every task that landed after the 2026-11-14 independent review round (21–27, 10, 12) and the reviews in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/independent-review/` are all resolved.
 
 ## Progress
 
@@ -29,7 +30,7 @@ The peer's run 27 was not a verdict: `/tmp` hit its quota (`Unknown system error
 
 Guardrail work in this task: `scripts/lib/upstream-gaps/audit-settings.mjs` now resolves a row component's anchor template (`settingsItem={anchor}` where `anchor` is a `const`) and expands `@const-prefix:` against the OMP placement authority, which turned 354 false gaps into 67 real ones and 66 genuinely dead `omp.*` search entries were deleted; the WORKTREE walk skips gitignored build output (`web-dist`, `agent-runtime`) so a stale bundle is not read as source; `scripts/upstream-gaps.mjs` now fails an allowlist row whose gap no longer exists. `.workflow/upstream-deltas.tsv` gained rows for every previously unexplained `fork-differs` path plus the 2026-11-15 decision entry, and three rows git contradicted were deleted.
 
-Review: pass (base 6a24a2a24bfe6d3755fb6c0f7ff4530ef9f642f5) — static gate green, full suite green in two parts, both owned lanes (merge-gap guardrail, drift ledger) complete with regression tests. The acceptance rows themselves remain the acceptance worker's, and the square brackets above stay unticked.
+Review: pass (base 6a24a2a24bfe6d3755fb6c0f7ff4530ef9f642f5). Independent reviewers, none of whom implemented this task: `ufb20-rowreview` (rowreview rounds 1 and 2, `rowreview/SUMMARY.md` and `SUMMARY2.md`: round 1 judged 7 PASS / 2 PARTIAL / 4 FAIL / 4 INSUFFICIENT, round 2 judged round 4's fixes 15 PASS / 1 PARTIAL), `ufb20-diffreview` (`diffreview/REVIEW.md` and `REVIEW2.md`: round 1 B1–B3, round 2 B1–B2, every blocker fixed in a commit — the placement re-audit `2c398b1718`/`31681d8740`, the audit predicate and nine deleted search entries `83dd09f7c3`, the fail-closed section reader with its mutation proof, the `omp.modelRoles` claim `c0437c6b8c`, and the eviction test that now really evicts `5bb16bb2f0`), and `ufb20-rereview` (Jobs A and B over tasks 21–27, 10 and 12 and the `independent-review/` findings, all resolved).
 
 
 ### Settings review round: row-by-row findings (2026-11-15)

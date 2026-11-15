@@ -258,11 +258,14 @@ describe('MCP configuration management and unmanaged projection', () => {
       expect(projectRaw.mcpServers['proj-server']).toBeDefined();
       expect(projectRaw.mcpServers['user-server']).toBeUndefined();
 
-      // Check user file content (OMP format: NO openchamber property)
+      // The user file keeps OMP's native entry untouched. OpenChamber's own
+      // references live under the `openchamber` key OMP ignores — the same
+      // place credentials already lived — because a native entry cannot carry a
+      // display label or the managed flag.
       const userRaw = JSON.parse(await readFile(userPath, 'utf8'));
-      expect(userRaw.openchamber).toBeUndefined();
-      expect(userRaw.mcpServers['user-server']).toBeDefined();
+      expect(userRaw.mcpServers['user-server']).toEqual({ type: 'http', url: 'https://user-mcp.example/api', enabled: true });
       expect(userRaw.mcpServers['proj-server']).toBeUndefined();
+      expect(userRaw.openchamber.credentials).toBeUndefined();
 
       // Read back with both paths
       const readBack = await readNativeMcpConfigurationIfPresent(projectPath, 'workspace-1', userPath);
@@ -359,6 +362,34 @@ describe('user-scope MCP storage in a temp HOME keeps native entries and credent
       // Global server in userPath must survive intact
       const userRaw = JSON.parse(await readFile(userPath, 'utf8'));
       expect(userRaw.mcpServers.figma).toEqual({ type: 'http', url: 'https://global.figma/mcp', headers: { 'X-Key': 'global-token' } });
+    });
+  });
+
+  test('a committed user-scope server reads back as the same server the Host authorized', async () => {
+    await withHome(async ({ userPath, projectPath }) => {
+      // The marketplace install commits this exact shape: a managed entry with a
+      // display label and no secret. The Host authorizes `mcp-server` requests by
+      // deep-comparing the requested server with its projection of this file, so a
+      // reread that invented a different label or managed flag made every
+      // user-scope server refuse with "The MCP server is not in the workspace
+      // configuration" while Settings → MCP still listed it.
+      const committed = {
+        serverId: 'deepwiki', label: 'DeepWiki', enabled: true, scope: 'user' as const,
+        transport: { type: 'http' as const, url: 'https://mcp.deepwiki.com/mcp' },
+      };
+      const state = { workspaceId, persistedRevision: '1', config: { servers: [committed] } };
+      await writeNativeMcpConfiguration(projectPath, state, userPath);
+
+      const reread = await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath);
+      expect(reread?.config.servers).toEqual([committed]);
+
+      // A second commit must not churn the file it just wrote.
+      await writeNativeMcpConfiguration(projectPath, state, userPath);
+      expect((await readNativeMcpConfigurationIfPresent(projectPath, workspaceId, userPath))?.config.servers).toEqual([committed]);
+
+      // The native entry stays OMP's format: no OpenChamber identity leaks into it.
+      const userRaw = JSON.parse(await readFile(userPath, 'utf8'));
+      expect(userRaw.mcpServers.deepwiki).toEqual({ type: 'http', url: 'https://mcp.deepwiki.com/mcp', enabled: true });
     });
   });
 

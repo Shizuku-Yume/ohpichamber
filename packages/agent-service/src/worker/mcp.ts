@@ -102,10 +102,17 @@ const CredentialMappingSchema = z.strictObject({
 type CredentialMapping = z.infer<typeof CredentialMappingSchema>;
 /**
  * The user file is OMP's native format and OMP reads only `mcpServers` and its
- * override lists. OpenChamber keeps its credential map under one top-level key
- * OMP ignores, so a reread or a second session finds the same references.
+ * override lists. OpenChamber keeps its credential map and each server's own
+ * identity under one top-level key OMP ignores, so a reread or a second session
+ * finds the same references and the same `label`/`managed` the user committed.
+ * A native entry cannot express either, and the Host authorizes a server by
+ * comparing it with the projection of this file.
  */
-const UserOpenchamberSchema = z.strictObject({ credentials: z.record(z.string().min(1), CredentialMappingSchema) });
+const UserServerIdentitySchema = z.strictObject({ label: z.string().min(1), managed: z.boolean().optional() });
+const UserOpenchamberSchema = z.strictObject({
+  credentials: z.record(z.string().min(1), CredentialMappingSchema).optional(),
+  servers: z.record(z.string().min(1), UserServerIdentitySchema).optional(),
+});
 const UserCredentialFileSchema = z.looseObject({ openchamber: UserOpenchamberSchema.optional() });
 type UserFile = MCPConfigFile & { openchamber?: z.infer<typeof UserOpenchamberSchema> };
 
@@ -214,10 +221,26 @@ function projectUserServers(raw: MCPConfigFile, workspaceId: string): MCPServerC
   const parsed = UserCredentialFileSchema.safeParse(raw);
   if (!parsed.success) throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'User MCP configuration is absent, invalid or unreadable.', true);
   const credentials = parsed.data.openchamber?.credentials ?? {};
+  const identities = parsed.data.openchamber?.servers ?? {};
   return projectUnmanagedMcpConfiguration(raw, workspaceId, 'user', true).config.servers
     .map(server => {
+      const identity = identities[server.serverId];
+      if (identity === undefined) {
+        const mapping = credentials[server.serverId];
+        return mapping ? { ...server, transport: { ...server.transport, ...mapping } } : server;
+      }
+      // The native entry carries only transport and enabled-ness: `label` and
+      // `managed` are OpenChamber's, so a reread must return exactly what the
+      // writer committed. The unmanaged projection marks every entry it builds
+      // as unmanaged, and the Host authorizes a server by deep-comparing it with
+      // this projection, so a managed entry's real flag (or its absence) wins.
+      const { managed: _unmanagedMark, ...native } = server;
+      const projection: MCPServerConfig = {
+        ...native, label: identity.label,
+        ...(identity.managed === undefined ? {} : { managed: identity.managed }),
+      };
       const mapping = credentials[server.serverId];
-      return mapping ? { ...server, transport: { ...server.transport, ...mapping } } : server;
+      return mapping ? { ...projection, transport: { ...projection.transport, ...mapping } } : projection;
     });
 }
 
@@ -296,6 +319,7 @@ async function writeUserServers(
       if (removed.length === 0 && changed.length === 0) return;
 
       const credentials: Record<string, CredentialMapping> = { ...UserCredentialFileSchema.parse(raw).openchamber?.credentials };
+      const identities: Record<string, { label: string; managed?: boolean }> = { ...UserCredentialFileSchema.parse(raw).openchamber?.servers };
       const servers: NonNullable<MCPConfigFile['mcpServers']> = { ...raw.mcpServers ?? {} };
       const disabled = new Set(raw.disabledServers ?? []);
       const keysFor = (id: string) => Object.keys(servers).filter(key => serverIdForKey(key) === id);
@@ -307,6 +331,7 @@ async function writeUserServers(
         }
         disabled.delete(id);
         delete credentials[id];
+        delete identities[id];
       }
       for (const server of changed) {
         const id = server.serverId;
@@ -330,12 +355,17 @@ async function writeUserServers(
         const mapping = credentialMapping(server);
         if (mapping) credentials[id] = mapping;
         else delete credentials[id];
+        identities[id] = { label: server.label, ...(server.managed === undefined ? {} : { managed: server.managed }) };
       }
 
       const file: UserFile = { ...raw, mcpServers: servers };
       if (disabled.size > 0 || raw.disabledServers !== undefined) file.disabledServers = [...disabled].sort();
-      if (Object.keys(credentials).length > 0) file.openchamber = { credentials };
-      else delete file.openchamber;
+      if (Object.keys(credentials).length > 0 || Object.keys(identities).length > 0) {
+        file.openchamber = {
+          ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
+          ...(Object.keys(identities).length > 0 ? { servers: identities } : {}),
+        };
+      } else delete file.openchamber;
       await writeMCPConfigFile(userConfigPath, file);
     });
   } catch (error) {

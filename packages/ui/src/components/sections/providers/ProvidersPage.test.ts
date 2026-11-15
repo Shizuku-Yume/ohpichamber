@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import type { Provider, ProviderOAuthMethods } from '@openchamber/agent-contract';
-import { getProviderCardStatus, oauthMethodsForProvider, requiresProviderAuth, shouldAutoOpenAuthPanel } from './providerAuth';
-import { listConnectableProviders, splitConnectableProviders } from './connectableProviders';
+import {
+  getProviderCardStatus,
+  getProviderEnvironment,
+  oauthMethodsForProvider,
+  requiresProviderAuth,
+  shouldAutoOpenAuthPanel,
+} from './providerAuth';
+import { listConnectableProviders, listProvidersAcceptingKey, splitConnectableProviders } from './connectableProviders';
 import { providerHeaderWrite, createEmptyCustomProviderForm } from './custom-provider-form';
 
 const methods: ProviderOAuthMethods['methods'] = [
@@ -28,12 +34,72 @@ describe('native provider management UI contracts', () => {
   test('a stored credential reads as connected while environment credentials are labelled separately', () => {
     expect(getProviderCardStatus(provider({
       auth: { status: 'configured', credentialRef: 'credential_1', method: 'api-key', source: 'stored-credential' },
-    }))).toEqual({ kind: 'connected' });
+    }))).toEqual({ kind: 'connected', environment: null });
     expect(getProviderCardStatus(provider({
       auth: { status: 'configured', credentialRef: 'credential_1', method: 'api-key', source: 'external-environment' },
-    }))).toEqual({ kind: 'environment' });
-    expect(getProviderCardStatus(provider())).toEqual({ kind: 'signInNeeded' });
+    }))).toEqual({ kind: 'environment', environment: { variable: null, active: true } });
+    expect(getProviderCardStatus(provider())).toEqual({ kind: 'signInNeeded', environment: null });
     expect(getProviderCardStatus(provider({ authMethods: [] }))).toBe(null);
+  });
+
+  test('an environment variable stays visible while a stored key wins', () => {
+    const storedKeyWins = provider({
+      auth: {
+        status: 'configured',
+        credentialRef: 'credential_1',
+        method: 'api-key',
+        source: 'stored-credential',
+        environment: { variable: 'OPENAI_API_KEY', active: false },
+      },
+    });
+    expect(getProviderEnvironment(storedKeyWins)).toEqual({ variable: 'OPENAI_API_KEY', active: false });
+    expect(getProviderCardStatus(storedKeyWins)).toEqual({
+      kind: 'connected',
+      environment: { variable: 'OPENAI_API_KEY', active: false },
+    });
+
+    const environmentWins = provider({
+      auth: {
+        status: 'configured',
+        credentialRef: 'credential_1',
+        method: 'api-key',
+        source: 'external-environment',
+        environment: { variable: 'OPENAI_API_KEY', active: true },
+      },
+    });
+    expect(getProviderCardStatus(environmentWins)).toEqual({
+      kind: 'environment',
+      environment: { variable: 'OPENAI_API_KEY', active: true },
+    });
+  });
+
+  test('a variable-less environment source names no variable and a blank one is absent', () => {
+    const computed = provider({
+      auth: {
+        status: 'configured',
+        credentialRef: 'credential_1',
+        method: 'api-key',
+        source: 'external-environment',
+        environment: { variable: null, active: true },
+      },
+    });
+    expect(getProviderEnvironment(computed)).toEqual({ variable: null, active: true });
+    expect(getProviderCardStatus(computed)).toEqual({
+      kind: 'environment',
+      environment: { variable: null, active: true },
+    });
+
+    const blank = provider({
+      auth: {
+        status: 'configured',
+        credentialRef: 'credential_1',
+        method: 'api-key',
+        source: 'external-environment',
+        environment: { variable: '   ', active: true },
+      },
+    });
+    expect(getProviderEnvironment(blank)).toBe(null);
+    expect(getProviderCardStatus(blank)).toEqual({ kind: 'environment', environment: null });
   });
 
   test('credential forms auto-open only for a missing credential the user has not dismissed', () => {
@@ -63,6 +129,50 @@ describe('native provider management UI contracts', () => {
     expect(groups.popular.map((entry) => entry.id)).toEqual(['openai']);
     expect(groups.popular[0]?.recommended).toBe(true);
     expect(groups.others.map((entry) => entry.id)).toEqual(['alpha', 'zeta']);
+  });
+
+  test('env-backed providers stay out of the connect picker but offer a key form', () => {
+    const providers = [
+      provider({
+        providerId: 'openai',
+        name: 'OpenAI',
+        auth: {
+          status: 'configured',
+          credentialRef: 'credential_1',
+          method: 'api-key',
+          source: 'external-environment',
+          environment: { variable: 'OPENAI_API_KEY', active: true },
+        },
+      }),
+      provider({
+        providerId: 'anthropic',
+        name: 'Anthropic',
+        auth: {
+          status: 'configured',
+          credentialRef: 'credential_2',
+          method: 'api-key',
+          source: 'stored-credential',
+          environment: { variable: 'ANTHROPIC_API_KEY', active: false },
+        },
+      }),
+      provider({
+        providerId: 'google',
+        name: 'Google',
+        authMethods: ['api-key', 'oauth'],
+        auth: {
+          status: 'configured',
+          credentialRef: 'credential_3',
+          method: 'oauth',
+          source: 'stored-credential',
+        },
+      }),
+      provider({ providerId: 'zeta', name: 'Zeta' }),
+    ];
+    expect(listConnectableProviders(providers).map((entry) => entry.id)).toEqual(['zeta']);
+    // Only the provider the environment currently authenticates needs the
+    // direct way in: a stored key already has an accounts list for adding
+    // more, and a provider without the API-key method has nothing to save.
+    expect(listProvidersAcceptingKey(providers).map((entry) => entry.id)).toEqual(['openai']);
   });
 
   test('connected-only provider filter selects configured credentials or executable models', () => {

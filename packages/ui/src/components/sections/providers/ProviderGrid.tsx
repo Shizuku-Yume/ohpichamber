@@ -13,12 +13,18 @@ import {
   SettingsCard,
   SettingsCardPill,
   SettingsCardSearch,
-  type SettingsCardTone,
 } from '@/components/sections/shared/SettingsCards';
-import { SETTINGS_CALLOUT_TITLE_CLASS } from '@/components/sections/shared/SettingsSection';
+import {
+  SETTINGS_CALLOUT_TITLE_CLASS,
+  SETTINGS_ICON_BUTTON_CLASS,
+} from '@/components/sections/shared/SettingsSection';
 import { useEnterpriseMode } from '@/stores/useEnterprisePolicyStore';
 import { useRoutingStore } from '@/stores/useRoutingStore';
-import { getProviderCardStatus, type ProviderCardStatus } from './providerAuth';
+import {
+  getProviderCardStatus,
+  type ProviderCardStatus,
+  type ProviderEnvironmentStatus,
+} from './providerAuth';
 
 /**
  * Enterprise mode already refuses provider and credential entry in the Host.
@@ -68,26 +74,44 @@ const ClassificationCard: React.FC<{ onOpen: () => void }> = ({ onOpen }) => {
   );
 };
 
-const StatusPill: React.FC<{ status: ProviderCardStatus }> = ({ status }) => {
+const EnvironmentPill: React.FC<{ environment: ProviderEnvironmentStatus | null }> = ({ environment }) => {
   const { t } = useI18n();
-  const label = status.kind === 'connected'
-    ? t('settings.providers.card.status.connected')
-    : status.kind === 'environment'
-      ? t('settings.providers.card.status.environment')
-      : t('settings.providers.card.status.signInNeeded');
-  const tone: SettingsCardTone = status.kind === 'connected'
-    ? 'success'
-    : status.kind === 'environment'
-      ? 'neutral'
-      : 'warning';
-  return <SettingsCardPill tone={tone}>{label}</SettingsCardPill>;
+  const label = environment?.variable
+    ? t('settings.providers.card.status.environmentVariable', { variable: environment.variable })
+    : t('settings.providers.card.status.environment');
+  return <SettingsCardPill tone="neutral">{label}</SettingsCardPill>;
+};
+
+/**
+ * The card's badges: its state, plus the environment source whenever a
+ * variable backs the provider. Both show while a stored key wins, because the
+ * key being used and the variable still being set are separate facts.
+ */
+const StatusPills: React.FC<{ status: ProviderCardStatus }> = ({ status }) => {
+  const { t } = useI18n();
+  if (status.kind === 'environment') {
+    return <EnvironmentPill environment={status.environment} />;
+  }
+  return (
+    <>
+      <SettingsCardPill tone={status.kind === 'connected' ? 'success' : 'warning'}>
+        {status.kind === 'connected'
+          ? t('settings.providers.card.status.connected')
+          : t('settings.providers.card.status.signInNeeded')}
+      </SettingsCardPill>
+      {status.environment ? <EnvironmentPill environment={status.environment} /> : null}
+    </>
+  );
 };
 
 interface ProviderGridProps {
   providers: readonly Provider[];
   models: readonly Model[];
+  /** Providers whose environment credential a saved key would outrank. */
+  keyProviders: ReadonlySet<string>;
   onSelect: (providerId: string) => void;
   onConnect: () => void;
+  onAddKey: (providerId: string) => void;
   onOpenClassification: () => void;
   loadFailed?: boolean;
   onRetry?: () => void;
@@ -97,8 +121,10 @@ interface ProviderGridProps {
 export const ProviderGrid: React.FC<ProviderGridProps> = ({
   providers,
   models,
+  keyProviders,
   onSelect,
   onConnect,
+  onAddKey,
   onOpenClassification,
   loadFailed = false,
   onRetry,
@@ -160,12 +186,17 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
         {filtered.map((provider) => {
           const status = getProviderCardStatus(provider);
           const count = modelCounts[provider.providerId] ?? 0;
+          // An environment-backed credential can still be outranked by a key
+          // saved here, so those cards offer the key form directly. Enterprise
+          // mode refuses credential writes, so the way in stays hidden.
+          const offerKey = !locked && keyProviders.has(provider.providerId);
+          const name = provider.name || provider.providerId;
           return (
             <SettingsCard
               key={provider.providerId}
               icon={<ProviderLogo providerId={provider.providerId} className="size-5" />}
-              title={provider.name || provider.providerId}
-              badges={status ? <StatusPill status={status} /> : null}
+              title={name}
+              badges={status ? <StatusPills status={status} /> : null}
               footer={(
                 <span
                   className="inline-flex items-center gap-1"
@@ -175,6 +206,18 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
                   <span className="tabular-nums">{count}</span>
                 </span>
               )}
+              control={offerKey ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={SETTINGS_ICON_BUTTON_CLASS}
+                  aria-label={t('settings.providers.page.actions.addKey')}
+                  title={t('settings.providers.page.actions.addKey')}
+                  onClick={() => onAddKey(provider.providerId)}
+                >
+                  <Icon name="key" className="size-4" />
+                </Button>
+              ) : undefined}
               onOpen={() => onSelect(provider.providerId)}
             />
           );

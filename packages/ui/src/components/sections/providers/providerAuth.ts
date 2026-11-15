@@ -24,15 +24,18 @@ export interface ProviderEnvironmentStatus {
  * The environment variable behind a provider's credential, whether or not it
  * currently wins. `variable === null` means no single name applies (a computed
  * resolver); a blank name means the variable is unset, so it reports nothing.
- * A record from before the field existed that is configured from the
- * environment still reads as an unnamed environment source, so its card does
- * not look keyless.
+ *
+ * Only `external-environment` is the machine's environment. A
+ * `managed-environment` credential comes from the runtime/models.yml config
+ * key, which outranks a saved key, so it is not an env var and gets no badge,
+ * no key override hint and no place in the key picker.
  */
 export const getProviderEnvironment = (provider: Provider): ProviderEnvironmentStatus | null => {
   if (provider.auth.status !== 'configured') return null;
+  if (provider.auth.source === 'managed-environment') return null;
   const reported = provider.auth.environment;
   if (!reported) {
-    return provider.auth.source === 'stored-credential' ? null : { variable: null, active: true };
+    return provider.auth.source === 'external-environment' ? { variable: null, active: true } : null;
   }
   if (reported.variable === null) return { variable: null, active: reported.active };
   const variable = reported.variable.trim();

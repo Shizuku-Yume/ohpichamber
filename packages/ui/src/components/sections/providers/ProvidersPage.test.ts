@@ -102,6 +102,39 @@ describe('native provider management UI contracts', () => {
     expect(getProviderCardStatus(blank)).toEqual({ kind: 'environment', environment: null });
   });
 
+  test('a legacy record reads as an environment source only when that is where it comes from', () => {
+    // Before the contract carried `environment`, an external-environment
+    // credential still had to read as an environment source rather than look
+    // keyless, so it becomes an unnamed one.
+    const legacyExternal = provider({
+      auth: { status: 'configured', credentialRef: 'credential_1', method: 'api-key', source: 'external-environment' },
+    });
+    expect(getProviderEnvironment(legacyExternal)).toEqual({ variable: null, active: true });
+    expect(getProviderCardStatus(legacyExternal)).toEqual({
+      kind: 'environment',
+      environment: { variable: null, active: true },
+    });
+
+    // A managed-environment credential is a config key, not a variable: it
+    // outranks a saved key, so it must not claim one takes precedence.
+    const managed = provider({
+      auth: { status: 'configured', credentialRef: 'credential_2', method: 'api-key', source: 'managed-environment' },
+    });
+    expect(getProviderEnvironment(managed)).toBe(null);
+    expect(getProviderCardStatus(managed)).toEqual({ kind: 'environment', environment: null });
+
+    const reportedForManaged = provider({
+      auth: {
+        status: 'configured',
+        credentialRef: 'credential_2',
+        method: 'api-key',
+        source: 'managed-environment',
+        environment: { variable: 'OPENAI_API_KEY', active: true },
+      },
+    });
+    expect(getProviderEnvironment(reportedForManaged)).toBe(null);
+  });
+
   test('credential forms auto-open only for a missing credential the user has not dismissed', () => {
     expect(requiresProviderAuth(provider())).toBe(true);
     expect(requiresProviderAuth(provider({
@@ -166,12 +199,18 @@ describe('native provider management UI contracts', () => {
           source: 'stored-credential',
         },
       }),
+      provider({
+        providerId: 'managed',
+        name: 'Managed',
+        auth: { status: 'configured', credentialRef: 'credential_4', method: 'api-key', source: 'managed-environment' },
+      }),
       provider({ providerId: 'zeta', name: 'Zeta' }),
     ];
     expect(listConnectableProviders(providers).map((entry) => entry.id)).toEqual(['zeta']);
     // Only the provider the environment currently authenticates needs the
     // direct way in: a stored key already has an accounts list for adding
-    // more, and a provider without the API-key method has nothing to save.
+    // more, a managed config key is not an environment variable, and a
+    // provider without the API-key method has nothing to save.
     expect(listProvidersAcceptingKey(providers).map((entry) => entry.id)).toEqual(['openai']);
   });
 

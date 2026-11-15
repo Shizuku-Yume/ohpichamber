@@ -211,8 +211,8 @@ export const ProviderGrid: React.FC<ProviderGridProps> = ({
                   variant="ghost"
                   size="icon"
                   className={SETTINGS_ICON_BUTTON_CLASS}
-                  aria-label={t('settings.providers.page.actions.addKey')}
-                  title={t('settings.providers.page.actions.addKey')}
+                  aria-label={t('settings.providers.page.actions.addKeyFor', { provider: name })}
+                  title={t('settings.providers.page.actions.addKeyFor', { provider: name })}
                   onClick={() => onAddKey(provider.providerId)}
                 >
                   <Icon name="key" className="size-4" />

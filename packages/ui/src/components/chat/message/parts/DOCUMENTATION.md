@@ -58,6 +58,9 @@ Use this doc when you ask an agent to change tool/header/description behavior.
 - `ReasoningPart.tsx`
   - Thinking block UI (`ReasoningTimelineBlock`), summary + optional duration.
 
+- `reasoningText.ts`
+  - `cleanReasoningText`, the one reasoning text normalization shared by `ReasoningPart.tsx` and `JustificationBlock.tsx`.
+
 - `components/LiveTurnActivity.tsx` (relative to the chat folder)
   - Owns the optional live-only turn disclosure. `MessageList` enables it when
     Activity Default is Collapsed and the turn has visible Activity content.
@@ -198,6 +201,8 @@ tool patch is parsed while the turn streams.
 - A tool result made of `{type:"text",text}` content blocks is shown as its joined text, not as a JSON envelope the reader has to open. `toolRenderers.unwrapTextBlocks` validates blocks one at a time and unwraps up to four nested serialized envelopes; `nativeToolResultContent` applies it before generic coercion, and the JSON summary view uses it too.
 - Thinking/Justification duration is hidden in `sorted` mode (handled in `ReasoningPart.tsx` + `JustificationBlock.tsx`).
 - Reasoning streaming presentation derives from the live stream phase (`streaming`/`cooldown`) only: canonical reasoning parts carry no persisted timing, so a cached part outside a live phase renders complete and never streams (issue #2020).
+- `reasoningText.ts` owns reasoning normalization for both `ReasoningPart.tsx` and `JustificationBlock.tsx`; there is no second copy. `cleanReasoningText` preserves paragraph breaks, because OMP folds provider summary parts with `\n\n` and blank-line suppression had merged a multi-paragraph thought into one running paragraph. It keeps genuinely empty lines, turns an invisible-only line (zero-width space and the like) into an empty line instead of deleting it, collapses runs of blank lines to one, strips `<!-- -->` sentinel lines (and an unterminated `<!--` on the last line while streaming) outside fenced code, and still strips a leading `> ` marker. Fenced code is emitted verbatim. The header summary (`stripMarkdown`/`getReasoningSummary`) keeps its own flat single-line wording.
+- Single newlines render as line breaks in the reasoning variant only, through the in-repo remark line-break plugin that `MarkdownRenderer` wires for `variant='reasoning'`; assistant and user text rendering are unchanged (user text already applies hard line breaks in `userTextPartContent.ts`).
 - Streamed assistant and reasoning text holds back only a still-growing GFM table row (`lib/streamTextCommit.ts`, a port of OMP's `holdPartialTableRow`): the unterminated last line when a run of pipe lines with a header and delimiter row sits above it, outside an open fence. Everything else — a paragraph, a list item, an open fence — appends as it arrives, so the first token shows immediately and thinking streams live while expanded. `AssistantTextPart` and `ReasoningPart` share the one function. The throttle in `hooks/useStreamingTextThrottle.ts` passes streaming text straight through without a second per-part throttle, keeping its identity reset, while the event pipeline flushes at 33 ms.
 - Tool result placement: the canonical projection puts a `tool_result` part in the message that made its `tool_call`, at partId `<call-part>:result`, and publishes partial output as `part.updated` while the call still runs. The timeline renders that part beside its call with no client-side pairing, and the live tail overlays a message's live parts over its record without moving parts between messages. Popup inspection (`ChatMessage.handleShowPopup`) preserves non-image output content so `ToolOutputDialog` displays structured diffs and text output.
 
@@ -269,6 +274,6 @@ Descriptions must not invent protocol metadata, aliases, or a successful mutatio
   - Hosted mobile: active Host via shared runtime transport.
   - Capacitor: active Host via shared runtime transport.
 - Tools: `ToolPart.tsx`, `ProgressiveGroup.tsx`, `toolPresentation.tsx`, `toolRenderUtils.ts`, `ToolRevealOnMount.tsx`, `GuestToolTable.tsx`
-- Reasoning/justification: `ReasoningPart.tsx`, `JustificationBlock.tsx`
+- Reasoning/justification: `ReasoningPart.tsx`, `JustificationBlock.tsx`, `reasoningText.ts`
 - Status/placeholders: `WorkingPlaceholder.tsx`, `SessionActiveSpinner.tsx`, `MigratingPart.tsx`, `BusyDots.tsx`
 - Utility renderers: `MinDurationShineText.tsx`

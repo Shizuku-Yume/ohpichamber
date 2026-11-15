@@ -503,7 +503,10 @@ export type MCPApplyOutcome = z.infer<typeof MCPApplyOutcomeSchema>;
 export const MCPApplyResultSchema = z.strictObject({
   kind: z.literal('mcp'),
   status: ApplyStatusSchema,
-  outcome: MCPApplyOutcomeSchema.optional(),
+  // Required: the coordinator always states whether the saved configuration is
+  // applied, waiting for sign-in, or not connected. A reader must not infer it
+  // from `status`, which only says how many captured workers answered.
+  outcome: MCPApplyOutcomeSchema,
   configuration: MCPConfigurationStateSchema,
   workers: z.array(MCPWorkerApplyOutcomeSchema),
 }).refine(validAggregate, 'Aggregate status reflects every unique captured live worker outcome').refine(

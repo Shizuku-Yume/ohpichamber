@@ -38,7 +38,7 @@ const container = document.createElement('div');
 document.body.appendChild(container);
 let root: ReturnType<typeof createRoot>;
 const server: MCPServerConfig = { serverId: 'tools', label: 'Tools', enabled: true, scope: 'project' as const, transport: { type: 'http', url: 'https://initial.test' } };
-const applyResult = (servers: MCPServerConfig[]): MCPApplyResult => ({ kind: 'mcp', status: 'no-active-workers', workers: [], configuration: { workspaceId: 'workspace', persistedRevision: '3', config: { servers } } });
+const applyResult = (servers: MCPServerConfig[]): MCPApplyResult => ({ kind: 'mcp', status: 'no-active-workers', outcome: 'applied', workers: [], configuration: { workspaceId: 'workspace', persistedRevision: '3', config: { servers } } });
 beforeEach(() => {
   secretWrites.length = 0;
   root = createRoot(container);
@@ -98,7 +98,7 @@ test('header values are written privately and only opaque references reach confi
 });
 
 test('worker apply failures remain visible even though persistence succeeded', async () => {
-  const result: MCPApplyResult = { ...applyResult([server]), status: 'failed', workers: [{ worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, outcome: 'failed', revisions: { runtimeStatus: 'unavailable', appliedRevision: null, catalogRevision: '0' }, error: { code: 'MCP_APPLY_FAILED', detail: 'The worker could not connect.', retryable: true } }] };
+  const result: MCPApplyResult = { ...applyResult([server]), status: 'failed', outcome: 'saved-not-connected', workers: [{ worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, outcome: 'failed', revisions: { runtimeStatus: 'unavailable', appliedRevision: null, catalogRevision: '0' }, error: { code: 'MCP_APPLY_FAILED', detail: 'The worker could not connect.', retryable: true } }] };
   useMcpConfigStore.setState({ applyResultsByDirectory: { '/repo': result }, errorsByDirectory: { '/repo': 'Runtime application incomplete.' } });
   await act(async () => { root.render(<I18nProvider><McpPage /></I18nProvider>); });
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('Runtime application incomplete.');

@@ -9,8 +9,8 @@ const server = { serverId: 'tools', label: 'Workspace tools', enabled: true, tra
 const connectedProbe = async (_workspaceId: string, serverId: string, configuration: MCPConfigurationState) => ({
   workspaceId: 'workspace', serverId, persistedRevision: configuration.persistedRevision, status: 'connected' as const, toolCount: 1,
 });
-const failedProbe = (code: string) => async (_workspaceId: string, serverId: string, configuration: MCPConfigurationState) => ({
-  workspaceId: 'workspace', serverId, persistedRevision: configuration.persistedRevision, status: 'failed' as const, error: { code, detail: 'Probe failed', retryable: true },
+const failedProbe = (code: string, detail = 'Probe failed') => async (_workspaceId: string, serverId: string, configuration: MCPConfigurationState) => ({
+  workspaceId: 'workspace', serverId, persistedRevision: configuration.persistedRevision, status: 'failed' as const, error: { code, detail, retryable: true },
 });
 
 function workerFixture(rootSessionId: string, controls: { fail?: boolean; beforeReconnect?: () => Promise<void> } = {}) {
@@ -354,5 +354,99 @@ test('no-worker configure classifies the saved servers by the stateless probe', 
     await unreachable.initialize();
     await expect(unreachable.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '1', config: { servers: [server] } }))
       .rejects.toMatchObject({ code: 'MCP_APPLY_FAILED', details: { result: { status: 'no-active-workers', outcome: 'saved-not-connected' } } });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+/** A probe answer in OMP's transport format: the challenge is inside the message,
+ * and the code stays MCP_APPLY_FAILED because the probe route never classified it. */
+const challengeProbe = failedProbe(
+  'MCP_APPLY_FAILED',
+  'HTTP 403: forbidden [WWW-Authenticate: Bearer resource_metadata="https://x/.well-known/oauth-protected-resource"]',
+);
+
+const failingWorker = (code: string, detail: string) => {
+  const identity = { rootSessionId: 'root-worker', workspaceId: 'workspace', workerGeneration: 'gen-1' };
+  const revisions = { runtimeStatus: 'unavailable' as const, appliedRevision: null, catalogRevision: '0' };
+  const worker: CatalogWorker = {
+    identity: { ...identity, agentDirectoryId: 'agent' },
+    isLive: () => true,
+    mcp: {
+      read: async configuration => ({ configuration, workerCatalog: { worker: identity, ...revisions, activeServers: [], tools: [] } }),
+      apply: async () => ({ worker: identity, outcome: 'failed', revisions, error: { code, detail, retryable: true } }),
+      reconnect: async () => { throw new Error('Unused'); },
+      oauth: async () => { throw new Error('Unused'); },
+      oauthStatus: async () => { throw new Error('Unused'); },
+    },
+    skills: {
+      read: async sources => ({ worker: identity, agentDirectoryId: 'agent', runtimeStatus: 'unavailable', persistedSources: sources, appliedSources: null, catalogRevision: '0', skills: [] }),
+      apply: async () => { throw new Error('Unused'); },
+      expand: async () => { throw new Error('Unused'); },
+    },
+  };
+  return worker;
+};
+
+test('a probe that reports an auth challenge is a saved sign-in, not a failed install', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-challenge-'));
+  let stored: MCPConfigurationState | null = null;
+  try {
+    const coordinator = new CatalogCoordinator(directory, {
+      readMcpConfiguration: async () => stored, probeMcp: challengeProbe, commitMcp: async (_id, _input, next) => { stored = next; },
+    });
+    await coordinator.initialize();
+    await coordinator.registerWorkspace('workspace', 'agent');
+    const result = await coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } });
+    expect(result).toMatchObject({ status: 'no-active-workers', outcome: 'saved-needs-auth', workers: [] });
+    // The server stays saved: the configuration revision advanced and is readable.
+    expect(result.configuration.persistedRevision).toBe('1');
+    expect((await coordinator.readWorkspaceMcpConfig('workspace')).config.servers.map(item => item.serverId)).toEqual(['tools']);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('a genuinely non-auth probe failure still throws saved-not-connected', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-not-connected-'));
+  let stored: MCPConfigurationState | null = null;
+  try {
+    const coordinator = new CatalogCoordinator(directory, {
+      readMcpConfiguration: async () => stored,
+      probeMcp: failedProbe('MCP_APPLY_FAILED', 'ECONNREFUSED 127.0.0.1:14032'),
+      commitMcp: async (_id, _input, next) => { stored = next; },
+    });
+    await coordinator.initialize();
+    await coordinator.registerWorkspace('workspace', 'agent');
+    await expect(coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } }))
+      .rejects.toMatchObject({ code: 'MCP_APPLY_FAILED', details: { result: { status: 'no-active-workers', outcome: 'saved-not-connected' } } });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test('the live-worker path and the no-worker probe agree on every auth signal', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-agreement-'));
+  const signals = [
+    { code: 'MCP_AUTH_REQUIRED', detail: 'Authorization required' },
+    { code: 'AUTH_REQUIRED', detail: 'Authorization required' },
+    { code: 'MCP_CREDENTIAL_UNAVAILABLE', detail: 'The credential is not available' },
+    { code: 'MCP_APPLY_FAILED', detail: 'HTTP 401 Unauthorized' },
+    { code: 'MCP_APPLY_FAILED', detail: 'HTTP 403: forbidden' },
+    { code: 'MCP_APPLY_FAILED', detail: 'challenge claims insufficient_scope' },
+  ];
+  try {
+    for (const signal of signals) {
+      let stored: MCPConfigurationState | null = null;
+      const commitMcp = async (_id: string, _input: MCPConfigureRequest, next: MCPConfigurationState) => { stored = next; };
+      const liveDirectory = await mkdtemp(join(tmpdir(), 'workspace-mcp-agreement-live-'));
+      const live = new CatalogCoordinator(liveDirectory, { readMcpConfiguration: async () => stored, probeMcp: connectedProbe, commitMcp });
+      const probe = new CatalogCoordinator(directory, { readMcpConfiguration: async () => stored, probeMcp: failedProbe(signal.code, signal.detail), commitMcp });
+      try {
+        await live.initialize();
+        await live.registerWorkspace('workspace', 'agent');
+        await live.register(failingWorker(signal.code, signal.detail));
+        expect((await live.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } })).outcome)
+          .toBe('saved-needs-auth');
+        await probe.initialize();
+        await probe.registerWorkspace('workspace', 'agent');
+        expect((await probe.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '1', config: { servers: [server] } })).outcome)
+          .toBe('saved-needs-auth');
+      } finally { await rm(liveDirectory, { recursive: true, force: true }); }
+    }
   } finally { await rm(directory, { recursive: true, force: true }); }
 });

@@ -124,6 +124,22 @@ function applyFailureCause(result: { workers: Array<{ outcome: string; error?: {
   return causes.length > 0 ? causes.join('; ') : fallback;
 }
 
+/** Codes a worker or the stateless probe reports when the server wants authorization. */
+const MCP_AUTH_CODES: Record<string, true> = { MCP_AUTH_REQUIRED: true, AUTH_REQUIRED: true, MCP_CREDENTIAL_UNAVAILABLE: true };
+/** A hosted MCP server answers 401/403 or names the scope before it accepts OAuth.
+ * The status codes are guarded against adjacent digits so a refused socket's port
+ * (`:14032`) cannot read as a 403. */
+const MCP_AUTH_TEXT = /(?<!\d)(401|403)(?!\d)|insufficient_scope|unauthorized|sign-in|sign in|auth/i;
+
+/** One classifier for both apply paths: a saved server that cannot connect because it
+ * needs authorization is a sign-in, not a failed install. The live-worker path and the
+ * no-worker probe must agree, because which one runs depends only on whether a session
+ * happens to be open. */
+export function mcpAuthRequired(error: { code: string; detail: string }): boolean {
+  if (MCP_AUTH_CODES[error.code] === true) return true;
+  return MCP_AUTH_TEXT.test(`${error.code} ${error.detail}`);
+}
+
 function operationError(error: Error | undefined, fallbackCode: string, fallbackDetail: string): CatalogOperationError {
   if (error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError) {
     return { code: error.code, detail: error.message, retryable: error.status >= 500 };
@@ -528,12 +544,7 @@ export class CatalogCoordinator {
     let outcome: MCPApplyOutcome = 'applied';
     if (status === 'no-active-workers') outcome = await this.unattendedMcpOutcome(configuration);
     else if (status === 'failed' || status === 'partial') {
-      const authNeeded = outcomes.some(o => o.outcome === 'failed' && (
-        o.error.code === 'MCP_AUTH_REQUIRED' ||
-        o.error.code === 'AUTH_REQUIRED' ||
-        /401|auth|sign-in|unauthorized/i.test(o.error.detail) ||
-        /401|auth|sign-in|unauthorized/i.test(o.error.code)
-      ));
+      const authNeeded = outcomes.some(o => o.outcome === 'failed' && mcpAuthRequired(o.error));
       outcome = authNeeded ? 'saved-needs-auth' : 'saved-not-connected';
     }
     const result: MCPApplyResult = { kind: 'mcp' as const, status, outcome, configuration, workers: outcomes };
@@ -915,12 +926,12 @@ export class CatalogCoordinator {
     const results = await Promise.all(configuration.config.servers.filter(server => server.enabled).map(async server => {
       try {
         const probe = await this.options.probeMcp(configuration.workspaceId, server.serverId, configuration);
-        return probe.status === 'connected' ? 'connected' : probe.error.code;
+        return probe.status === 'connected' ? 'connected' as const : probe.error;
       } catch {
-        return 'MCP_APPLY_FAILED';
+        return { code: 'MCP_APPLY_FAILED', detail: 'MCP probe failed' };
       }
     }));
-    if (results.includes('MCP_AUTH_REQUIRED')) return 'saved-needs-auth';
+    if (results.some(result => result !== 'connected' && mcpAuthRequired(result))) return 'saved-needs-auth';
     if (results.some(result => result !== 'connected')) return 'saved-not-connected';
     return 'applied';
   }

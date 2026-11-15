@@ -31,7 +31,7 @@ const error = { code: 'MCP_APPLY_FAILED', detail: 'Runtime application failed.',
 const mcpApplied = { worker, outcome: 'applied', revisions: mcpRevisions };
 const mcpFailed = { worker: sibling, outcome: 'failed', revisions: oldMcpRevisions, error };
 const retired = { worker: sibling, outcome: 'retired' };
-const mcpResult = { kind: 'mcp', status: 'partial', configuration, workers: [mcpApplied, mcpFailed] };
+const mcpResult = { kind: 'mcp', status: 'partial', outcome: 'saved-not-connected', configuration, workers: [mcpApplied, mcpFailed] };
 const sources = { workspace: '2', agent: '3' };
 const skill = { skillId: 'skill_1', name: 'Review', description: 'Review workflow', scope: 'workspace' };
 const skillRevisions = { runtimeStatus: 'ready', persistedSources: sources, appliedSources: sources, catalogRevision: '7' };
@@ -86,7 +86,7 @@ const boundaries = [
   { name: 'CatalogOperationError', schema: Catalog.CatalogOperationErrorSchema, valid: error, invalid: [{ ...error, detail: '' }, { ...error, rawException: 'secret provider error' }] },
   { name: 'MCPWorkerApplyOutcome', schema: Catalog.MCPWorkerApplyOutcomeSchema, valid: mcpApplied, invalid: [{ ...mcpApplied, revisions: emptyMcpRevisions }, { ...retired, revisions: mcpRevisions }, { worker, outcome: 'failed', revisions: oldMcpRevisions }] },
   { name: 'SkillsWorkerApplyOutcome', schema: Catalog.SkillsWorkerApplyOutcomeSchema, valid: skillApplied, invalid: [{ ...skillApplied, revisions: oldSkillRevisions }, { ...retired, revisions: skillRevisions }, { ...skillApplied, revisions: emptySkillRevisions }] },
-  { name: 'MCPApplyResult', schema: Catalog.MCPApplyResultSchema, valid: mcpResult, invalid: [{ ...mcpResult, status: 'applied' }, { ...mcpResult, configuration: { ...configuration, persistedRevision: '3' } }, { ...mcpResult, workers: [mcpApplied, mcpApplied] }] },
+  { name: 'MCPApplyResult', schema: Catalog.MCPApplyResultSchema, valid: mcpResult, invalid: [{ ...mcpResult, status: 'applied' }, { ...mcpResult, configuration: { ...configuration, persistedRevision: '3' } }, { ...mcpResult, workers: [mcpApplied, mcpApplied] }, { ...mcpResult, outcome: undefined }, { ...mcpResult, outcome: 'connected' }] },
   { name: 'SkillSourceScope', schema: Catalog.SkillSourceScopeSchema, valid: scope, invalid: [{ kind: 'agent', agentDirectoryId: '/private/agent', workspaceId: 'workspace_1' }, { kind: 'workspace' }] },
   { name: 'SkillsApplyResult', schema: Catalog.SkillsApplyResultSchema, valid: skillResult, invalid: [{ ...skillResult, sourceRevision: '1' }, { ...skillResult, scope: { ...scope, workspaceId: 'foreign_workspace' } }, { ...skillResult, status: 'no-active-workers' }] },
   { name: 'SkillInstallResult', schema: Catalog.SkillInstallResultSchema, valid: install, invalid: [{ ...install, sourceRevision: '3' }, { ...install, scope: { kind: 'agent', agentDirectoryId: 'agent_directory_1' } }, { ...install, persistence: 'applied' }] },

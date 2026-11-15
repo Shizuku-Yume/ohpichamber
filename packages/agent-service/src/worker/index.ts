@@ -21,9 +21,10 @@ function operationCause(error: unknown): string {
 
 function nativeMcpStatus(error: NativeMcpError): number {
   switch (error.code) {
-    case 'CATALOG_CONFLICT': case 'WORKER_GENERATION_CONFLICT': case 'MCP_OAUTH_CANCELLED': return 409;
+    case 'CATALOG_CONFLICT': case 'WORKER_GENERATION_CONFLICT': case 'MCP_OAUTH_CANCELLED': case 'MCP_OAUTH_IN_PROGRESS': return 409;
     case 'MCP_OAUTH_NOT_FOUND': return 404;
     case 'MCP_CREDENTIAL_UNAVAILABLE': return 422;
+    case 'MCP_OAUTH_CLIENT_REGISTRATION_REJECTED': return 422;
     case 'MCP_OAUTH_FAILED': return error.retryable ? 502 : 422;
     default: return 503;
   }

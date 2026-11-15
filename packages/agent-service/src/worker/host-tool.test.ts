@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { HostToolInvocation } from './host-tool.ts';
 import { createHostToolController, createHostToolExtension } from './host-tool.ts';
 import { HostActionRequestSchema } from '../native-policy-protocol.ts';
+import { ProposedWorkflowResultSchema } from '@openchamber/agent-contract';
 
 interface RegisteredToolStub {
   name: string;
@@ -120,8 +121,17 @@ describe('createHostToolExtension & controller', () => {
       input: { script: 'deploy.js' },
     });
 
-    expect(result.details).toEqual({ ok: true, runId: 'run-workflow-1' });
-    expect(capturedInvocation).not.toBeNull();
+    expect(result.details).toEqual({
+      ok: true,
+      action: 'workflow.run',
+      data: { ok: true, runId: 'run-workflow-1' },
+    });
+    expect(ProposedWorkflowResultSchema.safeParse(result.details).success).toBe(true);
+    expect(JSON.parse(result.content[0].text)).toEqual({
+      ok: true,
+      action: 'workflow.run',
+      data: { ok: true, runId: 'run-workflow-1' },
+    });
     expect(capturedInvocation!.request).toEqual({
       sessionId: 'session-123',
       toolName: 'openchamber_workflow',

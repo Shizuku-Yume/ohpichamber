@@ -19,7 +19,6 @@ import { useGlobalSessionsPolling } from '@/hooks/useGlobalSessionsPolling';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { useWebNotificationStream } from '@/hooks/useWebNotificationStream';
-import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useGuestCatalogSync } from '@/hooks/useGuestCatalogSync';
 import { useGuestInstallLinks } from '@/hooks/useGuestInstallLinks';
@@ -592,10 +591,6 @@ function App({ apis }: AppProps) {
 
   usePushVisibilityBeacon();
   useWebNotificationStream();
-  // Loaded here rather than by the Memory tab: the session index is built from
-  // this snapshot, so leaving it to the panel meant a user who never opened
-  // Project notes sent every message with no memory index at all.
-  useAgentMemorySync(currentDirectory || null);
   // The extension catalog follows the server while the app runs: another
   // window, another device, or an author rebuilding a folder install can
   // change it, and the rail must not wait for a reload. Install links that
@@ -800,21 +795,21 @@ function App({ apis }: AppProps) {
       <SyncProvider key={runtimeEndpointEpoch} directory={currentDirectory || ''}>
         <RuntimeAPIProvider apis={apis}>
           <FireworksProvider>
-              <TooltipProvider delayDuration={300} skipDelayDuration={150}>
-                <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
-                  <SyncAppEffects backgroundWorkEnabled />
-                  <MainLayout />
-                  <LegacyDataNotice />
-                  {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}
-                  <Toaster />
-                  <AppLinkConfirmDialog />
-                  <SharedTrustConfirmDialog />
-                  <AboutDialogWrapper />
-                  {showMemoryDebug && (
-                    <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
-                  )}
-                </div>
-              </TooltipProvider>
+            <TooltipProvider delayDuration={300} skipDelayDuration={150}>
+              <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
+                <SyncAppEffects backgroundWorkEnabled />
+                <MainLayout />
+                <LegacyDataNotice />
+                {isDesktopRuntime ? <AppStartupOverlay ready={bootOutcomeKnown && bootViewIsMain} /> : null}
+                <Toaster />
+                <AppLinkConfirmDialog />
+                <SharedTrustConfirmDialog />
+                <AboutDialogWrapper />
+                {showMemoryDebug && (
+                  <MemoryDebugPanelLoader onClose={() => setShowMemoryDebug(false)} />
+                )}
+              </div>
+            </TooltipProvider>
           </FireworksProvider>
         </RuntimeAPIProvider>
       </SyncProvider>

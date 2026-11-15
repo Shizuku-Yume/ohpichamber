@@ -28,7 +28,6 @@ import { useTerminalSessionKeepalive } from '@/hooks/useTerminalSessionKeepalive
 import { useUpdatePolling } from '@/hooks/useUpdatePolling';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useEnterprisePolicySync } from '@/hooks/useEnterprisePolicySync';
-import { useAgentMemorySync } from '@/hooks/useAgentMemorySync';
 import { bootServerStateStores, installServerStateBootEvents } from '@/stores/serverStateBoot';
 import { useRoutingSync } from '@/hooks/useRoutingSync';
 import { hostFilesystem } from '@/lib/host-filesystem';
@@ -1328,9 +1327,6 @@ function MobileAppContent({ apis }: MobileAppProps) {
     void bootServerStateStores();
   }, [isInitialized]);
   React.useEffect(() => installServerStateBootEvents(), []);
-  // Same as App.tsx: the session's memory index and the Memory tab both read
-  // this snapshot, and without it the phone showed no memory at all.
-  useAgentMemorySync(currentDirectory || null);
   useRouter();
   // APNs is the only notification channel on the native app (background-capable,
   // focus-suppressed server-side via the visibility beacon). Local notifications are

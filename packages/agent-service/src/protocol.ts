@@ -46,6 +46,7 @@ export const CompletionWorkerBootstrapSchema = z.strictObject({
   agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema,
   catalogRevision: CounterSchema,
   mcpConfigPath: PrivatePathSchema.optional(),
+  hostTools: z.record(z.string(), z.boolean()).optional(),
 });
 export type CompletionWorkerBootstrap = z.infer<typeof CompletionWorkerBootstrapSchema>;
 
@@ -68,7 +69,7 @@ export const WorkerPolicyRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp-server'), server: MCPServerConfigSchema, proposed: z.literal(true).optional() }),
   z.strictObject({ type: z.literal('mcp-oauth'), server: MCPServerConfigSchema, configuration: JsonObjectSchema, proposed: z.literal(true).optional() }),
   z.strictObject({ type: z.literal('shell'), request: ShellStartRequestSchema }),
-  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), permissionPresetId: EntityIdSchema.optional(), approvalId: EntityIdSchema.optional(), toolCallId: EntityIdSchema.optional(), proposed: z.literal(true).optional() }),
+  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), approvalId: EntityIdSchema.optional(), toolCallId: EntityIdSchema.optional(), proposed: z.literal(true).optional() }),
 ]);
 export type WorkerPolicyRequest = z.infer<typeof WorkerPolicyRequestSchema>;
 export const WorkerPolicyResultSchema = z.discriminatedUnion('allowed', [

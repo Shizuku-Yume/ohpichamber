@@ -19,10 +19,12 @@ for (const policyError of [
   test(`completion preserves Host policy ${policyError.status} ${policyError.code} through selection and provider catches`, async () => {
     const root = await mkdtemp(join(tmpdir(), 'completion-policy-'));
     let providerRequests = 0;
-    const provider = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch: () => {
-      providerRequests++;
-      return Response.json({ error: { message: 'Invalid API key', type: 'invalid_request_error', code: 'invalid_api_key' } }, { status: 401 });
-    } });
+    const provider = Bun.serve({
+      hostname: '127.0.0.1', port: 0, fetch: () => {
+        providerRequests++;
+        return Response.json({ error: { message: 'Invalid API key', type: 'invalid_request_error', code: 'invalid_api_key' } }, { status: 401 });
+      }
+    });
     let worker: StatelessWorker | undefined;
     try {
       const cwd = join(root, 'workspace');
@@ -39,18 +41,22 @@ for (const policyError of [
       const setup = await openNativeRuntime({ cwd, agentDirectory });
       try {
         await setup.models.configureProvider({ expectedRevision: '0', configuration }, '1');
-        await setup.models.configureModel({ expectedRevision: '1', model: {
-          modelId, provider: providerId, name: 'Completion policy model', modalities: ['text'],
-          contextWindow: 65536, maxOutputTokens: 256, reasoningEffortSupported: false,
-          reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
-        } }, '2');
+        await setup.models.configureModel({
+          expectedRevision: '1', model: {
+            modelId, provider: providerId, name: 'Completion policy model', modalities: ['text'],
+            contextWindow: 65536, maxOutputTokens: 256, reasoningEffortSupported: false,
+            reasoningOptions: [], variants: [], toolsSupported: true, enabled: true, pricing: null,
+          }
+        }, '2');
         const credential = await new NativeCredentials(setup.authStorage, setup.models, workspaceId).write({
           expectedRevision: '2', providerId, credential: { method: 'api-key', apiKey: 'completion-fixture-key' },
         }, '3');
         if (credential.auth.status !== 'configured') throw new Error('Fixture credential was not configured');
-        await setup.models.configureProvider({ expectedRevision: '3', configuration: {
-          ...configuration, credentialRef: credential.auth.credentialRef,
-        } }, '4');
+        await setup.models.configureProvider({
+          expectedRevision: '3', configuration: {
+            ...configuration, credentialRef: credential.auth.credentialRef,
+          }
+        }, '4');
       } finally {
         setup.authStorage.close();
       }
@@ -63,36 +69,50 @@ for (const policyError of [
       let refusal: ProjectionError | undefined = policyError;
       worker = await StatelessWorker.open(bootstrap, async () => { if (refusal) throw refusal; });
       await expect(worker.operation({
-        type: 'completion', operation: { type: 'completion.start', request: {
-          completionId: 'completion-policy-request', workspaceId,
-          selection: { providerId, modelId }, prompt: 'hello', format: { kind: 'text' },
-          overflow: 'reject', variant: null, reasoningEffort: null,
-        } },
+        type: 'completion', operation: {
+          type: 'completion.start', request: {
+            completionId: 'completion-policy-request', workspaceId,
+            selection: { providerId, modelId }, prompt: 'hello', format: { kind: 'text' },
+            overflow: 'reject', variant: null, reasoningEffort: null,
+          }
+        },
       })).rejects.toBe(policyError);
       const selection = { providerId, modelId: 'unavailable-model' };
       expect(await worker.operation({
-        type: 'completion', operation: { type: 'completion.start', request: {
-          completionId: 'completion-missing-model', workspaceId,
-          selection, prompt: 'hello', format: { kind: 'text' },
-          overflow: 'reject', variant: null, reasoningEffort: null,
-        } },
-      })).toMatchObject({ type: 'completion', result: { type: 'completion.result', result: {
-        completionId: 'completion-missing-model', selection, status: 'failed',
-        error: { code: 'MODEL_UNAVAILABLE', retryable: false },
-      } } });
+        type: 'completion', operation: {
+          type: 'completion.start', request: {
+            completionId: 'completion-missing-model', workspaceId,
+            selection, prompt: 'hello', format: { kind: 'text' },
+            overflow: 'reject', variant: null, reasoningEffort: null,
+          }
+        },
+      })).toMatchObject({
+        type: 'completion', result: {
+          type: 'completion.result', result: {
+            completionId: 'completion-missing-model', selection, status: 'failed',
+            error: { code: 'MODEL_UNAVAILABLE', retryable: false },
+          }
+        }
+      });
       expect(providerRequests).toBe(0);
       refusal = undefined;
       const providerFailure = await worker.operation({
-        type: 'completion', operation: { type: 'completion.start', request: {
-          completionId: 'completion-provider-failure', workspaceId,
-          selection: { providerId, modelId }, prompt: 'hello', format: { kind: 'text' },
-          overflow: 'reject', variant: null, reasoningEffort: null,
-        } },
+        type: 'completion', operation: {
+          type: 'completion.start', request: {
+            completionId: 'completion-provider-failure', workspaceId,
+            selection: { providerId, modelId }, prompt: 'hello', format: { kind: 'text' },
+            overflow: 'reject', variant: null, reasoningEffort: null,
+          }
+        },
       });
-      expect(providerFailure).toMatchObject({ type: 'completion', result: { type: 'completion.result', result: {
-        completionId: 'completion-provider-failure', status: 'failed',
-        error: { code: 'PROVIDER_UNAVAILABLE', retryable: true },
-      } } });
+      expect(providerFailure).toMatchObject({
+        type: 'completion', result: {
+          type: 'completion.result', result: {
+            completionId: 'completion-provider-failure', status: 'failed',
+            error: { code: 'PROVIDER_UNAVAILABLE', retryable: true },
+          }
+        }
+      });
       expect(providerRequests).toBeGreaterThan(0);
     } finally {
       await worker?.close();
@@ -116,22 +136,28 @@ test('workspace credential handoff persists an SDK credential for private resolu
   };
   let worker: StatelessWorker | undefined;
   try {
-    worker = await StatelessWorker.open(bootstrap, async () => {});
-    await worker.operation({ type: 'catalog', revision: '1', operation: {
-      type: 'catalog.provider.configure', request: { expectedRevision: '0', configuration: {
-        providerId: 'handoff-proxy', name: 'Handoff proxy', endpoint: 'http://127.0.0.1:18080/v1',
-        protocol: 'chat-completions', credentialRef: null,
-      } },
-    } });
-    const imported = await worker.operation({ type: 'catalog', revision: '2', operation: {
-      type: 'catalog.credential.handoff', request: {
-        workspaceId: bootstrap.workspaceId, agentDirectoryId: bootstrap.agentDirectoryId,
-        expectedRevision: '1', selection: {
-          providerId: 'handoff-proxy', source: 'selected-file', credentialType: 'key',
-          file: { format: 'opencode-auth-entry', content: JSON.stringify({ type: 'api', key: 'stateless-fixture-key' }) },
+    worker = await StatelessWorker.open(bootstrap, async () => { });
+    await worker.operation({
+      type: 'catalog', revision: '1', operation: {
+        type: 'catalog.provider.configure', request: {
+          expectedRevision: '0', configuration: {
+            providerId: 'handoff-proxy', name: 'Handoff proxy', endpoint: 'http://127.0.0.1:18080/v1',
+            protocol: 'chat-completions', credentialRef: null,
+          }
         },
-      },
-    } });
+      }
+    });
+    const imported = await worker.operation({
+      type: 'catalog', revision: '2', operation: {
+        type: 'catalog.credential.handoff', request: {
+          workspaceId: bootstrap.workspaceId, agentDirectoryId: bootstrap.agentDirectoryId,
+          expectedRevision: '1', selection: {
+            providerId: 'handoff-proxy', source: 'selected-file', credentialType: 'key',
+            file: { format: 'opencode-auth-entry', content: JSON.stringify({ type: 'api', key: 'stateless-fixture-key' }) },
+          },
+        },
+      }
+    });
     if (imported.type !== 'catalog' || imported.result.type !== 'catalog.credential.handed-off') {
       throw new Error('Expected a native credential handoff result');
     }
@@ -140,15 +166,94 @@ test('workspace credential handoff persists an SDK credential for private resolu
     const credentialRef = imported.result.result.outcome.credentialRef;
     if (!credentialRef) throw new Error('Expected the persisted credential reference');
     await worker.close();
-    worker = await StatelessWorker.open({ ...bootstrap, workerGeneration: 'cold-handoff-generation', catalogRevision: '2' }, async () => {});
-    expect(await worker.operation({ type: 'catalog', revision: '2', operation: {
-      type: 'catalog.credential.resolve', request: {
-        workspaceId: bootstrap.workspaceId, agentDirectoryId: bootstrap.agentDirectoryId,
-        providerId: 'handoff-proxy', credentialRef, purpose: 'quota',
-      },
-    } })).toMatchObject({ type: 'catalog', result: { type: 'catalog.credential.resolved', result: {
-      credential: { type: 'api_key', key: 'stateless-fixture-key' },
-    } } });
+    worker = await StatelessWorker.open({ ...bootstrap, workerGeneration: 'cold-handoff-generation', catalogRevision: '2' }, async () => { });
+    expect(await worker.operation({
+      type: 'catalog', revision: '2', operation: {
+        type: 'catalog.credential.resolve', request: {
+          workspaceId: bootstrap.workspaceId, agentDirectoryId: bootstrap.agentDirectoryId,
+          providerId: 'handoff-proxy', credentialRef, purpose: 'quota',
+        },
+      }
+    })).toMatchObject({
+      type: 'catalog', result: {
+        type: 'catalog.credential.resolved', result: {
+          credential: { type: 'api_key', key: 'stateless-fixture-key' },
+        }
+      }
+    });
+  } finally {
+    await worker?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test('the stateless workspace catalog reports runtime tool metadata and real tiers, including Host and MCP tools', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'stateless-tools-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+
+  const bootstrap: CompletionWorkerBootstrap = {
+    type: 'completion.bootstrap',
+    workerGeneration: 'tools-catalog-gen',
+    authorizationRootId: 'tools-catalog-root',
+    workspaceId: 'tools-workspace',
+    projectId: 'tools-project',
+    cwd,
+    agentDirectory,
+    agentDirectoryId: 'agent',
+    catalogRevision: '0',
+    mcpConfigPath: join(cwd, '.omp', 'mcp.json'),
+    hostTools: {
+      openchamber: true,
+      web: true,
+      openchamber_workflow: true,
+      notify: false,
+    },
+  };
+
+  let worker: StatelessWorker | undefined;
+  try {
+    worker = await StatelessWorker.open(bootstrap, async () => ({ allowed: true }));
+    const res = await worker.operation({ type: 'tools.catalog' });
+    if (res.type !== 'tools.catalog') throw new Error('Expected tools.catalog result');
+    const tools = res.catalog.tools;
+    expect(res.catalog.workspaceId).toBe('tools-workspace');
+
+    // 1. ast_grep has real tier 'read'
+    const astGrep = tools.find((t) => t.name === 'ast_grep');
+    expect(astGrep).toBeDefined();
+    expect(astGrep?.tier).toBe('read');
+    expect(astGrep?.label).toBe('AST Grep');
+    expect(astGrep?.description.length).toBeGreaterThan(0);
+
+    // 2. ast_edit has real tier 'write'
+    const astEdit = tools.find((t) => t.name === 'ast_edit');
+    expect(astEdit).toBeDefined();
+    expect(astEdit?.tier).toBe('write');
+    expect(astEdit?.label).toBe('AST Edit');
+    expect(astEdit?.description.length).toBeGreaterThan(0);
+
+    // 3. Host tools are included and have tier 'exec'
+    const openchamber = tools.find((t) => t.name === 'openchamber');
+    expect(openchamber).toBeDefined();
+    expect(openchamber?.tier).toBe('exec');
+    expect(openchamber?.availability).toBe(true);
+    expect(openchamber?.description.length).toBeGreaterThan(0);
+
+    const web = tools.find((t) => t.name === 'web');
+    expect(web).toBeDefined();
+    expect(web?.tier).toBe('exec');
+    expect(web?.availability).toBe(true);
+    const workflow = tools.find((t) => t.name === 'openchamber_workflow');
+    expect(workflow).toBeDefined();
+    expect(workflow?.tier).toBe('exec');
+    expect(workflow?.availability).toBe(true);
+
+    const notify = tools.find((t) => t.name === 'notify');
+    expect(notify).toBeDefined();
+    expect(notify?.tier).toBe('exec');
+    expect(notify?.availability).toBe(false);
   } finally {
     await worker?.close();
     await rm(root, { recursive: true, force: true });

@@ -72,14 +72,27 @@ export const HOST_TOOL_DESCRIPTIONS = {
  * caller reads.
  */
 function envelopeFor(toolName: HostActionRequest['toolName'], action: string, value: JsonValue): JsonObject | null {
-  if (toolName !== 'openchamber_render') return null;
-  const data = JsonObjectSchema.safeParse(value);
-  if (!data.success) return null;
-  const answer = JsonObjectSchema.safeParse(data.data.answer);
-  return {
-    ok: true, schemaVersion: 1, action,
-    openchamber: { schemaVersion: 1, ok: true, action, ...(answer.success ? { answer: answer.data } : {}), data: data.data },
-  };
+  if (toolName === 'openchamber_render') {
+    const data = JsonObjectSchema.safeParse(value);
+    if (!data.success) return null;
+    const answer = JsonObjectSchema.safeParse(data.data.answer);
+    return {
+      ok: true, schemaVersion: 1, action,
+      openchamber: { schemaVersion: 1, ok: true, action, ...(answer.success ? { answer: answer.data } : {}), data: data.data },
+    };
+  }
+  if (toolName === 'openchamber_workflow' && action === 'workflow.run') {
+    const data = JsonObjectSchema.safeParse(value);
+    if (!data.success) return null;
+    const runId = typeof data.data.runId === 'string' ? data.data.runId : undefined;
+    if (!runId) return null;
+    return {
+      ok: true,
+      action: 'workflow.run',
+      data: { ...data.data, runId },
+    };
+  }
+  return null;
 }
 
 export interface HostToolController {
@@ -167,20 +180,24 @@ export function createHostToolController({
 
   const toggle = async (tool: HostToolName, enabled: boolean): Promise<void> => {
     enablement[tool] = enabled;
-    if (enabled) {
-      if (registeredApi && !registeredWithApi.has(tool)) {
-        registerSingleTool(registeredApi, tool);
-      }
-      if (boundSession) {
-        const active = boundSession.getActiveToolNames();
-        if (!active.includes(tool)) {
-          await boundSession.setActiveToolsByName([...active, tool]);
-        }
-      }
-    } else if (boundSession) {
-      const active = boundSession.getActiveToolNames();
-      if (active.includes(tool)) {
-        await boundSession.setActiveToolsByName(active.filter(name => name !== tool));
+    if (enabled && registeredApi && !registeredWithApi.has(tool)) {
+      registerSingleTool(registeredApi, tool);
+    }
+    if (boundSession) {
+      const currentEnabled = typeof boundSession.getEnabledToolNames === 'function'
+        ? boundSession.getEnabledToolNames()
+        : boundSession.getActiveToolNames();
+      const currentMounted = typeof boundSession.getMountedXdevToolNames === 'function'
+        ? boundSession.getMountedXdevToolNames()
+        : [];
+      const nextEnabled = enabled
+        ? (currentEnabled.includes(tool) ? currentEnabled : [...currentEnabled, tool])
+        : currentEnabled.filter(name => name !== tool);
+      const nextMounted = currentMounted.filter(name => name !== tool);
+      if (typeof boundSession.setActiveToolPresentation === 'function') {
+        await boundSession.setActiveToolPresentation(nextEnabled, nextMounted);
+      } else {
+        await boundSession.setActiveToolsByName(nextEnabled);
       }
     }
   };

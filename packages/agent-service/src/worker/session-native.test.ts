@@ -12,7 +12,7 @@ import { cfgSearxngEndpoint } from '@oh-my-pi/pi-coding-agent/web/settings';
 import { cfgProvidersWebSearchTimeoutSeconds } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { cfgCompactionKeepRecentTokens } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { cfgGoalContinuationModes } from '@oh-my-pi/pi-coding-agent/goals/settings';
-import { cfgRecapIdleSeconds } from '@oh-my-pi/pi-coding-agent/modes/settings';
+import { cfgRecapEnabled, cfgRecapIdleSeconds } from '@oh-my-pi/pi-coding-agent/modes/settings';
 import { resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
 import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-session';
@@ -184,9 +184,10 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
    return respond(payload, cwd);
   }
  });
- const openWorker = (sessionFile?: string) => WorkerSession.open({
+ const openWorker = (sessionFile?: string, bootstrapOverrides: Partial<WorkerBootstrapMessage> = {}) => WorkerSession.open({
   type: 'bootstrap', rootSessionId, workerGeneration: generation,
-  projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'source', cwd, agentDirectory, mcpConfigPath, sessionFile, sessionsDirectory: join(root, 'sessions')
+  projectId: 'project', workspaceId: 'workspace', agentDirectoryId: 'source', cwd, agentDirectory, mcpConfigPath, sessionFile, sessionsDirectory: join(root, 'sessions'),
+  ...bootstrapOverrides,
  }, inputs => {
   events.push(...inputs);
   journal?.append(inputs);
@@ -274,13 +275,13 @@ async function fixture({ respond, invoke, machineCommands = [], onSubagent = () 
   await worker.session.setModelTemporary(initialModel);
   return {
    root: cwd, agentDirectory, get worker() { return worker!; }, events, requests, grants, hostRequests, interactions, journal, mcpConfigPath,
-   reopen: async () => {
+   reopen: async (overrides: Partial<WorkerBootstrapMessage> = {}) => {
     const sessionFile = worker!.session.sessionManager.getSessionFile();
     if (!sessionFile) throw new Error('Fixture session file is missing');
     interactions.closeSession(rootSessionId);
     await worker!.close();
     resetSettingsForTest();
-    worker = await openWorker(sessionFile);
+    worker = await openWorker(sessionFile, overrides);
     journal!.replace(worker.seed());
     interactions.openSession(rootSessionId, journal!.runtime().epoch, generation, 'workspace', async operation => { await worker!.operation(operation); }, input => { events.push(input); journal!.append([input]); });
    },
@@ -361,6 +362,105 @@ test('an idle stretch publishes a canonical recap event once OMP records it', as
   expect(harness.journal.snapshot().messages.some(message => message.role === 'recap')).toBe(false);
  } finally { await harness.close(); }
 }, 30000);
+
+test('a live worker turns recap.enabled off after a turn and no recap follows', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const model = harness.worker.session.modelRegistry.find('native-fixture', 'native-model');
+  if (!model) throw new Error('Native fixture model is required');
+  await harness.worker.session.setModelTemporary(model);
+  harness.worker.session.settings.writeValue(cfgRecapIdleSeconds, 1, 'override');
+  await harness.worker.operation({ type: 'prompt', runId: 'turn-run', request: prompt('Reply with marker.') });
+  harness.worker.session.settings.writeValue(cfgRecapEnabled, false, 'project');
+  await harness.worker.session.settings.flush();
+  await harness.worker.operation({ type: 'catalog', revision: '10', operation: { type: 'catalog.settings.apply' } });
+  // Genuine platform timer wait: OMP's internal IdleMaintenance timer fires against the real clock.
+  const timer = Promise.withResolvers<void>();
+  setTimeout(timer.resolve, 1500);
+  await timer.promise;
+  expect(harness.events.some(input => input.event.type === 'session.recap')).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('a worker test uses the real SDK session with xd:// mounts; toggling notify keeps mounted tools enabled', async () => {
+ const harness = await fixture({ respond: () => completion() });
+ try {
+  const initialMounted = harness.worker.session.getMountedXdevToolNames();
+  expect(initialMounted.length).toBeGreaterThan(0);
+  const initialEnabled = harness.worker.session.getEnabledToolNames();
+  for (const tool of initialMounted) {
+   expect(initialEnabled).toContain(tool);
+  }
+
+  // Toggling notify on must keep every mounted tool enabled
+  await harness.worker.toggleHostTool('notify', true);
+  const afterEnableMounted = harness.worker.session.getMountedXdevToolNames();
+  expect(afterEnableMounted).toEqual(initialMounted);
+  const afterEnableAll = harness.worker.session.getEnabledToolNames();
+  expect(afterEnableAll).toContain('notify');
+  for (const tool of initialMounted) {
+   expect(afterEnableAll).toContain(tool);
+  }
+
+  // Toggling notify off must also keep every mounted tool enabled
+  await harness.worker.toggleHostTool('notify', false);
+  const afterDisableMounted = harness.worker.session.getMountedXdevToolNames();
+  expect(afterDisableMounted).toEqual(initialMounted);
+  const afterDisableAll = harness.worker.session.getEnabledToolNames();
+  expect(afterDisableAll).not.toContain('notify');
+  for (const tool of initialMounted) {
+   expect(afterDisableAll).toContain(tool);
+  }
+ } finally { await harness.close(); }
+});
+
+test('a cold session reopens with web disabled; web is absent from model tool list and calling it is refused', async () => {
+ let turn = 0;
+ const harness = await fixture({
+  respond: () => {
+   turn++;
+   if (turn === 1) return completion();
+   if (turn === 2) return completion({ id: 'call_web_1', name: 'web', input: { action: 'browser.open', input: { url: 'https://example.com' } } });
+   return completion('Finished.');
+  },
+ });
+ try {
+  const model = harness.worker.session.modelRegistry.find('native-fixture', 'native-model');
+  if (!model) throw new Error('Native fixture model is required');
+  await harness.worker.session.setModelTemporary(model);
+  const warmDone = Promise.withResolvers<void>();
+  const unsubWarm = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) warmDone.resolve(); });
+  await harness.worker.operation({ type: 'prompt', runId: 'warm-run', request: prompt('Warm turn.') });
+  await warmDone.promise;
+  unsubWarm();
+
+  await harness.reopen({ hostTools: { web: false } });
+  expect(harness.worker.session.getEnabledToolNames()).not.toContain('web');
+  expect(harness.worker.session.getActiveToolNames()).not.toContain('web');
+
+  const coldDone = Promise.withResolvers<void>();
+  const unsubCold = harness.worker.session.subscribe(event => { if (event.type === 'agent_end' && event.isTerminal !== false && !event.awaitingAsyncWork) coldDone.resolve(); });
+  await harness.worker.operation({ type: 'prompt', runId: 'cold-run', request: prompt('Try web.') });
+  await coldDone.promise;
+  unsubCold();
+
+  const lastRequest = harness.requests.at(-1);
+  const toolNames = new Set<string>();
+  for (const entry of lastRequest?.tools ?? []) {
+   if (entry && typeof entry === 'object') {
+    if ('function' in entry && entry.function && typeof entry.function === 'object' && 'name' in entry.function && typeof entry.function.name === 'string') {
+     toolNames.add(entry.function.name);
+    } else if ('name' in entry && typeof entry.name === 'string') {
+     toolNames.add(entry.name);
+    }
+   }
+  }
+  expect(toolNames.has('web')).toBe(false);
+
+  const hostWebCalls = harness.hostRequests.filter(r => r.type === 'tool' && r.toolName === 'web');
+  expect(hostWebCalls).toHaveLength(0);
+ } finally { await harness.close(); }
+});
 
 test('Agent Hub reads answer from the worker without a live subagent', async () => {
  const harness = await fixture({ respond: () => completion() });

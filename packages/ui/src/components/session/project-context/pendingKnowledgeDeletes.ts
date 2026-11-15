@@ -1,7 +1,6 @@
 import React from 'react';
 
 import { toast } from '@/components/ui';
-import type { AgentMemoryScope } from '@/lib/agentMemoryApi';
 import { resolveProjectContextId, type ProjectRef } from '@/lib/projectContextApi';
 
 /** How long a deleted entry can still be brought back. */
@@ -41,8 +40,6 @@ export const planDeleteKey = (projectRef: ProjectRef, planId: string) => (
   `plan:${resolveProjectContextId(projectRef)}:${planId}`
 );
 
-/** Memory ids are unique per store, and the global store is shared by every project. */
-export const memoryDeleteKey = (scope: AgentMemoryScope, memoryId: string) => `memory:${scope}:${memoryId}`;
 
 /** Keys of entries hidden while their delete waits for the undo window. */
 export const usePendingKnowledgeDeletes = (): ReadonlySet<string> => (

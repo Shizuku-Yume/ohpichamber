@@ -11,8 +11,8 @@ export type { KnownToolName } from './presentations';
 export {
     categorizeTool,
     TOOL_PERMISSION_GROUPS,
-    TOOL_ONE_LINE_DESCRIPTIONS,
-    type ToolPermissionGroupKey,
+    GROUP_DESCRIPTIONS,
+    getToolOneLineDescription,
 } from './groups';
 export { useEvalView, splitEvalOutput, evalResultSummary, normalizeEvalLanguage, isToolCallStatusEvent } from './toolView';
 export type { EvalLanguage, EvalTableColumn, EvalView, EvalViewEntry, EvalStatusEvent, EvalCellView, EvalViewData, EvalOutputPart } from './toolView';

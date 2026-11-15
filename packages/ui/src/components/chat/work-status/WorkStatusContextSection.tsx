@@ -18,7 +18,6 @@ import { getPrStatusLabel } from '@/components/session/sidebar/prStatusLabel';
 import { getIssueStateLook, getTrackerItemStateLook } from '@/components/session/sidebar/sessions/sessionPrSummaries';
 import { fetchSessionKnowledgeSummary, setSessionProjectContextPin, type SessionKnowledgeSummary } from '@/lib/sessionKnowledgeApi';
 import { useProjectContextStore } from '@/stores/useProjectContextStore';
-import { useAgentMemoryStore } from '@/stores/useAgentMemoryStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { resolveProjectForSessionDirectory } from '@/lib/projectResolution';
@@ -91,8 +90,6 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
   // Re-read when source content or memory changes, not only when the session does.
   const contextEntries = useProjectContextStore((state) => state.entries);
   const loadProjectContext = useProjectContextStore((state) => state.load);
-  const memoryProject = useAgentMemoryStore((state) => state.project);
-  const memoryGlobal = useAgentMemoryStore((state) => state.global);
 
   const draftProject = React.useMemo(() => {
     if (!isDraft) return null;
@@ -121,7 +118,7 @@ export const WorkStatusContextSection: React.FC<Props> = ({ sessionId, directory
       if (!cancelled) setKnowledge(summary);
     });
     return () => { cancelled = true; };
-  }, [directory, sessionId, session, contextEntries, memoryProject, memoryGlobal]);
+  }, [directory, sessionId, session, contextEntries]);
 
   const visibleKnowledge = React.useMemo<SessionKnowledgeSummary>(() => {
     if (!isDraft) return knowledge;

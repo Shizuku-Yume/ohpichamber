@@ -979,6 +979,9 @@ export class WorkerRegistry {
 
   /** Takes a spare that can host this launch, or `undefined` when none matches. */
   private adoptSpare(input: WorkerBootstrap, environment: NodeJS.ProcessEnv): ChildProcess | undefined {
+    // One synchronous stat per launch, not per candidate: a spare whose cwd is gone
+    // cannot host the session, and the launch spawns its own process anyway.
+    const cwdExists = existsSync(input.cwd);
     const now = Date.now();
     for (let index = this.spareWorkers.length - 1; index >= 0; index -= 1) {
       const spare = this.spareWorkers[index];
@@ -991,7 +994,7 @@ export class WorkerRegistry {
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
         continue;
       }
-      if (spare.loaded && cwdMatch && envMatch && existsSync(input.cwd)) {
+      if (spare.loaded && cwdMatch && envMatch && cwdExists) {
         // A used-but-still-loading spare pays the rest of its warm-up inside the
         // session that adopted it, so prefer a spare that already finished.
         const partner = this.spareWorkers.find(other => other !== spare && !other.adopted && other.loaded && other.warm

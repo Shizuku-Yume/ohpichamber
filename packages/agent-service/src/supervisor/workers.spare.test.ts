@@ -220,26 +220,59 @@ test('a second workspace does not take the first workspace\'s spares', async () 
 // sweep clears, so one eviction left every workspace without a spare for a whole
 // reap interval. A removal the registry chose on purpose must not record that.
 //
-// The lease refusal below is the same signal arriving for a real reason and must
-// still block (pinned by `a refused refill does not retry from its own settle`),
-// so the two cases have to stay distinguishable.
+// The eviction that does it is the third asker, not the second: the wish list
+// holds `sparePoolSize` entries, so A's spares stay wanted while A is still in
+// it, and only a third workspace pushes A out and lets the stale sweep retire
+// them. Two askers prove nothing here — the earlier version of this test made
+// exactly that mistake and stayed green with the `retired` line deleted.
+//
+// The lease refusal is the same signal arriving for a real reason and must still
+// block (pinned by `a refused refill does not retry from its own settle`), so the
+// two cases have to stay distinguishable.
 test('a deliberate eviction does not refuse refills until the next reaper sweep', async () => {
   const f = await fixture({ slowLoad: true });
-  const other = join(f.root, 'other-workspace');
-  await mkdir(other);
+  const second = join(f.root, 'second-workspace');
+  const third = join(f.root, 'third-workspace');
+  await Promise.all([mkdir(second), mkdir(third)]);
   const registry = registryFor(f.entrypoint);
+  const pool = () => (registry as unknown as { spareWorkers: { cwd: string; retired?: boolean }[] }).spareWorkers;
   try {
-    // Fill the first workspace's pool while the spares are still loading, then
-    // let another workspace ask: with a spent total budget that ask evicts, which
-    // is a deliberate removal of an unloaded spare.
+    // The first workspace fills the pool while its spares are still loading, so
+    // the eviction below happens to unloaded spares — the state that used to set
+    // the refusal.
     registry.warmSessionWorker({ cwd: f.cwd, agentDirectory: f.agentDirectory });
     await waitFor(async () => (await pidsFor(f.log, f.cwd)).length >= 2, 5_000);
-    registry.warmSessionWorker({ cwd: other, agentDirectory: f.agentDirectory });
-    await Bun.sleep(500);
+    const firstWorkspaceSpares = pool().filter((spare: { cwd: string }) => spare.cwd === f.cwd);
+    expect(firstWorkspaceSpares.length).toBe(2);
+    expect(firstWorkspaceSpares.every((spare: { retired?: boolean }) => spare.retired !== true)).toBe(true);
 
-    // The refusal must not be set by that eviction. This is the assertion that
-    // separates a chosen removal from a failed spawn, and it is what the 30 s
-    // freeze in the report was.
+    // Two more askers push the first workspace out of the two-entry wish list.
+    registry.warmSessionWorker({ cwd: second, agentDirectory: f.agentDirectory });
+    registry.warmSessionWorker({ cwd: third, agentDirectory: f.agentDirectory });
+
+    // The eviction is real: both of the first workspace's spares are gone from
+    // the pool. Asserting this is what stops the test from passing on a setup
+    // that never removed anything.
+    const surviving = pool().filter((spare: { cwd: string }) => spare.cwd === f.cwd);
+    expect(surviving.length).toBe(0);
+
+    // `retired` is what the `close` handler reads, so it has to be set on the
+    // entries *before* their exit is reported: that is the whole guard.
+    for (const spare of firstWorkspaceSpares) {
+      expect((spare as { retired?: boolean }).retired).toBe(true);
+    }
+
+    // The refusal is set from the exit handler, so the assertion has to wait for
+    // the children to actually exit. Without this the test reads the flag before
+    // the handler can set it and stays green with the guard deleted.
+    await waitFor(() => firstWorkspaceSpares.every(
+      (spare: { child: { exitCode: number | null; signalCode: string | null } }) => spare.child.exitCode !== null || spare.child.signalCode !== null,
+    ), 5_000);
+    // The exit handler runs on the same turn as the exit; give it one.
+    await Bun.sleep(50);
+
+    // And it was a chosen removal, so the refusal that freezes the pool for a
+    // whole reap interval is not set.
     expect((registry as unknown as { spareRefillBlocked: boolean }).spareRefillBlocked).toBe(false);
   } finally {
     await registry.close();

@@ -274,9 +274,17 @@ export class WorkerRegistry {
    * The Host registers a project and the managed chats root at startup, so a
    * pool that only held one workspace let the second registration take the
    * whole budget and leave the workspace the user then typed in with none. The
-   * pool therefore shares the budget between the workspaces asking for it: the
-   * workspace in use keeps one spare, and the rest of the budget goes to the
-   * workspace currently asking.
+   * wish list therefore holds the last two askers rather than one, and spares
+   * are only retired once their workspace drops out of it.
+   *
+   * A second asker that arrives with the budget already spent gets nothing until
+   * a spare is adopted or ages out: the incumbent keeps its spares because it is
+   * still in the wish list. That is deliberate — the asker the user is in returns
+   * on every new chat, while the other registration is idle — so the newest
+   * asker wins the *next* slot, not the current one. This also bounds a third
+   * asker: with more askers than slots the wish list keeps `sparePoolSize` of
+   * them and the rest churn through one eviction each, transient and capped at
+   * one process per evicted spare rather than an unbounded spawn loop.
    */
   private readonly sparePoolSize = 2;
   private spareRefill: Promise<void> | undefined;

@@ -1243,3 +1243,83 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** OMP exposes a prebuilt or per-process session graph, or the cold path becomes a path users routinely take.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-15 - The Host classifies OMP tools by the tier each tool declares
+
+- **Decided:** the worker sends each tool call's declared OMP approval tier (`read`, `write` or `exec`, resolved from the live registry with the call's arguments) on `policy.request`. The Host authorizer drops its read and write name lists, keeps the argument-aware special cases, and classifies every other tool by that tier: read after the path check, write after the workspace check, exec and unknown as `approvalRequired`. Hard denials remain only for writes outside the workspace, explicit deny rows, enterprise mode, unconfigured MCP servers and isolated delegation. The coverage test enumerates live tool names in main, plan and vibe modes. This replaces the name-list half of "Host authorizes OMP tools by tier, not by a known-name list" (2026-11-13); its tier semantics stand.
+- **Instead of:** letting OMP's `tools.approvalMode` decide prompts while the Host keeps only invariants, or adding the `vibe_*` names to the list.
+- **Because:** vibe mode leaves the director with only `vibe_*` tools, which no list named, so the final deny refused every call and `auto` could not help. OMP cannot express the workspace boundary, and under `ask` its gate would stop raising our card for `eval` and MCP. A list fails again with the next OMP, extension or plugin tool.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP exposes a path-aware approval policy the Host can delegate to, or ADR-05 changes the path boundary.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-15 - The todo tray shows only while a task is open
+
+- **Decided:** a todo result with no tasks renders only its text, and the composer tray renders only while at least one task is neither completed nor abandoned. The chat history keeps every todo card.
+- **Instead of:** hiding a finished plan after OMP's `tasks.todoClearDelay` (60 s), or keeping the `N/N` row.
+- **Because:** the maintainer reported an empty box and a tray that stays when nothing is in progress.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** the tray reads OMP's canonical todo state, including `todo_hud_state` dismissal, instead of tool results.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-15 - MCP sign-in starts on install, polls to completion, and redirects by runtime
+
+- **Decided:** an install whose probe needs authorization saves the server, reports "sign in to finish", starts the OAuth flow, opens the authorization page once and polls until connected. A local desktop runtime keeps the Agent Service loopback on a fixed dedicated port. A remote Web, mobile or remote-Host desktop client uses a public Host callback route that validates `state`. Enterprise mode refuses MCP OAuth at the authorizer and at the callback route with `403 enterprise_mode`. Provider failure reasons reach the panel, and a server with closed client registration offers a client-ID field.
+- **Instead of:** a separate "Sign in" click, the SDK loopback alone with a paste field, or leaving MCP OAuth ungated in enterprise mode.
+- **Because:** the install copy already promises a browser sign-in. A loopback on the Agent Service is unreachable from a remote or mobile browser. An MCP server carries conversation content to a third party, the same class as provider entry.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP's callback server becomes configurable to a Host-owned origin, or enterprise mode gains a per-service allowlist.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-15 - Model auto-fill reads OMP's bundled catalog first and OpenRouter second
+
+- **Decided:** "尝试自动填写模型信息" (try to fill in model info) fills context window, max output, input modalities, tool support, reasoning and pricing from `@oh-my-pi/pi-catalog` through `resolveModelReference`, offline. Only models the catalog misses go to OpenRouter's public models API through the Host, which sends model ids only. Enterprise mode refuses the OpenRouter request with `403 enterprise_mode`, and the UI reports a catalog-only result. Auto-fill never overwrites a value the user typed.
+- **Instead of:** OpenRouter only, or the catalog only.
+- **Because:** the catalog is the data OMP executes with and already matches vendor-prefixed and bracketed ids. OpenRouter covers ids the catalog lacks, but it is a second authority and an egress call.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP's catalog gains a refresh channel, or OpenRouter stops being the broadest public model list.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-15 - Settings rows use one row pattern, one set of control sizes and one spacing scale
+
+- **Decided:** every settings row is label-left, control-right, with the control aligned to the row's trailing edge. OMP rows of every type follow it, booleans as checkbox rows. Named classes in `SettingsSection.tsx` set control widths (select, number stepper, short text, long text) and vertical spacing (section, row stack, checkbox stack). Pages stop adding their own widths and section spacing, and a guard test rejects raw width or spacing utilities on controls in `components/sections`. The 840 px page cap stays.
+- **Instead of:** stacked fields with a wider page, or removing the page cap now.
+- **Because:** the empty right side came from stacked rows capped at 24 rem and an inert trailing alignment, not from the page width, which matches upstream. The maintainer asked for spacing and control sizes to be unified across Settings.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** the maintainer finds the pages cramped after the row fix.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-15 - The OMP settings page has four tabs, ordered by a layout table
+
+- **Decided:** the OMP page renders 常用 (Common), 编辑与读取 (Editing & reading), 执行与工具 (Execution & tools) and 高级 (Advanced) from a layout table (tab → group → ordered ids) instead of OMP's `group` and declaration order. 高级 holds only internal tuning, and ends with the config.yml footer. The four read-summary thresholds get a preset that writes all four keys and shows 自定义 (Custom) for any other tuple. Rows Sessions, Agents, Memory, Chat, Tools or Behavior already own stay there. `dev.autoqa` and `spotlight.experiment.enabled` become `boundary`; five terminal-presentation rows become `tui-only`. Every row is searchable, and search opens its tab. Copy, option labels and units exist in all 15 locales. This supersedes "Engine rows without a locale override show OMP's own label and description" (2026-11-14), which the 15-locale test had already overtaken.
+- **Instead of:** three tabs, a separate experimental tab, or gathering other pages' complex rows into 高级.
+- **Because:** the page was a 93-row wall in OMP's declaration order, with raw English option chips, missing units and 85 unsearchable rows. Moving rows off their concept pages would relocate owners and search entries without addressing the complaint.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP adds a category or advanced marker to its settings registry.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-15 - Routing categories are a flat disclosure list and save only when valid
+
+- **Decided:** routing categories render as a flat disclosure list built on a shared `SettingsDisclosure` primitive, enabled by a checkbox. A new category needs a name and a description. The debounced save runs only for a valid draft, and an invalid one shows an inline helper while the save state stays idle.
+- **Instead of:** a card grid with a detail screen per category, or a placeholder description.
+- **Because:** a new category carried an empty description that the server rejects, so the draft never saved. A placeholder would be sent to the router as real criteria, and a card grid adds a navigation step to a short list.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** routing gains enough categories that a single list stops fitting on a screen.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-15 - Provider IDs follow OMP's selector grammar, not the OpenCode-era pattern
+
+- **Decided:** custom provider IDs accept letters, digits, `.`, `_` and `-` (up to 128), are unique regardless of case, and refuse `/`, `#`, `@`, `:`, whitespace and prototype names. `configureProvider` rejects `/` with 422. Custom base URLs may carry a query string. MCP server names follow OMP's `^[A-Za-z0-9_.-]{1,100}$`. Env-backed built-in providers show their variable name and offer a key field; the contract carries the variable name only.
+- **Instead of:** keeping `^[a-z0-9][a-z0-9_-]*$`, or dropping client validation.
+- **Because:** the pattern came from upstream's OpenCode era. OMP accepts any `models.yml` key and matches ids case-insensitively. Only the selector delimiters and object-key hazards break anything.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP's selector grammar changes.
+- **Effort:** ux-feedback-2026-11-15

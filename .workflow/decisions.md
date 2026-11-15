@@ -1333,6 +1333,7 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** user
 - **Mine:** no
 - **Revisit when:** a released OhPiChamber build exists and users report needing their upstream settings.
+- **Superseded by:** 2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names
 
 ## 2026-11-16 - Cut the fork off from upstream-hosted services
 
@@ -1352,3 +1353,34 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** the npm name `ohpichamber` turns out to be unavailable, or a pre-release channel becomes needed.
 - **Supersedes:** 2026-10-27 - Keep the fork version at 3.0.0
+
+## 2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names
+
+- **Decided:** what a user or the operating system sees is renamed. The product is OhPiChamber on every user-facing surface, with an About credit "Based on OpenChamber" and the upstream MIT notice. Electron uses `dev.ohpichamber.desktop`, mobile `dev.ohpichamber.app` (extensions under it), the CLI is `ohpichamber`, the URL scheme `ohpichamber://`, the data directory `~/.config/ohpichamber`, and Electron's user-data folder `OhPiChamber`. Nothing is imported from `~/.config/openchamber`. Environment variables keep the `OPENCHAMBER_*` prefix (209 names, 2845 references) and are documented as the fork's configuration names. Private workspace packages keep their `@openchamber/*` names, and code identifiers (`OpenChamberLogo`, the `OpenChamberWidget` Xcode target) stay.
+- **Instead of:** keeping the OpenChamber name and IDs; renaming but importing selected files from `~/.config/openchamber` on first start; renaming every variable to `OHPICHAMBER_*`; or renaming only the dozen variables users set by hand.
+- **Because:** shared app IDs and a shared data directory make an upstream install and this fork overwrite each other and read one `settings.json` whose schema has diverged. An import path would mean reading OpenCode-era keys, which the no-fallback cutover rule forbids. The fork merges upstream with real git merges, so every renamed line conflicts each time upstream touches it, and users never see private names. The renamed data directory, IDs and CLI already keep the two installs apart, so the shared variable prefix collides with nothing.
+- **Decided by:** user (name, IDs, data directory, environment variables); agent (private package and code names)
+- **Mine:** partly: the private package and code-name scope is mine
+- **Revisit when:** a user runs upstream OpenChamber and this fork in one environment and the shared prefix causes a real misconfiguration.
+- **Effort:** rebrand
+- **Supersedes:** 2026-11-16 - Ship as OhPiChamber with its own identifiers and a fresh data directory
+
+## 2026-11-16 - Rebrand in two phases around the open UX effort
+
+- **Decided:** the icon pipeline, identifiers, update feed, upstream-service cutoff, package names and canary removal land now. The product-name change across UI copy (160 i18n files, 5236 references) and documentation waits until `ux-feedback-2026-11-15` lands on `main`. When the rename lands, the maintainer's operator files in `~/.config/ohpichamber` are deleted, and from then on that directory holds the maintainer's real product data.
+- **Instead of:** waiting for every in-progress effort before starting, or renaming all copy now and resolving conflicts later.
+- **Because:** the open effort has 13 tasks rewriting UI copy, and a parallel mass string rename would conflict with each of them. The identity, icon and service work barely touches copy, and the update-feed fix is the urgent part.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** `ux-feedback-2026-11-15` is abandoned or split so that its remaining tasks no longer touch UI copy.
+- **Effort:** rebrand
+
+## 2026-11-16 - The OhPiChamber mark is the upstream cube with an OMP π folded over its front edge
+
+- **Decided:** the mark keeps upstream's cube unchanged: open shell, three roof tiers with a white centre, white edges, black outline. An OMP-proportioned π (bar 42, legs 40 and 41 wide, short left leg, measured from the official OMP mark) lies on the left face. Its bar covers the top-left edge, its long leg is the front vertical edge, and the bar folds round onto the right face as an opaque strip shaded one step darker. The π shades from white at the top to `#9fa1a6` on the left face and from `#d6d7da` to `#85878d` on the fold. The approved master is concept I2 at `/home/shizuku/Project/ohpichamber-omp-artifacts/icon-concepts-2026-11-16/ohpichamber-icon-i2.svg`. It is rebuilt in code by restoring upstream's `scripts/brand` generator without the VS Code, OpenCode and canary outputs.
+- **Instead of:** a π floating inside a glass cube (P3/V-series), a π engraved or embossed on the roof, a recoloured upstream cube, or hand-exported icon files.
+- **Because:** the maintainer chose the folded edge (E2 → G5 → H5 → I2) over twelve glass-cube and edge-treatment variants, because there the cube's edges become the π instead of crossing it. Upstream's generator already draws every platform drawing from one geometry file, and its only dependency, `sharp`, is installed.
+- **Decided by:** user (design); agent (generator restore)
+- **Mine:** partly: restoring the generator is mine
+- **Revisit when:** the 16–32 px drawings cannot show the π legibly and the maintainer rejects the simplified small sizes.
+- **Effort:** rebrand

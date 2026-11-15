@@ -54,8 +54,15 @@ type WorkerEntry = WorkerInput & {
   lastActivityAt: number;
 };
 type ActionHandle = { entry: WorkerEntry; controller: AbortController };
-/** A worker process booted ahead of a session, waiting for a bootstrap. */
-type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; warm: boolean; adopted: boolean; readyPromise?: Promise<void> };
+/**
+ * A worker process booted ahead of a session, waiting for a bootstrap.
+ *
+ * `retired` marks a spare this registry removed on purpose (another workspace
+ * needs the slot, the pool closed, a lease took the directory). Its `close`
+ * handler must not read that as "the spawn target is broken", because the
+ * refusal it would record lasts until the next reaper sweep.
+ */
+type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; warm: boolean; adopted: boolean; retired?: boolean; readyPromise?: Promise<void> };
 
 /** The Task17 measurement fixes these production values; tests may override them. */
 export const WORKER_CAPACITY_POLICY = {
@@ -258,11 +265,23 @@ export class WorkerRegistry {
    */
   private readonly spareWorkers: SpareWorker[] = [];
   private readonly spareLifetimeMs = 120_000;
-  /** Loaded-or-loading spares kept per workspace; adopting one still leaves a replacement. */
+  /**
+   * Total loaded-or-loading spares the service keeps, across every workspace
+   * that asked for one. It is a total and not a per-workspace size because a
+   * spare costs a whole worker process (~250 MB resident): the pool is a memory
+   * commitment, so it needs one ceiling rather than one per directory.
+   *
+   * The Host registers a project and the managed chats root at startup, so a
+   * pool that only held one workspace let the second registration take the
+   * whole budget and leave the workspace the user then typed in with none. The
+   * pool therefore shares the budget between the workspaces asking for it: the
+   * workspace in use keeps one spare, and the rest of the budget goes to the
+   * workspace currently asking.
+   */
   private readonly sparePoolSize = 2;
   private spareRefill: Promise<void> | undefined;
-  /** The pool the service wants filled. The pool only ever holds one workspace, so one entry is the whole wish list. */
-  private spareWanted: { input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>; environment: NodeJS.ProcessEnv } | undefined;
+  /** Workspaces that asked for a pool, most recently wanted last. Bounded by the pool size. */
+  private readonly spareWanted = new Map<string, { input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>; environment: NodeJS.ProcessEnv }>();
   /**
    * Set when a refill was refused by a worktree lease or a spawn failed. The
    * reaper's next sweep clears it. Retrying such an attempt on the settle of the
@@ -407,6 +426,7 @@ export class WorkerRegistry {
             if (isInsideOrSameDirectory(canonicalDirectory, spare.cwd)
               || isInsideOrSameDirectory(spare.cwd, canonicalDirectory)) {
               this.spareWorkers.splice(i, 1);
+              spare.retired = true;
               if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
             }
           }
@@ -680,13 +700,18 @@ export class WorkerRegistry {
       for (const spare of [...this.spareWorkers]) {
         if (now - spare.createdAt < this.spareLifetimeMs) continue;
         this.spareWorkers.splice(this.spareWorkers.indexOf(spare), 1);
+        spare.retired = true;
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
       }
       // The sweep is also where a blocked or short pool gets its next attempt:
       // it runs on a fixed interval whether or not anything asked for a spare, so
       // a refusal costs one attempt per interval instead of one per microtask.
       this.spareRefillBlocked = false;
-      if (this.spareWanted) this.warmSessionWorker(this.spareWanted.input, this.spareWanted.environment);
+      // Top the pool up from the wish list, newest workspace first: the one the
+      // user is in now gets its spare before an older registration does.
+      for (const { input, environment } of [...this.spareWanted.values()].reverse()) {
+        this.warmSessionWorker(input, environment);
+      }
     } finally { this.reaping = false; }
   }
 
@@ -895,6 +920,7 @@ export class WorkerRegistry {
     this.worktreeLeases.clear();
     this.relocationFences.clear();
     for (const spare of this.spareWorkers.splice(0)) {
+      spare.retired = true;
       if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
     }
     await Promise.all([...this.workerEntries.values()].map(entry => this.stopEntry(entry)));
@@ -924,24 +950,34 @@ export class WorkerRegistry {
   warmSessionWorker(input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>, environment = this.workerEnvironment(input as WorkerBootstrap)): void {
     if (this.closing) return;
     if (input.cwd.includes('ohpichamber-agent-ready-') || input.cwd.includes('worker-process-tree-') || input.cwd.includes('worker-lease-')) return;
-    for (let i = this.spareWorkers.length - 1; i >= 0; i -= 1) {
-      const spare = this.spareWorkers[i];
-      if (spare.cwd !== input.cwd) {
-        this.spareWorkers.splice(i, 1);
-        if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
-      }
+    // The workspace asked for a pool, so it joins the wish list. The map is
+    // insertion-ordered and the caller is the workspace the user is in now, so
+    // it moves to the end and wins the budget below.
+    this.spareWanted.delete(input.cwd);
+    while (this.spareWanted.size >= this.sparePoolSize) {
+      const oldest = this.spareWanted.keys().next();
+      if (oldest.done) break;
+      this.spareWanted.delete(oldest.value);
     }
-    // Every entry here is one slot of this workspace's pool, loaded or still
-    // loading. Filling to `sparePoolSize` is what keeps back-to-back new chats
-    // from alternating between an adopted spare and a cold launch: while one
-    // session uses a spare, the replacement is already loading.
-    this.spareWanted = { input, environment };
+    this.spareWanted.set(input.cwd, { input, environment });
+    // Spares belong to a directory the user has left only while the budget has
+    // room for them. Keeping a stale workspace's spare past that would spend a
+    // worker process the current workspace needs.
+    const stale = [...this.spareWorkers].filter(spare => spare.cwd !== input.cwd && !this.spareWanted.has(spare.cwd));
+    for (const spare of stale) {
+      const index = this.spareWorkers.indexOf(spare);
+      if (index >= 0) this.spareWorkers.splice(index, 1);
+      spare.retired = true;
+      if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
+    }
     // A refusal holds until the reaper's next sweep, so a leased workspace or a
     // broken spawn target costs one attempt per sweep rather than a retry from
     // the settle of the attempt that was refused.
     if (this.spareRefillBlocked) return;
-    const claimed = this.spareWorkers.filter(spare => !spare.adopted && spare.cwd === input.cwd && isDeepStrictEqual(spare.environment, environment));
-    if (claimed.length >= this.sparePoolSize) return;
+    // The total budget is shared, not per directory. A workspace that already
+    // holds its share leaves the rest to the one asking now, which is what keeps
+    // a second registered workspace from freezing out the first.
+    if (this.spareWorkers.filter(spare => !spare.adopted).length >= this.sparePoolSize) return;
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
     this.spareRefill = (async () => {
@@ -967,7 +1003,12 @@ export class WorkerRegistry {
           // retrying now: whatever stopped it will stop the next one too. Hold
           // until the reaper's sweep, so a broken spawn target costs one attempt
           // per sweep instead of a spawn per event-loop turn.
-          if (!spare.loaded) this.spareRefillBlocked = true;
+          //
+          // A spare this registry removed on purpose is not that signal. Its exit
+          // is the expected result of the removal, and blocking here would turn
+          // one workspace switch into a whole reap interval with no warm worker
+          // for the workspace the user is now in.
+          if (!spare.loaded && spare.retired !== true) this.spareRefillBlocked = true;
           resolveReady();
         };
         child.once('close', drop);
@@ -1011,6 +1052,7 @@ export class WorkerRegistry {
       const exitNull = spare.child.exitCode === null && spare.child.signalCode === null;
       if (expired || !spare.child.connected || !exitNull) {
         this.spareWorkers.splice(index, 1);
+        spare.retired = true;
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
         continue;
       }

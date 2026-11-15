@@ -498,7 +498,7 @@ export class WorkerRegistry {
           if (stored && isInsideOrSameDirectory(leaseDirectory, stored)) throw refuse('COMMAND_IN_FLIGHT');
         }
         if (current.info.state === 'starting') {
-          try { await waitWithin(current.ready, 5_000); } catch { /* starting settles */ }
+          try { await waitWithin(current.ready, this.options.startupTimeoutMs ?? 15_000); } catch { /* starting settles */ }
         }
         if (current.info.state === 'starting' || this.restartReservations.has(current.info.rootSessionId) || pendingWork(current)) {
           throw refuse('COMMAND_IN_FLIGHT');
@@ -508,8 +508,13 @@ export class WorkerRegistry {
         // is the authority, and a missing or failed probe is not proven idle.
         if (!(await this.hasNoRunningShellJobs(current))) throw refuse('COMMAND_IN_FLIGHT');
       } else {
+        // A start admitted just before the lease is not a command in flight: it
+        // is the startup every other caller already waits for, so it gets the
+        // registry's configured budget. A shorter fixed wait turned a lease over
+        // a just-registered workspace into a 409 against its prewarmed catalog
+        // worker whenever module loading ran long.
         if (current.info.state === 'starting') {
-          try { await waitWithin(current.ready, 5_000); } catch { /* starting settles */ }
+          try { await waitWithin(current.ready, this.options.startupTimeoutMs ?? 15_000); } catch { /* starting settles */ }
         }
         if (current.info.state === 'starting' || pendingWork(current)) {
           throw refuse('COMMAND_IN_FLIGHT');

@@ -153,8 +153,13 @@ export class NativeFileResources {
       if (result.some(item => item.entry.name === name && item.entry.scope === 'inherited')) continue;
       const spec = lookupBuiltinSlashCommand(name);
       if (!spec) continue;
-      const description = spec?.description ?? spec?.acpDescription ?? '';
-      const argumentHint = spec?.acpInputHint ?? spec?.inlineHint ?? undefined;
+      // This catalog feeds ACP and the GUI, not the terminal. OMP's TUI
+      // description embeds keybinding hints rendered through the active theme
+      // (`Shift+Tab` or `⇧⇥` depending on whether a theme was loaded), which is
+      // ambient state no client asked for; the ACP copy is the same command
+      // described for a client without a keyboard.
+      const description = spec.acpDescription ?? spec.description ?? '';
+      const argumentHint = spec.acpInputHint ?? spec.inlineHint ?? undefined;
       result.push({
         entry: CommandEntrySchema.parse({
           commandId: identity('command', `builtin:${name}`),

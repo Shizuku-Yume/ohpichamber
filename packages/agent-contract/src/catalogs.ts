@@ -634,7 +634,15 @@ const MCPOAuthResultOwnerFields = {
 export const MCPOAuthResultSchema = z.discriminatedUnion('status', [
   z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('pending'), authenticated: z.boolean(), pendingFlow: MCPOAuthPendingFlowSchema }),
   z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('authenticated'), authenticated: z.literal(true) }),
-  z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('unauthenticated'), authenticated: z.literal(false) }),
+  z.strictObject({
+    ...MCPOAuthResultOwnerFields, status: z.literal('unauthenticated'), authenticated: z.literal(false),
+    // Why the last attempt ended. A flow that fails after the browser handoff
+    // (consent denied, state mismatch, token exchange, expiry) has no other
+    // channel: the pending poll would otherwise report a plain unauthenticated
+    // result and the panel would reset with no message. Absent for a user
+    // cancel, which is a neutral outcome, and reported once per failure.
+    error: CatalogOperationErrorSchema.optional(),
+  }),
 ]);
 export type MCPOAuthResult = z.infer<typeof MCPOAuthResultSchema>;
 

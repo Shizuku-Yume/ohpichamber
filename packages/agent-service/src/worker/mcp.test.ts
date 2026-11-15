@@ -9,7 +9,9 @@ import {
   WorkerMcp,
 } from './mcp.ts';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
+import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import type { MCPConfigurationState } from '@openchamber/agent-contract';
+import { operationErrorDetail, WorkerReplySchema } from '../protocol.ts';
 
 describe('MCP configuration management and unmanaged projection', () => {
   test('returns null when configuration file is absent', async () => {
@@ -461,3 +463,22 @@ describe('user-scope OAuth through WorkerMcp on real files', () => {
     }
   });
 });
+
+
+      // The sentence must survive the worker wire, not only this call: the
+      // panel reads the problem detail, so the send-site bound has to admit an
+      // MCP OAuth cause whole while it still trims every other code.
+      const code = ProblemCodeSchema.parse(rejection.error.code);
+      const detail = operationErrorDetail(code, rejection.error.message);
+      expect(detail).toBe(rejection.error.message);
+      expect(detail).toContain('oauth.clientId');
+      expect(WorkerReplySchema.safeParse({
+        type: 'operation.error', workerGeneration: 'generation-1', commandId: 'command-1',
+        code, status: 422, detail,
+      }).success).toBe(true);
+      const other = 'x'.repeat(2_000);
+      expect(operationErrorDetail('MCP_APPLY_FAILED', other)).toBe('x'.repeat(200));
+      expect(WorkerReplySchema.safeParse({
+        type: 'operation.error', workerGeneration: 'generation-1', commandId: 'command-1',
+        code: 'MCP_APPLY_FAILED', status: 503, detail: operationErrorDetail('MCP_APPLY_FAILED', other),
+      }).success).toBe(true);

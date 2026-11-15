@@ -1,5 +1,6 @@
 import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, SessionToolsCatalogSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
 import { GoalControlRequestSchema } from '@openchamber/agent-contract';
+import type { ProblemCode } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { ProjectionInputSchema, ProjectionSeedSchema } from './projection/protocol.ts';
@@ -191,6 +192,24 @@ export const WorkerCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('stop'), workerGeneration: EntityIdSchema }),
   WorkerOperationCommandSchema,
 ]);
+/**
+ * How much of a failure cause the wire carries. Most operations carry a short
+ * sentence, but an OAuth failure is the provider's own diagnostic — a rejected
+ * dynamic client registration names the endpoint, the HTTP status and the
+ * `oauth.clientId` remedy — and a 200-character cut removes exactly the part the
+ * sign-in panel shows. The bound lives beside the schema that enforces it, and
+ * the sender truncates with the same function, so the two cannot disagree about
+ * what fits.
+ */
+export const DefaultOperationErrorDetailLimit = 200;
+export const McpOAuthOperationErrorDetailLimit = 1_000;
+export function operationErrorDetailLimit(code: ProblemCode): number {
+  return code.startsWith('MCP_OAUTH_') ? McpOAuthOperationErrorDetailLimit : DefaultOperationErrorDetailLimit;
+}
+export function operationErrorDetail(code: ProblemCode, detail: string): string {
+  return detail.slice(0, operationErrorDetailLimit(code));
+}
+
 export const WorkerReplySchema = z.discriminatedUnion('type', [
   // A pre-warmed worker reports that its module graph is loaded and it is
   // waiting for a bootstrap. Only then is adopting it faster than spawning.
@@ -200,7 +219,12 @@ export const WorkerReplySchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('warm') }),
   z.strictObject({ type: z.literal('ready'), workerGeneration: EntityIdSchema }),
   z.strictObject({ type: z.literal('error'), workerGeneration: EntityIdSchema, code: ProblemCodeSchema, detail: z.string().min(1).max(200).optional() }),
-  z.strictObject({ type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema, status: z.number().int().min(400).max(599), detail: z.string().min(1).max(200) }),
+  z.strictObject({
+    type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema,
+    status: z.number().int().min(400).max(599), detail: z.string().min(1).max(McpOAuthOperationErrorDetailLimit),
+  }).refine(reply => reply.detail.length <= operationErrorDetailLimit(reply.code), {
+    path: ['detail'], message: 'Operation error detail exceeds the limit for its code',
+  }),
   z.strictObject({ type: z.literal('lifecycle'), workerGeneration: EntityIdSchema, state: z.enum(['initialized', 'closed']) }),
   z.strictObject({ type: z.literal('opened'), workerGeneration: EntityIdSchema, sessionFile: PrivatePathSchema, seed: ProjectionSeedSchema }),
   z.strictObject({ type: z.literal('subagent'), workerGeneration: EntityIdSchema, subagentId: EntityIdSchema, status: z.enum(['started', 'completed', 'failed', 'aborted']), role: z.string().min(1), solutionSpace: z.string().optional(), sessionFile: PrivatePathSchema.optional(), toolCallId: EntityIdSchema.optional() }),

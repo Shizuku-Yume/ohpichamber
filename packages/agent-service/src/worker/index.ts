@@ -1,4 +1,4 @@
-import { WorkerCommandSchema } from '../protocol.ts';
+import { operationErrorDetail, WorkerCommandSchema } from '../protocol.ts';
 import type { CompletionWorkerBootstrap, UsageWorkerBootstrap, WorkerBootstrapMessage, WorkerOperation, WorkerReply } from '../protocol.ts';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
@@ -129,11 +129,14 @@ process.on('message', raw => {
       send({ type: 'result', workerGeneration: command.workerGeneration, commandId: command.commandId, result });
     }).catch((error: unknown) => {
       const nativeCode = error instanceof NativeMcpError ? ProblemCodeSchema.safeParse(error.code) : undefined;
+      const code = error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE';
       send({
         type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
         status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError ? nativeMcpStatus(error) : 503,
-        code: error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE',
-        detail: operationCause(error).slice(0, 200)
+        code,
+        // An MCP OAuth failure carries the provider's own sentence, which the
+        // sign-in panel shows verbatim; other codes keep the short bound.
+        detail: operationErrorDetail(code, operationCause(error))
       });
     });
     return;

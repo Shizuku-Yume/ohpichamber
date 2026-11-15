@@ -60,6 +60,7 @@ const samplePayloads: Record<string, Record<string, unknown>> = {
   'session.compacted': { compactionId: 'cmp-1', tokensBefore: 10, completedAt: 4 },
   'subagent.updated': { subagent: { subagentId: 'sub-1', parentSessionId: 'session-1', childSessionId: 'session-2', role: 'coder', status: 'running' } },
   'session.recap': { recap: 'x', createdAt: 5 },
+  'session.suggestion': { suggestion: 'Run the tests next.', createdAt: 5 },
   'advisor_yielded': { notes: [{ noteId: 'note-1', severity: 'nit', text: 'x', timestamp: 6 }] },
   'cleanse.progress': { activeCheckers: [], completedCheckers: [], repairedFiles: [], status: 'discovering' },
 };

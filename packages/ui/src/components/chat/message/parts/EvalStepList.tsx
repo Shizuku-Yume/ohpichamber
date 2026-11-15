@@ -6,6 +6,7 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import type { EvalStatusEvent } from '@/lib/toolPresentation';
 import { cn } from '@/lib/utils';
+import { useWaitingBlink } from '@/hooks/useDurationTicker';
 import { BusyDots } from './BusyDots';
 
 const MINI_CODE_STYLE: React.CSSProperties = {
@@ -114,6 +115,19 @@ export interface EvalStepListProps {
     onShowPopup?: (content: ToolPopupContent) => void;
 }
 
+// Its own component: the shared waiting blink re-renders this row once a
+// second, not the step list around it.
+const RunningRow: React.FC<{ label: string }> = ({ label }) => {
+    const blink = useWaitingBlink(true);
+    return (
+        <div data-testid="eval-step-running" className="flex items-center gap-1.5 py-0.5 px-1 text-primary">
+            <span className="text-muted-foreground/50 select-none shrink-0">└── </span>
+            <BusyDots />
+            <span className={cn('font-sans text-[11px] font-medium', blink)}>{label}</span>
+        </div>
+    );
+};
+
 export const EvalStepList: React.FC<EvalStepListProps> = ({
     statusEvents = [],
     statusEventsElided = 0,
@@ -218,15 +232,7 @@ export const EvalStepList: React.FC<EvalStepListProps> = ({
                 );
             })}
 
-            {isCellRunning ? (
-                <div data-testid="eval-step-running" className="flex items-center gap-1.5 py-0.5 px-1 text-primary">
-                    <span className="text-muted-foreground/50 select-none shrink-0">└── </span>
-                    <BusyDots />
-                    <span className="animate-pulse font-sans text-[11px] font-medium">
-                        {t('chat.eval.running')}
-                    </span>
-                </div>
-            ) : null}
+            {isCellRunning ? <RunningRow label={t('chat.eval.running')} /> : null}
         </div>
     );
 };

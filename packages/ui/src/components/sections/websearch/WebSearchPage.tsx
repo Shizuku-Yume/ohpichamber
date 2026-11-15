@@ -243,7 +243,10 @@ const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapsh
               className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
               aria-label={t('settings.webSearch.native.addFallback')}
             >
-              <SelectValue placeholder={t('settings.webSearch.native.addFallback')} />
+              {/* The value is always empty: picking a provider commits it to the
+                  fallback list. So the trigger reads as this action's label, not
+                  as the id a `SelectValue` without children would print. */}
+              <SelectValue>{t('settings.webSearch.native.addFallback')}</SelectValue>
             </SelectTrigger>
             <SelectContent>
               {addable.map((provider) => (

@@ -36,6 +36,7 @@ const AGENT_ROUTES = [
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers$/, response: C.ProviderCatalogSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/oauth-methods$/, response: C.ProviderOAuthMethodsSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/discover$/, request: C.ProviderModelDiscoveryRequestSchema, response: C.ProviderModelDiscoveryResultSchema, providerEntry: true },
+ { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/enrich$/, request: C.ProviderModelEnrichRequestSchema, response: C.ProviderModelEnrichResultSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, response: C.ProviderAccountsSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, request: C.ProviderAccountMutationRequestSchema, response: C.ProviderAccountsSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/oauth$/, request: C.ProviderOAuthRequestSchema, response: C.ProviderOAuthResultSchema, providerOAuth: true },

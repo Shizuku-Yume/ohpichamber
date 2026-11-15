@@ -35,3 +35,17 @@ test('provider discovery rejects malformed endpoint credentials and header injec
   }).success).toBe(true);
   expect(CatalogOperationSchema.safeParse({ type: 'catalog.provider.models.discover', request: { ...request, headers: { Authorization: 'Bearer secret\r\nX-Injected: value' } } }).success).toBe(false);
 });
+
+test('provider enrichment stays a local catalog request without connection details', () => {
+  const request = { providerId: 'stored-provider', models: [{ modelId: 'claude-opus-4-6' }] };
+  expect(CatalogOperationSchema.safeParse({ type: 'catalog.provider.models.enrich', request }).success).toBe(true);
+  for (const extra of [{ endpoint: 'https://provider.invalid/v1' }, { apiKey: 'secret' }, { headers: { Authorization: 'secret' } }]) {
+    expect(CatalogOperationSchema.safeParse({ type: 'catalog.provider.models.enrich', request: { ...request, ...extra } }).success).toBe(false);
+  }
+  const result = { type: 'catalog.provider.models.enriched', result: { models: [{ modelId: 'claude-opus-4-6', catalog: {
+    source: 'omp-catalog', input: ['text'], contextWindow: 200000, maxTokens: 64000,
+    cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 }, reasoning: true,
+  } }, { modelId: 'unknown-model' }] } };
+  expect(CatalogResultSchema.parse(result)).toEqual(result);
+  expect(CatalogResultSchema.safeParse({ ...result, result: { models: [{ modelId: 'unknown-model', headers: { Authorization: 'secret' } }] } }).success).toBe(false);
+});

@@ -14,9 +14,11 @@ export const ProviderAccountMutationRequestSchema = z.discriminatedUnion('action
   z.strictObject({ action: z.literal('label'), expectedRevision: CounterSchema, credentialRef: EntityIdSchema, label: z.string().trim().max(128) }),
 ]);
 export type ProviderAccountMutationRequest = z.infer<typeof ProviderAccountMutationRequestSchema>;
-export const ProviderOAuthMethodsSchema = z.strictObject({ methods: z.array(z.strictObject({
-  methodId: EntityIdSchema, providerId: EntityIdSchema, name: z.string().min(1), storeCredentialsAs: EntityIdSchema,
-})) });
+export const ProviderOAuthMethodsSchema = z.strictObject({
+  methods: z.array(z.strictObject({
+    methodId: EntityIdSchema, providerId: EntityIdSchema, name: z.string().min(1), storeCredentialsAs: EntityIdSchema,
+  }))
+});
 export type ProviderOAuthMethods = z.infer<typeof ProviderOAuthMethodsSchema>;
 const FlowIdentity = { flowId: EntityIdSchema, generation: EntityIdSchema };
 export const ProviderOAuthRequestSchema = z.discriminatedUnion('action', [
@@ -50,10 +52,50 @@ export const ProviderModelDiscoveryRequestSchema = z.strictObject({
   headers: ProviderHeaderWriteSchema.optional(), apiKey: z.string().min(1).optional(), credentialRef: EntityIdSchema.optional(),
 });
 export type ProviderModelDiscoveryRequest = z.infer<typeof ProviderModelDiscoveryRequestSchema>;
-export const ProviderModelDiscoveryResultSchema = z.strictObject({ models: z.array(z.strictObject({
-  modelId: EntityIdSchema, name: z.string().min(1), contextWindow: z.number().int().positive().optional(), maxOutputTokens: z.number().int().positive().optional(),
-})) });
+/**
+ * Capability metadata the bundled OMP catalog publishes for a model id. It is
+ * a read-only hint: auto-fill writes it into a custom provider's row only when
+ * the user has not set that field, and OMP's bundled catalog stays the
+ * authority the runtime executes with.
+ */
+export const ModelInfoSourceSchema = z.enum(['omp-catalog', 'openrouter']);
+export const ModelCatalogInfoSchema = z.strictObject({
+  source: ModelInfoSourceSchema,
+  input: z.array(z.enum(['text', 'image'])).min(1),
+  contextWindow: z.number().int().positive(),
+  maxTokens: z.number().int().positive(),
+  cost: z.strictObject({
+    input: z.number().nonnegative(),
+    output: z.number().nonnegative(),
+    cacheRead: z.number().nonnegative(),
+    cacheWrite: z.number().nonnegative(),
+  }),
+  reasoning: z.boolean(),
+  toolsSupported: z.boolean().optional(),
+  family: z.string().min(1).optional(),
+  status: z.enum(['active', 'alpha', 'beta', 'deprecated']).optional(),
+});
+export type ModelInfoSource = z.infer<typeof ModelInfoSourceSchema>;
+export type ModelCatalogInfo = z.infer<typeof ModelCatalogInfoSchema>;
+export const ProviderModelDiscoveryResultSchema = z.strictObject({
+  models: z.array(z.strictObject({
+    modelId: EntityIdSchema, name: z.string().min(1), contextWindow: z.number().int().positive().optional(), maxOutputTokens: z.number().int().positive().optional(),
+    catalog: ModelCatalogInfoSchema.optional(),
+  }))
+});
 export type ProviderModelDiscoveryResult = z.infer<typeof ProviderModelDiscoveryResultSchema>;
+// Enrichment is a local catalog read: no endpoint, credentials, or provider entry.
+export const ProviderModelEnrichRequestSchema = z.strictObject({
+  providerId: EntityIdSchema.optional(),
+  models: z.array(z.strictObject({ modelId: EntityIdSchema })).min(1).max(500),
+});
+export type ProviderModelEnrichRequest = z.infer<typeof ProviderModelEnrichRequestSchema>;
+export const ProviderModelEnrichResultSchema = z.strictObject({
+  models: z.array(z.strictObject({
+    modelId: EntityIdSchema, catalog: ModelCatalogInfoSchema.optional(),
+  }))
+});
+export type ProviderModelEnrichResult = z.infer<typeof ProviderModelEnrichResultSchema>;
 import { ImageModelSchema } from './catalogs.ts';
 export const ProviderConfigurationReadSchema = z.strictObject({ revision: CounterSchema, configuration: ProviderConfigurationSchema, headerNames: z.array(z.string()), models: z.array(ModelSchema), imageModels: z.array(ImageModelSchema).default([]) });
 export type ProviderConfigurationRead = z.infer<typeof ProviderConfigurationReadSchema>;

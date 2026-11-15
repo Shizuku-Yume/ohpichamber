@@ -875,3 +875,64 @@ providers:
     await fixture.close();
   }
 });
+
+test('bundled catalog metadata fills a known model id from the provider rows', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({
+      providerId: 'openai', models: [{ modelId: 'gpt-5.6' }],
+    });
+    expect(result.models).toEqual([{
+      modelId: 'gpt-5.6',
+      catalog: {
+        source: 'omp-catalog', input: ['text', 'image'], contextWindow: 1050000, maxTokens: 128000,
+        cost: { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
+        reasoning: true, family: 'gpt',
+      },
+    }]);
+  } finally { await fixture.close(); }
+});
+
+test('proxy reference matching resolves a bracket-affixed model id', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({ models: [{ modelId: '[Kiro] claude-opus-4-6' }] });
+    expect(result.models).toEqual([{
+      modelId: '[Kiro] claude-opus-4-6',
+      catalog: {
+        source: 'omp-catalog', input: ['text', 'image'], contextWindow: 1000000, maxTokens: 128000,
+        cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+        reasoning: true, family: 'opus',
+      },
+    }]);
+  } finally { await fixture.close(); }
+});
+
+test('an uncatalogued model id comes back without catalog metadata instead of failing', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({
+      providerId: 'm212-loopback', models: [{ modelId: 'not-a-catalogued-model' }],
+    });
+    expect(result).toEqual({ models: [{ modelId: 'not-a-catalogued-model' }] });
+  } finally { await fixture.close(); }
+});
+
+test('discovery attaches catalog metadata to catalogued ids and stays one request', async () => {
+  const requests: string[] = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push(new URL(request.url).pathname);
+      return Response.json({ data: [{ id: 'claude-opus-4-6', name: 'Claude' }, { id: 'not-a-catalogued-model', name: 'Unknown' }] });
+    }
+  });
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.discoverProviderModels({
+      endpoint: `http://127.0.0.1:${server.port}/v1`, protocol: 'chat-completions',
+    });
+    expect(requests).toEqual(['/v1/models']);
+    expect(result.models[0]).toMatchObject({ modelId: 'claude-opus-4-6', name: 'Claude', catalog: { source: 'omp-catalog', family: 'opus' } });
+    expect(result.models[1]).toEqual({ modelId: 'not-a-catalogued-model', name: 'Unknown' });
+  } finally { server.stop(true); await fixture.close(); }
+});

@@ -3,6 +3,7 @@ import {
   ProviderAccountSchema, ProviderAccountsSchema, ProviderAccountMutationRequestSchema,
   ProviderOAuthMethodsSchema, ProviderOAuthRequestSchema, ProviderOAuthResultSchema,
   ProviderModelDiscoveryRequestSchema, ProviderModelDiscoveryResultSchema,
+  ModelCatalogInfoSchema, ProviderModelEnrichRequestSchema, ProviderModelEnrichResultSchema,
   ProviderHeaderWriteSchema, ProviderConfigurationReadSchema,
 } from './provider-management.ts';
 
@@ -78,4 +79,60 @@ test('configuration reads expose header names only and reject returned secret va
     expect(ProviderConfigurationReadSchema.safeParse({ ...read, ...extra }).success).toBe(false);
     expect(ProviderConfigurationReadSchema.safeParse({ ...read, configuration: { ...configuration, ...extra } }).success).toBe(false);
   }
+});
+
+const catalog = {
+  source: 'omp-catalog' as const, input: ['text' as const, 'image' as const],
+  contextWindow: 200000, maxTokens: 64000,
+  cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+  reasoning: true, toolsSupported: true, family: 'opus', status: 'beta' as const,
+};
+
+test('catalog info is strict about its shape and its capability vocabulary', () => {
+  expect(ModelCatalogInfoSchema.parse(catalog)).toEqual(catalog);
+  expect(ModelCatalogInfoSchema.parse({ source: 'openrouter', input: ['text'], contextWindow: 8192, maxTokens: 1024, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, reasoning: false }))
+    .toMatchObject({ source: 'openrouter', input: ['text'] });
+  for (const extra of [{ pricing: {} }, { context: 1 }, { provider: 'openai' }, { apiKey: 'secret' }]) {
+    expect(ModelCatalogInfoSchema.safeParse({ ...catalog, ...extra }).success).toBe(false);
+  }
+  for (const invalid of [
+    { ...catalog, source: 'models.dev' },
+    { ...catalog, input: [] },
+    { ...catalog, input: ['audio'] },
+    { ...catalog, contextWindow: 0 },
+    { ...catalog, maxTokens: -1 },
+    { ...catalog, cost: { ...catalog.cost, input: -1 } },
+    { ...catalog, cost: { input: 1 } },
+    { ...catalog, reasoning: 'yes' },
+    { ...catalog, family: '' },
+    { ...catalog, status: 'preview' },
+  ]) expect(ModelCatalogInfoSchema.safeParse(invalid).success).toBe(false);
+});
+
+test('discovery results carry an optional catalog block without widening their credential surface', () => {
+  const known = { modelId: 'claude-opus-4-6', name: 'Claude Opus', contextWindow: 200000, maxOutputTokens: 64000, catalog };
+  const unknown = { modelId: 'local-model', name: 'Local model' };
+  const models = { models: [known, unknown] };
+  expect(ProviderModelDiscoveryResultSchema.parse(models)).toEqual(models);
+  expect(ProviderModelDiscoveryResultSchema.parse({ models: [{ ...unknown, catalog }] })).toMatchObject({ models: [{ catalog }] });
+  expect(ProviderModelDiscoveryResultSchema.safeParse({ models: [{ ...known, catalog: { ...catalog, headers: { Authorization: 'secret' } } }] }).success).toBe(false);
+});
+
+test('enrichment requests bound their model list and reject connection details', () => {
+  const request = { providerId: 'models_local', models: [{ modelId: 'claude-opus-4-6' }, { modelId: '[Kiro] claude-opus-4-6' }] };
+  expect(ProviderModelEnrichRequestSchema.parse(request)).toEqual(request);
+  expect(ProviderModelEnrichRequestSchema.parse({ models: [{ modelId: 'gpt-5.6' }] })).toEqual({ models: [{ modelId: 'gpt-5.6' }] });
+  expect(ProviderModelEnrichRequestSchema.safeParse({ models: [] }).success).toBe(false);
+  expect(ProviderModelEnrichRequestSchema.safeParse({ models: Array.from({ length: 501 }, (_, index) => ({ modelId: `model-${index}` })) }).success).toBe(false);
+  for (const extra of [{ endpoint: 'http://127.0.0.1/v1' }, { apiKey: 'secret' }, { headers: { Authorization: 'secret' } }, { credentialRef: 'credential_opaque' }]) {
+    expect(ProviderModelEnrichRequestSchema.safeParse({ ...request, ...extra }).success).toBe(false);
+  }
+  expect(ProviderModelEnrichRequestSchema.safeParse({ ...request, models: [{ modelId: 'ok', name: 'Extra' }] }).success).toBe(false);
+});
+
+test('enrichment results keep unknown ids as bare entries', () => {
+  const result = { models: [{ modelId: 'claude-opus-4-6', catalog }, { modelId: 'unknown-model' }] };
+  expect(ProviderModelEnrichResultSchema.parse(result)).toEqual(result);
+  expect(ProviderModelEnrichResultSchema.safeParse({ models: [{ modelId: 'ok', name: 'Extra' }] }).success).toBe(false);
+  expect(ProviderModelEnrichResultSchema.safeParse({ models: [{ modelId: 'ok', catalog: { ...catalog, source: 'openrouter', input: ['audio'] } }] }).success).toBe(false);
 });

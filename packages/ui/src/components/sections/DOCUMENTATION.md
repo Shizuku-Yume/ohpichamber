@@ -110,9 +110,10 @@ environment source is read from the Agent Service's
 `ProviderAuthState.environment` (`{ variable, active }`) on every provider the
 workspace reports. A key saved in OpenChamber outranks the environment
 variable, and the environment badge stays on the card because the variable is
-still set. The connect picker offers a key form for the providers it lists, so
-an env-backed provider is not a dead end. In enterprise mode the cards keep the
-stored accounts and offer nothing new.
+still set. The connect picker lists only providers with no credential yet, so
+an env-backed provider is not in it; the key form for one is reached from its
+card's key button or its own page. In enterprise mode the cards keep the stored
+accounts and offer nothing new.
 
 Custom provider IDs follow the model selector grammar: letters, digits, dots,
 underscores and hyphens, unique regardless of case, with no `/`, `#`, `@`, `:`,

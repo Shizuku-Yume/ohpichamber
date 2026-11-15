@@ -4681,7 +4681,6 @@ export const dict = {
   "settings.providers.accounts.add": "계정 추가",
   "settings.providers.accounts.active": "활성",
   "settings.openchamber.defaults.field.fallbackModel": "대체 모델",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "사용량 한도로 세션이 멈추고 다른 계정이 이어받을 수 없으면 이 모델로 세션을 계속합니다. OpenChamber가 OpenCode를 직접 실행할 때 작동합니다.",
   "settings.openchamber.defaults.field.fallbackModelNone": "없음",
   "settings.openchamber.defaults.field.fallbackThinking": "대체 모델 Thinking",
   "settings.openchamber.defaults.newSessionsTitle": "새 세션",

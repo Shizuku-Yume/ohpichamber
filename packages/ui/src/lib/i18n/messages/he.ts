@@ -8325,7 +8325,6 @@ export const dict = {
   "settings.providers.accounts.add": "הוסף חשבון",
   "settings.providers.accounts.active": "פעיל",
   "settings.openchamber.defaults.field.fallbackModel": "מודל גיבוי",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "כשמגבלת שימוש עוצרת סשן ואף חשבון אחר לא יכול להמשיך, הסשן ממשיך במודל הזה. עובד כש-OpenChamber מפעיל את OpenCode בעצמו.",
   "settings.openchamber.defaults.field.fallbackModelNone": "ללא",
   "settings.openchamber.defaults.field.fallbackThinking": "רמת חשיבה של מודל הגיבוי",
   "settings.openchamber.defaults.newSessionsTitle": "סשנים חדשים",

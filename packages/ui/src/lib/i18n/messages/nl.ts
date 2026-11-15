@@ -4681,7 +4681,6 @@ export const dict = {
   "settings.providers.accounts.add": "Account toevoegen",
   "settings.providers.accounts.active": "Actief",
   "settings.openchamber.defaults.field.fallbackModel": "Terugvalmodel",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "Als een gebruikslimiet een sessie stopt en geen ander account het kan overnemen, gaat de sessie verder op dit model. Werkt als OpenChamber OpenCode zelf start.",
   "settings.openchamber.defaults.field.fallbackModelNone": "Geen",
   "settings.openchamber.defaults.field.fallbackThinking": "Denken van terugvalmodel",
   "settings.openchamber.defaults.newSessionsTitle": "Nieuwe sessies",

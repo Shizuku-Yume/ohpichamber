@@ -4681,7 +4681,6 @@ export const dict = {
   "settings.providers.accounts.add": "新增帳號",
   "settings.providers.accounts.active": "使用中",
   "settings.openchamber.defaults.field.fallbackModel": "備用模型",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "當用量限制讓工作階段停下、且沒有其他帳號可以接手時，工作階段會改用這個模型繼續。僅在 OpenChamber 自行啟動 OpenCode 時生效。",
   "settings.openchamber.defaults.field.fallbackModelNone": "無",
   "settings.openchamber.defaults.field.fallbackThinking": "備用模型思考模式",
   "settings.openchamber.defaults.newSessionsTitle": "新工作階段",

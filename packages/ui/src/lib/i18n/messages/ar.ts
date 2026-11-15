@@ -8325,7 +8325,6 @@ export const dict = {
   "settings.providers.accounts.add": "إضافة حساب",
   "settings.providers.accounts.active": "نشط",
   "settings.openchamber.defaults.field.fallbackModel": "النموذج الاحتياطي",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "عندما يوقف حد الاستخدام جلسة ولا يمكن لحساب آخر متابعتها، تستمر الجلسة على هذا النموذج. يعمل عندما يشغّل OpenChamber برنامج OpenCode بنفسه.",
   "settings.openchamber.defaults.field.fallbackModelNone": "لا شيء",
   "settings.openchamber.defaults.field.fallbackThinking": "مستوى تفكير النموذج الاحتياطي",
   "settings.openchamber.defaults.newSessionsTitle": "الجلسات الجديدة",

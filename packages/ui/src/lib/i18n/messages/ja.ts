@@ -4681,7 +4681,6 @@ export const dict = {
   "settings.providers.accounts.add": "アカウントを追加",
   "settings.providers.accounts.active": "アクティブ",
   "settings.openchamber.defaults.field.fallbackModel": "フォールバックモデル",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "使用量の上限でセッションが止まり、ほかのアカウントでも続けられない場合、このモデルでセッションを続けます。OpenChamber が OpenCode を自分で起動している場合に動作します。",
   "settings.openchamber.defaults.field.fallbackModelNone": "なし",
   "settings.openchamber.defaults.field.fallbackThinking": "フォールバックモデルの思考",
   "settings.openchamber.defaults.newSessionsTitle": "新しいセッション",

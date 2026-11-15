@@ -4691,7 +4691,6 @@ export const dict = {
   "settings.providers.accounts.add": "Añadir cuenta",
   "settings.providers.accounts.active": "Activa",
   "settings.openchamber.defaults.field.fallbackModel": "Modelo de respaldo",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "Cuando un límite de uso detiene una sesión y ninguna otra cuenta puede continuar, la sesión sigue con este modelo. Funciona cuando OpenChamber inicia OpenCode por sí mismo.",
   "settings.openchamber.defaults.field.fallbackModelNone": "Ninguno",
   "settings.openchamber.defaults.field.fallbackThinking": "Pensamiento del modelo de respaldo",
   "settings.openchamber.defaults.newSessionsTitle": "Sesiones nuevas",

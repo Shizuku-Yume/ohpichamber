@@ -4680,7 +4680,6 @@ export const dict = {
   "settings.providers.accounts.add": "Add account",
   "settings.providers.accounts.active": "Active",
   "settings.openchamber.defaults.field.fallbackModel": "Fallback model",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "When a usage limit stops a session and no other account can take over, the session continues on this model. Works when OpenChamber starts OpenCode itself.",
   "settings.openchamber.defaults.field.fallbackModelNone": "None",
   "settings.openchamber.defaults.field.fallbackThinking": "Fallback model thinking",
   "settings.openchamber.defaults.newSessionsTitle": "New sessions",

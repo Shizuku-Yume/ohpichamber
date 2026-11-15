@@ -4681,7 +4681,6 @@ export const dict = {
   "settings.providers.accounts.add": "Ajouter un compte",
   "settings.providers.accounts.active": "Actif",
   "settings.openchamber.defaults.field.fallbackModel": "Modèle de secours",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "Quand une limite d’utilisation arrête une session et qu’aucun autre compte ne peut prendre le relais, la session continue avec ce modèle. Fonctionne quand OpenChamber lance OpenCode lui-même.",
   "settings.openchamber.defaults.field.fallbackModelNone": "Aucun",
   "settings.openchamber.defaults.field.fallbackThinking": "Pensée du modèle de secours",
   "settings.openchamber.defaults.newSessionsTitle": "Nouvelles sessions",

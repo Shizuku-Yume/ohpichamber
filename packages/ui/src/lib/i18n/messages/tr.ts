@@ -4620,7 +4620,6 @@ export const dict = {
   "settings.providers.accounts.add": "Hesap ekle",
   "settings.providers.accounts.active": "Etkin",
   "settings.openchamber.defaults.field.fallbackModel": "Yedek model",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "Bir kullanım sınırı oturumu durdurduğunda ve başka bir hesap devralamadığında oturum bu modelle devam eder. OpenChamber OpenCode’u kendisi başlattığında çalışır.",
   "settings.openchamber.defaults.field.fallbackModelNone": "Yok",
   "settings.openchamber.defaults.field.fallbackThinking": "Yedek model düşünmesi",
   "settings.openchamber.defaults.newSessionsTitle": "Yeni oturumlar",

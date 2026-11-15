@@ -4681,7 +4681,6 @@ export const dict = {
   "settings.providers.accounts.add": "Dodaj konto",
   "settings.providers.accounts.active": "Aktywne",
   "settings.openchamber.defaults.field.fallbackModel": "Model zapasowy",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "Gdy limit użycia zatrzyma sesję, a żadne inne konto nie może jej przejąć, sesja jest kontynuowana na tym modelu. Działa, gdy OpenChamber sam uruchamia OpenCode.",
   "settings.openchamber.defaults.field.fallbackModelNone": "Brak",
   "settings.openchamber.defaults.field.fallbackThinking": "Myślenie modelu zapasowego",
   "settings.openchamber.defaults.newSessionsTitle": "Nowe sesje",

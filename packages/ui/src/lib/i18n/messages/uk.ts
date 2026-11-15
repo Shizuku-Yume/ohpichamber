@@ -4691,7 +4691,6 @@ export const dict = {
   "settings.providers.accounts.add": "Додати акаунт",
   "settings.providers.accounts.active": "Активний",
   "settings.openchamber.defaults.field.fallbackModel": "Запасна модель",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "Коли ліміт використання зупиняє сесію, а інший акаунт не може її підхопити, сесія продовжується на цій моделі. Працює, коли OpenChamber сам запускає OpenCode.",
   "settings.openchamber.defaults.field.fallbackModelNone": "Немає",
   "settings.openchamber.defaults.field.fallbackThinking": "Мислення запасної моделі",
   "settings.openchamber.defaults.newSessionsTitle": "Нові сесії",

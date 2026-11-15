@@ -4681,7 +4681,6 @@ export const dict = {
   "settings.providers.accounts.add": "添加账号",
   "settings.providers.accounts.active": "使用中",
   "settings.openchamber.defaults.field.fallbackModel": "备用模型",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "当用量限制让会话停下、且没有其他账号可以接手时，会话会改用这个模型继续。仅在 OpenChamber 自己启动 OpenCode 时生效。",
   "settings.openchamber.defaults.field.fallbackModelNone": "无",
   "settings.openchamber.defaults.field.fallbackThinking": "备用模型思考模式",
   "settings.openchamber.defaults.newSessionsTitle": "新会话",

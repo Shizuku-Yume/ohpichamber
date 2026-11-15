@@ -4681,7 +4681,6 @@ export const dict = {
   "settings.providers.accounts.add": "Konto hinzufügen",
   "settings.providers.accounts.active": "Aktiv",
   "settings.openchamber.defaults.field.fallbackModel": "Ausweichmodell",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "Wenn ein Nutzungslimit eine Sitzung stoppt und kein anderes Konto übernehmen kann, läuft die Sitzung mit diesem Modell weiter. Funktioniert, wenn OpenChamber OpenCode selbst startet.",
   "settings.openchamber.defaults.field.fallbackModelNone": "Keins",
   "settings.openchamber.defaults.field.fallbackThinking": "Denken des Ausweichmodells",
   "settings.openchamber.defaults.newSessionsTitle": "Neue Sitzungen",

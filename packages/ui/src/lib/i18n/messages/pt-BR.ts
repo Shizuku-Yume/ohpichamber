@@ -4691,7 +4691,6 @@ export const dict = {
   "settings.providers.accounts.add": "Adicionar conta",
   "settings.providers.accounts.active": "Ativa",
   "settings.openchamber.defaults.field.fallbackModel": "Modelo reserva",
-  "settings.openchamber.defaults.field.fallbackModelInfo": "Quando um limite de uso interrompe uma sessão e nenhuma outra conta pode assumir, a sessão continua neste modelo. Funciona quando o OpenChamber inicia o OpenCode por conta própria.",
   "settings.openchamber.defaults.field.fallbackModelNone": "Nenhum",
   "settings.openchamber.defaults.field.fallbackThinking": "Pensamento do modelo reserva",
   "settings.openchamber.defaults.newSessionsTitle": "Novas sessões",

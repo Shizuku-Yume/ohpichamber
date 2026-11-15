@@ -19,8 +19,8 @@ shape is genuinely missing.
 
 - Flat hierarchy through spacing and typography; no cards, boxed backgrounds, or row chrome.
 - Secondary helper text is hidden behind an info icon (`info` prop) by default; the default view stays quiet.
-- Controls take their chrome from the shared primitives (`dropdownTriggerVariants()` for selects; no per-call size) and capped widths — no full-bleed inputs. See [control sizing](references/controls.md#standard-sizes-and-widths) for inputs beside dropdowns.
-- Layouts respond to the settings pane width via container queries (`@xl:` / `@3xl:`), never viewport `sm:`/`lg:` breakpoints (the pane is much narrower than the viewport inside the dialog).
+- Controls take their chrome from the shared primitives (`dropdownTriggerVariants()` for selects; no per-call size) and their width from the named width classes — no full-bleed inputs and no per-call `w-*`. See [widths](references/layout.md#widths) for which class each control takes and [control sizing](references/controls.md#standard-sizes-and-widths) for inputs beside dropdowns.
+- Layouts respond to the settings pane width via container queries (`@xl:` / `@3xl:`), never viewport `sm:`/`md:`/`lg:` breakpoints (the pane is much narrower than the viewport inside the dialog).
 - Checkbox/radio state comes before labels; selected states are subtle.
 
 ## References by topic
@@ -39,14 +39,24 @@ Consult only the branches affected by the change; these are ordinary module refe
 |---|---|
 | Page wrapper (title, description, save status, scrolling, `@container`) | `SettingsPageLayout` |
 | Titled block with divider | `SettingsSection` (`divider={false}` for the first one) |
-| Label left / control right | `SettingsFieldRow` |
-| Label above control (two-column cells, wide controls) | `SettingsStackedField` |
+| Label left / control right | `SettingsFieldRow` (the default row) |
+| Label above control (two-column cells, wide controls only) | `SettingsStackedField` |
 | Boolean | `SettingsCheckboxRow` |
+| OMP registry row (number, string, enum, boolean from one setting) | `OmpRowControl` |
 | Mutually exclusive list | `SettingsRadioGroup` + `SettingsRadioOption` |
 | Short segmented options | `SettingsChipGroup` |
 | Sub-cluster with a quiet L3 title inside a section | `SettingsControlGroup` |
 | Two-column area on wide panes | `SettingsTwoColumn` |
 | Helper text on demand (hover + tap) | `info` prop or `SettingsInfoHint` |
+
+`SettingsFieldRow` is the row for every control; `SettingsStackedField` is
+only for two-column cells and controls too wide for a row. Row shapes, the
+width class each control takes, and the section/row/checkbox spacing classes
+are defined once in [layout](references/layout.md). A component
+under `components/sections` therefore declares no raw width or spacing
+utility, no viewport breakpoint inside the pane, and no page padding override
+on `SettingsPageLayout` (the page cap stays `max-w-[840px]`). The settings
+layout guard test under `packages/ui` rejects a regression.
 
 Do not introduce raw `<Tooltip>`-based info icons.
 
@@ -83,6 +93,6 @@ Dynamic entity rows normally are not indexed. See [search registry rules](refere
 - Built from shared primitives; no ad-hoc page/section/row markup.
 - Description placement follows the policy above; warnings/syntax/status remain visible.
 - Container-query (`@xl:`/`@3xl:`) responsiveness — no viewport breakpoints in pane content.
-- Controls use the standard size and width caps; no stretched full-width inputs.
+- Rows follow the one row pattern; widths and section spacing come from the named classes, not per-call utilities ([layout](references/layout.md#rows)).
 - Search registry, anchor, page, localization, and availability agree.
 - Nearby Settings precedent and relevant tests remain consistent.

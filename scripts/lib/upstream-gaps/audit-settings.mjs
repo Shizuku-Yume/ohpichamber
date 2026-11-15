@@ -240,23 +240,91 @@ function extractQuotedLiterals(text) {
 // ---------------------------------------------------------------------------
 // 1. settings-item extractor
 // ---------------------------------------------------------------------------
+
+/**
+ * The OMP ids the Settings UI can actually draw: `owned-by` rows, `engine` rows,
+ * and `page` rows on a page with GUI controls, each of which must be renderable
+ * as a control. This mirrors `OMP_SETTING_EXPOSED_IDS` in
+ * `packages/agent-service/src/worker/settings-ui.ts`; a test pins the two
+ * together, and the audit uses it to tell a row component's real anchors from a
+ * search entry that points at nothing.
+ */
+function exposedOmpSettingIds(ref) {
+  const source = readFileAt(ref, 'packages/agent-service/src/worker/settings-ui.ts');
+  if (!source) return [];
+  const src = stripComments(source);
+  const placements = new Map();
+  const tableMatch = src.match(/\bRAW_PLACEMENTS[^=]*=\s*\{/);
+  if (tableMatch) {
+    const start = tableMatch.index + tableMatch[0].length - 1;
+    const end = findMatching(src, start, '{', '}');
+    if (end > start) {
+      for (const entry of src.slice(start + 1, end).matchAll(/(['"])([^'"]+)\1\s*:\s*(['"])([^'"]+)\3/g)) {
+        placements.set(entry[2], entry[4]);
+      }
+    }
+  }
+  const guiPages = new Set();
+  const guiMatch = src.match(/\bGUI_WRITTEN_PAGES[^=]*=\s*\{([\s\S]*?)\n\};/);
+  if (guiMatch) {
+    for (const entry of guiMatch[1].matchAll(/([A-Za-z_$][\w$]*)\s*:\s*true\b/g)) guiPages.add(entry[1]);
+  }
+  const renderable = (id) => {
+    if (id === 'modelRoles') return true;
+    // The descriptor list is not in this tree (OMP ships it), so a row counts as
+    // renderable unless its placement says otherwise. `engine` rows without OMP
+    // copy are hidden by decision, and the stale search entries this check is
+    // meant to find are not engine rows.
+    return true;
+  };
+  const exposed = [];
+  for (const [id, raw] of placements) {
+    if (raw.startsWith('owned-by ')) { exposed.push(id); continue; }
+    const page = raw.split(':')[0];
+    if (page === 'engine') { if (renderable(id)) exposed.push(id); continue; }
+    if (!guiPages.has(page)) continue;
+    if (id === 'defaultThinkingLevel' || id === 'retry.fallbackChains' || renderable(id)) exposed.push(id);
+  }
+  return exposed;
+}
+
 function extractSettingsItems(ref) {
   const files = listTreeFiles(ref, 'packages/ui/src').filter(
     (f) => /\.(ts|tsx)$/.test(f) && !/\.(test|spec)\.(ts|tsx)$/.test(f),
   );
   const items = new Map();
+  // The UI anchors an OMP row as `omp.<setting id>` while the placement table
+  // keys the bare setting id, so a template head may match either spelling.
+  const anchorNames = exposedOmpSettingIds(ref).flatMap(key => [key, `omp.${key}`]);
 
   const addItem = (id, entry) => {
     if (!id) return;
-    const list = items.get(id) ?? [];
-    list.push(entry);
-    items.set(id, list);
+    // A row component's anchor template (`omp.${setting.id}`) covers exactly the
+    // settings the OMP route exposes: those rows are the ones it draws. Anything
+    // else under that prefix is a stale search entry, so expand here instead of
+    // claiming the whole namespace.
+    const expanded = id.startsWith('@const-prefix:')
+      ? anchorNames.filter(anchor => anchor.startsWith(id.slice('@const-prefix:'.length)))
+      : [id];
+    for (const itemId of expanded.length > 0 ? expanded : [`${id}*`]) {
+      const list = items.get(itemId) ?? [];
+      list.push(entry);
+      items.set(itemId, list);
+    }
   };
 
   for (const file of files) {
     const raw = readFileAt(ref, file);
     if (!raw || (!raw.includes('settingsItem') && !raw.includes('settings-item'))) continue;
     const src = stripComments(raw);
+    // A component that stamps one anchor per row declares it in a file-local
+    // const first (`const anchor = `omp.${setting.id}`;` then
+    // `settingsItem={anchor}`). Reading only the attribute would miss every row
+    // such a component draws, which is a false gap, not a missing control.
+    const constAnchors = new Map();
+    for (const decl of src.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*(`[^`]*`|'[^']*'|"[^"]*")\s*[;\n]/g)) {
+      constAnchors.set(decl[1], decl[2].slice(1, -1));
+    }
     const re = /\b(settingsItemPrefix|settingsItem|data-settings-item)\s*=\s*/g;
     let m;
     while ((m = re.exec(src)) !== null) {
@@ -300,10 +368,24 @@ function extractSettingsItems(ref) {
               }
             }
           } else {
-            // Conditional expression or ternary with literals containing `.`
-            const lits = extractQuotedLiterals(expr).filter((s) => s.includes('.'));
-            for (const lit of lits) {
-              addItem(lit, { file, line: ln, attr, kind: 'conditional', expr });
+            // A bare identifier: the anchor a row component builds once and
+            // stamps on every row it draws. Its template's static head is the
+            // namespace those rows share (`omp.` for `omp.${setting.id}`), so
+            // record it as a prefix; a plain string const is a literal id.
+            const identifier = /^[A-Za-z_$][\w$]*$/.test(expr) ? constAnchors.get(expr) : undefined;
+            if (identifier !== undefined) {
+              const head = /^([^$`]+)\$\{/.exec(identifier);
+              if (head) {
+                addItem(`@const-prefix:${head[1]}`, { file, line: ln, attr, kind: 'const-prefix', expr, prefix: head[1] });
+              } else if (identifier) {
+                addItem(identifier, { file, line: ln, attr, kind: 'const-literal', expr });
+              }
+            } else {
+              // Conditional expression or ternary with literals containing `.`
+              const lits = extractQuotedLiterals(expr).filter((s) => s.includes('.'));
+              for (const lit of lits) {
+                addItem(lit, { file, line: ln, attr, kind: 'conditional', expr });
+              }
             }
           }
         }

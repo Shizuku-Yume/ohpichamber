@@ -84,6 +84,16 @@ const sameJob = (actual: C.ShellJobIdentity, expected: C.ShellJobIdentity): bool
 
 const headersFor = (commandId?: string): HeadersInit => commandId ? { 'Idempotency-Key': commandId } : {};
 
+// The Host's OpenRouter model-info route is Host-owned, not part of the agent
+// contract: it answers ModelCatalogInfo blocks for the ids it recognises.
+const OpenRouterModelInfoRequestSchema = z.strictObject({
+  modelIds: z.array(z.string().trim().min(1).max(256)).min(1).max(200),
+});
+const OpenRouterModelInfoResultSchema = z.strictObject({
+  models: z.array(z.strictObject({ modelId: C.EntityIdSchema, catalog: C.ModelCatalogInfoSchema })),
+});
+export type OpenRouterModelInfoResult = z.infer<typeof OpenRouterModelInfoResultSchema>;
+
 export class CanonicalClient {
   readonly plugins = {
     list: (workspaceId: string): Promise<C.PluginCatalogState> =>
@@ -486,6 +496,23 @@ export class CanonicalClient {
   discoverProviderModels(workspaceId: string, input: C.ProviderModelDiscoveryRequest): Promise<C.ProviderModelDiscoveryResult> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/discover`, C.ProviderModelDiscoveryResultSchema, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderModelDiscoveryRequestSchema, input),
+    });
+  }
+  /** Reads OMP's bundled catalog for these ids. Offline; no endpoint or key involved. */
+  enrichProviderModels(workspaceId: string, input: C.ProviderModelEnrichRequest): Promise<C.ProviderModelEnrichResult> {
+    return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/enrich`, C.ProviderModelEnrichResultSchema, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.ProviderModelEnrichRequestSchema, input),
+    });
+  }
+  /**
+   * The Host's OpenRouter model info for these ids (a Host route, not the
+   * agent contract). The route answers 403 `enterprise_mode` instead of making
+   * the outbound request; only ids travel, never keys or the endpoint.
+   */
+  openRouterModelInfo(modelIds: string[], signal?: AbortSignal): Promise<OpenRouterModelInfoResult> {
+    const body = OpenRouterModelInfoRequestSchema.parse({ modelIds });
+    return request('/api/openchamber/openrouter/model-info', OpenRouterModelInfoResultSchema, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal,
     });
   }
   providerConfiguration(workspaceId: string, providerId: string): Promise<C.ProviderConfigurationRead> {

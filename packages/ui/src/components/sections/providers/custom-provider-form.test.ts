@@ -1,9 +1,21 @@
 import { expect, test } from 'bun:test';
-import type { Model, ProviderConfigurationRead } from '@openchamber/agent-contract';
+import type { Model, ModelCatalogInfo, ProviderConfigurationRead } from '@openchamber/agent-contract';
 import {
+  applyModelCatalogInfo,
+  autoFillFields,
   buildCustomProviderRequest,
+  createDiscoveredModelRow,
   createEmptyCustomProviderForm,
   createModelRow,
+  discoveryFilterCounts,
+  discoveryFilterValues,
+  discoveryRows,
+  groupDiscoveryRows,
+  idsMissingCatalog,
+  idsToAdd,
+  markModelFieldTyped,
+  matchesDiscoveryFilter,
+  staleModelIds,
   isCustomProviderProtocol,
   isValidProviderID,
   modelModalitiesForKind,
@@ -220,4 +232,104 @@ test('validation rejects a taken provider id only when creating', () => {
     .toBe('settings.providers.page.custom.error.providerID.exists');
   expect(validateCustomProviderForm(form, new Set(['campus']), true, translate).fields.providerId)
     .toBeUndefined();
+});
+
+// ── Model-info auto-fill and the discovery dialog ──────────────────────────
+
+const catalog = (overrides: Partial<ModelCatalogInfo> = {}): ModelCatalogInfo => ({
+  source: 'omp-catalog',
+  input: ['text'],
+  contextWindow: 200000,
+  maxTokens: 32000,
+  cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0 },
+  reasoning: true,
+  toolsSupported: true,
+  family: 'claude',
+  ...overrides,
+});
+
+test('auto-fill writes only empty fields and never a value the user typed', () => {
+  const row = createModelRow({ modelId: 'claude-opus-4-6', name: 'Claude Opus 4.6' });
+  row.contextWindow = '4096';
+  const typed = markModelFieldTyped(row, 'contextWindow');
+
+  const fields = autoFillFields(typed, catalog({ input: ['text', 'image'] }));
+  expect(fields).not.toContain('contextWindow');
+  expect(fields).toEqual(expect.arrayContaining(['maxOutputTokens', 'modalities', 'toolsSupported', 'reasoning', 'pricing']));
+
+  const { models } = applyModelCatalogInfo([typed], new Map([['claude-opus-4-6', catalog()]]));
+  expect(models[0]!.contextWindow).toBe('4096');
+  expect(models[0]!.maxOutputTokens).toBe('32000');
+  expect(models[0]!.filledFrom.contextWindow).toBeUndefined();
+  expect(models[0]!.filledFrom.maxOutputTokens).toBe('omp-catalog');
+  expect(models[0]!.family).toBe('claude');
+});
+
+test('a filled value may be refilled, and the label follows the later source', () => {
+  const row = createModelRow({ modelId: 'mystery-model', name: 'Mystery' });
+  const first = applyModelCatalogInfo([row], new Map([['mystery-model', catalog({ source: 'omp-catalog' })]]));
+  const second = applyModelCatalogInfo(first.models, new Map([['mystery-model', catalog({ source: 'openrouter', maxTokens: 64000 })]]));
+  expect(second.models[0]!.maxOutputTokens).toBe('64000');
+  expect(second.models[0]!.filledFrom.maxOutputTokens).toBe('openrouter');
+});
+
+test('stale ids are the form rows the fresh discovery list no longer carries', () => {
+  const kept = createModelRow({ modelId: 'kept', name: 'Kept' });
+  const gone = createModelRow({ modelId: 'gone', name: 'Gone' });
+  const blank = createModelRow();
+  expect(staleModelIds([kept, gone, blank], [{ modelId: 'kept' }])).toEqual(['gone']);
+});
+
+test('add-all offers exactly the discovered ids the form does not hold', () => {
+  const existing = createModelRow({ modelId: 'b', name: 'B' });
+  expect(idsToAdd([existing], [
+    { modelId: 'a' },
+    { modelId: 'b' },
+    { modelId: 'a' },
+  ])).toEqual(['a']);
+});
+
+test('a discovered row is prefilled from its catalog without marking the values as typed', () => {
+  const row = createDiscoveredModelRow({ modelId: 'claude-opus-4-6', name: 'Claude Opus 4.6', catalog: catalog() });
+  expect(row.contextWindow).toBe('200000');
+  expect(row.filledFrom.contextWindow).toBe('omp-catalog');
+  // A later catalog read may still correct these values.
+  expect(autoFillFields(row, catalog({ maxTokens: 64000 }))).toContain('maxOutputTokens');
+});
+
+test('filter chips count every kind, and a chip whose count is zero still exists', () => {
+  const rows = discoveryRows(
+    [
+      { modelId: 'text-model', name: 'Text', catalog: catalog({ input: ['text'] }) },
+      { modelId: 'vision-model', name: 'Vision', catalog: catalog({ input: ['text', 'image'] }) },
+    ],
+    [createModelRow({ modelId: 'stale-model', name: 'Stale' })],
+  );
+  const counts = discoveryFilterCounts(rows);
+  expect(counts).toMatchObject({ all: 3, stale: 1, text: 3, image: 1, embedding: 0, audio: 0 });
+  expect(discoveryFilterValues).toEqual(['all', 'stale', 'text', 'image', 'embedding', 'audio']);
+  expect(matchesDiscoveryFilter(rows[0]!, 'image')).toBe(false);
+  expect(matchesDiscoveryFilter(rows[1]!, 'image')).toBe(true);
+  expect(matchesDiscoveryFilter(rows[2]!, 'stale')).toBe(true);
+});
+
+test('family grouping only happens when every visible row names a family', () => {
+  const familyRows = discoveryRows([
+    { modelId: 'a', name: 'A', catalog: catalog({ family: 'claude', input: ['text'] }) },
+    { modelId: 'b', name: 'B', catalog: catalog({ family: 'claude', input: ['text'] }) },
+  ], []);
+  expect(groupDiscoveryRows(familyRows).grouped).toBe(true);
+
+  const mixed = discoveryRows([
+    { modelId: 'a', name: 'A', catalog: catalog({ family: 'claude', input: ['text'] }) },
+    { modelId: 'b', name: 'B', catalog: catalog({ input: ['text'], family: undefined }) },
+  ], []);
+  expect(groupDiscoveryRows(mixed).grouped).toBe(false);
+});
+
+test('the OpenRouter step asks only for ids the OMP catalog did not answer', () => {
+  const known = createModelRow({ modelId: 'known', name: 'Known' });
+  const unknown = createModelRow({ modelId: 'unknown', name: 'Unknown' });
+  const answers = new Map([['known', catalog()]]);
+  expect(idsMissingCatalog([known, unknown], answers)).toEqual(['unknown']);
 });

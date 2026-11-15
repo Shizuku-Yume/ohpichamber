@@ -1,5 +1,5 @@
 import { ModelSchema, ProviderConfigureRequestSchema, ProviderModelDiscoveryRequestSchema } from '@openchamber/agent-contract';
-import type { Model, ProviderConfigurationRead, ProviderConfigureRequest, ProviderModelDiscoveryRequest, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
+import type { Model, ModelCatalogInfo, ModelInfoSource, ProviderConfigurationRead, ProviderConfigureRequest, ProviderModelDiscoveryRequest, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
 import type { CustomProviderIcon } from '@/lib/customProviderIcons';
 
@@ -10,6 +10,9 @@ export type CustomProviderProtocol = (typeof CUSTOM_PROVIDER_PROTOCOLS)[number];
 
 export const isCustomProviderProtocol = (value: string): value is CustomProviderProtocol =>
   CUSTOM_PROVIDER_PROTOCOLS.some((protocol) => protocol === value);
+
+/** The fields auto-fill may write, and the only ones whose provenance it tracks. */
+export type ModelAutoFillField = 'contextWindow' | 'maxOutputTokens' | 'modalities' | 'toolsSupported' | 'reasoning' | 'pricing';
 
 export interface ModelRow {
   row: string;
@@ -27,6 +30,19 @@ export interface ModelRow {
   toolsSupported?: boolean;
   /** Canonical fields the controls do not edit (reasoning, pricing, status, enabled). */
   base?: Model;
+  /** Auto-filled reasoning support, overriding `base`; absent when no catalog answered. */
+  reasoningEffortSupported?: boolean;
+  /** Auto-filled pricing, overriding `base`; absent when no catalog answered. */
+  pricing?: Model['pricing'];
+  /**
+   * Fields the user set (typed or saved). Auto-fill may refill its own values
+   * but never one of these, so a typed limit survives a later catalog read.
+   */
+  typed: ReadonlySet<ModelAutoFillField>;
+  /** Where each auto-filled value came from, for the label under the control. */
+  filledFrom: Partial<Record<ModelAutoFillField, ModelInfoSource>>;
+  /** Catalog family, when a catalog read named one; the dialog groups by it. */
+  family?: string;
 }
 export interface HeaderRow { row: string; name: string; value: string }
 /** What Save does with the uploaded logo image. */
@@ -172,11 +188,17 @@ const isHttpEndpoint = (value: string): boolean => {
 const isCanonicalModel = (model: Model | ProviderModelDiscoveryResult['models'][number] | undefined): model is Model =>
   model !== undefined && 'modalities' in model;
 
+/**
+ * A row from a saved model knows every field it carries was set by a person,
+ * so auto-fill leaves all of them alone. A new row starts with nothing typed.
+ */
 export function createModelRow(model?: Model | ProviderModelDiscoveryResult['models'][number]): ModelRow {
   const canonical = isCanonicalModel(model) ? { ...model } : undefined;
   const { modelId = '', name = '', contextWindow, maxOutputTokens } = model ?? {};
   const modalities: Model['modalities'] = canonical ? [...canonical.modalities] : ['text'];
   const nativeKind = nativeKindOf(modalities);
+  const typed: ModelAutoFillField[] = canonical ? ['contextWindow', 'maxOutputTokens', 'modalities', 'reasoning', 'pricing'] : [];
+  if (canonical?.toolsSupported !== undefined) typed.push('toolsSupported');
   return {
     row: crypto.randomUUID(),
     modelId,
@@ -187,6 +209,8 @@ export function createModelRow(model?: Model | ProviderModelDiscoveryResult['mod
     nativeKind,
     toolsSupported: canonical?.toolsSupported,
     base: canonical,
+    typed: new Set(typed),
+    filledFrom: {},
   };
 }
 
@@ -317,6 +341,10 @@ export function buildCustomProviderRequest(form: CustomProviderFormState, expect
       // the native runner accepts, matching the writer's own modality rule.
       modalities: normalizeModelModalities(row.nativeKind, row.modalities),
     };
+    // Auto-fill only ever replaces fields the user did not set, so these
+    // overrides cannot disagree with a value typed into the editor.
+    if (row.reasoningEffortSupported !== undefined) model.reasoningEffortSupported = row.reasoningEffortSupported;
+    if (row.pricing !== undefined) model.pricing = row.pricing;
     // Omission preserves the native runner's own tool-support default.
     if (row.toolsSupported === undefined) return ModelSchema.parse(model);
     return ModelSchema.parse({ ...model, toolsSupported: row.toolsSupported });
@@ -359,4 +387,228 @@ function logoPlanOf(logo: CustomProviderFormState['logo']): CustomProviderLogoPl
   if (logo === null) return { kind: 'keep' };
   if (logo === 'removed') return { kind: 'remove' };
   return { kind: 'upload', file: logo };
+}
+
+// ── Model info auto-fill and the discovery dialog ──────────────────────────
+
+/** A catalog answer keyed by model id, as both auto-fill sources return it. */
+export type ModelCatalogAnswers = ReadonlyMap<string, ModelCatalogInfo>;
+
+/**
+ * Which fields a catalog answer can still write into a row. A field the user
+ * set is skipped even when it is empty: "I typed it" is the user's answer.
+ */
+export function autoFillFields(row: ModelRow, catalog: ModelCatalogInfo): ModelAutoFillField[] {
+  const fields: ModelAutoFillField[] = [];
+  if (fillableLimit(row, 'contextWindow', String(catalog.contextWindow))) fields.push('contextWindow');
+  if (fillableLimit(row, 'maxOutputTokens', String(catalog.maxTokens))) fields.push('maxOutputTokens');
+  if (!row.typed.has('modalities')) {
+    const next = catalog.input.filter((input) => input === 'text' || input === 'image');
+    if (next.length > 0 && !sameModalities(next, row.modalities)) fields.push('modalities');
+  }
+  if (!row.typed.has('toolsSupported') && row.toolsSupported === undefined && catalog.toolsSupported !== undefined) fields.push('toolsSupported');
+  if (!row.typed.has('reasoning') && row.reasoningEffortSupported === undefined) fields.push('reasoning');
+  if (!row.typed.has('pricing') && row.pricing === undefined) fields.push('pricing');
+  return fields;
+}
+
+const sameModalities = (left: readonly string[], right: readonly Model['modalities'][number][]): boolean =>
+  left.length === right.length && left.every((value, index) => right[index] === value);
+
+/**
+ * A limit may be written when the field is empty and unset, or when nothing
+ * but a previous auto-fill put the current value there. A typed value stays.
+ */
+const fillableLimit = (row: ModelRow, field: 'contextWindow' | 'maxOutputTokens', value: string): boolean => {
+  if (row.typed.has(field)) return false;
+  const current = row[field].trim();
+  if (!current) return true;
+  return row.filledFrom[field] !== undefined && current !== value;
+};
+
+/**
+ * Applies the answers to the form's rows. Only fields the user did not set are
+ * written, and each written field records its source for the label under the
+ * control. A row whose id no answer names is left exactly as it was.
+ */
+export function applyModelCatalogInfo(
+  models: readonly ModelRow[],
+  answers: ModelCatalogAnswers,
+): { models: ModelRow[]; filled: number } {
+  let filled = 0;
+  const next = models.map((row) => {
+    const catalog = answers.get(row.modelId.trim());
+    if (!catalog) return row;
+    const fields = autoFillFields(row, catalog);
+    if (fields.length === 0 && catalog.family === undefined) return row;
+    filled += 1;
+    const filledFrom = { ...row.filledFrom };
+    const updated: ModelRow = { ...row, filledFrom };
+    for (const field of fields) {
+      filledFrom[field] = catalog.source;
+      if (field === 'contextWindow') updated.contextWindow = String(catalog.contextWindow);
+      else if (field === 'maxOutputTokens') updated.maxOutputTokens = String(catalog.maxTokens);
+      else if (field === 'modalities') {
+        const nativeKind = nativeKindOf(catalog.input);
+        updated.nativeKind = nativeKind;
+        updated.modalities = normalizeModelModalities(nativeKind, catalog.input);
+      } else if (field === 'toolsSupported') updated.toolsSupported = catalog.toolsSupported;
+      else if (field === 'reasoning') updated.reasoningEffortSupported = catalog.reasoning;
+      else if (field === 'pricing') {
+        updated.pricing = {
+          inputPerMillionTokens: catalog.cost.input,
+          outputPerMillionTokens: catalog.cost.output,
+          cacheReadPerMillionTokens: catalog.cost.cacheRead,
+          cacheWritePerMillionTokens: catalog.cost.cacheWrite,
+        };
+      }
+    }
+    if (catalog.family !== undefined) updated.family = catalog.family;
+    return updated;
+  });
+  return { models: next, filled };
+}
+
+/**
+ * The ids to ask the OpenRouter route for: models the OMP catalog did not
+ * answer, and only when they are not already catalogued from a previous fill.
+ */
+export function idsMissingCatalog(
+  models: readonly ModelRow[],
+  catalogued: ModelCatalogAnswers,
+): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const row of models) {
+    const modelId = row.modelId.trim();
+    if (!modelId || seen.has(modelId) || catalogued.has(modelId)) continue;
+    seen.add(modelId);
+    ids.push(modelId);
+  }
+  return ids;
+}
+
+/** A row imported from a discovery result, prefilled from what the catalog already knows. */
+export function createDiscoveredModelRow(model: ProviderModelDiscoveryResult['models'][number]): ModelRow {
+  const row = createModelRow(model);
+  if (!model.catalog) return row;
+  return applyModelCatalogInfo([row], new Map([[row.modelId.trim(), model.catalog]])).models[0];
+}
+
+/** Records that the user set this field by hand, so auto-fill stops touching it. */
+export function markModelFieldTyped(row: ModelRow, field: ModelAutoFillField): ModelRow {
+  if (row.typed.has(field)) return row;
+  return { ...row, typed: new Set([...row.typed, field]) };
+}
+
+/** A row whose id the freshly discovered list no longer carries. */
+export function staleModelIds(models: readonly ModelRow[], discovered: readonly { modelId: string }[]): string[] {
+  const known = new Set(discovered.map((model) => model.modelId));
+  return models
+    .map((row) => row.modelId.trim())
+    .filter((modelId) => modelId !== '' && !known.has(modelId));
+}
+
+/** Every discovered id the form does not hold yet, in discovery order. */
+export function idsToAdd(models: readonly ModelRow[], discovered: readonly { modelId: string }[]): string[] {
+  const existing = new Set(models.map((row) => row.modelId.trim()).filter(Boolean));
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const model of discovered) {
+    if (existing.has(model.modelId) || seen.has(model.modelId)) continue;
+    seen.add(model.modelId);
+    ids.push(model.modelId);
+  }
+  return ids;
+}
+
+export type DiscoveryFilter = 'all' | 'stale' | 'text' | 'image' | 'embedding' | 'audio';
+
+/**
+ * Every chip the dialog offers. The contract has no video modality, so there
+ * is no video chip; a chip whose count is zero shows zero rather than vanish,
+ * because a hidden chip would read as "this provider cannot do that".
+ */
+export const discoveryFilterValues: readonly DiscoveryFilter[] = ['all', 'stale', 'text', 'image', 'embedding', 'audio'];
+
+/** One row of the dialog: a discovered model, or a form row the list lost. */
+export interface DiscoveryRow {
+  kind: 'discovered' | 'stale';
+  modelId: string;
+  name?: string;
+  catalog?: ModelCatalogInfo;
+  /** The form row this id already belongs to, when it does. */
+  formRow?: ModelRow;
+  family?: string;
+}
+
+/**
+ * The dialog's rows: every discovered model, plus form rows the fresh list
+ * does not carry (a stale row can be removed individually). A form row marks
+ * the discovered model it stands for, so a row is never listed twice.
+ */
+export function discoveryRows(
+  discovered: readonly ProviderModelDiscoveryResult['models'][number][],
+  models: readonly ModelRow[],
+): DiscoveryRow[] {
+  const formById = new Map<string, ModelRow>();
+  for (const row of models) {
+    const modelId = row.modelId.trim();
+    if (modelId && !formById.has(modelId)) formById.set(modelId, row);
+  }
+  const discoveredIds = new Set(discovered.map((model) => model.modelId));
+  const rows: DiscoveryRow[] = discovered.map((model) => ({
+    kind: 'discovered',
+    modelId: model.modelId,
+    name: model.name,
+    catalog: model.catalog,
+    formRow: formById.get(model.modelId),
+    family: model.catalog?.family,
+  }));
+  for (const [modelId, formRow] of formById) {
+    if (discoveredIds.has(modelId)) continue;
+    rows.push({ kind: 'stale', modelId, name: formRow.name, formRow, family: formRow.family });
+  }
+  return rows;
+}
+
+/**
+ * A row passes the chosen filter. Text and image read the catalog's input
+ * modalities, or the form row's own when no catalog answered; embedding and
+ * audio read the native kind, which is what OMP accepts for them.
+ */
+export function matchesDiscoveryFilter(row: DiscoveryRow, filter: DiscoveryFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'stale') return row.kind === 'stale';
+  const inputs = row.catalog?.input ?? row.formRow?.modalities ?? [];
+  if (filter === 'text' || filter === 'image') return inputs.includes(filter);
+  if (filter === 'embedding') return row.formRow?.nativeKind === 'embedding';
+  return row.formRow?.nativeKind === 'tts' || row.formRow?.nativeKind === 'stt';
+}
+
+/**
+ * Grouping by family only pays off when every visible row names one; a list
+ * with a single unnamed row stays flat, since half a grouping reads worse.
+ */
+export function groupDiscoveryRows(rows: readonly DiscoveryRow[]): { grouped: boolean; groups: Array<{ family: string; rows: DiscoveryRow[] }> } {
+  if (rows.length === 0 || rows.some((row) => !row.family)) return { grouped: false, groups: [] };
+  const groups = new Map<string, DiscoveryRow[]>();
+  for (const row of rows) {
+    const family = row.family!;
+    const bucket = groups.get(family);
+    if (bucket) bucket.push(row);
+    else groups.set(family, [row]);
+  }
+  return { grouped: true, groups: [...groups].map(([family, familyRows]) => ({ family, rows: familyRows })) };
+}
+
+/** How many rows each filter would show. A chip is always offered, count and all. */
+export function discoveryFilterCounts(rows: readonly DiscoveryRow[]): Record<DiscoveryFilter, number> {
+  const counts: Record<DiscoveryFilter, number> = { all: rows.length, stale: 0, text: 0, image: 0, embedding: 0, audio: 0 };
+  for (const row of rows) {
+    for (const filter of ['stale', 'text', 'image', 'embedding', 'audio'] as const) {
+      if (matchesDiscoveryFilter(row, filter)) counts[filter] += 1;
+    }
+  }
+  return counts;
 }

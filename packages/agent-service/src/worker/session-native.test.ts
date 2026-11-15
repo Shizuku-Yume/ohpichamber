@@ -595,8 +595,11 @@ test('RPC goal continues three turns and retains completed mode', async () => {
  });
  try {
   await harness.worker.operation({ type: 'goal', op: 'create', objective: 'Finish the native proof' });
-  await waitForGoal(harness.worker, () => harness.requests.length >= 3 && harness.worker.mode().kind === 'goal' && harness.worker.mode().status === 'complete');
-  expect(harness.events.filter(input => input.event.type === 'run.started' && input.event.origin === 'goal')).toHaveLength(3);
+  const goalStarts = () => harness.events.filter(input => input.event.type === 'run.started' && input.event.origin === 'goal').length;
+  // The mode settles before the last `run.started` is published, so waiting on
+  // the mode alone raced the count this test asserts.
+  await waitForGoal(harness.worker, () => harness.requests.length >= 3 && goalStarts() >= 3 && harness.worker.mode().kind === 'goal' && harness.worker.mode().status === 'complete', 15000);
+  expect(goalStarts()).toBe(3);
   expect(harness.journal.runtime().mode).toMatchObject({ kind: 'goal', status: 'complete', objective: 'Finish the native proof' });
  } finally { await harness.close(); }
 }, 30000);

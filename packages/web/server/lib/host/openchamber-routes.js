@@ -1,5 +1,6 @@
 import { publicEnterprisePolicy } from '../enterprise-mode.js';
 import { withUserEnv } from '../injected-env.js';
+import { registerOpenRouterModelInfoRoute } from './openrouter-model-info.js';
 
 const SYSTEMD_SERVICE_UNIT_PATTERN = /^[A-Za-z0-9:_.@-]+\.service$/;
 
@@ -525,6 +526,10 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
       });
     }
   });
+
+  // Auto-fill's second source: OpenRouter's public model list, matched to the
+  // requested ids locally. Refused in enterprise mode before any request.
+  registerOpenRouterModelInfoRoute(app);
 
   app.get('/api/openchamber/models-metadata', async (_req, res) => {
     try {

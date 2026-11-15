@@ -441,6 +441,30 @@ describe('OAuth MCP fixture', () => {
     expect(unapprovedRedirect.status).toBe(400);
   });
 
+  test('--deny redirects back with error=access_denied instead of a code', async () => {
+    const fixture = startFixture({ deny: true });
+    const { origin } = fixture;
+    const redirectUri = 'http://localhost:38998/callback';
+    const { challenge } = await pkcePair();
+    const authorize = await fetch(
+      authorizationUrl(origin, {
+        response_type: 'code',
+        client_id: PREREGISTERED_CLIENT_ID,
+        redirect_uri: redirectUri,
+        state: 'denied',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+      }),
+      { redirect: 'manual' },
+    );
+    expect(authorize.status).toBe(302);
+    const redirected = redirectQuery(authorize.headers.get('Location'));
+    expect(redirected.error).toBe('access_denied');
+    expect(redirected.state).toBe('denied');
+    expect(redirected.code).toBeUndefined();
+    expect((await (await fetch(new URL('/__state', origin))).json()).issuedAuthorizationCodes).toBe(0);
+  });
+
   test('--challenge-403 answers 403 with the same bearer challenge', async () => {
     const fixture = startFixture({ challengeStatus: 403 });
     const { origin } = fixture;

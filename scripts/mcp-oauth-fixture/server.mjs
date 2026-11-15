@@ -28,6 +28,7 @@ Options:
                     its registration endpoint but only approves listed clients)
   --challenge-403   Answer an unauthenticated MCP request with 403 instead of 401
   --consent-page    Serve a one-button consent page instead of redirecting at once
+  --deny            Redirect back with error=access_denied instead of issuing a code
   --help            Print this text
 `;
 
@@ -38,6 +39,7 @@ export function normalizeOptions(partial = {}) {
     dynamicRegistration: partial.dynamicRegistration ?? true,
     challengeStatus: partial.challengeStatus ?? 401,
     consentPage: partial.consentPage ?? false,
+    deny: partial.deny ?? false,
     quiet: partial.quiet ?? false,
   };
 }
@@ -55,6 +57,8 @@ function parseArguments(argv) {
       partial.challengeStatus = 403;
     } else if (argument === '--consent-page') {
       partial.consentPage = true;
+    } else if (argument === '--deny') {
+      partial.deny = true;
     } else if (argument === '--port' || argument.startsWith('--port=')) {
       const raw = argument === '--port' ? argv[(index += 1)] : argument.slice('--port='.length);
       const port = Number(raw);
@@ -215,6 +219,15 @@ export function createFixture(partialOptions = {}) {
     );
   }
 
+  /** RFC 6749 §4.1.2.1: a refused authorization returns the error to the client. */
+  function issueDenial(params) {
+    const location = new URL(params.redirect_uri);
+    location.searchParams.set('error', 'access_denied');
+    location.searchParams.set('error_description', 'The user denied the request.');
+    location.searchParams.set('state', params.state);
+    return location.toString();
+  }
+
   function issueCode(params) {
     const code = randomToken();
     codes.set(code, {
@@ -283,6 +296,10 @@ export function createFixture(partialOptions = {}) {
         { error: 'invalid_request', error_description: 'code_challenge_method must be S256.' },
         400,
       );
+    }
+
+    if (options.deny) {
+      return new Response(null, { status: 302, headers: { Location: issueDenial(params) } });
     }
 
     if (!options.consentPage) {

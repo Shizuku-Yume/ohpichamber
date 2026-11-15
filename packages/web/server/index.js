@@ -573,13 +573,24 @@ const agentScopeRuntime = createHostAgentScopeRuntime({
  getArchiveCatalog: () => spaceArchive?.listArchiveCatalog?.() ?? [],
  fsPromises,
 });
+const resolveHostTools = async () => {
+ const settings = await readSettingsFromDiskMigrated().catch(() => null);
+ return {
+  openchamber: settings?.agentControlToolEnabled !== false,
+  web: settings?.agentWebToolEnabled !== false,
+  openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
+  notify: settings?.agentNotifyToolEnabled === true,
+  openchamber_render: settings?.agentRenderToolEnabled !== false,
+  openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
+ };
+};
 const hostAgentRuntime = createHostAgentRuntime({
  dataDir: OPENCHAMBER_DATA_DIR,
  scopeRuntime: agentScopeRuntime,
  bunPath: process.env.OHPICHAMBER_BUN,
  entrypoint: process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT,
  validateDirectoryPath,
- // Project environment plus the non-secret goal preferences the worker reads.
+ resolveHostTools,
  // Captured at worker admission: a saved change applies to workers started after it.
  getEnvironmentForDirectory: async (directory) => {
   const environment = await environmentRuntime.forDirectory(directory) ?? {};
@@ -1971,17 +1982,7 @@ async function main(options = {}) {
     express, store: attachmentStore, resolveWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
    })),
    globalEventHub: globalMessageStreamHub,
-   resolveHostTools: async () => {
-    const settings = await readSettingsFromDiskMigrated().catch(() => null);
-    return {
-     openchamber: settings?.agentControlToolEnabled !== false,
-     web: settings?.agentWebToolEnabled !== false,
-     openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
-     notify: settings?.agentNotifyToolEnabled === true,
-     openchamber_render: settings?.agentRenderToolEnabled !== false,
-     openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
-    };
-   },
+   resolveHostTools,
   },
   ensurePushInitialized,
   ensureGlobalWatcherStarted,

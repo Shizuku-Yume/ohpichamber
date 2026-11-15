@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { normalizePath } from '@/lib/pathNormalization';
 import { AgentPermissionsEditor } from './AgentPermissionsEditor';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
@@ -153,29 +154,54 @@ export const AgentsPage: React.FC = () => {
   const formRef = React.useRef(form);
   formRef.current = form;
   const [toolsCatalog, setToolsCatalog] = React.useState<ToolCatalogEntry[]>([]);
-
+  const [toolsCatalogError, setToolsCatalogError] = React.useState<string | null>(null);
+  const [catalogRetryCount, setCatalogRetryCount] = React.useState(0);
   React.useEffect(() => {
     let active = true;
     const loadCatalog = async () => {
+      setToolsCatalogError(null);
       try {
-        const currentSessionId = useSessionUIStore.getState().currentSessionId;
-        if (currentSessionId) {
-          const catalog = await canonicalClient.getTools({ sessionId: currentSessionId });
-          if (active) setToolsCatalog(catalog.tools);
+        if (!settingsDirectory) {
+          if (active) setToolsCatalog([]);
           return;
         }
-        if (settingsDirectory) {
-          const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
-          const catalog = await canonicalClient.getTools({ workspaceId: workspace.workspaceId });
-          if (active) setToolsCatalog(catalog.tools);
+        const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+        let loadedTools: ToolCatalogEntry[] | null = null;
+        const currentSessionId = useSessionUIStore.getState().currentSessionId;
+        if (currentSessionId) {
+          const sessionDir = useSessionUIStore.getState().getDirectoryForSession(currentSessionId);
+          const matchesOwnership = Boolean(
+            sessionDir &&
+            settingsDirectory &&
+            normalizePath(sessionDir) === normalizePath(settingsDirectory)
+          );
+          if (matchesOwnership) {
+            try {
+              const catalog = await canonicalClient.getTools({ sessionId: currentSessionId });
+              loadedTools = catalog.tools;
+            } catch {
+              // Fall back to workspace endpoint
+            }
+          }
         }
-      } catch {
-        // Tool catalog fallback handled by editor
+        if (!loadedTools) {
+          const catalog = await canonicalClient.getTools({ workspaceId: workspace.workspaceId });
+          loadedTools = catalog.tools;
+        }
+        if (active) {
+          setToolsCatalog(loadedTools);
+          setToolsCatalogError(null);
+        }
+      } catch (err) {
+        if (active) {
+          setToolsCatalog([]);
+          setToolsCatalogError(err instanceof Error ? err.message : 'SERVICE_UNAVAILABLE');
+        }
       }
     };
     void loadCatalog();
     return () => { active = false; };
-  }, [settingsDirectory]);
+  }, [settingsDirectory, catalogRetryCount]);
   const [isCreating, setIsCreating] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -206,12 +232,16 @@ export const AgentsPage: React.FC = () => {
   const buildAgent = React.useCallback((name: string): Agent | null => {
     const entity = entityRef.current;
     if (!entity) return null;
+    let allowedTools = form.allowedTools === null ? null : [...form.allowedTools];
+    if (toolsCatalogError) {
+      allowedTools = savedRef.current?.allowedTools ?? entity.allowedTools ?? null;
+    }
     const agent: Agent = {
       ...entity,
       name,
       description: form.description,
       model: form.model,
-      allowedTools: form.allowedTools === null ? null : [...form.allowedTools],
+      allowedTools,
     };
     // An untouched optional prompt retains its exact native representation.
     if (form.systemPromptOverride !== (entity.systemPromptOverride ?? '')) {
@@ -225,12 +255,13 @@ export const AgentsPage: React.FC = () => {
     else if (spawnsTrimmed.length > 0) agent.spawns = spawnsTrimmed.split(',').map((s) => s.trim()).filter(Boolean);
     else delete agent.spawns;
     return agent;
-  }, [form]);
+  }, [form, toolsCatalogError]);
 
   const save = React.useCallback(async (): Promise<AutosaveResult> => {
     const saved = savedRef.current;
     if (isNewAgent || !selectedAgent || !saved || hydratedSelectionRef.current !== selectionKey) return AUTOSAVE_UNCHANGED;
     if (fieldsEqual(form, saved)) return AUTOSAVE_UNCHANGED;
+    if (toolsCatalogError && form.allowedTools !== saved.allowedTools) return AUTOSAVE_UNCHANGED;
     const agent = buildAgent(selectedAgent.name);
     const expectedRevision = revisionRef.current;
     if (!agent || expectedRevision === undefined) return autosaveFailed(t('common.unavailable'));
@@ -255,7 +286,7 @@ export const AgentsPage: React.FC = () => {
     } finally {
       savingRef.current = false;
     }
-  }, [isNewAgent, selectedAgent, selectionKey, form, buildAgent, updateAgent, settingsDirectory, t]);
+  }, [isNewAgent, selectedAgent, selectionKey, form, buildAgent, updateAgent, settingsDirectory, toolsCatalogError, t]);
   const autosave = useAutosave(save);
   const { requestSave } = autosave;
 
@@ -460,10 +491,20 @@ export const AgentsPage: React.FC = () => {
           label={t('settings.agents.page.field.allowedTools')}
           controlClassName="w-full max-w-none flex-col items-stretch"
         >
+          {toolsCatalogError && (
+            <div role="status" className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between gap-2">
+              <span>{t('common.unavailable')}</span>
+              <Button size="xs" variant="outline" onClick={() => setCatalogRetryCount((c) => c + 1)}>
+                {t('settings.agents.page.permissionsEditor.actions.retry')}
+              </Button>
+            </div>
+          )}
           <AgentPermissionsEditor
             allowedTools={form.allowedTools}
             toolsCatalog={toolsCatalog}
+            disabled={Boolean(toolsCatalogError)}
             onChange={(nextTools) => {
+              if (toolsCatalogError) return;
               setForm((current) => ({ ...current, allowedTools: nextTools }));
               requestSave();
             }}

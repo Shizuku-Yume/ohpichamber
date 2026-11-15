@@ -1193,3 +1193,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** the maintainer schedules localization of the OMP settings page, or `locale-ui-patterns` is read to forbid English fallback on runtime-sourced copy; then translate or hide the affected rows.
 - **Effort:** ux-feedback-2026-11-12
+## 2026-11-14 - Child subagent session prompts inherit parentSessionId in Host routes to permit agentId
+
+- **Decided:** Host session routes (`routes.js`) track admitted child sessions with their `parentSessionId` so `prepareDelivery` and queue append evaluate `isRoot` as `scope.parentSessionId === undefined`. Child subagent runs (`parentSessionId !== undefined`) bypass `assertRootPromptAdmission` and retain their profile `options.agentId`, while root sessions continue enforcing `options.agentId === null`.
+- **Instead of:** Allowing `options.agentId` on root sessions, or mutating `agent-scope-store` schema/SQLite tables during this task.
+- **Because:** Root prompt admission intentionally enforces `agentId === null` for user-entered root turns (where model routing or default agents govern). Child subagents, however, are spawned with specific profile agent IDs (such as `task`, `sonic`, `reviewer`, or user-defined profiles). Tracking child parentage in the session admission route provides exact root/subagent discrimination without schema migrations.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** SQLite `host_agent_sessions` durable schema adds a first-class `parent_session_id` column across all sessions.
+- **Effort:** ux-feedback-2026-11-12

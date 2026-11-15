@@ -31,6 +31,7 @@ import type { MCPConfigFile, MCPHttpServerConfig, MCPSseServerConfig, MCPServerC
 import type { AuthStorage as SDKAuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { withFileLock } from '@oh-my-pi/pi-utils/file-lock';
 import { ProjectionError } from '../projection/journal.ts';
+import { MCPDiscoveredToolSchema, MCPToolDiscoverySchema, type MCPDiscoveredTool, type MCPToolDiscovery } from './mcp/protocol.ts';
 
 export * from './mcp/protocol.ts';
 
@@ -566,6 +567,41 @@ export class WorkerMcp extends MCPManager {
             : { code: 'MCP_RECONNECT_FAILED', detail: 'MCP connection test failed.', retryable: true }
         };
       } finally { if (manager) await this.#release([manager]); }
+    });
+  }
+
+  /**
+   * Names the tools of every enabled server through a real isolated handshake.
+   * It publishes nothing and keeps no transport, because the workspace tool
+   * catalog must answer before any session owns an applied MCP runtime.
+   */
+  discover(captured: MCPConfigurationState): Promise<MCPToolDiscovery> {
+    return this.#serialize(async () => {
+      const configuration = this.#capture(captured);
+      const enabled = configuration.config.servers.filter(server => server.enabled);
+      const staged = await Promise.allSettled(enabled.map(async server => ({ server, manager: await this.#stage(server) })));
+      const tools: MCPDiscoveredTool[] = [];
+      const managers: MCPManager[] = [];
+      try {
+        for (const attempt of staged) {
+          // A server that cannot connect contributes no tools: configure and
+          // apply already report that failure, and one bad server must not hide
+          // the tools a sibling server serves.
+          if (attempt.status !== 'fulfilled') continue;
+          managers.push(attempt.value.manager);
+          for (const tool of attempt.value.manager.getTools()) {
+            tools.push(MCPDiscoveredToolSchema.parse({
+              serverId: attempt.value.server.serverId, name: tool.name, description: tool.description ?? '',
+            }));
+          }
+        }
+      } finally {
+        await this.#release(managers).catch(() => { /* discovery commits no runtime to keep */ });
+      }
+      return MCPToolDiscoverySchema.parse({
+        workspaceId: configuration.workspaceId, persistedRevision: configuration.persistedRevision,
+        tools: tools.sort((left, right) => left.serverId.localeCompare(right.serverId) || left.name.localeCompare(right.name)),
+      });
     });
   }
 

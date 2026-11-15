@@ -42,7 +42,7 @@ export function categorizeTool(name: string): ToolPermissionGroupKey {
   return 'mcp_and_extensions';
 }
 
-export const TOOL_ONE_LINE_DESCRIPTIONS: Record<string, string> = {
+const TOOL_ONE_LINE_DESCRIPTIONS = {
   read: 'Read files, images, archives and structured data sources',
   write: 'Create or overwrite files in the workspace',
   edit: 'Edit files in place with hashline patches',
@@ -70,4 +70,21 @@ export const TOOL_ONE_LINE_DESCRIPTIONS: Record<string, string> = {
   openchamber: 'Execute host workspace control actions',
   openchamber_render: 'Render interactive UI components and views',
   openchamber_knowledge: 'Query project documentation and knowledge context',
-};
+} as const;
+export const GROUP_DESCRIPTIONS = {
+  files_and_search: 'File reading, editing, and codebase search tools',
+  execution: 'Terminal, code evaluation, LSP, and process execution tools',
+  web_and_external: 'Web browsing, search, and external service integrations',
+  planning_and_memory: 'Task tracking, checkpoints, goals, and agent memory',
+  multi_agent: 'Subagent orchestration and delegation tools',
+  openchamber: 'Host workspace management and presentation tools',
+  mcp_and_extensions: 'Model Context Protocol and third-party extension tools',
+} as const;
+
+export function getToolOneLineDescription(name: string): string {
+  if (Object.hasOwn(TOOL_ONE_LINE_DESCRIPTIONS, name)) {
+    // SAFETY: Object.hasOwn ensures name is a valid key of TOOL_ONE_LINE_DESCRIPTIONS
+    return TOOL_ONE_LINE_DESCRIPTIONS[name as keyof typeof TOOL_ONE_LINE_DESCRIPTIONS];
+  }
+  return '';
+}

@@ -617,6 +617,152 @@ describe('canonical session route contracts', () => {
     });
   });
 
+  describe('prompt admission for root and child sessions', () => {
+    it('refuses root prompt carrying agentId but admits child session prompt carrying agentId', async () => {
+      const live = new Set();
+      const calls = [];
+      const runtime = id => ({
+        sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+        createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+      });
+      const service = {
+        request: async (pathname, init = {}) => {
+          calls.push(pathname);
+          const id = decodeURIComponent(pathname.split('/').at(-2));
+          if (pathname.endsWith('/reopen')) {
+            live.add(id);
+            return Response.json(runtime(id));
+          }
+          if (pathname.endsWith('/runs')) {
+            const body = JSON.parse(init.body);
+            return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+          }
+          throw new Error(`Unexpected service request ${pathname}`);
+        }
+      };
+      const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+      const sessionService = createOpenChamberSessionService({
+        agentScopeStore: routeFixture.agentScopeStore,
+        service,
+        resolveWorkspaceScope: async () => validScope('workspace'),
+        resolveSessionScope: async id => {
+          if (id === 'ses_child') return { ...validScope('ses_child'), parentSessionId: 'ses_parent' };
+          return validScope(id);
+        },
+        resolveHostSessionScope: async id => {
+          if (id === 'ses_child') return { ...validScope('ses_child'), parentSessionId: 'ses_parent' };
+          return validScope(id);
+        },
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
+        directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+        archiveStore: createMemoryArchiveStore(),
+        sessionMetadataStore: createMemorySessionMetadataStore(),
+      });
+      const app = express();
+      const router = express.Router();
+      registerCanonicalSessionRoutes(router, sessionService);
+      app.use('/api/agent/v1/sessions', router);
+
+      const promptWithAgent = {
+        input: { text: 'with agent', attachments: [], context: [] },
+        options: { providerId: null, modelId: null, agentId: 'task-agent-id', variant: null, reasoningEffort: null },
+      };
+
+      const rootRes = await request(app)
+        .post('/api/agent/v1/sessions/ses_root/runs')
+        .send(promptWithAgent)
+        .expect(400);
+      expect(rootRes.body.detail).toContain('Root prompt agentId must be null');
+
+      const childRes = await request(app)
+        .post('/api/agent/v1/sessions/ses_child/runs')
+        .send(promptWithAgent)
+        .expect(200);
+      expect(childRes.body.run).toMatchObject({ sessionId: 'ses_child', status: 'running' });
+    });
+
+    it('admits child session prompt carrying agentId when parentSessionId is recovered via subagentSessions fallback', async () => {
+      const calls = [];
+      const live = new Set();
+      let createdChildId = '';
+      const runtime = id => ({
+        sessionId: id, rootSessionId: id, projectId: 'proj_1', workspaceId: 'ws_1', displayPath: 'app',
+        createdAt: 1, updatedAt: 2, epoch: `epoch-${id}`, headSequence: '0', runtimeStatus: 'idle', activeRunId: null, mode: { kind: 'main' }
+      });
+      const service = {
+        request: async (pathname, init = {}) => {
+          calls.push(pathname);
+          if (pathname === '/internal/sessions' && init.method === 'POST') {
+            const body = JSON.parse(init.body);
+            createdChildId = body.rootSessionId;
+            return Response.json({
+              ...runtime(body.rootSessionId),
+              projectId: body.projectId,
+              workspaceId: body.workspaceId,
+              parentSessionId: body.parentSessionId,
+            });
+          }
+          const id = decodeURIComponent(pathname.split('/').at(-2));
+          if (pathname.endsWith('/reopen')) {
+            live.add(id);
+            return Response.json(runtime(id));
+          }
+          if (pathname.endsWith('/runs')) {
+            const body = JSON.parse(init.body);
+            return Response.json({ run: { runId: body.runId, sessionId: id, status: 'running', origin: 'host', createdAt: 1 } });
+          }
+          throw new Error(`Unexpected service request ${pathname}`);
+        }
+      };
+      const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+      const sessionService = createOpenChamberSessionService({
+        agentScopeStore: routeFixture.agentScopeStore,
+        service,
+        resolveWorkspaceScope: async () => validScope('ws_1'),
+        resolveSessionScope: async id => ({ ...validScope(id), workspaceId: 'ws_1', projectId: 'proj_1' }),
+        resolveHostSessionScope: async id => ({ ...validScope(id), workspaceId: 'ws_1', projectId: 'proj_1' }),
+        registerSessionScope: async () => true,
+        resolveAttachments: async () => [],
+        capturePrompt: async (_scope, body) => body,
+        beforeDispatch: async () => { },
+        onPromptAccepted: async () => { },
+        directCommandAdmissionStore: routeFixture.directCommandAdmissionStore,
+        archiveStore: createMemoryArchiveStore(),
+        sessionMetadataStore: createMemorySessionMetadataStore(),
+      });
+      const app = express();
+      const router = express.Router();
+      registerCanonicalSessionRoutes(router, sessionService);
+      app.use('/api/agent/v1/sessions', router);
+
+      const createRes = await request(app)
+        .post('/api/agent/v1/sessions')
+        .send({
+          projectId: 'proj_1',
+          workspaceId: 'ws_1',
+          parentSessionId: 'ses_parent_root',
+          options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null },
+        })
+        .expect(200);
+      expect(createdChildId).toBeTruthy();
+
+      const promptWithAgent = {
+        input: { text: 'with agent', attachments: [], context: [] },
+        options: { providerId: null, modelId: null, agentId: 'task-agent-id', variant: null, reasoningEffort: null },
+      };
+
+      const childRes = await request(app)
+        .post(`/api/agent/v1/sessions/${encodeURIComponent(createdChildId)}/runs`)
+        .send(promptWithAgent)
+        .expect(200);
+      expect(childRes.body.run).toMatchObject({ sessionId: createdChildId, status: 'running' });
+    });
+  });
+
   describe('session create with multi-run metadata', () => {
     const multirunBase = {
       version: 1,

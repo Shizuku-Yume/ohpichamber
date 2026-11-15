@@ -15,7 +15,7 @@ export type CapturedHostBootstrapScope = z.infer<typeof CapturedHostBootstrapSco
 export const HostAuthorizationScopeSchema = CapturedHostBootstrapScopeSchema.extend({ workerGeneration: EntityIdSchema });
 export type HostAuthorizationScope = z.infer<typeof HostAuthorizationScopeSchema>;
 export const HostSessionBootstrapSchema = WorkerBootstrapSchema.extend({ displayPath: DisplayPathSchema, deferred: z.boolean().optional() });
-export const HostWorkspaceBootstrapSchema = z.strictObject({ projectId: EntityIdSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema, env: z.record(z.string(), z.string()).optional() });
+export const HostWorkspaceBootstrapSchema = z.strictObject({ projectId: EntityIdSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema, env: z.record(z.string(), z.string()).optional(), hostTools: z.record(z.string(), z.boolean()).optional() });
 export const HostWorkspaceRegisteredSchema = z.strictObject({ workspaceId: EntityIdSchema, projectId: EntityIdSchema, agentDirectoryId: EntityIdSchema, authorizationRootId: EntityIdSchema, catalogRevision: CounterSchema });
 export const HostSessionRelocationPrepareSchema = z.strictObject({
   transactionId: EntityIdSchema, sourceWorkspaceId: EntityIdSchema,
@@ -73,7 +73,7 @@ export const HostWorkerAuthorizationCancelSchema = z.strictObject({ type: z.lite
 export const HostWorkerActionRequestSchema = z.strictObject({ type: z.literal('worker.action.request'), requestId: EntityIdSchema, scope: HostAuthorizationScopeSchema, request: HostActionRequestSchema });
 export const HostWorkerActionReplySchema = z.strictObject({ type: z.literal('worker.action.result'), requestId: EntityIdSchema, result: HostActionResultSchema });
 export const HostWorkerActionCancelSchema = z.strictObject({ type: z.literal('worker.action.cancel'), requestId: EntityIdSchema });
-export const HostWorkspacePolicySchema = z.strictObject({ projectId: EntityIdSchema, workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, providers: z.array(z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema, endpoint: z.string().url().optional() })), mcpServers: z.array(MCPServerConfigSchema), fileTools: z.array(z.enum(['read', 'write'])), shellCommands: z.array(z.string().min(1)), agentIds: z.array(EntityIdSchema), permissionPresetIds: z.array(EntityIdSchema), providerEntry: z.boolean() });
+export const HostWorkspacePolicySchema = z.strictObject({ projectId: EntityIdSchema, workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema, cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema, providers: z.array(z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema, endpoint: z.string().url().optional() })), mcpServers: z.array(MCPServerConfigSchema), fileTools: z.array(z.enum(['read', 'write'])), shellCommands: z.array(z.string().min(1)), agentIds: z.array(EntityIdSchema), providerEntry: z.boolean() });
 export type HostWorkspacePolicy = z.infer<typeof HostWorkspacePolicySchema>;
 export { WorkerBootstrapSchema, WorkerPolicyRequestSchema, WorkerPolicyResultSchema };
 export type { WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';

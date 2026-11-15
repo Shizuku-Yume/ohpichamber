@@ -356,4 +356,23 @@ describe('canonical queue runtime', () => {
     assert.equal(dispatchCalled, true);
     await runtime.stop();
   });
+  it('refuses a root prompt carrying agentId and admits the same prompt on a child session', async () => {
+    const store = storeFor();
+    const service = createService();
+    const runtime = createCanonicalQueueRuntime({
+      store,
+      service,
+      resolveAttachments: async () => [],
+      publishQueue: () => {},
+      reportFailure: () => {},
+    });
+    const delegated = { input: { text: 'delegate', attachments: [], context: [] }, options: { ...options, agentId: 'task-subagent' } };
+    await assert.rejects(
+      () => runtime.append(scope, randomUUID(), { expectedRevision: '0', content: 'delegate', request: delegated }),
+      /Root prompt agentId must be null/,
+    );
+    const child = await runtime.append({ ...scope, parentSessionId: 'ses_parent' }, randomUUID(), { expectedRevision: '0', content: 'delegate', request: delegated });
+    assert.equal(child.items[0].options.agentId, 'task-subagent');
+    await runtime.stop();
+  });
 });

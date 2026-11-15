@@ -204,6 +204,12 @@ export class AgentService {
         if (result.type !== 'mcp' || result.result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp connection test operation.');
         return result.result.result;
       },
+      discoverMcpTools: async (workspaceId, configuration) => {
+        const root = await this.workspaceCatalogs.stateless(workspaceId);
+        const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'discover', configuration } });
+        if (result.type !== 'mcp' || result.result.type !== 'discovered') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp discovery operation.');
+        return result.result.result;
+      },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad, options.permissionAuthority);
     this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);

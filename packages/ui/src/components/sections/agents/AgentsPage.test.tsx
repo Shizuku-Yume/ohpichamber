@@ -34,6 +34,9 @@ const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => 
       ],
     });
   }
+  if (url.includes('/omp')) {
+    return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 0, settings: [] });
+  }
   return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
 });
 // These loading boundaries must run after the browser globals and the Bun asset-loader plugin are installed.
@@ -42,6 +45,7 @@ const { createRoot } = await import('react-dom/client');
 const { I18nProvider } = await import('@/lib/i18n');
 const { useAgentsStore } = await import('@/stores/useAgentsStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
+const { useSessionUIStore } = await import('@/sync/session-ui-store');
 plugin({
   name: 'agent-settings-provider-logos',
   setup(build) {
@@ -64,7 +68,26 @@ const container = document.createElement('div');
 document.body.appendChild(container);
 let root: Root;
 beforeEach(() => {
+  fetchSpy.mockImplementation(async (input) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes('/workspaces/resolve')) {
+      return Response.json({ workspaceId: 'ws_1', projectId: 'project', name: 'project' });
+    }
+    if (url.includes('/tools')) {
+      return Response.json({
+        sessionId: 'sess_1',
+        tools: [
+          { name: 'read', label: 'Read', description: 'Read files', tier: 'read', availability: true },
+          { name: 'bash', label: 'Bash', description: 'Run commands', tier: 'exec', availability: true },
+          { name: 'custom-tool', label: 'Custom', description: 'Custom tool', tier: 'exec', availability: true },
+          { name: 'disabled-tool', label: 'Disabled', description: 'Disabled tool', tier: 'exec', availability: false },
+        ],
+      });
+    }
+    return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  });
   useProjectsStore.setState({ projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  useSessionUIStore.setState({ currentSessionId: null });
   root = createRoot(container);
   useAgentsStore.setState({
     selectedAgentName: 'test', agentDraft: null,
@@ -308,4 +331,126 @@ test('thinking level and spawns are updated and saved to agent definition', asyn
     spawnsInput.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
   });
   expect(writes[0].spawns).toEqual(['scout', 'reviewer']);
+});
+test('the editor uses the workspace selected in Settings, even when a chat in another project is current', async () => {
+  const requestedUrls: string[] = [];
+  fetchSpy.mockImplementation(async (input) => {
+    const url = String(input instanceof Request ? input.url : input);
+    requestedUrls.push(url);
+    if (url.includes('/workspaces/resolve')) {
+      return Response.json({ workspaceId: 'ws_projectB', projectId: 'projectB', name: 'projectB' });
+    }
+    if (url.includes('/tools')) {
+      return Response.json({
+        workspaceId: 'ws_projectB',
+        tools: [
+          { name: 'read', label: 'Read', description: 'Read files', tier: 'read', availability: true },
+          { name: 'b-specific-tool', label: 'B Tool', description: 'Tool for B', tier: 'exec', availability: true },
+        ],
+      });
+    }
+    return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'projectB', path: '/projectB' }], activeProjectId: 'projectB' });
+  });
+
+  useSessionUIStore.setState({
+    currentSessionId: 'sess_projectA',
+    getDirectoryForSession: (id: string) => (id === 'sess_projectA' ? '/projectA' : null),
+  });
+  useProjectsStore.setState({
+    projects: [
+      { id: 'projectA', path: '/projectA' },
+      { id: 'projectB', path: '/projectB' },
+    ],
+    activeProjectId: 'projectB',
+  });
+  useAgentsStore.setState({
+    selectedAgentName: 'test',
+    agentsByDirectory: { '/projectB': [initialAgent] },
+    revisionsByDirectory: { '/projectB': '1' },
+    errorsByDirectory: {},
+  });
+
+  await render();
+
+  expect(requestedUrls.some((u) => u.includes('/workspaces/ws_projectB/tools'))).toBe(true);
+  expect(requestedUrls.some((u) => u.includes('/sessions/sess_projectA/tools'))).toBe(false);
+  expect(container.textContent).toContain('b-specific-tool');
+});
+
+test('a failed catalog load disables editing and never autosaves an empty list', async () => {
+  const writes: Agent[] = [];
+  fetchSpy.mockImplementation(async (input) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes('/workspaces/resolve')) {
+      return Response.json({ workspaceId: 'ws_1', projectId: 'project', name: 'project' });
+    }
+    if (url.includes('/tools')) {
+      return new Response('Failed to load tools', { status: 503, statusText: 'Service Unavailable' });
+    }
+    return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
+  });
+
+  useAgentsStore.setState({
+    updateAgent: async (agent) => {
+      writes.push(agent);
+      return { ok: true, revision: '2' };
+    },
+  });
+
+  await render();
+
+  const statusBanner = container.querySelector('[role="status"]');
+  expect(statusBanner).not.toBeNull();
+  expect(statusBanner?.textContent).toContain('Unavailable');
+
+  // Quick action chip buttons must be unconditionally disabled
+  const chipButtons = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')];
+  expect(chipButtons.length).toBeGreaterThan(0);
+  for (const btn of chipButtons) {
+    expect(btn.disabled).toBe(true);
+  }
+  // Checkboxes must be unconditionally disabled
+  const checkboxes = [...container.querySelectorAll<HTMLInputElement>('[data-settings-item="agents.allowed-tools"] input[type="checkbox"]')];
+  for (const cb of checkboxes) {
+    expect(cb.disabled).toBe(true);
+  }
+
+  // Editing a field triggers autosave
+  await edit(field('initial'), 'Updated description during catalog failure');
+
+  // Must unconditionally write and MUST NOT empty allowedTools
+  expect(writes.length).toBeGreaterThan(0);
+  const lastWrite = writes[writes.length - 1];
+  expect(lastWrite.allowedTools).toEqual(initialAgent.allowedTools);
+  expect(lastWrite.allowedTools).not.toEqual([]);
+});
+test('unavailable or unknown tools cannot be selected and are excluded from Show all', async () => {
+  const writes: Agent[] = [];
+  const agentWithUnknown: Agent = {
+    ...initialAgent,
+    allowedTools: ['read', 'unknown-tool'],
+  };
+  useAgentsStore.setState({
+    agentsByDirectory: { '/project': [agentWithUnknown] },
+    updateAgent: async (agent) => {
+      writes.push(agent);
+      return { ok: true, revision: String(writes.length + 1) };
+    },
+  });
+
+  await render();
+
+  expect(container.textContent).toContain('unknown-tool');
+  expect(container.textContent).toContain('Unavailable');
+
+  await toggleTool('disabled-tool');
+  expect(writes.some((w) => w.allowedTools?.includes('disabled-tool'))).toBe(false);
+
+  const showAll = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Show all');
+  if (!showAll) throw new Error('Missing Show all action');
+  await act(async () => { showAll.click(); });
+  const lastWrite = writes.at(-1);
+  expect(lastWrite?.allowedTools).toEqual(['read', 'bash', 'custom-tool']);
+  expect(lastWrite?.allowedTools).not.toContain('disabled-tool');
+  expect(lastWrite?.allowedTools).not.toContain('unknown-tool');
 });

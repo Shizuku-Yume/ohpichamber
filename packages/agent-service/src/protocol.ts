@@ -1,6 +1,5 @@
 import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, SessionToolsCatalogSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
 import { GoalControlRequestSchema } from '@openchamber/agent-contract';
-import type { ProblemCode } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { ProjectionInputSchema, ProjectionSeedSchema } from './projection/protocol.ts';
@@ -201,13 +200,10 @@ export const WorkerCommandSchema = z.discriminatedUnion('type', [
  * the sender truncates with the same function, so the two cannot disagree about
  * what fits.
  */
-export const DefaultOperationErrorDetailLimit = 200;
-export const McpOAuthOperationErrorDetailLimit = 1_000;
-export function operationErrorDetailLimit(code: ProblemCode): number {
-  return code.startsWith('MCP_OAUTH_') ? McpOAuthOperationErrorDetailLimit : DefaultOperationErrorDetailLimit;
-}
-export function operationErrorDetail(code: ProblemCode, detail: string): string {
-  return detail.slice(0, operationErrorDetailLimit(code));
+const DefaultOperationErrorDetailLimit = 200;
+const McpOAuthOperationErrorDetailLimit = 1_000;
+export function operationErrorDetail(code: string, detail: string): string {
+  return detail.slice(0, code.startsWith('MCP_OAUTH_') ? McpOAuthOperationErrorDetailLimit : DefaultOperationErrorDetailLimit);
 }
 
 export const WorkerReplySchema = z.discriminatedUnion('type', [
@@ -222,7 +218,7 @@ export const WorkerReplySchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema,
     status: z.number().int().min(400).max(599), detail: z.string().min(1).max(McpOAuthOperationErrorDetailLimit),
-  }).refine(reply => reply.detail.length <= operationErrorDetailLimit(reply.code), {
+  }).refine(reply => reply.detail.length <= (reply.code.startsWith('MCP_OAUTH_') ? McpOAuthOperationErrorDetailLimit : DefaultOperationErrorDetailLimit), {
     path: ['detail'], message: 'Operation error detail exceeds the limit for its code',
   }),
   z.strictObject({ type: z.literal('lifecycle'), workerGeneration: EntityIdSchema, state: z.enum(['initialized', 'closed']) }),

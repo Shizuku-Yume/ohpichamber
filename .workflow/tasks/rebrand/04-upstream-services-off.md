@@ -1,0 +1,14 @@
+# 04: No default calls to upstream-hosted services
+
+**Effort:** rebrand
+**Blocked by:** None
+**Covers:** W3, W5
+**Files:** `packages/web/server/lib/notifications/apns-runtime.js`, `APNS.md` and tests, `packages/web/server/lib/linear/auth.js`, `DOCUMENTATION.md`, `OAUTH-BROKER-HANDOFF.md` and tests, the Linear and push settings UI under `packages/ui/src/components/sections/`, `packages/ui/src/components/sections/classification/ClassificationProvidersPage.tsx`, `packages/ui/src/components/sections/extensions/ExtensionsPage.tsx`, `packages/ui/src/components/views/walkthrough/walkthroughAction.ts`, `packages/web/server/lib/guests/authoring/skill.txt`, the matching i18n keys
+**Read first:** spec `rebrand.md` "Upstream services off" and "Updates and services"; `decisions.md: 2026-11-16 - Cut the fork off from upstream-hosted services`; skill `enterprise-boundary`; skill `ui-api-decoupling`; skill `locale-ui-patterns`; `packages/web/server/lib/notifications/APNS.md`; `packages/web/server/lib/linear/DOCUMENTATION.md`; `packages/ui/src/components/sections/PATTERNS.md`
+**Check:** `rg -n 'openchamber\.dev' packages scripts .github Dockerfile docker-compose.yml --glob '!**/node_modules/**' --glob '!packages/docs/**'` returns only lines owned by tasks 02 and 03 (SDK docs, updater), and none from this task's files. Run the Web surface (`bun run dev`) with `OPENCHAMBER_DATA_DIR` pointing at a throwaway directory and no relay or broker configured. The Linear integration then shows OAuth sign-in as unavailable, with the reason and the setting that enables it. The mobile-push settings say remote iOS push needs a relay URL. The Host log shows no request to any `openchamber.dev` host. With `OPENCHAMBER_LINEAR_BROKER_URL` set to a local stub, the sign-in button returns. Screenshots and the log go to `/home/shizuku/Project/ohpichamber-omp-artifacts/rebrand-04-2026-11-16/`. Focused web-server and ui tests pass.
+
+- [ ] Remove `DEFAULT_RELAY_URL` from `apns-runtime.js`. With no configured relay, the APNs path reports itself unavailable and sends nothing, with no silent failure. Local and Web push keep working.
+- [ ] Remove `DEFAULT_LINEAR_BROKER_URL`. With no `OPENCHAMBER_LINEAR_BROKER_URL` or `settings.json` `linearBrokerUrl`, Linear OAuth is unavailable and the UI says why. Any non-OAuth Linear path keeps working.
+- [ ] Links to `docs.openchamber.dev` and `openchamber.dev/extensions` in UI, walkthrough and guest-authoring text point to the matching file under `https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/docs`, or are removed when no fork doc exists.
+- [ ] Update `APNS.md`, Linear `DOCUMENTATION.md` and `OAUTH-BROKER-HANDOFF.md` to the no-default contract.
+- [ ] New or changed copy follows `locale-ui-patterns` in every locale. It may name the product only through existing wording, because the product-name sweep is task 06.

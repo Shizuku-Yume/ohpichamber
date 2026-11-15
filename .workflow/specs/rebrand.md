@@ -1,7 +1,8 @@
 # Rebrand: OhPiChamber identity, mark and upstream cutoff
 
-**Status:** proposed
+**Status:** in progress
 **Priority:** high
+**Integration branch:** rebrand/integration
 
 ## What this is for
 

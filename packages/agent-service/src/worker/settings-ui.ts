@@ -150,6 +150,9 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'compaction.enabled': 'sessions:compaction',
   'compaction.experimentalContextManagement': 'sessions:compaction',
   'compaction.midTurnEnabled': 'sessions:compaction',
+  // An ordered array with five choices the generic row cannot honour: a chip
+  // group would write one string into the array instead of an order. It stays
+  // config.yml-only until a control that edits the sequence exists.
   'compaction.methodOrder': 'config-only',
   'compaction.thresholdPercent': 'sessions:compaction',
   'compaction.thresholdTokens': 'sessions:compaction',
@@ -265,7 +268,9 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'hindsight.mentalModelAutoSeed': 'memory:backend',
 
   // --- model (65) ---
-  'defaultThinkingLevel': 'sessions:defaults',
+  // The Defaults section's thinking control writes it; no generic row does,
+  // because the value is a model-specific effort the picker renders.
+  'defaultThinkingLevel': 'owned-by sessions.default-thinking',
   'modelRoleStorage': 'behavior:prompt',
   'personality': 'behavior:prompt',
   'inlineToolDescriptors': 'behavior:prompt',

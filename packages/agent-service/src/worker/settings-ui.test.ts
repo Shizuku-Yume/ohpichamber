@@ -58,7 +58,8 @@ test('misclassifications are fixed: followUpMode is not a chat owner; recap belo
 
 test('an owned-by placement names an owner control, and all placement types stay populated', () => {
   expect([...OMP_SETTING_OWNER_IDS].sort()).toEqual([
-    'chat.session-recap', 'chat.suggestion-generator', 'omp.modelRoles', 'sessions.fallback-model',
+    'chat.session-recap', 'chat.suggestion-generator', 'omp.modelRoles', 'sessions.default-thinking',
+    'sessions.fallback-model',
   ]);
   const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, 'config-only': 0, hidden: 0, boundary: 0 };
   for (const placement of Object.values(OMP_SETTING_PLACEMENTS)) {
@@ -156,15 +157,31 @@ test('every exposed page row is drawn by the section a GUI owner renders', () =>
   // invisible: the "hollow setting" this effort exists to remove. The section
   // names are read from the components that render them, so a deleted section
   // fails here instead of being excused by this test's own list.
-  const unwritten: string[] = [];
+  const placed = new Map<string, Set<string>>();
   for (const id of OMP_SETTING_EXPOSED_IDS) {
     const placement = OMP_SETTING_PLACEMENTS[id];
     if (placement?.type !== 'page') continue;
-    const rendered = renderedSections(placement.page);
-    if (rendered !== undefined && !rendered.has(placement.section)) {
-      unwritten.push(`${id} → ${placement.page}:${placement.section}`);
+    const sections = placed.get(placement.page) ?? new Set<string>();
+    sections.add(placement.section);
+    placed.set(placement.page, sections);
+  }
+
+  // Fail closed. A page with exposed rows whose owner this test cannot read is
+  // an unchecked page, not a clean one: that is how the Sessions page slipped
+  // through while 57 of its rows went unverified.
+  const unread: string[] = [];
+  const unwritten: string[] = [];
+  for (const [page, sections] of placed) {
+    const rendered = renderedSections(page);
+    if (rendered === undefined) {
+      unread.push(page);
+      continue;
+    }
+    for (const section of sections) {
+      if (!rendered.has(section)) unwritten.push(`${page}:${section}`);
     }
   }
+  expect(unread).toEqual([]);
   expect(unwritten).toEqual([]);
 });
 
@@ -178,6 +195,18 @@ test('a value no generic row can draw is owned by the control that writes it, or
     expect(OMP_SETTING_PLACEMENTS[id], id).toEqual({ type: 'config-only' });
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
   }
+});
+
+test('every owned-by owner is an anchor a control emits', () => {
+  // `owned-by` says a control writes this key instead of a generic row, so the
+  // named anchor has to exist: otherwise search lands on the page and finds
+  // nothing, and the setting is unowned in fact while looking owned in the
+  // table. The anchors are read from the UI sources, not listed here.
+  const sources = walk(String(new URL('../../../ui/src/components/sections', import.meta.url).pathname))
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+  const missing = OMP_SETTING_OWNER_IDS.filter((owner) => !sources.includes(`settingsItem="${owner}"`));
+  expect(missing).toEqual([]);
 });
 
 test('every page or engine placement can actually draw a control', () => {
@@ -199,24 +228,29 @@ test('every page or engine placement can actually draw a control', () => {
 });
 
 /**
- * The page sections the UI draws, read from the components themselves: an OMP
- * page section is rendered by `getSectionRows('<section>')`,
- * `getSectionSettings('<section>')` or a `<s>Settings` binding built from
- * `getSectionSettings('<section>')` in `packages/ui/src`.
+ * The page sections the UI draws, read from the components themselves: a page
+ * section is rendered by `getSectionRows('<section>')` or
+ * `getSectionSettings('<section>')`.
+ *
+ * A page's owner either takes the shared `useOmpPageSettings('<page>')` hook or
+ * filters the snapshot itself, as `DefaultsSettings` does with its own state
+ * and `placement.page === 'sessions'`. Both shapes are the page's own; gating
+ * on the hook alone skipped every Sessions section. Returns `undefined` when no
+ * component claims the page or claims it without pulling a section, so the
+ * caller can fail closed rather than read silence as "all drawn".
  */
 function renderedSections(page: string): ReadonlySet<string> | undefined {
   const root = new URL('../../../ui/src/components/sections', import.meta.url);
   const files = walk(String(root.pathname));
   const sections = new Set<string>();
-  let found = false;
+  const ownPage = new RegExp(`placement\\??\\.page === '${page}'`);
   for (const file of files) {
     const source = readFileSync(file, 'utf8');
-    if (!source.includes(`useOmpPageSettings('${page}')`)) continue;
-    found = true;
+    if (!source.includes(`useOmpPageSettings('${page}')`) && !ownPage.test(source)) continue;
     for (const match of source.matchAll(/getSectionRows\('([^']+)'\)/g)) sections.add(match[1]);
     for (const match of source.matchAll(/getSectionSettings\('([^']+)'\)/g)) sections.add(match[1]);
   }
-  return found ? sections : undefined;
+  return sections.size > 0 ? sections : undefined;
 }
 
 function walk(dir: string): string[] {

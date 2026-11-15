@@ -1202,3 +1202,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** SQLite `host_agent_sessions` durable schema adds a first-class `parent_session_id` column across all sessions.
 - **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - The 2026-11-12 feedback cutovers own the remaining files they rewrote
+
+- **Decided:** these `fork-differs` paths keep the fork blob because this effort's own work produced them: the UI-blocks guidance test no longer mirrors a generated server module (`chat/uiBlocks/guidance.test.ts`), the shared sortable visibility list `shared/SettingsSortableVisibilityList.tsx`, the Settings window's keyboard reorder and plugin-category fix (`views/SettingsWindow.tsx`), the `parseProjects` round-trip test for the dropped per-project `defaultAgent` (`lib/settings/parsers.test.ts`), the Magic-prompts sidebar without the retired memory prompts (`sections/magic-prompts/MagicPromptsSidebar.tsx`), and the stream-cadence harness (`scripts/perf/scenario.mjs`, `scripts/profile-session.mjs`).
+- **Instead of:** taking upstream's copy of each file, which still generates the ui-blocks module, keeps the OpenChamber memory prompts, reads `defaultAgent` from project settings, and has no stream-cadence scenario.
+- **Because:** each file is the surviving half of a cutover this effort made on purpose; upstream's version reintroduces the behavior the cutover removed, and the reference comparison was run against the fork blob. The drift ledger's job is to force this listing, not to prefer upstream.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** upstream rewrites one of these files on a contract the fork also accepts.
+- **Effort:** ux-feedback-2026-11-12

@@ -474,21 +474,17 @@ export class WorkerSession {
           await authorizeTool(event.toolName, toolInput);
         } catch (error) {
           if (error instanceof NativeApprovalRequired) {
-            let approved = false;
-            if (ctx?.ui?.approve) {
-              const answer = await ctx.ui.approve(
-                { full: error.message, compact: error.message },
-                { toolCallId: event.toolCallId } as unknown as { signal?: AbortSignal },
-              );
-              approved = answer === 'once';
-            } else {
-              approved = await interaction.approveTool(
-                event.toolCallId,
-                event.toolName,
-                toolInput,
-                error.message,
-              );
-            }
+            // This approval comes from the Host authorizer inside `tool_call`,
+            // not from OMP's own gate, so `ctx.ui.approve` has no
+            // `tool_approval_requested` observation to match and would answer
+            // `deny` for every request. Ask the user through the canonical
+            // approval path instead, which the session mode can auto-answer.
+            const approved = await interaction.approveTool(
+              event.toolCallId,
+              event.toolName,
+              toolInput,
+              error.message,
+            );
             if (!approved) {
               return { block: true, reason: 'Tool approval was rejected' };
             }

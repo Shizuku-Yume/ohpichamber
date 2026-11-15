@@ -539,3 +539,125 @@ describe('ReasoningTimelineBlock live follow', () => {
     }
   });
 });
+
+// The reasoning body must show the structure the model wrote: OMP folds
+// provider summary parts with `\n\n`, so a dropped blank line joins separate
+// paragraphs into one running block. These render the real expanded body
+// through the shared MarkdownRenderer pipeline.
+describe('ReasoningPart body structure', () => {
+  const BODY_SELECTOR = '[data-message-text-export-source]';
+
+  type RenderedReasoning = {
+    paragraphs: string[];
+    breaks: number;
+    codeSource: string | null;
+    codeBreaks: number;
+    hasCommentMarkup: boolean;
+  };
+
+  const readRenderedReasoning = (container: Element): RenderedReasoning => {
+    const body = container.querySelector(BODY_SELECTOR);
+    if (!body) throw new Error('Expected the mounted reasoning body');
+    const code = body.querySelector('pre code');
+    return {
+      paragraphs: Array.from(body.querySelectorAll('p'), (paragraph) => paragraph.textContent ?? ''),
+      breaks: body.querySelectorAll('p br').length,
+      codeSource: body.querySelector('[data-oc-code-source]')?.getAttribute('data-oc-code-source') ?? null,
+      codeBreaks: code?.querySelectorAll('br').length ?? 0,
+      hasCommentMarkup: (body.textContent ?? '').includes('<!--'),
+    };
+  };
+
+  // Markdown loads lazily and streaming commits per block, so wait for the
+  // expected paragraph count instead of guessing a delay.
+  const waitForParagraphs = async (container: Element, expected: number): Promise<void> => {
+    const deadline = Date.now() + 3_000;
+    while (Date.now() < deadline) {
+      const body = container.querySelector(BODY_SELECTOR);
+      const paragraphs = body?.querySelectorAll('p') ?? [];
+      if (paragraphs.length >= expected && (paragraphs[paragraphs.length - 1]?.textContent ?? '').length > 0) {
+        return;
+      }
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+    }
+    throw new Error(`Timed out waiting for ${expected} reasoning paragraphs`);
+  };
+
+  const renderReasoning = async (text: string, streaming: boolean, expectedParagraphs: number): Promise<RenderedReasoning> => {
+    const dom = installDomStub();
+    const root = createRoot(dom.container);
+    const previousExpansion = useUIStore.getState().expandReasoningWhileStreaming;
+    useUIStore.setState({ expandReasoningWhileStreaming: true });
+    const part: ReasoningPartFixture = { type: 'reasoning', partId: 'prt_structure', content: text };
+    try {
+      await act(async () => {
+        root.render(
+          <TestProviders>
+            <ReasoningPart
+              part={part}
+              messageId="msg_structure"
+              streamPhase={streaming ? 'streaming' : undefined}
+            />
+          </TestProviders>,
+        );
+      });
+      if (!streaming) {
+        // Settled blocks start folded; a reader opens the body.
+        const toggle = dom.container.querySelector<HTMLElement>('[role="button"]');
+        if (!toggle) throw new Error('Expected the reasoning toggle');
+        await act(async () => {
+          toggle.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+        });
+      }
+      await waitForParagraphs(dom.container, expectedParagraphs);
+      return readRenderedReasoning(dom.container);
+    } finally {
+      await act(async () => { root.unmount(); });
+      useUIStore.setState({ expandReasoningWhileStreaming: previousExpansion });
+      dom.restore();
+    }
+  };
+
+  test('a blank line between paragraphs renders as two paragraphs', async () => {
+    const rendered = await renderReasoning('A\n\nB', false, 2);
+    expect(rendered.paragraphs).toEqual(['A', 'B']);
+    expect(rendered.breaks).toBe(0);
+  });
+
+  test('a single newline renders as a line break inside one paragraph', async () => {
+    const rendered = await renderReasoning('A\nB', false, 1);
+    expect(rendered.paragraphs).toEqual(['A\nB']);
+    expect(rendered.breaks).toBe(1);
+  });
+
+  test('a fenced code block keeps its blank lines and literal line endings', async () => {
+    const rendered = await renderReasoning('Before\n```\nline 1\n\nline 3\n```\nAfter', false, 2);
+    expect(rendered.paragraphs).toEqual(['Before', 'After']);
+    expect(rendered.codeSource).toBe('line 1\n\nline 3');
+    expect(rendered.codeBreaks).toBe(0);
+    expect(rendered.breaks).toBe(0);
+  });
+
+  test('empty HTML comment sentinel lines leave no visible body content', async () => {
+    const rendered = await renderReasoning('A\n\n<!-- -->\n\nB', false, 2);
+    expect(rendered.paragraphs).toEqual(['A', 'B']);
+    expect(rendered.hasCommentMarkup).toBe(false);
+  });
+
+  test('streaming and settled render the same paragraphs for the same text', async () => {
+    const text = 'First paragraph.\n\nSecond paragraph.\n\n```\ncode 1\n\ncode 2\n```\n\nThird paragraph.';
+    const settled = await renderReasoning(text, false, 3);
+    const streaming = await renderReasoning(text, true, 3);
+    expect(streaming.paragraphs).toEqual(settled.paragraphs);
+    expect(streaming.paragraphs).toEqual(['First paragraph.', 'Second paragraph.', 'Third paragraph.']);
+    expect(streaming.breaks).toBe(settled.breaks);
+    expect(streaming.codeSource).toBe('code 1\n\ncode 2');
+  });
+
+  test('a single newline in LONG_REASONING is not collapsed away', async () => {
+    const rendered = await renderReasoning(LONG_REASONING, false, 1);
+    expect(rendered.paragraphs).toHaveLength(1);
+    expect(rendered.breaks).toBe(1);
+    expect(rendered.paragraphs[0]).toContain('remain hidden in the collapsed header view');
+  });
+});

@@ -202,10 +202,6 @@
     "isolatedSpacesIdleStop": {
       "scope": "instance"
     },
-    "agentMemoryFeatureAvailable": {
-      "scope": "instance",
-      "computed": true
-    },
     "agentWorkflowFeatureAvailable": {
       "scope": "instance",
       "computed": true
@@ -856,6 +852,10 @@
       "local": true
     },
     "alwaysShowScrollbars": {
+      "scope": "device",
+      "local": true
+    },
+    "agentMemoryViewedAt": {
       "scope": "device",
       "local": true
     },

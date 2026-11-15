@@ -328,14 +328,6 @@ export const SETTINGS_REGISTRY = {
   effect: ['server'],
   parse: fromSchema(z.object({ enabled: z.boolean(), hours: z.number().int().min(1).max(168) }).strict()),
  }),
- // Server-owned: it says whether this build has the feature at all.
- agentMemoryFeatureAvailable: field({
-  scope: 'instance',
-  effect: ['ui'],
-  computed: true,
-  parse: parseBoolean,
-  ui: uiStore('agentMemoryFeatureAvailable', (v) => useUIStore.getState().setAgentMemoryFeatureAvailable(v), { autoSave: false }),
- }),
  // Server-owned: whether this build has agent workflows (`OPENCHAMBER_WORKFLOWS_ENABLE`).
  agentWorkflowFeatureAvailable: field({
   scope: 'instance',

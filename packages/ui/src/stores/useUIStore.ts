@@ -1175,11 +1175,6 @@ interface UIStore {
  /** The isolated-spaces switch as saved; the server applies it at its next start. */
  isolatedSpacesEnabled: boolean;
  /**
-  * Whether this build has agent memory at all. Server-owned and not
-  * persisted: an unreleased feature must not come back from a stale cache.
-  */
- agentMemoryFeatureAvailable: boolean;
- /**
   * Whether this build has agent workflows (`OPENCHAMBER_WORKFLOWS_ENABLE`).
   * Server-owned and not persisted, for the same reason as the memory flag.
   */
@@ -1463,7 +1458,6 @@ interface UIStore {
  setPlanModeAllowAgents: (value: boolean) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
- setAgentMemoryFeatureAvailable: (value: boolean) => void;
  setAgentWorkflowFeatureAvailable: (value: boolean) => void;
  setRoutingFeatureAvailable: (value: boolean) => void;
  setOverviewFeatureAvailable: (value: boolean) => void;
@@ -1705,7 +1699,6 @@ export const useUIStore = create<UIStore>()(
     planModeAllowAgents: false,
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
-    agentMemoryFeatureAvailable: false,
     agentWorkflowFeatureAvailable: false,
     routingFeatureAvailable: false,
     overviewFeatureAvailable: false,
@@ -3297,9 +3290,6 @@ export const useUIStore = create<UIStore>()(
       const workflowTabIds = panel.tabs.filter((tab) => tab.mode === 'workflows').map((tab) => tab.id);
       if (workflowTabIds.length > 0) get().closeContextPanelTabs(directory, workflowTabIds);
      }
-    },
-    setAgentMemoryFeatureAvailable: (value) => {
-     set({ agentMemoryFeatureAvailable: value });
     },
     setAgentWorkflowFeatureAvailable: (value) => {
      set({ agentWorkflowFeatureAvailable: value });

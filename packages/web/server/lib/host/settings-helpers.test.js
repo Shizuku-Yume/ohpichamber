@@ -887,7 +887,6 @@ describe('settings registry gate', () => {
       gitProviderId: 'anthropic',
       gitModelId: 'claude',
       memoryLimitHistorical: 200,
-      agentMemoryFeatureAvailable: true,
       desktopHosts: [],
       notARealKey: 1,
     })).toEqual({});

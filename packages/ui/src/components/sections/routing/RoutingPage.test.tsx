@@ -278,6 +278,31 @@ describe('RoutingPage', () => {
     expect(container.textContent).toContain('settings.routing.category.nameRequired');
   });
 
+  test('unmounting with an invalid draft does not send it', async () => {
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    await act(async () => {
+      buttonContaining('Hard').click();
+    });
+    const name = container.querySelector<HTMLInputElement>('[aria-label="settings.routing.category.name"]');
+    if (!name) throw new Error('Missing name field');
+    await setInputValue(name, '');
+
+    saveCalls.length = 0;
+    saveStateCalls.length = 0;
+    await act(async () => {
+      root.unmount();
+    });
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    expect(saveCalls.length).toBe(0);
+    expect(saveStateCalls).not.toContain('error');
+  });
+
   test('thinking select displays reasoning effort options rather than legacy model variants', async () => {
     await act(async () => {
       root.render(<RoutingPage />);

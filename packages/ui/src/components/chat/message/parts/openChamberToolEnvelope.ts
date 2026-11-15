@@ -81,17 +81,6 @@ export const movedSchema = z.object({
   worktree: z.object({ name: text, branch: text, path: text }).optional().catch(undefined),
 });
 
-export const memorySavedSchema = z.object({
-  memory: z.object({
-    title: text,
-    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
-    scope: z.enum(['global', 'project']).optional().catch(undefined),
-  }),
-  replaced: z.boolean().optional().catch(undefined),
-  // Stored, but held back from future sessions.
-  warning: text,
-});
-
 export const knowledgeSavedSchema = z.object({
   todo: z.object({ text: text, completed: z.boolean().optional().catch(undefined) }).optional().catch(undefined),
   note: z.object({ body: text }).optional().catch(undefined),
@@ -147,18 +136,6 @@ export const modelsFoundSchema = z.object({
   total: z.number().optional().catch(undefined),
   // Where the next page starts; null on the last page.
   next: z.number().nullable().optional().catch(undefined),
-});
-
-export const memoriesListedSchema = z.object({
-  memories: z.array(z.object({
-    memoryId: z.string(),
-    title: text,
-    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
-    scope: z.enum(['global', 'project']).optional().catch(undefined),
-  })),
-  // A scope that failed to load: its entries are missing from the list.
-  globalUnavailable: z.boolean().optional().catch(undefined),
-  projectUnavailable: z.boolean().optional().catch(undefined),
 });
 
 export const knowledgeListedSchema = z.object({
@@ -218,15 +195,6 @@ export const tightestWindow = (provider: UsageProviderRow): { key: string; windo
   }
   return best;
 };
-
-export const memoryReadSchema = z.object({
-  memory: z.object({
-    title: text,
-    body: text,
-    type: z.enum(['fact', 'preference', 'reference']).optional().catch(undefined),
-    scope: z.enum(['global', 'project']).optional().catch(undefined),
-  }),
-});
 
 const deletedSchema = z.object({ deleted: z.literal(true) });
 const knowledgeShownSchema = z.object({ planId: z.string(), shown: z.literal(true) });
@@ -336,7 +304,6 @@ const VIEW_SCHEMAS: ReadonlyMap<string, z.ZodType> = new Map<string, z.ZodType>(
   ['session.moveToWorktree', movedSchema],
   ['session.markDone', dispatchedSchema],
   ['session.track', dispatchedSchema],
-  ['memory.save', memorySavedSchema],
   ['knowledge.save', knowledgeSavedSchema],
   ['schedule.create', scheduledSchema],
   ['schedule.update', scheduledSchema],
@@ -346,13 +313,10 @@ const VIEW_SCHEMAS: ReadonlyMap<string, z.ZodType> = new Map<string, z.ZodType>(
   ['session.list', sessionsListedSchema],
   ['models.list', modelPreferencesSchema],
   ['models.search', modelsFoundSchema],
-  ['memory.list', memoriesListedSchema],
   ['knowledge.list', knowledgeListedSchema],
   ['schedule.list', scheduleListedSchema],
   ['browser.open', pageOpenedSchema],
   ['browser.capture', screenshotSchema],
-  ['memory.read', memoryReadSchema],
-  ['memory.delete', deletedSchema],
   ['knowledge.show', knowledgeShownSchema],
   ['knowledge.delete', deletedSchema],
   ['session.status', sessionStatusSchema],
@@ -490,10 +454,6 @@ export const OPENCHAMBER_ACTION_VERB_KEYS = {
   'knowledge.save': 'chat.toolPart.openchamber.action.knowledgeSave',
   'knowledge.delete': 'chat.toolPart.openchamber.action.knowledgeDelete',
   'knowledge.show': 'chat.toolPart.openchamber.action.knowledgeShow',
-  'memory.read': 'chat.toolPart.openchamber.action.memoryRead',
-  'memory.list': 'chat.toolPart.openchamber.action.memoryList',
-  'memory.save': 'chat.toolPart.openchamber.action.memorySave',
-  'memory.delete': 'chat.toolPart.openchamber.action.memoryDelete',
   'notify.send': 'chat.toolPart.openchamber.action.notifySend',
   'usage.read': 'chat.toolPart.openchamber.action.usageRead',
   'browser.open': 'chat.toolPart.openchamber.action.browserOpen',

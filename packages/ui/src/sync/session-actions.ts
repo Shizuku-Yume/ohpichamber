@@ -43,7 +43,7 @@ import { recordSessionActionFailure } from "./session-action-failures"
 import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
 import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
-import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, SessionCreateRequest, Run } from "@openchamber/agent-contract"
+import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, SessionCreateRequest, Run, Workspace } from "@openchamber/agent-contract"
 import { installHostSession, installRuntimeRun, installSessionMetadata, installSessionSnapshot, type RunControlBaseline } from "./event-reducer"
 import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
 import type { State } from "./types"
@@ -843,13 +843,14 @@ export async function createSession(
  selectionTransition?: "submitted-draft",
  selection?: SessionCreateSelection,
  navigation: "open" | "preserve" = "open",
+ resolveWorkspace: (directory: string) => Promise<Workspace> = (directory) => canonicalClient.resolveWorkspace(directory),
 ): Promise<CanonicalSession | null> {
  const runtimeKey = getRuntimeKey()
  const runtimeRevision = getRuntimeSwitchRevision()
  try {
   const effectiveDirectory = directoryOverride ?? dir()
   if (!effectiveDirectory) throw new Error("No directory for session creation")
-  const workspace = await canonicalClient.resolveWorkspace(effectiveDirectory)
+  const workspace = await resolveWorkspace(effectiveDirectory)
   if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
   const admittedMetadata = { ...metadata }
   const createRequest: SessionCreateRequest = {

@@ -26,9 +26,9 @@ const KNOWLEDGE_METADATA_KEY = 'knowledge_context_delivered';
 const PINS_METADATA_KEY = 'project_context_pins';
 
 /**
- * Budget per source: pins, memory and guidance travel together, but a huge
- * pinned plan must not crowd out the memory index or the guidance. Anything
- * past a source's budget is cut, loudly.
+ * Budget per source: pins and guidance travel together, but a huge pinned plan
+ * must not crowd out the guidance. Anything past a source's budget is cut,
+ * loudly.
  */
 const KNOWLEDGE_MAX_LENGTH = 8000;
 
@@ -102,8 +102,8 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
   const readStoredSession = async (sessionId) => ({ metadata: await readSessionMetadata(sessionId) });
 
   /**
-   * The user's pins, read fresh. Memory is not copied into a prompt: the model
-   * sees only what plain OMP sends plus these pins and its attachments.
+   * The user's pins, read fresh. The model sees only what plain OMP sends plus
+   * these pins.
    */
   const readPins = (session) => {
     const metadata = isRecord(session?.metadata) ? session.metadata : {};
@@ -152,7 +152,7 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
    */
   const collectSummary = async (directory, pins = { notes: [], plans: [] }) => {
     const projectId = directory ? await resolveProjectId(directory) : '';
-    const empty = { notes: [], plans: [], memory: { global: 0, project: 0 } };
+    const empty = { notes: [], plans: [] };
     if (!projectId) return empty;
 
     let notes = [];
@@ -170,8 +170,7 @@ export const createSessionKnowledgeRuntime = (dependencies) => {
       plans = [];
     }
 
-    const memory = { global: 0, project: 0 };
-    return { notes, plans, memory };
+    return { notes, plans };
   };
 
   const readDeliveredSignature = (session) => {

@@ -13,7 +13,7 @@ afterEach(() => {
 describe('sessionKnowledgeApi', () => {
   test('fetchSessionKnowledgeSummary returns empty summary when directory is null', async () => {
     const summary = await fetchSessionKnowledgeSummary(null);
-    expect(summary).toEqual({ notes: [], plans: [], memory: { global: 0, project: 0 } });
+    expect(summary).toEqual({ notes: [], plans: [] });
   });
 
   test('fetchSessionKnowledgeSummary fetches and parses summary', async () => {
@@ -25,7 +25,6 @@ describe('sessionKnowledgeApi', () => {
       return Response.json({
         notes: [{ id: 'n1', body: 'Note body' }],
         plans: [{ id: 'p1', title: 'Plan title' }],
-        memory: { global: 2, project: 1 },
       });
     });
 
@@ -33,7 +32,6 @@ describe('sessionKnowledgeApi', () => {
     expect(summary).toEqual({
       notes: [{ id: 'n1', body: 'Note body' }],
       plans: [{ id: 'p1', title: 'Plan title' }],
-      memory: { global: 2, project: 1 },
     });
   });
 
@@ -43,7 +41,7 @@ describe('sessionKnowledgeApi', () => {
     });
 
     const summary = await fetchSessionKnowledgeSummary('/failed/repo', 'ses-failed');
-    expect(summary).toEqual({ notes: [], plans: [], memory: { global: 0, project: 0 } });
+    expect(summary).toEqual({ notes: [], plans: [] });
   });
 
   test('setSessionProjectContextPin sends pin mutation and returns pins', async () => {

@@ -105,14 +105,18 @@ export const SnippetsPage: React.FC = () => {
   };
 
   if (!selectedSnippetName) {
+    // Nothing to edit yet; the heading stays so the pane is titled and
+    // SettingsView's focus target exists.
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <Icon name="file-text" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-ui-label">{t('settings.snippets.page.empty.title')}</p>
-          <p className="typography-meta mt-1 opacity-75">{t('settings.snippets.page.empty.description')}</p>
+      <SettingsPageLayout title={t('settings.page.snippets.title')} showSaveStatus={false}>
+        <div className="flex items-center justify-center py-16">
+          <div className="max-w-sm text-center text-muted-foreground">
+            <Icon name="file-text" className="mx-auto mb-3 h-12 w-12 opacity-50" />
+            <p className="typography-ui-label">{t('settings.snippets.page.empty.title')}</p>
+            <p className="typography-meta mt-1 opacity-75">{t('settings.snippets.page.empty.description')}</p>
+          </div>
         </div>
-      </div>
+      </SettingsPageLayout>
     );
   }
 

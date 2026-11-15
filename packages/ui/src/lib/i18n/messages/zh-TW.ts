@@ -8634,7 +8634,6 @@ export const dict = {
   "chat.workStatus.breakdown.pinnedNote": "筆記",
   "chat.workStatus.breakdown.unpin": "從脈絡取消釘選",
   "chat.workStatus.breakdown.pinnedPlan": "計畫",
-  "chat.workStatus.breakdown.memory": "代理記憶",
   "chat.workStatus.breakdown.pinnedKnowledgeSingle": "已釘選 {count}",
   "chat.workStatus.breakdown.pinnedKnowledgePlural": "已釘選 {count}",
   "chat.workStatus.breakdown.mcp": "MCP 伺服器",

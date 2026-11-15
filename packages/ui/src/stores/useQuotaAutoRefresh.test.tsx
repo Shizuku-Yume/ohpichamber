@@ -1,4 +1,4 @@
-import { expect, spyOn, test } from 'bun:test';
+import { expect, mock, spyOn, test } from 'bun:test';
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { installHookTestDom } from '@/components/session/sidebar/test-utils/testDom';
@@ -7,6 +7,26 @@ import { QUOTA_PROVIDERS } from '@/lib/quota';
 import { useConfigStore } from './useConfigStore';
 import { refreshTrayQuotas, useQuotaAutoRefresh, useQuotaStore } from './useQuotaStore';
 
+// The Host resolves every quota read through a workspace, and publishing one
+// starts the store's own scope load. Both are properties of the app being
+// ready, not of the freshness behavior these tests describe: the catalog
+// answers, the workspace is published, and that first load is drained once here
+// so no test's spies can observe setup work.
+const fetchQuotaModule = await import('@/lib/quota/fetchQuota');
+mock.module('@/lib/quota/fetchQuota', () => ({
+  ...fetchQuotaModule,
+  // Every built-in provider has a credential in this fixture, which is what the
+  // "all providers" readout asks the Host about; the selection it prunes to is
+  // covered by `useQuotaStore.test.ts`.
+  fetchConfiguredQuotaProviders: async () => ({
+    providers: new Set(QUOTA_PROVIDERS.map(provider => provider.id)),
+    nativeToLogical: {},
+  }),
+}));
+useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_quota_refresh' });
+await useQuotaStore.getState().ensureLoadedForRuntime().catch(() => undefined);
+useQuotaStore.getState().resetForRuntimeSwitch();
+
 test('tray launch seeds dropdown quotas and native openings share freshness even in a hidden window', async () => {
   const dom = installHookTestDom();
   const location = Object.getOwnPropertyDescriptor(window, 'location');
@@ -14,7 +34,7 @@ test('tray launch seeds dropdown quotas and native openings share freshness even
   const root = createRoot(dom.container);
   initializeRuntimeEndpoint({ apiBaseUrl: 'http://localhost:3000', runtimeKey: 'local' });
   const initialized = useConfigStore.getState().isInitialized;
-  useConfigStore.setState({ isInitialized: true });
+  useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_quota_refresh' });
   useQuotaStore.getState().resetForRuntimeSwitch();
   useQuotaStore.setState({ dropdownProviderIds: ['claude'] });
   const actions = { loadSettings: useQuotaStore.getState().loadSettings, fetchProviderQuota: useQuotaStore.getState().fetchProviderQuota };
@@ -62,7 +82,7 @@ test('another credential change aborts and clears the previous account while its
   const root = createRoot(dom.container);
   initializeRuntimeEndpoint({ apiBaseUrl: 'http://localhost:3000', runtimeKey: 'local' });
   const initialized = useConfigStore.getState().isInitialized;
-  useConfigStore.setState({ isInitialized: true });
+  useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_quota_refresh' });
   useQuotaStore.getState().resetForRuntimeSwitch();
   const ensureLoadedForRuntime = useQuotaStore.getState().ensureLoadedForRuntime;
   const ensure = spyOn(useQuotaStore.getState(), 'ensureLoadedForRuntime').mockResolvedValue();
@@ -113,7 +133,7 @@ test('quota fetches belong to shown readouts and stop while the document is hidd
   const root = createRoot(dom.container);
   initializeRuntimeEndpoint({ apiBaseUrl: 'http://localhost:3000', runtimeKey: 'local' });
   const previousInitialized = useConfigStore.getState().isInitialized;
-  useConfigStore.setState({ isInitialized: true });
+  useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_quota_refresh' });
   useQuotaStore.getState().resetForRuntimeSwitch();
   useQuotaStore.setState({ dropdownProviderIds: ['claude'] });
   let now = 100_000;
@@ -245,7 +265,7 @@ test('hidden native windows stop quota requests even when Chromium reports visib
   Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
   initializeRuntimeEndpoint({ apiBaseUrl: 'http://localhost:3000', runtimeKey: 'local' });
   const previousInitialized = useConfigStore.getState().isInitialized;
-  useConfigStore.setState({ isInitialized: true });
+  useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_quota_refresh' });
   useQuotaStore.getState().resetForRuntimeSwitch();
   useQuotaStore.setState({ dropdownProviderIds: ['claude'] });
   let now = 100_000;

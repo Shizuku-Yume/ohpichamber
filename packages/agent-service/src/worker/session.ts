@@ -389,7 +389,7 @@ export class WorkerSession {
     if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
     if (input.skillSources && !input.agentDirectoryId) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership is missing');
     const prewarmed = await consumePrewarmedNativeRuntime(input);
-    const runtime = prewarmed ?? await openNativeRuntime(input);
+    const runtime = prewarmed?.runtime ?? await openNativeRuntime(input);
     const { authStorage, settings, modelRegistry } = runtime;
     let manager: SessionManager | undefined;
     let session: AgentSession | undefined;
@@ -474,21 +474,17 @@ export class WorkerSession {
           await authorizeTool(event.toolName, toolInput);
         } catch (error) {
           if (error instanceof NativeApprovalRequired) {
-            let approved = false;
-            if (ctx?.ui?.approve) {
-              const answer = await ctx.ui.approve(
-                { full: error.message, compact: error.message },
-                { toolCallId: event.toolCallId } as unknown as { signal?: AbortSignal },
-              );
-              approved = answer === 'once';
-            } else {
-              approved = await interaction.approveTool(
-                event.toolCallId,
-                event.toolName,
-                toolInput,
-                error.message,
-              );
-            }
+            // This approval comes from the Host authorizer inside `tool_call`,
+            // not from OMP's own gate, so `ctx.ui.approve` has no
+            // `tool_approval_requested` observation to match and would answer
+            // `deny` for every request. Ask the user through the canonical
+            // approval path instead, which the session mode can auto-answer.
+            const approved = await interaction.approveTool(
+              event.toolCallId,
+              event.toolName,
+              toolInput,
+              error.message,
+            );
             if (!approved) {
               return { block: true, reason: 'Tool approval was rejected' };
             }
@@ -539,7 +535,7 @@ export class WorkerSession {
     try {
       const [, pluginExtensionPaths] = await Promise.all([
         installWebSearchAuthorization(runtime, hostAuthorize),
-        nativePluginExtensionPaths(input.cwd),
+        prewarmed?.pluginExtensionPaths ?? nativePluginExtensionPaths(input.cwd),
       ]);
       const directory = input.sessionsDirectory ?? SessionManager.getDefaultSessionDir(input.cwd, input.agentDirectory);
       manager = input.sessionFile
@@ -702,7 +698,11 @@ export class WorkerSession {
           process.stderr.write(`${JSON.stringify({ type: 'policy.capture.warning', message: message.slice(0, 200) })}\n`);
         }
       };
-      void capturePolicy().catch(() => { });
+      // The first snapshot must exist before the worker reports ready: a session
+      // start is the only chance to publish it, and readers treat a ready worker
+      // as having one. capturePolicy swallows its own failures, so awaiting it
+      // cannot fail the open; it only orders the publish ahead of readiness.
+      const initialPolicyCapture = capturePolicy();
       projection = owned.projection;
       // External MCP servers can take tens of seconds to handshake; the first
       // prompt must not wait for them. Start the connection in the background,
@@ -721,14 +721,16 @@ export class WorkerSession {
           });
       }
       // Skill publications are generation-local; an untouched configuration still has CAS revision zero.
-      if (input.skillSources) await catalogs.skills.apply(input.skillSources, '1');
-      if (input.options) await owned.selectOptions(input.options);
-      await initializeExtensions(nativeSession, {
+      const postInitTasks: Promise<unknown>[] = [];
+      if (input.skillSources) postInitTasks.push(catalogs.skills.apply(input.skillSources, '1'));
+      if (input.options) postInitTasks.push(owned.selectOptions(input.options));
+      postInitTasks.push(initializeExtensions(nativeSession, {
         mode: 'rpc', uiContext: interaction.ui,
         reportSendError: () => owned?.fail(), reportRuntimeError: () => owned?.fail(), onShutdown: onFatal,
-      });
-      // Reopening a transcript must use the latest workspace preference, not restored session state.
-      warming.apply((await warming.read(input.workspaceId, '0')).mode);
+      }));
+      postInitTasks.push(warming.read(input.workspaceId, '0').then(w => warming.apply(w.mode)).catch(() => { }));
+      await Promise.all(postInitTasks);
+      await initialPolicyCapture;
       return owned;
     } catch (error) {
       interaction.close();

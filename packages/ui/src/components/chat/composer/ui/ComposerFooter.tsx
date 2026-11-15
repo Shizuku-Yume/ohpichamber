@@ -47,7 +47,7 @@ interface ComposerFooterProps {
     draftMode?: DraftSessionMode;
     draftGoalObjective?: DraftGoalObjective | null;
     planRoleAvailable: boolean | undefined;
-    sessionGoalEnabled: boolean;
+    goalModeEnabled: boolean;
     onDraftModeChange: (mode: ComposerModeValue, goalObjective?: DraftGoalObjective | null) => void;
 
     radius: string;
@@ -130,7 +130,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
         draftMode,
         draftGoalObjective,
         planRoleAvailable,
-        sessionGoalEnabled,
+        goalModeEnabled,
         onDraftModeChange,
         radius: chatInputRadius,
         footerPaddingClass,
@@ -312,7 +312,7 @@ function ComposerFooterView(props: ComposerFooterProps) {
                             draftGoalObjective={draftGoalObjective}
                             runActive={runActive}
                             planRoleAvailable={planRoleAvailable}
-                            sessionGoalEnabled={sessionGoalEnabled}
+                            goalModeEnabled={goalModeEnabled}
                             directory={directory}
                             onDraftModeChange={onDraftModeChange}
                         /> : null}

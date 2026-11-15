@@ -118,7 +118,6 @@ const createInstance = async ({ mode, apiPort, models, instances }) => {
     agentControlToolEnabled: true,
     agentScheduleToolEnabled: true,
     agentWebToolEnabled: true,
-    agentMemoryToolEnabled: true,
     agentKnowledgeToolEnabled: true,
     agentNotifyToolEnabled: true,
     agentRenderToolEnabled: true,

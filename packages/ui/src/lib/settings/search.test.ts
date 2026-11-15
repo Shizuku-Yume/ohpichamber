@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type { I18nKey } from '@/lib/i18n/store';
-import { buildSettingsSearchResults } from './search';
+import { dict as en } from '@/lib/i18n/messages/en';
+import { SETTINGS_SEARCH_ITEMS, buildSettingsSearchResults } from './search';
 
 const t = (key: I18nKey): string => key;
 
@@ -171,6 +172,19 @@ describe('settings search', () => {
     expect(connectResults.some((result) => result.id === 'git.gitlab-connect')).toBe(true);
   });
 
+
+  test('every search entry resolves to copy in the English dictionary', () => {
+    // A `titleKey` or `descriptionKey` with no copy renders the raw key, so the
+    // result row shows `settings.…` instead of a name. An entry with no copy is
+    // deleted rather than left in the index for the guard to filter at runtime.
+    const unresolved = SETTINGS_SEARCH_ITEMS.flatMap((item) => {
+      const missing = [item.titleKey, item.descriptionKey]
+        .filter((key): key is I18nKey => key !== undefined)
+        .filter((key) => en[key] === undefined);
+      return missing.length > 0 ? [`${item.id}: ${missing.join(', ')}`] : [];
+    });
+    expect(unresolved).toEqual([]);
+  });
 
   test('finds guest extension panels on the integrations page', () => {
     const results = buildSettingsSearchResults({

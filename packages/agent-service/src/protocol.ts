@@ -58,6 +58,9 @@ const UsageSessionReferenceSchema = z.strictObject({
   sessionsDirectory: PrivatePathSchema.optional(), parentSessionId: EntityIdSchema.optional(),
 });
 export type UsageSessionReference = z.infer<typeof UsageSessionReferenceSchema>;
+/** One authorized transcript: its session identity, and whether it is a root session or a subagent's. */
+export const UsageScopeFileSchema = z.strictObject({ file: PrivatePathSchema, sessionId: EntityIdSchema, role: z.enum(['root', 'subagent']) });
+export type UsageScopeFile = z.infer<typeof UsageScopeFileSchema>;
 export const UsageAuthorizationSchema = z.array(z.strictObject({ workspaceId: EntityIdSchema, projectId: EntityIdSchema }));
 
 /** `proposed` marks a value the authorized operation itself introduces. The authorizer then
@@ -108,7 +111,7 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp'), operation: McpOperationSchema }),
   z.strictObject({ type: z.literal('shell'), operation: ShellOperationSchema }),
   z.strictObject({ type: z.literal('completion'), operation: CompletionOperationSchema }),
-  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, sessionDirectories: z.array(PrivatePathSchema).optional() }),
+  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, sessionFiles: z.array(UsageScopeFileSchema).optional() }),
   z.strictObject({ type: z.literal('usage.tools'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
   z.strictObject({ type: z.literal('usage.accounts'), query: UsageQuerySchema }),
   z.strictObject({ type: z.literal('mcp.configuration.read') }),
@@ -192,6 +195,9 @@ export const WorkerReplySchema = z.discriminatedUnion('type', [
   // A pre-warmed worker reports that its module graph is loaded and it is
   // waiting for a bootstrap. Only then is adopting it faster than spawning.
   z.strictObject({ type: z.literal('idle') }),
+  // A spare that finished its background warm-up. Adoption still ranks by
+  // `idle`; this only lets the supervisor prefer a spare with nothing left to pay.
+  z.strictObject({ type: z.literal('warm') }),
   z.strictObject({ type: z.literal('ready'), workerGeneration: EntityIdSchema }),
   z.strictObject({ type: z.literal('error'), workerGeneration: EntityIdSchema, code: ProblemCodeSchema, detail: z.string().min(1).max(200).optional() }),
   z.strictObject({ type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema, status: z.number().int().min(400).max(599), detail: z.string().min(1).max(200) }),

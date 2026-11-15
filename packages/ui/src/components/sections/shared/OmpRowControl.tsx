@@ -22,7 +22,11 @@ export const OmpRowControl: React.FC<{
 }> = ({ setting, value, disabled, onChange }) => {
   const { t } = useI18n();
   const labelKey = `settings.omp.items.${setting.id}.label` as I18nKey;
-  const label = t(labelKey) === labelKey ? (setting.label ?? setting.id) : t(labelKey);
+  // The locale is the only user-facing name. `settings-ui.test.ts` fails when an
+  // exposed row has no copy, so the OMP label is a fallback only a new setting
+  // could reach, and the id never becomes prose: `modelRoles` used to render as
+  // a raw id because its OMP label is empty.
+  const label = t(labelKey) === labelKey ? (setting.label || setting.id.replace(/\./g, ' ')) : t(labelKey);
   const descriptionKey = `settings.omp.items.${setting.id}.description` as I18nKey;
   const description = t(descriptionKey) === descriptionKey ? setting.description : t(descriptionKey);
   const anchor = `omp.${setting.id}`;

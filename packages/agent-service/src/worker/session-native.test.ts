@@ -46,7 +46,7 @@ afterEach(() => {
 const rootSessionId = 'native-root';
 const generation = 'native-generation';
 const options = { providerId: 'native-fixture', modelId: 'native-model', agentId: null, variant: null, reasoningEffort: null };
-const prompt = (text: string): PromptRequest => ({ input: { text, context: [], attachments: [] }, options });
+const prompt = (text: string, overrides: Partial<typeof options> = {}): PromptRequest => ({ input: { text, context: [], attachments: [] }, options: { ...options, ...overrides } });
 const ProviderRequestSchema = z.object({
  messages: z.array(z.object({ role: z.enum(['system', 'developer', 'user', 'assistant', 'tool']) }).catchall(JsonValueSchema)),
 }).catchall(JsonValueSchema);
@@ -708,6 +708,21 @@ test('headless slash commands execute allowed commands like /dirs and /clear wit
   if (clearResult.type !== 'command') throw new Error('Expected command output');
   expect(clearResult.output).toContain('Context reset');
   expect(harness.worker.session.sessionManager.getTurnBudget()?.total ?? null).toBeNull();
+  expect(harness.fatal()).toBe(false);
+ } finally { await harness.close(); }
+}, 30000);
+
+test('a prompt that names another model still switches and records it', async () => {
+ const harness = await fixture({ respond: () => completion(), planModel: true });
+ try {
+  const initial = harness.worker.session.model;
+  const other = harness.worker.session.modelRegistry.find('native-fixture', 'native-plan-model');
+  if (!initial || !other) throw new Error('The fixture needs a second model to test a real switch');
+  await harness.worker.operation({ type: 'prompt', runId: 'switch-run', request: prompt('Reply with the fixture marker.', { providerId: other.provider, modelId: other.id }) });
+  // A different model must go through setModelTemporary, which is what moves the
+  // session's model and records the change.
+  expect(harness.worker.session.model?.provider).toBe(other.provider);
+  expect(harness.worker.session.model?.id).toBe(other.id);
   expect(harness.fatal()).toBe(false);
  } finally { await harness.close(); }
 }, 30000);

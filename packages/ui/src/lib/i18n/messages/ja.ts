@@ -8634,7 +8634,6 @@ export const dict = {
   "chat.workStatus.breakdown.pinnedNote": "メモ",
   "chat.workStatus.breakdown.unpin": "コンテキストからピンを外す",
   "chat.workStatus.breakdown.pinnedPlan": "プラン",
-  "chat.workStatus.breakdown.memory": "エージェントメモリ",
   "chat.workStatus.breakdown.pinnedKnowledgeSingle": "{count} 件ピン留め",
   "chat.workStatus.breakdown.pinnedKnowledgePlural": "{count} 件ピン留め",
   "chat.workStatus.breakdown.mcp": "MCP サーバー",

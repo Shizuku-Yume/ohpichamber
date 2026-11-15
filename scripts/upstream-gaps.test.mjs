@@ -170,3 +170,131 @@ test('an allowlist row must cite a decisions.md heading or an existing OMP modul
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /lack a decisions\.md heading/);
 });
+
+test('an allowlist row for a gap that no longer exists fails', () => {
+  // A removed gap leaves its row behind: the citation still resolves, so only a
+  // stale-row check catches it, and the row would otherwise hide a future
+  // regression of the same key under an old decision.
+  const fixture = makeFixture(baseFiles());
+  fixture.fork('scripts/upstream-gaps.allowlist.tsv', `${ALLOWLIST_HEADER}ui-call-no-route\t/api/tracker/things\t## 2026-01-01 - Keep the tracker surface\tCovered while the route existed.\n`);
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /describe a gap that no longer exists/);
+  assert.match(result.output, /ui-call-no-route:\/api\/tracker\/things/);
+});
+
+const ROW_CONTROL = `export const Row = ({ setting }) => {
+  const anchor = \`omp.\${setting.id}\`;
+  return <Checkbox settingsItem={anchor} />;
+};
+`;
+
+const SEARCH_ITEMS = `export const SETTINGS_SEARCH_ITEMS = [
+  { id: 'omp.bash.enabled', page: 'omp' },
+];
+`;
+
+const PLACEMENTS = `const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
+  'bash.enabled': 'engine',
+};
+const GUI_WRITTEN_PAGES: Readonly<Record<string, true>> = {
+  sessions: true,
+};
+`;
+
+test("a row component's anchor template counts for the settings it renders", () => {
+  const fixture = makeFixture({
+    ...baseFiles(),
+    'packages/agent-service/src/worker/settings-ui.ts': PLACEMENTS,
+    'packages/ui/src/components/RowControl.tsx': ROW_CONTROL,
+    'packages/ui/src/lib/settings/search.ts': SEARCH_ITEMS,
+  });
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 0, result.output);
+});
+
+test('a search entry the row template cannot reach is still a gap', () => {
+  const fixture = makeFixture({
+    ...baseFiles(),
+    'packages/agent-service/src/worker/settings-ui.ts': PLACEMENTS,
+    'packages/ui/src/RowControl.tsx': ROW_CONTROL,
+    'packages/ui/src/lib/settings/search.ts': SEARCH_ITEMS.replace('bash.enabled', 'bash.removed'),
+  });
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /\[settings-search\] omp\.bash\.removed/);
+});
+
+const REGISTRY_UPSTREAM = `export const SETTINGS_REGISTRY = {
+  staleMemoryFlag: field({
+    scope: 'instance',
+    effect: ['ui'],
+    computed: true,
+    parse: parseBoolean,
+  }),
+};
+`;
+
+test('a stale staged bundle is not read as a settings consumer', () => {
+  // A checkout can hold gitignored build output (`resources/web-dist`, produced
+  // by electron:build). A git ref lists only tracked paths, so the filesystem
+  // walk must skip the same directories: otherwise a stale bundle keeps a
+  // removed key looking half-present and the guardrail points at a file that is
+  // not source at all.
+  const files = {
+    ...baseFiles(),
+    'packages/agent-service/src/worker/settings-ui.ts': PLACEMENTS,
+    'packages/ui/src/components/RowControl.tsx': ROW_CONTROL,
+    'packages/ui/src/lib/settings/search.ts': SEARCH_ITEMS,
+    'packages/ui/src/lib/settings/registry.ts': REGISTRY_UPSTREAM,
+  };
+  const fixture = makeFixture(files);
+  // The fork removes the key from every source surface and keeps only the
+  // stale bundle, which still mentions it.
+  fixture.fork('packages/ui/src/lib/settings/registry.ts', "export const SETTINGS_REGISTRY = {};\n");
+  fixture.fork('packages/electron/resources/web-dist/assets/stale.js', "export const staleMemoryFlag = true;\n");
+  const result = runGuardrail(fixture);
+  assert.doesNotMatch(result.output, /web-dist/);
+});
+
+test('only a placement a GUI owner draws counts as exposure', () => {
+  // The audit reads the placement table alone, because OMP's descriptors are
+  // not in this tree. Exposure is therefore exactly: `owned-by`, `engine`, and a
+  // `page` placement on a page listed in GUI_WRITTEN_PAGES. A `config-only` or
+  // `tui-only` row, or a page placement on a page with no GUI control, is
+  // config.yml-only, so a search entry pointing at it is a dead row.
+  const placements = PLACEMENTS.replace(
+    "'bash.enabled': 'engine',",
+    [
+      "'bash.enabled': 'engine',",
+      "'bash.approval': 'sessions:execution',",
+      "'bash.missing': 'voice:general',",
+      "'bash.configOnly': 'config-only',",
+      "'bash.terminalOnly': 'tui-only',",
+    ].join('\n  '),
+  );
+  const fixture = makeFixture({
+    ...baseFiles(),
+    'packages/agent-service/src/worker/settings-ui.ts': placements,
+    'packages/ui/src/components/RowControl.tsx': ROW_CONTROL,
+    'packages/ui/src/lib/settings/search.ts': SEARCH_ITEMS.replace(
+      "  { id: 'omp.bash.enabled', page: 'omp' },",
+      [
+        "  { id: 'omp.bash.enabled', page: 'omp' },",
+        "  { id: 'omp.bash.approval', page: 'omp' },",
+        "  { id: 'omp.bash.missing', page: 'omp' },",
+        "  { id: 'omp.bash.configOnly', page: 'omp' },",
+        "  { id: 'omp.bash.terminalOnly', page: 'omp' },",
+      ].join('\n'),
+    ),
+  });
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 1, result.output);
+  // A GUI page placement and an engine row are live anchors.
+  assert.doesNotMatch(result.output, /omp\.bash\.approval/);
+  assert.doesNotMatch(result.output, /omp\.bash\.enabled/);
+  // Everything the route omits is a gap.
+  for (const id of ['omp.bash.missing', 'omp.bash.configOnly', 'omp.bash.terminalOnly']) {
+    assert.match(result.output, new RegExp(`\\[settings-search\\] ${id.replaceAll('.', '\\.')}`));
+  }
+});

@@ -182,6 +182,25 @@ describe('i18n dictionaries', () => {
     }
   });
 
+  test('every OMP settings section has a translated purpose, not a raw group name', () => {
+    // A section heading is the one place the page could fall back to OMP's own
+    // English group name, so each section carries a title and a sentence in
+    // every locale. A shell name stays `Bash` by design; its purpose does not.
+    const sectionKeys = Object.keys(enDict)
+      .filter((k) => /^settings\.omp\.section\..+\.(title|description)$/.test(k))
+      .sort();
+    expect(sectionKeys.length).toBeGreaterThan(0);
+    for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
+      const missing = sectionKeys.filter((key) => !(key in dictionary));
+      expect(missing, `${locale} missing OMP section keys`).toEqual([]);
+      if (locale === 'en') continue;
+      const untranslated = sectionKeys
+        .filter((key) => key.endsWith('.description'))
+        .filter((key) => (dictionary as Record<string, string>)[key] === (enDict as Record<string, string>)[key]);
+      expect(untranslated, `${locale} untranslated OMP section purposes`).toEqual([]);
+    }
+  });
+
   test('all locales expose language label keys', () => {
     for (const [, dictionary] of Object.entries(localeDictionaries)) {
       expect(dictionary['common.language.german']).toBeTruthy();

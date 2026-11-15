@@ -57,6 +57,18 @@ function git(args) {
   });
 }
 
+/**
+ * Directories that are never source. A git ref lists only tracked paths, so a
+ * filesystem walk has to skip the same build outputs a checkout can contain:
+ * `web-dist` and the staged `agent-runtime` are gitignored and produced by
+ * `electron:build`. Walking them would compare a stale bundle against a tracked
+ * upstream tree, where every key the bundle predates looks like a dropped
+ * setting. `registry.test.ts` skips the same set for the same reason.
+ */
+const BUILD_OUTPUT_DIRS = new Set([
+  'node_modules', 'dist', 'dist-bundle', 'build', 'out', '.git', 'ios', 'android', 'web-dist', 'agent-runtime',
+]);
+
 function listTreeFiles(ref, prefix) {
   if (ref === 'WORKTREE') {
     const absPrefix = path.join(REPO_ROOT, prefix);
@@ -64,7 +76,7 @@ function listTreeFiles(ref, prefix) {
     const results = [];
     const walk = (dir) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git') continue;
+        if (BUILD_OUTPUT_DIRS.has(entry.name)) continue;
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
         else results.push(path.relative(REPO_ROOT, full).replaceAll('\\', '/'));
@@ -240,23 +252,87 @@ function extractQuotedLiterals(text) {
 // ---------------------------------------------------------------------------
 // 1. settings-item extractor
 // ---------------------------------------------------------------------------
+
+/**
+ * The OMP ids the Settings UI can actually draw: `owned-by` rows, `engine` rows,
+ * and `page` rows on a page with GUI controls. This mirrors
+ * `OMP_SETTING_EXPOSED_IDS` in `packages/agent-service/src/worker/settings-ui.ts`,
+ * and the audit uses it to tell a row component's real anchors from a search
+ * entry that points at nothing.
+ *
+ * Placement type alone decides exposure because the placement table is the
+ * authority on renderability: a `record`/`array` value with no options for the
+ * generic row is placed `config-only`, not on a page. `settings-ui.test.ts`
+ * pins that invariant against OMP's registry, which this audit cannot read, so
+ * the audit never has to guess whether a row would draw a control.
+ */
+function exposedOmpSettingIds(ref) {
+  const source = readFileAt(ref, 'packages/agent-service/src/worker/settings-ui.ts');
+  if (!source) return [];
+  const src = stripComments(source);
+  const placements = new Map();
+  const tableMatch = src.match(/\bRAW_PLACEMENTS[^=]*=\s*\{/);
+  if (tableMatch) {
+    const start = tableMatch.index + tableMatch[0].length - 1;
+    const end = findMatching(src, start, '{', '}');
+    if (end > start) {
+      for (const entry of src.slice(start + 1, end).matchAll(/(['"])([^'"]+)\1\s*:\s*(['"])([^'"]+)\3/g)) {
+        placements.set(entry[2], entry[4]);
+      }
+    }
+  }
+  const guiPages = new Set();
+  const guiMatch = src.match(/\bGUI_WRITTEN_PAGES[^=]*=\s*\{([\s\S]*?)\n\};/);
+  if (guiMatch) {
+    for (const entry of guiMatch[1].matchAll(/([A-Za-z_$][\w$]*)\s*:\s*true\b/g)) guiPages.add(entry[1]);
+  }
+  const exposed = [];
+  for (const [id, raw] of placements) {
+    if (raw.startsWith('owned-by ')) { exposed.push(id); continue; }
+    if (raw === 'engine') { exposed.push(id); continue; }
+    const colon = raw.indexOf(':');
+    if (colon > 0 && guiPages.has(raw.slice(0, colon))) exposed.push(id);
+  }
+  return exposed;
+}
+
 function extractSettingsItems(ref) {
   const files = listTreeFiles(ref, 'packages/ui/src').filter(
     (f) => /\.(ts|tsx)$/.test(f) && !/\.(test|spec)\.(ts|tsx)$/.test(f),
   );
   const items = new Map();
+  // The UI anchors an OMP row as `omp.<setting id>` while the placement table
+  // keys the bare setting id, so a template head may match either spelling.
+  const anchorNames = exposedOmpSettingIds(ref).flatMap(key => [key, `omp.${key}`]);
 
   const addItem = (id, entry) => {
     if (!id) return;
-    const list = items.get(id) ?? [];
-    list.push(entry);
-    items.set(id, list);
+    // A row component's anchor template (`omp.${setting.id}`) covers exactly the
+    // settings the OMP route exposes: those rows are the ones it draws. Anything
+    // else under that prefix is a stale search entry, so expand here instead of
+    // claiming the whole namespace.
+    const expanded = id.startsWith('@const-prefix:')
+      ? anchorNames.filter(anchor => anchor.startsWith(id.slice('@const-prefix:'.length)))
+      : [id];
+    for (const itemId of expanded.length > 0 ? expanded : [`${id}*`]) {
+      const list = items.get(itemId) ?? [];
+      list.push(entry);
+      items.set(itemId, list);
+    }
   };
 
   for (const file of files) {
     const raw = readFileAt(ref, file);
     if (!raw || (!raw.includes('settingsItem') && !raw.includes('settings-item'))) continue;
     const src = stripComments(raw);
+    // A component that stamps one anchor per row declares it in a file-local
+    // const first (`const anchor = `omp.${setting.id}`;` then
+    // `settingsItem={anchor}`). Reading only the attribute would miss every row
+    // such a component draws, which is a false gap, not a missing control.
+    const constAnchors = new Map();
+    for (const decl of src.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*(`[^`]*`|'[^']*'|"[^"]*")\s*[;\n]/g)) {
+      constAnchors.set(decl[1], decl[2].slice(1, -1));
+    }
     const re = /\b(settingsItemPrefix|settingsItem|data-settings-item)\s*=\s*/g;
     let m;
     while ((m = re.exec(src)) !== null) {
@@ -300,10 +376,24 @@ function extractSettingsItems(ref) {
               }
             }
           } else {
-            // Conditional expression or ternary with literals containing `.`
-            const lits = extractQuotedLiterals(expr).filter((s) => s.includes('.'));
-            for (const lit of lits) {
-              addItem(lit, { file, line: ln, attr, kind: 'conditional', expr });
+            // A bare identifier: the anchor a row component builds once and
+            // stamps on every row it draws. Its template's static head is the
+            // namespace those rows share (`omp.` for `omp.${setting.id}`), so
+            // record it as a prefix; a plain string const is a literal id.
+            const identifier = /^[A-Za-z_$][\w$]*$/.test(expr) ? constAnchors.get(expr) : undefined;
+            if (identifier !== undefined) {
+              const head = /^([^$`]+)\$\{/.exec(identifier);
+              if (head) {
+                addItem(`@const-prefix:${head[1]}`, { file, line: ln, attr, kind: 'const-prefix', expr, prefix: head[1] });
+              } else if (identifier) {
+                addItem(identifier, { file, line: ln, attr, kind: 'const-literal', expr });
+              }
+            } else {
+              // Conditional expression or ternary with literals containing `.`
+              const lits = extractQuotedLiterals(expr).filter((s) => s.includes('.'));
+              for (const lit of lits) {
+                addItem(lit, { file, line: ln, attr, kind: 'conditional', expr });
+              }
             }
           }
         }

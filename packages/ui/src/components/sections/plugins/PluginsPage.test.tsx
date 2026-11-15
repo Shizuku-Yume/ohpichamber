@@ -357,6 +357,16 @@ test('an empty installed list offers an Add plugin card that explains the empty 
   expect(buttonWith('Add plugin')).toBeDefined();
 });
 
+test('the capability section and the marketplace source line stay visible when nothing was discovered', async () => {
+  // Both states used to be an absent element, so the section that explains them
+  // simply vanished: the reader saw no inventory and no reason for it.
+  await showCatalog(emptyCatalog);
+
+  expect(container.textContent).toContain('Capabilities');
+  expect(container.textContent).toContain('No extensions loaded.');
+  expect(container.textContent).toContain('No marketplace sources yet.');
+});
+
 test('a selected marketplace category resets when its source leaves the catalog, and every remaining plugin is listed', async () => {
   const lintKit = { marketplace: 'market-a', name: 'lint-kit', description: 'Lint rules', version: '1.0.0', details: { category: 'Quality' } };
   const docsKit = { marketplace: 'market-b', name: 'docs-kit', description: 'Docs', version: '2.0.0' };

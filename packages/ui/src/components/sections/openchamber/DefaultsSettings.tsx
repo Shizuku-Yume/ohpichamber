@@ -332,11 +332,6 @@ export const DefaultsSettings: React.FC = () => {
           changes: [{ id, value }],
         });
         setOmpState(next);
-        if (id === 'goal.enabled') {
-          const enabled = value === true;
-          useUIStore.getState().setSessionGoalEnabled(enabled);
-          void updateDesktopSettings({ sessionGoalEnabled: enabled });
-        }
       } catch (err) {
         if (err instanceof CanonicalApiError && err.problem.status === 409) {
           const latest = await canonicalClient.getOmpSettings(currentState.workspaceId);
@@ -345,11 +340,6 @@ export const DefaultsSettings: React.FC = () => {
             changes: [{ id, value }],
           });
           setOmpState(next);
-          if (id === 'goal.enabled') {
-            const enabled = value === true;
-            useUIStore.getState().setSessionGoalEnabled(enabled);
-            void updateDesktopSettings({ sessionGoalEnabled: enabled });
-          }
         } else {
           console.warn(`Failed to update OMP setting ${id}:`, err);
         }
@@ -364,7 +354,11 @@ export const DefaultsSettings: React.FC = () => {
     (section: string) => {
       if (!ompState) return [];
       return ompState.settings.filter(
-        (s) => s.placement?.type === 'page' && s.placement.page === 'sessions' && s.placement.section === section,
+        (s) => s.placement?.type === 'page' && s.placement.page === 'sessions' && s.placement.section === section
+          // A record of per-model chains has no equal-length option list, so the
+          // generic row would draw an empty chip group. The fallback selector
+          // above is the control that writes it.
+          && s.id !== 'retry.fallbackChains',
       );
     },
     [ompState],
@@ -372,7 +366,11 @@ export const DefaultsSettings: React.FC = () => {
 
   return (
     <>
-      <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
+      {/* The section anchor is the model-roles record itself: the three editors
+          below all write `modelRoles`, and the OMP settings table names
+          `omp.modelRoles` as that record's owner. Stamping the record here is
+          what makes that claim name a real control rather than a search entry. */}
+      <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false} settingsItem="omp.modelRoles">
         <div className="space-y-4">
           <ModelRoleEditor
             role="default"
@@ -565,6 +563,63 @@ export const DefaultsSettings: React.FC = () => {
               </SettingsFieldRow>
             </div>
           ) : null}
+        </div>
+      </SettingsSection>
+
+      {/* Sampling */}
+      <SettingsSection
+        title={t('settings.sessions.section.sampling.title')}
+        description={t('settings.sessions.section.sampling.description')}
+        settingsItem="sessions.sampling"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {getSectionRows('sampling').map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      {/* Context handling */}
+      <SettingsSection
+        title={t('settings.sessions.section.context.title')}
+        description={t('settings.sessions.section.context.description')}
+        settingsItem="sessions.context"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {getSectionRows('context').map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      {/* Startup */}
+      <SettingsSection
+        title={t('settings.sessions.section.startup.title')}
+        description={t('settings.sessions.section.startup.description')}
+        settingsItem="sessions.startup"
+      >
+        <div className={SETTINGS_OPTION_STACK_CLASS}>
+          {getSectionRows('general').map((s) => (
+            <OmpRowControl
+              key={s.id}
+              setting={s}
+              value={s.value}
+              disabled={isSavingOmp}
+              onChange={(val) => void handleOmpChange(s.id, val)}
+            />
+          ))}
         </div>
       </SettingsSection>
 

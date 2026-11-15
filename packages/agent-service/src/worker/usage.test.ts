@@ -85,7 +85,11 @@ test('a project scope constrains every aggregate, and an empty scope matches not
   const projectA = join(agentDir, 'sessions', '--work--a');
   await tuiSession('--work--a', 'a', [user('ua', null, start), assistant('aa', 'ua', start + 1, { amount: 100, provider: 'prov-a', model: 'model-a', cost: 0.2 })]);
   await tuiSession('--work--b', 'b', [user('ub', null, start), assistant('ab', 'ub', start + 1, { amount: 1000, provider: 'prov-b', model: 'model-b', cost: 2 })]);
-  const scoped = await getUsageStats(query, [projectA]);
+  // A scope is the exact authorized file set the Host resolves, not a folder:
+  // a folder can hold another workspace's transcripts.
+  const scope = (...files: Array<[string, string, 'root' | 'subagent']>) =>
+    files.map(([file, sessionId, role]) => ({ file, sessionId, role }));
+  const scoped = await getUsageStats(query, scope([join(projectA, 'a.jsonl'), 'a', 'root']));
   expect(scoped).toMatchObject({ steps: 1, sessions: 1, prompts: 1, activeDays: 1, tokens: { input: 100 } });
   expect(scoped.cost).toBeCloseTo(0.2);
   expect(scoped.providers.map(provider => provider.providerId)).toEqual(['prov-a']);

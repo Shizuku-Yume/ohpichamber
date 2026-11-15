@@ -23,6 +23,7 @@ import { SETTINGS_CARD_GRID_CLASS, SettingsAddCard, SettingsBackButton, Settings
 import {
   SETTINGS_SELECT_TRIGGER_CLASS,
   SettingsFieldRow,
+  SETTINGS_HELPER_CLASS,
   SettingsSection,
   SettingsStackedField,
 } from '@/components/sections/shared/SettingsSection';
@@ -912,8 +913,10 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
         </SettingsSection>
 
         {/* Capability sources are the extension inventory's own view of the
-            workspace; with nothing discovered there is nothing to list. */}
-        {extensions !== null && extensions.items.length > 0 ? (
+            workspace. The section renders even when it discovers nothing: its
+            empty state names the section and says so, which an absent section
+            could not. */}
+        {extensions !== null ? (
           <ExtensionControlCenter
             inventory={extensions}
             disabled={disabled}
@@ -940,13 +943,18 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           )}
           contentClassName="space-y-3"
         >
+          {/* The configured sources, or a line saying none is: the button that
+              edits them sits in this section's header, so an absent row left
+              the filter looking broken rather than empty. */}
           {catalog.marketplaceSources.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
               {catalog.marketplaceSources.map(source => (
                 <SettingsCardChip key={source.name}>{source.name}</SettingsCardChip>
               ))}
             </div>
-          ) : null}
+          ) : (
+            <p className={SETTINGS_HELPER_CLASS}>{t('settings.plugins.marketplace.sources.empty')}</p>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1">
               <Icon name="search" className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />

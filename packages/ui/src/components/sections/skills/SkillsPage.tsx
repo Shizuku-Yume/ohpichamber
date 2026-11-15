@@ -338,35 +338,38 @@ const SkillsInstalledPage: React.FC = () => {
     } finally { setDeletingFile(false); }
   };
 
+  // Both the empty and the waiting pane carry the page title: it is the heading
+  // SettingsView focuses on navigation, so a branch without it left the pane
+  // untitled. This is the installed view; the catalog has its own page.
+  const pageTitle = t('settings.page.skills.title');
+
   if (!selected && !isNew) {
+    // The page title is the heading SettingsView focuses on navigation, so the
+    // empty pane keeps it instead of centring a message with no title.
     return (
-      <div className="flex h-full items-center justify-center px-4">
-        <div className="text-center text-muted-foreground">
-          <Icon name="book-open" className="mx-auto mb-3 h-10 w-10 sm:h-12 sm:w-12 opacity-50" />
-          <p>{t('settings.skills.page.empty.title')}</p>
-          <p className="typography-meta mt-1 opacity-75">{t('settings.skills.page.empty.description')}</p>
+      <SettingsPageLayout title={pageTitle} showSaveStatus={false}>
+        <div className="flex items-center justify-center py-16">
+          <div className="max-w-sm text-center text-muted-foreground">
+            <Icon name="book-open" className="mx-auto mb-3 h-10 w-10 sm:h-12 sm:w-12 opacity-50" />
+            <p>{t('settings.skills.page.empty.title')}</p>
+            <p className="typography-meta mt-1 opacity-75">{t('settings.skills.page.empty.description')}</p>
+          </div>
         </div>
-      </div>
+      </SettingsPageLayout>
     );
   }
 
-  if (loading) {
+  if (loading || loadFailed) {
     return (
-      <div className="flex h-full items-center justify-center px-4">
-        <div className="text-center text-muted-foreground">
-          <p>{t('settings.skills.page.loading.details')}</p>
+      <SettingsPageLayout title={pageTitle} showSaveStatus={false}>
+        <div className="flex items-center justify-center py-16">
+          <div className={loadFailed ? 'text-center text-[var(--status-error)]' : 'text-center text-muted-foreground'}>
+            <p role={loadFailed ? 'alert' : undefined}>
+              {t(loadFailed ? 'settings.skills.page.toast.loadFileContentFailed' : 'settings.skills.page.loading.details')}
+            </p>
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  if (loadFailed) {
-    return (
-      <div className="flex h-full items-center justify-center px-4">
-        <div className="text-center text-[var(--status-error)]">
-          <p role="alert">{t('settings.skills.page.toast.loadFileContentFailed')}</p>
-        </div>
-      </div>
+      </SettingsPageLayout>
     );
   }
 

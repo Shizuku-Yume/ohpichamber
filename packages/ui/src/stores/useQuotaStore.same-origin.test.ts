@@ -6,6 +6,7 @@ import { useQuotaStore } from './useQuotaStore';
 test('Electron dev loads usage through its same-origin proxy before Settings opens', async () => {
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
   const previousInitialized = useConfigStore.getState().isInitialized;
+  const previousWorkspaceId = useConfigStore.getState().workspaceId;
   const events = new EventTarget();
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -22,14 +23,15 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
   const network = spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const path = input.toString();
     requests.push(path);
-    if (path === '/api/config/settings?surface=desktop') {
+    const pathname = new URL(path, 'http://localhost').pathname;
+    if (pathname === '/api/config/settings') {
       return Response.json({ usageDropdownProviders: ['codex'] });
     }
-    if (path === '/api/quota/extensions') {
+    if (pathname === '/api/quota/extensions') {
       return Response.json({ extensions: [] });
     }
-    if (path === '/api/quota/providers') return Response.json({ providers: ['codex'] });
-    if (path === '/api/quota/codex') {
+    if (pathname === '/api/quota/providers') return Response.json({ providers: ['codex'] });
+    if (pathname === '/api/quota/codex') {
       return Response.json({
         providerId: 'codex', providerName: 'Codex', ok: true, configured: true, fetchedAt: 123,
         usage: { windows: { '5h': {
@@ -44,11 +46,19 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
   try {
     // Electron deliberately omits the API base when Vite proxies the backend.
     initializeRuntimeEndpoint({ apiBaseUrl: '', runtimeKey: null });
-    useConfigStore.setState({ isInitialized: true });
+    // The Host resolves each quota read through a workspace, so a ready
+    // instance publishes one before its first read. Publishing it is what
+    // starts the load, so the reset comes first and the store's own scope
+    // subscription performs the read the test then awaits.
     useQuotaStore.getState().resetForRuntimeSwitch();
+    useConfigStore.setState({ isInitialized: true, workspaceId: 'ws_same_origin' });
     await useQuotaStore.getState().ensureLoadedForRuntime();
 
-    expect(requests).toEqual(['/api/config/settings?surface=desktop', '/api/quota/extensions', '/api/quota/providers', '/api/quota/codex']);
+    // Every read carries the workspace the Host resolves its credential catalog through.
+    expect(requests).toEqual([
+      '/api/config/settings?surface=desktop', '/api/quota/extensions',
+      '/api/quota/providers?workspaceId=ws_same_origin', '/api/quota/codex?workspaceId=ws_same_origin',
+    ]);
     expect(getRuntimeKey()).toBe('local');
     expect(getRuntimeApiBaseUrl()).toBe('');
     expect(useQuotaStore.getState().loadedRuntimeKey).toBe('local');
@@ -58,7 +68,7 @@ test('Electron dev loads usage through its same-origin proxy before Settings ope
     expect(requests).toHaveLength(4);
   } finally {
     useQuotaStore.getState().resetForRuntimeSwitch();
-    useConfigStore.setState({ isInitialized: previousInitialized });
+    useConfigStore.setState({ isInitialized: previousInitialized, workspaceId: previousWorkspaceId });
     network.mockRestore();
     if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
     else Reflect.deleteProperty(globalThis, 'window');

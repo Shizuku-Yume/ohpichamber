@@ -112,14 +112,19 @@ export const CommandsPage: React.FC = () => {
   // A selection with no template file behind it (a built-in, or a row from a
   // catalog this directory no longer has) has nothing to edit.
   if (!selectedName || (!isNew && !entity)) {
+    // Without a selection there is nothing to save, but the page still needs its
+    // heading: SettingsView focuses `[data-settings-page-heading]` on navigation,
+    // and a bare centred div left the pane with no title at all.
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center text-muted-foreground">
-          <Icon name="terminal-box" className="mx-auto mb-3 size-12 opacity-50" />
-          <p>{t('settings.commands.page.empty.title')}</p>
-          <p className="typography-meta mt-1 opacity-75">{t('settings.commands.page.empty.description')}</p>
+      <SettingsPageLayout title={t('settings.page.commands.title')} showSaveStatus={false}>
+        <div className="flex items-center justify-center py-16">
+          <div className="max-w-sm text-center text-muted-foreground">
+            <Icon name="terminal-box" className="mx-auto mb-3 size-12 opacity-50" />
+            <p>{t('settings.commands.page.empty.title')}</p>
+            <p className="typography-meta mt-1 opacity-75">{t('settings.commands.page.empty.description')}</p>
+          </div>
         </div>
-      </div>
+      </SettingsPageLayout>
     );
   }
   return <SettingsPageLayout title={isNew ? t('settings.commands.page.title.new') : `/${selectedName}`}

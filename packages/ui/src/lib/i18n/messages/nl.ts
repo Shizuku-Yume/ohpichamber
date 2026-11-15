@@ -8634,7 +8634,6 @@ export const dict = {
   "chat.workStatus.breakdown.pinnedNote": "notitie",
   "chat.workStatus.breakdown.unpin": "Uit context halen",
   "chat.workStatus.breakdown.pinnedPlan": "plan",
-  "chat.workStatus.breakdown.memory": "Agentgeheugen",
   "chat.workStatus.breakdown.pinnedKnowledgeSingle": "{count} vastgezet",
   "chat.workStatus.breakdown.pinnedKnowledgePlural": "{count} vastgezet",
   "chat.workStatus.breakdown.mcp": "MCP-servers",

@@ -958,7 +958,11 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
               disabled={busy || isReadOnly}
             >
               <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
-                <SelectValue />
+                <SelectValue>
+                  {draft.scope === 'user'
+                    ? t('settings.mcp.grid.scope.user')
+                    : t('settings.mcp.grid.scope.project')}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="project">{t('settings.mcp.grid.scope.project')}</SelectItem>

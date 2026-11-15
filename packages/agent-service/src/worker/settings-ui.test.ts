@@ -7,6 +7,7 @@ import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_OWNER_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
 import { NativeSettings } from './catalog-settings.ts';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 beforeEach(resetSettingsForTest);
 afterEach(resetSettingsForTest);
@@ -37,7 +38,7 @@ test('every TUI-visible OMP setting has a placement and no hand-kept id list rem
     const placement = OMP_SETTING_PLACEMENTS[setting.id];
     expect(placement, `Missing placement for TUI-visible setting ${setting.id}`).toBeDefined();
     expect(placement.type, `Placement for ${setting.id} must not be hidden`).not.toBe('hidden');
-    expect(['page', 'engine', 'tui-only', 'owned-by', 'boundary'], setting.id).toContain(placement.type);
+    expect(['page', 'engine', 'tui-only', 'owned-by', 'config-only', 'boundary'], setting.id).toContain(placement.type);
     if (placement.type === 'owned-by') {
       expect(placement.owner.length, setting.id).toBeGreaterThan(0);
     }
@@ -56,8 +57,11 @@ test('misclassifications are fixed: followUpMode is not a chat owner; recap belo
 });
 
 test('an owned-by placement names an owner control, and all placement types stay populated', () => {
-  expect(OMP_SETTING_OWNER_IDS).toEqual(['chat.session-recap', 'chat.suggestion-generator']);
-  const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, hidden: 0, boundary: 0 };
+  expect([...OMP_SETTING_OWNER_IDS].sort()).toEqual([
+    'chat.session-recap', 'chat.suggestion-generator', 'omp.modelRoles', 'sessions.default-thinking',
+    'sessions.fallback-model',
+  ]);
+  const counts = { page: 0, engine: 0, 'tui-only': 0, 'owned-by': 0, 'config-only': 0, hidden: 0, boundary: 0 };
   for (const placement of Object.values(OMP_SETTING_PLACEMENTS)) {
     counts[placement.type] += 1;
   }
@@ -129,7 +133,7 @@ test('an unknown condition name keeps the row visible', async () => {
 test('every engine placement carries OMP label and description from the pinned registry', () => {
   for (const setting of orderedSettings()) {
     if (setting.isCredential) continue;
-    if (OMP_SETTING_PLACEMENTS[setting.id]?.type !== 'engine' || setting.id === 'modelRoles') continue; // rendered by the model role editor
+    if (OMP_SETTING_PLACEMENTS[setting.id]?.type !== 'engine') continue;
     expect(setting.ui?.label, `${setting.id} needs an OMP label`).toBeTruthy();
     expect(setting.ui?.description, `${setting.id} needs an OMP description`).toBeTruthy();
   }
@@ -147,3 +151,159 @@ test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
   }
 });
+
+test('every exposed page row is drawn by the section a GUI owner renders', () => {
+  // A placement on a page section nobody draws makes the row writable but
+  // invisible: the "hollow setting" this effort exists to remove. The section
+  // names are read from the components that render them, so a deleted section
+  // fails here instead of being excused by this test's own list.
+  const placed = new Map<string, Set<string>>();
+  for (const id of OMP_SETTING_EXPOSED_IDS) {
+    const placement = OMP_SETTING_PLACEMENTS[id];
+    if (placement?.type !== 'page') continue;
+    const sections = placed.get(placement.page) ?? new Set<string>();
+    sections.add(placement.section);
+    placed.set(placement.page, sections);
+  }
+
+  // Fail closed. A page with exposed rows whose owner this test cannot read is
+  // an unchecked page, not a clean one: that is how the Sessions page slipped
+  // through while 57 of its rows went unverified.
+  const unread: string[] = [];
+  const unwritten: string[] = [];
+  for (const [page, sections] of placed) {
+    const rendered = renderedSections(page);
+    if (rendered === undefined) {
+      unread.push(page);
+      continue;
+    }
+    for (const section of sections) {
+      if (!rendered.has(section)) unwritten.push(`${page}:${section}`);
+    }
+  }
+  expect(unread).toEqual([]);
+  expect(unwritten).toEqual([]);
+});
+
+test('a value no generic row can draw is owned by the control that writes it, or config-only', () => {
+  // A per-model record or a bare array has no option list, so an OmpRowControl
+  // would draw an empty chip group. Those values either name the control that
+  // writes them or stay in config.yml; none sits on a page as a hollow row.
+  expect(OMP_SETTING_PLACEMENTS['retry.fallbackChains']).toEqual({ type: 'owned-by', owner: 'sessions.fallback-model' });
+  expect(OMP_SETTING_EXPOSED_IDS.has('retry.fallbackChains')).toBe(true);
+  for (const id of ['tools.approval', 'tools.restrictedFolders', 'compaction.methodOrder', 'ttsr.disabledRules', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools', 'task.perCallModelAllow', 'goal.continuationModes', 'tools.xdevInlineDevices']) {
+    expect(OMP_SETTING_PLACEMENTS[id], id).toEqual({ type: 'config-only' });
+    expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
+  }
+});
+
+test('every exposed OMP row has a label and description in all fifteen locales', () => {
+  // `OmpRowControl` renders the locale and falls back to OMP's English copy, so
+  // a row without a translation shows English in a Chinese UI — and a row whose
+  // OMP label is empty used to show its raw id (`modelRoles`). The ids come from
+  // the placement table, not a hand list, so a newly exposed row cannot join the
+  // page without copy.
+  const source = readFileSync(
+    String(new URL('../../../ui/src/lib/i18n/messages/omp-settings.i18n.ts', import.meta.url).pathname),
+    'utf8',
+  );
+  const dictionaries = new Map<string, Map<string, string>>();
+  for (const block of source.matchAll(/^ {2}'([^']+)': \{\n([\s\S]*?)^ {2}\},?$/gm)) {
+    const entries = new Map<string, string>();
+    for (const line of block[2].matchAll(/^ {4}'([^']+)': (?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"),$/gm)) {
+      entries.set(line[1], line[2] ?? line[3] ?? '');
+    }
+    dictionaries.set(block[1], entries);
+  }
+  expect([...dictionaries.keys()].sort()).toEqual([
+    'ar', 'de', 'en', 'es', 'fr', 'he', 'ja', 'ko', 'nl', 'pl', 'pt-BR', 'tr', 'uk', 'zh-CN', 'zh-TW',
+  ]);
+
+  // The rows a control draws: engine rows and page rows on a page the UI owns.
+  // `owned-by` rows are drawn by their named control, which supplies its own
+  // translated label.
+  const drawn = [...OMP_SETTING_EXPOSED_IDS].filter((id) => OMP_SETTING_PLACEMENTS[id]?.type !== 'owned-by');
+  const english = dictionaries.get('en')!;
+  const missing: string[] = [];
+  // A description identical to the English one is an untranslated row, not a
+  // translation. Names are sometimes the same everywhere (`Glob`, `Bash`), so
+  // only the description is compared.
+  const untranslated: string[] = [];
+  for (const [locale, entries] of dictionaries) {
+    for (const id of drawn) {
+      const label = `settings.omp.items.${id}.label`;
+      const description = `settings.omp.items.${id}.description`;
+      if (!entries.has(label)) missing.push(`${locale}: ${label}`);
+      if (!entries.has(description)) missing.push(`${locale}: ${description}`);
+      if (locale !== 'en' && entries.has(description) && entries.get(description) === english.get(description)) {
+        untranslated.push(`${locale}: ${description}`);
+      }
+    }
+  }
+  expect(missing).toEqual([]);
+  expect(untranslated).toEqual([]);
+});
+
+test('every owned-by owner is an anchor a control emits', () => {
+  // `owned-by` says a control writes this key instead of a generic row, so the
+  // named anchor has to exist: otherwise search lands on the page and finds
+  // nothing, and the setting is unowned in fact while looking owned in the
+  // table. The anchors are read from the UI sources, not listed here.
+  const sources = walk(String(new URL('../../../ui/src/components/sections', import.meta.url).pathname))
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+  const missing = OMP_SETTING_OWNER_IDS.filter((owner) => !sources.includes(`settingsItem="${owner}"`));
+  expect(missing).toEqual([]);
+});
+
+test('every page or engine placement can actually draw a control', () => {
+  // The Audit reads placement type alone to decide whether the route exposes a
+  // row, because it cannot see OMP's descriptors. That is only sound while a
+  // value the generic row cannot draw is never placed on a page or `engine`.
+  const byId = new Map(orderedSettings().map((setting) => [setting.id, setting]));
+  const undrawable: string[] = [];
+  for (const [id, placement] of Object.entries(OMP_SETTING_PLACEMENTS)) {
+    if (placement.type !== 'page' && placement.type !== 'engine') continue;
+    const setting = byId.get(id);
+    if (!setting) continue; // a synthetic id the route resolves from OMP's own registry
+    const type = setting.type;
+    const choices = setting.ui?.options ?? setting.enumValues ?? [];
+    const drawable = type === 'boolean' || type === 'number' || type === 'string' || choices.length > 0;
+    if (!drawable) undrawable.push(`${id} (${type}) → ${placement.type}`);
+  }
+  expect(undrawable).toEqual([]);
+});
+
+/**
+ * The page sections the UI draws, read from the components themselves: a page
+ * section is rendered by `getSectionRows('<section>')` or
+ * `getSectionSettings('<section>')`.
+ *
+ * A page's owner either takes the shared `useOmpPageSettings('<page>')` hook or
+ * filters the snapshot itself, as `DefaultsSettings` does with its own state
+ * and `placement.page === 'sessions'`. Both shapes are the page's own; gating
+ * on the hook alone skipped every Sessions section. Returns `undefined` when no
+ * component claims the page or claims it without pulling a section, so the
+ * caller can fail closed rather than read silence as "all drawn".
+ */
+function renderedSections(page: string): ReadonlySet<string> | undefined {
+  const root = new URL('../../../ui/src/components/sections', import.meta.url);
+  const files = walk(String(root.pathname));
+  const sections = new Set<string>();
+  const ownPage = new RegExp(`placement\\??\\.page === '${page}'`);
+  for (const file of files) {
+    const source = readFileSync(file, 'utf8');
+    if (!source.includes(`useOmpPageSettings('${page}')`) && !ownPage.test(source)) continue;
+    for (const match of source.matchAll(/getSectionRows\('([^']+)'\)/g)) sections.add(match[1]);
+    for (const match of source.matchAll(/getSectionSettings\('([^']+)'\)/g)) sections.add(match[1]);
+  }
+  return sections.size > 0 ? sections : undefined;
+}
+
+function walk(dir: string): string[] {
+  return readdirSync(dir).flatMap((entry) => {
+    const full = `${dir}/${entry}`;
+    if (statSync(full).isDirectory()) return walk(full);
+    return /\.tsx$/.test(entry) && !/\.test\.tsx$/.test(entry) ? [full] : [];
+  });
+}

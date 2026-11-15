@@ -202,10 +202,6 @@
     "isolatedSpacesIdleStop": {
       "scope": "instance"
     },
-    "agentMemoryFeatureAvailable": {
-      "scope": "instance",
-      "computed": true
-    },
     "agentWorkflowFeatureAvailable": {
       "scope": "instance",
       "computed": true
@@ -644,9 +640,6 @@
         "desktop",
         "mobile"
       ]
-    },
-    "sessionGoalEnabled": {
-      "scope": "profile"
     },
     "sessionGoalDefaultBudgetEnabled": {
       "scope": "profile"

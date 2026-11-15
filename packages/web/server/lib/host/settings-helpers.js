@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { createRequire } from 'node:module';
 
-export const isAgentMemoryFeatureAvailable = () => false;
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
 export const isWorkflowFeatureAvailable = () => true;
 import { idleStopSchema } from '../spaces/idle-stop.js';
@@ -500,9 +499,6 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.sessionReviewOfferEnabled === 'boolean') {
       result.sessionReviewOfferEnabled = candidate.sessionReviewOfferEnabled;
-    }
-    if (typeof candidate.sessionGoalEnabled === 'boolean') {
-      result.sessionGoalEnabled = candidate.sessionGoalEnabled;
     }
     if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
       result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
@@ -1025,9 +1021,6 @@ export const createSettingsHelpers = (dependencies) => {
       ...sanitized,
       hasManagedRemoteTunnelToken,
       hasDesktopUiPassword,
-      // Tells the client whether agent memory exists in this build at all, so
-      // its settings row and panel tab can be absent rather than merely off.
-      agentMemoryFeatureAvailable: isAgentMemoryFeatureAvailable(),
       overviewFeatureAvailable: isOverviewFeatureAvailable(),
       // Whether this build has agent workflows (OPENCHAMBER_WORKFLOWS_ENABLE).
       agentWorkflowFeatureAvailable: isWorkflowFeatureAvailable(),

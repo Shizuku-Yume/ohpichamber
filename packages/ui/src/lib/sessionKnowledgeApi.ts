@@ -11,10 +11,9 @@ import { z } from 'zod';
 export interface SessionKnowledgeSummary {
   notes: Array<{ id: string; body: string }>;
   plans: Array<{ id: string; title: string }>;
-  memory: { global: number; project: number };
 }
 
-const EMPTY_SUMMARY: SessionKnowledgeSummary = { notes: [], plans: [], memory: { global: 0, project: 0 } };
+const EMPTY_SUMMARY: SessionKnowledgeSummary = { notes: [], plans: [] };
 
 // Several panels ask for the same session's summary at the same moment when a
 // session opens. One request serves all of them, and its answer stays good for
@@ -66,10 +65,6 @@ const requestSessionKnowledgeSummary = async (
     return {
       notes: Array.isArray(payload?.notes) ? payload.notes : [],
       plans: Array.isArray(payload?.plans) ? payload.plans : [],
-      memory: {
-        global: typeof payload?.memory?.global === 'number' ? payload.memory.global : 0,
-        project: typeof payload?.memory?.project === 'number' ? payload.memory.project : 0,
-      },
     };
   } catch {
     return EMPTY_SUMMARY;

@@ -28,65 +28,116 @@ import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
 import { optionSlug } from '@/components/sections/shared/ompRowHelpers';
 import { Icon } from '@/components/icon/Icon';
 
+/**
+ * One section per OMP tab group. Keyed by the group name OMP itself carries, so
+ * a new group is a visible missing entry here instead of a raw heading.
+ */
+const SECTION_METADATA: Record<string, { titleKey: I18nKey; descriptionKey: I18nKey }> = {
+  'Retry & Fallback': {
+    titleKey: 'settings.omp.group.retry_fallback.label',
+    descriptionKey: 'settings.omp.section.retry.description',
+  },
+  Compaction: {
+    titleKey: 'settings.omp.group.compaction.label',
+    descriptionKey: 'settings.omp.section.compaction.description',
+  },
+  LSP: {
+    titleKey: 'settings.omp.group.lsp.label',
+    descriptionKey: 'settings.omp.section.lsp.description',
+  },
+  Subagents: {
+    titleKey: 'settings.omp.section.subagents.title',
+    descriptionKey: 'settings.omp.section.subagents.description',
+  },
+  Modes: {
+    titleKey: 'settings.omp.group.modes.label',
+    descriptionKey: 'settings.omp.section.modes.description',
+  },
+  'Commands & Skills': {
+    titleKey: 'settings.omp.group.commands_skills.label',
+    descriptionKey: 'settings.omp.section.commands.description',
+  },
+  'Discovery & MCP': {
+    titleKey: 'settings.omp.section.integrations.title',
+    descriptionKey: 'settings.omp.section.integrations.description',
+  },
+  Agent: {
+    titleKey: 'settings.omp.section.agent.title',
+    descriptionKey: 'settings.omp.section.agent.description',
+  },
+  Bash: {
+    titleKey: 'settings.omp.section.bash.title',
+    descriptionKey: 'settings.omp.section.bash.description',
+  },
+  Developer: {
+    titleKey: 'settings.omp.section.developer.title',
+    descriptionKey: 'settings.omp.section.developer.description',
+  },
+  Editing: {
+    titleKey: 'settings.omp.section.editing.title',
+    descriptionKey: 'settings.omp.section.editing.description',
+  },
+  'Eval & Runtimes': {
+    titleKey: 'settings.omp.section.eval_runtimes.title',
+    descriptionKey: 'settings.omp.section.eval_runtimes.description',
+  },
+  Execution: {
+    titleKey: 'settings.omp.section.execution.title',
+    descriptionKey: 'settings.omp.section.execution.description',
+  },
+  Experimental: {
+    titleKey: 'settings.omp.section.experimental.title',
+    descriptionKey: 'settings.omp.section.experimental.description',
+  },
+  Extensions: {
+    titleKey: 'settings.omp.section.extensions.title',
+    descriptionKey: 'settings.omp.section.extensions.description',
+  },
+  Notifications: {
+    titleKey: 'settings.omp.section.notifications.title',
+    descriptionKey: 'settings.omp.section.notifications.description',
+  },
+  'Output Limits': {
+    titleKey: 'settings.omp.section.output_limits.title',
+    descriptionKey: 'settings.omp.section.output_limits.description',
+  },
+  'Read Summaries': {
+    titleKey: 'settings.omp.section.read_summaries.title',
+    descriptionKey: 'settings.omp.section.read_summaries.description',
+  },
+  Reading: {
+    titleKey: 'settings.omp.section.reading.title',
+    descriptionKey: 'settings.omp.section.reading.description',
+  },
+  'Rules (TTSR)': {
+    titleKey: 'settings.omp.section.ttsr.title',
+    descriptionKey: 'settings.omp.section.ttsr.description',
+  },
+  Thinking: {
+    titleKey: 'settings.omp.section.thinking.title',
+    descriptionKey: 'settings.omp.section.thinking.description',
+  },
+};
+
 interface ResolvedSection {
   readonly id: string;
   readonly titleKey?: I18nKey;
   readonly descriptionKey?: I18nKey;
-  readonly label: string;
   readonly rows: readonly OmpSetting[];
 }
 
-const SECTION_METADATA: Record<string, { titleKey?: I18nKey; descriptionKey?: I18nKey; label: string }> = {
-  retry: {
-    titleKey: 'settings.omp.group.retry_fallback.label',
-    descriptionKey: 'settings.omp.section.retry.description',
-    label: 'Retry & Fallback',
-  },
-  compaction: {
-    titleKey: 'settings.omp.group.compaction.label',
-    descriptionKey: 'settings.omp.section.compaction.description',
-    label: 'Compaction',
-  },
-  lsp: {
-    titleKey: 'settings.omp.group.lsp.label',
-    descriptionKey: 'settings.omp.section.lsp.description',
-    label: 'LSP',
-  },
-  tasks: {
-    titleKey: 'settings.omp.section.subagents.title',
-    descriptionKey: 'settings.omp.section.subagents.description',
-    label: 'Subagents',
-  },
-  modes: {
-    titleKey: 'settings.omp.group.modes.label',
-    descriptionKey: 'settings.omp.section.modes.description',
-    label: 'Modes',
-  },
-  commands: {
-    titleKey: 'settings.omp.group.commands_skills.label',
-    descriptionKey: 'settings.omp.section.commands.description',
-    label: 'Commands & Skills',
-  },
-  integrations: {
-    titleKey: 'settings.omp.section.integrations.title',
-    descriptionKey: 'settings.omp.section.integrations.description',
-    label: 'Integrations',
-  },
-};
-
-function resolveSectionInfo(setting: OmpSetting): { id: string; titleKey?: I18nKey; descriptionKey?: I18nKey; label: string } {
-  if (setting.id.startsWith('retry.')) return { id: 'retry', ...SECTION_METADATA.retry };
-  if (setting.id.startsWith('compaction.') || setting.group === 'Compaction') return { id: 'compaction', ...SECTION_METADATA.compaction };
-  if (setting.id.startsWith('lsp.') || setting.group === 'LSP') return { id: 'lsp', ...SECTION_METADATA.lsp };
-  if (setting.id.startsWith('task.') || setting.group === 'Subagents') return { id: 'tasks', ...SECTION_METADATA.tasks };
-  if (setting.id.startsWith('plan.') || setting.id.startsWith('goal.') || setting.group === 'Modes') return { id: 'modes', ...SECTION_METADATA.modes };
-  if (setting.id.startsWith('skills.') || setting.group === 'Commands & Skills') return { id: 'commands', ...SECTION_METADATA.commands };
-  if (setting.id.startsWith('mcp.') || setting.group === 'Discovery & MCP') return { id: 'integrations', ...SECTION_METADATA.integrations };
-  const slug = optionSlug(setting.group || 'general');
-  return {
-    id: slug,
-    label: setting.group || 'General',
-  };
+/** The section a row belongs to: OMP's own group, with ids as a fallback head. */
+function resolveSectionInfo(setting: OmpSetting): { id: string; titleKey?: I18nKey; descriptionKey?: I18nKey } {
+  const group = setting.group ?? '';
+  if (group !== '') {
+    return { id: optionSlug(group), ...SECTION_METADATA[group] };
+  }
+  // A row without a group is placed by its id's head, so it still lands in a
+  // named section instead of an untitled bucket.
+  const head = setting.id.split('.')[0];
+  const byHead = { 'retry': 'Retry & Fallback', 'compaction': 'Compaction', 'lsp': 'LSP', 'task': 'Subagents', 'plan': 'Modes', 'goal': 'Modes' }[head];
+  if (byHead !== undefined) return { id: optionSlug(byHead), ...SECTION_METADATA[byHead] };
+  return { id: optionSlug(head) };
 }
 
 type Values = Record<string, OmpSettingValue>;
@@ -222,16 +273,12 @@ export const OmpSettingsPage: React.FC = () => {
   /** Rows the page draws: engine placement, in the snapshot, and condition holds. */
   const visible = React.useMemo(() => {
     if (!state) return null;
-    const byId = new Map(state.settings.map((setting) => [setting.id, setting]));
-    const engineSettings = state.settings.filter((setting) => {
-      if (setting.placement.type !== 'engine') return false;
-      if (setting.conditionActive === false) return false;
-      if (setting.id === 'modelRoles') return false;
-      return true;
-    });
+    const engineSettings = state.settings.filter((setting) => (
+      setting.placement.type === 'engine' && setting.conditionActive !== false
+    ));
 
     const sectionOrder: string[] = [];
-    const sectionMap = new Map<string, { id: string; titleKey?: I18nKey; descriptionKey?: I18nKey; label: string; rows: OmpSetting[] }>();
+    const sectionMap = new Map<string, { id: string; titleKey?: I18nKey; descriptionKey?: I18nKey; rows: OmpSetting[] }>();
 
     for (const setting of engineSettings) {
       const info = resolveSectionInfo(setting);
@@ -249,7 +296,6 @@ export const OmpSettingsPage: React.FC = () => {
 
     return {
       sections,
-      modelRoles: byId.get('modelRoles'),
       hiddenCount,
     };
   }, [state]);
@@ -292,7 +338,7 @@ export const OmpSettingsPage: React.FC = () => {
         {visible.sections.map((section, index) => (
           <SettingsSection
             key={section.id}
-            title={section.titleKey ? t(section.titleKey) : section.label}
+            title={t(section.titleKey ?? 'settings.omp.advanced')}
             description={section.descriptionKey ? t(section.descriptionKey) : undefined}
             divider={index > 0}
             settingsItem={`omp.section.${section.id}`}

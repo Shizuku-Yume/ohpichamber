@@ -40,6 +40,7 @@ function createFixture(initialGenerator: SuggestionGenerator = 'session') {
   const recordedUsage: Array<{ usage: unknown; target: unknown }> = [];
   const ephemeralCalls: EphemeralTurnOptions[] = [];
   const smallModelCalls: Array<{ promptText: string; signal: AbortSignal }> = [];
+  let ephemeralReply = '"Next step suggestion"';
   let currentGenerator: SuggestionGenerator = initialGenerator;
   let draft = false;
   let aborted = false;
@@ -83,10 +84,10 @@ function createFixture(initialGenerator: SuggestionGenerator = 'session') {
     runEphemeralTurn: async (options: EphemeralTurnOptions): Promise<EphemeralTurnResult> => {
       ephemeralCalls.push(options);
       return {
-        replyText: '"Next step suggestion"',
+        replyText: ephemeralReply,
         assistantMessage: {
           role: 'assistant',
-          content: [{ type: 'text', text: '"Next step suggestion"' }],
+          content: [{ type: 'text', text: ephemeralReply }],
           stopReason: 'stop',
           api: 'openai-completions',
           provider: 'provider-session',
@@ -138,6 +139,9 @@ function createFixture(initialGenerator: SuggestionGenerator = 'session') {
     setAborted: (value: boolean) => {
       aborted = value;
     },
+    setEphemeralReply: (value: string) => {
+      ephemeralReply = value;
+    },
     completedEvent: {
       type: 'agent_end' as const,
       isTerminal: true,
@@ -166,6 +170,31 @@ describe('Worker SuggestionDriver', () => {
       type: 'session.suggestion',
       suggestion: 'Next step suggestion',
     });
+  });
+
+  test('session generator asks for alternatives and publishes the first line', async () => {
+    const fixture = createFixture('session');
+    // A plural reply, exactly as the model answers the alternatives prompt.
+    fixture.setEphemeralReply('Now list them in French.\nAdd a unit test for that.\nThanks, continue.');
+    await fixture.driver.handleAgentEnd(fixture.completedEvent);
+
+    // The plural prompt is the one the model will actually answer; a
+    // single-message request is declined far more often (see PREDICTION_CHOICES).
+    const promptText = fixture.ephemeralCalls[0]?.promptText ?? '';
+    expect(promptText).toContain('up to');
+    expect(promptText).toContain('different messages');
+    expect(fixture.emittedEvents[0]?.event).toMatchObject({
+      type: 'session.suggestion',
+      suggestion: 'Now list them in French.',
+    });
+  });
+
+  test('a plural reply that still skips publishes nothing', async () => {
+    const fixture = createFixture('session');
+    fixture.setEphemeralReply('NO_PREDICTION');
+    await fixture.driver.handleAgentEnd(fixture.completedEvent);
+
+    expect(fixture.emittedEvents).toHaveLength(0);
   });
 
   test('small generator drives small-model call at completed agent_end', async () => {

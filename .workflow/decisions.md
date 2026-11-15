@@ -1118,14 +1118,20 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** a product glossary fixes a different term.
 - **Effort:** ux-feedback-2026-11-12
 
-## 2026-11-14 - New-chat latency budgets met via immediate session ID return, queued prompt delivery, and bounded speculative session preparation
+## 2026-11-14 - Immediate session ID and queued prompt delivery; the prepared path meets the first-delta budget, the cold path does not
 
-- **Decided:** `POST /sessions` returns immediately (~5 ms) with the initialized session ID while worker admission and launch proceed asynchronously, and prompt delivery (`POST /runs`) queues behind worker readiness. To meet the ≤ 600 ms first `part.delta` budget reproducibly, the Host Gateway and Canonical Client support bounded speculative session preparation (`/api/agent/v1/sessions/prepare`), triggered when the user opens the new-chat composer for a workspace (and mirrored before user prompt dispatch in the performance test). The speculative session is bounded (≤1 per workspace), idle-reaped after 5 minutes, discarded on draft cancellation, and consumed on session creation so the session graph is already built and ready when the prompt arrives. Background worker registration failures publish their cause through session error status and diagnostics, failure cleanup is generation-conditional inside `withRoot`, and draft submissions paint an immediate optimistic user bubble carried over on materialization.
-- **Instead of:** retaining synchronous worker `ready` before returning from `POST /sessions` (stalling session creation at ~880–1150 ms) or leaving heavy OMP SDK graph initialization on the critical prompt delivery path (stalling first delta at 647 ms).
-- **Because:** the independent review of task 17 (Review17) and task 24 (Review24) measured that synchronous worker launch and SDK `createAgentSession` graph initialization inherently take ~500 ms, leaving first `part.delta` above the 600 ms budget (p50: 647.62 ms). Returning the session ID immediately meets the `POST /sessions` budget (p50: 4.65 ms ≤ 400 ms), and bounded speculative open when the composer is active brings first `part.delta` after send to ~225–230 ms (p50 ≤ 600 ms MET reproducibly across 20 samples), while ensuring zero leaks and full lifecycle correctness.
+- **Decided:** `POST /sessions` returns immediately (~5–15 ms) with the initialized session ID while worker admission and launch proceed asynchronously, and prompt delivery (`POST /runs`) queues behind worker readiness. To keep a new chat fast for the path a user actually takes, the Host Gateway and Canonical Client also support bounded speculative session preparation (`/api/agent/v1/sessions/prepare`), triggered when the user opens the new-chat composer for a workspace (and as an explicit variant in the performance test). The speculative session is bounded (≤1 per workspace), idle-reaped after five minutes, discarded on draft cancellation and on Host shutdown, and consumed on session creation, so the session graph is already built and ready when the prompt arrives.
+- **Instead of:** retaining synchronous worker `ready` before returning from `POST /sessions` (stalling session creation at ~880–1150 ms) or leaving heavy OMP SDK graph initialization on the critical prompt delivery path.
+- **Because:** the independent reviews of tasks 17 and 24 measured that a worker launch plus SDK `createAgentSession` inherently cost ~500 ms, which puts the cold path's first `part.delta` above the 600 ms budget. The three measured paths, from `task24/after-8` and `after-9` receipts plus the round-3 review's independent run:
+  - **Prepared (composer open, then send)** — what the product does: first `part.delta` p50 **≈ 220–260 ms**, `POST /sessions` p50 6–7 ms. Meets both budgets in every run.
+  - **Cold, no prepare**: `POST /sessions` p50 13–15 ms (meets its budget) but first `part.delta` p50 **≈ 720–800 ms on a lightly loaded machine and ≈ 855–934 ms under load**. Does not meet 600 ms.
+  - **Prepare issued and abandoned immediately before send**: first `part.delta` p50 **≈ 780–1020 ms** and `POST /sessions` p50 **560–750 ms**, because creation waits on its own in-flight prepare. This is an accepted, documented miss of the 400 ms creation budget.
+
+  The remaining cold-path cost is measured, not assumed: `createAgentSession` ≈ 109 ms, serial agent-loop preparation before the provider call ≈ 144 ms, and supervisor queueing ≈ 60 ms, all in one process on one thread. The post-init `Promise.all` that fills the rest is concurrent, not serial: its branches' CPU time exceeds their own wall time, so their wall time is queueing (see the task file's sub-step table).
+- **Open, for the maintainer:** the cold path's ≤ 600 ms first-delta budget needs a waiver, or an SDK seam that lets a session graph be built in a spare process (OMP's `AgentRegistry.global()` is process-wide, so the attempt was rejected: it regressed the cold path and conflicted on the registry). The prepared path meeting the budget is not a substitute for the cold path meeting it; it is what the product does.
 - **Decided by:** agent
 - **Mine:** yes
-- **Revisit when:** OMP SDK changes session initialization or worker process architecture.
+- **Revisit when:** OMP SDK changes session initialization or worker process architecture, or the maintainer decides the cold path's budget.
 - **Effort:** ux-feedback-2026-11-12
 
 ## 2026-11-14 - OMP settings name only verified owners; writes reach placed settings only
@@ -1201,4 +1207,29 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent
 - **Mine:** yes
 - **Revisit when:** SQLite `host_agent_sessions` durable schema adds a first-class `parent_session_id` column across all sessions.
+- **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - The 2026-11-12 feedback cutovers own the remaining files they rewrote
+
+- **Decided:** these `fork-differs` paths keep the fork blob because this effort's own work produced them: the UI-blocks guidance test no longer mirrors a generated server module (`chat/uiBlocks/guidance.test.ts`), the shared sortable visibility list `shared/SettingsSortableVisibilityList.tsx`, the Settings window's keyboard reorder and plugin-category fix (`views/SettingsWindow.tsx`), the `parseProjects` round-trip test for the dropped per-project `defaultAgent` (`lib/settings/parsers.test.ts`), the Magic-prompts sidebar without the retired memory prompts (`sections/magic-prompts/MagicPromptsSidebar.tsx`), and the stream-cadence harness (`scripts/perf/scenario.mjs`, `scripts/profile-session.mjs`).
+- **Instead of:** taking upstream's copy of each file, which still generates the ui-blocks module, keeps the OpenChamber memory prompts, reads `defaultAgent` from project settings, and has no stream-cadence scenario.
+- **Because:** each file is the surviving half of a cutover this effort made on purpose; upstream's version reintroduces the behavior the cutover removed, and the reference comparison was run against the fork blob. The drift ledger's job is to force this listing, not to prefer upstream.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** upstream rewrites one of these files on a contract the fork also accepts.
+- **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - Row 16 ships PARTIAL with task 24 blocked on the 600 ms variant-(a) budget
+
+- **Decided:** task 20 closes with row 16 recorded as PARTIAL, and task 24 keeps `Status: blocked` on its cold-path first-delta budget (variant (a), the new chat that never calls `prepare`: ~760 ms against ≤ 600 ms). The cold-prompt stall the maintainer reported is fixed and measured on both surfaces (501 ms Web / 495 ms Electron against 1529 / 1568 ms before); the remaining number is the harness variant only.
+- **Instead of:** marking row 16 PASS on the strength of the fixed user path, or clearing task 24's blocked status by redefining the budget to the variant the product actually uses.
+- **Because:** the Check names first `part.delta` on a new chat explicitly and only the maintainer can waive a budget, so a green row would be a claim the receipt does not support. The measured remainder is real work in one process on one thread — `createAgentSession`, serial agent-loop preparation before the provider call, and supervisor queueing — and the alternative is an OMP SDK seam that builds a session graph ahead of the call, which is a design decision, not an acceptance one.
+- **Mine:** yes
+- **Revisit when:** the maintainer waives the 600 ms budget for the cold variant, or the OMP SDK exposes a prebuilt session graph so a spare can construct one ahead of the prompt.
+- **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - Task 02's asar-guard revert stays unlanded
+
+- **Decided:** `16199d2a6b` (`revert(web): drop unneeded asar guard in standalone-loader symlinks`) is left out of the integration branch.
+- **Instead of:** landing it because the guard looked like dead code in a development tree.
+- **Because:** it is load-bearing for the packaged app: `ensureAgentRuntimeSymlinks` writes inside the runtime root, `packages/electron/package.json` stages `resources/agent-runtime`, and the asar copy of `@openchamber/web/resources` is read too. The commit also removed a `try/catch` around `mkdirSync`, packaged Electron was verified working **with** the guard, and no test under `packages/web/server/**/*.test.js` imports `standalone-loader` — so nothing in the suite would have caught the breakage.
+- **Mine:** yes
+- **Revisit when:** the symlink writer stops writing inside the runtime root, or a packaged-Electron test covers `standalone-loader`'s symlink path so the guard's absence fails loudly.
 - **Effort:** ux-feedback-2026-11-12

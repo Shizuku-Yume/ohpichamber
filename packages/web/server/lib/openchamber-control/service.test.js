@@ -148,7 +148,7 @@ describe('OpenChamber control service canonical consumers', () => {
   });
   it('creates native goals before CLI create, send and fork prompts', async () => {
     const h = createHarness({
-      agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true,
+      agentControlToolEnabled: true, agentWebToolEnabled: true,
       agentNotifyToolEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5000
     });
     const created = await h.control.execute('session.create', {

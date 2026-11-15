@@ -59,15 +59,20 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'display.shimmer': 'tui-only',
   'tui.motion': 'tui-only',
   'display.pinnedAgents': 'tui-only',
-  'display.subagentLivePreview': 'chat:display',
+  // OMP reads these seven only in its terminal transcript renderer
+  // (`modes/interactive-mode.ts`, `modes/utils/ui-helpers.ts`) and OMP's own
+  // session loader hardcodes the compacted-history collapse. Nothing in this
+  // app's transcript reads them, so they are terminal presentation and stay
+  // out of the GUI.
+  'display.subagentLivePreview': 'tui-only',
   'display.smoothStreaming': 'tui-only',
-  'display.hideToolActivity': 'chat:display',
-  'display.showTokenUsage': 'chat:display',
-  'display.showTurnTime': 'chat:display',
-  'display.cacheMissMarker': 'chat:display',
+  'display.hideToolActivity': 'tui-only',
+  'display.showTokenUsage': 'tui-only',
+  'display.showTurnTime': 'tui-only',
+  'display.cacheMissMarker': 'tui-only',
   'display.shellVisualization': 'tui-only',
-  'display.advisorCollapsedLines': 'chat:display',
-  'display.collapseCompacted': 'chat:display',
+  'display.advisorCollapsedLines': 'tui-only',
+  'display.collapseCompacted': 'tui-only',
   'showHardwareCursor': 'tui-only',
   'tui.imeSafeCursor': 'tui-only',
   'task.showResolvedModelBadge': 'tui-only',
@@ -120,9 +125,9 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'recap.idleSeconds': 'owned-by chat.session-recap',
   'power.sleepPrevention': 'general:power',
   'features.unexpectedStopDetection': 'engine',
-  'tools.approval': 'engine',
+  'tools.approval': 'config-only',
   'tools.approvalMode': 'tui-only',
-  'tools.restrictedFolders': 'sessions:security',
+  'tools.restrictedFolders': 'config-only',
   'skills.registryUrl': 'boundary',
   'stt.enabled': 'voice:stt',
   'stt.submitTrigger': 'voice:stt',
@@ -145,7 +150,10 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'compaction.enabled': 'sessions:compaction',
   'compaction.experimentalContextManagement': 'sessions:compaction',
   'compaction.midTurnEnabled': 'sessions:compaction',
-  'compaction.methodOrder': 'sessions:compaction',
+  // An ordered array with five choices the generic row cannot honour: a chip
+  // group would write one string into the array instead of an order. It stays
+  // config.yml-only until a control that edits the sequence exists.
+  'compaction.methodOrder': 'config-only',
   'compaction.thresholdPercent': 'sessions:compaction',
   'compaction.thresholdTokens': 'sessions:compaction',
   'compaction.handoffSaveToDisk': 'sessions:compaction',
@@ -159,7 +167,14 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'snapcompact.systemPrompt': 'engine',
   'snapcompact.toolResults': 'engine',
   'tools.format': 'engine',
-  'snapcompact.shape': 'engine',
+  // `snapcompact.shape` only picks the frame shape snapcompact prints text
+  // with, which is how OMP's terminal transcript renders an archive. This app
+  // renders no such frame, so it is terminal presentation like `display.*`.
+  'snapcompact.shape': 'tui-only',
+  // TTSR interrupts the agent mid-stream when output matches a rule pattern.
+  // `session/ttsr-coordinator.ts` runs that in the SDK, not in OMP's renderer,
+  // so these stay on the engine page: they change what the agent does, not how
+  // a transcript looks.
   'ttsr.enabled': 'engine',
   'ttsr.judge': 'engine',
   'ttsr.contextMode': 'engine',
@@ -167,7 +182,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'ttsr.repeatMode': 'engine',
   'ttsr.repeatGap': 'engine',
   'ttsr.builtinRules': 'engine',
-  'ttsr.disabledRules': 'engine',
+  'ttsr.disabledRules': 'config-only',
 
   // --- files (28) ---
   'edit.mode': 'engine',
@@ -204,7 +219,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'bash.allowCompoundCommands': 'engine',
   'bash.autoBackground.enabled': 'engine',
   'bash.gitGuard': 'engine',
-  'bash.patterns': 'engine',
+  'bash.patterns': 'config-only',
   'bashInterceptor.enabled': 'engine',
   'bash.direnv': 'engine',
   'bash.direnvLoadTimeoutMs': 'engine',
@@ -253,7 +268,9 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'hindsight.mentalModelAutoSeed': 'memory:backend',
 
   // --- model (65) ---
-  'defaultThinkingLevel': 'sessions:defaults',
+  // The Defaults section's thinking control writes it; no generic row does,
+  // because the value is a model-specific effort the picker renders.
+  'defaultThinkingLevel': 'owned-by sessions.default-thinking',
   'modelRoleStorage': 'behavior:prompt',
   'personality': 'behavior:prompt',
   'inlineToolDescriptors': 'behavior:prompt',
@@ -284,7 +301,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'model.loopGuard.toolCallReminder': 'engine',
   'model.toolCallLoopGuard.enabled': 'engine',
   'model.toolCallLoopGuard.threshold': 'engine',
-  'model.toolCallLoopGuard.exemptTools': 'engine',
+  'model.toolCallLoopGuard.exemptTools': 'config-only',
   'providers.autoThinkingMaxEffort': 'engine',
   'temperature': 'sessions:sampling',
   'topP': 'sessions:sampling',
@@ -307,7 +324,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'retry.usageAwareFallback': 'sessions:retry',
   'retry.usageReservePct': 'sessions:retry',
   'retry.usageReservePolicy': 'sessions:retry',
-  'retry.fallbackChains': 'sessions:retry',
+  'retry.fallbackChains': 'owned-by sessions.fallback-model',
   'retry.fallbackRevertPolicy': 'sessions:retry',
   'providers.anthropic.serverSideFallback': 'sessions:retry',
   'advisor.enabled': 'agents:advisor',
@@ -338,7 +355,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'task.speculativeLaunch': 'agents:subagents',
   'task.enableEffort': 'agents:subagents',
   'task.perCallModel': 'agents:subagents',
-  'task.perCallModelAllow': 'agents:subagents',
+  'task.perCallModelAllow': 'config-only',
   'task.maxConcurrency': 'engine',
   'task.workerThreads': 'agents:subagents',
   'task.enableLsp': 'agents:subagents',
@@ -356,7 +373,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'plan.autosaveDir': 'boundary',
   'goal.enabled': 'sessions:plan',
   'goal.statusInFooter': 'tui-only',
-  'goal.continuationModes': 'sessions:plan',
+  'goal.continuationModes': 'config-only',
   'title.generator': 'sessions:title',
   'title.refreshOnReplan': 'sessions:title',
   'title.refreshAfterPrompts': 'sessions:title',
@@ -367,7 +384,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'commands.enableOpencodeProject': 'commands:catalog',
 
   // --- providers (41) ---
-  'providers.maxInFlightRequests': 'providers:protocol',
+  'providers.maxInFlightRequests': 'config-only',
   'providers.ollama-cloud.maxConcurrency': 'providers:protocol',
   'providers.webSearchTimeoutSeconds': 'web-search:providers',
   'providers.antigravityEndpoint': 'boundary',
@@ -461,7 +478,7 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'async.widgets': 'engine',
   'tools.xdev': 'engine',
   'tools.xdevDocs': 'engine',
-  'tools.xdevInlineDevices': 'engine',
+  'tools.xdevInlineDevices': 'config-only',
   'tools.xdevNotices': 'engine',
   'dev.autoqa': 'engine',
   'dev.autoqaPush.endpoint': 'boundary',
@@ -492,7 +509,10 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'spotlight.experiment.enabled': 'engine',
 
   // --- Untabbed settings explicitly placed ---
-  'modelRoles': 'engine',
+  // The role record is drawn by the shared `ModelRoleEditor`, not by a generic
+  // row: Defaults (default), Agents (task, advisor), Tools (image) and Memory
+  // (memory) each edit one role through the same control.
+  'modelRoles': 'owned-by omp.modelRoles',
   'cycleOrder': 'tui-only',
   'modelPresets': 'tui-only',
   'suggestion.generator': 'owned-by chat.suggestion-generator',
@@ -534,7 +554,6 @@ function isRenderableEngineSetting(setting: {
   readonly options?: readonly unknown[];
   readonly enumValues?: readonly unknown[];
 }): boolean {
-  if (setting.id === 'modelRoles') return true;
   if (setting.type === 'boolean' || setting.type === 'number' || setting.type === 'string') return true;
   const choices = setting.options ?? setting.enumValues ?? [];
   return choices.length > 0;
@@ -558,7 +577,9 @@ export const OMP_SETTING_EXPOSED_IDS: ReadonlySet<string> = new Set(
       if (placement.type === 'owned-by') return true;
       if (placement.type === 'page') {
         if (GUI_WRITTEN_PAGES[placement.page] !== true) return false;
-        if (id === 'defaultThinkingLevel' || id === 'retry.fallbackChains') return true;
+        // A page placement is a claim that a control draws the row; a value no
+        // control can draw is placed `config-only` instead, so this is only a
+        // guard against a future mis-placement rendering an empty chip group.
         const desc = ORDERED_SETTINGS_MAP.get(id);
         return desc ? isRenderableEngineSetting({ id, ...desc }) : false;
       }

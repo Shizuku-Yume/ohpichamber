@@ -3712,7 +3712,6 @@ export const dict = {
   "chat.workStatus.breakdown.pinnedNote": "הערה",
   "chat.workStatus.breakdown.unpin": "בטל הצמדה להקשר",
   "chat.workStatus.breakdown.pinnedPlan": "תוכנית",
-  "chat.workStatus.breakdown.memory": "זיכרון הסוכן",
   "chat.workStatus.breakdown.pinnedKnowledgeSingle": "{count} מוצמד",
   "chat.workStatus.breakdown.pinnedKnowledgePlural": "{count} מוצמדים",
   "chat.workStatus.breakdown.mcp": "שרתי MCP",

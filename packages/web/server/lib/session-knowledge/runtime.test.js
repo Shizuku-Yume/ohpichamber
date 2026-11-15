@@ -12,10 +12,6 @@ const note = (overrides = {}) => ({
 const plan = (overrides = {}) => ({
   id: 'p1', file: 'p1.md', title: 'Migration plan', createdAt: 1, pinned: true, ...overrides,
 });
-const memory = (overrides = {}) => ({
-  id: 'm1', title: 'Uses bun', body: 'Full text.', type: 'fact', createdAt: 1, updatedAt: 1, ...overrides,
-});
-
 const createRuntime = (overrides = {}) => {
   const dependencies = {
     resolveProjectId: async () => PROJECT_ID,
@@ -27,7 +23,6 @@ const createRuntime = (overrides = {}) => {
   };
   if ('readSessionMetadata' in overrides) dependencies.readSessionMetadata = overrides.readSessionMetadata;
   if ('persistSessionMetadata' in overrides) dependencies.persistSessionMetadata = overrides.persistSessionMetadata;
-  if ('isAgentMemoryEnabled' in overrides) dependencies.isAgentMemoryEnabled = overrides.isAgentMemoryEnabled;
   return createSessionKnowledgeRuntime(dependencies);
 };
 
@@ -55,29 +50,20 @@ describe('what the session is owed', () => {
     expect(text).toContain('Plan body.');
   });
 
-  test('never copies memory titles, memory guidance or session-link guidance into the prompt', async () => {
-    const runtime = createRuntime({
-      agentMemoryRuntime: {
-        readAll: async () => ({
-          global: [memory({ title: 'Uses bun' }), memory({ id: 'm2', title: 'Remember the deploy flag' })],
-          project: [memory({ id: 'm3', title: 'Project memory title' })],
-          globalFailed: false, projectFailed: false,
-        }),
-      },
-    });
+  test('never copies guidance into the prompt', async () => {
+    const runtime = createRuntime();
 
     const { text } = await runtime.resolvePending(DIRECTORY, '', PINS);
 
     expect(text).toContain('Pinned note body.');
-    for (const forbidden of ['Uses bun', 'Remember the deploy flag', 'Project memory title', 'Save to it in the moment', 'session.link', 'Whenever the user gives']) {
+    for (const forbidden of ['Save to it in the moment', 'session.link', 'Whenever the user gives']) {
       expect(text).not.toContain(forbidden);
     }
   });
 
-  test('memory being on does not create an otherwise empty delivery', async () => {
+  test('nothing pinned creates no delivery', async () => {
     const runtime = createRuntime({
       projectContextRuntime: { readContext: async () => ({ notes: [], todos: [], plans: [] }) },
-      agentMemoryRuntime: { readAll: async () => ({ global: [memory()], project: [], globalFailed: false, projectFailed: false }) },
     });
 
     const { text, signature } = await runtime.resolvePending(DIRECTORY, '');
@@ -124,22 +110,12 @@ describe('what has already been delivered', () => {
     expect(a).toBe(b);
   });
 
-  test('memory changes do not change the delivered signature', () => {
+  test('no pins mean no delivered signature', () => {
     expect(buildKnowledgeSignature({ notes: [], plans: [] })).toBe('');
   });
 });
 
 describe('when a source will not load', () => {
-  test('a broken memory store does not affect pinned notes', async () => {
-    const runtime = createRuntime({
-      agentMemoryRuntime: { readAll: async () => { throw new Error('unreadable'); } },
-    });
-
-    const { text } = await runtime.resolvePending(DIRECTORY, '', PINS);
-
-    expect(text).toContain('Pinned note body.');
-  });
-
   test('an unreadable plan is marked, not dropped', async () => {
     const runtime = createRuntime({
       projectContextRuntime: {
@@ -171,7 +147,6 @@ describe('the panel summary', () => {
 
     expect(summary.notes).toEqual([{ id: 'n1', body: 'Pinned note body.' }]);
     expect(summary.plans).toEqual([{ id: 'p1', title: 'Migration plan' }]);
-    expect(summary.memory).toEqual({ global: 0, project: 0 });
   });
 });
 
@@ -263,15 +238,13 @@ describe('size', () => {
     expect(text).toContain('project knowledge truncated');
   });
 
-  test('a huge pin truncates cleanly without injecting memory or guidance', () => {
+  test('a huge pin truncates cleanly without injecting guidance', () => {
     const text = buildKnowledgeText({
       notes: [note({ body: 'x'.repeat(20_000) })],
       plans: [],
-      memory: { global: [memory()], project: [], enabled: true, complete: true },
     });
 
     expect(text.length).toBeLessThan(8_200);
-    expect(text).not.toContain('Uses bun');
     expect(text).not.toContain('Save to it in the moment');
   });
 });

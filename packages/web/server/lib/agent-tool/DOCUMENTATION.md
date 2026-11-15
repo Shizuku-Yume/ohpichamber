@@ -7,7 +7,7 @@ helper shares (`callback-address.js`). The managed tools an agent calls are
 declared in `../openchamber-control/actions.js` and dispatched by the same
 control service the CLI uses, so tool, UI and CLI behavior have one owner.
 
-The Agent Service exposes seven tools to the model from its worker
+The Agent Service exposes these tools to the model from its worker
 (`packages/agent-service/src/worker/host-tool.ts`):
 
 - `openchamber` — projects, models, sessions, scheduled tasks, workflows, and
@@ -15,18 +15,12 @@ The Agent Service exposes seven tools to the model from its worker
   `agentControlToolEnabled` is not `false`.
 - `web` — looking at and interacting with the page in OpenChamber's browser
   panel. Enabled while `agentWebToolEnabled` is not `false`.
-- `memory` — `memory.*`, the store that survives across sessions. Enabled
-  while `agentMemoryToolEnabled` is `true`.
 - `openchamber_knowledge` — the project's Notes, Todos and Plans (below).
   Enabled while `agentKnowledgeToolEnabled` is not `false`.
 - `notify` — `notify.send`, a notification through `lib/notifications/emit-route.js`
   (same limits and rate window as `POST /api/notifications/emit`). Off by
   default: enabled only while `agentNotifyToolEnabled` is `true`, and the
   control service refuses the action when the setting is off.
-- `openchamber_image` — `image.generate`, an image made or edited by the image
-  model the user chose in Settings (`../openchamber-control/generate-image.js`,
-  which reads `agentImageModel`). Off by default: the control service runs it
-  only while `agentImageToolEnabled` is `true`.
 - `openchamber_render` — `render.page`, a page shown inline in the chat from
   its HTML or openui-lang program (`../openchamber-control/render-page.js`).
   With `awaitAnswer` the call waits for the user's answer and returns their

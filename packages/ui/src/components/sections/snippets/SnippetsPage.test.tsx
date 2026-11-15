@@ -87,3 +87,12 @@ test('same-name templates select by opaque identity; external Markdown remains r
   expect(container.querySelector('textarea')?.readOnly).toBe(false);
   expect(container.textContent).not.toContain('Aliases');
 });
+
+test('the empty pane keeps the page heading so Settings can focus it', async () => {
+  await act(async () => {
+    await useSnippetsStore.getState().loadSnippets();
+    root.render(<ThemeSystemProvider><I18nProvider><TooltipProvider><SnippetsSidebar /><SnippetsPage /></TooltipProvider></I18nProvider></ThemeSystemProvider>);
+  });
+  const heading = container.querySelector('[data-settings-page-heading]');
+  expect(heading?.textContent).toBe('Prompt Templates');
+});

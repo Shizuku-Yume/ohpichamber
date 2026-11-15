@@ -1033,7 +1033,6 @@ interface UIStore {
  sessionWorkEnabled: boolean;
  /** Let Jev offer an AI review or a walkthrough after a turn that changed the project. */
  sessionReviewOfferEnabled: boolean;
- sessionGoalEnabled: boolean;
  sessionGoalDefaultBudgetEnabled: boolean;
  sessionGoalDefaultBudget: number;
  collapsibleThinkingBlocks: boolean;
@@ -1175,11 +1174,6 @@ interface UIStore {
  /** The isolated-spaces switch as saved; the server applies it at its next start. */
  isolatedSpacesEnabled: boolean;
  /**
-  * Whether this build has agent memory at all. Server-owned and not
-  * persisted: an unreleased feature must not come back from a stale cache.
-  */
- agentMemoryFeatureAvailable: boolean;
- /**
   * Whether this build has agent workflows (`OPENCHAMBER_WORKFLOWS_ENABLE`).
   * Server-owned and not persisted, for the same reason as the memory flag.
   */
@@ -1191,11 +1185,6 @@ interface UIStore {
  routingFeatureAvailable: boolean;
  /** Whether the overview page exists at all; the server says, from `OPENCHAMBER_OVERVIEW_ENABLED`. */
  overviewFeatureAvailable: boolean;
- /**
-  * When the user last looked at each memory scope, keyed by scope. Drives the
-  * new/changed badges; there is no stored review state.
-  */
- agentMemoryViewedAt: Record<string, number>;
  /** Active tab of the project context panel (notes/todos/plans). */
  projectContextTab: string;
  /**
@@ -1358,7 +1347,6 @@ interface UIStore {
  setSuggestionGenerator: (value: 'session' | 'small' | 'off') => void;
  setSessionWorkEnabled: (value: boolean) => void;
  setSessionReviewOfferEnabled: (value: boolean) => void;
- setSessionGoalEnabled: (value: boolean) => void;
  setSessionGoalDefaultBudgetEnabled: (value: boolean) => void;
  setSessionGoalDefaultBudget: (value: number) => void;
  setCollapsibleThinkingBlocks: (value: boolean) => void;
@@ -1463,11 +1451,9 @@ interface UIStore {
  setPlanModeAllowAgents: (value: boolean) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
- setAgentMemoryFeatureAvailable: (value: boolean) => void;
  setAgentWorkflowFeatureAvailable: (value: boolean) => void;
  setRoutingFeatureAvailable: (value: boolean) => void;
  setOverviewFeatureAvailable: (value: boolean) => void;
- markAgentMemoryViewed: (key: string, viewedAt: number) => void;
  setProjectContextTab: (value: string) => void;
  openProjectKnowledgePlan: (directory: string, projectContextId: string, planId: string) => void;
  clearProjectKnowledgePlanRequest: () => void;
@@ -1609,7 +1595,6 @@ export const useUIStore = create<UIStore>()(
     suggestionGenerator: 'session',
     sessionWorkEnabled: true,
     sessionReviewOfferEnabled: false,
-    sessionGoalEnabled: true,
     sessionGoalDefaultBudgetEnabled: false,
     sessionGoalDefaultBudget: 200_000,
     collapsibleThinkingBlocks: true,
@@ -1705,11 +1690,9 @@ export const useUIStore = create<UIStore>()(
     planModeAllowAgents: false,
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
-    agentMemoryFeatureAvailable: false,
     agentWorkflowFeatureAvailable: false,
     routingFeatureAvailable: false,
     overviewFeatureAvailable: false,
-    agentMemoryViewedAt: {},
     projectContextTab: 'notes',
     projectKnowledgePlanRequest: null,
     inputSpellcheckEnabled: false,
@@ -2699,9 +2682,6 @@ export const useUIStore = create<UIStore>()(
      set({ sessionReviewOfferEnabled: value });
     },
 
-    setSessionGoalEnabled: (value) => {
-     set({ sessionGoalEnabled: value });
-    },
 
 
     setSessionGoalDefaultBudgetEnabled: (value) => {
@@ -3298,9 +3278,6 @@ export const useUIStore = create<UIStore>()(
       if (workflowTabIds.length > 0) get().closeContextPanelTabs(directory, workflowTabIds);
      }
     },
-    setAgentMemoryFeatureAvailable: (value) => {
-     set({ agentMemoryFeatureAvailable: value });
-    },
     setAgentWorkflowFeatureAvailable: (value) => {
      set({ agentWorkflowFeatureAvailable: value });
     },
@@ -3310,15 +3287,6 @@ export const useUIStore = create<UIStore>()(
     // Losing the feature closes the page, so nothing of it stays on screen.
     setOverviewFeatureAvailable: (value) => {
      set(value ? { overviewFeatureAvailable: true } : { overviewFeatureAvailable: false, isOverviewOpen: false });
-    },
-    markAgentMemoryViewed: (key, viewedAt) => {
-     set((state) => ({
-      // Never moves backwards: a stale unmount landing after a newer look
-      // would otherwise resurrect badges the user has already cleared.
-      agentMemoryViewedAt: viewedAt > (state.agentMemoryViewedAt[key] ?? 0)
-       ? { ...state.agentMemoryViewedAt, [key]: viewedAt }
-       : state.agentMemoryViewedAt,
-     }));
     },
     setProjectContextTab: (value) => {
      set({ projectContextTab: value });
@@ -3770,7 +3738,6 @@ export const useUIStore = create<UIStore>()(
      suggestionGenerator: state.suggestionGenerator,
      sessionWorkEnabled: state.sessionWorkEnabled,
      sessionReviewOfferEnabled: state.sessionReviewOfferEnabled,
-     sessionGoalEnabled: state.sessionGoalEnabled,
      sessionGoalDefaultBudgetEnabled: state.sessionGoalDefaultBudgetEnabled,
      sessionGoalDefaultBudget: state.sessionGoalDefaultBudget,
      collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,
@@ -3847,7 +3814,6 @@ export const useUIStore = create<UIStore>()(
      agentRenderToolEnabled: state.agentRenderToolEnabled,
      agentWorkflowToolEnabled: state.agentWorkflowToolEnabled,
      isolatedSpacesEnabled: state.isolatedSpacesEnabled,
-     agentMemoryViewedAt: state.agentMemoryViewedAt,
      inputSpellcheckEnabled: state.inputSpellcheckEnabled,
      largeTextPasteBehavior: state.largeTextPasteBehavior,
      selectionApprovalText: state.selectionApprovalText,

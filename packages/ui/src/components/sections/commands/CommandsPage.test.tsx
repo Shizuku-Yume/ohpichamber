@@ -182,6 +182,9 @@ test('a built-in command is not editable here and the page keeps only template f
   // A built-in has no template file, so the page offers no editor for it.
   expect(container.textContent).toContain('Select a command from the sidebar');
   expect(container.querySelector('textarea')).toBeNull();
+  // The empty pane still has the page heading Settings focuses on navigation.
+  const heading = container.querySelector('[data-settings-page-heading]');
+  expect(heading?.textContent).toBe('Commands');
 });
 
 test('locale switch preserves unsaved custom command draft without rehydrating', async () => {

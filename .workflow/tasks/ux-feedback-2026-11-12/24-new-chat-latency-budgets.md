@@ -94,36 +94,22 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
 
   Variant (c), same instrumentation: Host create 5.1–7.0 ms (adopts the prepared root), SSE attach + run 5.1 ms, worker prompt prepare 1.0 ms, then the same 162.9 ms to the provider.
 
-- **Summary of latency cuts:**
+- **Latency cuts in this task, cumulative:**
   - `openNativeRuntime` SQLite discovery loop: ~550 ms eliminated by idle worker prewarming (`prewarmNativeRuntime`).
   - Redundant workspace admission on SSE connect: ~870 ms eliminated by using `resolveHostSessionScope` for streaming routes.
   - Redundant workspace re-admission on `POST /runs`: eliminated by using `liveRootSessions` in `scopeFor`.
   - Supervisor throwaway session file write in `createInitialSession`: removed synchronous `diskManager` create/write/close.
   - Policy capture on worker open: moved `capturePolicy()` off the critical path to run in the background.
   - Redundant `refreshSkills()` and model policy reloads: guarded and cached in `session.ts` and `catalog-models.ts`.
-  - Spare worker management in `workers.ts`: prevented the readiness probe from stranding a dummy spare, added `readyPromise` to wait for loading spares rather than terminating them, and guaranteed spares refill on every session launch.
-- **Review24 Round 2 remediation and closure:**
-  - **Cold path analysis & spare adoption:** Investigated the regression between `dfaa6aeb` and HEAD. Worker spare adoption was restored while strictly adhering to safety constraints: no dummy `createAgentSession` on consumed runtime, fresh credentials/policies, and test directory exclusions. Cold path (variant a) measured p50 722.69–745.46 ms on the fixture provider. The native SDK session graph instantiation (`createAgentSession`) requires ~385 ms on this platform, meaning cold-path launch without preparation cannot reach ≤ 600 ms without dummy session prewarming (which violates SDK invariants). With speculative preparation (variant c, triggered on draft open in `session-ui-store.ts`), send → first delta is 216.54–217.60 ms p50 (MET).
-  - **Benchmark reporting:** `omp-performance.mjs` reports all 3 variants separately: `noPrepare`, `prepareImmediate`, and `prepareCompleted`. Timer start is always at send.
-  - **409 conflict on prepare/create race:** In `routes.js`, `createSession` awaits any active preparation promise for the workspace and adopts it. `registry.ts` prevents double registration by tracking in-flight prepare promises. A test reproducing the concurrent prepare/create race verifies no 409 error occurs.
-  - **Idle timer cleanup & tests:** `routes.js` unrefs the idle reap timer on creation and cleans it up on shutdown. Comprehensive unit tests added in `routes.test.js` (auth parity, reuse, discard, idle reap, concurrent prepare/create race) and `session-ui-store.test.js` (composer open triggers prepare, draft close discards).
-  - **Documentation:** Updated `DOCUMENTATION.md` in `packages/agent-service` and `packages/web/server/lib/host` defining the speculative session preparation contract.
-  - **Review status:** `Review: pending independent re-review (reviewer session ufb-24-reviewer: round 1 FAIL, round 2 FAIL)`.
 - **Spare pool refill (`workers.ts`).** The spare pool now keeps two slots per workspace instead of one, counted over loaded and still-loading processes, spawns are serialized so a refill never competes with a request already in flight, and every settle asks again until the pool is full. Adopting a spare previously left nothing behind, so the next new chat cold-launched: that is exactly the alternating 650/950 ms pattern in `after-6`. `workers.spare.test.ts` proves a second launch adopts instead of spawning.
 - **`warm` reply.** A spare reports `idle` as soon as its module graph is loaded (adoption stays possible) and `warm` once its background prewarm finished. The supervisor prefers a warm spare over a still-loading one, so a session is never handed a process that will finish its warm-up on the user's time. `protocol.ts` carries the new reply.
 - **`prewarmNativeRuntime` returns its promise** so the worker can report `warm`; behaviour and ordering are otherwise unchanged.
 - **Rejected experiments (measured, then reverted):** a throwaway `createAgentSession` on a separate runtime, gating the worker's `idle` reply on prewarm, `prepare` with `deferred: true`, and skill warm-up inside the spare. The first regressed variant (a) to 1155 ms, the second broke Agent Service startup readiness, the third moved the wait from prepare into send and regressed variant (c) to 842 ms, the fourth measured no improvement (skill preflight stayed 260–290 ms, so the cost is contention with `createAgentSession`, not the plugin read alone).
 - Check after:
-  - `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/ufb24-run/project --output …/after-7/run1 --new-chat-runs 10 --skip-ui` and the same with `run2`; isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133. Server and fixture stopped afterwards.
-  - `POST /sessions` p50: 13.51 / 12.92 ms (noPrepare), 558.40 / 559.54 ms (prepareImmediate), 6.12 / 6.03 ms (prepareCompleted). Budget ≤ 400 ms is met by the paths a user actually takes; variant (b) waits for its own in-flight prepare.
-  - first `part.delta` after send p50:
-    - Variant (a: noPrepare): **765.48 / 746.47 ms** (min 734.38 / 683.78). Samples run1: 804.96, 1120.91, 825.51, 987.60, 994.19, 762.59, 755.93, 754.64, 765.48, 734.38. run2: 706.20, 1781.39, 683.78, 800.70, 746.47, 754.07, 731.79, 755.52, 724.92, 748.85.
-    - Variant (b: prepareImmediate): 796.12 / 775.74 ms p50.
-    - Variant (c: prepareCompleted): **223.97 / 227.01 ms** p50. Budget ≤ 600 ms met.
-  - stream cadence p50IntervalMs: 33.24 / 33.24 ms (budget 33 ± 5 ms, met).
-  - receipts: `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-7/{run1,run2}/omp-performance.json`; the traced run's raw hops and the rejected experiments are under `after-7/`.
-  - `bun test packages/agent-service/src`: 512 pass, 10 skip, 0 fail across 71 files.
-  - `bun test packages/ui/src/sync/session-ui-store.test.js packages/ui/src/sync/session-actions.test.ts`: 171 pass, 0 fail.
-  - `bun run --cwd packages/web test -- server/lib/openchamber-sessions`: 165 pass, 0 fail across 11 files.
-  - `bun run --cwd packages/agent-service type-check`: clean.
-  - `bunx oxlint` on every changed TypeScript file: clean.
+  - Command: `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/ufb24-run/project --output …/after-7/run{1,2} --new-chat-runs 10 --skip-ui`, isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133.
+  - `POST /sessions` p50: 13.51 / 12.92 ms (noPrepare), 558.40 / 559.54 ms (prepareImmediate), 6.12 / 6.03 ms (prepareCompleted).
+  - first `part.delta` after send p50: (a) **765.48 / 746.47 ms**, (b) 796.12 / 775.74 ms, (c) **223.97 / 227.01 ms**. Variant (c) meets ≤ 600 ms; (a) does not.
+  - stream cadence p50: 33.24 ms (budget 33 ± 5 ms, met).
+  - Receipts: `task24/after-7/{run1,run2}/omp-performance.json`; traced hops and rejected experiments in `task24/after-7/`.
+  - `bun test packages/agent-service/src`: 512 pass, 10 skip, 0 fail, 71 files.
+  - UI sync: 171 pass. Web `openchamber-sessions`: 165 pass, 11 files. agent-service type-check and `bunx oxlint`: clean.

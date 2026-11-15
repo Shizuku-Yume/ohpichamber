@@ -596,7 +596,6 @@ settings-registry	agentMemoryToolEnabled	## 2026-11-13 - OMP owns image generati
 settings-sanitizer	agentImageModel	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
 settings-sanitizer	agentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
 settings-sanitizer	agentMemoryToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
-settings-sanitizer	agentMemoryViewedAt	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
 settings-store	useUIStore.agentImageModel	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
 settings-store	useUIStore.agentImageToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber image tool in favor of OMP generate_image
 settings-store	useUIStore.agentMemoryToolEnabled	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend

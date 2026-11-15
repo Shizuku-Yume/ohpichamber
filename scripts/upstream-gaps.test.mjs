@@ -171,6 +171,18 @@ test('an allowlist row must cite a decisions.md heading or an existing OMP modul
   assert.match(result.output, /lack a decisions\.md heading/);
 });
 
+test('an allowlist row for a gap that no longer exists fails', () => {
+  // A removed gap leaves its row behind: the citation still resolves, so only a
+  // stale-row check catches it, and the row would otherwise hide a future
+  // regression of the same key under an old decision.
+  const fixture = makeFixture(baseFiles());
+  fixture.fork('scripts/upstream-gaps.allowlist.tsv', `${ALLOWLIST_HEADER}ui-call-no-route\t/api/tracker/things\t## 2026-01-01 - Keep the tracker surface\tCovered while the route existed.\n`);
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /describe a gap that no longer exists/);
+  assert.match(result.output, /ui-call-no-route:\/api\/tracker\/things/);
+});
+
 const ROW_CONTROL = `export const Row = ({ setting }) => {
   const anchor = \`omp.\${setting.id}\`;
   return <Checkbox settingsItem={anchor} />;

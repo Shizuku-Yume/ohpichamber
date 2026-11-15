@@ -153,11 +153,20 @@ for (const item of settingsOut) {
 
 // 6. Check detected gaps against allowlist
 const unallowlistedGaps = [];
+const detectedKeys = new Set();
 for (const gap of detectedGaps) {
   const key = `${gap.class}:${gap.item}`;
+  detectedKeys.add(key);
   if (!allowlist.has(key)) {
     unallowlistedGaps.push(gap);
   }
+}
+
+// An allowlist row whose gap no longer exists is dead weight: it outlives the
+// code it described and hides a future regression under a stale citation.
+const staleRows = [];
+for (const [key, row] of allowlist) {
+  if (!detectedKeys.has(key)) staleRows.push({ key, line: row.line });
 }
 
 console.log(`[upstream-gaps] Total detected gaps: ${detectedGaps.length}`);
@@ -171,6 +180,11 @@ if (invalidCitations.length > 0) {
   }
 }
 
+if (staleRows.length > 0) {
+  console.error(`\n[upstream-gaps] FAILED: ${staleRows.length} allowlist rows describe a gap that no longer exists:`);
+  for (const row of staleRows) console.error(`  - line ${row.line} [${row.key}]`);
+}
+
 if (unallowlistedGaps.length > 0) {
   console.error('\n[upstream-gaps] FAILED: Found unallowlisted merge gaps:');
   for (const g of unallowlistedGaps) {
@@ -178,7 +192,7 @@ if (unallowlistedGaps.length > 0) {
   }
 }
 
-if (unallowlistedGaps.length > 0 || invalidCitations.length > 0) {
+if (unallowlistedGaps.length > 0 || invalidCitations.length > 0 || staleRows.length > 0) {
   if (CHECK_MODE) {
     process.exit(1);
   }

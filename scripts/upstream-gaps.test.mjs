@@ -170,3 +170,45 @@ test('an allowlist row must cite a decisions.md heading or an existing OMP modul
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /lack a decisions\.md heading/);
 });
+
+const ROW_CONTROL = `export const Row = ({ setting }) => {
+  const anchor = \`omp.\${setting.id}\`;
+  return <Checkbox settingsItem={anchor} />;
+};
+`;
+
+const SEARCH_ITEMS = `export const SETTINGS_SEARCH_ITEMS = [
+  { id: 'omp.bash.enabled', page: 'omp' },
+];
+`;
+
+const PLACEMENTS = `const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
+  'bash.enabled': 'engine',
+};
+const GUI_WRITTEN_PAGES: Readonly<Record<string, true>> = {
+  sessions: true,
+};
+`;
+
+test("a row component's anchor template counts for the settings it renders", () => {
+  const fixture = makeFixture({
+    ...baseFiles(),
+    'packages/agent-service/src/worker/settings-ui.ts': PLACEMENTS,
+    'packages/ui/src/components/RowControl.tsx': ROW_CONTROL,
+    'packages/ui/src/lib/settings/search.ts': SEARCH_ITEMS,
+  });
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 0, result.output);
+});
+
+test('a search entry the row template cannot reach is still a gap', () => {
+  const fixture = makeFixture({
+    ...baseFiles(),
+    'packages/agent-service/src/worker/settings-ui.ts': PLACEMENTS,
+    'packages/ui/src/RowControl.tsx': ROW_CONTROL,
+    'packages/ui/src/lib/settings/search.ts': SEARCH_ITEMS.replace('bash.enabled', 'bash.removed'),
+  });
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 1, result.output);
+  assert.match(result.output, /\[settings-search\] omp\.bash\.removed/);
+});

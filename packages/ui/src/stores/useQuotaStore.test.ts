@@ -3,6 +3,11 @@ import type { ProviderResult } from "@/types"
 
 let runtimeKey = "url:https://instance-a"
 let isInitialized = true
+// The Host resolves every quota read through a workspace: `/api/quota/providers`
+// rejects a request with no `workspaceId`, so a store instance without one can
+// answer nothing. The fixtures below report themselves ready the same way the
+// real boot does, with the catalog's workspace published.
+const workspaceId: string = "ws-quota-test"
 const fetched: string[] = []
 
 type StubPayload = { usageDropdownProviders: string[] } | { extensions: never[] } | ProviderResult
@@ -48,7 +53,7 @@ mock.module("@/lib/runtime-fetch", () => ({
 const configStoreModule = await import("@/stores/useConfigStore")
 mock.module("@/stores/useConfigStore", () => ({
   ...configStoreModule,
-  useConfigStore: { ...configStoreModule.useConfigStore, getState: () => ({ isInitialized }) },
+  useConfigStore: { ...configStoreModule.useConfigStore, getState: () => ({ isInitialized, workspaceId }) },
 }))
 
 const { useQuotaStore } = await import("./useQuotaStore")
@@ -205,11 +210,17 @@ describe("Quotas are requested only for providers with a credential", () => {
     expect(results.find((entry) => entry.providerId === "codex")).toMatchObject({ configured: false, usage: null, error: "Not configured" })
   })
 
-  test("a list that failed asks every provider and reads as no credential on none", async () => {
+  test("a provider list that failed is one error, not a request per provider", async () => {
+    // A failed catalog read used to fan out to every provider, which turned one
+    // outage into 26 failure rows. "Could not say" is an error state, never an
+    // authoritative "nothing is configured".
     configuredProviders = null
-    await useQuotaStore.getState().fetchQuotas(["claude", "codex"])
+    const answered = await useQuotaStore.getState().fetchQuotas(["claude", "codex"])
 
-    expect(requested()).toEqual(["/api/quota/claude", "/api/quota/codex"])
+    expect(answered).toBe(false)
+    expect(requested()).toEqual([])
+    expect(useQuotaStore.getState().phase).toBe("error")
+    expect(useQuotaStore.getState().error).toBe("Quota provider catalog unavailable")
   })
 
   test("a removed credential clears the sample and the error of the account it belonged to", async () => {

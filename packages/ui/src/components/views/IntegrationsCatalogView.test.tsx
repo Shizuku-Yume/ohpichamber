@@ -1,4 +1,5 @@
-import { afterAll, afterEach, beforeEach, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
+import type { MCPOAuthResult } from '@openchamber/agent-contract';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Element as HappyElement, HTMLElement, Window } from 'happy-dom';
@@ -28,7 +29,36 @@ for (const [key, value] of Object.entries({
   descriptors.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
   Object.defineProperty(globalThis, key, { value, configurable: true });
 }
+// The sign-in panel the detail page mounts reads the same client; the catalog's
+// own install path must not reach the network in these tests.
+const oauthStarts: string[] = [];
+const connects: string[] = [];
+const infos: string[] = [];
+const successes: string[] = [];
+const errors: string[] = [];
+const oauthReads: string[] = [];
+const actualClient = await import('@/api/canonicalClient');
+mock.module('@/api/canonicalClient', () => ({
+  ...actualClient,
+  canonicalClient: {
+    ...actualClient.canonicalClient,
+    resolveWorkspace: async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }),
+    getWorkspaceMcpOAuth: async (): Promise<MCPOAuthResult> => {
+      oauthReads.push('read');
+      return { serverId: 'linear', persistedRevision: '1', worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, status: 'unauthenticated', authenticated: false };
+    },
+    submitWorkspaceMcpOAuth: async (_workspaceId: string, serverId: string): Promise<MCPOAuthResult> => {
+      oauthStarts.push(serverId);
+      return { serverId, persistedRevision: '1', worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, status: 'pending', authenticated: false, pendingFlow: { flowId: 'flow', authorizationUrl: 'https://auth.example.test/authorize' } };
+    },
+  },
+}));
 const { createRoot } = await import('react-dom/client');
+const { toast } = await import('@/components/ui/toast');
+// The page's own toasts are its user-visible report; record them per level.
+spyOn(toast, 'success').mockImplementation((message) => { successes.push(String(message)); return 'id'; });
+spyOn(toast, 'info').mockImplementation((message) => { infos.push(String(message)); return 'id'; });
+spyOn(toast, 'error').mockImplementation((message) => { errors.push(String(message)); return 'id'; });
 const { I18nProvider } = await import('@/lib/i18n');
 const { useUIStore } = await import('@/stores/useUIStore');
 const { useMcpConfigStore } = await import('@/stores/useMcpConfigStore');
@@ -65,7 +95,19 @@ const appliedMcpMutation = () => ({
   result: {
     kind: 'mcp' as const,
     status: 'applied' as const,
-    configuration: { workspaceId: 'workspace', persistedRevision: '1', config: { servers: [] } },
+    outcome: 'applied' as const,
+    configuration: { workspaceId: 'workspace', persistedRevision: '1', config: { servers: [] as typeof linearServer[] } },
+    workers: [],
+  },
+});
+const needsAuthMcpMutation = () => ({
+  ok: true as const,
+  outcome: 'saved-needs-auth' as const,
+  result: {
+    kind: 'mcp' as const,
+    status: 'no-active-workers' as const,
+    outcome: 'saved-needs-auth' as const,
+    configuration: { workspaceId: 'workspace', persistedRevision: '1', config: { servers: [linearServer] } },
     workers: [],
   },
 });
@@ -95,10 +137,21 @@ beforeEach(() => {
     createMcp: async () => appliedMcpMutation(),
     deleteMcp: async () => appliedMcpMutation(),
   });
+  oauthStarts.length = 0;
+  oauthReads.length = 0;
+  connects.length = 0;
+  infos.length = 0;
+  successes.length = 0;
+  errors.length = 0;
   useMcpStore.setState({
     refresh: async () => undefined,
-    connect: async () => undefined,
-    getStatusForDirectory: () => EMPTY_RUNTIME_STATUS,
+    connect: async (serverId: string) => { connects.push(serverId); },
+    testConnection: async (serverId: string) => ({ workspaceId: 'workspace', serverId, persistedRevision: '1', status: 'failed' as const, error: { code: 'MCP_AUTH_REQUIRED', detail: 'HTTP 403 forbidden', retryable: false } }),
+    // A server the test saved carries the probe the Agent Service reported for
+    // it: sign-in required once it exists, nothing before.
+    getStatusForDirectory: () => useMcpConfigStore.getState().serversByDirectory['/repo']?.some((saved) => saved.serverId === 'linear')
+      ? linearAuthRequiredStatus
+      : EMPTY_RUNTIME_STATUS,
   });
   usePluginsStore.setState({
     loadPlugins: async () => true,
@@ -343,4 +396,82 @@ test('no OpenCode-only plugin entries are offered', async () => {
   expect(body.textContent?.includes('Search Providers')).toBe(false);
   // OpenChamber's own extensions stay.
   expect(body.textContent?.includes('Excalidraw')).toBe(true);
+});
+
+const settle = async (turns = 20) => {
+  for (let turn = 0; turn < turns; turn += 1) await act(async () => { await Promise.resolve(); });
+};
+
+/** Installs the entry the way the user does: open the card, Install, confirm the scope. */
+const installFromBrowse = async (name: string) => {
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], name);
+  if (!card) throw new Error(`${name} card missing`);
+  await act(async () => card.click());
+  await clickButton('Install');
+  const confirm = [...browser.document.body.querySelectorAll('button')].filter((candidate) => candidate.textContent?.trim() === 'Install').at(-1);
+  if (!confirm) throw new Error('Scope dialog confirm missing');
+  await act(async () => confirm.click());
+  await settle();
+};
+
+/** Saves the server the way the store does after a needs-sign-in apply. */
+const saveLinear = () => {
+  const configuration = { workspaceId: 'workspace', persistedRevision: '1', config: { servers: [linearServer] } };
+  useMcpConfigStore.setState({
+    serversByDirectory: { '/repo': [linearServer] },
+    configurationsByDirectory: { '/repo': configuration },
+  });
+};
+
+test('a saved needs-sign-in install opens the connection card and never reports an install error', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  useMcpConfigStore.setState({
+    createMcp: async () => { saveLinear(); return needsAuthMcpMutation(); },
+  });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  await installFromBrowse('Linear');
+
+  expect(errors).toEqual([]);
+  expect(infos).toEqual(['Linear saved. Sign in to finish.']);
+  expect(successes).toEqual([]);
+  expect(browser.document.body.querySelector('main h1')?.textContent).toBe('Linear');
+  expect(browser.document.body.textContent?.includes('Connection')).toBe(true);
+  // The install is one action: the panel starts the only sign-in method itself.
+  expect(oauthStarts).toEqual(['linear']);
+});
+
+test('a needs-sign-in result that arrives as a refused apply is still a sign-in, not an error', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  // The store turns this refusal into success-with-action; the view must honour
+  // the outcome rather than the `ok` shape it happened to travel in.
+  useMcpConfigStore.setState({
+    createMcp: async () => { saveLinear(); return { ...needsAuthMcpMutation(), ok: false as unknown as true, error: 'MCP_AUTH_REQUIRED' }; },
+  });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  await installFromBrowse('Linear');
+
+  expect(errors).toEqual([]);
+  expect(infos).toEqual(['Linear saved. Sign in to finish.']);
+  expect(successes).toEqual([]);
+  expect(browser.document.body.textContent?.includes('Connection')).toBe(true);
+});
+
+test('reinstalling a saved unauthenticated server never toasts success', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  // Saved, but no probe evidence yet: the reinstall reconfigures the server
+  // rather than skipping it as installed.
+  useMcpConfigStore.setState({ serversByDirectory: { '/repo': [linearServer] } });
+  useMcpStore.setState({ getStatusForDirectory: () => EMPTY_RUNTIME_STATUS });
+  useMcpConfigStore.setState({
+    updateMcp: async () => needsAuthMcpMutation(),
+  });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  await installFromBrowse('Linear');
+
+  expect(successes).toEqual([]);
+  expect(errors).toEqual([]);
+  expect(infos).toEqual(['Linear saved. Sign in to finish.']);
 });

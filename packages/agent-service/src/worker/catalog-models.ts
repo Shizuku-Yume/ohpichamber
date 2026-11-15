@@ -729,8 +729,10 @@ export class NativeModels {
 
  async selection(input: ModelSelection, controls?: Pick<CompletionRequest, 'variant' | 'reasoningEffort'>): Promise<ResolvedModelSelection> {
   await this.load();
-  await this.context.modelRegistry.reapplyModelPolicies();
-  await this.context.authStorage.credentials.reload();
+  await Promise.all([
+   this.context.modelRegistry.reapplyModelPolicies(),
+   this.context.authStorage.credentials.reload(),
+  ]);
   if (cfgDisabledProviders.get(this.context.settings).includes(input.providerId)) {
    throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider is disabled');
   }

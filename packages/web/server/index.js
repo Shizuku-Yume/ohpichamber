@@ -1548,6 +1548,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  },
  syncToHmrState: () => { },
  hostAgentRuntime,
+ openChamberSessionService,
  sessionAssistRuntime,
  sessionWorkRuntime,
  contextObligatoryRuntime,

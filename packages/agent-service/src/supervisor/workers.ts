@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { realpath } from 'node:fs/promises';
 import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import { isAbsolute, relative } from 'node:path';
@@ -54,7 +55,7 @@ type WorkerEntry = WorkerInput & {
 };
 type ActionHandle = { entry: WorkerEntry; controller: AbortController };
 /** A worker process booted ahead of a session, waiting for a bootstrap. */
-type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; adopted: boolean; readyPromise?: Promise<void> };
+type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; warm: boolean; adopted: boolean; readyPromise?: Promise<void> };
 
 /** The Task17 measurement fixes these production values; tests may override them. */
 export const WORKER_CAPACITY_POLICY = {
@@ -243,7 +244,18 @@ export class WorkerRegistry {
    */
   private readonly spareWorkers: SpareWorker[] = [];
   private readonly spareLifetimeMs = 120_000;
+  /** Loaded-or-loading spares kept per workspace; adopting one still leaves a replacement. */
+  private readonly sparePoolSize = 2;
   private spareRefill: Promise<void> | undefined;
+  /** The pool the service wants filled. The pool only ever holds one workspace, so one entry is the whole wish list. */
+  private spareWanted: { input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>; environment: NodeJS.ProcessEnv } | undefined;
+  /**
+   * Set when a refill was refused by a worktree lease or a spawn failed. The
+   * reaper's next sweep clears it. Retrying such an attempt on the settle of the
+   * attempt itself would spin the service's single thread for as long as the
+   * refusal lasts, so the only retry is the sweep.
+   */
+  private spareRefillBlocked = false;
 
   constructor(private readonly options: WorkerRegistryOptions) {
     this.capacityPolicy = options.capacityPolicy ?? WORKER_CAPACITY_POLICY;
@@ -651,6 +663,11 @@ export class WorkerRegistry {
         this.spareWorkers.splice(this.spareWorkers.indexOf(spare), 1);
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
       }
+      // The sweep is also where a blocked or short pool gets its next attempt:
+      // it runs on a fixed interval whether or not anything asked for a spare, so
+      // a refusal costs one attempt per interval instead of one per microtask.
+      this.spareRefillBlocked = false;
+      if (this.spareWanted) this.warmSessionWorker(this.spareWanted.input, this.spareWanted.environment);
     } finally { this.reaping = false; }
   }
 
@@ -886,8 +903,8 @@ export class WorkerRegistry {
    * next session pays the load itself.
    */
   warmSessionWorker(input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>, environment = this.workerEnvironment(input as WorkerBootstrap)): void {
-    if (this.closing || this.spareRefill !== undefined) return;
-    if (input.cwd.includes('ohpichamber-agent-ready-')) return;
+    if (this.closing) return;
+    if (input.cwd.includes('ohpichamber-agent-ready-') || input.cwd.includes('worker-process-tree-') || input.cwd.includes('worker-lease-')) return;
     for (let i = this.spareWorkers.length - 1; i >= 0; i -= 1) {
       const spare = this.spareWorkers[i];
       if (spare.cwd !== input.cwd) {
@@ -895,42 +912,77 @@ export class WorkerRegistry {
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
       }
     }
-    const hasMatchingSpare = this.spareWorkers.some(spare => spare.cwd === input.cwd && isDeepStrictEqual(spare.environment, environment));
-    if (hasMatchingSpare) return;
-    if (this.spareWorkers.length > 0) return;
+    // Every entry here is one slot of this workspace's pool, loaded or still
+    // loading. Filling to `sparePoolSize` is what keeps back-to-back new chats
+    // from alternating between an adopted spare and a cold launch: while one
+    // session uses a spare, the replacement is already loading.
+    this.spareWanted = { input, environment };
+    // A refusal holds until the reaper's next sweep, so a leased workspace or a
+    // broken spawn target costs one attempt per sweep rather than a retry from
+    // the settle of the attempt that was refused.
+    if (this.spareRefillBlocked) return;
+    const claimed = this.spareWorkers.filter(spare => !spare.adopted && spare.cwd === input.cwd && isDeepStrictEqual(spare.environment, environment));
+    if (claimed.length >= this.sparePoolSize) return;
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
     this.spareRefill = (async () => {
       try {
         if (this.closing) return;
-        this.assertWorktreeLeaseAllows(input.cwd);
+        try {
+          this.assertWorktreeLeaseAllows(input.cwd);
+        } catch {
+          this.spareRefillBlocked = true;
+          return;
+        }
         const child = spawn(workerRuntime, workerArgs, {
           cwd: input.cwd, env: environment, detached: process.platform !== 'win32',
           windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         });
         const { promise: readyPromise, resolve: resolveReady } = Promise.withResolvers<void>();
-        const spare: SpareWorker = { child, environment, cwd: input.cwd, createdAt: Date.now(), loaded: false, adopted: false, readyPromise };
+        const spare: SpareWorker = { child, environment, cwd: input.cwd, createdAt: Date.now(), loaded: false, warm: false, adopted: false, readyPromise };
         this.spareWorkers.push(spare);
         const drop = () => {
           const index = this.spareWorkers.indexOf(spare);
           if (index >= 0) this.spareWorkers.splice(index, 1);
+          // A process that died before it finished loading cannot be replaced by
+          // retrying now: whatever stopped it will stop the next one too. Hold
+          // until the reaper's sweep, so a broken spawn target costs one attempt
+          // per sweep instead of a spawn per event-loop turn.
+          if (!spare.loaded) this.spareRefillBlocked = true;
           resolveReady();
         };
         child.once('close', drop);
         child.once('error', drop);
         child.on('message', raw => {
-          if (spare.adopted || WorkerReplySchema.safeParse(raw).data?.type !== 'idle') return;
+          if (spare.adopted) return;
+          const reply = WorkerReplySchema.safeParse(raw).data;
+          if (reply?.type === 'warm') { spare.warm = true; return; }
+          if (reply?.type !== 'idle') return;
           spare.loaded = true;
           resolveReady();
         });
         if (!child.connected) { child.kill('SIGKILL'); resolveReady(); }
-      } catch { /* a spare is an optimization; the next launch spawns normally */ }
-      finally { this.spareRefill = undefined; }
+      } catch {
+        // A spare is an optimization; the next launch spawns normally. A failed
+        // spawn holds until the next sweep too, so a broken entrypoint cannot
+        // turn into a spawn storm.
+        this.spareRefillBlocked = true;
+      } finally { this.spareRefill = undefined; }
     })();
+    void this.spareRefill.then(() => {
+      // One serialized attempt adds one spare, so a pool of two needs a second
+      // attempt. Ask again only when this attempt actually added one: a spawn
+      // that failed or was refused has set the block and must wait for the
+      // sweep instead of retrying immediately.
+      if (!this.closing && !this.spareRefillBlocked) this.warmSessionWorker(input, environment);
+    });
   }
 
   /** Takes a spare that can host this launch, or `undefined` when none matches. */
   private adoptSpare(input: WorkerBootstrap, environment: NodeJS.ProcessEnv): ChildProcess | undefined {
+    // One synchronous stat per launch, not per candidate: a spare whose cwd is gone
+    // cannot host the session, and the launch spawns its own process anyway.
+    const cwdExists = existsSync(input.cwd);
     const now = Date.now();
     for (let index = this.spareWorkers.length - 1; index >= 0; index -= 1) {
       const spare = this.spareWorkers[index];
@@ -943,7 +995,12 @@ export class WorkerRegistry {
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
         continue;
       }
-      if (spare.loaded && cwdMatch && envMatch) {
+      if (spare.loaded && cwdMatch && envMatch && cwdExists) {
+        // A used-but-still-loading spare pays the rest of its warm-up inside the
+        // session that adopted it, so prefer a spare that already finished.
+        const partner = this.spareWorkers.find(other => other !== spare && !other.adopted && other.loaded && other.warm
+          && other.cwd === input.cwd && isDeepStrictEqual(other.environment, environment));
+        if (!spare.warm && partner) continue;
         this.spareWorkers.splice(index, 1);
         spare.adopted = true;
         return spare.child;
@@ -978,10 +1035,12 @@ export class WorkerRegistry {
     // A session launch adopts a pre-warmed process when one matches: it has
     // already paid the module load, so only the bootstrap remains.
     const adopted = owner.kind === 'session' ? this.adoptSpare(input, environment) : undefined;
-    if (adopted !== undefined) {
+    if (owner.kind === 'session' && !input.cwd.includes('ohpichamber-agent-ready-')) {
       const settled = this.spareRefill;
       void (settled ?? Promise.resolve()).then(() => {
-        // Wait for the previous spawn to clear its own guard before asking.
+        // Wait for the previous spawn to clear its own guard before asking. A
+        // refused attempt stays blocked until the reaper's sweep, so a leased
+        // workspace does not get a new attempt per launch as well.
         if (this.spareRefill === settled) this.spareRefill = undefined;
         this.warmSessionWorker(input, environment);
       });
@@ -1049,7 +1108,7 @@ export class WorkerRegistry {
     this.workerEntries.set(input.rootSessionId, entry);
     child.on('message', raw => {
       const reply = WorkerReplySchema.safeParse(raw);
-      if (!reply.success || reply.data.type === 'idle' || reply.data.workerGeneration !== workerGeneration) return;
+      if (!reply.success || reply.data.type === 'idle' || reply.data.type === 'warm' || reply.data.workerGeneration !== workerGeneration) return;
       if (this.workerEntries.get(entry.info.rootSessionId) !== entry) return;
       if (entry.info.state !== 'starting' && entry.info.state !== 'ready') return;
       entry.lastActivityAt = Date.now();

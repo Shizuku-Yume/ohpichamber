@@ -191,18 +191,25 @@ const measureDispatch = async (client, workspace, model) => {
  * - POST /sessions p50 ≤ 400 ms
  * - first part.delta after send on a new chat ≤ 600 ms
  */
-const measureCreateRunFirstEvent = async (client, workspace, model, iterations = 5) => {
+const measureNewChatVariant = async (client, workspace, model, iterations, variantMode) => {
   const options = { providerId: model?.providerId ?? null, modelId: model?.modelId ?? null, agentId: null, variant: null, reasoningEffort: null }
   const createSessionSamples = []
   const firstDeltaAfterSendSamples = []
   const firstDeltaAfterRunSamples = []
 
   for (let index = 0; index < iterations; index += 1) {
-    // Mirror the UI opening the new-chat composer for the workspace before the user sends
-    await client.json("/api/agent/v1/sessions/prepare", {
-      method: "POST",
-      body: JSON.stringify({ projectId: workspace.projectId, workspaceId: workspace.workspaceId }),
-    })
+    let pendingPreparePromise = null
+    if (variantMode === "prepareCompleted") {
+      await client.json("/api/agent/v1/sessions/prepare", {
+        method: "POST",
+        body: JSON.stringify({ projectId: workspace.projectId, workspaceId: workspace.workspaceId }),
+      })
+    } else if (variantMode === "prepareImmediate") {
+      pendingPreparePromise = client.json("/api/agent/v1/sessions/prepare", {
+        method: "POST",
+        body: JSON.stringify({ projectId: workspace.projectId, workspaceId: workspace.workspaceId }),
+      }).catch(() => undefined)
+    }
 
     const sendStarted = performance.now()
     const sessionRes = await timed(() => client.json("/api/agent/v1/sessions", {
@@ -254,10 +261,11 @@ const measureCreateRunFirstEvent = async (client, workspace, model, iterations =
 
     // Dispatch the prompt
     const postRunStarted = performance.now()
-    await client.json(`/api/agent/v1/sessions/${sessionId}/runs`, {
+    const runRes = await client.json(`/api/agent/v1/sessions/${sessionId}/runs`, {
       method: "POST",
       body: JSON.stringify({ input: { text: "Say hello.", attachments: [], context: [] }, options }),
     })
+    const runId = runRes?.run?.runId
 
     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout waiting for part.delta")), 30_000))
     await Promise.race([readUntilDelta, timeoutPromise])
@@ -270,7 +278,13 @@ const measureCreateRunFirstEvent = async (client, workspace, model, iterations =
     firstDeltaAfterSendSamples.push(firstDeltaTime - sendStarted)
     firstDeltaAfterRunSamples.push(firstDeltaTime - postRunStarted)
 
+    if (runId) {
+      await client.json(`/api/agent/v1/sessions/${sessionId}/runs/${encodeURIComponent(runId)}/abort`, { method: "POST" }).catch(() => { })
+    }
+    if (pendingPreparePromise) await pendingPreparePromise
+    const waitIdleStart = performance.now()
     await waitIdle(client, sessionId)
+    console.log(`  [${variantMode}] iteration ${index + 1}/${iterations}: send->delta = ${round(firstDeltaTime - sendStarted)} ms, post->delta = ${round(firstDeltaTime - postRunStarted)} ms, waitIdle = ${round(performance.now() - waitIdleStart)} ms`)
   }
 
   return {
@@ -291,6 +305,20 @@ const measureCreateRunFirstEvent = async (client, workspace, model, iterations =
     firstDeltaAfterRun: {
       p50Ms: percentile(firstDeltaAfterRunSamples, 0.5),
       samples: firstDeltaAfterRunSamples.map((v) => round(v)),
+    },
+  }
+}
+
+const measureCreateRunFirstEvent = async (client, workspace, model, iterations = 5) => {
+  const noPrepare = await measureNewChatVariant(client, workspace, model, iterations, "noPrepare")
+  const prepareImmediate = await measureNewChatVariant(client, workspace, model, iterations, "prepareImmediate")
+  const prepareCompleted = await measureNewChatVariant(client, workspace, model, iterations, "prepareCompleted")
+  return {
+    ...noPrepare,
+    variants: {
+      noPrepare,
+      prepareImmediate,
+      prepareCompleted,
     },
   }
 }
@@ -454,7 +482,9 @@ const main = async () => {
   console.log(`dispatch: new session ${summary.dispatch.newSessionMs} ms, warm ${summary.dispatch.warmSessionMs} ms, overhead ${summary.dispatch.overheadMs} ms (budget 150 ms)`)
 
   summary.newChat = await measureCreateRunFirstEvent(client, workspace, model, options.newChatRuns)
-  console.log(`new chat: POST /sessions p50 ${summary.newChat.createSession.p50Ms} ms (budget 400 ms), first part.delta after send p50 ${summary.newChat.firstDeltaAfterSend.p50Ms} ms (budget 600 ms)`)
+  console.log(`new chat (a: no prepare): POST /sessions p50 ${summary.newChat.variants.noPrepare.createSession.p50Ms} ms (budget 400 ms), first part.delta after send p50 ${summary.newChat.variants.noPrepare.firstDeltaAfterSend.p50Ms} ms (budget 600 ms)`)
+  console.log(`new chat (b: prepare immediate): POST /sessions p50 ${summary.newChat.variants.prepareImmediate.createSession.p50Ms} ms, first part.delta after send p50 ${summary.newChat.variants.prepareImmediate.firstDeltaAfterSend.p50Ms} ms`)
+  console.log(`new chat (c: prepare completed): POST /sessions p50 ${summary.newChat.variants.prepareCompleted.createSession.p50Ms} ms, first part.delta after send p50 ${summary.newChat.variants.prepareCompleted.firstDeltaAfterSend.p50Ms} ms`)
 
   summary.streamCadence = await measureStreamCadence(client, workspace, model)
   console.log(`stream cadence: p50 flush interval ${summary.streamCadence.p50IntervalMs} ms (budget 33 ± 5 ms)`)

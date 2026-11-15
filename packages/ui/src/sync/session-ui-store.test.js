@@ -1555,3 +1555,33 @@ describe('defaultSessionMode in new session draft', () => {
   });
 });
 
+describe('speculative session preparation in draft lifecycle', () => {
+  test('openNewSessionDraft triggers prepareSession for directory', async () => {
+    const prepareCalls = [];
+    stub(canonicalClient, 'prepareSession', async (payload) => {
+      prepareCalls.push(payload);
+      return { ok: true, sessionId: 'ses-prep-1' };
+    });
+    useDirectoryStore.setState({ currentDirectory: '/repo' });
+    useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: '/repo' });
+    await new Promise(r => setTimeout(r, 20));
+    expect(prepareCalls).toHaveLength(1);
+    expect(prepareCalls[0]).toMatchObject({ projectId: 'project-a' });
+  });
+
+  test('closeNewSessionDraft triggers discardPreparedSession', async () => {
+    const discardCalls = [];
+    stub(canonicalClient, 'discardPreparedSession', async (payload) => {
+      discardCalls.push(payload);
+      return { ok: true };
+    });
+    useDirectoryStore.setState({ currentDirectory: '/repo' });
+    useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: '/repo' });
+    await Promise.resolve();
+    useSessionUIStore.getState().closeNewSessionDraft();
+    await new Promise(r => setTimeout(r, 20));
+    expect(discardCalls).toHaveLength(1);
+    expect(discardCalls[0]).toMatchObject({ workspaceId: expect.any(String) });
+  });
+});
+

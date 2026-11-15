@@ -74,6 +74,20 @@ type RelocationFence = { sessionId: string; sourceCanonical: string; destination
 
 const WORKTREE_LEASE_ID_PATTERN = /^[A-Za-z0-9_-]{1,80}$/;
 
+/**
+ * Worker operations that read state without running anything the user asked
+ * for. A lease, eviction or relocation must not be refused because one of them
+ * happens to be in flight: the service issues them itself during startup
+ * (`mcp.configuration.read`), catalog refreshes and session inspection, so
+ * counting them as "a command in flight" made admission depend on which
+ * prewarm happened to still be running.
+ */
+const PASSIVE_WORKER_OPERATIONS: Record<string, true> = { mcp: true, catalog: true, 'mcp.configuration.read': true };
+const hasActiveWork = (pending: Iterable<{ type?: string }>): boolean => {
+  for (const operation of pending) if (!(operation.type && PASSIVE_WORKER_OPERATIONS[operation.type])) return true;
+  return false;
+};
+
 // Segment-safe containment: `/work/a` is not inside `/work/ab`.
 const isInsideOrSameDirectory = (root: string, target: string): boolean => {
   const path = relative(root, target);
@@ -490,7 +504,7 @@ export class WorkerRegistry {
       if (current !== entry) return null;
       const refuse = (code: 'RUN_ACTIVE' | 'COMMAND_IN_FLIGHT') => new WorkerOperationError(409, code, code === 'RUN_ACTIVE' ? 'The session still has an active run'
         : 'The session still has a command in flight', { sessionId: entry.info.rootSessionId });
-      const pendingWork = (candidate: WorkerEntry): boolean => [...candidate.pending.values()].some(p => p.type !== 'mcp' && p.type !== 'catalog')
+      const pendingWork = (candidate: WorkerEntry): boolean => hasActiveWork(candidate.pending.values())
         || [...this.actions.values()].some(action => action.entry === candidate);
       if (entry.kind === 'session') {
         // Removing the folder would delete session storage inside it.
@@ -840,7 +854,7 @@ export class WorkerRegistry {
       if (!this.sessionIsIdle(rootSessionId)) {
         throw new WorkerOperationError(409, 'RUN_ACTIVE', 'The session still has an active run');
       }
-      const hasActiveSessionCommand = [...entry.pending.values()].some(p => p.type !== 'mcp' && p.type !== 'catalog');
+      const hasActiveSessionCommand = hasActiveWork(entry.pending.values());
       if (entry.info.state === 'starting' || this.restartReservations.has(rootSessionId) || hasActiveSessionCommand
         || [...this.actions.values()].some(action => action.entry === entry)) {
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted, so its worker cannot restart');
@@ -849,7 +863,7 @@ export class WorkerRegistry {
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is controlled, so its worker cannot restart');
       }
       if (this.workerEntries.get(rootSessionId) !== entry || entry.info.state !== 'ready' || this.closing
-        || this.restartReservations.has(rootSessionId) || [...entry.pending.values()].some(p => p.type !== 'mcp' && p.type !== 'catalog')
+        || this.restartReservations.has(rootSessionId) || hasActiveWork(entry.pending.values())
         || [...this.actions.values()].some(action => action.entry === entry)
         || !this.sessionIsIdle(rootSessionId)) {
         throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is relocating, so its worker cannot restart');

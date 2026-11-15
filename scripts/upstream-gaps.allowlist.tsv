@@ -655,3 +655,7 @@ route-deps	createPrWatchRuntime.getOpenCodeAuthHeaders	## 2026-11-14 - Auto-revi
 ui-call-no-route	/api/source-control/:param	OMP packages/web/server/lib/source-control/provider-routes.js	Generic route prefix built by uploadUrls(); answered by provider-routes.js route('get', '/uploads/:secret/:filename') mounted per provider.
 settings-item	chat.session-goal	## 2026-11-13 - OMP settings live on the page that owns the concept	The session-goal switch is OMP 'goal.enabled', rendered as a row in the Sessions Plan and Goal section; the separate chat.session-goal toggle was removed so one concept has one control.
 settings-search	chat.session-goal	## 2026-11-13 - OMP settings live on the page that owns the concept	Search entry removed with the duplicate control: the goal switch is searchable as omp.goal.enabled on the Sessions page.
+settings-registry	agentMemoryFeatureAvailable	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-sanitizer	agentMemoryFeatureAvailable	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-store	useUIStore.agentMemoryFeatureAvailable	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend
+settings-store	useUIStore.setAgentMemoryFeatureAvailable	## 2026-11-13 - OMP owns image generation and agent memory	Retired OpenChamber memory host tool in favor of OMP memory backend

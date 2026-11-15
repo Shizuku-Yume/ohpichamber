@@ -212,3 +212,35 @@ test('a search entry the row template cannot reach is still a gap', () => {
   assert.equal(result.status, 1, result.output);
   assert.match(result.output, /\[settings-search\] omp\.bash\.removed/);
 });
+
+const REGISTRY_UPSTREAM = `export const SETTINGS_REGISTRY = {
+  staleMemoryFlag: field({
+    scope: 'instance',
+    effect: ['ui'],
+    computed: true,
+    parse: parseBoolean,
+  }),
+};
+`;
+
+test('a stale staged bundle is not read as a settings consumer', () => {
+  // A checkout can hold gitignored build output (`resources/web-dist`, produced
+  // by electron:build). A git ref lists only tracked paths, so the filesystem
+  // walk must skip the same directories: otherwise a stale bundle keeps a
+  // removed key looking half-present and the guardrail points at a file that is
+  // not source at all.
+  const files = {
+    ...baseFiles(),
+    'packages/agent-service/src/worker/settings-ui.ts': PLACEMENTS,
+    'packages/ui/src/components/RowControl.tsx': ROW_CONTROL,
+    'packages/ui/src/lib/settings/search.ts': SEARCH_ITEMS,
+    'packages/ui/src/lib/settings/registry.ts': REGISTRY_UPSTREAM,
+  };
+  const fixture = makeFixture(files);
+  // The fork removes the key from every source surface and keeps only the
+  // stale bundle, which still mentions it.
+  fixture.fork('packages/ui/src/lib/settings/registry.ts', "export const SETTINGS_REGISTRY = {};\n");
+  fixture.fork('packages/electron/resources/web-dist/assets/stale.js', "export const staleMemoryFlag = true;\n");
+  const result = runGuardrail(fixture);
+  assert.doesNotMatch(result.output, /web-dist/);
+});

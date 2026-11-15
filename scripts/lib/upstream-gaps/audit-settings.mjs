@@ -57,6 +57,18 @@ function git(args) {
   });
 }
 
+/**
+ * Directories that are never source. A git ref lists only tracked paths, so a
+ * filesystem walk has to skip the same build outputs a checkout can contain:
+ * `web-dist` and the staged `agent-runtime` are gitignored and produced by
+ * `electron:build`. Walking them would compare a stale bundle against a tracked
+ * upstream tree, where every key the bundle predates looks like a dropped
+ * setting. `registry.test.ts` skips the same set for the same reason.
+ */
+const BUILD_OUTPUT_DIRS = new Set([
+  'node_modules', 'dist', 'dist-bundle', 'build', 'out', '.git', 'ios', 'android', 'web-dist', 'agent-runtime',
+]);
+
 function listTreeFiles(ref, prefix) {
   if (ref === 'WORKTREE') {
     const absPrefix = path.join(REPO_ROOT, prefix);
@@ -64,7 +76,7 @@ function listTreeFiles(ref, prefix) {
     const results = [];
     const walk = (dir) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === '.git') continue;
+        if (BUILD_OUTPUT_DIRS.has(entry.name)) continue;
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) walk(full);
         else results.push(path.relative(REPO_ROOT, full).replaceAll('\\', '/'));

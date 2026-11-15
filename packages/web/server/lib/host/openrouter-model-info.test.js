@@ -121,6 +121,35 @@ describe('OpenRouter model info route', () => {
     });
   });
 
+  it('answers the shape the shared contract validates, without float noise', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({
+      data: [{
+        id: 'acme/noisy-prices',
+        top_provider: { context_length: 131072, max_completion_tokens: 8192 },
+        architecture: { input_modalities: ['text'] },
+        // 3e-7 per token is 0.3 per million, which naive multiplication renders
+        // as 0.30000000000000004.
+        pricing: { prompt: '0.0000003', completion: '0', input_cache_read: '0.00000003' },
+        supported_parameters: ['tools'],
+      }],
+    }));
+    const app = createApp({ fetchImpl });
+
+    const res = await request(app).post(ENDPOINT).send({ modelIds: ['acme/noisy-prices'] }).expect(200);
+    const info = res.body.models[0].catalog;
+
+    expect(info.cost).toEqual({ input: 0.3, output: 0, cacheRead: 0.03, cacheWrite: 0 });
+    for (const price of Object.values(info.cost)) {
+      expect(Number.isFinite(price)).toBe(true);
+      expect(price).toBeGreaterThanOrEqual(0);
+    }
+    expect(Number.isInteger(info.contextWindow) && info.contextWindow > 0).toBe(true);
+    expect(Number.isInteger(info.maxTokens) && info.maxTokens > 0).toBe(true);
+    expect(info.input.length).toBeGreaterThanOrEqual(1);
+    expect(typeof info.reasoning).toBe('boolean');
+    expect(info.source).toBe('openrouter');
+  });
+
   it('matches the base id of a variant and keeps the requested id in the reply', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(listPayload));
     const app = createApp({ fetchImpl });
@@ -129,7 +158,7 @@ describe('OpenRouter model info route', () => {
 
     expect(res.body.models).toEqual([{
       modelId: 'mimo-v2-flash',
-      catalog: expect.objectContaining({ contextWindow: 262144, maxTokens: 65536, cost: { input: 0, output: 0, cacheRead: null, cacheWrite: null }, reasoning: false }),
+      catalog: expect.objectContaining({ contextWindow: 262144, maxTokens: 65536, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, reasoning: false }),
     }]);
     expect(res.body.models[0].catalog).not.toHaveProperty('toolsSupported');
   });

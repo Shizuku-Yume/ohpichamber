@@ -41,7 +41,8 @@ const perMillion = (value) => {
   if (typeof value !== 'string' || value.trim() === '') return null;
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return parsed * 1_000_000;
+  // Six decimals keep a third-of-a-cent price from carrying binary noise.
+  return Math.round(parsed * 1_000_000 * 1_000_000) / 1_000_000;
 };
 
 /**
@@ -86,8 +87,10 @@ const toCatalogInfo = (model) => {
   const cost = {
     input: inputPrice,
     output: outputPrice,
-    cacheRead: perMillion(model?.pricing?.input_cache_read),
-    cacheWrite: perMillion(model?.pricing?.input_cache_write),
+    // The shared catalog contract wants a number in every slot; OMP's own
+    // catalog writes 0 for a price it does not publish.
+    cacheRead: perMillion(model?.pricing?.input_cache_read) ?? 0,
+    cacheWrite: perMillion(model?.pricing?.input_cache_write) ?? 0,
   };
   const supportedParameters = Array.isArray(model?.supported_parameters) ? model.supported_parameters : null;
   const toolsSupported = supportedParameters

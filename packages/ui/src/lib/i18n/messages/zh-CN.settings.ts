@@ -1724,7 +1724,6 @@ export const settingsDict = {
   'settings.providers.page.custom.description': '通过指定基础 URL、凭据、模型列表和支持的 API 协议添加提供商。会写入 OpenCode 配置以供聊天使用。',
   'settings.providers.page.custom.field.providerID.label': '提供商 ID',
   'settings.providers.page.custom.field.providerID.placeholder': 'my-provider',
-  'settings.providers.page.custom.field.providerID.info': '小写字母、数字、连字符和下划线。用作 OpenCode 提供商 ID。',
   'settings.providers.page.custom.field.name.label': '显示名称',
   'settings.providers.page.custom.field.name.placeholder': '我的提供商',
   'settings.providers.page.custom.field.name.info': '显示在提供商和模型选择器中。',
@@ -1776,7 +1775,6 @@ export const settingsDict = {
   'settings.providers.page.custom.actions.update': '更新提供商',
 
   'settings.providers.page.custom.error.providerID.required': '提供商 ID 为必填项',
-  'settings.providers.page.custom.error.providerID.format': '请使用小写字母、数字、连字符或下划线',
   'settings.providers.page.custom.error.providerID.exists': '已连接具有此 ID 的提供商',
   'settings.providers.page.custom.error.name.required': '显示名称为必填项',
   'settings.providers.page.custom.error.baseURL.required': '基础 URL 为必填项',

@@ -1724,7 +1724,6 @@ export const settingsDict = {
   "settings.providers.page.custom.description": "Додайте провайдера з базовою URL-адресою, обліковими даними, списком моделей і підтримуваним протоколом API. Зберігається в конфігурації OpenCode для використання в чаті.",
   "settings.providers.page.custom.field.providerID.label": "ID провайдера",
   "settings.providers.page.custom.field.providerID.placeholder": "mij-provider",
-  "settings.providers.page.custom.field.providerID.info": "Малі літери, цифри, дефіси та підкреслення. Використовується як ID провайдера OpenCode.",
   "settings.providers.page.custom.field.name.label": "Відображувана назва",
   "settings.providers.page.custom.field.name.placeholder": "Мій провайдер",
   "settings.providers.page.custom.field.name.info": "Показується у виборі провайдера та моделі.",
@@ -1776,7 +1775,6 @@ export const settingsDict = {
   "settings.providers.page.custom.actions.update": "Оновити провайдера",
 
   "settings.providers.page.custom.error.providerID.required": "ID провайдера обов’язковий",
-  "settings.providers.page.custom.error.providerID.format": "Використовуйте малі літери, цифри, дефіси або підкреслення",
   "settings.providers.page.custom.error.providerID.exists": "Провайдер із цим ID уже підключено",
   "settings.providers.page.custom.error.name.required": "Відображувана назва обов’язкова",
   "settings.providers.page.custom.error.baseURL.required": "Базова URL-адреса обов’язкова",

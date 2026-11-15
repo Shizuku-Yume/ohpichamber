@@ -1332,4 +1332,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Decided by:** agent
 - **Mine:** yes
 - **Revisit when:** OMP exposes a provider registration directory, or the redirect origin moves to the Host.
+## 2026-11-16 - Custom provider IDs keep a leading letter or digit
+
+- **Decided:** the provider-ID pattern is `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`, narrower than the bare character set in "Provider IDs follow OMP's selector grammar": the first character must be a letter or digit. IDs like `.`, `..` or `-x` are refused.
+- **Instead of:** accepting the whole `[A-Za-z0-9._-]` set in any position, which OMP itself would accept.
+- **Because:** the same id reaches logo routes and settings keys, so a leading `.` reads as a hidden file, a leading `-` reads as a CLI flag, and `.`/`..` read as path segments. The narrower first character costs no real provider name.
+- **Mine:** yes
+- **Revisit when:** a provider name or OMP-side convention needs a leading dot or hyphen.
 - **Effort:** ux-feedback-2026-11-15

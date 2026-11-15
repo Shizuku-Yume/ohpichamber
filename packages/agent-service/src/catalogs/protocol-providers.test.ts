@@ -25,8 +25,13 @@ test('public provider flow and account result envelopes reject token and private
 test('provider discovery rejects malformed endpoint credentials and header injection', () => {
   const request = { endpoint: 'https://provider.invalid/v1', protocol: 'responses' };
   expect(CatalogOperationSchema.safeParse({ type: 'catalog.provider.models.discover', request }).success).toBe(true);
-  for (const endpoint of ['https://user:secret@provider.invalid/v1', 'https://provider.invalid/v1?token=secret', 'file:///private/models']) {
+  for (const endpoint of ['https://user:secret@provider.invalid/v1', 'https://provider.invalid/v1#secret', 'file:///private/models']) {
     expect(CatalogOperationSchema.safeParse({ type: 'catalog.provider.models.discover', request: { ...request, endpoint } }).success).toBe(false);
   }
+  // Azure-style base URLs carry their api-version in a query string.
+  expect(CatalogOperationSchema.safeParse({
+    type: 'catalog.provider.models.discover',
+    request: { ...request, endpoint: 'https://x.openai.azure.com/openai/v1?api-version=2024-10-21' },
+  }).success).toBe(true);
   expect(CatalogOperationSchema.safeParse({ type: 'catalog.provider.models.discover', request: { ...request, headers: { Authorization: 'Bearer secret\r\nX-Injected: value' } } }).success).toBe(false);
 });

@@ -160,6 +160,35 @@ test('native grant re-authorizes an exact command without a session allowance', 
   } finally { interaction.close(); }
 });
 
+test('a turn-less async job still raises its native grant and resolves by toolCallId only', async () => {
+  const requests: WorkerInteractionMessage[] = [];
+  const interaction = new WorkerInteraction({ request: request => requests.push(request), currentTurn: () => undefined });
+  const input = { command: 'printf async-job' };
+  try {
+    const first = interaction.requestNativeGrant('call-async-1', input, undefined);
+    const firstRequest = requests[0];
+    if (firstRequest?.kind !== 'approval') throw new Error('Expected canonical approval request');
+    expect(firstRequest.turnId).toBe('turn-0');
+    expect(firstRequest.toolCallId).toBe('call-async-1');
+    expect(firstRequest.nativeGrant).toBe(true);
+
+    const second = interaction.requestNativeGrant('call-async-2', input, undefined);
+    const secondRequest = requests[1];
+    if (secondRequest?.kind !== 'approval') throw new Error('Expected canonical approval request');
+    expect(secondRequest.toolCallId).toBe('call-async-2');
+    expect(secondRequest.approvalId).not.toBe(firstRequest.approvalId);
+
+    // The first grant answers only its own call: the second card stays pending.
+    expect(interaction.resolveApproval(firstRequest.approvalId, 'approve')).toBe(true);
+    await expect(first).resolves.toBe(true);
+    expect(interaction.takeApprovalReceipt('call-async-1')).toBe(firstRequest.approvalId);
+
+    expect(interaction.resolveApproval(secondRequest.approvalId, 'approve')).toBe(true);
+    await expect(second).resolves.toBe(true);
+    expect(interaction.takeApprovalReceipt('call-async-2')).toBe(secondRequest.approvalId);
+  } finally { interaction.close(); }
+});
+
 test('an already-aborted native prompt publishes no approval card', async () => {
   const requests: WorkerInteractionMessage[] = [];
   const interaction = new WorkerInteraction({ request: request => requests.push(request), currentTurn: () => 'turn' });

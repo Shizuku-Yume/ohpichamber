@@ -1627,7 +1627,6 @@ export const settingsDict = {
   'settings.providers.page.custom.description': 'Ajoutez un fournisseur avec une URL de base, des identifiants, une liste de modèles et un protocole API pris en charge. Enregistré dans la configuration OpenCode pour le chat.',
   'settings.providers.page.custom.field.providerID.label': 'ID du fournisseur',
   'settings.providers.page.custom.field.providerID.placeholder': 'mon-fournisseur',
-  'settings.providers.page.custom.field.providerID.info': 'Minuscules, chiffres, tirets et underscores. Utilisé comme ID de fournisseur OpenCode.',
   'settings.providers.page.custom.field.name.label': 'Nom affiché',
   'settings.providers.page.custom.field.name.placeholder': 'Mon fournisseur',
   'settings.providers.page.custom.field.name.info': 'Affiché dans les sélecteurs de fournisseur et de modèle.',
@@ -1679,7 +1678,6 @@ export const settingsDict = {
   'settings.providers.page.custom.actions.update': 'Mettre à jour le fournisseur',
 
   'settings.providers.page.custom.error.providerID.required': 'L’ID du fournisseur est obligatoire',
-  'settings.providers.page.custom.error.providerID.format': 'Utilisez des minuscules, chiffres, tirets ou underscores',
   'settings.providers.page.custom.error.providerID.exists': 'Un fournisseur avec cet ID est déjà connecté',
   'settings.providers.page.custom.error.name.required': 'Le nom affiché est obligatoire',
   'settings.providers.page.custom.error.baseURL.required': 'L’URL de base est obligatoire',

@@ -38,8 +38,10 @@ export const ProviderOAuthResultSchema = z.strictObject({
   browserCookieNames: z.array(z.string().min(1)).optional(),
 });
 export type ProviderOAuthResult = z.infer<typeof ProviderOAuthResultSchema>;
+// Discovery runs against a custom provider's base URL, which may carry a query
+// (`?api-version=`). Embedded credentials stay refused.
 const EndpointSchema = z.url({ protocol: /^https?$/ }).refine(value => {
-  const url = new URL(value); return !url.username && !url.password && !url.search && !url.hash;
+  const url = new URL(value); return !url.username && !url.password && !url.hash;
 });
 export const ProviderHeaderWriteSchema = z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), z.string().refine(value => !/[\r\n]/.test(value)));
 export const ProviderModelDiscoveryRequestSchema = z.strictObject({

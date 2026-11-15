@@ -24,7 +24,7 @@ const cases: { mode: NativePolicyContext['editMode']; input: JsonObject }[] = [
 describe('trusted execution-free first-party target inspection', () => {
   for (const { mode, input } of cases) test(`derives ${mode} targets without writing or executing the edit`, async () => {
     const cwd = await workspace();
-    const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'edit', input }, { editMode: mode });
+    const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'edit', input }, { editMode: mode, declaredTier: 'exec' });
     expect(descriptor?.effectiveMode).toBe(mode); expect(descriptor?.sourcePaths).toContain(join(cwd, 'src/a.ts')); expect(descriptor?.destinationPaths).toContain(join(cwd, 'src/a.ts'));
     expect(await readFile(join(cwd, 'src/a.ts'), 'utf8')).toBe('old\n');
   });
@@ -34,15 +34,25 @@ describe('trusted execution-free first-party target inspection', () => {
     ['hashline', { input: '[src/a.ts#0000]\nMV ../outside.ts\n' }],
   ] satisfies [NativePolicyContext['editMode'], JsonObject][])('includes %s rename destinations outside the source root', async (mode, input) => {
     const cwd = await workspace();
-    const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'edit', input }, { editMode: mode });
+    const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'edit', input }, { editMode: mode, declaredTier: 'exec' });
     expect(descriptor?.destinationPaths).toContain(join(cwd, '../outside.ts')); expect(descriptor?.fileOps.some(operation => operation.to === join(cwd, '../outside.ts'))).toBe(true);
     expect(await readFile(join(cwd, 'src/a.ts'), 'utf8')).toBe('old\n');
   });
   test('does not use a tool-input mode to replace initialized SDK mode', async () => {
     const cwd = await workspace();
-    const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'edit', input: { ...cases[0]!.input, mode: 'apply_patch' } }, { editMode: 'replace' });
+    const descriptor = await describeNativeOperation(cwd, { type: 'tool', toolName: 'edit', input: { ...cases[0]!.input, mode: 'apply_patch' } }, { editMode: 'replace', declaredTier: 'write' });
     expect(descriptor?.effectiveMode).toBe('replace'); expect(descriptor?.sourcePaths).toContain(join(cwd, 'src/a.ts'));
     await expect(describeNativeOperation(cwd, { type: 'tool', toolName: 'edit', input: cases[0]!.input })).rejects.toThrow('effective edit mode');
+  });
+  test('carries the declared tier into the descriptor for pathless and path tools alike', async () => {
+    const cwd = await workspace();
+    const pathless = await describeNativeOperation(cwd, { type: 'tool', toolName: 'vibe_spawn', input: { prompt: 'do work' } }, { editMode: 'none', declaredTier: 'exec' });
+    expect(pathless?.declaredTier).toBe('exec');
+    expect(pathless?.sourcePaths).toEqual([]);
+    const read = await describeNativeOperation(cwd, { type: 'tool', toolName: 'vibe_list', input: {} }, { editMode: 'none', declaredTier: 'read' });
+    expect(read?.declaredTier).toBe('read');
+    const shell = await describeNativeOperation(cwd, { type: 'shell', request: { command: 'printf x', background: true } });
+    expect(shell?.declaredTier).toBeUndefined();
   });
   test('retains literal selector-shaped filenames and derives all read backing containers', async () => {
     const cwd = await workspace(); await writeFile(join(cwd, 'literal:1-2'), 'literal');

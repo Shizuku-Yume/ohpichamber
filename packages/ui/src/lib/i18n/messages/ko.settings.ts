@@ -1724,7 +1724,6 @@ export const settingsDict = {
   'settings.providers.page.custom.description': '기본 URL, 자격 증명, 모델 목록 및 지원되는 API 프로토콜로 제공자를 추가합니다. 채팅에 사용할 수 있도록 OpenCode 설정에 저장됩니다.',
   'settings.providers.page.custom.field.providerID.label': '제공자 ID',
   'settings.providers.page.custom.field.providerID.placeholder': 'my-provider',
-  'settings.providers.page.custom.field.providerID.info': '소문자, 숫자, 하이픈, 밑줄. OpenCode 제공자 ID로 사용됩니다.',
   'settings.providers.page.custom.field.name.label': '표시 이름',
   'settings.providers.page.custom.field.name.placeholder': '내 제공자',
   'settings.providers.page.custom.field.name.info': '제공자 및 모델 선택기에 표시됩니다.',
@@ -1776,7 +1775,6 @@ export const settingsDict = {
   'settings.providers.page.custom.actions.update': '공급자 업데이트',
 
   'settings.providers.page.custom.error.providerID.required': '제공자 ID는 필수입니다',
-  'settings.providers.page.custom.error.providerID.format': '소문자, 숫자, 하이픈, 밑줄을 사용하세요',
   'settings.providers.page.custom.error.providerID.exists': '이 ID의 제공자가 이미 연결되어 있습니다',
   'settings.providers.page.custom.error.name.required': '표시 이름은 필수입니다',
   'settings.providers.page.custom.error.baseURL.required': '기본 URL은 필수입니다',

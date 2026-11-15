@@ -100,23 +100,25 @@ login, AWS profile for Bedrock) asks only its form and calls
 `integration.connect.external`, which stores a reference to credentials managed
 outside OpenCode; the account then lists as "External credentials".
 
-A provider's credentials show as one collapsible card per kind: API key,
-browser sign-in, credentials on the server machine
-(`providers/ProviderAuthMethodCards.tsx`, built on the Integrations page's
-`IntegrationCatalogCard`). The same cards serve the connect page and a
-connected provider's page, where they are always on screen. A card names its
-kind, says in one line how it works, and carries a pill: In use, Not in use,
-Sign in again or Not connected. Opened, it lists the stored accounts of its
-kind with their Use, Rename and Remove actions, then the field or button that
-adds another. Under a stored account that field or button waits behind "Add
-account": an empty key field under a key reads as "replace this key" and a bare
-Connect as "reconnect", while both add another account that becomes active. A
-provider with one kind starts with its card
-open. Keys from environment variables are listed above the cards. A key
-OpenCode takes from the environment or the config, or credentials on the
-server machine, mark their own card In use, or the key card when the provider
-has no card of that kind. In enterprise mode the cards keep the stored accounts and
-offer nothing new.
+Every OMP built-in provider appears as a card, plus one card per custom
+provider (`providers/ProviderGrid.tsx`). Opening a card shows its accounts and
+the form that adds one, through `providers/ProviderAccounts.tsx` and
+`providers/ProviderApiKeyForm.tsx`. A provider whose credentials come from the
+environment shows "From $VAR" with the variable's name and never its value;
+its API-key form stays available, so a key can still be saved for it. The
+environment source is read from the Agent Service's
+`ProviderAuthState.environment` (`{ variable, active }`) on every provider the
+workspace reports. A key saved in OpenChamber outranks the environment
+variable, and the environment badge stays on the card because the variable is
+still set. The connect picker lists only providers with no credential yet, so
+an env-backed provider is not in it; the key form for one is reached from its
+card's key button or its own page. In enterprise mode the cards keep the stored
+accounts and offer nothing new.
+
+Custom provider IDs follow the model selector grammar: letters, digits, dots,
+underscores and hyphens, unique regardless of case, with no `/`, `#`, `@`, `:`,
+whitespace or prototype names such as `__proto__`. A custom base URL may carry a
+query string (Azure's `?api-version=`), but no userinfo.
 
 The cards replaced a separate account list over an "Add account" panel that
 stacked the key form and the sign-in buttons. That panel read as steps to

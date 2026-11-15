@@ -70,6 +70,7 @@ import { cfgTitleRefreshOnReplan } from '@oh-my-pi/pi-coding-agent/utils/title-s
 import { captureNativePolicy } from './native-policy-snapshot.ts';
 import type { HostNativePolicySnapshot, NativePolicyContext } from '../native-policy-protocol.ts';
 import { createNativeBashPolicyExtension } from './native-bash-policy.ts';
+import { resolveDeclaredTier } from './tool-tier.ts';
 import { NativePermissionBridge } from './native-permission-bridge.ts';
 import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 import { cfgTaskPerCallModel } from '@oh-my-pi/pi-coding-agent/task/settings';
@@ -418,7 +419,10 @@ export class WorkerSession {
         if (key !== null && authorizedProviderUses.has(key)) return;
         await capturePolicy?.();
         const model = session?.model;
-        const nativeContext: NativePolicyContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined) };
+        const nativeContext: NativePolicyContext = {
+          editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined),
+          declaredTier: resolveDeclaredTier(session, toolName, toolInput),
+        };
         if (model) {
           nativeContext.providerId = model.provider;
           nativeContext.modelId = model.id;
@@ -430,7 +434,10 @@ export class WorkerSession {
       }
       await capturePolicy?.();
       const model = session?.model;
-      const nativeContext: NativePolicyContext = { editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined) };
+      const nativeContext: NativePolicyContext = {
+        editMode: runtime.effectiveEditMode(model ? formatModelString(model) : undefined),
+        declaredTier: resolveDeclaredTier(session, toolName, toolInput),
+      };
       if (model) {
         nativeContext.providerId = model.provider;
         nativeContext.modelId = model.id;

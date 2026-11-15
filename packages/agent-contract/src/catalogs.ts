@@ -2,10 +2,17 @@ import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, JsonObjectSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { AgentSchema } from './session.ts';
 
+// A provider base URL may carry a query string (Azure's `?api-version=`), but
+// credentials belong in headers: userinfo and fragments stay refused.
 const PublicEndpointSchema = z.url({ protocol: /^https?$/ }).refine((endpoint) => {
   const url = new URL(endpoint);
-  return url.username === '' && url.password === '' && url.search === '' && url.hash === '';
-}, 'Public endpoints contain no embedded credentials, query parameters or fragments');
+  return url.username === '' && url.password === '' && url.hash === '';
+}, 'Public endpoints contain no embedded credentials or fragments');
+// MCP transports keep refusing query strings so a token cannot ride in a URL.
+const MCPTransportUrlSchema = PublicEndpointSchema.refine(
+  (endpoint) => new URL(endpoint).search === '',
+  'MCP transport URLs contain no query parameters',
+);
 const RelativeCommandSchema = z.string().min(1).refine(
   (command) => !command.startsWith('/') && !command.startsWith('\\\\') && !/^[A-Za-z]:[\\/]/.test(command),
   'Public command references are not absolute Host paths',
@@ -91,6 +98,16 @@ export const ProviderAuthStateSchema = z.discriminatedUnion('status', [
     credentialRef: EntityIdSchema,
     method: z.enum(['api-key', 'oauth']),
     source: z.enum(['stored-credential', 'managed-environment', 'external-environment']),
+    /**
+     * The environment variable that can back this provider: its name only,
+     * never a value. `active` says it currently supplies the winning
+     * credential; a stored key can win while the variable stays visible.
+     * Absent when the provider has no environment mechanism.
+     */
+    environment: z.strictObject({
+      variable: z.string().min(1).nullable(),
+      active: z.boolean(),
+    }).optional(),
   }),
 ]);
 export type ProviderAuthState = z.infer<typeof ProviderAuthStateSchema>;
@@ -313,8 +330,8 @@ export const MCPTransportSchema = z.discriminatedUnion('type', [
     args: z.array(z.string()),
     envCredentialRefs: z.record(z.string().min(1), EntityIdSchema).optional(),
   }),
-  z.strictObject({ type: z.literal('http'), url: PublicEndpointSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
-  z.strictObject({ type: z.literal('sse'), url: PublicEndpointSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
+  z.strictObject({ type: z.literal('http'), url: MCPTransportUrlSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
+  z.strictObject({ type: z.literal('sse'), url: MCPTransportUrlSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
 ]);
 export type MCPTransport = z.infer<typeof MCPTransportSchema>;
 

@@ -10,6 +10,10 @@
  * ship them. Field names follow the official MCP Registry `server.json`
  * where they overlap, so importing from it stays possible.
  *
+ * A local MCP server declares `envInputs` for the environment values it needs.
+ * The install form collects them and stores each as a workspace credential
+ * referenced by `envCredentialRefs`; the value never lands in the MCP config.
+ *
  * OpenCode-only npm plugins are not listed: this app runs OMP native plugins
  * from `@oh-my-pi/pi-coding-agent`, which does not load them. The `plugin`
  * component kind stays for native plugin packages that support OMP.
@@ -42,6 +46,22 @@ export type CatalogInput = {
 };
 
 /**
+ * An environment variable a local server needs. The install form collects the
+ * value and stores it as a workspace credential reference; the value itself
+ * never enters the persisted MCP config.
+ */
+export type CatalogEnvInput = {
+  /** Stable id inside the entry, unique per entry. */
+  id: string;
+  /** Environment variable name passed to the server process. */
+  envName: string;
+  /** Label key, translated with t() in the component. */
+  labelKey: I18nKey;
+  /** Blocks install while empty. */
+  required?: boolean;
+};
+
+/**
  * One installable part of an integration. At most one MCP component per
  * entry: the entry id doubles as the MCP server name.
  */
@@ -58,14 +78,20 @@ export type CatalogMcpComponent = {
     /** True when the token is optional and install works without it. */
     tokenOptional?: boolean;
   };
-  /** Local servers run on the machine OpenCode runs on. */
+  /** Local servers run on the machine the agent host runs on. */
   local?: {
     /** May carry `{inputId}` tokens for entries with `inputs`. */
     command: string[];
-    /** First run downloads a package; OpenCode's default timeout is too tight. */
+    /** First run downloads a package; the default startup timeout is too tight. */
     timeoutMs?: number;
     /** Prerequisites shown as a note on the card. */
     requires?: Array<'node' | 'python' | 'docker'>;
+    /**
+     * Environment variables the install form collects. Values are stored as
+     * workspace credentials and referenced as `envCredentialRefs`; the MCP
+     * config gets the references, never the secrets.
+     */
+    envInputs?: CatalogEnvInput[];
   };
   /** Where the user creates a token, for `auth: 'token'`. */
   tokenHelpUrl?: string;
@@ -2310,7 +2336,18 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     icon: 'git-pull-request',
     homepage: 'https://learn.microsoft.com/en-us/azure/devops/mcp-server/',
     status: 'stable',
-    components: [{ kind: 'mcp', auth: 'none', local: { command: ['npx', '-y', '@azure-devops/mcp', '{org}'], timeoutMs: LOCAL_TIMEOUT_MS, requires: ['node'] } }],
+    components: [
+      {
+        kind: 'mcp',
+        auth: 'none',
+        local: {
+          command: ['npx', '-y', '@azure-devops/mcp', '{org}', '-a', 'envvar'],
+          timeoutMs: LOCAL_TIMEOUT_MS,
+          requires: ['node'],
+          envInputs: [{ id: 'token', envName: 'ADO_MCP_AUTH_TOKEN', labelKey: 'integrationsCatalog.entry.azure-devops.env.token', required: true }],
+        },
+      },
+    ],
     inputs: [{ id: 'org', labelKey: 'integrationsCatalog.input.org', placeholder: 'contoso', required: true }],
   },
   {
@@ -2338,7 +2375,16 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     homepage: 'https://www.mongodb.com',
     status: 'stable',
     components: [
-      { kind: 'mcp', auth: 'none', local: { command: ['npx', '-y', 'mongodb-mcp-server@latest', '--readOnly'], timeoutMs: LOCAL_TIMEOUT_MS, requires: ['node'] } },
+      {
+        kind: 'mcp',
+        auth: 'none',
+        local: {
+          command: ['npx', '-y', 'mongodb-mcp-server@latest', '--readOnly'],
+          timeoutMs: LOCAL_TIMEOUT_MS,
+          requires: ['node'],
+          envInputs: [{ id: 'connectionString', envName: 'MDB_MCP_CONNECTION_STRING', labelKey: 'integrationsCatalog.entry.mongodb.env.connectionString', required: true }],
+        },
+      },
       { kind: 'skill', source: 'mongodb/agent-skills', subpath: 'skills/mongodb-natural-language-querying', skillDir: 'mongodb-natural-language-querying' },
       { kind: 'skill', source: 'mongodb/agent-skills', subpath: 'skills/mongodb-query-optimizer', skillDir: 'mongodb-query-optimizer' },
       { kind: 'skill', source: 'mongodb/agent-skills', subpath: 'skills/mongodb-schema-design', skillDir: 'mongodb-schema-design' },
@@ -2355,7 +2401,24 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     icon: 'tools',
     homepage: 'https://github.com/googleapis/genai-toolbox',
     status: 'stable',
-    components: [{ kind: 'mcp', auth: 'none', local: { command: ['npx', '-y', '@toolbox-sdk/server', '--prebuilt={db}', '--stdio'], timeoutMs: LOCAL_TIMEOUT_MS, requires: ['node'] } }],
+    components: [
+      {
+        kind: 'mcp',
+        auth: 'none',
+        local: {
+          command: ['npx', '-y', '@toolbox-sdk/server', '--prebuilt={db}', '--stdio'],
+          timeoutMs: LOCAL_TIMEOUT_MS,
+          requires: ['node'],
+          envInputs: [
+            { id: 'postgresHost', envName: 'POSTGRES_HOST', labelKey: 'integrationsCatalog.entry.mcp-toolbox.env.postgresHost' },
+            { id: 'postgresPort', envName: 'POSTGRES_PORT', labelKey: 'integrationsCatalog.entry.mcp-toolbox.env.postgresPort' },
+            { id: 'postgresDatabase', envName: 'POSTGRES_DATABASE', labelKey: 'integrationsCatalog.entry.mcp-toolbox.env.postgresDatabase' },
+            { id: 'postgresUser', envName: 'POSTGRES_USER', labelKey: 'integrationsCatalog.entry.mcp-toolbox.env.postgresUser' },
+            { id: 'postgresPassword', envName: 'POSTGRES_PASSWORD', labelKey: 'integrationsCatalog.entry.mcp-toolbox.env.postgresPassword' },
+          ],
+        },
+      },
+    ],
     inputs: [{ id: 'db', labelKey: 'integrationsCatalog.input.db', placeholder: 'postgres', defaultValue: 'postgres' }],
   },
   {
@@ -2369,7 +2432,21 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
     icon: 'bar-chart-box',
     homepage: 'https://grafana.com',
     status: 'stable',
-    components: [{ kind: 'mcp', auth: 'none', local: { command: ['uvx', 'mcp-grafana'], timeoutMs: LOCAL_TIMEOUT_MS, requires: ['python'] } }],
+    components: [
+      {
+        kind: 'mcp',
+        auth: 'none',
+        local: {
+          command: ['uvx', 'mcp-grafana'],
+          timeoutMs: LOCAL_TIMEOUT_MS,
+          requires: ['python'],
+          envInputs: [
+            { id: 'url', envName: 'GRAFANA_URL', labelKey: 'integrationsCatalog.entry.grafana.env.url', required: true },
+            { id: 'apiKey', envName: 'GRAFANA_API_KEY', labelKey: 'integrationsCatalog.entry.grafana.env.apiKey' },
+          ],
+        },
+      },
+    ],
   },
   {
     id: 'terraform',

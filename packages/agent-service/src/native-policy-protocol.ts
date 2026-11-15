@@ -20,7 +20,7 @@ export const HostNativePolicySnapshotSchema = z.strictObject({
 export type HostNativePolicySnapshot = z.infer<typeof HostNativePolicySnapshotSchema>;
 const NativeEditModeSchema = z.enum(['apply_patch', 'hashline', 'none', 'patch', 'replace', 'sloppy']);
 /** Capability tier the tool declares for itself; the Host classifies unknown tools by it. */
-export const NativeToolTierSchema = z.enum(['read', 'write', 'exec']);
+const NativeToolTierSchema = z.enum(['read', 'write', 'exec']);
 export type NativeToolTier = z.infer<typeof NativeToolTierSchema>;
 export const NativePolicyContextSchema = z.strictObject({
   editMode: NativeEditModeSchema,

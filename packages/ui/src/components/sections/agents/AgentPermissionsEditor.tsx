@@ -374,7 +374,14 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
                             )}
                           </span>
                         }
-                        description={description ? <span className="text-xs text-muted-foreground">{description}</span> : undefined}
+                        // A catalog tool can carry paragraphs of instructions.
+                        // Two lines keep the list scannable; the full text stays
+                        // reachable through `title`.
+                        description={description ? (
+                          <span className="line-clamp-2 text-xs text-muted-foreground" title={description}>
+                            {description}
+                          </span>
+                        ) : undefined}
                         labelAccessory={<TierChip tier={tool.tier} />}
                       />
                     );

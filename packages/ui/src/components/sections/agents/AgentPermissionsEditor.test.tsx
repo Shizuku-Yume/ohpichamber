@@ -66,3 +66,14 @@ test('a tool whose label adds information keeps the id beside it', async () => {
   expect(view.textContent).toContain('Manage skill');
   expect(view.textContent).toContain('(manage_skill)');
 });
+
+test('a long tool description is clamped but still reachable', async () => {
+  const long = 'Mach-O names resolve without the underscore. '.repeat(40);
+  const view = await render([
+    { name: 'ida', label: 'IDA Pro', description: long, tier: 'exec', availability: false },
+  ]);
+  const description = [...view.querySelectorAll('span')].find((node) => node.getAttribute('title') === long);
+  expect(description).toBeDefined();
+  // Two lines in the list, the whole text on hover.
+  expect(description?.className).toContain('line-clamp-2');
+});

@@ -255,11 +255,16 @@ function extractQuotedLiterals(text) {
 
 /**
  * The OMP ids the Settings UI can actually draw: `owned-by` rows, `engine` rows,
- * and `page` rows on a page with GUI controls, each of which must be renderable
- * as a control. This mirrors `OMP_SETTING_EXPOSED_IDS` in
- * `packages/agent-service/src/worker/settings-ui.ts`; a test pins the two
- * together, and the audit uses it to tell a row component's real anchors from a
- * search entry that points at nothing.
+ * and `page` rows on a page with GUI controls. This mirrors
+ * `OMP_SETTING_EXPOSED_IDS` in `packages/agent-service/src/worker/settings-ui.ts`,
+ * and the audit uses it to tell a row component's real anchors from a search
+ * entry that points at nothing.
+ *
+ * Placement type alone decides exposure because the placement table is the
+ * authority on renderability: a `record`/`array` value with no options for the
+ * generic row is placed `config-only`, not on a page. `settings-ui.test.ts`
+ * pins that invariant against OMP's registry, which this audit cannot read, so
+ * the audit never has to guess whether a row would draw a control.
  */
 function exposedOmpSettingIds(ref) {
   const source = readFileAt(ref, 'packages/agent-service/src/worker/settings-ui.ts');
@@ -281,23 +286,12 @@ function exposedOmpSettingIds(ref) {
   if (guiMatch) {
     for (const entry of guiMatch[1].matchAll(/([A-Za-z_$][\w$]*)\s*:\s*true\b/g)) guiPages.add(entry[1]);
   }
-  const renderable = (id) => {
-    if (id === 'modelRoles') return true;
-    // The descriptor list is not in this tree (OMP ships it), so a row counts as
-    // renderable unless its placement says otherwise. `engine` rows without OMP
-    // copy are hidden by decision, and the stale search entries this check is
-    // meant to find are not engine rows.
-    return true;
-  };
   const exposed = [];
   for (const [id, raw] of placements) {
     if (raw.startsWith('owned-by ')) { exposed.push(id); continue; }
-    const page = raw.split(':')[0];
-    if (page === 'engine') { if (renderable(id)) exposed.push(id); continue; }
-    if (!guiPages.has(page)) continue;
-    // `retry.fallbackChains` has no option list of its own: the Sessions
-    // fallback selector writes it and no generic row draws it.
-    if (id === 'defaultThinkingLevel' || renderable(id)) exposed.push(id);
+    if (raw === 'engine') { exposed.push(id); continue; }
+    const colon = raw.indexOf(':');
+    if (colon > 0 && guiPages.has(raw.slice(0, colon))) exposed.push(id);
   }
   return exposed;
 }

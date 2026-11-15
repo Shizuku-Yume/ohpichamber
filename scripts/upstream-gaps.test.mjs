@@ -256,3 +256,45 @@ test('a stale staged bundle is not read as a settings consumer', () => {
   const result = runGuardrail(fixture);
   assert.doesNotMatch(result.output, /web-dist/);
 });
+
+test('only a placement a GUI owner draws counts as exposure', () => {
+  // The audit reads the placement table alone, because OMP's descriptors are
+  // not in this tree. Exposure is therefore exactly: `owned-by`, `engine`, and a
+  // `page` placement on a page listed in GUI_WRITTEN_PAGES. A `config-only` or
+  // `tui-only` row, or a page placement on a page with no GUI control, is
+  // config.yml-only, so a search entry pointing at it is a dead row.
+  const placements = PLACEMENTS.replace(
+    "'bash.enabled': 'engine',",
+    [
+      "'bash.enabled': 'engine',",
+      "'bash.approval': 'sessions:execution',",
+      "'bash.missing': 'voice:general',",
+      "'bash.configOnly': 'config-only',",
+      "'bash.terminalOnly': 'tui-only',",
+    ].join('\n  '),
+  );
+  const fixture = makeFixture({
+    ...baseFiles(),
+    'packages/agent-service/src/worker/settings-ui.ts': placements,
+    'packages/ui/src/components/RowControl.tsx': ROW_CONTROL,
+    'packages/ui/src/lib/settings/search.ts': SEARCH_ITEMS.replace(
+      "  { id: 'omp.bash.enabled', page: 'omp' },",
+      [
+        "  { id: 'omp.bash.enabled', page: 'omp' },",
+        "  { id: 'omp.bash.approval', page: 'omp' },",
+        "  { id: 'omp.bash.missing', page: 'omp' },",
+        "  { id: 'omp.bash.configOnly', page: 'omp' },",
+        "  { id: 'omp.bash.terminalOnly', page: 'omp' },",
+      ].join('\n'),
+    ),
+  });
+  const result = runGuardrail(fixture);
+  assert.equal(result.status, 1, result.output);
+  // A GUI page placement and an engine row are live anchors.
+  assert.doesNotMatch(result.output, /omp\.bash\.approval/);
+  assert.doesNotMatch(result.output, /omp\.bash\.enabled/);
+  // Everything the route omits is a gap.
+  for (const id of ['omp.bash.missing', 'omp.bash.configOnly', 'omp.bash.terminalOnly']) {
+    assert.match(result.output, new RegExp(`\\[settings-search\\] ${id.replaceAll('.', '\\.')}`));
+  }
+});

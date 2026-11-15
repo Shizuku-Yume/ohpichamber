@@ -272,7 +272,6 @@ settings-search	integrations.extensions.resource-monitor	## 2026-11-10 - Merge u
 settings-search	magic-prompts.scope	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Active UI control 'magic-prompts.scope' cannot be found or navigated to using the Settings search bar.
 settings-search	mcp.advanced	## 2026-11-12 - A dead settings row is deleted, not kept for later	Search index entry 'mcp.advanced' points to retired/deleted control; result cannot be highlighted in UI.
 settings-search	notifications.pullRequests	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	Active UI control 'notifications.pullRequests' cannot be found or navigated to using the Settings search bar.
-settings-search	omp.behaviour	## 2026-11-12 - A dead settings row is deleted, not kept for later	Search index entry 'omp.behaviour' points to retired/deleted control; result cannot be highlighted in UI.
 settings-search	plugins.create	## 2026-11-12 - A dead settings row is deleted, not kept for later	Search index entry 'plugins.create' points to retired/deleted control; result cannot be highlighted in UI.
 settings-search	plugins.options	## 2026-11-12 - A dead settings row is deleted, not kept for later	Search index entry 'plugins.options' points to retired/deleted control; result cannot be highlighted in UI.
 settings-search	projects.accent-color	## 2026-11-12 - A dead settings row is deleted, not kept for later	Search index entry 'projects.accent-color' points to retired/deleted control; result cannot be highlighted in UI.

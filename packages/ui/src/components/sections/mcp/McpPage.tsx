@@ -16,6 +16,8 @@ import {
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { readClipboardText } from '@/lib/clipboard';
 import {
@@ -265,10 +267,10 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
   const hasPending = rows.some((row) => row.key.trim() !== '' && row.value !== '') || bearerDraft !== '';
 
   return (
-    <div className="space-y-2">
+    <div className={SETTINGS_SPACE_ROW_CLASS}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <span className="typography-micro w-32 shrink-0 text-muted-foreground">{keyLabel}</span>
+          <span className="typography-micro shrink-0 text-muted-foreground">{keyLabel}</span>
           <span className="typography-micro text-muted-foreground">{t('settings.mcp.page.env.value')}</span>
         </div>
         <Button
@@ -285,14 +287,14 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
         </Button>
       </div>
 
-      <div className="space-y-1.5">
+      <div className={SETTINGS_SPACE_ROW_CLASS}>
         {configuredKeys.map((key) => (
           <div key={key} className="flex items-center gap-2">
             <Input
               value={key}
               readOnly
               aria-label={isEnv ? t('settings.mcp.page.env.key') : key}
-              className="w-36 shrink-0 font-mono typography-meta"
+              className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} shrink-0 font-mono typography-meta`}
             />
             <div className="relative flex flex-1 items-center">
               <Input
@@ -321,7 +323,7 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
 
         {!isEnv && bearerReference !== undefined ? (
           <div className="flex items-center gap-2">
-            <Input value="Authorization" readOnly aria-label={t('settings.mcp.page.advanced.headers')} className="w-36 shrink-0 font-mono typography-meta" />
+            <Input value="Authorization" readOnly aria-label={t('settings.mcp.page.advanced.headers')} className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} shrink-0 font-mono typography-meta`} />
             <div className="relative flex flex-1 items-center">
               <Input value="Bearer ••••••••" readOnly type="password" aria-label={`Authorization ${t('settings.common.status.saved')}`} className="w-full pr-8 font-mono typography-meta" />
               <span className="absolute right-2 typography-micro text-muted-foreground">{t('settings.common.status.saved')}</span>
@@ -346,7 +348,7 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
               onChange={(event) => updateRow(index, 'key', keyTransform(event.target.value))}
               placeholder={isEnv ? t('settings.mcp.page.env.keyPlaceholder') : t('settings.mcp.page.advanced.headerNamePlaceholder')}
               aria-label={t('settings.mcp.page.env.key')}
-              className="w-36 shrink-0 font-mono typography-meta"
+              className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} shrink-0 font-mono typography-meta`}
               data-bwignore="true"
               data-1p-ignore="true"
               data-lpignore="true"
@@ -382,7 +384,7 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
 
         {!isEnv ? (
           <div className="flex items-center gap-2">
-            <span className="w-36 shrink-0 typography-meta text-muted-foreground">Authorization: Bearer</span>
+            <span className="shrink-0 typography-meta text-muted-foreground">Authorization: Bearer</span>
             <Input
               type="password"
               value={bearerDraft}
@@ -894,7 +896,6 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
           title={t('settings.mcp.page.server.title')}
           divider={false}
           settingsItem="mcp.server"
-          contentClassName="space-y-0"
           titleAccessory={isNew ? (
             <Button
               variant="ghost"
@@ -912,7 +913,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
           <SettingsFieldRow
             settingsItem="mcp.name"
             label={t('settings.mcp.page.server.name')}
-            controlClassName="flex-wrap @xl:w-auto @xl:flex-1"
+            controlClassName="flex-wrap @xl:flex-1"
           >
             {isNew ? (
               <>
@@ -924,7 +925,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                     setDraft(value => ({ ...value, serverId, label: value.label === value.serverId ? serverId : value.label }));
                   }}
                   placeholder={t('settings.mcp.page.server.namePlaceholder')}
-                  className="h-7 w-48 min-w-0 max-w-full shrink px-2 font-mono"
+                  className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} shrink font-mono`}
                   autoFocus
                 />
               </>
@@ -936,7 +937,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                   disabled={busy || isReadOnly}
                   readOnly={isReadOnly}
                   placeholder={t('settings.mcp.page.server.namePlaceholder')}
-                  className="h-7 w-48 px-2"
+                  className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                   aria-label={t('settings.mcp.page.server.name')}
                 />
                 <code className="typography-micro text-muted-foreground">{draft.serverId}</code>
@@ -945,7 +946,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
           </SettingsFieldRow>
           <SettingsFieldRow
             label={t('settings.mcp.page.fields.scope')}
-            controlClassName="flex-wrap @xl:w-auto @xl:flex-1"
+            controlClassName="flex-wrap @xl:flex-1"
           >
             <Select
               value={draft.scope ?? 'project'}
@@ -984,7 +985,6 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
           title={t('settings.mcp.page.connection.title')}
           description={t('settings.mcp.page.connection.description')}
           settingsItem="mcp.command"
-          contentClassName="space-y-2"
         >
           <SortableTabsStrip
             items={connectionTabs}

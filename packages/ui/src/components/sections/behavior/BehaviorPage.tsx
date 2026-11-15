@@ -325,7 +325,7 @@ export const BehaviorPage: React.FC = () => {
           </div>
         )}
         settingsItem="behavior.system-prompt"
-        contentClassName="space-y-3"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <SettingsChipGroup<RulesScope>
           value={rulesScope}
@@ -338,7 +338,7 @@ export const BehaviorPage: React.FC = () => {
         />
         <SettingsStackedField
           label={AGENTS_MD_FILE_NAME}
-          controlClassName="w-full max-w-[40rem] flex-col items-stretch"
+          controlClassName="w-full max-w-none flex-col items-stretch"
         >
           <Textarea
             value={rulesValue}
@@ -356,7 +356,7 @@ export const BehaviorPage: React.FC = () => {
         title={t('settings.behavior.page.section.responseStyle')}
         info={t('settings.behavior.page.responseStyle.tooltip')}
         settingsItem="behavior.response-style"
-        contentClassName="space-y-3"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <SettingsCheckboxRow
           checked={responseStyleEnabled}
@@ -398,7 +398,7 @@ export const BehaviorPage: React.FC = () => {
         {responseStylePreset === 'custom' ? (
           <SettingsStackedField
             label={t('settings.behavior.page.responseStyle.option.custom')}
-            controlClassName="w-full max-w-[40rem] flex-col items-stretch"
+            controlClassName="w-full max-w-none flex-col items-stretch"
           >
             <Textarea
               aria-label={t('settings.behavior.page.responseStyle.option.custom')}

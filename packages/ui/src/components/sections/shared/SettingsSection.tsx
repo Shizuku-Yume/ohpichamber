@@ -4,6 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Radio } from '@/components/ui/radio';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
+import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { SettingsInfoHint } from './SettingsInfoHint';
 
@@ -399,6 +400,74 @@ export const SettingsFieldRow: React.FC<SettingsFieldRowProps> = ({
       >
         {children}
       </div>
+    </div>
+  );
+};
+
+interface SettingsDisclosureProps {
+  /** Item name; truncates. */
+  title: React.ReactNode;
+  /** Quiet one-line summary next to the title; truncates. */
+  secondary?: React.ReactNode;
+  /**
+   * Trailing control (a checkbox row, say). It sits beside the toggle rather
+   * than inside it, so it stays its own hit target.
+   */
+  accessory?: React.ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+  /** Rendered only while expanded. */
+  children: React.ReactNode;
+  settingsItem?: string;
+  className?: string;
+}
+
+/**
+ * A flat list item that expands into its editor: one ghost header row with a
+ * chevron, the item name and a quiet summary, then the editor below. No card,
+ * border or divide chrome — a list of these reads as one flat stack.
+ */
+export const SettingsDisclosure: React.FC<SettingsDisclosureProps> = ({
+  title,
+  secondary,
+  accessory,
+  expanded,
+  onToggle,
+  children,
+  settingsItem,
+  className,
+}) => {
+  const contentId = React.useId();
+
+  return (
+    <div data-settings-item={settingsItem} className={cn('py-1', className)}>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          aria-expanded={expanded}
+          aria-controls={contentId}
+          onClick={onToggle}
+          className="flex h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1.5"
+        >
+          <Icon
+            name={expanded ? 'arrow-down-s' : 'arrow-right-s'}
+            className="size-4 shrink-0 text-muted-foreground"
+          />
+          <span className={cn(SETTINGS_FIELD_LABEL_CLASS, 'min-w-0 truncate font-medium')}>
+            {title}
+          </span>
+          {secondary != null ? (
+            <span className={cn(SETTINGS_HELPER_CLASS, 'min-w-0 truncate')}>{secondary}</span>
+          ) : null}
+        </Button>
+        {accessory}
+      </div>
+      {expanded ? (
+        <div id={contentId} className={cn(SETTINGS_SPACE_ROW_CLASS, 'px-1 pb-4 pt-2')}>
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 };

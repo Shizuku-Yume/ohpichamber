@@ -41,6 +41,7 @@ Consult only the branches affected by the change; these are ordinary module refe
 | Titled block with divider | `SettingsSection` (`divider={false}` for the first one) |
 | Label left / control right | `SettingsFieldRow` (the default row) |
 | Label above control (two-column cells, wide controls only) | `SettingsStackedField` |
+| Flat list of items that each expand into an editor | `SettingsDisclosure` |
 | Boolean | `SettingsCheckboxRow` |
 | OMP registry row (number, string, enum, boolean from one setting) | `OmpRowControl` |
 | Mutually exclusive list | `SettingsRadioGroup` + `SettingsRadioOption` |
@@ -53,6 +54,17 @@ Consult only the branches affected by the change; these are ordinary module refe
 only for two-column cells and controls too wide for a row. Row shapes, the
 width class each control takes, and the section/row/checkbox spacing classes
 are defined once in [layout](references/layout.md).
+
+### Expandable rows
+
+`SettingsDisclosure` is for a flat list of items that each expand into an
+editor (a routing category, a custom preset). Its header is one ghost toggle
+with a chevron, the item name and an optional quiet summary; an `accessory`
+such as `SettingsCheckboxRow` sits beside the toggle so it stays a separate
+hit target. The editor renders only while expanded. Do not wrap a list of
+disclosures in cards or give the rows `divide-*`/border chrome: the list stays
+flat, like every other settings stack. For a single always-visible control use
+`SettingsFieldRow`; for a one-time reveal of helper copy use the `info` prop.
 
 `settingsLayoutGuard.test.ts` under `packages/ui` enforces the mechanical
 part and reports `file:line`: no raw width on a settings control or in a

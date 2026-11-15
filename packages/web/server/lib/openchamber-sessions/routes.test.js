@@ -1259,6 +1259,53 @@ describe('speculative session preparation', () => {
     }
   });
 
+  it('reaps an idle prepared session after its timeout and spawns a new one next time', async () => {
+    const ws = await createTestWorkspace();
+    let createdCount = 0;
+    const deleted = [];
+    const { app, sessionService } = setupApp(async (pathname, init) => {
+      if (pathname === '/internal/sessions' && init.method === 'POST') {
+        createdCount += 1;
+        const body = JSON.parse(init.body);
+        return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+      }
+      if (pathname.endsWith('/reopen') && init.method === 'POST') {
+        const id = decodeURIComponent(pathname.split('/').at(-2));
+        return Response.json(runtimeSession({ sessionId: id, rootSessionId: id, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+      }
+      if (pathname.startsWith('/internal/workers/') && init.method === 'DELETE') {
+        deleted.push(decodeURIComponent(pathname.split('/').pop()));
+        return Response.json({ ok: true });
+      }
+      if (pathname.startsWith('/api/agent/v1/sessions/') && init.method === 'DELETE') {
+        const id = decodeURIComponent(pathname.split('/').pop());
+        deleted.push(id);
+        return Response.json({ sessionId: id, deletedSessionIds: [id] });
+      }
+      return Response.json({});
+    }, ws);
+    // Only the timer under test is faked: the HTTP request needs the real clock to
+    // settle, so overriding everything would deadlock the request itself.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const prep = await request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: ws.workspaceId }).expect(200);
+      expect(createdCount).toBe(1);
+      // Nothing is reaped before the documented five minutes.
+      await vi.advanceTimersByTimeAsync(299_000);
+      expect(deleted).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(deleted).toEqual([prep.body.sessionId]);
+      // The reaped session is gone from the pool: the next prepare spawns again
+      // rather than handing back the session it just discarded.
+      const again = await request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: ws.workspaceId }).expect(200);
+      expect(createdCount).toBe(2);
+      expect(again.body.sessionId).not.toBe(prep.body.sessionId);
+    } finally {
+      vi.useRealTimers();
+      await sessionService.close();
+    }
+  });
+
   it('reaps idle prepared sessions via timer and falls back cleanly on prepare failure', async () => {
     const ws = await createTestWorkspace();
     let shouldFail = true;
@@ -1292,31 +1339,63 @@ describe('speculative session preparation', () => {
   it('prevents HTTP 409 collision when create races an in-flight prepare', async () => {
     const ws = await createTestWorkspace();
     let createdCount = 0;
-    const { promise: delayPromise, resolve: resolveDelay } = Promise.withResolvers();
-    const { app, sessionService } = setupApp(async (pathname, init) => {
-      if (pathname === '/internal/sessions' && init.method === 'POST') {
-        createdCount += 1;
-        await delayPromise;
-        const body = JSON.parse(init.body);
-        return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
-      }
-      return Response.json({});
-    }, ws);
+    // Prepare resolves its workspace before it registers itself. Delaying that first
+    // resolve holds prepare mid-body, so the create arrives while prepare is still
+    // unregistered: the window the fix closes. Without the fix prepare registers too
+    // late, create starts its own admission, and the supervisor refuses one of the
+    // two — the 409 this test names. Both requests must end with the same session.
+    let scopeResolves = 0;
+    const app = express();
+    const router = express.Router();
+    const { createOpenChamberSessionService, registerCanonicalSessionRoutes } = routes;
+    const sessionService = createOpenChamberSessionService({
+      agentScopeStore: prepState.agentScopeStore,
+      service: { request: async (pathname, init) => {
+        if (pathname === '/internal/sessions' && init.method === 'POST') {
+          createdCount += 1;
+          const body = JSON.parse(init.body);
+          return Response.json(runtimeSession({ sessionId: body.rootSessionId, rootSessionId: body.rootSessionId, projectId: ws.projectId, workspaceId: ws.workspaceId }));
+        }
+        return Response.json({});
+      } },
+      resolveWorkspaceScope: async (id) => {
+        scopeResolves += 1;
+        if (scopeResolves === 1) await new Promise(resolve => setTimeout(resolve, 150));
+        return id === ws.workspaceId ? ws : null;
+      },
+      resolveSessionScope: async () => null,
+      resolveHostSessionScope: async () => null,
+      registerSessionScope: async (runtime) => {
+        await prepState.agentScopeStore.bindSession({
+          sessionId: runtime.sessionId, rootSessionId: runtime.rootSessionId,
+          workspaceId: runtime.workspaceId, agentDirectoryId: ws.agentDirectoryId,
+        });
+        return true;
+      },
+      resolveAttachments: async () => [],
+      capturePrompt: async (_scope, body) => body,
+      beforeDispatch: async () => { },
+      onPromptAccepted: async () => { },
+      directCommandAdmissionStore: prepState.directCommandAdmissionStore,
+      archiveStore: createMemoryArchiveStore(),
+      sessionMetadataStore: createMemorySessionMetadataStore(),
+    });
+    registerCanonicalSessionRoutes(router, sessionService);
+    app.use('/api/agent/v1/sessions', router);
     try {
       const prepReq = request(app).post('/api/agent/v1/sessions/prepare').send({ projectId: ws.projectId, workspaceId: ws.workspaceId });
+      await new Promise(resolve => setTimeout(resolve, 20));
       const createReq = request(app).post('/api/agent/v1/sessions').send({
         projectId: ws.projectId, workspaceId: ws.workspaceId, options: { providerId: null, modelId: null, agentId: null, variant: null, reasoningEffort: null }
       });
-
-      resolveDelay();
-
       const [prepRes, createRes] = await Promise.all([prepReq, createReq]);
+      // Exactly one session, and neither request may be refused for colliding.
+      expect(createdCount).toBe(1);
       expect(prepRes.status).toBe(200);
       expect(createRes.status).toBe(200);
       expect(createRes.body.session.sessionId).toBe(prepRes.body.sessionId);
-      expect(createdCount).toBe(1);
     } finally {
-      await sessionService.close();
+      await sessionService.close?.();
     }
   });
 });

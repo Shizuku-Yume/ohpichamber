@@ -1547,3 +1547,4 @@ packages/web/server/lib/pr-watch/runtime.js	fork-differs	decision	2026-11-14 - A
 packages/web/server/lib/pr-watch/runtime.test.js	fork-differs	decision	2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Tests the delegated PR-watch dispatch and lease behaviour.
 scripts/perf/scenario.mjs	fork-differs	decision	2026-11-13 - Streaming text updates every 33 ms	Adds the stream-cadence scenario and budget that measures the 33 ms flush.
 scripts/profile-session.mjs	fork-differs	decision	2026-11-13 - Streaming text updates every 33 ms	Profiles the stream-cadence scenario behind the 33 ms decision.
+packages/ui/src/stores/useQuotaStore.same-origin.test.ts	fork-differs	decision	2026-11-13 - The Usage page is an OMP-native dashboard	Covers the same-origin Electron usage load and now publishes the workspace the Host requires before asserting the request order.

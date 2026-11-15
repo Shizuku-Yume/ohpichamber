@@ -219,6 +219,31 @@ const parseFileEditorKeymap: SettingsParser<FileEditorKeymap> = parseOneOf(['def
 const parseResponseStylePreset: SettingsParser<ResponseStylePreset> = parseGuarded(isResponseStylePreset);
 
 /**
+ * The Host-owned per-session permission policy and its monotonic revision.
+ * An entry is a mode, or a boolean from before the modes existed; the
+ * permission runtime converts those on its first read. `settings-helpers.js`
+ * builds the same shape and drops entries that are neither, so an invalid
+ * entry is dropped here rather than failing the whole policy.
+ */
+const permissionStoredEntrySchema = z.union([z.boolean(), z.enum(['ask', 'safety', 'auto'])]);
+type PermissionStoredEntry = z.infer<typeof permissionStoredEntrySchema>;
+const permissionSessionsSchema = z.record(z.string(), z.unknown()).transform((entries) => {
+ const sessions: Record<string, PermissionStoredEntry> = {};
+ for (const [sessionId, entry] of Object.entries(entries)) {
+  if (!sessionId) continue;
+  const parsed = permissionStoredEntrySchema.safeParse(entry);
+  if (parsed.success) sessions[sessionId] = parsed.data;
+ }
+ return sessions;
+});
+const permissionAutoAcceptSchema = z.object({
+ sessions: permissionSessionsSchema.catch({}).default({}),
+ revision: z.number().int().nonnegative().catch(0).default(0),
+});
+type PermissionAutoAcceptPolicy = z.infer<typeof permissionAutoAcceptSchema>;
+const parsePermissionAutoAccept: SettingsParser<PermissionAutoAcceptPolicy> = fromSchema(permissionAutoAcceptSchema);
+
+/**
  * Removing a built-in starter must stay a durable choice, so the list is only
  * patched with the built-ins when the corresponding marker says they were
  * never offered. The markers travel with the user's edit (useDraftStarters).
@@ -246,6 +271,10 @@ export const SETTINGS_REGISTRY = {
  agentRenderToolEnabled: field({ scope: 'instance', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('agentRenderToolEnabled', (v) => useUIStore.getState().setAgentRenderToolEnabled(v)) }),
 
  permissionDefaultMode: field({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseOneOf(['ask', 'safety', 'auto']), ui: uiStore('permissionDefaultMode', (v) => useUIStore.getState().setPermissionDefaultMode(v)) }),
+ // The Host-owned per-session policy, written by the permission runtime and
+ // read back by it after a restart; it travels in the settings document, the
+ // client mirrors it, and no UI control edits it directly.
+ permissionAutoAccept: field<PermissionAutoAcceptPolicy>({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parsePermissionAutoAccept }),
  sessionGoalChecker: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseOneOf(['classifier', 'small-model']), ui: uiStore('sessionGoalChecker', (v) => useUIStore.getState().setSessionGoalChecker(v)) }),
  sessionGoalMaxAutoTurns: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseIntegerInRange(1, 200), ui: uiStore('sessionGoalMaxAutoTurns', (v) => useUIStore.getState().setSessionGoalMaxAutoTurns(v)) }),
  planModeAllowAgents: field({ scope: 'profile', effect: ['server', 'ui'], parse: parseBoolean, ui: uiStore('planModeAllowAgents', (v) => useUIStore.getState().setPlanModeAllowAgents(v)) }),

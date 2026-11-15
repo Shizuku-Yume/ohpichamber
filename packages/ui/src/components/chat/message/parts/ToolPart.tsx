@@ -38,6 +38,7 @@ import { describeToolCall, describeToolResult, evalResultSummary, isMemoryTool }
 import { TodoCard } from './TodoCard';
 import { MemoryToolCard } from './MemoryToolCard';
 import { extractTodoPhases } from '../../todoData';
+import { hasTodoTasks } from '../../todoProgress';
 import { toolDisplayStyles } from '@/lib/typography';
 import { WorkerHighlightedCode } from '@/components/code/WorkerHighlightedCode';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -1443,7 +1444,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                         <div className="relative ml-2 pl-3">
                             {isTodoTool(toolName) && result && !result.isError ? (() => {
                                 const phases = extractTodoPhases(resultContent.details);
-                                return phases ? <TodoCard phases={phases} defaultExpanded /> : null;
+                                return phases && hasTodoTasks(phases) ? <TodoCard phases={phases} defaultExpanded /> : null;
                             })() : null}
                             {isMemoryTool(toolName) && result && !result.isError ? (
                                 <MemoryToolCard toolName={toolName} input={call?.input ?? {}} result={resultContent} />

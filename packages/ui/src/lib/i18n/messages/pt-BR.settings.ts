@@ -1724,7 +1724,6 @@ export const settingsDict = {
   "settings.providers.page.custom.description": "Adicione um provedor com URL base, credenciais, lista de modelos e protocolo de API compatível. Ele é salvo na configuração do OpenCode para uso no chat.",
   "settings.providers.page.custom.field.providerID.label": "ID do provedor",
   "settings.providers.page.custom.field.providerID.placeholder": "meu-provedor",
-  "settings.providers.page.custom.field.providerID.info": "Letras minúsculas, números, hífens e sublinhados. Usado como ID de provedor do OpenCode.",
   "settings.providers.page.custom.field.name.label": "Nome de exibição",
   "settings.providers.page.custom.field.name.placeholder": "Meu provedor",
   "settings.providers.page.custom.field.name.info": "Mostrado nos seletores de provedor e modelo.",
@@ -1776,7 +1775,6 @@ export const settingsDict = {
   "settings.providers.page.custom.actions.update": "Atualizar provedor",
 
   "settings.providers.page.custom.error.providerID.required": "O ID do provedor é obrigatório",
-  "settings.providers.page.custom.error.providerID.format": "Use letras minúsculas, números, hífens ou sublinhados",
   "settings.providers.page.custom.error.providerID.exists": "Já existe um provedor conectado com este ID",
   "settings.providers.page.custom.error.name.required": "O nome de exibição é obrigatório",
   "settings.providers.page.custom.error.baseURL.required": "A URL base é obrigatória",

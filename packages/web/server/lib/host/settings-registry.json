@@ -40,6 +40,9 @@
     "permissionDefaultMode": {
       "scope": "profile"
     },
+    "permissionAutoAccept": {
+      "scope": "profile"
+    },
     "sessionGoalChecker": {
       "scope": "profile"
     },

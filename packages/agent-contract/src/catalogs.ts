@@ -2,10 +2,17 @@ import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, JsonObjectSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { AgentSchema } from './session.ts';
 
+// A provider base URL may carry a query string (Azure's `?api-version=`), but
+// credentials belong in headers: userinfo and fragments stay refused.
 const PublicEndpointSchema = z.url({ protocol: /^https?$/ }).refine((endpoint) => {
   const url = new URL(endpoint);
-  return url.username === '' && url.password === '' && url.search === '' && url.hash === '';
-}, 'Public endpoints contain no embedded credentials, query parameters or fragments');
+  return url.username === '' && url.password === '' && url.hash === '';
+}, 'Public endpoints contain no embedded credentials or fragments');
+// MCP transports keep refusing query strings so a token cannot ride in a URL.
+const MCPTransportUrlSchema = PublicEndpointSchema.refine(
+  (endpoint) => new URL(endpoint).search === '',
+  'MCP transport URLs contain no query parameters',
+);
 const RelativeCommandSchema = z.string().min(1).refine(
   (command) => !command.startsWith('/') && !command.startsWith('\\\\') && !/^[A-Za-z]:[\\/]/.test(command),
   'Public command references are not absolute Host paths',
@@ -91,6 +98,16 @@ export const ProviderAuthStateSchema = z.discriminatedUnion('status', [
     credentialRef: EntityIdSchema,
     method: z.enum(['api-key', 'oauth']),
     source: z.enum(['stored-credential', 'managed-environment', 'external-environment']),
+    /**
+     * The environment variable that can back this provider: its name only,
+     * never a value. `active` says it currently supplies the winning
+     * credential; a stored key can win while the variable stays visible.
+     * Absent when the provider has no environment mechanism.
+     */
+    environment: z.strictObject({
+      variable: z.string().min(1).nullable(),
+      active: z.boolean(),
+    }).optional(),
   }),
 ]);
 export type ProviderAuthState = z.infer<typeof ProviderAuthStateSchema>;
@@ -313,8 +330,8 @@ export const MCPTransportSchema = z.discriminatedUnion('type', [
     args: z.array(z.string()),
     envCredentialRefs: z.record(z.string().min(1), EntityIdSchema).optional(),
   }),
-  z.strictObject({ type: z.literal('http'), url: PublicEndpointSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
-  z.strictObject({ type: z.literal('sse'), url: PublicEndpointSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
+  z.strictObject({ type: z.literal('http'), url: MCPTransportUrlSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
+  z.strictObject({ type: z.literal('sse'), url: MCPTransportUrlSchema, credentialRef: EntityIdSchema.optional(), headerCredentialRefs: z.record(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/), EntityIdSchema).optional() }),
 ]);
 export type MCPTransport = z.infer<typeof MCPTransportSchema>;
 
@@ -503,7 +520,10 @@ export type MCPApplyOutcome = z.infer<typeof MCPApplyOutcomeSchema>;
 export const MCPApplyResultSchema = z.strictObject({
   kind: z.literal('mcp'),
   status: ApplyStatusSchema,
-  outcome: MCPApplyOutcomeSchema.optional(),
+  // Required: the coordinator always states whether the saved configuration is
+  // applied, waiting for sign-in, or not connected. A reader must not infer it
+  // from `status`, which only says how many captured workers answered.
+  outcome: MCPApplyOutcomeSchema,
   configuration: MCPConfigurationStateSchema,
   workers: z.array(MCPWorkerApplyOutcomeSchema),
 }).refine(validAggregate, 'Aggregate status reflects every unique captured live worker outcome').refine(
@@ -631,7 +651,15 @@ const MCPOAuthResultOwnerFields = {
 export const MCPOAuthResultSchema = z.discriminatedUnion('status', [
   z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('pending'), authenticated: z.boolean(), pendingFlow: MCPOAuthPendingFlowSchema }),
   z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('authenticated'), authenticated: z.literal(true) }),
-  z.strictObject({ ...MCPOAuthResultOwnerFields, status: z.literal('unauthenticated'), authenticated: z.literal(false) }),
+  z.strictObject({
+    ...MCPOAuthResultOwnerFields, status: z.literal('unauthenticated'), authenticated: z.literal(false),
+    // Why the last attempt ended. A flow that fails after the browser handoff
+    // (consent denied, state mismatch, token exchange, expiry) has no other
+    // channel: the pending poll would otherwise report a plain unauthenticated
+    // result and the panel would reset with no message. Absent for a user
+    // cancel, which is a neutral outcome, and reported once per failure.
+    error: CatalogOperationErrorSchema.optional(),
+  }),
 ]);
 export type MCPOAuthResult = z.infer<typeof MCPOAuthResultSchema>;
 

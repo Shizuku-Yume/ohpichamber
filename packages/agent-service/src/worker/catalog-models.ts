@@ -3,7 +3,7 @@ import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
-import { oauthAccountKey, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
+import { AUTHENTICATED_SENTINEL, getEnvApiKey, getEnvApiKeyName, listProvidersWithEnvKey, oauthAccountKey, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
 import { generateImage } from '@oh-my-pi/pi-ai/images';
 import { getModelPricingStatus, IMAGE_GENERATION_APIS, modelKind, PROVIDER_DESCRIPTORS } from '@oh-my-pi/pi-catalog';
 import { authPolicyFor } from '@oh-my-pi/pi-catalog/compat/auth';
@@ -104,6 +104,25 @@ export function resolveProviderDisplayName(providerId: string, configuredName?: 
  return providerId;
 }
 
+const ENV_PROVIDER_IDS: ReadonlySet<string> = new Set(listProvidersWithEnvKey());
+
+/**
+ * The environment variable that can back a provider, as a name only. OMP's own
+ * resolver decides presence, so an unset or blank variable reads as absent.
+ * Computed resolvers (multi-variable pickers, ADC/Bedrock probes) have no
+ * single name and report `variable: null`. `active` is whether the variable
+ * currently supplies the winning credential, taken from the projected source.
+ */
+function providerEnvironment(providerId: string, active: boolean): { variable: string | null; active: boolean } | undefined {
+ // OMP's own resolver decides presence, so an unset or blank variable is absent.
+ // An ambient sentinel (AWS profile, ADC) is auth without a variable to name.
+ if (!active) {
+  if (!ENV_PROVIDER_IDS.has(providerId)) return undefined;
+  const value = getEnvApiKey(providerId);
+  if (value === undefined || value === AUTHENTICATED_SENTINEL || value.trim() === '') return undefined;
+ }
+ return { variable: getEnvApiKeyName(providerId) ?? null, active };
+}
 
 function modelKey(selection: ModelSelection): string {
  return JSON.stringify([selection.providerId, selection.modelId]);
@@ -495,7 +514,11 @@ export class NativeModels {
     if (!headers.has(name)) headers.set(name, name === 'authorization' ? `Bearer ${apiKey}` : apiKey);
    }
    if (request.protocol === 'messages' && !headers.has('anthropic-version')) headers.set('anthropic-version', '2023-06-01');
-   const url = new URL(`${request.endpoint.replace(/\/+$/, '')}/models`);
+   // A custom base URL may carry a query (`?api-version=`); the discovery path
+   // appends to the pathname, so the query has to be reattached afterwards.
+   const endpoint = new URL(request.endpoint);
+   const url = new URL(`${endpoint.origin}${endpoint.pathname.replace(/\/+$/, '')}/models`);
+   url.search = endpoint.search;
    const models: ProviderModelDiscoveryResult['models'] = [];
    const seen = new Set<string>();
    const pages = new Set<string>();
@@ -594,6 +617,12 @@ export class NativeModels {
      : `credential_${createHash('sha256').update(`${providerId}\0${source.kind}`).digest('hex').slice(0, 24)}`,
     source: storedSource ? 'stored-credential' : source.kind === 'env' ? 'external-environment' : 'managed-environment',
    };
+  }
+  // The variable stays visible even when a stored key wins the cascade; only
+  // its name travels, never the value.
+  if (auth.status === 'configured') {
+   const environment = providerEnvironment(providerId, auth.source === 'external-environment');
+   if (environment) auth = { ...auth, environment };
   }
   const base = {
    providerId, name: resolveProviderDisplayName(providerId, configured?.name),
@@ -822,6 +851,11 @@ export class NativeModels {
 
  async configureProvider(input: ProviderConfigureRequest, revision: string): Promise<ProviderMutationResult> {
   const request = ProviderConfigureRequestSchema.parse(input);
+  // A provider ID is the model selector's provider half; a slash would split
+  // every selector built from it, leaving the provider unselectable.
+  if (request.configuration.providerId.includes('/')) {
+   throw new ProjectionError(422, 'INVALID_REQUEST', 'Provider identity cannot contain a path separator');
+  }
   PositiveCounterSchema.parse(revision);
   const state = await this.load();
   await this.context.authStorage.credentials.reload();

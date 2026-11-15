@@ -45,6 +45,7 @@ import { getMcpServerStatus, isMcpServerConnected, useMcpStore } from '@/stores/
 import { McpGrid } from './McpGrid';
 import { McpOAuthSignIn } from './McpOAuthSignIn';
 import { parseImportedMcpSnippet } from './mcpImport';
+import { mcpServerIdFrom } from './mcpServerId';
 import { problemMessage } from '@/lib/problemMessage';
 
 type RemoteTransportType = 'http' | 'sse';
@@ -926,7 +927,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                 <Input
                   value={draft.serverId}
                   onChange={(event) => {
-                    const serverId = event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+                    const serverId = mcpServerIdFrom(event.target.value);
                     setDraft(value => ({ ...value, serverId, label: value.label === value.serverId ? serverId : value.label }));
                   }}
                   placeholder={t('settings.mcp.page.server.namePlaceholder')}

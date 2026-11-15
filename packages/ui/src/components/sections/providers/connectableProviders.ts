@@ -1,5 +1,6 @@
 import type { Provider } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
+import { getProviderEnvironment } from './providerAuth';
 
 export interface ConnectableProvider {
   id: string;
@@ -32,16 +33,41 @@ const POPULAR_IDS: Record<string, true> = Object.fromEntries(
   POPULAR_PROVIDERS.map((provider) => [provider.id, true] as const),
 );
 
+const toConnectable = (provider: Provider): ConnectableProvider => ({
+  id: provider.providerId,
+  name: provider.name || provider.providerId,
+});
+
+const byName = (a: ConnectableProvider, b: ConnectableProvider) =>
+  a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+
 /**
  * What can still be connected: native providers the workspace reports without
  * a configured credential. Sorted by name so the compact rows stay scannable.
+ * A provider working from an environment variable has a credential, so it
+ * stays out of this list; `listProvidersAcceptingKey` covers it instead.
  */
 export const listConnectableProviders = (
   providers: readonly Provider[],
 ): ConnectableProvider[] => providers
   .filter((provider) => provider.auth.status === 'missing' && provider.authMethods.length > 0)
-  .map((provider) => ({ id: provider.providerId, name: provider.name || provider.providerId }))
-  .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  .map(toConnectable)
+  .sort(byName);
+
+/**
+ * Providers the environment is currently authenticating: the picker leaves
+ * them out because they are configured, yet a key saved here outranks the
+ * variable, so their cards need the "Add a key" way in. Once a stored key
+ * wins, the provider's own accounts section is the place to add another, and a
+ * provider without the API-key method has nothing to save.
+ */
+export const listProvidersAcceptingKey = (
+  providers: readonly Provider[],
+): ConnectableProvider[] => providers
+  .filter((provider) => provider.authMethods.includes('api-key')
+    && getProviderEnvironment(provider)?.active === true)
+  .map(toConnectable)
+  .sort(byName);
 
 interface ConnectableProviderGroups {
   /** Popular providers that can still be connected, in `POPULAR_PROVIDERS` order. */

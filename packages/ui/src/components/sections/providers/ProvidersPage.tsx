@@ -25,7 +25,12 @@ import { toast } from '@/components/ui';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SETTINGS_ICON_BUTTON_CLASS, SETTINGS_SPACE_ROW_CLASS, SettingsSection } from '@/components/sections/shared/SettingsSection';
+import {
+  SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SettingsFieldRow,
+  SettingsSection,
+} from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { SettingsBackButton } from '@/components/sections/shared/SettingsCards';
 import { ClassificationProvidersPage } from '@/components/sections/classification/ClassificationProvidersPage';
@@ -37,8 +42,13 @@ import { ProviderAccounts } from './ProviderAccounts';
 import { ProviderApiKeyForm } from './ProviderApiKeyForm';
 import { ProviderOAuthMethods } from './ProviderOAuthMethods';
 import { CustomProviderForm } from './CustomProviderForm';
-import { listConnectableProviders } from './connectableProviders';
-import { oauthMethodsForProvider, requiresProviderAuth, shouldAutoOpenAuthPanel } from './providerAuth';
+import { listConnectableProviders, listProvidersAcceptingKey } from './connectableProviders';
+import {
+  getProviderEnvironment,
+  oauthMethodsForProvider,
+  requiresProviderAuth,
+  shouldAutoOpenAuthPanel,
+} from './providerAuth';
 import { CUSTOM_PROVIDER_ID, type CustomProviderPersistPlan } from './custom-provider-form';
 import { problemMessage } from '@/lib/problemMessage';
 import { ProviderLogoImageControl } from './ProviderLogoImageControl';
@@ -68,6 +78,8 @@ interface ProviderDetailProps {
   enterprise: boolean;
   busy: boolean;
   initialEdit: boolean;
+  /** The card asked for the key form, so it opens on arrival. */
+  initialAddKey: boolean;
   authFailureHint: string | null;
   onRefresh: () => Promise<void>;
   onSave: (plan: CustomProviderPersistPlan) => Promise<void>;
@@ -87,6 +99,7 @@ function ProviderDetail({
   enterprise,
   busy,
   initialEdit,
+  initialAddKey,
   authFailureHint,
   onRefresh,
   onSave,
@@ -100,7 +113,7 @@ function ProviderDetail({
   const [retry, setRetry] = React.useState(0);
   const [editing, setEditing] = React.useState(initialEdit);
   const [query, setQuery] = React.useState('');
-  const [showAuthPanel, setShowAuthPanel] = React.useState(false);
+  const [showAuthPanel, setShowAuthPanel] = React.useState(initialAddKey);
   const [authPanelDismissed, setAuthPanelDismissed] = React.useState(false);
   const [accountBusyId, setAccountBusyId] = React.useState<string | null>(null);
   const [accountError, setAccountError] = React.useState<string | null>(null);
@@ -289,6 +302,7 @@ function ProviderDetail({
   );
   const canConnect = !enterprise;
   const authStatusIncomplete = requiresProviderAuth(provider);
+  const environment = getProviderEnvironment(provider);
 
   return (
     <>
@@ -328,7 +342,9 @@ function ProviderDetail({
                     <Icon name="add" className="size-3.5" />
                     {accounts.length > 0
                       ? t('settings.providers.accounts.add')
-                      : t('settings.providers.page.actions.connect')}
+                      : environment
+                        ? t('settings.providers.page.actions.addKey')
+                        : t('settings.providers.page.actions.connect')}
                   </>
                 )}
               </Button>
@@ -355,8 +371,24 @@ function ProviderDetail({
           </div>
         ) : null}
 
-        {provider.auth.status === 'configured' && provider.auth.source !== 'stored-credential' ? (
-          <p className="typography-meta text-muted-foreground">{t('settings.providers.card.status.environment')}</p>
+        {environment ? (
+          <SettingsFieldRow label={t('settings.providers.accounts.environment')}>
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <Icon name="terminal-box" className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 truncate font-mono typography-ui-label text-foreground">
+                {environment.variable ? `$${environment.variable}` : t('settings.providers.card.status.environment')}
+              </span>
+              <SettingsInfoHint>
+                {environment.active
+                  ? environment.variable
+                    ? t('settings.providers.page.environment.using', { variable: environment.variable })
+                    : t('settings.providers.page.environment.usingUnnamed')
+                  : environment.variable
+                    ? t('settings.providers.page.environment.overridden', { variable: environment.variable })
+                    : t('settings.providers.page.environment.overriddenUnnamed')}
+              </SettingsInfoHint>
+            </span>
+          </SettingsFieldRow>
         ) : null}
 
         {enterprise ? (
@@ -551,6 +583,8 @@ export const ProvidersPage: React.FC = () => {
   const [candidate, setCandidate] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [partialProvider, setPartialProvider] = React.useState<string | null>(null);
+  /** Set when a grid card asked for its key form, so the detail opens on it. */
+  const [addKeyFor, setAddKeyFor] = React.useState<string | null>(null);
   const [methods, setMethods] = React.useState<Methods | null>(null);
   const [methodsFailed, setMethodsFailed] = React.useState(false);
   const connectRequested = useUIStore((value) => value.settingsProvidersConnectRequested);
@@ -564,6 +598,7 @@ export const ProvidersPage: React.FC = () => {
     setSelected('');
     setCandidate('');
     setPartialProvider(null);
+    setAddKeyFor(null);
     setMethods(null);
     setMethodsFailed(false);
     if (directory) void store.getState().load(directory);
@@ -572,6 +607,7 @@ export const ProvidersPage: React.FC = () => {
       setSelected('');
       setCandidate('');
       setPartialProvider(null);
+      setAddKeyFor(null);
       setMethods(null);
       setMethodsFailed(false);
       setBusy(false);
@@ -614,6 +650,7 @@ export const ProvidersPage: React.FC = () => {
     setSelected((value) => value === ADD_PROVIDER_ID ? '' : value);
     setCandidate('');
     setPartialProvider(null);
+    setAddKeyFor(null);
   }, [enterprise]);
 
   React.useEffect(() => {
@@ -653,15 +690,18 @@ export const ProvidersPage: React.FC = () => {
   const provider = providers.find((entry) => entry.providerId === selected);
   const existingIds = new Set(providers.map((entry) => entry.providerId));
   const connectable = state.providers ? listConnectableProviders(providers) : null;
+  const keyProviders = new Set(listProvidersAcceptingKey(providers).map((entry) => entry.id));
   const connectListFailed = !state.providers && Boolean(state.error);
 
   const backToGrid = () => {
     setCandidate('');
     setSelected('');
     setPartialProvider(null);
+    setAddKeyFor(null);
   };
 
-  const openProviderForKey = (providerId: string) => {
+  const openProvider = (providerId: string) => {
+    setAddKeyFor(null);
     if (providers.some((entry) => entry.providerId === providerId)) {
       setCandidate('');
       setSelected(providerId);
@@ -669,6 +709,13 @@ export const ProvidersPage: React.FC = () => {
     }
     setCandidate(providerId);
     setSelected(ADD_PROVIDER_ID);
+  };
+
+  const requestProviderKey = (providerId: string) => {
+    if (enterprise) return;
+    setAddKeyFor(providerId);
+    setCandidate('');
+    setSelected(providerId);
   };
 
   const saveCustomProvider = async (plan: CustomProviderPersistPlan) => {
@@ -776,7 +823,7 @@ export const ProvidersPage: React.FC = () => {
     return (
       <ClassificationProvidersPage
         titleLeading={<SettingsBackButton label={t('settings.providers.page.back')} onClick={backToGrid} />}
-        onOpenProvider={openProviderForKey}
+        onOpenProvider={openProvider}
       />
     );
   }
@@ -923,6 +970,7 @@ export const ProvidersPage: React.FC = () => {
           enterprise={enterprise}
           busy={busy}
           initialEdit={partialProvider === provider.providerId}
+          initialAddKey={addKeyFor === provider.providerId}
           authFailureHint={partialProvider === provider.providerId
             ? t('settings.providers.page.custom.authFailure.keyAfterConfig')
             : null}
@@ -940,8 +988,10 @@ export const ProvidersPage: React.FC = () => {
     <ProviderGrid
       providers={connectedProviders}
       models={models}
-      onSelect={setSelected}
+      keyProviders={keyProviders}
+      onSelect={openProvider}
       onConnect={() => setSelected(ADD_PROVIDER_ID)}
+      onAddKey={requestProviderKey}
       onOpenClassification={() => setSelected(CLASSIFICATION_PAGE_ID)}
       loadFailed={connectListFailed}
       onRetry={() => { void state.refresh(); }}

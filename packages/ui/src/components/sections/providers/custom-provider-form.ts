@@ -18,6 +18,12 @@ export interface ModelRow {
   contextWindow: string;
   maxOutputTokens: string;
   modalities: Model['modalities'];
+  /**
+   * The row's native runner kind. OMP publishes `audio` only for `tts`/`stt`
+   * models and `embedding` only for embedding models, and the writer rejects
+   * either on any other kind, so which chips may be offered follows from here.
+   */
+  nativeKind: NativeModelKind;
   toolsSupported?: boolean;
   /** Canonical fields the controls do not edit (reasoning, pricing, status, enabled). */
   base?: Model;
@@ -77,16 +83,87 @@ export interface CustomProviderValidation {
 
 const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 
+/**
+ * OMP's selector grammar: the provider is the text before the first `/`, so
+ * the delimiter set below would split a selection, and the id also keys plain
+ * objects (`config.providers`, `metadata.providers`), so prototype names are
+ * refused even though they pass the character rule.
+ */
+const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const PROVIDER_ID_DELIMITERS = /[/#@:\s]/;
+// A Set, not a Record: `__proto__` as an object-literal key would set the
+// prototype instead of carrying the name as data.
+const PROTOTYPE_KEY_HAZARDS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** The one provider-id rule, used by the editor's field check and the request builder. */
+export function isValidProviderID(value: string): boolean {
+  return PROVIDER_ID_PATTERN.test(value)
+    && !PROVIDER_ID_DELIMITERS.test(value)
+    && !PROTOTYPE_KEY_HAZARDS.has(value);
+}
+
+/** OMP matches provider ids case-insensitively, so a taken id differs only by case. */
+function isProviderIDTaken(providerId: string, existing: ReadonlySet<string>): boolean {
+  const normalized = providerId.toLowerCase();
+  for (const id of existing) {
+    if (id.toLowerCase() === normalized) return true;
+  }
+  return false;
+}
+
 const positiveInteger = (value: string): boolean => {
   const parsed = Number(value.trim());
   return /^[0-9]+$/.test(value.trim()) && Number.isSafeInteger(parsed) && parsed > 0;
 };
 
+/**
+ * The native runner kinds whose modality chips differ. A canonical `Model`
+ * carries no kind, so a tts or stt model is only recognizable by its `audio`
+ * modality; both allow the same chips, so they collapse into one kind here.
+ */
+export type NativeModelKind = 'chat' | 'tts' | 'stt' | 'embedding';
+
+const BASE_MODALITIES = ['text', 'image'] as const;
+
+/**
+ * Which input chips a model of this kind can actually save. OpenChamber's
+ * writer keeps `audio` only for tts/stt runners and `embedding` only for an
+ * embedding runner; on any other kind it rejects the request with 422.
+ */
+export function modelModalitiesForKind(kind: NativeModelKind): readonly Model['modalities'][number][] {
+  if (kind === 'tts' || kind === 'stt') return [...BASE_MODALITIES, 'audio'];
+  if (kind === 'embedding') return [...BASE_MODALITIES, 'embedding'];
+  return BASE_MODALITIES;
+}
+
+/**
+ * Drops a modality the kind cannot save and keeps text or image, which the
+ * writer requires even from a tts or embedding runner.
+ */
+export function normalizeModelModalities(
+  kind: NativeModelKind,
+  modalities: readonly Model['modalities'][number][],
+): Model['modalities'] {
+  const allowed = modelModalitiesForKind(kind);
+  const kept = [...new Set(modalities)].filter((modality) => allowed.includes(modality));
+  if (!kept.some((modality) => modality === 'text' || modality === 'image')) kept.unshift('text');
+  return kept;
+}
+
+/** A canonical model's kind as far as the editor can tell; absent kinds are chat. */
+function nativeKindOf(modalities: readonly Model['modalities'][number][]): NativeModelKind {
+  if (modalities.includes('embedding')) return 'embedding';
+  if (modalities.includes('audio')) return 'tts';
+  return 'chat';
+}
+
+/** A query string is part of a gateway endpoint (`?api-version=` on Azure);
+ *  embedded credentials and fragments are not. */
 const isHttpEndpoint = (value: string): boolean => {
   try {
     const endpoint = new URL(value);
     return (endpoint.protocol === 'http:' || endpoint.protocol === 'https:')
-      && endpoint.username === '' && endpoint.password === '' && endpoint.search === '' && endpoint.hash === '';
+      && endpoint.username === '' && endpoint.password === '' && endpoint.hash === '';
   } catch {
     return false;
   }
@@ -98,13 +175,16 @@ const isCanonicalModel = (model: Model | ProviderModelDiscoveryResult['models'][
 export function createModelRow(model?: Model | ProviderModelDiscoveryResult['models'][number]): ModelRow {
   const canonical = isCanonicalModel(model) ? { ...model } : undefined;
   const { modelId = '', name = '', contextWindow, maxOutputTokens } = model ?? {};
+  const modalities: Model['modalities'] = canonical ? [...canonical.modalities] : ['text'];
+  const nativeKind = nativeKindOf(modalities);
   return {
     row: crypto.randomUUID(),
     modelId,
     name,
     contextWindow: contextWindow === undefined ? '' : String(contextWindow),
     maxOutputTokens: maxOutputTokens === undefined ? '' : String(maxOutputTokens),
-    modalities: canonical ? [...canonical.modalities] : ['text'],
+    modalities: normalizeModelModalities(nativeKind, modalities),
+    nativeKind,
     toolsSupported: canonical?.toolsSupported,
     base: canonical,
   };
@@ -165,8 +245,8 @@ export function validateCustomProviderForm(
   const endpoint = form.endpoint.trim();
 
   if (!providerId) fields.providerId = t('settings.providers.page.custom.error.providerID.required');
-  else if (!/^[a-z0-9][a-z0-9_-]*$/.test(providerId)) fields.providerId = t('settings.providers.page.custom.error.providerID.format');
-  else if (!editing && existingProviderIDs.has(providerId)) fields.providerId = t('settings.providers.page.custom.error.providerID.exists');
+  else if (!isValidProviderID(providerId)) fields.providerId = t('settings.providers.page.custom.error.providerID.format');
+  else if (!editing && isProviderIDTaken(providerId, existingProviderIDs)) fields.providerId = t('settings.providers.page.custom.error.providerID.exists');
 
   if (!name) fields.name = t('settings.providers.page.custom.error.name.required');
 
@@ -223,7 +303,7 @@ export function validateCustomProviderForm(
 
 export function buildCustomProviderRequest(form: CustomProviderFormState, expectedRevision: string): CustomProviderPersistPlan {
   const providerId = form.providerId.trim();
-  if (!/^[a-z0-9][a-z0-9_-]*$/.test(providerId)) throw new Error('Invalid provider ID');
+  if (!isValidProviderID(providerId)) throw new Error('Invalid provider ID');
   const models = form.models.map((row) => {
     // All canonical metadata survives editing. Discovery supplies no fabricated limits.
     const model = {
@@ -233,7 +313,9 @@ export function buildCustomProviderRequest(form: CustomProviderFormState, expect
       name: row.name.trim(),
       contextWindow: row.contextWindow.trim() ? Number(row.contextWindow) : 0,
       maxOutputTokens: row.maxOutputTokens.trim() ? Number(row.maxOutputTokens) : 0,
-      modalities: row.modalities,
+      // A saved row can predate a kind change; the request carries only what
+      // the native runner accepts, matching the writer's own modality rule.
+      modalities: normalizeModelModalities(row.nativeKind, row.modalities),
     };
     // Omission preserves the native runner's own tool-support default.
     if (row.toolsSupported === undefined) return ModelSchema.parse(model);

@@ -4,7 +4,7 @@ import { useI18n, type I18nKey } from '@/lib/i18n';
 import { Icon } from '@/components/icon/Icon';
 
 import type { TodoItem, TodoPhase } from '../../todoData';
-import { activeTodoTask, isClosedTodo, todoProgress } from '../../todoProgress';
+import { activeTodoTask, hasTodoTasks, isClosedTodo, todoProgress } from '../../todoProgress';
 
 const STATUS_LABEL_KEY = {
     pending: 'chat.todoTray.status.pending',
@@ -31,6 +31,7 @@ export const TodoCard: React.FC<{ phases: TodoPhase[]; defaultExpanded?: boolean
     const { t } = useI18n();
     const [expanded, setExpanded] = React.useState(defaultExpanded);
     const contentId = React.useId();
+    if (!hasTodoTasks(phases)) return null;
     const progress = todoProgress(phases);
     const active = activeTodoTask(phases);
     const progressText = `${progress.closed}/${progress.total}`;

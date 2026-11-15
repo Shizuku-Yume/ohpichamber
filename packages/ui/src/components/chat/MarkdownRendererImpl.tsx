@@ -420,12 +420,12 @@ export function MarkdownContent({
   }, [purpose, preparedHighlights, fileReferences, directory, confirmFile]);
   const plugins = React.useMemo(() => ({ code, math: markdownMath, cjk: getMarkdownCjk(singleTilde), renderers }), [code, singleTilde]);
   const processing = React.useMemo(() => {
-    const base = getMarkdownProcessingOptions(allowRawHtml, singleTilde);
+    const base = getMarkdownProcessingOptions(allowRawHtml, singleTilde, variant === 'reasoning');
     const extra: Pluggable[] = [];
     if (activeEmojiShortcodes) extra.push([remarkEmojiShortcodes, activeEmojiShortcodes]);
     if (extra.length === 0) return base;
     return { ...base, remarkPlugins: [...(base.remarkPlugins ?? []), ...extra] };
-  }, [allowRawHtml, singleTilde, activeEmojiShortcodes]);
+  }, [allowRawHtml, singleTilde, variant, activeEmojiShortcodes]);
   const presentation = React.useMemo(() => ({
     directory,
     fileReferences,

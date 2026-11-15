@@ -1323,3 +1323,20 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** OMP's selector grammar changes.
 - **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - MCP sign-in failure is a contract-visible result, and a closed registration asks for the client ID
+
+- **Decided:** the sign-in contract gains `MCP_OAUTH_IN_PROGRESS` (HTTP 409), `MCP_OAUTH_CLIENT_REGISTRATION_REJECTED` (HTTP 422) and an optional `error` on the unauthenticated `MCPOAuthResult`. A closed client registration reveals and focuses the client-ID field and shows the provider's own sentence; nothing is pre-filled, because no client ID is known, and no app-registration link is added. A failure after the browser handoff has no request left to throw from, so it is reported once through `MCPOAuthResult.unauthenticated.error`. The OAuth redirect stays `http://localhost:3000/callback` here and belongs to task 05.
+- **Instead of:** keeping one opaque `MCP_OAUTH_FAILED` and a `CATALOG_CONFLICT` for a second start, or adding a link to each provider's app-registration page.
+- **Because:** the panel must distinguish "already signing in" from a real conflict and must show why a handoff failed, and polling every 1.5 s otherwise resets to plain unauthenticated. A registration link would need per-provider URLs nobody maintains.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP exposes a provider registration directory, or the redirect origin moves to the Host.
+## 2026-11-16 - Custom provider IDs keep a leading letter or digit
+
+- **Decided:** the provider-ID pattern is `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`, narrower than the bare character set in "Provider IDs follow OMP's selector grammar": the first character must be a letter or digit. IDs like `.`, `..` or `-x` are refused.
+- **Instead of:** accepting the whole `[A-Za-z0-9._-]` set in any position, which OMP itself would accept.
+- **Because:** the same id reaches logo routes and settings keys, so a leading `.` reads as a hidden file, a leading `-` reads as a CLI flag, and `.`/`..` read as path segments. The narrower first character costs no real provider name.
+- **Mine:** yes
+- **Revisit when:** a provider name or OMP-side convention needs a leading dot or hyphen.
+- **Effort:** ux-feedback-2026-11-15

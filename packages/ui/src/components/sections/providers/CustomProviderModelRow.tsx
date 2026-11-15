@@ -12,9 +12,7 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { formatGoalTokens } from '@/lib/sessionGoalMetadata';
 import { cn } from '@/lib/utils';
-import type { ModelFieldErrors, ModelRow } from './custom-provider-form';
-
-const MODEL_MODALITIES = ['text', 'image', 'audio', 'embedding'] as const;
+import { modelModalitiesForKind, type ModelFieldErrors, type ModelRow } from './custom-provider-form';
 
 type ModelTextField = 'modelId' | 'name' | 'contextWindow' | 'maxOutputTokens';
 
@@ -58,7 +56,11 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
   const title = name || modelId || t('settings.providers.page.custom.models.untitled');
   const context = positive(model.contextWindow);
   const output = positive(model.maxOutputTokens);
+  const modalities = modelModalitiesForKind(model.nativeKind);
   const extraInputs = model.modalities.filter((modality) => modality !== 'text');
+  // The writer needs text or image on every model, so the last of those two
+  // stays checked even on a tts row where audio alone would read as valid.
+  const baseModalityCount = model.modalities.filter((modality) => modality === 'text' || modality === 'image').length;
   const summary = [
     context ? t('settings.providers.page.custom.discovery.contextValue', { value: formatGoalTokens(context) }) : null,
     output ? t('settings.providers.page.custom.discovery.outputValue', { value: formatGoalTokens(output) }) : null,
@@ -176,12 +178,13 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
           <div className="space-y-1">
             <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.inputCapabilities')}</span>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
-              {MODEL_MODALITIES.map((modality) => (
+              {modalities.map((modality) => (
                 <SettingsCheckboxRow
                   key={modality}
                   checked={model.modalities.includes(modality)}
                   onChange={() => onToggleModality(modality)}
-                  disabled={disabled || (model.modalities.includes(modality) && model.modalities.length === 1)}
+                  disabled={disabled || (model.modalities.includes(modality)
+                    && (baseModalityCount === 1 && (modality === 'text' || modality === 'image')))}
                   label={modality}
                   ariaLabel={modality}
                 />

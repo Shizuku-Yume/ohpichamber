@@ -55,13 +55,20 @@ export const selectMcpServersForDirectory = (state: Pick<McpConfigStore, 'server
 
 export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) => {
   const publish = (directory: string, configuration: MCPConfigurationState, result?: MCPApplyResult) => {
-    set(state => ({
-      configurationsByDirectory: { ...state.configurationsByDirectory, [directory]: configuration },
-      serversByDirectory: { ...state.serversByDirectory, [directory]: configuration.config.servers },
-      ...(directory === keyFor() ? { mcpServers: configuration.config.servers } : {}),
-      errorsByDirectory: { ...state.errorsByDirectory, [directory]: undefined },
-      ...(result ? { applyResultsByDirectory: { ...state.applyResultsByDirectory, [directory]: result } } : {}),
-    }));
+    set(state => {
+      const next = {
+        configurationsByDirectory: { ...state.configurationsByDirectory, [directory]: configuration },
+        serversByDirectory: { ...state.serversByDirectory, [directory]: configuration.config.servers },
+        errorsByDirectory: { ...state.errorsByDirectory, [directory]: undefined },
+        mcpServers: state.mcpServers,
+        applyResultsByDirectory: state.applyResultsByDirectory,
+      };
+      // These two mirror the directory only when it is the one the store is
+      // currently read through; another directory's write must not touch them.
+      if (directory === keyFor()) next.mcpServers = configuration.config.servers;
+      if (result) next.applyResultsByDirectory = { ...state.applyResultsByDirectory, [directory]: result };
+      return next;
+    });
   };
   const mutate = async (directory: string | null | undefined, transform?: (servers: MCPServerConfig[]) => MCPServerConfig[]): Promise<McpMutationResult> => {
     const ownerGeneration = generation;
@@ -81,8 +88,7 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
       if (ownerGeneration !== generation) throw new Error('Runtime changed.');
       revisions.set(key, ++mutationRevision);
       publish(key, result.configuration, result);
-      const outcome: McpInstallOutcome = result.outcome
-        ?? (result.status === 'applied' || result.status === 'no-active-workers' ? 'applied' : 'saved-not-connected');
+      const outcome: McpInstallOutcome = result.outcome;
       if (outcome === 'applied' || outcome === 'saved-needs-auth') {
         return { ok: true, result, outcome };
       }
@@ -92,16 +98,22 @@ export const useMcpConfigStore = create<McpConfigStore>()(devtools((set, get) =>
       const message = problemMessage(error, 'The MCP configuration could not be saved.');
       const parsed = error instanceof CanonicalApiError ? MCPApplyResultSchema.safeParse(error.problem.details?.result) : null;
       const result = parsed?.success && parsed.data.configuration.workspaceId === workspaceId ? parsed.data : undefined;
-      const outcome: McpInstallOutcome | undefined = result?.outcome;
       // A rejected apply still advanced the persisted revision: adopt it as the next CAS baseline.
       if (result && ownerGeneration === generation) {
         revisions.set(key, ++mutationRevision);
         publish(key, result.configuration, result);
       }
+      // A server saved with authorization still pending is a sign-in, not a
+      // failed save: it succeeds with an action even when the refusal body
+      // carried it.
+      if (result?.outcome === 'saved-needs-auth') {
+        return { ok: true, result, outcome: 'saved-needs-auth' };
+      }
       if (ownerGeneration === generation) {
         set(state => ({ errorsByDirectory: { ...state.errorsByDirectory, [key]: message } }));
       }
-      return { ok: false, error: message, ...(result ? { result, outcome } : {}) };
+      if (!result) return { ok: false, error: message };
+      return { ok: false, error: message, result, outcome: result.outcome };
     }
   };
   return {

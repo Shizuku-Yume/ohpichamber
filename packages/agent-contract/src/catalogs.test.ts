@@ -31,7 +31,7 @@ const error = { code: 'MCP_APPLY_FAILED', detail: 'Runtime application failed.',
 const mcpApplied = { worker, outcome: 'applied', revisions: mcpRevisions };
 const mcpFailed = { worker: sibling, outcome: 'failed', revisions: oldMcpRevisions, error };
 const retired = { worker: sibling, outcome: 'retired' };
-const mcpResult = { kind: 'mcp', status: 'partial', configuration, workers: [mcpApplied, mcpFailed] };
+const mcpResult = { kind: 'mcp', status: 'partial', outcome: 'saved-not-connected', configuration, workers: [mcpApplied, mcpFailed] };
 const sources = { workspace: '2', agent: '3' };
 const skill = { skillId: 'skill_1', name: 'Review', description: 'Review workflow', scope: 'workspace' };
 const skillRevisions = { runtimeStatus: 'ready', persistedSources: sources, appliedSources: sources, catalogRevision: '7' };
@@ -53,8 +53,8 @@ const boundaries = [
   { name: 'ModelReasoningOption', schema: Catalog.ModelReasoningOptionSchema, valid: reasoningOption, invalid: [{ ...reasoningOption, budgetTokens: -1 }, { ...reasoningOption, reasoningEffort: '' }] },
   { name: 'ModelVariant', schema: Catalog.ModelVariantSchema, valid: variant, invalid: [{ ...variant, variant: '' }, { ...variant, reasoningEffort: undefined }] },
   { name: 'Model', schema: Catalog.ModelSchema, valid: model, invalid: [{ ...model, maxOutputTokens: 8193 }, { ...model, reasoningEffortSupported: false }, { ...model, variants: [{ ...variant, reasoningEffort: 'unadvertised' }] }] },
-  { name: 'ProviderAuthState', schema: Catalog.ProviderAuthStateSchema, valid: auth, invalid: [{ ...auth, apiKey: 'secret' }, { status: 'configured', method: 'api-key' }] },
-  { name: 'Provider', schema: Catalog.ProviderSchema, valid: provider, invalid: [{ ...provider, endpoint: 'https://user:secret@models.example/v1' }, { ...provider, authMethods: ['oauth'] }, { ...provider, endpoint: 'https://models.example/v1?api_key=secret' }] },
+  { name: 'ProviderAuthState', schema: Catalog.ProviderAuthStateSchema, valid: auth, invalid: [{ ...auth, apiKey: 'secret' }, { status: 'configured', method: 'api-key' }, { ...auth, environment: { variable: 'OPENAI_API_KEY', active: true, apiKey: 'secret' } }, { ...auth, environment: { variable: '', active: true } }, { ...auth, environment: { variable: null } }] },
+  { name: 'Provider', schema: Catalog.ProviderSchema, valid: provider, invalid: [{ ...provider, endpoint: 'https://user:secret@models.example/v1' }, { ...provider, authMethods: ['oauth'] }, { ...provider, endpoint: 'https://models.example/v1#secret' }] },
   { name: 'ModelCatalogDefaults', schema: Catalog.ModelCatalogDefaultsSchema, valid: { model: selection, thinkingLevel: 'high' }, invalid: [{ model: selection, thinkingLevel: '' }, { ...selection }] },
   { name: 'ModelCatalog', schema: Catalog.ModelCatalogSchema, valid: { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel], defaults: { model: selection, thinkingLevel: 'auto' }, planRoleAvailable: true }, invalid: [{ workspaceId: 'workspace_1', revision: '1', models: [model, model], imageModels: [imageModel], defaults: { model: selection, thinkingLevel: 'high' }, planRoleAvailable: true }, { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel], planRoleAvailable: true }, { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel, imageModel], defaults: { model: selection, thinkingLevel: 'high' }, planRoleAvailable: true }] },
   { name: 'ProviderCatalog', schema: Catalog.ProviderCatalogSchema, valid: { workspaceId: 'workspace_1', revision: '1', providers: [provider] }, invalid: [{ workspaceId: 'workspace_1', revision: '1', providers: [provider, provider] }] },
@@ -86,7 +86,7 @@ const boundaries = [
   { name: 'CatalogOperationError', schema: Catalog.CatalogOperationErrorSchema, valid: error, invalid: [{ ...error, detail: '' }, { ...error, rawException: 'secret provider error' }] },
   { name: 'MCPWorkerApplyOutcome', schema: Catalog.MCPWorkerApplyOutcomeSchema, valid: mcpApplied, invalid: [{ ...mcpApplied, revisions: emptyMcpRevisions }, { ...retired, revisions: mcpRevisions }, { worker, outcome: 'failed', revisions: oldMcpRevisions }] },
   { name: 'SkillsWorkerApplyOutcome', schema: Catalog.SkillsWorkerApplyOutcomeSchema, valid: skillApplied, invalid: [{ ...skillApplied, revisions: oldSkillRevisions }, { ...retired, revisions: skillRevisions }, { ...skillApplied, revisions: emptySkillRevisions }] },
-  { name: 'MCPApplyResult', schema: Catalog.MCPApplyResultSchema, valid: mcpResult, invalid: [{ ...mcpResult, status: 'applied' }, { ...mcpResult, configuration: { ...configuration, persistedRevision: '3' } }, { ...mcpResult, workers: [mcpApplied, mcpApplied] }] },
+  { name: 'MCPApplyResult', schema: Catalog.MCPApplyResultSchema, valid: mcpResult, invalid: [{ ...mcpResult, status: 'applied' }, { ...mcpResult, configuration: { ...configuration, persistedRevision: '3' } }, { ...mcpResult, workers: [mcpApplied, mcpApplied] }, { ...mcpResult, outcome: undefined }, { ...mcpResult, outcome: 'connected' }] },
   { name: 'SkillSourceScope', schema: Catalog.SkillSourceScopeSchema, valid: scope, invalid: [{ kind: 'agent', agentDirectoryId: '/private/agent', workspaceId: 'workspace_1' }, { kind: 'workspace' }] },
   { name: 'SkillsApplyResult', schema: Catalog.SkillsApplyResultSchema, valid: skillResult, invalid: [{ ...skillResult, sourceRevision: '1' }, { ...skillResult, scope: { ...scope, workspaceId: 'foreign_workspace' } }, { ...skillResult, status: 'no-active-workers' }] },
   { name: 'SkillInstallResult', schema: Catalog.SkillInstallResultSchema, valid: install, invalid: [{ ...install, sourceRevision: '3' }, { ...install, scope: { kind: 'agent', agentDirectoryId: 'agent_directory_1' } }, { ...install, persistence: 'applied' }] },
@@ -129,6 +129,13 @@ describe('Canonical catalogs and scoped operations', () => {
     const resultOwner = { serverId: 'server_1', worker, persistedRevision: '2' };
     expect(Catalog.MCPOAuthResultSchema.parse({ ...resultOwner, status: 'authenticated', authenticated: true }).status).toBe('authenticated');
     expect(Catalog.MCPOAuthResultSchema.parse({ ...resultOwner, status: 'unauthenticated', authenticated: false }).status).toBe('unauthenticated');
+    // A failed sign-in reports why it ended; a cancel reports nothing.
+    const oauthFailure = { ...resultOwner, status: 'unauthenticated', authenticated: false, error: { code: 'MCP_OAUTH_FAILED', detail: 'Authorization failed: access_denied', retryable: false } };
+    expect(Catalog.MCPOAuthResultSchema.parse(oauthFailure).error?.detail).toBe('Authorization failed: access_denied');
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...oauthFailure, error: { code: 'MCP_OAUTH_FAILED', detail: '', retryable: false } }).success).toBe(false);
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...oauthFailure, error: { code: 'MCP_OAUTH_FAILED', detail: 'x', retryable: 'yes' } }).success).toBe(false);
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...resultOwner, status: 'authenticated', authenticated: true, error: oauthFailure.error }).success).toBe(false);
+    expect(Catalog.MCPOAuthResultSchema.safeParse({ ...resultOwner, status: 'pending', authenticated: false, pendingFlow: oauthFlow, error: oauthFailure.error }).success).toBe(false);
     expect(Catalog.MCPOAuthResultSchema.safeParse({ ...resultOwner, status: 'authenticated', authenticated: true, pendingFlow: oauthFlow }).success).toBe(false);
     for (const field of ['authorizationUrl', 'tokenUrl', 'issuerUrl', 'registrationUrl', 'resourceMetadataUrl', 'redirectUri', 'resource']) {
       for (const url of ['ftp://auth.example', 'https://user:secret@auth.example', 'https://auth.example#private']) {
@@ -168,14 +175,35 @@ describe('Canonical catalogs and scoped operations', () => {
     expect(Catalog.CatalogUpdateSchema.parse({ kind: 'skills', state: skillState }).kind).toBe('skills');
   });
 
+  test('environment-backed auth carries a variable name only, and only on configured providers', () => {
+    const named = { variable: 'OPENAI_API_KEY', active: true };
+    expect(Catalog.ProviderAuthStateSchema.parse({ ...auth, environment: named })).toMatchObject({ environment: named });
+    expect(Catalog.ProviderAuthStateSchema.parse({ ...auth, environment: { variable: null, active: false } }))
+      .toMatchObject({ environment: { variable: null, active: false } });
+    expect(Catalog.ProviderAuthStateSchema.parse(auth)).not.toHaveProperty('environment');
+    expect(Catalog.ProviderAuthStateSchema.safeParse({ status: 'missing', environment: named }).success).toBe(false);
+    expect(Catalog.ProviderAuthStateSchema.safeParse({ ...auth, environment: { value: 'sk-live-secret' } }).success).toBe(false);
+    expect(Catalog.ProviderAuthStateSchema.safeParse({ ...auth, environment: { variable: 'OPENAI_API_KEY', active: true, key: 'sk-live-secret' } }).success).toBe(false);
+  });
+
   test('public provider records never expose secrets; only intentional credential writes accept secret payloads', () => {
     expect(Catalog.ProviderCredentialWriteRequestSchema.parse({ expectedRevision: '1', providerId: 'provider_1', credential: { method: 'oauth', accessToken: 'private-token', refreshToken: 'private-refresh', expiresAt: 2000 } }).credential.method).toBe('oauth');
     expect(Catalog.ProviderAuthStateSchema.parse({ status: 'missing' }).status).toBe('missing');
     expect(Catalog.ProviderMutationResultSchema.parse({ revision: '2', providerId: 'provider_1', provider: null }).provider).toBeNull();
     expect(Catalog.ModelMutationResultSchema.parse({ revision: '2', selection, model: null }).model).toBeNull();
-    for (const endpoint of ['https://user:secret@models.example', 'https://models.example?key=secret', 'https://models.example#secret', 'ftp://models.example']) {
+    for (const endpoint of ['https://user:secret@models.example', 'https://models.example#secret', 'ftp://models.example']) {
       expect(Catalog.ProviderSchema.safeParse({ ...provider, endpoint }).success).toBe(false);
     }
+    // A provider base URL may carry a query string; a secret there is the
+    // operator's own choice, and userinfo stays refused as the sturdier leak.
+    expect(Catalog.ProviderSchema.safeParse({ ...provider, endpoint: 'https://models.example/v1?api-version=2024-10-21' }).success).toBe(true);
+    expect(Catalog.ProviderConfigurationSchema.safeParse({ ...providerConfiguration, endpoint: 'https://x.openai.azure.com/openai/v1?api-version=2024-10-21' }).success).toBe(true);
+    for (const endpoint of ['https://user:secret@x.openai.azure.com/openai/v1?api-version=1', 'https://x.openai.azure.com/openai/v1?api-version=1#frag']) {
+      expect(Catalog.ProviderConfigurationSchema.safeParse({ ...providerConfiguration, endpoint }).success).toBe(false);
+    }
+    expect(Catalog.ProviderAuthStateSchema.safeParse({
+      ...auth, environment: { variable: 'OPENAI_API_KEY', active: true, apiKey: 'secret' },
+    }).success).toBe(false);
     expect(Catalog.ProviderSchema.safeParse({ ...provider, auth: { ...auth, refreshToken: 'private-refresh' } }).success).toBe(false);
     expect(Catalog.ProviderCredentialMutationResultSchema.safeParse({ revision: '2', providerId: 'provider_1', auth, apiKey: 'private-key' }).success).toBe(false);
   });

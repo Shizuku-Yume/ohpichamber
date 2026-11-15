@@ -1770,7 +1770,6 @@ export const settingsDict = {
   'settings.providers.page.custom.description': 'Dodaj dostawcę z adresem bazowym, poświadczeniami, listą modeli i obsługiwanym protokołem API. Zapisuje się w konfiguracji OpenCode do użycia w czacie.',
   'settings.providers.page.custom.field.providerID.label': 'ID dostawcy',
   'settings.providers.page.custom.field.providerID.placeholder': 'moj-dostawca',
-  'settings.providers.page.custom.field.providerID.info': 'Małe litery, cyfry, myślniki i podkreślenia. Używane jako ID dostawcy OpenCode.',
   'settings.providers.page.custom.field.name.label': 'Nazwa wyświetlana',
   'settings.providers.page.custom.field.name.placeholder': 'Mój dostawca',
   'settings.providers.page.custom.field.name.info': 'Widoczna w selektorach dostawcy i modelu.',
@@ -1822,7 +1821,6 @@ export const settingsDict = {
   'settings.providers.page.custom.actions.update': 'Zaktualizuj dostawcę',
 
   'settings.providers.page.custom.error.providerID.required': 'ID dostawcy jest wymagane',
-  'settings.providers.page.custom.error.providerID.format': 'Użyj małych liter, cyfr, myślników lub podkreśleń',
   'settings.providers.page.custom.error.providerID.exists': 'Dostawca o tym ID jest już połączony',
   'settings.providers.page.custom.error.name.required': 'Nazwa wyświetlana jest wymagana',
   'settings.providers.page.custom.error.baseURL.required': 'Adres bazowy jest wymagany',

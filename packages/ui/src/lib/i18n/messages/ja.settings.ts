@@ -1757,7 +1757,6 @@ export const settingsDict = {
   'settings.providers.page.custom.description': 'ベース URL、認証情報、モデル一覧、対応 API プロトコルを指定してプロバイダーを追加します。チャットで使えるよう OpenCode 設定に保存されます。',
   'settings.providers.page.custom.field.providerID.label': 'プロバイダー ID',
   'settings.providers.page.custom.field.providerID.placeholder': 'my-provider',
-  'settings.providers.page.custom.field.providerID.info': '小文字・数字・ハイフン・アンダースコア。OpenCode のプロバイダー ID として使われます。',
   'settings.providers.page.custom.field.name.label': '表示名',
   'settings.providers.page.custom.field.name.placeholder': 'My Provider',
   'settings.providers.page.custom.field.name.info': 'プロバイダーおよびモデル選択に表示されます。',
@@ -1809,7 +1808,6 @@ export const settingsDict = {
   'settings.providers.page.custom.actions.update': 'プロバイダーを更新',
 
   'settings.providers.page.custom.error.providerID.required': 'プロバイダー ID は必須です',
-  'settings.providers.page.custom.error.providerID.format': '小文字・数字・ハイフン・アンダースコアを使ってください',
   'settings.providers.page.custom.error.providerID.exists': 'この ID のプロバイダーは既に接続されています',
   'settings.providers.page.custom.error.name.required': '表示名は必須です',
   'settings.providers.page.custom.error.baseURL.required': 'ベース URL は必須です',

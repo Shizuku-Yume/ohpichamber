@@ -1602,7 +1602,6 @@ export const settingsDict = {
   'settings.providers.page.custom.description': '透過指定基礎 URL、憑證、模型清單與支援的 API 通訊協定新增供應商。會寫入 OpenCode 設定以供聊天使用。',
   'settings.providers.page.custom.field.providerID.label': '供應商 ID',
   'settings.providers.page.custom.field.providerID.placeholder': 'my-provider',
-  'settings.providers.page.custom.field.providerID.info': '小寫字母、數字、連字號與底線。用作 OpenCode 供應商 ID。',
   'settings.providers.page.custom.field.name.label': '顯示名稱',
   'settings.providers.page.custom.field.name.placeholder': '我的供應商',
   'settings.providers.page.custom.field.name.info': '顯示於供應商與模型選擇器。',
@@ -1654,7 +1653,6 @@ export const settingsDict = {
   'settings.providers.page.custom.actions.update': '更新提供者',
 
   'settings.providers.page.custom.error.providerID.required': '供應商 ID 為必填',
-  'settings.providers.page.custom.error.providerID.format': '請使用小寫字母、數字、連字號或底線',
   'settings.providers.page.custom.error.providerID.exists': '已連線具有此 ID 的供應商',
   'settings.providers.page.custom.error.name.required': '顯示名稱為必填',
   'settings.providers.page.custom.error.baseURL.required': '基礎 URL 為必填',

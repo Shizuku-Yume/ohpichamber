@@ -12,7 +12,7 @@ Use the shared control class constants; every desktop dropdown footprint is
 
 - `SelectTrigger`: no size prop — its chrome comes from `dropdownTriggerVariants()`.
 - Custom dropdown triggers (ModelSelector / AgentSelector): `SETTINGS_CUSTOM_TRIGGER_CLASS`.
-- Text `Input` next to dropdowns: `size="compact"` (h-7), matching the trigger footprint.
+- Text `Input` next to dropdowns: `inputSize="compact"` (h-7), matching the trigger footprint.
 - Icon action next to a control: `SETTINGS_ICON_BUTTON_CLASS`.
 
 Widths come from the named classes — never let controls span the pane, and

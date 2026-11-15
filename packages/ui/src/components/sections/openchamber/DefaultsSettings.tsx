@@ -366,7 +366,11 @@ export const DefaultsSettings: React.FC = () => {
 
   return (
     <>
-      <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false}>
+      {/* The section anchor is the model-roles record itself: the three editors
+          below all write `modelRoles`, and the OMP settings table names
+          `omp.modelRoles` as that record's owner. Stamping the record here is
+          what makes that claim name a real control rather than a search entry. */}
+      <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false} settingsItem="omp.modelRoles">
         <div className="space-y-4">
           <ModelRoleEditor
             role="default"

@@ -248,8 +248,15 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const guests = useGuestsStore((state) => open ? state.guests : EMPTY_GUESTS);
 
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  /**
+   * The entry an install just saved with sign-in still pending. Its panel starts
+   * the one sign-in method on mount instead of asking for a second click; a
+   * later visit to the same page signs in from the Authorize button.
+   */
+  const [autoStartEntryId, setAutoStartEntryId] = React.useState<string | null>(null);
   const showEntry = React.useCallback((id: string | null) => {
     setSelectedId(id);
+    setAutoStartEntryId(current => (current !== null && current !== id ? null : current));
   }, []);
 
   // Browse and detail share one scroller: a detail page opens at its top,
@@ -282,6 +289,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
   React.useEffect(() => {
     if (!open) {
       setSelectedId(null);
+      setAutoStartEntryId(null);
       browseScrollTopRef.current = 0;
       setQuery('');
       setCategory(null);
@@ -479,19 +487,24 @@ export function IntegrationsCatalogView(): React.ReactNode {
           const exists = mcpServers.some((server) => server.serverId === entry.id);
           const attempted = await (exists ? updateMcp(entry.id, config, settingsDirectory) : createMcp(config, settingsDirectory))
             .then((result) => ({ result }))
-            .catch((failure: unknown) => ({ failure }));
+            .catch((failure) => ({ failure }));
           if ('failure' in attempted) {
             failed = true;
             errorDetail = attempted.failure instanceof Error ? attempted.failure.message : String(attempted.failure);
             continue;
           }
-          if (!attempted.result.ok) {
+          // A server saved with authorization pending is a sign-in, not a
+          // failed install: the reason the save could not connect is what the
+          // panel is about to finish.
+          if (attempted.result.outcome === 'saved-needs-auth') {
+            hadAuthPending = true;
+            setSelectedId(entry.id);
+            setAutoStartEntryId(entry.id);
+          } else if (!attempted.result.ok) {
             failed = true;
             errorDetail = attempted.result.error;
             continue;
-          }
-          if (attempted.result.outcome === 'saved-needs-auth' || component.auth === 'oauth') {
-            hadAuthPending = true;
+          } else if (component.auth === 'oauth') {
             setSelectedId(entry.id);
           }
           if (component.auth === 'token') {
@@ -553,7 +566,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
           description: errorDetail ?? undefined,
         });
       } else if (hadAuthPending) {
-        toast.info(t('integrationsCatalog.status.needsAuth'));
+        toast.info(t('integrationsCatalog.install.savedNeedsAuth', { name: entry.name }));
       } else if (!openedSettings) {
         toast.success(t('integrationsCatalog.install.success', { name: entry.name }));
       }
@@ -977,6 +990,8 @@ export function IntegrationsCatalogView(): React.ReactNode {
               <McpOAuthSignIn
                 serverId={entry.id}
                 directory={settingsDirectory}
+                autoStart={autoStartEntryId === entry.id}
+                onAutoStartConsumed={() => setAutoStartEntryId((current) => (current === entry.id ? null : current))}
                 onConnected={() => { void useMcpStore.getState().connect(entry.id, settingsDirectory); }}
               />
             </div>

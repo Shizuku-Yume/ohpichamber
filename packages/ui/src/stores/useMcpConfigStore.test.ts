@@ -27,9 +27,9 @@ mock.module('@/api/canonicalClient', () => ({
         throw writeFailure;
       }
       current = { ...current, persistedRevision: String(BigInt(current.persistedRevision) + 1n), config: request.config };
-      return { kind: 'mcp', status: 'no-active-workers', configuration: current, workers: [] };
+      return { kind: 'mcp', status: 'no-active-workers', outcome: 'applied', configuration: current, workers: [] };
     },
-    applyWorkspaceMcp: async (): Promise<MCPApplyResult> => ({ kind: 'mcp', status: 'no-active-workers', configuration: current, workers: [] }),
+    applyWorkspaceMcp: async (): Promise<MCPApplyResult> => ({ kind: 'mcp', status: 'no-active-workers', outcome: 'applied', configuration: current, workers: [] }),
   }
 }));
 const { useMcpConfigStore } = await import('./useMcpConfigStore');
@@ -61,7 +61,7 @@ describe('workspace MCP configuration consumers', () => {
   test('partial apply exposes failure and does not publish failed state to store', async () => {
     await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
     const partial: MCPApplyResult = {
-      kind: 'mcp', status: 'partial', configuration: { ...current, persistedRevision: '5', config: { servers: [{ ...server, enabled: false }] } }, workers: [
+      kind: 'mcp', status: 'partial', outcome: 'saved-not-connected', configuration: { ...current, persistedRevision: '5', config: { servers: [{ ...server, enabled: false }] } }, workers: [
         { worker: { workspaceId: 'workspace', rootSessionId: 'root_a', workerGeneration: 'generation_a' }, outcome: 'applied', revisions: { runtimeStatus: 'ready', appliedRevision: '5', catalogRevision: '2' } },
         { worker: { workspaceId: 'workspace', rootSessionId: 'root_b', workerGeneration: 'generation_b' }, outcome: 'failed', revisions: { runtimeStatus: 'ready', appliedRevision: '4', catalogRevision: '1' }, error: { code: 'MCP_APPLY_FAILED', detail: 'Worker could not apply.', retryable: true } },
       ]
@@ -110,6 +110,25 @@ describe('workspace MCP configuration consumers', () => {
     writeFailure = null;
     expect((await useMcpConfigStore.getState().updateMcp('tools', { label: 'Renamed' }, '/repo')).ok).toBe(true);
     expect(captured[captured.length - 1].expectedPersistedRevision).toBe('5');
+  });
+  test('a server saved with sign-in pending is a success with an action, even through the refused apply', async () => {
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: '/repo' });
+    const needsAuth: MCPApplyResult = {
+      kind: 'mcp', status: 'no-active-workers', outcome: 'saved-needs-auth',
+      configuration: { ...current, persistedRevision: '5', config: { servers: [{ ...server, transport: { type: 'http', url: 'https://mcp.example.test/mcp' } }] } }, workers: [],
+    };
+    // The coordinator refuses a configure whose probe needs authorization, so the
+    // install learns the outcome from the problem body instead of the return value.
+    const refusal = new CanonicalApiError({ type: 'urn:problem:MCP_OAUTH_FAILED', title: 'Sign-in required', status: 422, detail: 'HTTP 403 forbidden', code: 'MCP_OAUTH_FAILED', retryable: false, details: { result: needsAuth } });
+    writeFailure = refusal;
+    const result = await useMcpConfigStore.getState().updateMcp('tools', { transport: { type: 'http', url: 'https://mcp.example.test/mcp' } }, '/repo');
+    expect(result.ok).toBe(true);
+    expect(result.outcome).toBe('saved-needs-auth');
+    expect(result.result).toEqual(needsAuth);
+    // The refused apply still advanced persistence, and the store must not
+    // remember it as a failure.
+    expect(useMcpConfigStore.getState().configurationsByDirectory['/repo'].persistedRevision).toBe('5');
+    expect(useMcpConfigStore.getState().errorsByDirectory['/repo']).toBeUndefined();
   });
   test('an unread directory shows no servers of the current directory', async () => {
     // Static import above: no mock is needed for the directory store.

@@ -55,7 +55,7 @@ type WorkerEntry = WorkerInput & {
 };
 type ActionHandle = { entry: WorkerEntry; controller: AbortController };
 /** A worker process booted ahead of a session, waiting for a bootstrap. */
-type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; adopted: boolean; readyPromise?: Promise<void> };
+type SpareWorker = { child: ChildProcess; environment: NodeJS.ProcessEnv; cwd: string; createdAt: number; loaded: boolean; warm: boolean; adopted: boolean; readyPromise?: Promise<void> };
 
 /** The Task17 measurement fixes these production values; tests may override them. */
 export const WORKER_CAPACITY_POLICY = {
@@ -244,6 +244,8 @@ export class WorkerRegistry {
    */
   private readonly spareWorkers: SpareWorker[] = [];
   private readonly spareLifetimeMs = 120_000;
+  /** Loaded-or-loading spares kept per workspace; adopting one still leaves a replacement. */
+  private readonly sparePoolSize = 2;
   private spareRefill: Promise<void> | undefined;
 
   constructor(private readonly options: WorkerRegistryOptions) {
@@ -886,7 +888,7 @@ export class WorkerRegistry {
    * next session pays the load itself.
    */
   warmSessionWorker(input: Pick<WorkerBootstrap, 'cwd' | 'agentDirectory' | 'env'>, environment = this.workerEnvironment(input as WorkerBootstrap)): void {
-    if (this.closing || this.spareRefill !== undefined) return;
+    if (this.closing) return;
     if (input.cwd.includes('ohpichamber-agent-ready-') || input.cwd.includes('worker-process-tree-') || input.cwd.includes('worker-lease-')) return;
     for (let i = this.spareWorkers.length - 1; i >= 0; i -= 1) {
       const spare = this.spareWorkers[i];
@@ -895,9 +897,12 @@ export class WorkerRegistry {
         if (spare.child.exitCode === null && spare.child.signalCode === null) spare.child.kill('SIGTERM');
       }
     }
-    const hasMatchingSpare = this.spareWorkers.some(spare => spare.cwd === input.cwd && isDeepStrictEqual(spare.environment, environment));
-    if (hasMatchingSpare) return;
-    if (this.spareWorkers.length > 0) return;
+    // Every entry here is one slot of this workspace's pool, loaded or still
+    // loading. Filling to `sparePoolSize` is what keeps back-to-back new chats
+    // from alternating between an adopted spare and a cold launch: while one
+    // session uses a spare, the replacement is already loading.
+    const claimed = this.spareWorkers.filter(spare => !spare.adopted && spare.cwd === input.cwd && isDeepStrictEqual(spare.environment, environment));
+    if (claimed.length >= this.sparePoolSize) return;
     const workerRuntime = this.options.workerRuntime ?? defaultWorkerRuntime();
     const workerArgs = /(?:^|[\\/])bun(?:\.exe)?$/i.test(workerRuntime) ? ['--no-env-file', this.options.workerEntrypoint] : [this.options.workerEntrypoint];
     this.spareRefill = (async () => {
@@ -909,7 +914,7 @@ export class WorkerRegistry {
           windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         });
         const { promise: readyPromise, resolve: resolveReady } = Promise.withResolvers<void>();
-        const spare: SpareWorker = { child, environment, cwd: input.cwd, createdAt: Date.now(), loaded: false, adopted: false, readyPromise };
+        const spare: SpareWorker = { child, environment, cwd: input.cwd, createdAt: Date.now(), loaded: false, warm: false, adopted: false, readyPromise };
         this.spareWorkers.push(spare);
         const drop = () => {
           const index = this.spareWorkers.indexOf(spare);
@@ -919,7 +924,10 @@ export class WorkerRegistry {
         child.once('close', drop);
         child.once('error', drop);
         child.on('message', raw => {
-          if (spare.adopted || WorkerReplySchema.safeParse(raw).data?.type !== 'idle') return;
+          if (spare.adopted) return;
+          const reply = WorkerReplySchema.safeParse(raw).data;
+          if (reply?.type === 'warm') { spare.warm = true; return; }
+          if (reply?.type !== 'idle') return;
           spare.loaded = true;
           resolveReady();
         });
@@ -927,6 +935,12 @@ export class WorkerRegistry {
       } catch { /* a spare is an optimization; the next launch spawns normally */ }
       finally { this.spareRefill = undefined; }
     })();
+    void this.spareRefill.then(() => {
+      // The pool may still be short (spawning is serialized, so one call adds one
+      // spare). Ask again once this spawn settled, which also refills after an
+      // adoption that happened while the spawn was in flight.
+      if (!this.closing) this.warmSessionWorker(input, environment);
+    });
   }
 
   /** Takes a spare that can host this launch, or `undefined` when none matches. */
@@ -944,6 +958,11 @@ export class WorkerRegistry {
         continue;
       }
       if (spare.loaded && cwdMatch && envMatch && existsSync(input.cwd)) {
+        // A used-but-still-loading spare pays the rest of its warm-up inside the
+        // session that adopted it, so prefer a spare that already finished.
+        const partner = this.spareWorkers.find(other => other !== spare && !other.adopted && other.loaded && other.warm
+          && other.cwd === input.cwd && isDeepStrictEqual(other.environment, environment));
+        if (!spare.warm && partner) continue;
         this.spareWorkers.splice(index, 1);
         spare.adopted = true;
         return spare.child;
@@ -1049,7 +1068,7 @@ export class WorkerRegistry {
     this.workerEntries.set(input.rootSessionId, entry);
     child.on('message', raw => {
       const reply = WorkerReplySchema.safeParse(raw);
-      if (!reply.success || reply.data.type === 'idle' || reply.data.workerGeneration !== workerGeneration) return;
+      if (!reply.success || reply.data.type === 'idle' || reply.data.type === 'warm' || reply.data.workerGeneration !== workerGeneration) return;
       if (this.workerEntries.get(entry.info.rootSessionId) !== entry) return;
       if (entry.info.state !== 'starting' && entry.info.state !== 'ready') return;
       entry.lastActivityAt = Date.now();

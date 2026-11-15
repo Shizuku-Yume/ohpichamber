@@ -121,8 +121,8 @@ export interface PrewarmedRuntimeEntry {
 
 let prewarmedRuntimePromise: Promise<PrewarmedRuntimeEntry | undefined> | undefined;
 
-export function prewarmNativeRuntime(input: { cwd: string; agentDirectory: string }): void {
-  if (prewarmedRuntimePromise) return;
+export function prewarmNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<PrewarmedRuntimeEntry | undefined> {
+  if (prewarmedRuntimePromise) return prewarmedRuntimePromise;
   const canonicalCwd = resolve(input.cwd);
   const canonicalAgentDir = resolve(input.agentDirectory);
   prewarmedRuntimePromise = Promise.all([
@@ -137,6 +137,7 @@ export function prewarmNativeRuntime(input: { cwd: string; agentDirectory: strin
       return { runtime, cwd: canonicalCwd, agentDirectory: canonicalAgentDir, pluginExtensionPaths };
     })
     .catch(() => undefined);
+  return prewarmedRuntimePromise;
 }
 
 export async function consumePrewarmedNativeRuntime(input: { cwd: string; agentDirectory: string }): Promise<PrewarmedRuntimeEntry | undefined> {

@@ -32,6 +32,29 @@
 
 ## Blocked
 
+**Update after the row-16 spare-pool fix.** The gap this section describes is now
+much smaller, and its cause is named rather than inferred. The Host registers its
+project root and the managed chats root at startup, and `warmSessionWorker` used
+to let each registration evict the other's spares; the workspace the user then
+typed in paid a cold worker module load inside the prompt. Sharing the budget and
+distinguishing a chosen eviction from a failed spawn cut the real-path cost:
+
+- run acknowledgement on a cold workspace **1624–1653 ms → 639–652 ms**;
+- a send racing the draft's in-flight prepare (row 16's reported case)
+  **1630–1653 ms → 501–527 ms**;
+- `POST /sessions/prepare` itself **1567–1569 ms → 618–640 ms**.
+
+Variant (a) in the harness is unchanged (724 → 764 ms p50) because that variant
+never calls `prepare`, so it never registers a workspace and never gets a spare;
+`before/` and `final/` receipts under `task20/row16-fix/` are identical for it.
+The remaining ~640 ms is the cold open that variant (a) structurally measures:
+what is left is `createAgentSession`, the agent-loop preparation before the
+provider call, and supervisor queueing — the same real work this section already
+names. Variant (c), the path a user takes, stays 226 ms and in budget.
+
+So the Check still misses on variant (a) alone, and the waiver ask is unchanged
+in kind but smaller in size. Details and receipts: `task20/row16-fix/REPORT.md`.
+
 The Check is half met, and the half that is not met is not reachable by further work on this path.
 
 - **Cold path (variant a, no prepare): first `part.delta` p50 ≈ 720–930 ms against ≤ 600 ms.** Measured 720–800 ms on a lightly loaded machine (`after-7`, `after-8`, `after-9/A1,A2`), 855–934 ms in the round-3 reviewer's runs, 927.00 ms in the round-4 reviewer's run, 1261–1651 ms in `after-9/run1..3` (load 12–22), 1424.83 ms in `after-final2` (load 5.17) and 1520.92 ms in `after-final` (load 18.66). All 10 samples exceed 600 in every reviewer run.
@@ -42,6 +65,8 @@ The Check is half met, and the half that is not met is not reachable by further 
 - **Decision needed from the maintainer:** waive the ≤ 600 ms first-delta budget for the cold path, or fund an OMP SDK seam that builds a session graph ahead of time (`AgentRegistry.global()` is process-wide today, so a spare cannot construct one). The waiver request is recorded in `.workflow/decisions.md`.
 
 ## Progress
+
+- **Cold-workspace stall cut from ~1.5 s to ~640 ms (row 16 follow-up).** The Host registers its project root and the managed chats root during startup, and `warmSessionWorker` treated the spare pool as the asking workspace's private property: each registration evicted every spare whose `cwd` differed, so the two startup registrations killed each other's spares and the workspace the user then typed in paid a cold worker module load (~650–730 ms) inside the prompt. Traced, proven, and fixed in `workers.ts`: `spareWanted` is now a bounded insertion-ordered map (the asker moves to the end and wins the budget), the pool size is a total across workspaces rather than per directory, and a `retired` flag on `SpareWorker` marks every removal the registry chose, so `drop()` no longer reads a deliberate eviction as a broken spawn target. That misreading was the second half of the bug: the refusal it set is cleared only by the reaper sweep (`reapIntervalMs = 30_000`), so one eviction left both workspaces without a spare for a whole reap interval. Real path, Web :4120, `claude-haiku-5-5`, isolated HOME and data dir, four restarts per variant: run acknowledgement **1624/1613/1653/1646 ms → 670/655/715/662 ms**; `POST /sessions/prepare` **1567/1569 ms → 640/618 ms**; send after prepare **40/42 ms → 41/43 ms**; a send racing an in-flight prepare, which is the draft case the row reports, **1630/1653/1647 ms → 675/686/683 ms**. Trace shows `sup.adopt adopted=True` with a process spawned during startup instead of at send. Two alternatives were measured and rejected: a per-workspace fair split (one spare each) regressed variant (a) to 1000–1033 ms on alternate iterations and broke this task's "adopting leaves a replacement" invariant, and a single-workspace pool with only the `retired` flag stayed at 1520–1580 ms, confirming the shared wish list is the load-bearing part. Receipts: `task20/row16-fix/` (`REPORT.md`, `before/`, `final/`, `variantA/`). Fixture harness unchanged on variant (a) 724 → 764 ms because that variant never calls `prepare` and so never registers a workspace; variant (c) stays 226 ms, MET. Tests: two new tests in `workers.spare.test.ts` (adoption after a second workspace asks; a deliberate eviction does not set the refusal), each verified to fail on the pre-fix tree and pass here. `bun test packages/agent-service/src/supervisor` 99 pass.
 
 - **Earlier rounds.** `admit` paid a synchronous worker launch (914.5 ms), so `POST /internal/sessions` gained `deferred: true` and prompts queue behind readiness; `POST /sessions` fell to 13–14 ms. `stopGeneration`, causal registration failures, the optimistic draft bubble and its restore guard landed then.
 - **Traced per-hop timeline (`after-8`).** Temporary instrumentation stamped one shared wall-clock file from the Host, supervisor, worker and fixture; all of it was removed. Raw logs: `task24/after-8/analysis/`. Variant (a), 12 samples, ms after send, p50: Host create 5.6, client attach + run 6.0, await worker open 60.0, `createAgentSession` 108.8, mode reconcile 1.0, post-init `Promise.all` 273–316, ready → dispatch 1.0, prompt prepare 1.5, agent-loop prep 143.8, provider first byte + relay 13.0.

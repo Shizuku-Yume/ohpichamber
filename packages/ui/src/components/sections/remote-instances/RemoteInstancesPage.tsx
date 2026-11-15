@@ -35,6 +35,7 @@ import {
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_HELPER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
@@ -1601,7 +1602,7 @@ export const RemoteInstancesPage: React.FC = () => {
                 {t('settings.remoteInstances.clientAuth.actions.addDevice')}
               </Button>
             </div>
-            <div>
+            <div className="flex flex-col gap-1">
               {revokedClientCount > 0 ? (
                 <div className="flex justify-end">
                   <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void purgeRevokedRemoteClients()}>
@@ -2360,7 +2361,7 @@ export const RemoteInstancesPage: React.FC = () => {
             <Icon name={advancedOpen ? 'arrow-up-s' : 'arrow-down-s'} className="h-4 w-4 text-muted-foreground" />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <p className="typography-micro text-muted-foreground">{t('settings.remoteInstances.page.section.advancedHint')}</p>
+            <p className="pb-2 typography-micro text-muted-foreground">{t('settings.remoteInstances.page.section.advancedHint')}</p>
             <SettingsFieldRow label={t('settings.remoteInstances.page.field.connectionTimeoutSeconds')}>
               <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
                 <NumberInput
@@ -2451,29 +2452,31 @@ export const RemoteInstancesPage: React.FC = () => {
               ) : null}
 
               {isManagedMode ? (
-                <SettingsFieldRow
-                  label={t('settings.remoteInstances.page.field.remoteLanAccess')}
-                  info={t('settings.remoteInstances.page.field.remoteLanAccessHint')}
-                  description={remoteLanExposed ? (
-                    <span className="text-[var(--status-warning)]">
+                <div>
+                  <SettingsFieldRow
+                    label={t('settings.remoteInstances.page.field.remoteLanAccess')}
+                    info={t('settings.remoteInstances.page.field.remoteLanAccessHint')}
+                  >
+                    <Switch
+                      checked={remoteLanExposed}
+                      onCheckedChange={(checked) =>
+                        updateDraft((current) => ({
+                          ...current,
+                          remoteOpenchamber: {
+                            ...current.remoteOpenchamber,
+                            bindHost: checked ? '0.0.0.0' : '127.0.0.1',
+                          },
+                        }))
+                      }
+                      aria-label={t('settings.remoteInstances.page.field.remoteLanAccess')}
+                    />
+                  </SettingsFieldRow>
+                  {remoteLanExposed ? (
+                    <p className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-warning)]')}>
                       {t('settings.remoteInstances.page.field.remoteLanAccessWarning')}
-                    </span>
-                  ) : undefined}
-                >
-                  <Switch
-                    checked={remoteLanExposed}
-                    onCheckedChange={(checked) =>
-                      updateDraft((current) => ({
-                        ...current,
-                        remoteOpenchamber: {
-                          ...current.remoteOpenchamber,
-                          bindHost: checked ? '0.0.0.0' : '127.0.0.1',
-                        },
-                      }))
-                    }
-                    aria-label={t('settings.remoteInstances.page.field.remoteLanAccess')}
-                  />
-                </SettingsFieldRow>
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
 
               {isManagedMode ? (
@@ -2592,7 +2595,7 @@ export const RemoteInstancesPage: React.FC = () => {
                 </div>
               </SettingsFieldRow>
 
-              <div className="pt-1">
+              <div className="flex flex-col gap-1 pt-1">
                 <p className="typography-micro text-muted-foreground">{t('settings.remoteInstances.page.tunnelPreview.caption')}</p>
                 <p dir="ltr" className="typography-micro font-mono text-foreground/80 break-all">
                   {`${draft.localForward.bindHost}:${draft.localForward.preferredLocalPort || 'auto'} → ${draft.sshParsed?.destination || draft.nickname || 'remote'}:${draft.remoteOpenchamber.preferredPort || 'auto'}`}
@@ -2630,40 +2633,44 @@ export const RemoteInstancesPage: React.FC = () => {
                 />
               </SettingsFieldRow>
 
-              <SettingsFieldRow
-                label={remoteLanExposed
-                  ? t('settings.remoteInstances.page.field.uiPasswordRequired')
-                  : t('settings.remoteInstances.page.field.uiPasswordOptional')}
-                info={isManagedMode
-                  ? t('settings.remoteInstances.page.field.uiPasswordHintManaged')
-                  : t('settings.remoteInstances.page.field.uiPasswordHintExternal')}
-                description={uiPasswordMissing ? (
-                  <span className="text-[var(--status-error)]">{t('settings.remoteInstances.page.field.uiPasswordMissingForLan')}</span>
-                ) : undefined}
-              >
-                <Input
-                  inputSize="compact"
-                  className={cn(SETTINGS_WIDTH_SHORT_TEXT_CLASS, uiPasswordMissing && 'border-[var(--status-error)]')}
-                  type="password"
-                  ref={uiPasswordRef}
-                  aria-invalid={uiPasswordMissing}
-                  value={draft.auth.openchamberPassword?.value || ''}
-                  onChange={(event) =>
-                    updateDraft((current) => ({
-                      ...current,
-                      auth: {
-                        ...current.auth,
-                        openchamberPassword: {
-                          enabled: event.target.value.trim().length > 0,
-                          value: event.target.value,
-                          store: current.auth.openchamberPassword?.store || 'never',
+              <div>
+                <SettingsFieldRow
+                  label={remoteLanExposed
+                    ? t('settings.remoteInstances.page.field.uiPasswordRequired')
+                    : t('settings.remoteInstances.page.field.uiPasswordOptional')}
+                  info={isManagedMode
+                    ? t('settings.remoteInstances.page.field.uiPasswordHintManaged')
+                    : t('settings.remoteInstances.page.field.uiPasswordHintExternal')}
+                >
+                  <Input
+                    inputSize="compact"
+                    className={cn(SETTINGS_WIDTH_SHORT_TEXT_CLASS, uiPasswordMissing && 'border-[var(--status-error)]')}
+                    type="password"
+                    ref={uiPasswordRef}
+                    aria-invalid={uiPasswordMissing}
+                    value={draft.auth.openchamberPassword?.value || ''}
+                    onChange={(event) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        auth: {
+                          ...current.auth,
+                          openchamberPassword: {
+                            enabled: event.target.value.trim().length > 0,
+                            value: event.target.value,
+                            store: current.auth.openchamberPassword?.store || 'never',
+                          },
                         },
-                      },
-                    }))
-                  }
-                  placeholder={t('settings.remoteInstances.page.field.uiPasswordPlaceholder')}
-                />
-              </SettingsFieldRow>
+                      }))
+                    }
+                    placeholder={t('settings.remoteInstances.page.field.uiPasswordPlaceholder')}
+                  />
+                </SettingsFieldRow>
+                {uiPasswordMissing ? (
+                  <p className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-error)]')}>
+                    {t('settings.remoteInstances.page.field.uiPasswordMissingForLan')}
+                  </p>
+                ) : null}
+              </div>
             </SettingsSection>
 
             <SettingsSection

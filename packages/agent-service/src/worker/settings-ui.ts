@@ -164,7 +164,14 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'snapcompact.systemPrompt': 'engine',
   'snapcompact.toolResults': 'engine',
   'tools.format': 'engine',
-  'snapcompact.shape': 'engine',
+  // `snapcompact.shape` only picks the frame shape snapcompact prints text
+  // with, which is how OMP's terminal transcript renders an archive. This app
+  // renders no such frame, so it is terminal presentation like `display.*`.
+  'snapcompact.shape': 'tui-only',
+  // TTSR interrupts the agent mid-stream when output matches a rule pattern.
+  // `session/ttsr-coordinator.ts` runs that in the SDK, not in OMP's renderer,
+  // so these stay on the engine page: they change what the agent does, not how
+  // a transcript looks.
   'ttsr.enabled': 'engine',
   'ttsr.judge': 'engine',
   'ttsr.contextMode': 'engine',

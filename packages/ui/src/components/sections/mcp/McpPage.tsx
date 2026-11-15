@@ -268,9 +268,9 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
 
   return (
     <div className={SETTINGS_SPACE_ROW_CLASS}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <span className="typography-micro shrink-0 text-muted-foreground">{keyLabel}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
+          <span className={cn('truncate typography-micro text-muted-foreground @xl:flex-none', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>{keyLabel}</span>
           <span className="typography-micro text-muted-foreground">{t('settings.mcp.page.env.value')}</span>
         </div>
         <Button
@@ -289,14 +289,16 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
 
       <div className={SETTINGS_SPACE_ROW_CLASS}>
         {configuredKeys.map((key) => (
-          <div key={key} className="flex items-center gap-2">
-            <Input
-              value={key}
-              readOnly
-              aria-label={isEnv ? t('settings.mcp.page.env.key') : key}
-              className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} shrink-0 font-mono typography-meta`}
-            />
-            <div className="relative flex flex-1 items-center">
+          <div key={key} className="flex min-w-0 flex-col gap-2 @xl:flex-row @xl:items-center">
+            <div className={cn('min-w-0 @xl:flex-none', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
+              <Input
+                value={key}
+                readOnly
+                aria-label={isEnv ? t('settings.mcp.page.env.key') : key}
+                className="font-mono typography-meta"
+              />
+            </div>
+            <div className="relative flex min-w-0 flex-1 items-center">
               <Input
                 value="••••••••"
                 readOnly
@@ -322,9 +324,11 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
         ))}
 
         {!isEnv && bearerReference !== undefined ? (
-          <div className="flex items-center gap-2">
-            <Input value="Authorization" readOnly aria-label={t('settings.mcp.page.advanced.headers')} className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} shrink-0 font-mono typography-meta`} />
-            <div className="relative flex flex-1 items-center">
+          <div className="flex min-w-0 flex-col gap-2 @xl:flex-row @xl:items-center">
+            <div className={cn('min-w-0 @xl:flex-none', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
+              <Input value="Authorization" readOnly aria-label={t('settings.mcp.page.advanced.headers')} className="font-mono typography-meta" />
+            </div>
+            <div className="relative flex min-w-0 flex-1 items-center">
               <Input value="Bearer ••••••••" readOnly type="password" aria-label={`Authorization ${t('settings.common.status.saved')}`} className="w-full pr-8 font-mono typography-meta" />
               <span className="absolute right-2 typography-micro text-muted-foreground">{t('settings.common.status.saved')}</span>
             </div>
@@ -342,19 +346,21 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
         ) : null}
 
         {rows.map((row, index) => (
-          <div key={index} className="flex items-center gap-2">
-            <Input
-              value={row.key}
-              onChange={(event) => updateRow(index, 'key', keyTransform(event.target.value))}
-              placeholder={isEnv ? t('settings.mcp.page.env.keyPlaceholder') : t('settings.mcp.page.advanced.headerNamePlaceholder')}
-              aria-label={t('settings.mcp.page.env.key')}
-              className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} shrink-0 font-mono typography-meta`}
-              data-bwignore="true"
-              data-1p-ignore="true"
-              data-lpignore="true"
-              spellCheck={false}
-              disabled={disabled}
-            />
+          <div key={index} className="flex min-w-0 flex-col gap-2 @xl:flex-row @xl:items-center">
+            <div className={cn('min-w-0 @xl:flex-none', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
+              <Input
+                value={row.key}
+                onChange={(event) => updateRow(index, 'key', keyTransform(event.target.value))}
+                placeholder={isEnv ? t('settings.mcp.page.env.keyPlaceholder') : t('settings.mcp.page.advanced.headerNamePlaceholder')}
+                aria-label={t('settings.mcp.page.env.key')}
+                className="font-mono typography-meta"
+                data-bwignore="true"
+                data-1p-ignore="true"
+                data-lpignore="true"
+                spellCheck={false}
+                disabled={disabled}
+              />
+            </div>
             <Input
               type="password"
               value={row.value}
@@ -383,15 +389,15 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
         ))}
 
         {!isEnv ? (
-          <div className="flex items-center gap-2">
-            <span className="shrink-0 typography-meta text-muted-foreground">Authorization: Bearer</span>
+          <div className="flex min-w-0 flex-col gap-2 @xl:flex-row @xl:items-center">
+            <span className={cn('truncate typography-meta text-muted-foreground @xl:flex-none', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>Authorization: Bearer</span>
             <Input
               type="password"
               value={bearerDraft}
               onChange={(event) => onBearerDraftChange(event.target.value)}
               placeholder={t('settings.mcp.page.env.valuePlaceholder')}
               aria-label={t('settings.mcp.page.advanced.headers')}
-              className="w-full flex-1 font-mono typography-meta"
+              className="min-w-0 flex-1 font-mono typography-meta"
               autoComplete="new-password"
               data-bwignore="true"
               data-1p-ignore="true"
@@ -399,7 +405,6 @@ const CredentialEditor: React.FC<CredentialEditorProps> = ({
               spellCheck={false}
               disabled={disabled}
             />
-            <span className="h-7 w-7 shrink-0" />
           </div>
         ) : null}
       </div>
@@ -925,7 +930,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                     setDraft(value => ({ ...value, serverId, label: value.label === value.serverId ? serverId : value.label }));
                   }}
                   placeholder={t('settings.mcp.page.server.namePlaceholder')}
-                  className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} shrink font-mono`}
+                  className={cn(SETTINGS_WIDTH_SHORT_TEXT_CLASS, 'shrink font-mono')}
                   autoFocus
                 />
               </>

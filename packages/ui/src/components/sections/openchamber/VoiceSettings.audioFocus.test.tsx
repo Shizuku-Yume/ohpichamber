@@ -43,8 +43,8 @@ const Wrapper = ({ children }: PropsWithChildren) => <div>{children}</div>;
 mock.module('@/components/sections/shared/SettingsSection', () => ({
     SettingsSection: Wrapper, SettingsFieldRow: Wrapper, SettingsStackedField: Wrapper,
     SettingsCheckboxRow: () => null, SettingsChipGroup: () => null,
-    SETTINGS_NUMBER_INPUT_CLASS: '', SETTINGS_SELECT_ROW_TRIGGER_CLASS: '', SETTINGS_CONTROL_CLUSTER_CLASS: '',
-    SETTINGS_HELPER_CLASS: '', SETTINGS_ICON_BUTTON_CLASS: '', SETTINGS_OPTION_STACK_CLASS: '',
+    SETTINGS_WIDTH_NUMBER_CLASS: '', SETTINGS_WIDTH_SELECT_CLASS: '', SETTINGS_WIDTH_LONG_TEXT_CLASS: '',
+    SETTINGS_HELPER_CLASS: '', SETTINGS_ICON_BUTTON_CLASS: '', SETTINGS_SPACE_CHECKBOX_CLASS: '',
 }));
 
 type FocusEvent = { id: string; state: 'paused' | 'gained' | 'lost' };

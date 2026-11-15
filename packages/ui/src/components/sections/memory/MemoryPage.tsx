@@ -5,7 +5,7 @@ import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
   SettingsSection,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
@@ -106,7 +106,7 @@ export const MemoryPage: React.FC = () => {
           divider={false}
           settingsItem="memory.section.backend"
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {backendById.has('memory.backend') ? (
               <OmpRowControl
                 setting={backendById.get('memory.backend')!}
@@ -149,7 +149,7 @@ export const MemoryPage: React.FC = () => {
           description={t('settings.memory.section.autolearn.description')}
           settingsItem="memory.section.autolearn"
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {['autolearn.enabled', 'autolearn.autoContinue'].map((id) => {
               const s = backendById.get(id);
               if (!s) return null;
@@ -173,7 +173,7 @@ export const MemoryPage: React.FC = () => {
             description={t('settings.memory.section.mnemopi.description')}
             settingsItem="memory.section.mnemopi"
           >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               {mnemopiKeys.map((id) => {
                 const s = backendById.get(id);
                 if (!s) return null;
@@ -198,7 +198,7 @@ export const MemoryPage: React.FC = () => {
             description={t('settings.memory.section.hindsight.description')}
             settingsItem="memory.section.hindsight"
           >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               {hindsightKeys.map((id) => {
                 const s = backendById.get(id);
                 if (!s) return null;

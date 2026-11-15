@@ -4,7 +4,7 @@ import {
   SettingsFieldRow,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
-  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Icon } from '@/components/icon/Icon';
@@ -95,7 +95,7 @@ export const SessionGoalMaxTurnsField: React.FC<{ disabled?: boolean }> = ({ dis
           max={SESSION_GOAL_MAX_AUTO_TURNS_LIMIT}
           step={1}
           disabled={disabled}
-          className={SETTINGS_NUMBER_INPUT_CLASS}
+          className={SETTINGS_WIDTH_NUMBER_CLASS}
           aria-label={t('settings.openchamber.visual.goal.maxTurnsLabel')}
         />
         <Button size="sm"

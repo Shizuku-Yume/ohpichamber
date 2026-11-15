@@ -4,9 +4,9 @@ import {
   SettingsCheckboxRow,
   SettingsSection,
   SettingsStackedField,
-  SETTINGS_CONTROL_CLUSTER_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
   SETTINGS_FIELD_LABEL_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
   SETTINGS_SELECT_TRIGGER_CLASS,
@@ -257,7 +257,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         title={isEdit ? t('settings.providers.page.custom.editTitle') : t('settings.providers.page.custom.title')}
         divider={false}
         settingsItem="providers.custom"
-        contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.native.customDescription')}</p>
 
@@ -423,9 +423,9 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
       <SettingsSection
         title={t('settings.providers.page.custom.models.title')}
-        contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
-        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
+        <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} space-y-2`}>
           <div className="flex items-center gap-1.5">
             <Button
               type="button"
@@ -452,7 +452,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           ) : null}
         </div>
 
-        <div className={SETTINGS_CONTROL_CLUSTER_CLASS}>
+        <div className={SETTINGS_WIDTH_LONG_TEXT_CLASS}>
           {form.models.map((model, index) => (
             <CustomProviderModelRow
               key={model.row}
@@ -492,7 +492,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
       <SettingsSection
         title={t('settings.providers.page.custom.headers.title')}
-        contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.headers.description')}</p>
         {isEdit ? (
@@ -517,7 +517,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         {form.replaceHeaders ? (
           <>
             {form.headers.map((header, index) => (
-              <div key={header.row} className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
+              <div key={header.row} className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} space-y-2`}>
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1 space-y-2">
                     <div>

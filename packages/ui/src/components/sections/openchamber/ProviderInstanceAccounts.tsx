@@ -14,8 +14,8 @@ import type {
 import { SourceControlInstanceOtherProviderError } from '@/lib/api/types';
 import { useSourceControlProvider } from '@/lib/source-control/providers/registry';
 import {
-  SETTINGS_CONTROL_CLUSTER_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsChipGroup,
   SettingsFieldRow,
 } from '@/components/sections/shared/SettingsSection';
@@ -398,7 +398,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
             ? t('settings.sourceControl.field.sshUrl.invalid')
             : sshUrlFailed ? t(copy.operationFailed) : undefined}
         >
-          <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+          <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
             <Input
               className="h-8 w-full min-w-0 rounded-md"
               value={sshUrl}
@@ -469,7 +469,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
       )}
 
       {showConnectionMethods && (
-        <div className={SETTINGS_FIELDS_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {connectMethods.length > 1 && !flow && (
             <SettingsFieldRow label={t('settings.sourceControl.method.label')}>
               <SettingsChipGroup<ConnectMethod>
@@ -499,7 +499,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
           )}
           {method === 'pat' && !flow && needsUsername && (
             <SettingsFieldRow label={t('settings.sourceControl.field.username.label')} info={t('settings.sourceControl.field.username.info', { provider })}>
-              <div className={SETTINGS_CONTROL_CLUSTER_CLASS}>
+              <div className={SETTINGS_WIDTH_LONG_TEXT_CLASS}>
                 <Input
                   className="h-8 w-full min-w-0 rounded-md"
                   value={username}
@@ -529,7 +529,7 @@ export const ProviderInstanceAccounts: React.FC<ProviderInstanceAccountsProps> =
                 </span>
               ) : undefined}
             >
-              <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+              <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
                 <Input
                   className="h-8 w-full min-w-0 rounded-md"
                   type="password"

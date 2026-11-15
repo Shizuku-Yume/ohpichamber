@@ -30,8 +30,8 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 interface FormState {
@@ -335,7 +335,7 @@ export const AgentsPage: React.FC = () => {
             divider={false}
             settingsItem="agents.section.subagents"
           >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <ModelRoleEditor
                 role="task"
                 roles={roleSelectors}
@@ -365,7 +365,7 @@ export const AgentsPage: React.FC = () => {
             description={t('settings.agents.section.prewalk.description')}
             settingsItem="agents.section.prewalk"
           >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               {prewalkSettings.map((s) => (
                 <OmpRowControl
                   key={s.id}
@@ -384,7 +384,7 @@ export const AgentsPage: React.FC = () => {
             description={t('settings.agents.section.advisor.description')}
             settingsItem="agents.section.advisor"
           >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <ModelRoleEditor
                 role="advisor"
                 roles={roleSelectors}
@@ -450,7 +450,7 @@ export const AgentsPage: React.FC = () => {
               requestSave();
             }}
           >
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('sessions.scheduledTasks.editor.thinkingLevel.label')}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={t('sessions.scheduledTasks.editor.thinkingLevel.label')}>
               <SelectValue>{thinkingLevelLabel(form.thinkingLevel, t)}</SelectValue>
             </SelectTrigger>
             <SelectContent>

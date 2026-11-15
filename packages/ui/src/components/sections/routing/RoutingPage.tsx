@@ -10,10 +10,10 @@ import { cn } from '@/lib/utils';
 import {
   SETTINGS_CUSTOM_TRIGGER_CLASS,
   SETTINGS_DESCRIPTION_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
   SettingsCheckboxRow,
   SettingsFieldRow,
   SettingsSection,
@@ -88,7 +88,7 @@ const VariantSelect: React.FC<{
   };
   return (
     <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={efforts.length === 0}>
-      <SelectTrigger className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
+      <SelectTrigger className={cn(SETTINGS_WIDTH_SELECT_CLASS, className)} aria-label={ariaLabel}>
         <SelectValue>{label(selected)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -352,9 +352,9 @@ export const RoutingPage: React.FC = () => {
       ) : (
         <>
           <SettingsSection title={t('settings.routing.auto.title')} divider={false}>
-            <div className={SETTINGS_FIELDS_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <JevAccessNote />
-              <div className={SETTINGS_OPTION_STACK_CLASS}>
+              <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
                 <SettingsCheckboxRow
                   settingsItem="routing.enabled"
                   checked={draft.enabled}
@@ -405,7 +405,7 @@ export const RoutingPage: React.FC = () => {
           </SettingsSection>
 
           <SettingsSection title={t('settings.routing.categories.title')}>
-            <div className={SETTINGS_FIELDS_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <p className={SETTINGS_HELPER_CLASS}>{t('settings.routing.categories.description')}</p>
               <div className="divide-y divide-border/40 border-y border-border/40">
                 {draft.categories.map((category) => (

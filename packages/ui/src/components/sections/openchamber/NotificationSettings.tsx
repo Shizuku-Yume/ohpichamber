@@ -15,7 +15,7 @@ import {
   SettingsTwoColumn,
   SettingsCheckboxRow,
   SettingsGroupTitle,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 const DEFAULT_NOTIFICATION_TEMPLATES = {
@@ -465,7 +465,7 @@ export const NotificationSettings: React.FC = () => {
           title={t('settings.notifications.page.delivery.title')}
           divider={false}
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
             <SettingsCheckboxRow
               checked={nativeNotificationsEnabled && canShowNotifications}
               onChange={(checked) => {
@@ -530,7 +530,7 @@ export const NotificationSettings: React.FC = () => {
               settingsItem="notifications.events"
               title={t('settings.notifications.page.events.title')}
             >
-              <div className={SETTINGS_OPTION_STACK_CLASS}>
+              <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
                 <SettingsCheckboxRow
                   checked={notifyOnCompletion}
                   onChange={setNotifyOnCompletion}

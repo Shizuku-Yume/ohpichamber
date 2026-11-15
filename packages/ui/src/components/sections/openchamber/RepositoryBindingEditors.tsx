@@ -41,7 +41,7 @@ import { useConnectedAccountIds, useSourceControlAuthStore } from '@/stores/useS
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useGitIdentity } from '@/stores/useGitStore';
 import {
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
   SettingsControlGroup,
   SettingsGroupTitle,
@@ -157,7 +157,7 @@ export const AdditionalRemoteGrants: React.FC<SourceControlBindingSettingsProps>
       title={t('gitView.remotes.title')}
       description={t('gitView.remotes.description')}
       className={cn('min-w-0', className)}
-      contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+      contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
       {ungranted.map((remote) => {
         const traits = remoteTraits(remote.fetch.displayUrl);
@@ -351,7 +351,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
     <SettingsControlGroup
       description={t('gitView.hydration.description')}
       className="min-w-0 pt-2"
-      contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+      contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
       <SettingsStackedField label={t('gitView.hydration.parentRemote')} controlClassName={EDITOR_CONTROL_CLASS}>
         <Select value={parentRemote} onValueChange={(value) => {

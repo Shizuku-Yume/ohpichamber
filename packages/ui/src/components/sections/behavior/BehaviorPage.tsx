@@ -33,8 +33,8 @@ import {
   SettingsChipGroup,
   SettingsFieldRow,
   SettingsStackedField,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
@@ -380,7 +380,7 @@ export const BehaviorPage: React.FC = () => {
             }}
             disabled={isLoading || !responseStyleEnabled}
           >
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
               <SelectValue>
                 {(value) => (isResponseStylePreset(value) ? t(RESPONSE_STYLE_OPTION_LABEL_KEYS[value]) : null)}
               </SelectValue>
@@ -420,7 +420,7 @@ export const BehaviorPage: React.FC = () => {
         description={t('settings.behavior.section.prompt.description')}
         settingsItem="behavior.section.prompt"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {promptSettings.map((s) => (
             <OmpRowControl
               key={s.id}

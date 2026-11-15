@@ -15,12 +15,13 @@ import {
   SettingsStackedField,
   SettingsCheckboxRow,
   SettingsChipGroup,
-  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
   SettingsBadge,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { LIVE_BROWSER_TABS_MAX, LIVE_BROWSER_TABS_MIN } from '@/lib/browser/liveTabs';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -132,7 +133,7 @@ const FilesAndEditorSection: React.FC = () => {
         ) : null}
       </div>
 
-      <div className={SETTINGS_OPTION_STACK_CLASS}>
+      <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
         <SettingsCheckboxRow
           checked={autoSaveEnabled}
           onChange={setAutoSaveEnabled}
@@ -233,7 +234,7 @@ const TerminalSection: React.FC = () => {
         settingsItem="appearance.terminal-shell"
       >
         <Select value={terminalShell} onValueChange={(value) => { if (isTerminalShell(value)) setTerminalShell(value); }}>
-          <SelectTrigger aria-label={t('settings.openchamber.visual.field.terminalShellAria')} className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+          <SelectTrigger aria-label={t('settings.openchamber.visual.field.terminalShellAria')} className={SETTINGS_WIDTH_SELECT_CLASS}>
             <SelectValue>
               {terminalShell === 'auto'
                 ? t('settings.openchamber.visual.option.terminalShell.auto')
@@ -248,7 +249,7 @@ const TerminalSection: React.FC = () => {
           </SelectContent>
         </Select>
       </SettingsFieldRow>
-      <div className={SETTINGS_OPTION_STACK_CLASS}>
+      <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
         {terminalShellSupportsLogin ? (
           <SettingsCheckboxRow
             checked={terminalLoginShellEnabled}
@@ -304,7 +305,7 @@ const PanelsAndLinksSection: React.FC = () => {
   const setAlwaysShowScrollbars = useUIStore((state) => state.setAlwaysShowScrollbars);
 
   return (
-    <SettingsSection title={t('settings.layout.general.panels.title')} contentClassName={SETTINGS_OPTION_STACK_CLASS}>
+    <SettingsSection title={t('settings.layout.general.panels.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
       {!isMobile ? (
         <SettingsCheckboxRow
           checked={sessionTabsEnabled}
@@ -373,7 +374,7 @@ const PanelsAndLinksSection: React.FC = () => {
               min={LIVE_BROWSER_TABS_MIN}
               max={LIVE_BROWSER_TABS_MAX}
               step={1}
-              className={SETTINGS_NUMBER_INPUT_CLASS}
+              className={SETTINGS_WIDTH_NUMBER_CLASS}
               deferExternalValueWhileFocused
               aria-label={t('settings.openchamber.visual.field.liveBrowserTabs')}
             />

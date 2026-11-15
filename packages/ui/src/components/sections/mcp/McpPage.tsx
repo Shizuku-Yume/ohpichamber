@@ -15,7 +15,7 @@ import {
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { readClipboardText } from '@/lib/clipboard';
 import {
@@ -957,7 +957,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
               }}
               disabled={busy || isReadOnly}
             >
-              <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+              <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                 <SelectValue>
                   {draft.scope === 'user'
                     ? t('settings.mcp.grid.scope.user')
@@ -1035,7 +1035,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                     changeRemoteTransport(type);
                   }}
                 >
-                  <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} disabled={busy || isReadOnly}>
+                  <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} disabled={busy || isReadOnly}>
                     <SelectValue>{draft.transport.type === 'sse' ? REMOTE_TRANSPORT_LABELS.sse : REMOTE_TRANSPORT_LABELS.http}</SelectValue>
                   </SelectTrigger>
                   <SelectContent align="end">

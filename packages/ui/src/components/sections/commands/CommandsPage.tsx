@@ -17,7 +17,7 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 interface CommandForm {
@@ -141,7 +141,7 @@ export const CommandsPage: React.FC = () => {
           <Select value={form.scope} onValueChange={scope => {
             if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope });
           }}>
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
               <SelectValue placeholder={t('settings.agents.page.field.scopePlaceholder')}>
                 {form.scope === 'workspace' ? t('settings.common.scope.project') : t('settings.common.scope.global')}
               </SelectValue>

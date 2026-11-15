@@ -28,7 +28,7 @@ import {
   SETTINGS_PAGE_TITLE_CLASS,
   SETTINGS_SECTION_TITLE_CLASS,
   SETTINGS_FIELD_LABEL_CLASS,
-  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
@@ -2376,7 +2376,7 @@ export const RemoteInstancesPage: React.FC = () => {
                 min={5}
                 max={240}
                 step={1}
-                className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
+                className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
                 value={draft.connectionTimeoutSec}
                 onValueChange={(next) => {
                   updateDraft((current) => ({
@@ -2404,7 +2404,7 @@ export const RemoteInstancesPage: React.FC = () => {
                   min={1}
                   max={65535}
                   step={1}
-                  className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
+                  className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
                   value={draft.remoteOpenchamber.preferredPort}
                   onValueChange={(next) => {
                     updateDraft((current) => ({
@@ -2581,7 +2581,7 @@ export const RemoteInstancesPage: React.FC = () => {
                     min={1}
                     max={65535}
                     step={1}
-                    className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
+                    className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
                     value={draft.localForward.preferredLocalPort}
                     onValueChange={(next) => {
                       updateDraft((current) => ({
@@ -2845,7 +2845,7 @@ export const RemoteInstancesPage: React.FC = () => {
                               min={1}
                               max={65535}
                               step={1}
-                              className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
+                              className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
                               value={forward.localPort}
                               onValueChange={(next) => {
                                 updateForward((item) => ({
@@ -2887,7 +2887,7 @@ export const RemoteInstancesPage: React.FC = () => {
                                 min={1}
                                 max={65535}
                                 step={1}
-                                className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
+                                className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
                                 value={forward.remotePort}
                                 onValueChange={(next) => {
                                   updateForward((item) => ({

@@ -16,7 +16,7 @@ import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import { formatTimeForPreference } from '@/lib/timeFormat';
 import { useUIStore, type TimeFormatPreference } from '@/stores/useUIStore';
 import { useDurationTickerNow, useWaitingBlink } from '@/hooks/useDurationTicker';
-import { SettingsChipGroup, SettingsFieldRow, SettingsSection, SettingsStackedField, SettingsGroupTitle, SETTINGS_FIELD_LABEL_CLASS, SETTINGS_CALLOUT_TITLE_CLASS, SETTINGS_DESCRIPTION_CLASS, SETTINGS_HELPER_CLASS, SETTINGS_SELECT_ROW_TRIGGER_CLASS } from '@/components/sections/shared/SettingsSection';
+import { SettingsChipGroup, SettingsFieldRow, SettingsSection, SettingsStackedField, SettingsGroupTitle, SETTINGS_FIELD_LABEL_CLASS, SETTINGS_CALLOUT_TITLE_CLASS, SETTINGS_DESCRIPTION_CLASS, SETTINGS_HELPER_CLASS, SETTINGS_WIDTH_SELECT_CLASS } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { problemMessage } from '@/lib/problemMessage';
 
@@ -1247,7 +1247,7 @@ export const TunnelSettings: React.FC = () => {
               }}
               disabled={controlsBusy}
             >
-              <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+              <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                 <SelectValue placeholder={t('settings.openchamber.tunnel.field.providerPlaceholder')}>
                   {getProviderLabel(tunnelProvider)}
                 </SelectValue>
@@ -1296,7 +1296,7 @@ export const TunnelSettings: React.FC = () => {
                 }}
                 disabled={controlsBusy}
               >
-                <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+                <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                   <SelectValue>{selectedHttpsPort}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -1656,7 +1656,7 @@ export const TunnelSettings: React.FC = () => {
                   }}
                   disabled={controlsBusy || managedRemoteTunnelPresets.length <= 1}
                 >
-                  <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+                  <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                     <SelectValue placeholder={t('settings.openchamber.tunnel.field.selectSavedTunnelPlaceholder')}>
                       {selectedPreset?.name}
                     </SelectValue>
@@ -1798,7 +1798,7 @@ export const TunnelSettings: React.FC = () => {
             }}
             disabled={isSavingTtl || controlsBusy}
           >
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
               <SelectValue className="truncate">
                 {ttlOptionLabel(BOOTSTRAP_TTL_OPTIONS, bootstrapTtlMs, '1800000')}
               </SelectValue>
@@ -1818,7 +1818,7 @@ export const TunnelSettings: React.FC = () => {
             }}
             disabled={isSavingTtl || controlsBusy}
           >
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
               <SelectValue className="truncate">
                 {ttlOptionLabel(SESSION_TTL_OPTIONS, sessionTtlMs, '28800000')}
               </SelectValue>

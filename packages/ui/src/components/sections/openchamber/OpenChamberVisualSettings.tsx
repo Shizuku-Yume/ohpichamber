@@ -39,12 +39,12 @@ import {
     SettingsChipGroup,
     SETTINGS_SELECT_TRIGGER_CLASS,
     SETTINGS_ICON_BUTTON_CLASS,
-    SETTINGS_CONTROL_CLUSTER_CLASS,
+    SETTINGS_WIDTH_LONG_TEXT_CLASS,
     SETTINGS_NUMBER_STEPPER_ROW_CLASS,
     SETTINGS_NUMBER_UNIT_CLASS,
-    SETTINGS_NUMBER_INPUT_CLASS,
-    SETTINGS_FIELDS_STACK_CLASS,
-    SETTINGS_OPTION_STACK_CLASS,
+    SETTINGS_WIDTH_NUMBER_CLASS,
+    SETTINGS_SPACE_ROW_CLASS,
+    SETTINGS_SPACE_CHECKBOX_CLASS,
     SETTINGS_HELPER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
@@ -445,7 +445,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     </SettingsStackedField>
 
                                     {(shouldShow('timeFormat') || shouldShow('weekStart')) && (
-                                        <div className={SETTINGS_FIELDS_STACK_CLASS}>
+                                        <div className={SETTINGS_SPACE_ROW_CLASS}>
                                             {shouldShow('timeFormat') && (
                                                 <SettingsStackedField
                                                     label={t('settings.openchamber.visual.field.timeFormat')}
@@ -488,7 +488,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         )}
 
                         {(showPwaInstallNameSetting || showPwaOrientationSetting || showMobileKeyboardModeSetting) && (
-                            <SettingsSection title={t('settings.openchamber.visual.section.appInstall')} contentClassName={SETTINGS_FIELDS_STACK_CLASS}>
+                            <SettingsSection title={t('settings.openchamber.visual.section.appInstall')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
 
                             {showPwaInstallNameSetting && (
                                 <SettingsFieldRow
@@ -496,7 +496,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     info={t('settings.openchamber.visual.field.installAppNameHint')}
                                     settingsItem="appearance.pwa-install-name"
                                     alignEnd={false}
-                                    controlClassName={SETTINGS_CONTROL_CLUSTER_CLASS}
+                                    controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
                                 >
                                     <Input
                                         value={pwaInstallName}
@@ -538,7 +538,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     description={t('settings.openchamber.visual.field.installOrientationHint')}
                                     settingsItem="appearance.pwa-orientation"
                                     alignEnd={false}
-                                    controlClassName={SETTINGS_CONTROL_CLUSTER_CLASS}
+                                    controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
                                 >
                                     <Select
                                         value={pwaOrientation}
@@ -584,7 +584,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     info={t('settings.openchamber.visual.field.mobileKeyboardModeHint')}
                                     settingsItem="appearance.mobile-keyboard-mode"
                                     alignEnd={false}
-                                    controlClassName={SETTINGS_CONTROL_CLUSTER_CLASS}
+                                    controlClassName={SETTINGS_WIDTH_LONG_TEXT_CLASS}
                                 >
                                     <Select
                                         value={mobileKeyboardMode}
@@ -630,7 +630,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
                 {/* --- Density & type --- */}
                 {hasLayoutSettings && (
-                    <SettingsSection title={t('settings.openchamber.visual.section.densityAndType')} contentClassName={SETTINGS_FIELDS_STACK_CLASS}>
+                    <SettingsSection title={t('settings.openchamber.visual.section.densityAndType')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
                         {(shouldShow('fontSize') && !isMobile) || shouldShow('terminalFontSize') ? (
                             <SettingsTwoColumn>
                                 {shouldShow('fontSize') && !isMobile && (
@@ -738,7 +738,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 min={50}
                                                 max={200}
                                                 step={5}
-                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                className={SETTINGS_WIDTH_NUMBER_CLASS}
                                                 aria-label={t('settings.openchamber.visual.field.fontSizePercentageAria')}
                                             />
                                             <span className={SETTINGS_NUMBER_UNIT_CLASS}>%</span>
@@ -769,7 +769,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 min={50}
                                                 max={200}
                                                 step={5}
-                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                className={SETTINGS_WIDTH_NUMBER_CLASS}
                                                 aria-label={t('settings.openchamber.visual.field.chatFontSizePercentageAria')}
                                             />
                                             <span className={SETTINGS_NUMBER_UNIT_CLASS}>%</span>
@@ -818,7 +818,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 min={9}
                                                 max={52}
                                                 step={1}
-                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                className={SETTINGS_WIDTH_NUMBER_CLASS}
                                             />
                                             <span className={SETTINGS_NUMBER_UNIT_CLASS}>px</span>
                                             <Button size="sm"
@@ -848,7 +848,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 min={9}
                                                 max={32}
                                                 step={1}
-                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                className={SETTINGS_WIDTH_NUMBER_CLASS}
                                             />
                                             <span className={SETTINGS_NUMBER_UNIT_CLASS}>px</span>
                                             <Button size="sm"
@@ -883,7 +883,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 min={50}
                                                 max={200}
                                                 step={5}
-                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                className={SETTINGS_WIDTH_NUMBER_CLASS}
                                             />
                                             <span className={SETTINGS_NUMBER_UNIT_CLASS}>%</span>
                                             <Button size="sm"
@@ -914,7 +914,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 min={0}
                                                 max={100}
                                                 step={5}
-                                                className={SETTINGS_NUMBER_INPUT_CLASS}
+                                                className={SETTINGS_WIDTH_NUMBER_CLASS}
                                             />
                                             <span className={SETTINGS_NUMBER_UNIT_CLASS}>px</span>
                                             <Button size="sm"
@@ -941,7 +941,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                     <SettingsSection
                         title={t('settings.openchamber.visual.section.sessionActivity')}
                         settingsItem="appearance.session-activity"
-                        contentClassName={SETTINGS_OPTION_STACK_CLASS}
+                        contentClassName={SETTINGS_SPACE_CHECKBOX_CLASS}
                     >
                         <SettingsCheckboxRow
                             checked={animatedActivityIndicators}

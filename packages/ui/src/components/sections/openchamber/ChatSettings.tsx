@@ -23,10 +23,11 @@ import {
   SettingsControlGroup,
   SettingsRadioGroup,
   SettingsRadioOption,
-  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
 import { useDeviceInfo } from '@/lib/device';
@@ -184,7 +185,7 @@ const MessagesTab: React.FC = () => {
             aria-label={t('settings.openchamber.visual.section.activityDefaultAria')}
           />
         </SettingsFieldRow>
-        <div className={SETTINGS_OPTION_STACK_CLASS} data-settings-item="chat.reasoning">
+        <div className={SETTINGS_SPACE_CHECKBOX_CLASS} data-settings-item="chat.reasoning">
           <SettingsCheckboxRow
             checked={showReasoningTraces}
             onChange={setShowReasoningTraces}
@@ -238,7 +239,7 @@ const MessagesTab: React.FC = () => {
       <SettingsSection
         title={t('settings.layout.chat.section.reading')}
         settingsItem="chat.message-appearance"
-        contentClassName={SETTINGS_OPTION_STACK_CLASS}
+        contentClassName={SETTINGS_SPACE_CHECKBOX_CLASS}
       >
         <SettingsCheckboxRow
           checked={wideChatLayoutEnabled}
@@ -335,7 +336,7 @@ const MessagesTab: React.FC = () => {
             />
           </SettingsFieldRow>
         </div>
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
           <SettingsCheckboxRow
             checked={codeBlockLineWrap}
             onChange={setCodeBlockLineWrap}
@@ -368,7 +369,7 @@ const MessagesTab: React.FC = () => {
         description={t('settings.chat.section.display.description')}
         settingsItem="chat.section.display"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {displaySettings.map((s) => (
             <OmpRowControl
               key={s.id}
@@ -387,7 +388,7 @@ const MessagesTab: React.FC = () => {
         description={t('settings.chat.section.thinking.description')}
         settingsItem="chat.section.thinking"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {thinkingSettings.map((s) => (
             <OmpRowControl
               key={s.id}
@@ -406,7 +407,7 @@ const MessagesTab: React.FC = () => {
         description={t('settings.chat.section.images.description')}
         settingsItem="chat.section.images"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {imageSettings.map((s) => (
             <OmpRowControl
               key={s.id}
@@ -536,7 +537,7 @@ const ComposerTab: React.FC = () => {
             ))}
           </SettingsRadioGroup>
         </SettingsControlGroup>
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
           <SettingsCheckboxRow
             checked={allowPromptingSubagentSessions}
             onChange={setAllowPromptingSubagentSessions}
@@ -553,7 +554,7 @@ const ComposerTab: React.FC = () => {
           description={t('settings.chat.section.composerKeywords.description')}
           settingsItem="chat.composer-keywords"
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {[...composerSettings, ...btwSettings].map((s) => (
               <OmpRowControl
                 key={s.id}
@@ -568,7 +569,7 @@ const ComposerTab: React.FC = () => {
       ) : null}
 
       <SettingsSection title={t('settings.layout.chat.section.draftsAndHistory')} contentClassName="space-y-3">
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
           <SettingsCheckboxRow
             checked={persistChatDraft}
             onChange={(enabled) => {
@@ -621,7 +622,7 @@ const ComposerTab: React.FC = () => {
                 min={MIN_INPUT_HISTORY_LIMIT}
                 max={MAX_INPUT_HISTORY_LIMIT}
                 step={1}
-                className={SETTINGS_NUMBER_INPUT_CLASS}
+                className={SETTINGS_WIDTH_NUMBER_CLASS}
                 deferExternalValueWhileFocused
                 aria-label={t('settings.openchamber.visual.field.inputHistoryLimitAria')}
               />
@@ -778,7 +779,7 @@ const AssistanceTab: React.FC = () => {
         title={t('settings.openchamber.visual.section.sessionAssistance')}
         settingsItem="chat.session-assistance"
         divider={false}
-        contentClassName={SETTINGS_OPTION_STACK_CLASS}
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <SettingsCheckboxRow
           checked={draftStartersVisible}

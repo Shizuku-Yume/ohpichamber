@@ -12,7 +12,7 @@ import {
   SettingsCheckboxRow,
   SettingsSection,
   SettingsStackedField,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
@@ -156,7 +156,7 @@ export const ToolsPage: React.FC = () => {
           divider={false}
           settingsItem="tools.section.host"
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             <SettingsCheckboxRow
               settingsItem="sessions.agent-control-tool"
               checked={agentControlToolEnabled}
@@ -252,7 +252,7 @@ export const ToolsPage: React.FC = () => {
           description={t('settings.tools.section.media.description')}
           settingsItem="tools.section.media"
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {availableById.has('browser.enabled') ? (
               <>
                 <OmpRowControl
@@ -311,7 +311,7 @@ export const ToolsPage: React.FC = () => {
           description={t('settings.tools.section.code.description')}
           settingsItem="tools.section.code"
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {['todo.enabled', 'find.enabled', 'glob.enabled', 'grep.enabled', 'astGrep.enabled', 'astEdit.enabled', 'debug.enabled', 'launch.enabled'].map((id) => {
               const s = availableById.get(id);
               if (!s) return null;
@@ -361,7 +361,7 @@ export const ToolsPage: React.FC = () => {
           description={t('settings.tools.section.specialized.description')}
           settingsItem="tools.section.specialized"
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {['web_search.enabled', 'fetch.enabled', 'github.enabled', 'computer.enabled', 'ratchet.enabled', 'archive.enabled', 'checkpoint.enabled', 'vault.enabled', 'security.enabled', 'ask.enabled', 'out.enabled', 'speechgen.enabled', 'ida.enabled'].map((id) => {
               const s = availableById.get(id);
               if (!s) return null;

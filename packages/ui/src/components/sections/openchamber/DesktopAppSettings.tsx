@@ -21,7 +21,7 @@ import {
   SettingsSection,
   SettingsCheckboxRow,
   SettingsFieldRow,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useUIStore } from '@/stores/useUIStore';
 
@@ -300,7 +300,7 @@ export const DesktopAppSettings: React.FC = () => {
 
   return (
     <SettingsSection title={t('settings.layout.general.desktopApp.title')} contentClassName="space-y-3">
-      <div className={SETTINGS_OPTION_STACK_CLASS}>
+      <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
         {launchAtLoginSupported ? (
           <SettingsCheckboxRow
             settingsItem="sessions.desktop-launch-at-login"

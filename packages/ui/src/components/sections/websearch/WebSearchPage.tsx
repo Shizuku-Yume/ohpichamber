@@ -19,13 +19,13 @@ import {
 } from '@/components/sections/shared/SettingsCards';
 import {
   SETTINGS_CALLOUT_TITLE_CLASS,
-  SETTINGS_CONTROL_CLUSTER_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
-  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SELECT_TRIGGER_CLASS,
   SettingsChipGroup,
   SettingsFieldRow,
   SettingsSection,
@@ -209,7 +209,7 @@ const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapsh
         info={t('settings.webSearch.native.fallbackInfo')}
         settingsItem="web-search.fallbacks"
       >
-        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
+        <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} space-y-2`}>
           <SettingsSortableList
             items={rows}
             disabled={busy}
@@ -240,7 +240,7 @@ const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapsh
             onValueChange={(providerId) => void commit({ fallbackProviderIds: [...snapshot.fallbackProviderIds, providerId] })}
           >
             <SelectTrigger
-              className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+              className={SETTINGS_SELECT_TRIGGER_CLASS}
               aria-label={t('settings.webSearch.native.addFallback')}
             >
               {/* The value is always empty: picking a provider commits it to the
@@ -270,7 +270,7 @@ const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapsh
             max={300}
             step={1}
             disabled={busy}
-            className={SETTINGS_NUMBER_INPUT_CLASS}
+            className={SETTINGS_WIDTH_NUMBER_CLASS}
             aria-label={t('settings.webSearch.native.timeout')}
           />
           <span className={SETTINGS_NUMBER_UNIT_CLASS} aria-hidden="true">{t('settings.webSearch.native.timeoutUnit')}</span>
@@ -349,7 +349,7 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
             <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.detail.noKey')}</p>
           ) : provider.credentialConfigured ? (
             <SettingsFieldRow label={t('settings.webSearch.keys.label')} info={t('settings.webSearch.native.keyInfo')}>
-              <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center justify-end gap-2`}>
+              <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex items-center justify-end gap-2`}>
                 <span className="typography-meta text-muted-foreground">{t('settings.webSearch.keys.saved')}</span>
                 <Button variant="outline" size="xs" disabled={busy} onClick={() => void handleRemove()}>
                   {t('settings.webSearch.keys.remove')}
@@ -358,7 +358,7 @@ const ProviderDetail: React.FC<{ provider: WebSearchProviderEntry; snapshot: Web
             </SettingsFieldRow>
           ) : enterprise ? null : (
             <SettingsFieldRow label={t('settings.webSearch.keys.label')} info={t('settings.webSearch.native.keyInfo')}>
-              <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex items-center gap-2`}>
+              <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex items-center gap-2`}>
                 <Input
                   type="password"
                   autoComplete="off"

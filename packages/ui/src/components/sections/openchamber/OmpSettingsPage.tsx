@@ -14,7 +14,7 @@ import {
   SettingsSection,
   SETTINGS_DESCRIPTION_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
@@ -343,7 +343,7 @@ export const OmpSettingsPage: React.FC = () => {
             divider={index > 0}
             settingsItem={`omp.section.${section.id}`}
           >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               {section.rows.map((setting) => (
                 <OmpRowControl
                   key={setting.id}

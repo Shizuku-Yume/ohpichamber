@@ -8,7 +8,7 @@ import type { SourceControlIdentity } from '@/lib/api/types';
 import type { SourceControlProviderDescriptor } from '@/lib/source-control/providers/descriptor';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import {
-  SETTINGS_CONTROL_CLUSTER_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
   SettingsControlGroup,
   SettingsFieldRow,
 } from '@/components/sections/shared/SettingsSection';
@@ -143,7 +143,7 @@ export const SourceControlProviderCard: React.FC<{ descriptor: SourceControlProv
             info={t(copy.instanceInfo)}
             description={instanceFailed ? t(copy.operationFailed) : undefined}
           >
-            <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
+            <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2 @xl:flex-row @xl:items-center`}>
               <Input
                 className="h-8 w-full min-w-0 rounded-md"
                 value={instanceInput}

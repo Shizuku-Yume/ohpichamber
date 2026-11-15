@@ -197,6 +197,53 @@ test('a value no generic row can draw is owned by the control that writes it, or
   }
 });
 
+test('every exposed OMP row has a label and description in all fifteen locales', () => {
+  // `OmpRowControl` renders the locale and falls back to OMP's English copy, so
+  // a row without a translation shows English in a Chinese UI — and a row whose
+  // OMP label is empty used to show its raw id (`modelRoles`). The ids come from
+  // the placement table, not a hand list, so a newly exposed row cannot join the
+  // page without copy.
+  const source = readFileSync(
+    String(new URL('../../../ui/src/lib/i18n/messages/omp-settings.i18n.ts', import.meta.url).pathname),
+    'utf8',
+  );
+  const dictionaries = new Map<string, Map<string, string>>();
+  for (const block of source.matchAll(/^ {2}'([^']+)': \{\n([\s\S]*?)^ {2}\},?$/gm)) {
+    const entries = new Map<string, string>();
+    for (const line of block[2].matchAll(/^ {4}'([^']+)': (?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"),$/gm)) {
+      entries.set(line[1], line[2] ?? line[3] ?? '');
+    }
+    dictionaries.set(block[1], entries);
+  }
+  expect([...dictionaries.keys()].sort()).toEqual([
+    'ar', 'de', 'en', 'es', 'fr', 'he', 'ja', 'ko', 'nl', 'pl', 'pt-BR', 'tr', 'uk', 'zh-CN', 'zh-TW',
+  ]);
+
+  // The rows a control draws: engine rows and page rows on a page the UI owns.
+  // `owned-by` rows are drawn by their named control, which supplies its own
+  // translated label.
+  const drawn = [...OMP_SETTING_EXPOSED_IDS].filter((id) => OMP_SETTING_PLACEMENTS[id]?.type !== 'owned-by');
+  const english = dictionaries.get('en')!;
+  const missing: string[] = [];
+  // A description identical to the English one is an untranslated row, not a
+  // translation. Names are sometimes the same everywhere (`Glob`, `Bash`), so
+  // only the description is compared.
+  const untranslated: string[] = [];
+  for (const [locale, entries] of dictionaries) {
+    for (const id of drawn) {
+      const label = `settings.omp.items.${id}.label`;
+      const description = `settings.omp.items.${id}.description`;
+      if (!entries.has(label)) missing.push(`${locale}: ${label}`);
+      if (!entries.has(description)) missing.push(`${locale}: ${description}`);
+      if (locale !== 'en' && entries.has(description) && entries.get(description) === english.get(description)) {
+        untranslated.push(`${locale}: ${description}`);
+      }
+    }
+  }
+  expect(missing).toEqual([]);
+  expect(untranslated).toEqual([]);
+});
+
 test('every owned-by owner is an anchor a control emits', () => {
   // `owned-by` says a control writes this key instead of a generic row, so the
   // named anchor has to exist: otherwise search lands on the page and finds

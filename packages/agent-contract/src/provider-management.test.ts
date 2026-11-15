@@ -52,9 +52,11 @@ test('OAuth contracts preserve method versus storage identity and keep grants ou
 
 test('discovery permits intentional write-only credentials but rejects unsafe endpoints and header injection', () => {
   expect(ProviderModelDiscoveryRequestSchema.parse({ ...discovery, headers: { Authorization: 'Bearer write-only-secret', 'X-Local': 'value' }, apiKey: 'write-only-key' })).toMatchObject(discovery);
-  for (const endpoint of ['file:///private/models', 'javascript:alert(1)', 'ftp://127.0.0.1/models', 'https://user:secret@example.test/v1', 'https://example.test/v1?api_key=secret', 'https://example.test/v1#secret']) {
+  for (const endpoint of ['file:///private/models', 'javascript:alert(1)', 'ftp://127.0.0.1/models', 'https://user:secret@example.test/v1', 'https://example.test/v1#secret']) {
     expect(ProviderModelDiscoveryRequestSchema.safeParse({ ...discovery, endpoint }).success).toBe(false);
   }
+  expect(ProviderModelDiscoveryRequestSchema.parse({ ...discovery, endpoint: 'https://x.openai.azure.com/openai/v1?api-version=2024-10-21' }).endpoint)
+    .toBe('https://x.openai.azure.com/openai/v1?api-version=2024-10-21');
   for (const headers of [{ 'Bad Header': 'value' }, { 'X-Test\r\nAuthorization': 'secret' }, { 'X-Test': 'value\r\nAuthorization: secret' }, { 'X-Test': 'value\nsecret' }]) {
     expect(ProviderHeaderWriteSchema.safeParse(headers).success).toBe(false);
     expect(ProviderModelDiscoveryRequestSchema.safeParse({ ...discovery, headers }).success).toBe(false);

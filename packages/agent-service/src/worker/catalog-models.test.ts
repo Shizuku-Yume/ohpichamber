@@ -535,6 +535,86 @@ test('configured discovery falls back to native key cascade when no explicit acc
   } finally { server.stop(true); await fixture.close(); }
 });
 
+test('environment-backed providers publish the variable name and keep it visible when a stored key wins', async () => {
+  const fixture = await openCatalogFixture();
+  const previous = process.env.OPENAI_API_KEY;
+  try {
+    process.env.OPENAI_API_KEY = 'env-only-openai-key';
+    expect(fixture.reader.models.provider('openai').auth).toEqual({
+      status: 'configured', credentialRef: expect.any(String), method: 'api-key',
+      source: 'external-environment', environment: { variable: 'OPENAI_API_KEY', active: true },
+    });
+    // The projection carries the variable's name and never its value.
+    expect(JSON.stringify(await fixture.reader.models.readProviders('workspace_1', '1'))).not.toContain('env-only-openai-key');
+    await fixture.writer.authStorage.credentials.upsert('openai', { type: 'api_key', key: 'stored-openai-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    expect(fixture.writer.models.provider('openai').auth).toMatchObject({
+      source: 'stored-credential', environment: { variable: 'OPENAI_API_KEY', active: false },
+    });
+    // A blank variable is absent, not an empty source.
+    process.env.OPENAI_API_KEY = '';
+    expect(fixture.writer.models.provider('openai').auth).not.toHaveProperty('environment');
+    // A provider with no environment mechanism says nothing about one.
+    await fixture.writer.authStorage.credentials.upsert('campus-2', { type: 'api_key', key: 'campus-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    expect(fixture.writer.models.provider('campus-2').auth).toMatchObject({ status: 'configured', source: 'stored-credential' });
+    expect(fixture.writer.models.provider('campus-2').auth).not.toHaveProperty('environment');
+  } finally {
+    if (previous === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previous;
+    await fixture.close();
+  }
+});
+
+test('a computed env resolver reports presence without inventing a single variable name', async () => {
+  const fixture = await openCatalogFixture();
+  const previous = process.env.HF_TOKEN;
+  try {
+    process.env.HF_TOKEN = 'env-only-huggingface-token';
+    expect(fixture.reader.models.provider('huggingface').auth).toMatchObject({
+      status: 'configured', source: 'external-environment', environment: { variable: null, active: true },
+    });
+  } finally {
+    if (previous === undefined) delete process.env.HF_TOKEN; else process.env.HF_TOKEN = previous;
+    await fixture.close();
+  }
+});
+
+test('a provider identity containing a selector separator is refused before any write', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    for (const providerId of ['campus/2', 'campus/', '/campus']) {
+      await expect(fixture.writer.models.configureProvider({
+        expectedRevision: '0', configuration: { ...configuration, providerId },
+      }, '1')).rejects.toMatchObject({ status: 422, code: 'INVALID_REQUEST' });
+    }
+    expect(await readFile(fixture.writer.modelsPath, 'utf8').catch(() => '')).not.toContain('campus');
+  } finally { await fixture.close(); }
+});
+
+test('a custom base URL query string survives discovery and the native baseUrl write', async () => {
+  const requests: string[] = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push(request.url);
+      return Response.json({ data: [{ id: 'azure-model', name: 'Azure' }] });
+    }
+  });
+  const fixture = await openCatalogFixture();
+  const endpoint = `http://127.0.0.1:${server.port}/v1?api-version=2024-10-21`;
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration: { ...configuration, endpoint } }, '1');
+    expect(await fixture.writer.models.discoverProviderModels({ endpoint, protocol: 'chat-completions' }))
+      .toEqual({ models: [{ modelId: 'azure-model', name: 'Azure' }] });
+    const requested = new URL(requests[0]!);
+    // `/models` belongs to the pathname; the query stays behind it.
+    expect(requested.pathname).toBe('/v1/models');
+    expect(requested.search).toBe('?api-version=2024-10-21');
+    const persisted = YAML.parse(await readFile(fixture.writer.modelsPath, 'utf8'));
+    expect(persisted.providers[configuration.providerId].baseUrl).toBe(endpoint);
+    expect((await fixture.reader.models.readProviderConfiguration(configuration.providerId, '1')).configuration.endpoint).toBe(endpoint);
+  } finally { server.stop(true); await fixture.close(); }
+});
+
 test('explicit empty headers replace old native provider headers and remain empty after reopen', async () => {
   const fixture = await openCatalogFixture();
   try {

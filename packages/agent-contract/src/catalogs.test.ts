@@ -53,8 +53,8 @@ const boundaries = [
   { name: 'ModelReasoningOption', schema: Catalog.ModelReasoningOptionSchema, valid: reasoningOption, invalid: [{ ...reasoningOption, budgetTokens: -1 }, { ...reasoningOption, reasoningEffort: '' }] },
   { name: 'ModelVariant', schema: Catalog.ModelVariantSchema, valid: variant, invalid: [{ ...variant, variant: '' }, { ...variant, reasoningEffort: undefined }] },
   { name: 'Model', schema: Catalog.ModelSchema, valid: model, invalid: [{ ...model, maxOutputTokens: 8193 }, { ...model, reasoningEffortSupported: false }, { ...model, variants: [{ ...variant, reasoningEffort: 'unadvertised' }] }] },
-  { name: 'ProviderAuthState', schema: Catalog.ProviderAuthStateSchema, valid: auth, invalid: [{ ...auth, apiKey: 'secret' }, { status: 'configured', method: 'api-key' }] },
-  { name: 'Provider', schema: Catalog.ProviderSchema, valid: provider, invalid: [{ ...provider, endpoint: 'https://user:secret@models.example/v1' }, { ...provider, authMethods: ['oauth'] }, { ...provider, endpoint: 'https://models.example/v1?api_key=secret' }] },
+  { name: 'ProviderAuthState', schema: Catalog.ProviderAuthStateSchema, valid: auth, invalid: [{ ...auth, apiKey: 'secret' }, { status: 'configured', method: 'api-key' }, { ...auth, environment: { variable: 'OPENAI_API_KEY', active: true, apiKey: 'secret' } }, { ...auth, environment: { variable: '', active: true } }, { ...auth, environment: { variable: null } }] },
+  { name: 'Provider', schema: Catalog.ProviderSchema, valid: provider, invalid: [{ ...provider, endpoint: 'https://user:secret@models.example/v1' }, { ...provider, authMethods: ['oauth'] }, { ...provider, endpoint: 'https://models.example/v1#secret' }] },
   { name: 'ModelCatalogDefaults', schema: Catalog.ModelCatalogDefaultsSchema, valid: { model: selection, thinkingLevel: 'high' }, invalid: [{ model: selection, thinkingLevel: '' }, { ...selection }] },
   { name: 'ModelCatalog', schema: Catalog.ModelCatalogSchema, valid: { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel], defaults: { model: selection, thinkingLevel: 'auto' }, planRoleAvailable: true }, invalid: [{ workspaceId: 'workspace_1', revision: '1', models: [model, model], imageModels: [imageModel], defaults: { model: selection, thinkingLevel: 'high' }, planRoleAvailable: true }, { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel], planRoleAvailable: true }, { workspaceId: 'workspace_1', revision: '1', models: [model], imageModels: [imageModel, imageModel], defaults: { model: selection, thinkingLevel: 'high' }, planRoleAvailable: true }] },
   { name: 'ProviderCatalog', schema: Catalog.ProviderCatalogSchema, valid: { workspaceId: 'workspace_1', revision: '1', providers: [provider] }, invalid: [{ workspaceId: 'workspace_1', revision: '1', providers: [provider, provider] }] },
@@ -168,14 +168,35 @@ describe('Canonical catalogs and scoped operations', () => {
     expect(Catalog.CatalogUpdateSchema.parse({ kind: 'skills', state: skillState }).kind).toBe('skills');
   });
 
+  test('environment-backed auth carries a variable name only, and only on configured providers', () => {
+    const named = { variable: 'OPENAI_API_KEY', active: true };
+    expect(Catalog.ProviderAuthStateSchema.parse({ ...auth, environment: named })).toMatchObject({ environment: named });
+    expect(Catalog.ProviderAuthStateSchema.parse({ ...auth, environment: { variable: null, active: false } }))
+      .toMatchObject({ environment: { variable: null, active: false } });
+    expect(Catalog.ProviderAuthStateSchema.parse(auth)).not.toHaveProperty('environment');
+    expect(Catalog.ProviderAuthStateSchema.safeParse({ status: 'missing', environment: named }).success).toBe(false);
+    expect(Catalog.ProviderAuthStateSchema.safeParse({ ...auth, environment: { value: 'sk-live-secret' } }).success).toBe(false);
+    expect(Catalog.ProviderAuthStateSchema.safeParse({ ...auth, environment: { variable: 'OPENAI_API_KEY', active: true, key: 'sk-live-secret' } }).success).toBe(false);
+  });
+
   test('public provider records never expose secrets; only intentional credential writes accept secret payloads', () => {
     expect(Catalog.ProviderCredentialWriteRequestSchema.parse({ expectedRevision: '1', providerId: 'provider_1', credential: { method: 'oauth', accessToken: 'private-token', refreshToken: 'private-refresh', expiresAt: 2000 } }).credential.method).toBe('oauth');
     expect(Catalog.ProviderAuthStateSchema.parse({ status: 'missing' }).status).toBe('missing');
     expect(Catalog.ProviderMutationResultSchema.parse({ revision: '2', providerId: 'provider_1', provider: null }).provider).toBeNull();
     expect(Catalog.ModelMutationResultSchema.parse({ revision: '2', selection, model: null }).model).toBeNull();
-    for (const endpoint of ['https://user:secret@models.example', 'https://models.example?key=secret', 'https://models.example#secret', 'ftp://models.example']) {
+    for (const endpoint of ['https://user:secret@models.example', 'https://models.example#secret', 'ftp://models.example']) {
       expect(Catalog.ProviderSchema.safeParse({ ...provider, endpoint }).success).toBe(false);
     }
+    // A provider base URL may carry a query string; a secret there is the
+    // operator's own choice, and userinfo stays refused as the sturdier leak.
+    expect(Catalog.ProviderSchema.safeParse({ ...provider, endpoint: 'https://models.example/v1?api-version=2024-10-21' }).success).toBe(true);
+    expect(Catalog.ProviderConfigurationSchema.safeParse({ ...providerConfiguration, endpoint: 'https://x.openai.azure.com/openai/v1?api-version=2024-10-21' }).success).toBe(true);
+    for (const endpoint of ['https://user:secret@x.openai.azure.com/openai/v1?api-version=1', 'https://x.openai.azure.com/openai/v1?api-version=1#frag']) {
+      expect(Catalog.ProviderConfigurationSchema.safeParse({ ...providerConfiguration, endpoint }).success).toBe(false);
+    }
+    expect(Catalog.ProviderAuthStateSchema.safeParse({
+      ...auth, environment: { variable: 'OPENAI_API_KEY', active: true, apiKey: 'secret' },
+    }).success).toBe(false);
     expect(Catalog.ProviderSchema.safeParse({ ...provider, auth: { ...auth, refreshToken: 'private-refresh' } }).success).toBe(false);
     expect(Catalog.ProviderCredentialMutationResultSchema.safeParse({ revision: '2', providerId: 'provider_1', auth, apiKey: 'private-key' }).success).toBe(false);
   });

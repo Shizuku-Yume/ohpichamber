@@ -111,6 +111,20 @@ describe('settings registry', () => {
       useUIStore.setState(original, true);
     }
   });
+  test('keeps the Host-owned permission policy as a profile key the server reads back', () => {
+    expect(SETTINGS_REGISTRY.permissionAutoAccept.scope).toBe('profile');
+    expect(MIRRORED_KEYS).toContain('permissionAutoAccept');
+    const policy = { sessions: { ses_a: 'safety', ses_legacy: true }, revision: 2 };
+    expect(parseSettingsDocument({ permissionAutoAccept: policy })).toEqual({ permissionAutoAccept: policy });
+    // An entry that is neither a mode nor a legacy boolean is dropped, never
+    // defaulted; the permission runtime fails closed to `ask` for it anyway.
+    expect(parseSettingsDocument({ permissionAutoAccept: { sessions: { ses_a: 'always' }, revision: 1 } }))
+      .toEqual({ permissionAutoAccept: { sessions: {}, revision: 1 } });
+    expect(parseSettingsDocument({ permissionAutoAccept: { sessions: {} } }))
+      .toEqual({ permissionAutoAccept: { sessions: {}, revision: 0 } });
+    expect(parseSettingsDocument({ permissionAutoAccept: 'on' })).toEqual({});
+  });
+
   test('applies the server-owned overview feature flag to the UI store', () => {
     const original = useUIStore.getState().overviewFeatureAvailable;
     try {

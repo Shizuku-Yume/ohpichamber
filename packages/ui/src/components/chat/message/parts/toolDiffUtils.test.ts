@@ -30,11 +30,13 @@ describe('native tool diffs', () => {
         expect(file).toMatchObject({ additions: 2, deletions: 1 });
     });
     test('uses each per-file result exactly once and ignores aggregate text', () => {
-        const part = result({ diff: 'combined display only', perFileResults: [
-            { path: '/project/deleted.ts', op: 'delete', diff: '-1|gone' },
-            { path: '/project/new.ts', sourcePath: '/project/old.ts', move: '/project/new.ts', op: 'update', diff: '-42|before\n+42|after' },
-            { path: '/project/error.ts', diff: '+1|not applied', isError: true },
-        ] });
+        const part = result({
+            diff: 'combined display only', perFileResults: [
+                { path: '/project/deleted.ts', op: 'delete', diff: '-1|gone' },
+                { path: '/project/new.ts', sourcePath: '/project/old.ts', move: '/project/new.ts', op: 'update', diff: '-42|before\n+42|after' },
+                { path: '/project/error.ts', diff: '+1|not applied', isError: true },
+            ]
+        });
         expect(getToolDiffs(part).map((file) => file.path)).toEqual(['/project/deleted.ts', '/project/new.ts']);
         expect(resolveToolQuickOpenTarget(part)).toEqual({ filePath: '/project/new.ts', line: 42 });
         expect(getToolFileChanges(part)[1]?.sourcePath).toBe('/project/old.ts');
@@ -72,6 +74,30 @@ describe('native tool diffs', () => {
         expect(getToolDiffs(call('write'))).toEqual([]);
         expect(extractFirstChangedLineFromDiff('@@ -10,2 +12,3 @@\n context\n-old\n+new\n+extra')).toBe(13);
     });
+    test('forwards tool_stream_update edit previews on tool calls into live file changes and diffs', () => {
+        const callWithPreview: ToolCallPart = {
+            ...call('edit'),
+            editPreview: {
+                files: [
+                    { path: 'src/main.ts', diff: '-1|old\n+1|new\n+2|added', firstChangedLine: 1, op: 'update' },
+                ],
+                streaming: true,
+            },
+        };
+        const changes = getToolFileChanges(callWithPreview);
+        expect(changes).toHaveLength(1);
+        expect(changes[0].path).toBe('src/main.ts');
+        expect(changes[0].op).toBe('update');
+        expect(changes[0].additions).toBe(2);
+        expect(changes[0].deletions).toBe(1);
+        expect(changes[0].diff).toContain('--- a/src/main.ts');
+        expect(changes[0].diff).toContain('+++ b/src/main.ts');
+
+        const diffs = getToolDiffs(callWithPreview);
+        expect(diffs).toHaveLength(1);
+        expect(diffs[0].additions).toBe(2);
+        expect(diffs[0].deletions).toBe(1);
+    });
     test('read selectors target the file and their first requested line', () => {
         const read: ToolCallPart = {
             type: 'tool_call', partId: 'read-part', toolCallId: 'read-call', toolName: 'read',
@@ -85,9 +111,11 @@ describe('native tool diffs', () => {
         expect(getToolDiffs(part)[0]?.path).toBe('NOTES.md');
         expect(resolveToolQuickOpenTarget(part)).toEqual({ filePath: 'NOTES.md', line: 1 });
 
-        const batch = result({ diff: 'combined', perFileResults: [
-            { path: '[workspace]/src/a.ts', move: '[workspace]/src/b.ts', sourcePath: '[workspace]/src/a.ts', diff: '+1|new' },
-        ] });
+        const batch = result({
+            diff: 'combined', perFileResults: [
+                { path: '[workspace]/src/a.ts', move: '[workspace]/src/b.ts', sourcePath: '[workspace]/src/a.ts', diff: '+1|new' },
+            ]
+        });
         expect(getToolFileChanges(batch)).toMatchObject([{ path: 'src/b.ts', sourcePath: 'src/a.ts' }]);
 
         const write = result({ resolvedPath: '[workspace]/NOTES.md' }, 'write');

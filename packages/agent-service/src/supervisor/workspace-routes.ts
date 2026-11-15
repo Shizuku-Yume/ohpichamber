@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
+import { getAgentDir } from '@oh-my-pi/pi-utils';
 import type { IncomingMessage } from 'node:http';
 import {
   AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema,
@@ -14,6 +15,7 @@ import {
   UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema,
   WebSearchUpdateRequestSchema, WebSearchCredentialWriteRequestSchema, WebSearchCredentialDeleteRequestSchema,
   OmpSettingsUpdateRequestSchema,
+  SessionToolsCatalogSchema,
 } from '@openchamber/agent-contract';
 import type { WorkspaceCatalogs } from './workspaces.ts';
 import type { WorkerRegistry } from './workers.ts';
@@ -73,6 +75,32 @@ export class WorkspaceRoutes {
       const result = await this.catalogs.operation(workspaceId, operation);
       if (result.type !== 'extensions.inventory') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested extensions.inventory operation.');
       return { status: 200, body: result.state };
+    }
+    const workspaceTools = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/tools$/.exec(url.pathname);
+    if (workspaceTools && request.method === 'GET') {
+      const workspaceId = id(workspaceTools[1]);
+      const liveWorker = this.workers.list().find(w => {
+        const bootstrap = this.workers.bootstrap(w.rootSessionId);
+        return bootstrap?.workspaceId === workspaceId;
+      });
+      let result;
+      if (liveWorker) {
+        result = await this.workers.request(liveWorker.rootSessionId, { type: 'tools.catalog' });
+      } else {
+        const root = await this.catalogs.stateless(workspaceId);
+        result = await this.workers.request(root, { type: 'tools.catalog' });
+      }
+      if (result.type !== 'tools.catalog') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested tools.catalog operation.');
+      const catalog = SessionToolsCatalogSchema.parse(result.catalog);
+      // The workspace catalog answers for the saved MCP configuration, not for
+      // whichever session worker happened to apply it, so a saved profile can
+      // select a server's tools before any chat exists.
+      const mcp = await this.mcp.workspaceMcpTools(workspaceId);
+      for (const tool of mcp.tools) {
+        if (catalog.tools.some(entry => entry.name === tool.name)) continue;
+        catalog.tools.push({ name: tool.name, label: tool.name, description: tool.description, tier: 'exec', availability: true });
+      }
+      return { status: 200, body: catalog };
     }
     const plugins = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/plugins(?:\/(.*))?$/.exec(url.pathname);
     if (plugins) {
@@ -150,20 +178,30 @@ export class WorkspaceRoutes {
       for (const scope of authorizedScopes) {
         if (this.catalogs.get(scope.workspaceId).projectId !== scope.projectId) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The session workspace does not match its catalog project');
       }
-      const references = this.sessions.usageReferences(authorizedScopes, query);
       await mkdir(this.stateDirectory, { recursive: true, mode: 0o700 });
       await this.workers.startUsage({
         rootSessionId: this.usageWorkerId, workspaceId: this.usageWorkerId, projectId: this.usageWorkerId,
-        cwd: this.stateDirectory, agentDirectory: this.stateDirectory, agentDirectoryId: this.usageWorkerId, catalogRevision: '0'
+        cwd: this.stateDirectory, agentDirectory: getAgentDir(), agentDirectoryId: this.usageWorkerId, catalogRevision: '0'
       });
       if (url.pathname === '/internal/usage/tools') {
+        const references = this.sessions.usageReferences(authorizedScopes, query);
         const result = await this.workers.request(this.usageWorkerId, { type: 'usage.tools', query, references });
         if (result.type !== 'usage.tools') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.tools operation.');
         return { status: 200, body: UsageToolsResponseSchema.parse(result.result) };
       }
-      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query, references });
+      // Every report is bounded by the Host-authorized inventory: the exact transcripts of the
+      // roots in scope plus their subagents. A query with neither filter means that whole
+      // inventory, never every file under a sessions folder — one folder can hold another
+      // workspace's transcripts, and OMP's default folder discovery cannot see a root's own.
+      const sessionFiles = this.sessions.usageSessionFiles(authorizedScopes, query);
+      const result = await this.workers.request(this.usageWorkerId, { type: 'usage.stats', query, sessionFiles });
       if (result.type !== 'usage.stats') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.stats operation.');
-      return { status: 200, body: UsageStatsSchema.parse(result.result) };
+      // Accounts fail on their own: their errors are named beside the session errors, never folded into an empty success.
+      const accounts = await this.workers.request(this.usageWorkerId, { type: 'usage.accounts', query });
+      if (accounts.type !== 'usage.accounts') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested usage.accounts operation.');
+      const partial = result.result.partial || Object.keys(accounts.result.errors).length > 0;
+      const errors = { ...result.result.errors, ...accounts.result.errors };
+      return { status: 200, body: UsageStatsSchema.parse({ ...result.result, accounts: accounts.result.accounts, partial, ...(partial ? { errors } : {}) }) };
     }
     const searchRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/web-search(?:\/credentials\/([^/]+))?$/.exec(url.pathname);
     if (searchRoute) {
@@ -235,13 +273,7 @@ export class WorkspaceRoutes {
       const action = mcpRoute[4];
       if (action === 'reconnect' && request.method === 'POST') {
         const body = await readBody(request, MCPApplyRequestSchema);
-        return {
-          status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body, async configuration => {
-            const result = await execute({ type: 'test', serverId, configuration });
-            if (result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp connection test operation.');
-            return result.result;
-          })
-        };
+        return { status: 200, body: await this.mcp.reconnectWorkspaceMcp(workspaceId, serverId, body) };
       }
       if (action === 'test' && request.method === 'POST') {
         const body = await readBody(request, MCPApplyRequestSchema);

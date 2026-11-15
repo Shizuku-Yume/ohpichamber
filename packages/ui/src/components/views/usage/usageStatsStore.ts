@@ -21,8 +21,7 @@ import { isSameLocalDay, rangeStart, type UsageRange } from './usageStatsModel';
  * an earlier local day is dropped and read again, whether or not it was forced.
  */
 
-export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null };
-
+export type UsageStatsRequest = { range: UsageRange; projectDirectory: string | null; providerId?: string | null };
 export type UsageStatsEntry = {
   /** Last successful report; kept on screen through refreshes and failed refreshes. */
   stats: UsageStats | null;
@@ -53,10 +52,11 @@ export type UsageToolsFetcher = (
 ) => Promise<UsageToolsResponse>;
 
 export const usageStatsKey = (runtimeKey: string, request: UsageStatsRequest): string =>
-  `${runtimeKey}::${request.range}::${request.projectDirectory ?? '__all__'}`;
-
+  `${runtimeKey}::${request.range}::${request.projectDirectory ?? '__all__'}::${request.providerId ?? '__all__'}`;
 type UsageStatsStore = {
   entries: Record<string, UsageStatsEntry>;
+  selectedProvider: string | null;
+  setSelectedProvider: (provider: string | null) => void;
   /**
    * Loads a report for the request under the current runtime. Without `force`
    * this only reads a key that has no report, no error and no read running,
@@ -81,18 +81,23 @@ type UsageStatsStore = {
 
 const viewerTimeZone = (): string => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-const fetchFromCanonical: UsageStatsFetcher = async ({ range, projectDirectory }, signal) => {
+const fetchFromCanonical: UsageStatsFetcher = async ({ range, projectDirectory, providerId }, signal) => {
   const workspace = projectDirectory ? await canonicalClient.resolveWorkspace(projectDirectory, { signal }) : undefined;
   signal.throwIfAborted();
   const to = Date.now();
-  return canonicalClient.getUsageStats({ from: rangeStart(range, new Date(to)), to, timezone: viewerTimeZone(),
-    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId }, { signal });
+  return canonicalClient.getUsageStats({
+    from: rangeStart(range, new Date(to)), to, timezone: viewerTimeZone(),
+    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId,
+    providerId: providerId ?? undefined,
+  }, { signal });
 };
 
 const fetchToolsFromCanonical: UsageToolsFetcher = async ({ projectDirectory }, window, signal) => {
   const workspace = projectDirectory ? await canonicalClient.resolveWorkspace(projectDirectory, { signal }) : undefined;
-  return canonicalClient.getUsageTools({ from: window.from, to: window.to, timezone: viewerTimeZone(),
-    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId }, { signal });
+  return canonicalClient.getUsageTools({
+    from: window.from, to: window.to, timezone: viewerTimeZone(),
+    workspaceId: workspace?.workspaceId, projectId: workspace?.projectId
+  }, { signal });
 };
 
 const isExpiredToday = (request: UsageStatsRequest, entry: UsageStatsEntry | undefined, at: number): boolean =>
@@ -128,7 +133,8 @@ export function createUsageStatsStore(
       entries: {},
       toolEntries: {},
       toolsRequested: false,
-
+      selectedProvider: null,
+      setSelectedProvider: (provider) => set({ selectedProvider: provider }),
       load: async (request, options) => {
         const runtime = runtimeKey();
         const key = usageStatsKey(runtime, request);
@@ -185,14 +191,27 @@ export function createUsageStatsStore(
         const { signal } = controller;
         const read = Symbol('usage tools read');
         currentToolReads.set(key, read);
-        const isDropped = () => signal.aborted || currentToolReads.get(key) !== read;
+        const isDropped = () => signal.aborted || runtimeKey() !== runtime || currentToolReads.get(key) !== read;
+        // The report may have moved window without superseding this read (a
+        // refresh that started after it): its answer names the old bounds.
+        const windowMoved = () => get().entries[key]?.stats?.range !== window;
         patchTools(key, { loading: true });
         try {
           const tools = await toolsFetcher(request, window, signal);
           if (isDropped()) return;
+          if (windowMoved()) {
+            patchTools(key, { loading: false });
+            void get().loadTools(request, { force: true });
+            return;
+          }
           patchTools(key, { tools, loading: false, error: null });
         } catch (error) {
           if (isDropped()) return;
+          if (windowMoved()) {
+            patchTools(key, { loading: false });
+            void get().loadTools(request, { force: true });
+            return;
+          }
           patchTools(key, { loading: false, error: error instanceof Error ? error.message : String(error) });
         }
       },
@@ -200,7 +219,7 @@ export function createUsageStatsStore(
       reset: () => {
         controller.abort();
         controller = new AbortController();
-        set({ entries: {}, toolEntries: {} });
+        set({ entries: {}, toolEntries: {}, selectedProvider: null });
       },
     };
   });

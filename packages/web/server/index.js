@@ -104,7 +104,7 @@ import { createJevClient } from './lib/routing/jev.js';
 import { createSessionWorkRuntime } from './lib/session-work/runtime.js';
 import { createSessionLineage } from './lib/session-lineage.js';
 import { beginGuestServiceHost, beginGuestServiceShutdown, stopAllGuestServices } from './lib/guests/service.js';
-import { findInstalledGuest } from './lib/guests/catalog.js';
+import { findInstalledGuest, listInstalledGuests } from './lib/guests/catalog.js';
 import { extensionsPersistPath } from './lib/guests/persist.js';
 import { createGuestSurfaceRuntime } from './lib/guests/surface.js';
 import { BROWSER_PROVIDER_IDLE_MS } from '@openchamber/sdk';
@@ -112,9 +112,7 @@ import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { worktreeSetupOf } from './lib/projects/worktree-setup.js';
 import { ensureChatsDir, migrateLegacyUserDirs } from './lib/data-dir-migration.js';
 import { createProjectContextRuntime } from './lib/project-context/runtime.js';
-import { createAgentMemoryRuntime } from './lib/agent-memory/runtime.js';
-import { createAgentMemoryActions } from './lib/agent-memory/actions.js';
-import { createMemoryProjectResolver } from './lib/agent-memory/project-resolution.js';
+import { createProjectIdFromPath } from './lib/projects/project-id.js';
 import { createSpacesHost } from './lib/spaces/host.js';
 import { createSpaceArchive } from './lib/spaces/space-archive.js';
 import { CHAT_EXPORT_TIMEOUT_MS } from './lib/spaces/space-native-archive.js';
@@ -159,7 +157,15 @@ import { createFileOpenRequester } from './lib/openchamber-control/file-open.js'
 import { applyConnectAttemptTimeout } from './lib/network-defaults.js';
 import { applyOutboundProxyFromEnv } from './lib/outbound-proxy.js';
 import { applySystemCertificates } from './lib/system-ca.js';
-
+import { createOutboundHandles } from './lib/source-control/outbound-handles.js';
+import { createNotificationChannelAccounts, notificationChannelsPersistPath } from './lib/notifications/channel-accounts.js';
+import { createExtensionNotificationChannels } from './lib/notifications/extension-channels.js';
+import { NOTIFICATIONS_OUTBOUND_PATH } from '@openchamber/sdk';
+import { createAutoReviewRuntime } from './lib/auto-review/runtime.js';
+import { createPrWatchRuntime } from './lib/pr-watch/runtime.js';
+import { createClientPushAccess } from './lib/notifications/client-push-access.js';
+import { proxyGuestServiceRequest } from './lib/guests/service.js';
+import { setHostCallbackRoute } from './lib/guests/host-callback.js';
 // Background CLI launches enter here in a fresh process, without CLI defaults.
 applyConnectAttemptTimeout();
 applySystemCertificates();
@@ -567,13 +573,24 @@ const agentScopeRuntime = createHostAgentScopeRuntime({
  getArchiveCatalog: () => spaceArchive?.listArchiveCatalog?.() ?? [],
  fsPromises,
 });
+const resolveHostTools = async () => {
+ const settings = await readSettingsFromDiskMigrated().catch(() => null);
+ return {
+  openchamber: settings?.agentControlToolEnabled !== false,
+  web: settings?.agentWebToolEnabled !== false,
+  openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
+  notify: settings?.agentNotifyToolEnabled === true,
+  openchamber_render: settings?.agentRenderToolEnabled !== false,
+  openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
+ };
+};
 const hostAgentRuntime = createHostAgentRuntime({
  dataDir: OPENCHAMBER_DATA_DIR,
  scopeRuntime: agentScopeRuntime,
  bunPath: process.env.OHPICHAMBER_BUN,
  entrypoint: process.env.OHPICHAMBER_AGENT_SERVICE_ENTRYPOINT,
  validateDirectoryPath,
- // Project environment plus the non-secret goal preferences the worker reads.
+ resolveHostTools,
  // Captured at worker admission: a saved change applies to workers started after it.
  getEnvironmentForDirectory: async (directory) => {
   const environment = await environmentRuntime.forDirectory(directory) ?? {};
@@ -732,6 +749,7 @@ const openChamberSessionService = createOpenChamberSessionService({
   get resolveWorktreeSetup() { return sessionWorktreeMoveBridge.resolveWorktreeSetup ?? undefined; },
   warn: (message, error) => console.warn(message, error instanceof Error ? error.message : String(error)),
  },
+ readSettings: readSettingsFromDiskMigrated,
  resolveWorkspaceScope: hostAgentRuntime.resolveWorkspaceScope,
  resolveWorkspaceDirectory: agentScopeRuntime.resolveWorkspaceDirectory,
  resolveHostWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
@@ -836,22 +854,6 @@ const projectContextRuntime = createProjectContextRuntime({
  }),
 });
 
-const agentMemoryRuntime = createAgentMemoryRuntime({
- fsPromises,
- path,
- projectsDirPath: OPENCHAMBER_PROJECTS_CONFIG_DIR,
- userConfigRoot: OPENCHAMBER_USER_CONFIG_ROOT,
-});
-
-/**
- * One switch for everything memory-related. It gates the tool, these routes,
- * and the session index alike, so turning memory off leaves nothing behind
- * that still reads or writes the store.
- */
-const isAgentMemoryEnabled = async () => {
- const settings = await readSettingsFromDiskMigrated().catch(() => null);
- return settings?.agentMemoryToolEnabled === true;
-};
 
 
 
@@ -879,7 +881,22 @@ notificationTemplateRuntime = createNotificationTemplateRuntime({
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
  readSettingsFromDisk,
 });
+const notificationChannelHandles = createOutboundHandles();
+setHostCallbackRoute(NOTIFICATIONS_OUTBOUND_PATH, {
+ refusal: notificationChannelHandles.refusal,
+ serve: notificationChannelHandles.serve,
+});
+const extensionNotificationChannels = createExtensionNotificationChannels({
+ listGuests: () => listInstalledGuests({ persistPath: extensionsPersistPath(OPENCHAMBER_DATA_DIR) }),
+ proxyServiceRequest: proxyGuestServiceRequest,
+ persistPath: extensionsPersistPath(OPENCHAMBER_DATA_DIR),
+ accounts: createNotificationChannelAccounts({ persistPath: notificationChannelsPersistPath(OPENCHAMBER_DATA_DIR) }),
+ handles: notificationChannelHandles,
+ isAnyUiVisible,
+});
 
+let autoReviewRuntime = null;
+let prWatchRuntime = null;
 const notificationTriggerRuntime = createNotificationTriggerRuntime({
  readSettingsFromDisk,
  prepareNotificationLastMessage,
@@ -895,6 +912,8 @@ const notificationTriggerRuntime = createNotificationTriggerRuntime({
  isAnyInteractiveClientVisible,
  sessionService: openChamberSessionService,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
+ deliverToExtensionChannels: (delivery) => extensionNotificationChannels.deliver(delivery),
+ isInAutoReview: (sessionId, turnEndedAt) => autoReviewRuntime.speaksFor(sessionId, turnEndedAt),
 });
 
 clearPendingPushBadge = () => notificationTriggerRuntime.clearPendingPushBadge();
@@ -905,9 +924,7 @@ const sessionLineage = createSessionLineage();
 const sessionAssistRuntime = createSessionAssistRuntime({
  sessionService: openChamberSessionService,
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
- getSmallModelService: async () => import('./lib/small-model/index.js'),
- persistSessionAssist: (sessionID, directory, assist) =>
-  persistSessionMetadataPatch(sessionID, { openchamber: { assist } }, { directory }),
+ lineage: sessionLineage,
  onTurnSettled: (sessionId) => {
   void globalMessageStreamHub.releaseSession(sessionId, 'run');
  },
@@ -919,26 +936,7 @@ const sessionAssistRuntime = createSessionAssistRuntime({
  */
 const sessionKnowledgeRuntime = createSessionKnowledgeRuntime({
  projectContextRuntime,
- agentMemoryRuntime,
- // Called, not captured: the resolver is declared further down, and taking a
- // reference here would read it before it exists.
- resolveProjectId: (directory) => resolveMemoryProjectId(directory),
- isAgentMemoryEnabled,
- isSessionLinkingAvailable: async () => {
-  const settings = await readSettingsFromDiskMigrated();
-  return settings.agentControlToolEnabled !== false;
- },
- // Both tools are on by default; their guidance is stated only while the
- // session's agent actually has them.
- isPageRenderingAvailable: async () => {
-  const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return settings?.agentRenderToolEnabled !== false;
- },
- isWorkflowAvailable: async () => {
-  if (!isWorkflowFeatureAvailable()) return false;
-  const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return settings?.agentWorkflowToolEnabled !== false;
- },
+ resolveProjectId: (directory) => resolveProjectContextId(directory),
  readSessionMetadata: readStoredSessionMetadata,
  // Pins and the delivered-signature cursor are read from OpenChamber's own store.
  persistSessionMetadata: (sessionID, directory, patch) => persistSessionMetadataPatch(sessionID, patch, { directory }),
@@ -959,6 +957,24 @@ const globalMessageStreamHub = createGlobalMessageStreamHub({
  resolveSessionScope: hostAgentRuntime.resolveSessionScope,
 });
 
+autoReviewRuntime = createAutoReviewRuntime({
+ globalEventHub: globalMessageStreamHub,
+ sessionService: openChamberSessionService,
+ broadcastUiEvent: broadcastOpenChamberUiEvent,
+ onRunEnded: (ended) => notificationTriggerRuntime.notifyAutoReviewEnded(ended),
+ dataDir: OPENCHAMBER_DATA_DIR,
+});
+autoReviewRuntime.start();
+
+prWatchRuntime = createPrWatchRuntime({
+ sessionService: openChamberSessionService,
+ broadcastUiEvent: broadcastOpenChamberUiEvent,
+ dataDir: OPENCHAMBER_DATA_DIR,
+ readCleanupOnMerge: async () => (await readSettingsFromDiskMigrated())?.mergedWorktreeCleanupEnabled === true,
+ isSessionArchived: (sessionID) => openChamberSessionService.archiveStore.isArchived(sessionID),
+ insideSpace: Boolean(process.env.OPENCHAMBER_SPACE_IDLE_STOP_FILE),
+});
+prWatchRuntime.start(globalMessageStreamHub);
 // Jev model routing and the permission safety net. Every failure keeps the
 // user's own model or the auto-accept reply it was asked about.
 const routingRuntime = createRoutingRuntime({
@@ -1175,6 +1191,10 @@ const clientPairingRuntime = createClientPairingRuntime({
  storePath: CLIENT_PAIRING_SESSIONS_FILE_PATH,
  remoteClientAuthRuntime,
 });
+const clientPushAccess = createClientPushAccess({
+ listClients: remoteClientAuthRuntime.listClients,
+ removeDevicesOfSessions: [apnsRuntime.removeApnsDevicesOfSessions, pushRuntime.removePushDevicesOfSessions],
+});
 const featureRoutesRuntime = createFeatureRoutesRuntime();
 const bootstrapRuntime = createBootstrapRuntime({
  createUiAuth,
@@ -1338,36 +1358,15 @@ const convertLegacyQueue = async () => {
  }
 };
 /**
- * Maps a session directory onto the project whose memory it belongs to, so a
- * session running in a worktree writes to the project the panel shows.
+ * Maps a session directory onto the project it belongs to.
  */
-const resolveMemoryProjectId = createMemoryProjectResolver({
- listProjectPaths: async () => {
-  const settings = await readSettingsFromDiskMigrated().catch(() => null);
-  return sanitizeProjects(settings?.projects || []).map((project) => project.path);
- },
- resolvePrimaryWorktreeRoot,
- managedProjectRoots: [...new Set([path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'chats'), OPENCHAMBER_CHATS_DIR])],
-});
-
-/**
- * Tells open panels that the service changed what it remembers, so what it just
- * stored is visible without reopening anything.
- */
-const emitAgentMemoryChangedEvent = (event) => {
- for (const client of uiOpenChamberEventClients) {
-  try {
-   writeSseEvent(client, {
-    type: 'openchamber:service-memory-changed',
-    properties: {
-     scope: event.scope,
-     ...(event.projectId ? { projectId: event.projectId } : {}),
-    },
-   });
-  } catch {
-   uiOpenChamberEventClients.delete(client);
-  }
- }
+const resolveProjectContextId = async (directory) => {
+ if (!directory || typeof directory !== 'string') return null;
+ const settings = await readSettingsFromDiskMigrated().catch(() => null);
+ const projectPaths = sanitizeProjects(settings?.projects || []).map((project) => project.path);
+ const primaryRoot = await resolvePrimaryWorktreeRoot(directory, projectPaths).catch(() => null);
+ const root = primaryRoot || directory;
+ return createProjectIdFromPath(root);
 };
 const scheduledTaskService = createScheduledTaskService({
  readSettingsFromDiskMigrated,
@@ -1485,17 +1484,10 @@ const openChamberControlService = createOpenChamberControlService({
   }
   return pluginNotificationEmitter.emit(input);
  },
- agentMemoryActions: createAgentMemoryActions({
-  agentMemoryRuntime,
-  createError: (message, status) => new OpenChamberControlError(message, status),
-  onMemoryChanged: emitAgentMemoryChangedEvent,
-  isAgentMemoryEnabled,
-  resolveProjectId: resolveMemoryProjectId,
- }),
  projectContextRuntime,
  // The resolver session knowledge reads pinned notes and plans through, so
  // what an agent writes is what the next session is given.
- resolveProjectContextId: resolveMemoryProjectId,
+ resolveProjectContextId,
  // On by default: the knowledge tool is the canonical owner of notes, todos
  // and plans, and a client must not keep writing after it is switched off.
  isKnowledgeToolEnabled: async () => {
@@ -1521,6 +1513,7 @@ const openChamberControlService = createOpenChamberControlService({
   createError: (message, status) => new OpenChamberControlError(message, status),
  }),
  dispatchResults: dispatchResultsRuntime,
+ prWatch: prWatchRuntime,
  archiveStore: openChamberSessionService.archiveStore,
  workflowRuntime: workflowsModule.workflowRuntime,
 });
@@ -1555,9 +1548,12 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
  },
  syncToHmrState: () => { },
  hostAgentRuntime,
+ openChamberSessionService,
  sessionAssistRuntime,
  sessionWorkRuntime,
  contextObligatoryRuntime,
+ autoReviewRuntime,
+ prWatchRuntime,
  messageQueueRuntime,
  dispatchResultsRuntime,
  messageSearchRuntime,
@@ -1946,6 +1942,7 @@ async function main(options = {}) {
   // Re-evaluate the relay lifecycle after pairing/device changes (a revoked or
   // redeemed device can flip relay demand on or off).
   reconcileRelay: () => (relayServiceInstance ? relayServiceInstance.reconcile() : Promise.resolve()),
+  removeClientPushDevices: clientPushAccess.removeDevicesOfClients,
   getPairingTransports: resolvePairingTransports,
   getDirectCandidateUrls: resolveDirectLanUrls,
   // Stable server identity for client-side verification of learned addresses.
@@ -1986,6 +1983,7 @@ async function main(options = {}) {
     express, store: attachmentStore, resolveWorkspaceScope: agentScopeRuntime.resolveWorkspaceScope,
    })),
    globalEventHub: globalMessageStreamHub,
+   resolveHostTools,
   },
   ensurePushInitialized,
   ensureGlobalWatcherStarted,
@@ -2141,10 +2139,32 @@ async function main(options = {}) {
   readSettingsFromDiskMigrated,
   formatSettingsResponse,
   persistSettings,
+  onSettingsUpdated: async (settings) => {
+   try {
+    const tools = {
+     openchamber: settings?.agentControlToolEnabled !== false,
+     web: settings?.agentWebToolEnabled !== false,
+     openchamber_knowledge: settings?.agentKnowledgeToolEnabled !== false,
+     notify: settings?.agentNotifyToolEnabled === true,
+     openchamber_render: settings?.agentRenderToolEnabled !== false,
+     openchamber_workflow: isWorkflowFeatureAvailable() && settings?.agentWorkflowToolEnabled !== false,
+    };
+    await hostAgentRuntime.service.request('/internal/workers/host-tools', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ tools }),
+    });
+   } catch {
+    // ignore if service not ready
+   }
+  },
  });
 
  await featureRoutesRuntime.registerRoutes(app, {
-  themesDir: OPENCHAMBER_USER_THEMES_DIR,
+  extensionNotificationChannels,
+  autoReviewRuntime,
+  prWatchRuntime,
+  persistResolvedSettings: (...args) => settingsRuntime.persistResolvedSettings(...args),
   environmentStore,
   environmentRuntime,
   listConfiguredProjects,
@@ -2203,8 +2223,6 @@ async function main(options = {}) {
   resolvePrimaryWorktreeRoot,
   resolveWorktreeTopLevel,
   projectContextRuntime,
-  agentMemoryRuntime,
-  isAgentMemoryEnabled,
   sessionKnowledgeRuntime,
   scheduledTasksRuntime,
   scheduledTaskService,

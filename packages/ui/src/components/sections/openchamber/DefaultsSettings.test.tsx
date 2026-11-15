@@ -68,6 +68,23 @@ const mockOmpSettings = {
       default: {},
       configured: true,
     },
+    // A retry row the section draws, and the record it must not draw.
+    {
+      id: 'retry.maxRetries' as const,
+      type: 'number' as const,
+      value: 2,
+      default: 2,
+      configured: false,
+      placement: { type: 'page' as const, page: 'sessions', section: 'retry' },
+    },
+    {
+      id: 'retry.fallbackChains' as const,
+      type: 'record' as const,
+      value: {},
+      default: {},
+      configured: false,
+      placement: { type: 'page' as const, page: 'sessions', section: 'retry' },
+    },
   ],
 };
 
@@ -165,6 +182,23 @@ describe('DefaultsSettings', () => {
 
     expect(useSessionDisplayStore.getState().showChatsSection).toBe(false);
     expect(updatedDesktopSettingsPayload).toEqual({ sidebarShowChatsSection: false });
+  });
+
+  test('the retry section draws real rows and skips the fallback-chain record', async () => {
+    await act(async () => {
+      root.render(
+        <I18nProvider>
+          <DefaultsSettings />
+        </I18nProvider>,
+      );
+    });
+    await settle();
+
+    // A record has no option list, so the generic row would render an empty
+    // chip group: the fallback selector above is the control that writes it.
+    expect(host.querySelector('[data-settings-item="omp.retry.maxRetries"]')).not.toBeNull();
+    expect(host.querySelector('[data-settings-item="omp.retry.fallbackChains"]')).toBeNull();
+    expect(host.querySelector('[data-settings-item="sessions.fallback-model"]')).not.toBeNull();
   });
 
   test('default session mode selector updates useUIStore', async () => {

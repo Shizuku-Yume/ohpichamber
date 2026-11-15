@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { ProviderResult, QuotaProviderId } from '@/types';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { runtimeFetch, type RuntimeFetchOptions } from '@/lib/runtime-fetch';
 
 const windowSchema = z.object({
   usedPercent: z.number().nullable(),
@@ -43,16 +43,30 @@ const PROVIDER_LIST_TIMEOUT_MS = 10_000;
 
 /**
  * Providers the instance has a credential for, or null when it could not say.
- * Null is not "none": the caller asks every provider, as a cold instance, a
- * restarting OpenCode or a server without this route answer here. The deadline
- * covers the body too, because every quota load waits on this read.
+ * Null is an explicit failure: callers must not fan out to every provider.
+ * The deadline covers the body too, because every quota load waits on this read.
  */
-export const fetchConfiguredQuotaProviders = async (timeoutMs = PROVIDER_LIST_TIMEOUT_MS): Promise<ReadonlySet<string> | null> => {
+export const fetchConfiguredQuotaProviders = async (
+  optionsOrTimeout: number | { timeoutMs?: number; workspaceId?: string } = PROVIDER_LIST_TIMEOUT_MS,
+  maybeWorkspaceId?: string,
+): Promise<{ providers: ReadonlySet<string>; nativeToLogical: Record<string, string> } | null> => {
+  const timeoutMs = typeof optionsOrTimeout === 'number' ? optionsOrTimeout : (optionsOrTimeout.timeoutMs ?? PROVIDER_LIST_TIMEOUT_MS);
+  const workspaceId = typeof optionsOrTimeout === 'object' ? optionsOrTimeout.workspaceId : maybeWorkspaceId;
   const controller = new AbortController();
   const read = async () => {
-    const response = await runtimeFetch('/api/quota/providers', { signal: controller.signal });
+    const options: RuntimeFetchOptions = { signal: controller.signal };
+    if (workspaceId) options.query = { workspaceId };
+    const response = await runtimeFetch('/api/quota/providers', options);
     if (!response.ok) return null;
-    return new Set(z.object({ providers: z.array(z.string()) }).parse(await response.json()).providers);
+    const schema = z.object({
+      providers: z.array(z.string()),
+      nativeToLogical: z.record(z.string(), z.string()).optional(),
+    });
+    const parsed = schema.parse(await response.json());
+    return {
+      providers: new Set(parsed.providers),
+      nativeToLogical: parsed.nativeToLogical ?? {},
+    };
   };
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<null>((resolve) => {
@@ -71,14 +85,14 @@ export const fetchConfiguredQuotaProviders = async (timeoutMs = PROVIDER_LIST_TI
 /** The deadline covers response bodies too, including transports that ignore abort. */
 export const fetchQuota = async (
   providerId: QuotaProviderId,
-  { signal, timeoutMs = 30_000 }: { signal?: AbortSignal; timeoutMs?: number } = {},
+  { signal, timeoutMs = 30_000, workspaceId }: { signal?: AbortSignal; timeoutMs?: number; workspaceId?: string } = {},
 ): Promise<ProviderResult> => {
   const controller = new AbortController();
   const abort = () => controller.abort(new DOMException('The operation was aborted.', 'AbortError'));
   if (signal?.aborted) abort();
   else signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => controller.abort(new DOMException('Quota request timed out', 'TimeoutError')), timeoutMs);
-  let rejectAborted: () => void = () => {};
+  let rejectAborted: () => void = () => { };
   const aborted = new Promise<never>((_resolve, reject) => {
     rejectAborted = () => reject(controller.signal.reason);
     if (controller.signal.aborted) rejectAborted();
@@ -86,7 +100,9 @@ export const fetchQuota = async (
   });
   const readResult = async () => {
     controller.signal.throwIfAborted();
-    const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}`, { signal: controller.signal });
+    const options: RuntimeFetchOptions = { signal: controller.signal };
+    if (workspaceId) options.query = { workspaceId };
+    const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}`, options);
     const payload = await response.json();
     if (!response.ok) {
       const failure = z.object({ error: z.string() }).safeParse(payload);
@@ -123,14 +139,14 @@ export const activateGiftReset = async (
   recordId: number,
   resetType: QuotaGiftResetType,
   grantType?: string,
-  { signal, timeoutMs = 30_000 }: { signal?: AbortSignal; timeoutMs?: number } = {},
+  { signal, timeoutMs = 30_000, workspaceId }: { signal?: AbortSignal; timeoutMs?: number; workspaceId?: string } = {},
 ): Promise<void> => {
   const controller = new AbortController();
   const abort = () => controller.abort(new DOMException('The operation was aborted.', 'AbortError'));
   if (signal?.aborted) abort();
   else signal?.addEventListener('abort', abort, { once: true });
   const timer = setTimeout(() => controller.abort(new DOMException('Gift reset request timed out', 'TimeoutError')), timeoutMs);
-  let rejectAborted: () => void = () => {};
+  let rejectAborted: () => void = () => { };
   const aborted = new Promise<never>((_resolve, reject) => {
     rejectAborted = () => reject(controller.signal.reason);
     if (controller.signal.aborted) rejectAborted();
@@ -141,9 +157,7 @@ export const activateGiftReset = async (
     const response = await runtimeFetch(`/api/quota/${encodeURIComponent(providerId)}/gift-reset/use`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // grantType is omitted from the JSON when undefined (the record carried
-      // none); the server then falls back to 'GLOBAL'.
-      body: JSON.stringify({ recordId, resetType, grantType }),
+      body: JSON.stringify({ recordId, resetType, grantType, workspaceId }),
       signal: controller.signal,
     });
     const payload = await response.json();

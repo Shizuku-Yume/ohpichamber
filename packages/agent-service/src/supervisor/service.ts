@@ -23,6 +23,7 @@ import type {
   PluginUpdateCheckResult, PluginUpgradePreviewResult, PluginMarketplaceSources,
   ExtensionInventoryState,
   SessionRecapListResponse, SubagentListResponse, SubagentTranscriptResponse, SubagentTreeCostResponse,
+  SessionToolsCatalog,
 } from '@openchamber/agent-contract';
 import { HostStreamingPromptRequestSchema, WorkerBootstrapSchema, WorkerOperationSchema } from '../protocol.ts';
 import type { WorkerBootstrap, WorkerInfo, WorkerPolicyRequest, WorkerPolicyResult } from '../protocol.ts';
@@ -107,7 +108,8 @@ type ServiceResponse =
   | { sources: SkillSourceRevisions }
   | WorktreeLeaseAcquireResult
   | ShellJob | ShellSnapshot | ShellOutput | ShellStopResult | ShellStreamResponse | ShellStdinResult
-  | SessionRecapListResponse | SubagentListResponse | SubagentTranscriptResponse | SubagentTreeCostResponse;
+  | SessionRecapListResponse | SubagentListResponse | SubagentTranscriptResponse | SubagentTreeCostResponse
+  | SessionToolsCatalog;
 
 function respondJson(response: ServerResponse, status: number, body: ServiceResponse): void {
   response.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -196,6 +198,18 @@ export class AgentService {
         const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'persist', request, configuration } });
         if (result.type !== 'mcp' || result.result.type !== 'persisted' || result.result.configuration.persistedRevision !== configuration.persistedRevision) throw new WorkerOperationError(503, 'MCP_CONFIG_WRITE_FAILED', 'The persisted MCP configuration revision did not match the request');
       },
+      probeMcp: async (workspaceId, serverId, configuration) => {
+        const root = await this.workspaceCatalogs.stateless(workspaceId);
+        const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'test', serverId, configuration } });
+        if (result.type !== 'mcp' || result.result.type !== 'tested') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp connection test operation.');
+        return result.result.result;
+      },
+      discoverMcpTools: async (workspaceId, configuration) => {
+        const root = await this.workspaceCatalogs.stateless(workspaceId);
+        const result = await this.workers.request(root, { type: 'mcp', operation: { type: 'discover', configuration } });
+        if (result.type !== 'mcp' || result.result.type !== 'discovered') throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The worker reply did not match the requested mcp discovery operation.');
+        return result.result.result;
+      },
     });
     this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad, options.permissionAuthority);
     this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
@@ -250,7 +264,14 @@ export class AgentService {
       try {
         const scope = this.workers.authorizationScope(bootstrap.rootSessionId);
         if (!scope || scope.agentDirectoryId !== agentDirectoryId) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The launched worker was not admitted under the expected agent directory');
-        await this.registerCatalogWorker(bootstrap, scope.workerGeneration);
+        const generation = scope.workerGeneration;
+        void this.registerCatalogWorker(bootstrap, generation).catch(async error => {
+          const cause = error instanceof Error && error.message.trim() ? error.message : 'The worker catalogs could not be read';
+          const code = error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError ? error.code : 'SERVICE_UNAVAILABLE';
+          this.sessions.registrationFailed(bootstrap.rootSessionId, generation, cause);
+          this.options.onDiagnostic?.({ level: 'error', rootSessionId: bootstrap.rootSessionId, workerGeneration: generation, message: `Catalog registration failed (${code}): ${cause}` });
+          await this.workers.stopGeneration(bootstrap.rootSessionId, generation).catch(() => { });
+        });
         return result;
       } catch (error) {
         await this.workers.stop(bootstrap.rootSessionId);
@@ -547,13 +568,22 @@ export class AgentService {
         this.assertAdmissionScope(input);
         // A healthy live root is already admitted: return it instead of registering and reconciling again.
         // A reopen without an agent-directory id keeps the admission path, which resolves the id it must compare.
+        const pendingOpening = this.sessions.openingPromise(input.rootSessionId);
+        if (pendingOpening) { respondJson(response, 200, await pendingOpening); return; }
         const live = input.agentDirectoryId === undefined ? undefined : await this.sessions.liveReopenRuntime({ ...input, displayPath });
         if (live) { respondJson(response, 200, live); return; }
         respondJson(response, 200, await this.admit(input, bootstrap => this.sessions.reopen({ ...bootstrap, displayPath })));
         return;
       }
       if (request.method === 'POST' && url.pathname === '/internal/sessions') {
-        const { displayPath, ...input } = await readBody(request, HostSessionBootstrapSchema);
+        const { displayPath, deferred, ...input } = await readBody(request, HostSessionBootstrapSchema);
+        this.workers.assertWorktreeLeaseAllows(input.cwd);
+        if (deferred) {
+          const session = await this.sessions.createInitialSession({ ...input, displayPath }, () =>
+            this.admit(input, bootstrap => this.sessions.openWorker({ ...bootstrap, displayPath }))
+          );
+          respondJson(response, 201, session); return;
+        }
         respondJson(response, 201, await this.admit(input, bootstrap => this.sessions.open({ ...bootstrap, displayPath }))); return;
       }
       if (request.method === 'GET' && url.pathname === '/api/agent/v1/sessions') {
@@ -716,6 +746,11 @@ export class AgentService {
       if (request.method === 'POST' && url.pathname === '/internal/workers') {
         const input = await readBody(request, WorkerBootstrapSchema);
         respondJson(response, 201, await this.admit(input, bootstrap => this.workers.start(bootstrap))); return;
+      }
+      if (request.method === 'POST' && url.pathname === '/internal/workers/host-tools') {
+        const input = await readBody(request, z.strictObject({ tools: z.record(z.string(), z.boolean()) }));
+        await this.workers.broadcastOperation({ type: 'host-tools.configure', tools: input.tools });
+        response.writeHead(204, { 'Cache-Control': 'no-store' }); response.end(); return;
       }
       const restart = /^\/internal\/workers\/([^/]+)\/restart$/.exec(url.pathname);
       if (restart && request.method === 'POST') {

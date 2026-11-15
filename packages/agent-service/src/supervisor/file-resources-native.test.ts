@@ -163,9 +163,16 @@ test('all 30 ALLOWED_BUILTIN_COMMANDS are projected as read-only inherited entri
     expect(entry.description.length).toBeGreaterThan(0);
 
     const spec = lookupBuiltinSlashCommand(name);
-    const expectedDesc = spec?.description ?? spec?.acpDescription ?? '';
-    expect(entry.description).toBe(expectedDesc);
-    const expectedHint = spec?.acpInputHint ?? spec?.inlineHint ?? undefined;
+    if (!spec) throw new Error(`Missing builtin spec: ${name}`);
+    // OMP resolves the TUI copy through the active theme, so `Esc`/`Shift+Tab`
+    // become `⎋`/`⇧⇥` depending on what loaded first. The catalog hands clients
+    // the ACP copy, which names no key at all.
+    if (spec.acpDescription) {
+      expect(entry.description).toBe(spec.acpDescription);
+      expect(entry.description).not.toContain('Shift+Tab');
+      expect(entry.description).not.toContain('⇧⇥');
+    }
+    const expectedHint = spec.acpInputHint ?? spec.inlineHint ?? undefined;
     expect(entry.argumentHint).toBe(expectedHint);
   }
   // Assert dedicated /btw is also projected read-only without modifying the 29-command execution allowlist

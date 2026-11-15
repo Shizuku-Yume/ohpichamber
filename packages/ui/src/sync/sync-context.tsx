@@ -18,6 +18,7 @@ import { applyDirectoryEvent, compareCounters, installSessionList, mergeHostSess
 import { useBtwStore } from "@/stores/useBtwStore"
 import { useSubagentsStore } from "@/stores/useSubagentsStore"
 import { useSessionRecapStore } from "@/stores/useSessionRecapStore"
+import { useSessionSuggestionStore } from "@/stores/useSessionSuggestionStore"
 import { useCleanseStore } from "@/stores/useCleanseStore"
 import { useAdvisorStore } from "@/stores/useAdvisorStore"
 import { createEventPipeline, type EventPipeline } from "./event-pipeline"
@@ -27,6 +28,8 @@ import { subscribeMessageQueueSync } from "./message-queue-sync";
 import { subscribeSessionAdmission } from "./session-admission";
 import { subscribeControlStreamSync } from "./control-stream-sync";
 import { subscribeSessionMetadataSync } from "./session-metadata-sync";
+import { subscribePrWatchSync } from "./pr-watch-sync";
+import { subscribeAutoReviewSync } from "./auto-review-sync";
 
 import { SessionMessageLoader, getImperativeSessionMessageLoader, setImperativeSessionMessageLoader, type SessionMessageLoadState, type SessionMessageTarget } from "./session-message-loader"
 import { setSyncRefs } from "./sync-refs"
@@ -110,7 +113,12 @@ export function handleEvents(target: SessionMessageTarget, events: readonly Cano
     }
     if (event.type === "session.recap") {
       useSessionRecapStore.getState().applyRecap(event);
-      continue;
+    }
+    if (event.type === "session.suggestion") {
+      useSessionSuggestionStore.getState().applySuggestion(event);
+    }
+    if (event.type === "run.started" || event.type === "turn.started") {
+      useSessionSuggestionStore.getState().clearSuggestion(target.sessionId);
     }
     if (event.type === "cleanse.progress") {
       useCleanseStore.getState().applyCleanseProgress(target.sessionId, event);
@@ -374,6 +382,8 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     // Workflow runs and the host snapshot follow the control stream: an SSE
     // client hears a run's progress here, never on its own engine stream.
     const unsubscribeControlStream = subscribeControlStreamSync(props.runtimeKey ?? getRuntimeKey());
+    const unsubscribePrWatchEvents = subscribePrWatchSync(props.runtimeKey ?? getRuntimeKey());
+    const unsubscribeAutoReviewEvents = subscribeAutoReviewSync(props.runtimeKey ?? getRuntimeKey());
     const stopBeforeSwitch = subscribeRuntimeEndpointWillChange((detail) => {
       if (detail.runtimeKey === props.runtimeKey) return
       currentRef.current = false
@@ -432,7 +442,7 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     document.addEventListener("visibilitychange", visible)
     return () => {
       currentRef.current = false
-      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents(); unsubscribeMetadataEvents(); unsubscribeSessionAdmission(); unsubscribeControlStream();
+      stopBeforeSwitch(); resumeAfterSwitch(); stopAuthRecovery(); stopConnectionRecovery(); unconfigure(); pipeline.cleanup(); clearInterval(discoveryTimer); unsubscribeFolderEvents(); unsubscribeDraftEvents(); unsubscribeMessageQueueEvents(); unsubscribeMetadataEvents(); unsubscribeSessionAdmission(); unsubscribeControlStream(); unsubscribePrWatchEvents(); unsubscribeAutoReviewEvents();
       window.removeEventListener("online", resume)
       window.removeEventListener("offline", offline)
       window.removeEventListener("pageshow", pageshow)
@@ -447,9 +457,29 @@ function RuntimeSyncProvider(props: { directory: string; children: React.ReactNo
     const directory = currentDirectoryRef.current
     if (directory) childStores.ensureChild(directory, { priority: "selected", reason: "current-directory" })
     setSyncRefs(childStores, directory)
-    setActionRefs(childStores, () => currentDirectoryRef.current, (targetDirectory, sessionId) => {
-      if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => { })
-    })
+    setActionRefs(
+      childStores,
+      () => currentDirectoryRef.current,
+      (targetDirectory, sessionId) => {
+        if (isCurrent()) void messageLoader.refresh({ directory: targetDirectory, sessionId }).catch(() => { })
+      },
+      (sessionId, targetDirectory) => {
+        if (!isCurrent()) return
+        const dir = targetDirectory || currentDirectoryRef.current
+        const store = childStores.getChild(dir)
+        const snapshot = store?.getState().snapshot[sessionId]
+        if (snapshot) {
+          pipelineRef.current?.attach({ directory: dir, sessionId }, snapshot)
+          return
+        }
+        const session = store?.getState().session.find(s => s.sessionId === sessionId)
+          ?? useGlobalSessionsStore.getState().entityById.get(sessionId)
+        if (session) {
+          const cursor = `${session.epoch}:${session.headSequence}`
+          pipelineRef.current?.attach({ directory: dir, sessionId }, { cursor, session: { sessionId, runtimeStatus: session.runtimeStatus } })
+        }
+      },
+    )
     setOptimisticRefs(
       (input) => { if (isCurrent()) messageLoader.optimisticAdd({ ...input, directory: input.directory || currentDirectoryRef.current }) },
       (input) => { if (isCurrent()) messageLoader.optimisticRemove({ ...input, directory: input.directory || currentDirectoryRef.current }) },

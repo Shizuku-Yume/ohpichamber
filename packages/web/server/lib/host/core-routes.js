@@ -1,6 +1,7 @@
 import { hasLegacyOpenCodeData } from './legacy-data.js';
 import { ThemeImportStorageError } from './theme-runtime.js';
 import { registerThemeCatalogRoutes } from './theme-catalog.js';
+import { collectLocalFileDiagnostics } from '../diagnostics/local-files.js';
 
 const parseLoopbackUrl = (rawUrl) => {
   if (typeof rawUrl !== 'string') {
@@ -233,6 +234,28 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     });
   });
 
+  // This is a local support export, not an API for connected remote clients.
+  // Check the socket address rather than proxy-provided forwarding headers.
+  // The private relay also dials loopback, and stamps every request it forwards.
+  const requireLocalDiagnostics = (req, res, next) => {
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket?.remoteAddress)
+      || req.headers['x-openchamber-relay-connection']
+      || (tunnelAuthController?.classifyRequestScope && tunnelAuthController.classifyRequestScope(req) !== 'local')) {
+      res.status(403).json({ error: 'Local diagnostics require a loopback connection' });
+      return;
+    }
+    if (uiAuthController?.requireAuth) return uiAuthController.requireAuth(req, res, next);
+    next();
+  };
+
+  app.get('/api/diagnostics/local-files', requireLocalDiagnostics, async (_req, res) => {
+    try {
+      res.json(await collectLocalFileDiagnostics({ webPort: getServerPort() }));
+    } catch {
+      res.status(500).json({ error: 'Diagnostics unavailable' });
+    }
+  });
+
   app.get('/api/version', async (_req, res) => {
     const serverId = await resolveServerId();
     res.json({
@@ -385,7 +408,8 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     // Injected lazily because the relay service is constructed after these routes.
     getRelayPairingCandidate = async () => null,
     // Re-evaluate the relay lifecycle after pairing/device changes.
-    reconcileRelay = async () => {},
+    reconcileRelay = async () => { },
+    removeClientPushDevices = async () => { },
     // Returns { local, lan, relayAvailable } — the direct transport URLs the
     // server can actually be reached on (LAN derived from the server bind, not
     // the UI origin), for the create-device dialog.
@@ -833,6 +857,9 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
       if (!result.revoked) {
         return res.status(404).json({ revoked: false, error: 'Client not found' });
       }
+      await removeClientPushDevices([req.params.id]).catch((error) => {
+        console.warn('Failed to remove push registrations of a revoked client:', error?.message ?? error);
+      });
       void reconcileRelay();
       res.json(result);
     });
@@ -848,8 +875,9 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
           return res.status(403).json({ purged: 0, error: 'Client tokens cannot purge revoked devices' });
         }
       }
+      const clients = await remoteClientAuthRuntime.listClients();
+      await removeClientPushDevices(clients.filter((client) => client.revokedAt).map((client) => client.id));
       const result = await remoteClientAuthRuntime.purgeRevokedClients();
-      void reconcileRelay();
       res.json(result);
     });
   });

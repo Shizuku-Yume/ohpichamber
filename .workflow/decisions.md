@@ -1117,3 +1117,129 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** a product glossary fixes a different term.
 - **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Immediate session ID and queued prompt delivery; the prepared path meets the first-delta budget, the cold path does not
+
+- **Decided:** `POST /sessions` returns immediately (~5–15 ms) with the initialized session ID while worker admission and launch proceed asynchronously, and prompt delivery (`POST /runs`) queues behind worker readiness. To keep a new chat fast for the path a user actually takes, the Host Gateway and Canonical Client also support bounded speculative session preparation (`/api/agent/v1/sessions/prepare`), triggered when the user opens the new-chat composer for a workspace (and as an explicit variant in the performance test). The speculative session is bounded (≤1 per workspace), idle-reaped after five minutes, discarded on draft cancellation and on Host shutdown, and consumed on session creation, so the session graph is already built and ready when the prompt arrives.
+- **Instead of:** retaining synchronous worker `ready` before returning from `POST /sessions` (stalling session creation at ~880–1150 ms) or leaving heavy OMP SDK graph initialization on the critical prompt delivery path.
+- **Because:** the independent reviews of tasks 17 and 24 measured that a worker launch plus SDK `createAgentSession` inherently cost ~500 ms, which puts the cold path's first `part.delta` above the 600 ms budget. The three measured paths, from `task24/after-8` and `after-9` receipts plus the round-3 review's independent run:
+  - **Prepared (composer open, then send)** — what the product does: first `part.delta` p50 **≈ 220–260 ms**, `POST /sessions` p50 6–7 ms. Meets both budgets in every run.
+  - **Cold, no prepare**: `POST /sessions` p50 13–15 ms (meets its budget) but first `part.delta` p50 **≈ 720–800 ms on a lightly loaded machine and ≈ 855–934 ms under load**. Does not meet 600 ms.
+  - **Prepare issued and abandoned immediately before send**: first `part.delta` p50 **≈ 780–1020 ms** and `POST /sessions` p50 **560–750 ms**, because creation waits on its own in-flight prepare. This is an accepted, documented miss of the 400 ms creation budget.
+
+  The remaining cold-path cost is measured, not assumed: `createAgentSession` ≈ 109 ms, serial agent-loop preparation before the provider call ≈ 144 ms, and supervisor queueing ≈ 60 ms, all in one process on one thread. The post-init `Promise.all` that fills the rest is concurrent, not serial: its branches' CPU time exceeds their own wall time, so their wall time is queueing (see the task file's sub-step table).
+- **Open, for the maintainer:** the cold path's ≤ 600 ms first-delta budget needs a waiver, or an SDK seam that lets a session graph be built in a spare process (OMP's `AgentRegistry.global()` is process-wide, so the attempt was rejected: it regressed the cold path and conflicted on the registry). The prepared path meeting the budget is not a substitute for the cold path meeting it; it is what the product does.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP SDK changes session initialization or worker process architecture, or the maintainer decides the cold path's budget.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - OMP settings name only verified owners; writes reach placed settings only
+
+- **Decided:** an `owned-by` placement names only a control that writes that OMP key: `recap.enabled` and `recap.idleSeconds` → Chat → Session recap (`chat.session-recap`, task 11), `suggestion.generator` → `chat.suggestion-generator`. `tui.renderMermaid`, `tools.approvalMode` and `enabledModels` have no GUI writer of their OMP keys and are `tui-only`, so they stay off the OMP page and off the writable set. The `enabledModels` row is removed (untabbed, so hidden). The OMP write route accepts only ids present in the placement table, so an unplaced id is refused with 400.
+- **Instead of:** `owned-by` rows for the mermaid, permission-default and providers controls, which write other keys, and the unrestricted write path the rewrite left behind.
+- **Because:** the effort's rule that an `owned-by` row names a real writer could not hold for those three; without the gate, the route accepted every non-credential OMP id, widening the 157-id allowlist it replaced.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** a GUI control starts writing `tools.approvalMode` or `enabledModels`, or task 12 moves the egress endpoints (`collab.*`, `share.*`, `stream.*`) onto a page.
+## 2026-11-14 - Agent tool permissions editor queries live tool catalog and groups tools by domain
+
+- **Decided:** the Agent tool permissions editor queries the live session or workspace tool catalog exposing name, label, description, tier (`read`, `write`, `exec`), and availability (`SessionToolsCatalogSchema`). Tools are grouped into 7 fork-owned domains (files and search, execution, web and external, planning and memory, multi-agent, OpenChamber, MCP and extensions) with collapsible sections, header tri-state checkboxes, and tier chips. Quick actions operate over available tools only, preventing 422 `UNSUPPORTED_CAPABILITY` on profile creation/activation. Dead `permissionPresetId` fields and inputs were deleted.
+- **Instead of:** keeping the static flat 2-4 column grid over `OMP_TOOL_NAMES` and free-text permission preset ID.
+- **Because:** `OMP_TOOL_NAMES` includes uninstalled, unconfigured, or gated tools (e.g. `ida`, `checkpoint`, `memory`, `github`), causing "Show all" to select unavailable tools and crashing profile activation with 422. A live catalog reflects real OMP settings and active extensions, allowing safe tool selection and clear user visibility.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP introduces runtime dynamic tool capability negotiation or fine-grained parameter-level permission rules.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing
+
+- **Decided:** auto-review and PR watch retire OpenCode-specific staged reverts (`revertCommit`), manual queue release hooks (`onRunSettled`), client-driven prompt routing (`routeSend`), and session guidance (`sessionKnowledgeRuntime`), delegating send dispatch, queueing, observation leases, and provider routing exclusively to the canonical session service and global message stream hub.
+- **Instead of:** maintaining OpenCode-shaped revert commit endpoints, manual queue settlement callbacks, or bespoke model-routing interceptors inside the review loop.
+- **Because:** OMP has no staged-revert API, and prompts in the OMP architecture carry `KEEP_SESSION_MODEL` leaving routing to the session's active selection or Auto routing; observation leases (`hub.retainSession`) replace manual queue holds; and prompt context travels directly via synthetic context in `sessionService.send`.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP introduces native turn rollback checkpoints or session-level review transactional boundaries.
+## 2026-11-14 - Enterprise-boundary OMP settings are placed `boundary`: never rendered, written or read by a GUI route
+
+- **Decided:** settings that cross the enterprise boundary (relay, share and stream endpoints, collab and browser relay, image URL listeners, memory and search endpoints and API keys, dev autoqa push, OTLP telemetry) get the placement `boundary`. The OMP route omits them from its state, so their values never reach the browser, and refuses writes to them with 400. They stay editable only in `config.yml`, as before this task, when the OMP settings allowlist did not name them.
+- **Instead of:** `tunnel:collab`, `memory:backend` and `chat:images` page placements, which would have let a GUI write egress targets and read secret values back.
+- **Because:** the enterprise-boundary skill classifies these as egress, exposure, provider entry and telemetry. Their enforcement belongs at the crossing, and the mode's pin knobs do not exist yet. Web, Electron and mobile all reach this route through the same Host, so one enforcement point covers them.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** a later task adds an admin pin for one of these endpoints; that needs the `enterprise-mode.js` knob, its test cases, and moving the `boundary` placement to a page.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Untabbed engine settings without OMP copy are hidden, not drawn with raw ids
+
+- **Decided:** the 38 settings that OMP's TUI never shows (untabbed, so no OMP label or description: retry internals, compaction tuning, skills discovery toggles, spotlight experiment, task overrides, thinking budgets) are removed from the placement table, so they default to `hidden`. `modelRoles` stays `engine` because the role editor draws it. A test asserts every `engine` row carries OMP's label and description.
+- **Instead of:** writing locale copy for 38 internal settings in 15 locales, or keeping them as `engine` rows that show raw ids.
+- **Because:** the real-path page drew raw ids such as `thinkingBudgets.high` as row labels. Their copy would be invented, and they are OMP tuning knobs that the page's own footer already says to edit in config.yml.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP ships labels for these settings, or the maintainer wants them in the GUI.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - The OMP route exposes only the settings a GUI owner draws or writes
+
+- **Decided:** the OMP settings route returns and accepts only `OMP_SETTING_EXPOSED_IDS`: `engine` placements, `owned-by` placements, and `page` placements that a GUI control writes (today `defaultThinkingLevel`, written by Defaults). `tui-only`, untabbed (`hidden`), `boundary` and unwritten page placements are omitted from state and refused on write with 400. The path settings (`plan.autosaveDir`, `workspace.additionalDirectories`, `contextFiles.extra`, `mnemopi.dbPath`, `ovnfs.path`, `worktree.base`, `ida.installDir`, `browser.screenshotDir`, `python.interpreter`) and the off-host `skills.registryUrl` are `boundary`.
+- **Instead of:** the earlier rule that refused only boundary and unplaced ids, which made tui-only ids readable and writable, contrary to the 2026-11-14 owners decision.
+- **Because:** the old contract excluded remote URLs and configurable paths as a second authority and a path escape hatch. A placed row with no reader or writer is an unverified claim. The two decisions now agree.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** task 12 adds a page control that writes another page placement; that key joins `GUI_WRITTEN_PAGE_KEYS` in the same change.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-14 - Engine rows without a locale override show OMP's own label and description
+
+- **Decided:** each `engine` row takes its label and description from OMP's registry. The locale overrides in `omp-settings.i18n.ts` cover the rows the page names, and any row without an override shows OMP's English text in every locale. The 131 engine rows are not mass-translated in this effort.
+- **Instead of:** translating every engine row into 15 locales now, or hiding untranslated rows.
+- **Because:** OMP's labels are themselves technical English, and the copy is OMP's own rather than an invented fallback. Mass translation of about 3,900 strings is a separate localization effort the maintainer did not ask for in this effort.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** the maintainer schedules localization of the OMP settings page, or `locale-ui-patterns` is read to forbid English fallback on runtime-sourced copy; then translate or hide the affected rows.
+- **Effort:** ux-feedback-2026-11-12
+## 2026-11-14 - Child subagent session prompts inherit parentSessionId in Host routes to permit agentId
+
+- **Decided:** Host session routes (`routes.js`) track admitted child sessions with their `parentSessionId` so `prepareDelivery` and queue append evaluate `isRoot` as `scope.parentSessionId === undefined`. Child subagent runs (`parentSessionId !== undefined`) bypass `assertRootPromptAdmission` and retain their profile `options.agentId`, while root sessions continue enforcing `options.agentId === null`.
+- **Instead of:** Allowing `options.agentId` on root sessions, or mutating `agent-scope-store` schema/SQLite tables during this task.
+- **Because:** Root prompt admission intentionally enforces `agentId === null` for user-entered root turns (where model routing or default agents govern). Child subagents, however, are spawned with specific profile agent IDs (such as `task`, `sonic`, `reviewer`, or user-defined profiles). Tracking child parentage in the session admission route provides exact root/subagent discrimination without schema migrations.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** SQLite `host_agent_sessions` durable schema adds a first-class `parent_session_id` column across all sessions.
+- **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - The 2026-11-12 feedback cutovers own the remaining files they rewrote
+
+- **Decided:** these `fork-differs` paths keep the fork blob because this effort's own work produced them: the UI-blocks guidance test no longer mirrors a generated server module (`chat/uiBlocks/guidance.test.ts`), the shared sortable visibility list `shared/SettingsSortableVisibilityList.tsx`, the Settings window's keyboard reorder and plugin-category fix (`views/SettingsWindow.tsx`), the `parseProjects` round-trip test for the dropped per-project `defaultAgent` (`lib/settings/parsers.test.ts`), the Magic-prompts sidebar without the retired memory prompts (`sections/magic-prompts/MagicPromptsSidebar.tsx`), and the stream-cadence harness (`scripts/perf/scenario.mjs`, `scripts/profile-session.mjs`).
+- **Instead of:** taking upstream's copy of each file, which still generates the ui-blocks module, keeps the OpenChamber memory prompts, reads `defaultAgent` from project settings, and has no stream-cadence scenario.
+- **Because:** each file is the surviving half of a cutover this effort made on purpose; upstream's version reintroduces the behavior the cutover removed, and the reference comparison was run against the fork blob. The drift ledger's job is to force this listing, not to prefer upstream.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** upstream rewrites one of these files on a contract the fork also accepts.
+- **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - Row 16 ships PARTIAL with task 24 blocked on the 600 ms variant-(a) budget
+
+- **Decided:** task 20 closes with row 16 recorded as PARTIAL, and task 24 keeps `Status: blocked` on its cold-path first-delta budget (variant (a), the new chat that never calls `prepare`: ~760 ms against ≤ 600 ms). The cold-prompt stall the maintainer reported is fixed and measured on both surfaces (501 ms Web / 495 ms Electron against 1529 / 1568 ms before); the remaining number is the harness variant only.
+- **Instead of:** marking row 16 PASS on the strength of the fixed user path, or clearing task 24's blocked status by redefining the budget to the variant the product actually uses.
+- **Because:** the Check names first `part.delta` on a new chat explicitly and only the maintainer can waive a budget, so a green row would be a claim the receipt does not support. The measured remainder is real work in one process on one thread — `createAgentSession`, serial agent-loop preparation before the provider call, and supervisor queueing — and the alternative is an OMP SDK seam that builds a session graph ahead of the call, which is a design decision, not an acceptance one.
+- **Mine:** yes
+- **Revisit when:** the maintainer waives the 600 ms budget for the cold variant, or the OMP SDK exposes a prebuilt session graph so a spare can construct one ahead of the prompt.
+- **Effort:** ux-feedback-2026-11-12
+## 2026-11-15 - Task 02's asar-guard revert stays unlanded
+
+- **Decided:** `16199d2a6b` (`revert(web): drop unneeded asar guard in standalone-loader symlinks`) is left out of the integration branch.
+- **Instead of:** landing it because the guard looked like dead code in a development tree.
+- **Because:** it is load-bearing for the packaged app: `ensureAgentRuntimeSymlinks` writes inside the runtime root, `packages/electron/package.json` stages `resources/agent-runtime`, and the asar copy of `@openchamber/web/resources` is read too. The commit also removed a `try/catch` around `mkdirSync`, packaged Electron was verified working **with** the guard, and no test under `packages/web/server/**/*.test.js` imports `standalone-loader` — so nothing in the suite would have caught the breakage.
+- **Mine:** yes
+- **Revisit when:** the symlink writer stops writing inside the runtime root, or a packaged-Electron test covers `standalone-loader`'s symlink path so the guard's absence fails loudly.
+- **Effort:** ux-feedback-2026-11-12
+
+## 2026-11-15 - The cold-path first-delta budget is waived
+
+- **Decided:** the W11 budget of ≤ 600 ms from send to the first `part.delta` is waived for a new chat that never calls `prepare` (variant (a), measured ~720–800 ms p50 on a lightly loaded machine). Task 24 archives with `Check waived:`, and row 16 of the acceptance matrix stands as accepted.
+- **Instead of:** funding an OMP SDK seam that lets a spare worker build a session graph ahead of the prompt, or holding the effort open until one exists.
+- **Because:** the path users take (`openNewSessionDraft` calls `prepare`) measures 220–280 ms and meets the budget, `POST /sessions` fell from ~1 s to 13–15 ms, and the remaining cold cost is OMP's own `createAgentSession` (~110 ms), agent-loop preparation (~145 ms) and supervisor queueing (~60 ms), which this repository cannot remove while `AgentRegistry.global()` is process-wide.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP exposes a prebuilt or per-process session graph, or the cold path becomes a path users routinely take.
+- **Effort:** ux-feedback-2026-11-12

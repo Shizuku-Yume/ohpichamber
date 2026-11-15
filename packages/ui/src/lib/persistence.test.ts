@@ -945,8 +945,10 @@ describe('updateDesktopSettings', () => {
     for (const explicit of [undefined, false, true]) {
       invalidateSettingsCache();
       registerSettingsApi(async (changes) => changes, async () => ({
-        settings: { workStatusHiddenSections: ['mcp', 'telemetry'], workStatusHiddenSectionsExplicit: explicit,
-          draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true },
+        settings: {
+          workStatusHiddenSections: ['mcp', 'telemetry'], workStatusHiddenSectionsExplicit: explicit,
+          draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true
+        },
         source: 'web',
       }));
       await syncDesktopSettings();
@@ -1271,13 +1273,13 @@ describe('updateDesktopSettings', () => {
 
   test('a delayed read retains an edit whose write finishes before the read', async () => {
     const readResult = deferred<{ settings: SettingsPayload; source: 'web' }>();
-    const newDefaults = { lastSelectedModel: 'provider/new', zenModel: 'high', defaultAgent: 'review' };
+    const newDefaults = { lastSelectedModel: 'provider/new', zenModel: 'high' };
     const writes: Array<Partial<SettingsPayload>> = [];
     registerSettingsApi(async (changes) => { writes.push(changes); return { ...changes }; }, () => readResult.promise);
     const update = updateDesktopSettings(newDefaults);
     const read = loadDesktopSettings();
     await update;
-    readResult.resolve({ settings: { lastSelectedModel: 'provider/old', zenModel: 'low', defaultAgent: 'build' }, source: 'web' });
+    readResult.resolve({ settings: { lastSelectedModel: 'provider/old', zenModel: 'low' }, source: 'web' });
     expect(await read).toMatchObject(newDefaults);
     expect(await loadDesktopSettings()).toMatchObject(newDefaults);
     await updateDesktopSettings({ lastSelectedModel: 'provider/old' });

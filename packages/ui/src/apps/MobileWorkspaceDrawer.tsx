@@ -84,6 +84,15 @@ export const MobileWorkspaceDrawer: React.FC<{
 
   // Tabs the user has actually opened — their panes stay mounted afterwards.
   const [visitedTabs, setVisitedTabs] = React.useState<ReadonlySet<MobileWorkspaceTab>>(() => new Set());
+  /** Unmounts a pane that has nothing left to show, so it cannot start work again. */
+  const stopVisitingTab = React.useCallback((stopped: MobileWorkspaceTab) => {
+    setVisitedTabs((current) => {
+      if (!current.has(stopped)) return current;
+      const next = new Set(current);
+      next.delete(stopped);
+      return next;
+    });
+  }, []);
   React.useEffect(() => {
     if (!open) return;
     setVisitedTabs((current) => {
@@ -256,7 +265,13 @@ export const MobileWorkspaceDrawer: React.FC<{
         {visitedTabs.has('terminal') ? (
           <div className={cn('h-full', tab !== 'terminal' && 'hidden')}>
             <ErrorBoundary>
-              <TerminalView visible={open && tab === 'terminal'} />
+              <TerminalView
+                visible={open && tab === 'terminal'}
+                onLastTabClosed={() => {
+                  stopVisitingTab('terminal');
+                  onClose();
+                }}
+              />
             </ErrorBoundary>
           </div>
         ) : null}

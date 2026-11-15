@@ -249,7 +249,7 @@ describe('canonical Host authenticated real-service boundary', () => {
     servicePhase = 'ready';
     const stats = { range: { from: 1, to: 2 }, sessions: 0, subagents: 0, prompts: 0, steps: 0,
       tokens: { input: 0, output: 0, reasoning: null, cacheRead: 0, cacheWrite: 0, total: 0 }, cost: 0,
-      tools: { mode: 'none' }, activeDays: 0, streak: 0, activity: [], models: [], partial: false };
+      tools: { mode: 'none' }, activeDays: 0, streak: 0, activity: [], providers: [], models: [], partial: false };
     requestService = async (url, init) => {
       expect(url).toBe('/internal/usage');
       expect(init.method).toBe('POST');

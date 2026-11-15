@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, CacheWarmingApplyResultSchema, CacheWarmingUpdateRequestSchema, type CacheWarmingState, type CacheWarmingUpdateRequest, type CacheWarmingApplyResult, type CacheWarmingWorkerApplyOutcome } from '@openchamber/agent-contract';
 import { CacheWarmingPartialWriteDetailsSchema } from '@openchamber/agent-contract';
 import type { CatalogOperation, CatalogResult } from '../catalogs/protocol.ts';
-import { WorkerOperationError, type WorkerRegistry } from './workers.ts';
+import { WorkerOperationError, type WorkerRegistry, type StatelessWorkerInput } from './workers.ts';
 import { HostWorkspaceBootstrapSchema } from './host-authorization-protocol.ts';
 import { PluginMutationResultSchema, type PluginApplyRequest, type PluginMutationResult, type CatalogWorkerIdentity, type PluginWorkerApplyOutcome, type PluginRuntimeState } from '@openchamber/agent-contract';
 import type { CatalogCoordinator, CatalogAdmission } from './catalog.ts';
@@ -16,7 +16,7 @@ export type PrivateWorkspaceRegistration = z.infer<typeof HostWorkspaceBootstrap
 const isStatelessCatalogRead = (operation: CatalogOperation): boolean => (
   operation.type === 'catalog.models.read' || operation.type === 'catalog.providers.read'
 );
-const WorkspaceSchema = HostWorkspaceBootstrapSchema.omit({ env: true }).extend({
+const WorkspaceSchema = HostWorkspaceBootstrapSchema.omit({ env: true, hostTools: true }).extend({
   workspaceId: EntityIdSchema, authorizationRootId: EntityIdSchema,
   agentDirectoryIds: z.array(EntityIdSchema).min(1),
 });
@@ -39,6 +39,7 @@ export class WorkspaceCatalogs {
   private readonly pluginOwners = new Map<string, z.infer<typeof PluginOwnerSchema>>();
   private readonly pluginBindings = new Map<string, z.infer<typeof PluginBindingSchema>>();
   private readonly environments = new Map<string, Record<string, string>>();
+  private readonly hostToolsByWorkspace = new Map<string, Record<string, boolean>>();
   private readonly tails = new Map<string, Promise<void>>();
   private readonly prewarming = new Map<string, Promise<void>>();
   private stateTail: Promise<void> = Promise.resolve();
@@ -85,6 +86,7 @@ export class WorkspaceCatalogs {
         catch (error) { this.workspaces.delete(workspaceId); if (!owner) this.owners.delete(input.agentDirectoryId); throw error; }
       }
       this.environments.set(workspaceId, input.env ?? {});
+      if (input.hostTools) this.hostToolsByWorkspace.set(workspaceId, input.hostTools);
       // Warm the stateless catalog worker off the request path so the first
       // models/providers read does not pay worker startup. A failure is
       // reported to the next real read, never to workspace registration.
@@ -136,7 +138,20 @@ export class WorkspaceCatalogs {
     // Environments are refreshed only by authenticated Host admission, never restored from disk.
     const env = this.environments.get(workspaceId);
     if (!env) throw new WorkerOperationError(503, 'SERVICE_UNAVAILABLE', 'The workspace environment was not captured');
-    await this.workers.startStateless({ rootSessionId: workspace.authorizationRootId, projectId: workspace.projectId, workspaceId, cwd: workspace.cwd, agentDirectory: workspace.agentDirectory, agentDirectoryId: workspace.agentDirectoryId, catalogRevision: this.revision(workspaceId), mcpConfigPath: join(workspace.cwd, '.omp', 'mcp.json'), env });
+    const hostTools = this.hostToolsByWorkspace.get(workspaceId);
+    const input: StatelessWorkerInput = {
+      rootSessionId: workspace.authorizationRootId,
+      projectId: workspace.projectId,
+      workspaceId,
+      cwd: workspace.cwd,
+      agentDirectory: workspace.agentDirectory,
+      agentDirectoryId: workspace.agentDirectoryId,
+      catalogRevision: this.revision(workspaceId),
+      mcpConfigPath: join(workspace.cwd, '.omp', 'mcp.json'),
+      env,
+    };
+    if (hostTools) input.hostTools = hostTools;
+    await this.workers.startStateless(input);
     return workspace.authorizationRootId;
   }
   async operation(workspaceId: string, operation: CatalogOperation): Promise<CatalogResult> {
@@ -146,9 +161,32 @@ export class WorkspaceCatalogs {
     // A pure read advances no revision and touches no owner mutation, so it runs
     // beside other reads instead of behind the mutation queue.
     if (isStatelessCatalogRead(operation)) return this.operationNow(workspaceId, operation);
-    return this.serial(workspace.agentDirectoryId, () => this.operationNow(workspaceId, operation));
+    return this.serial(workspace.agentDirectoryId, async () => {
+      const result = await this.operationNow(workspaceId, operation);
+      if (operation.type === 'catalog.settings.write' && result.type === 'catalog.settings.mutated') {
+        await this.reloadSessionWorkersSettings(workspaceId);
+      }
+      return result;
+    });
   }
 
+  async reloadSessionWorkersSettings(workspaceId: string): Promise<void> {
+    const workspace = this.get(workspaceId);
+    const active = this.workers.list().filter(worker => worker.kind === 'session' && (worker.state === 'ready' || worker.state === 'starting'));
+    await Promise.all(active.map(async worker => {
+      const input = this.workers.bootstrap(worker.rootSessionId);
+      if (!input || (input.agentDirectoryId !== workspace.agentDirectoryId && input.workspaceId !== workspaceId)) return;
+      try {
+        await this.workers.request(worker.rootSessionId, {
+          type: 'catalog',
+          revision: this.revision(workspaceId),
+          operation: { type: 'catalog.settings.apply' },
+        }, worker.workerGeneration);
+      } catch {
+        // worker may be busy or stopping
+      }
+    }));
+  }
   /**
    * Boots a spare session worker for this workspace. It is an optimization:
    * a failed or unused spare only means the next session starts as it did
@@ -262,6 +300,11 @@ export class WorkspaceCatalogs {
   }
 
   async pluginRevision(workspaceId: string): Promise<string> {
+    const binding = this.pluginBindings.get(workspaceId);
+    if (binding) {
+      const owner = this.pluginOwners.get(binding.rootPath);
+      if (owner) return owner.revision;
+    }
     return (await this.pluginBinding(workspaceId)).owner.revision;
   }
 

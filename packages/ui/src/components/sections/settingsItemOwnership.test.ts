@@ -27,6 +27,7 @@ const SAME_PAGE_CLAIMS: Readonly<Record<string, string>> = {
   'providers.auth': 'ProvidersPage authenticates the same provider in two places',
   'providers.connect': 'ProviderConnectPicker opens the form ProviderGrid resells',
   'providers.custom': 'ProviderConnectPicker offers custom setup; CustomProviderForm is it',
+  'providers.logo': 'ProvidersPage lists custom provider logos; CustomProviderForm edits them',
   'sessions.small-model': 'The opt-out toggle and the model picker are one setting, disabled together',
 };
 
@@ -108,6 +109,37 @@ describe('settings item ownership', () => {
     for (const [id, reason] of Object.entries(SAME_PAGE_CLAIMS)) {
       expect(`${id} claimed: ${ids.has(id)}`).toBe(`${id} claimed: true`);
       expect(`${id} reason: ${reason.length > 0}`).toBe(`${id} reason: true`);
+    }
+  });
+
+  test('every owned-by row names a control that writes its OMP key', () => {
+    const claims = collectClaims();
+    const claimsByOwner = new Map(claims.map((claim) => [claim.id, claim]));
+    const settingsUiPath = join(SECTIONS_ROOT, '../../../../packages/agent-service/src/worker/settings-ui.ts');
+    const settingsUiSource = readFileSync(settingsUiPath, 'utf8');
+    const rawPlacementsMatch = settingsUiSource.match(/const RAW_PLACEMENTS: Readonly<Record<string, string>> = \{([\s\S]*?)\n\};/);
+    if (!rawPlacementsMatch) throw new Error('RAW_PLACEMENTS not found');
+    const lines = rawPlacementsMatch[1].split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith("'"))
+      .map((l) => {
+        const m = l.match(/'([^']+)':\s*'([^']+)'/);
+        return m ? [m[1], m[2]] : null;
+      }).filter((entry): entry is [string, string] => entry !== null);
+
+    const ownedByEntries = lines.filter(([, raw]) => raw.startsWith('owned-by '));
+    expect(ownedByEntries.length).toBeGreaterThan(0);
+
+    for (const [id, raw] of ownedByEntries) {
+      const owner = raw.slice('owned-by '.length).trim();
+      const claim = claimsByOwner.get(owner);
+      expect(claim !== undefined, `Owner "${owner}" for OMP setting "${id}" must exist in UI claims`).toBe(true);
+      const claimFileSource = readFileSync(join(SECTIONS_ROOT, claim!.file), 'utf8');
+      const writesOmpKeyPattern = new RegExp(`updateOmpSettings[\\s\\S]*?id:\\s*['"]${id.replace('.', '\\.')}['"]`);
+      expect(
+        writesOmpKeyPattern.test(claimFileSource),
+        `File ${claim!.file} claiming "${owner}" must write OMP setting "${id}" via updateOmpSettings`,
+      ).toBe(true);
     }
   });
 });

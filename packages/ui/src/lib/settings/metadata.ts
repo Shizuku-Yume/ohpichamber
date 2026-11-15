@@ -8,6 +8,8 @@ export type SettingsPageSlug =
   | 'remote-instances'
   | 'providers'
   | 'web-search'
+  | 'tools'
+  | 'memory'
   | 'omp'
   | 'behavior'
   | 'usage'
@@ -103,6 +105,22 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'agent',
     kind: 'single',
     keywords: ['web search', 'websearch', 'search', 'internet', 'exa', 'tavily', 'firecrawl', 'parallel', 'tinyfish'],
+  },
+  {
+    slug: 'tools',
+    title: 'Tools',
+    group: 'agent',
+    kind: 'single',
+    description: 'Configure agent capabilities: host tools and OMP built-in tools.',
+    keywords: ['tools', 'capabilities', 'web', 'browser', 'image', 'generate_image', 'todo', 'grep', 'glob', 'find', 'debug', 'launch', 'speech', 'ratchet', 'archive', 'checkpoint', 'fetch', 'vault', 'github', 'security', 'ask', 'ida'],
+  },
+  {
+    slug: 'memory',
+    title: 'Memory',
+    group: 'agent',
+    kind: 'single',
+    description: 'Agent memory backend and options for persistent learnings.',
+    keywords: ['memory', 'backend', 'mnemopi', 'hindsight', 'sharpshooter', 'autolearn', 'learnings', 'embeddings', 'recall', 'retain'],
   },
   {
     slug: 'usage',
@@ -310,6 +328,10 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): IconName | null {
       return 'cloud';
     case 'web-search':
       return 'global';
+    case 'tools':
+      return 'tools';
+    case 'memory':
+      return 'database-2';
     case 'omp':
       return 'equalizer-2';
     case 'behavior':

@@ -1,4 +1,5 @@
 import {
+  JsonObjectSchema,
   MAX_THINKING_SUFFIX_OPTIONS,
   THINKING_LEVELS,
   formatModelRef,
@@ -7,6 +8,7 @@ import {
   parseConfiguredThinkingLevel,
   parseModelSelector,
   splitSelectorThinking,
+  type JsonValue,
   type Model,
 } from '@openchamber/agent-contract';
 import type { I18nKey } from '@/lib/i18n';
@@ -96,3 +98,33 @@ export const levelLabel = (translate: (key: I18nKey) => string, level: string): 
   const label = translate(key);
   return label === key ? level : label;
 };
+
+/** Every entry the native `modelRoles` record holds, arrays and objects included. */
+export function parseRolesRecord(val: unknown): Record<string, JsonValue> {
+  const parsed = JsonObjectSchema.safeParse(val);
+  return parsed.success ? parsed.data : {};
+}
+
+/** The selector shown for a role; native role values may be arrays of fallbacks. */
+export function roleSelector(value: JsonValue | undefined): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value) && typeof value[0] === 'string') return value[0];
+  if (value && typeof value === 'object' && !Array.isArray(value) && typeof value.selector === 'string') return value.selector;
+  return '';
+}
+
+/**
+ * The entries `next` really changed relative to `previous`: written values plus
+ * the keys it removed.
+ */
+export function changedRoles(
+  previous: Record<string, JsonValue>,
+  next: Record<string, JsonValue>,
+): { written: Record<string, JsonValue>; removed: string[] } {
+  const removed = Object.keys(previous).filter((role) => !Object.hasOwn(next, role));
+  const written: Record<string, JsonValue> = {};
+  for (const [role, value] of Object.entries(next)) {
+    if (previous[role] !== value) written[role] = value;
+  }
+  return { written, removed };
+}

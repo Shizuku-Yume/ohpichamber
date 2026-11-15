@@ -50,7 +50,7 @@ export const IntegrationsPage: React.FC = () => {
   return (
     <SettingsPageLayout
       title={t('settings.page.integrations.title')}
-      namedBySidebar
+      description={t('settings.page.integrations.description')}
       showSaveStatus
       headerEnd={canBrowseCatalog ? (
         <Button

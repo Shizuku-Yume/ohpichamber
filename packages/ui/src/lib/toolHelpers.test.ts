@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { ToolCallPartSchema } from '@openchamber/agent-contract';
 import {
   detectToolOutputLanguage, formatToolInput,
+  isEvalTool,
   isFileChangeTool, isQuestionTool, isShellTool, isSubagentTool, normalizeToolName,
   parseNativeReadPath, toolBaseName, toolInputPath, toolInputPaths,
 } from './toolHelpers';
@@ -17,6 +18,10 @@ describe('native tool helpers', () => {
     expect(isShellTool('bash')).toBe(true);
     expect(isShellTool('shell')).toBe(false);
     expect(isShellTool('mcp.bash')).toBe(false);
+    expect(isShellTool('eval')).toBe(false);
+    expect(isEvalTool('eval')).toBe(true);
+    expect(isEvalTool('runtime.eval:1')).toBe(true);
+    expect(isEvalTool('bash')).toBe(false);
     expect(isSubagentTool('task')).toBe(true);
     expect(isSubagentTool('subagent')).toBe(false);
     expect(isQuestionTool('ask')).toBe(true);
@@ -38,6 +43,7 @@ describe('native tool helpers', () => {
     expect(JSON.parse(formatToolInput(edit.input, edit.toolName))).toEqual(edit.input);
     expect(formatToolInput(call.input, 'bash')).toBe('git status\necho done');
     expect(formatToolInput({ path: 'new.ts', content: 'hello' }, 'write')).toBe('hello');
+    expect(formatToolInput({ code: 'console.log(1)' }, 'eval')).toBe('console.log(1)');
     expect(detectToolOutputLanguage('read', '', { path: 'src/main.ts' })).toBe('typescript');
     const rename = ToolCallPartSchema.parse({ ...edit, input: { path: 'old.ts', edits: [{ op: 'update', rename: 'new.ts' }] } });
     expect(toolInputPaths(rename)).toEqual(['old.ts', 'new.ts']);

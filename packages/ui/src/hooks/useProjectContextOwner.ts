@@ -88,7 +88,7 @@ export const resolvePlanRequestOwner = (directory: string | null, projectId: str
   return registered ? { id: registered.id, path: registered.path } : null;
 };
 
-/** The single owner used by Project knowledge and agent-memory synchronization. */
+/** The single owner used by Project knowledge panels. */
 export const useProjectContextOwner = (directory: string | null): ProjectRef | null => {
   const projects = useProjectsStore((state) => state.projects);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);

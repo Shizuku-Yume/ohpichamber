@@ -32,7 +32,7 @@ export const registerSessionKnowledgeRoutes = (app, dependencies) => {
   app.get('/api/session-knowledge/summary', async (req, res) => {
     const query = SummaryQuerySchema.safeParse(req.query);
     if (!query.success || !query.data.directory) {
-      return res.json({ notes: [], plans: [], memory: { global: 0, project: 0 } });
+      return res.json({ notes: [], plans: [] });
     }
     try {
       return res.json(query.data.sessionId
@@ -40,7 +40,7 @@ export const registerSessionKnowledgeRoutes = (app, dependencies) => {
         : await sessionKnowledgeRuntime.collectSummary(query.data.directory));
     } catch {
       // A panel that cannot read this shows nothing rather than an error.
-      return res.json({ notes: [], plans: [], memory: { global: 0, project: 0 } });
+      return res.json({ notes: [], plans: [] });
     }
   });
 

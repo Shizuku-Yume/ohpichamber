@@ -77,7 +77,7 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     const stats: C.UsageStats = {
       range: { from: 1, to: 1000 }, sessions: 1, subagents: 0, prompts: 1, steps: 1,
       tokens: { input: 2, output: 3, reasoning: null, cacheRead: 0, cacheWrite: 0, total: 5 }, cost: 0,
-      tools: { mode: 'none' }, activeDays: 1, streak: 1, activity: [], models: [], partial: true,
+      tools: { mode: 'none' }, activeDays: 1, streak: 1, activity: [], providers: [], models: [], partial: true,
       errors: { session_bad: 'SESSION_READ_FAILED' },
     };
     respondWith(stats);
@@ -194,7 +194,7 @@ describe('CanonicalClient real HTTP scope boundary', () => {
   });
 
   test('settings reads and writes verify workspace ownership and the next revision', async () => {
-    const settingsState = { workspaceId, revision: '7', settings: [] };
+    const settingsState = { workspaceId, revision: '7', totalCount: 0, settings: [] };
     respondWith(settingsState);
     expect((await client.getOmpSettings(workspaceId)).revision).toBe('7');
     expect(calls.at(-1)).toBe(`GET /api/agent/v1/workspaces/${workspaceId}/settings`);

@@ -184,7 +184,7 @@ The directory event reducer (`applyDirectoryEvent` in `event-reducer.ts`) enforc
    - `session.compacted` events
 5. **Stream invalidation**: `stream.invalidated` has no sequence or cursor. Replay exhaustion, epoch changes, and delivery overflow trigger authoritative snapshot recovery. Unexpected connection closure is reported by the Canonical Client's transport error callback; intentional teardown does not schedule recovery.
 6. **Opaque cursor ownership**: Only the Host supplies a transport cursor. The pipeline forwards `SessionSnapshot.cursor` unchanged; it never parses, reconstructs, or substitutes a pagination cursor. Local event reduction advances `headSequence` while retaining the last authoritative snapshot cursor as the recovery baseline.
-7. **Flush batching**: Rapid event streams are throttled to a 100 ms frame (`FLUSH_FRAME_MS`). The first event after an idle period flushes immediately. Accumulated events apply to the directory store in a single transaction, cloning only the touched state slices.
+7. **Flush batching**: Rapid event streams are throttled to a 33 ms frame (`FLUSH_FRAME_MS`). The first event after an idle period flushes immediately. Accumulated events apply to the directory store in a single transaction, cloning only the touched state slices.
 
 ### Stream lifecycle and disconnection rules
 

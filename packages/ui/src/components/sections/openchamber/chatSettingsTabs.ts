@@ -49,19 +49,37 @@ const SEARCH_TARGET_TABS = new Map<string, ChatSettingsTab>([
   ['chat.follow-up-behavior', 'composer'],
   ['chat.large-text-paste', 'composer'],
   ['chat.subagent-read-only-banner', 'composer'],
-  ['chat.save-pasted-images', 'composer'],
   ['chat.spellcheck', 'composer'],
   ['chat.input-history-scope', 'composer'],
   ['chat.input-history-limit', 'composer'],
   ['chat.session-assistance', 'assistance'],
   ['chat.draft-starters-visible', 'assistance'],
   ['chat.session-recap', 'assistance'],
-  ['chat.session-suggestion', 'assistance'],
+  ['chat.suggestion-generator', 'assistance'],
   ['chat.session-review-offer', 'assistance'],
-  ['chat.session-goal', 'assistance'],
   ['chat.session-goal-checker', 'assistance'],
   ['chat.session-goal-max-turns', 'assistance'],
   ['chat.session-goal-budget', 'assistance'],
 ]);
 
-export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | null => SEARCH_TARGET_TABS.get(id) ?? null;
+/** The tab each OMP chat section's rows are drawn in. */
+const OMP_SECTION_TABS: Readonly<Record<string, ChatSettingsTab>> = {
+  composer: 'composer',
+  magicKeywords: 'composer',
+  btw: 'composer',
+  display: 'messages',
+  thinking: 'messages',
+  images: 'messages',
+};
+
+export const chatSettingsTabForSearchTarget = (id: string): ChatSettingsTab | null => {
+  const tab = SEARCH_TARGET_TABS.get(id);
+  if (tab) return tab;
+  if (id.startsWith('omp.')) {
+    // An OMP row's section decides its tab: the composer keywords live in the
+    // Composer tab, the transcript rows in Messages.
+    const section = id.slice('omp.'.length).split('.')[0];
+    return OMP_SECTION_TABS[section] ?? 'messages';
+  }
+  return null;
+};

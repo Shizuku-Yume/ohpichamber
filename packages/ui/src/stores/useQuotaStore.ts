@@ -25,8 +25,10 @@ let inFlightRuntimeLoad: Promise<void> | null = null;
 // one is out gets one more read after it, since that read may predate the change.
 let inFlightExtensionLoad: Promise<void> | null = null;
 let extensionLoadAgain = false;
-const quotaRequests = new Map<QuotaProviderId, { controller: AbortController; promise: Promise<boolean> }>();
-let configuredProvidersRequest: Promise<ReadonlySet<string> | null> | null = null;
+const quotaRequests = new Map<string, { controller: AbortController; promise: Promise<boolean> }>();
+const quotaRequestKey = (workspaceId: string, providerId: QuotaProviderId) => `${workspaceId}\0${providerId}`;
+let configuredProvidersRequest: Promise<{ providers: ReadonlySet<string>; nativeToLogical: Record<string, string> } | null> | null = null;
+let configuredProvidersWorkspaceId: string | null = null;
 const quotaAutoRefreshConsumers = new Map<symbol, boolean>();
 let quotaAutoRefreshInterval: number | null = null;
 let lastVisibleRefreshAt: number | null = null;
@@ -63,7 +65,10 @@ interface QuotaStore extends QuotaSettingsState {
   phase: LoadPhase;
   /** Instance whose quotas `results` describes, or `null` when nothing is loaded. */
   loadedRuntimeKey: string | null;
-  selectedProviderId: QuotaProviderId | null;
+  /** Workspace whose quota results the loaded instance describes. */
+  loadedWorkspaceId: string | null;
+  /** Logical quota provider id by native provider id, as returned by the Host. */
+  nativeToLogical: Record<string, string>;
   isLoading: boolean;
   isFetchingProvider: Record<string, boolean>;
   lastUpdated: number | null;
@@ -79,7 +84,6 @@ interface QuotaStore extends QuotaSettingsState {
   fetchQuotas: (providerIds: QuotaProviderId[], options?: { invalidate?: boolean }) => Promise<boolean>;
   /** Resolves true when the instance answered, false on a transport failure. */
   fetchProviderQuota: (providerId: QuotaProviderId, invalidate?: boolean) => Promise<boolean>;
-  setSelectedProvider: (providerId: QuotaProviderId | null) => void;
   setDisplayMode: (mode: 'usage' | 'remaining') => void;
   /** Shows or hides one provider in the "show in Work Status" list; answers the list to save. */
   setProviderInDropdown: (providerId: QuotaProviderId, shown: boolean) => string[];
@@ -167,7 +171,6 @@ const applyExtensionProviders = (next: ExtensionQuotaProvider[]): void => {
       dropdownProviderIds: resolveDropdownProviderIds(current.savedDropdownProviderIds, quotaProviderIds(next)),
       results: gone.length > 0 ? current.results.filter((result) => !isGone(result.providerId)) : current.results,
       refreshErrors,
-      selectedProviderId: current.selectedProviderId !== null && isGone(current.selectedProviderId) ? null : current.selectedProviderId,
       isFetchingProvider: Object.fromEntries(Object.entries(current.isFetchingProvider).filter(([id]) => !isGone(id))),
       isLoading: quotaRequests.size > 0,
     };
@@ -178,9 +181,10 @@ const applyExtensionProviders = (next: ExtensionQuotaProvider[]): void => {
 };
 
 /** Overlapping loads share one list read, as they share one request per provider. */
-const readConfiguredProviders = () => {
-  if (configuredProvidersRequest) return configuredProvidersRequest;
-  const request: Promise<ReadonlySet<string> | null> = fetchConfiguredQuotaProviders().finally(() => {
+const readConfiguredProviders = (workspaceId: string) => {
+  if (configuredProvidersRequest && configuredProvidersWorkspaceId === workspaceId) return configuredProvidersRequest;
+  configuredProvidersWorkspaceId = workspaceId;
+  const request: Promise<{ providers: ReadonlySet<string>; nativeToLogical: Record<string, string> } | null> = fetchConfiguredQuotaProviders({ workspaceId }).finally(() => {
     if (configuredProvidersRequest === request) configuredProvidersRequest = null;
   });
   configuredProvidersRequest = request;
@@ -218,7 +222,8 @@ export const useQuotaStore = create<QuotaStore>()(
       extensionProviders: [],
       phase: 'unknown',
       loadedRuntimeKey: null,
-      selectedProviderId: null,
+      loadedWorkspaceId: null,
+      nativeToLogical: {},
       isLoading: false,
       isFetchingProvider: {},
       lastUpdated: null,
@@ -268,11 +273,19 @@ export const useQuotaStore = create<QuotaStore>()(
       fetchQuotas: async (providerIds, { invalidate = false } = {}) => {
         const generation = quotaGeneration;
         try {
-          // One read instead of a request per provider nobody has a credential
-          // for. An account switch names providers it knows are configured.
+          const workspaceId = useConfigStore.getState().workspaceId;
+          if (!workspaceId) return false;
           if (!invalidate) set({ isLoading: true });
-          const configured = invalidate ? null : await readConfiguredProviders();
+          const listResult = invalidate ? null : await readConfiguredProviders(workspaceId);
           if (generation !== quotaGeneration) return false;
+          if (!invalidate && !listResult) {
+            set({ phase: 'error', error: 'Quota provider catalog unavailable', isLoading: false });
+            return false;
+          }
+          if (listResult) {
+            set({ nativeToLogical: listResult.nativeToLogical });
+          }
+          const configured = listResult?.providers ?? null;
           const absent = configured ? providerIds.filter((providerId) => !configured.has(providerId)) : [];
           const targets = providerIds.filter((providerId) => !absent.includes(providerId));
           if (absent.length > 0) recordNotConfigured(set, absent);
@@ -283,7 +296,7 @@ export const useQuotaStore = create<QuotaStore>()(
         } catch (error) {
           if (generation !== quotaGeneration) return false;
           const message = error instanceof Error ? error.message : 'Failed to fetch quotas';
-          set({ error: message });
+          set({ error: message, isLoading: false, phase: 'error' });
           return false;
         }
       },
@@ -293,20 +306,20 @@ export const useQuotaStore = create<QuotaStore>()(
       },
 
       fetchProviderQuota: async (providerId, invalidate = false) => {
-        // Concurrent callers share one request per provider. `invalidate` is how
-        // a provider-account switch says the shared request, and any sample it
-        // produces, describe the account being switched away from.
-        const existing = quotaRequests.get(providerId);
+        const workspaceId = useConfigStore.getState().workspaceId;
+        if (!workspaceId) return false;
+        const requestKey = quotaRequestKey(workspaceId, providerId);
+        const existing = quotaRequests.get(requestKey);
         if (existing && !invalidate) return existing.promise;
         if (existing) {
           existing.controller.abort();
-          quotaRequests.delete(providerId);
+          quotaRequests.delete(requestKey);
         }
         const generation = quotaGeneration;
         const controller = new AbortController();
         const promise = Promise.resolve().then(async () => {
           try {
-            const result = await fetchQuota(providerId, { signal: controller.signal });
+            const result = await fetchQuota(providerId, { signal: controller.signal, workspaceId });
             if (generation !== quotaGeneration) return false;
             // A reachable instance can still report that its provider request
             // failed. Configuration is known, but there is no new usage sample.
@@ -344,18 +357,16 @@ export const useQuotaStore = create<QuotaStore>()(
             set(state => ({ refreshErrors: { ...state.refreshErrors, [providerId]: message }, error: message }));
             return false;
           } finally {
-            if (quotaRequests.get(providerId)?.controller === controller) quotaRequests.delete(providerId);
+            if (quotaRequests.get(requestKey)?.controller === controller) quotaRequests.delete(requestKey);
             if (generation === quotaGeneration) {
-              // A superseded request finishes while its replacement still runs;
-              // the provider stays fetching until the replacement settles too.
               set((state) => ({
-                isFetchingProvider: { ...state.isFetchingProvider, [providerId]: quotaRequests.has(providerId) },
+                isFetchingProvider: { ...state.isFetchingProvider, [providerId]: quotaRequests.has(requestKey) },
                 isLoading: quotaRequests.size > 0,
               }));
             }
           }
         });
-        quotaRequests.set(providerId, { controller, promise });
+        quotaRequests.set(requestKey, { controller, promise });
         set(state => ({ isLoading: true, isFetchingProvider: { ...state.isFetchingProvider, [providerId]: true } }));
         return promise;
       },
@@ -366,9 +377,10 @@ export const useQuotaStore = create<QuotaStore>()(
         // Wait for the instance to report itself initialised. Asking earlier
         // gets an honest-looking "not configured" for every provider, which is
         // then cached as if it were the answer.
-        if (!useConfigStore.getState().isInitialized) return;
+        const config = useConfigStore.getState();
+        if (!config.isInitialized || !config.workspaceId) return;
         if (visibleOnly && !hasVisibleQuotaReadout()) return;
-        if (!refresh && get().loadedRuntimeKey === runtimeKey) return;
+        if (!refresh && get().loadedRuntimeKey === runtimeKey && get().loadedWorkspaceId === config.workspaceId) return;
         const generation = quotaGeneration;
         let missingProvidersOnly = false;
         if (inFlightRuntimeLoad) {
@@ -400,7 +412,7 @@ export const useQuotaStore = create<QuotaStore>()(
             // an answer, not a read that never happened: leaving the phase
             // `unknown` would say "usage has not loaded" forever.
             if (generation !== quotaGeneration) return;
-            set({ loadedRuntimeKey: runtimeKey, phase: 'ready' });
+            set({ loadedRuntimeKey: runtimeKey, loadedWorkspaceId: config.workspaceId, phase: 'ready' });
             return;
           }
           const answered = await fetchQuotas(providerIds);
@@ -411,7 +423,7 @@ export const useQuotaStore = create<QuotaStore>()(
           if (generation !== quotaGeneration) return;
           // Answered is ready; a read that reached no provider is an error, not
           // a silent "never loaded", so a consumer can stop waiting on it.
-          if (answered) set({ loadedRuntimeKey: runtimeKey, phase: 'ready' });
+          if (answered) set({ loadedRuntimeKey: runtimeKey, loadedWorkspaceId: config.workspaceId, phase: 'ready' });
           else if (get().phase === 'unknown') set({ phase: 'error' });
         })().finally(() => { if (generation === quotaGeneration) inFlightRuntimeLoad = null; });
 
@@ -421,6 +433,7 @@ export const useQuotaStore = create<QuotaStore>()(
       resetForRuntimeSwitch: () => {
         quotaGeneration += 1;
         configuredProvidersRequest = null;
+        configuredProvidersWorkspaceId = null;
         for (const request of quotaRequests.values()) request.controller.abort();
         quotaRequests.clear();
         inFlightRuntimeLoad = null;
@@ -439,7 +452,8 @@ export const useQuotaStore = create<QuotaStore>()(
           extensionProviders: [],
           results: [],
           loadedRuntimeKey: null,
-          selectedProviderId: null,
+          loadedWorkspaceId: null,
+          nativeToLogical: {},
           isLoading: false,
           isFetchingProvider: {},
           lastUpdated: null,
@@ -452,6 +466,7 @@ export const useQuotaStore = create<QuotaStore>()(
         // Samples describe the account just left, even when no readout is open.
         quotaGeneration += 1;
         configuredProvidersRequest = null;
+        configuredProvidersWorkspaceId = null;
         for (const request of quotaRequests.values()) request.controller.abort();
         quotaRequests.clear();
         inFlightRuntimeLoad = null;
@@ -459,12 +474,11 @@ export const useQuotaStore = create<QuotaStore>()(
         extensionLoadAgain = false;
         lastVisibleRefreshAt = null;
         lastVisibleRefreshIncludedAll = false;
-        set({ results: [], phase: 'unknown', loadedRuntimeKey: null, isLoading: false, isFetchingProvider: {}, lastUpdated: null, refreshErrors: {}, error: null });
+        set({ results: [], phase: 'unknown', loadedRuntimeKey: null, loadedWorkspaceId: null, nativeToLogical: {}, isLoading: false, isFetchingProvider: {}, lastUpdated: null, refreshErrors: {}, error: null });
         if (!hasVisibleQuotaReadout()) return;
         await get().ensureLoadedForRuntime({ refresh: true, allProviders: [...quotaAutoRefreshConsumers.values()].some(Boolean), visibleOnly: true });
       },
 
-      setSelectedProvider: (providerId) => set({ selectedProviderId: providerId }),
       setDisplayMode: (mode) => set({ displayMode: mode }),
       setProviderInDropdown: (providerId, shown) => {
         const { savedDropdownProviderIds, dropdownProviderIds, extensionProviders } = get();
@@ -637,3 +651,17 @@ export const useQuotaProviders = (): QuotaProviderMeta[] => {
   const extensionProviders = useQuotaStore((state) => state.extensionProviders);
   return React.useMemo(() => quotaProviderList(extensionProviders), [extensionProviders]);
 };
+
+// Quota results are workspace-scoped. Track readiness as one scope: a catalog
+// that is still initializing, or a directory switch whose catalog has not
+// re-resolved yet, has no usable workspace. Any change — including
+// ready→empty during a switch — aborts in-flight requests and clears results,
+// then loads once the new workspace is published.
+let observedQuotaScope = '';
+useConfigStore.subscribe((state) => {
+  const nextScope = state.isInitialized ? state.workspaceId : '';
+  if (nextScope === observedQuotaScope) return;
+  observedQuotaScope = nextScope;
+  useQuotaStore.getState().resetForRuntimeSwitch();
+  if (nextScope) void useQuotaStore.getState().ensureLoadedForRuntime();
+});

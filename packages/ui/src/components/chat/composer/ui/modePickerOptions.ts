@@ -30,12 +30,12 @@ export const MODE_DESCRIPTION_KEYS = {
 /** Builds the localized rows, hiding Goal when the feature is off and disabling Plan without a role. */
 export function buildModeOptions(input: {
     planRoleAvailable: boolean | undefined;
-    sessionGoalEnabled: boolean;
+    goalModeEnabled: boolean;
     selectedKind: ComposerModeValue;
     translate: (key: I18nKey) => string;
 }): ModeOption[] {
     return MODE_ORDER
-        .filter((value) => value !== 'goal' || input.sessionGoalEnabled || input.selectedKind === 'goal')
+        .filter((value) => value !== 'goal' || input.goalModeEnabled || input.selectedKind === 'goal')
         .map((value) => ({
             value,
             label: input.translate(MODE_LABEL_KEYS[value]),

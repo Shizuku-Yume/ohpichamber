@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getCurrentIntlLocale, useI18n } from '@/lib/i18n';
 import type { I18nKey } from '@/lib/i18n';
-import type { UsageModel, UsageStats } from '@openchamber/agent-contract';
+import type { UsageModel, UsageProvider, UsageStats } from '@openchamber/agent-contract';
 import { formatDateTimeForPreference, formatTimeForPreference } from '@/lib/timeFormat';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -69,7 +69,8 @@ const RANGE_LABEL_KEYS = {
  * its own, except Today once the local day changes. See `usageStatsStore.ts`.
  */
 function useUsageStats(range: UsageRange, projectDirectory: string | null) {
-  const request = React.useMemo(() => ({ range, projectDirectory }), [range, projectDirectory]);
+  const selectedProvider = useUsageStatsStore((store) => store.selectedProvider);
+  const request = React.useMemo(() => ({ range, projectDirectory, providerId: selectedProvider ?? undefined }), [range, projectDirectory, selectedProvider]);
   const entry = useUsageStatsStore((store) => selectUsageStatsEntry(store, request));
   const load = useUsageStatsStore((store) => store.load);
 
@@ -261,8 +262,38 @@ function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; rang
   // A one-day report makes the daily chart a single bar and leaves active days
   // and the streak at 0 or 1, so today shows the totals without them.
   const today = range === '1d';
+
+  const isScopeFullyUnpriced = React.useMemo(() => {
+    if (stats.models.length === 0) {
+      return stats.cost === 0 && stats.steps > 0;
+    }
+    return stats.models.every((m) => m.pricing === null);
+  }, [stats.models, stats.cost, stats.steps]);
+
+  const isScopeMixedPricing = React.useMemo(() => {
+    if (stats.models.length === 0) return false;
+    const hasPriced = stats.models.some((m) => m.pricing !== null);
+    const hasUnpriced = stats.models.some((m) => m.pricing === null);
+    return hasPriced && hasUnpriced;
+  }, [stats.models]);
+
+  const costValue = isScopeFullyUnpriced ? '—' : formats.cost.format(stats.cost);
+  const costHint = isScopeMixedPricing ? t('usageStats.costPartialHint') : undefined;
+
+  const baseBreakdown = t('usageStats.metric.tokensBreakdown', {
+    input: formats.compact.format(stats.tokens.input),
+    output: formats.compact.format(stats.tokens.output),
+    cache: formats.compact.format(cache),
+  });
+  const tokensHint = stats.tokens.reasoning && stats.tokens.reasoning > 0
+    ? `${baseBreakdown} · ${t('usageStats.tokens.reasoning')} ${formats.compact.format(stats.tokens.reasoning)}`
+    : baseBreakdown;
+
   return (
     <>
+      {stats.providers && stats.providers.length > 1 ? (
+        <ProviderComparison providers={stats.providers} formats={formats} />
+      ) : null}
       <div className={cn('grid grid-cols-2 gap-2', today ? 'sm:grid-cols-2' : 'sm:grid-cols-3')}>
         <StatTile
           label={t('usageStats.metric.sessions')}
@@ -273,13 +304,9 @@ function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; rang
         <StatTile
           label={t('usageStats.metric.tokens')}
           value={formats.compact.format(stats.tokens.total)}
-          hint={t('usageStats.metric.tokensBreakdown', {
-            input: formats.compact.format(stats.tokens.input),
-            output: formats.compact.format(stats.tokens.output + (stats.tokens.reasoning ?? 0)),
-            cache: formats.compact.format(cache),
-          })}
+          hint={tokensHint}
         />
-        <StatTile label={t('usageStats.metric.cost')} value={formats.cost.format(stats.cost)} />
+        <StatTile label={t('usageStats.metric.cost')} value={costValue} hint={costHint} />
         {today ? null : (
           <>
             <StatTile label={t('usageStats.metric.activeDays')} value={formats.integer.format(stats.activeDays)} />
@@ -292,7 +319,7 @@ function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; rang
 
       <TokenComposition stats={stats} formats={formats} />
 
-      <EfficiencyTiles stats={stats} formats={formats} />
+      <EfficiencyTiles stats={stats} formats={formats} isFullyUnpriced={isScopeFullyUnpriced} />
 
       <ModelUsage models={stats.models} formats={formats} />
 
@@ -306,7 +333,7 @@ function StatTile({ label, value, hint }: { label: string; value: string; hint?:
     <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-edge bg-[var(--surface-elevated)] px-3 py-2.5">
       <span className="truncate typography-micro text-muted-foreground">{label}</span>
       <span className="truncate text-xl font-semibold tabular-nums text-foreground">{value}</span>
-      {hint ? <span className="truncate typography-micro text-muted-foreground" title={hint}>{hint}</span> : null}
+      {hint ? <span className="typography-micro text-muted-foreground whitespace-normal break-words" title={hint}>{hint}</span> : null}
     </div>
   );
 }
@@ -443,12 +470,12 @@ function TokenComposition({ stats, formats }: { stats: UsageStats; formats: Form
               />
             ))}
         </div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-4">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
           {segments.map((segment) => (
-            <div key={segment.key} className="flex min-w-0 items-center gap-1.5">
+            <div key={segment.key} className="flex items-center gap-1.5 whitespace-nowrap">
               <span className={cn('size-2 shrink-0 rounded-full', TOKEN_SEGMENT_CLASSES[segment.key])} aria-hidden="true" />
-              <span className="min-w-0 truncate typography-micro text-muted-foreground">{t(TOKEN_SEGMENT_LABEL_KEYS[segment.key])}</span>
-              <span className="ms-auto shrink-0 typography-micro tabular-nums text-foreground">
+              <span className="typography-micro text-muted-foreground whitespace-nowrap">{t(TOKEN_SEGMENT_LABEL_KEYS[segment.key])}</span>
+              <span className="ms-1.5 shrink-0 typography-micro tabular-nums text-foreground whitespace-nowrap">
                 {t('usageStats.tokens.legendValue', {
                   value: formats.compact.format(segment.value),
                   share: formats.percent.format(segment.value / stats.tokens.total),
@@ -462,9 +489,10 @@ function TokenComposition({ stats, formats }: { stats: UsageStats; formats: Form
   );
 }
 
-/** Averages that need the whole report: cache reuse, cost of a session, and
- * how much of the output the model spent reasoning. */
-function EfficiencyTiles({ stats, formats }: { stats: UsageStats; formats: Formats }): React.ReactNode {
+/** Averages that need the whole report: cache reuse, cost of a session, how
+ * much of the output the model spent reasoning, and the report's latency,
+ * speed and error rate. Rendered for every report, not only comparisons. */
+function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStats; formats: Formats; isFullyUnpriced?: boolean }): React.ReactNode {
   const { t } = useI18n();
   const hitRate = cacheHitRate(stats.tokens);
   const costPerSession = averagePer(stats.cost, stats.sessions);
@@ -472,17 +500,20 @@ function EfficiencyTiles({ stats, formats }: { stats: UsageStats; formats: Forma
   const tokensPerSession = averagePer(stats.tokens.total, stats.sessions);
   const stepsPerSession = averagePer(stats.steps, stats.sessions);
   const reasoning = reasoningShare(stats.tokens);
+  const ttft = stats.avgTtft ?? null;
+  const tokensPerSecond = stats.avgTokensPerSecond ?? null;
+  const errorRate = stats.errorRate ?? null;
   return (
     <Section title={t('usageStats.efficiency.title')}>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <StatTile label={t('usageStats.efficiency.cacheHitRate')} value={hitRate === null ? '—' : formats.percent.format(hitRate)} />
         <StatTile
           label={t('usageStats.efficiency.costPerSession')}
-          value={costPerSession === null ? '—' : formats.cost.format(costPerSession)}
+          value={isFullyUnpriced || costPerSession === null ? '—' : formats.cost.format(costPerSession)}
         />
         <StatTile
           label={t('usageStats.efficiency.costPerMillion')}
-          value={perMillion === null ? '—' : formats.cost.format(perMillion)}
+          value={isFullyUnpriced || perMillion === null ? '—' : formats.cost.format(perMillion)}
         />
         <StatTile
           label={t('usageStats.efficiency.tokensPerSession')}
@@ -493,6 +524,12 @@ function EfficiencyTiles({ stats, formats }: { stats: UsageStats; formats: Forma
           value={stepsPerSession === null ? '—' : formats.decimal.format(stepsPerSession)}
         />
         <StatTile label={t('usageStats.efficiency.reasoningShare')} value={reasoning === null ? '—' : formats.percent.format(reasoning)} />
+        <StatTile label={t('usageStats.providers.table.ttft')} value={ttft === null ? '—' : formats.milliseconds.format(Math.round(ttft))} />
+        <StatTile
+          label={t('usageStats.providers.table.tps')}
+          value={tokensPerSecond === null ? '—' : `${formats.decimal.format(tokensPerSecond)} tok/s`}
+        />
+        <StatTile label={t('usageStats.providers.table.errorRate')} value={errorRate === null ? '—' : formats.percent.format(errorRate)} />
       </div>
     </Section>
   );
@@ -639,6 +676,7 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
             const providerName = provider?.name || model.providerId;
             const name = provider?.models.find((entry) => entry.modelId === model.modelId)?.name || model.modelId;
             const share = max > 0 ? (valueOf(model) / max) * 100 : 0;
+            const costLabel = model.pricing === null ? '—' : formats.cost.format(model.cost);
             return (
               <li key={`${formatModelRef(model)}#${model.variant ?? ''}`} className="flex min-w-0 flex-col gap-1">
                 <div className="flex min-w-0 items-center gap-2">
@@ -651,8 +689,8 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
                   </span>
                   <span className="shrink-0 typography-micro tabular-nums text-muted-foreground">
                     {dimension === 'steps'
-                      ? `${formats.integer.format(model.steps)} · ${formats.cost.format(model.cost)}`
-                      : `${formats.compact.format(model.tokens.total)} · ${formats.cost.format(model.cost)}`}
+                      ? `${formats.integer.format(model.steps)} · ${costLabel}`
+                      : `${formats.compact.format(model.tokens.total)} · ${costLabel}`}
                   </span>
                 </div>
                 {/* Track width is the leader's value in the compared dimension. Tokens
@@ -679,6 +717,127 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
           })}
         </ul>
       )}
+    </Section>
+  );
+}
+
+type ProviderDimension = 'tokens' | 'cost' | 'steps' | 'ttft' | 'tps' | 'errorRate';
+const PROVIDER_DIMENSIONS: readonly ProviderDimension[] = ['tokens', 'cost', 'steps', 'ttft', 'tps', 'errorRate'];
+const PROVIDER_DIMENSION_LABEL_KEYS: Record<ProviderDimension, I18nKey> = {
+  tokens: 'usageStats.providers.byTokens',
+  cost: 'usageStats.providers.byCost',
+  steps: 'usageStats.providers.bySteps',
+  ttft: 'usageStats.providers.byTtft',
+  tps: 'usageStats.providers.byTps',
+  errorRate: 'usageStats.providers.byErrorRate',
+};
+
+function ProviderComparison({ providers, formats }: { providers: UsageProvider[]; formats: Formats }): React.ReactNode {
+  const { t } = useI18n();
+  const configuredProviders = useConfigStore((state) => state.providers);
+  const setSelectedProvider = useUsageStatsStore((state) => state.setSelectedProvider);
+  const [dimension, setDimension] = React.useState<ProviderDimension>('tokens');
+
+  const valueOf = React.useCallback((p: UsageProvider): number => {
+    switch (dimension) {
+      case 'tokens': return p.tokens.total;
+      case 'cost': return p.cost;
+      case 'steps': return p.steps;
+      case 'ttft': return p.avgTtft ?? 0;
+      case 'tps': return p.avgTokensPerSecond ?? 0;
+      case 'errorRate': return p.errorRate;
+    }
+  }, [dimension]);
+
+  const ranked = React.useMemo(() => [...providers].sort((a, b) => valueOf(b) - valueOf(a)), [providers, valueOf]);
+  const max = ranked.reduce((peak, p) => Math.max(peak, valueOf(p)), 0);
+
+  return (
+    <Section
+      title={t('usageStats.providers.title')}
+      actions={
+        providers.length > 0 ? (
+          <SettingsChipGroup
+            value={dimension}
+            onChange={setDimension}
+            aria-label={t('usageStats.providers.compareBy')}
+            options={PROVIDER_DIMENSIONS.map((option) => ({ value: option, label: t(PROVIDER_DIMENSION_LABEL_KEYS[option]) }))}
+          />
+        ) : undefined
+      }
+    >
+      {/* Ranked comparison bars */}
+      <ul className="flex flex-col gap-2.5 rounded-lg border border-edge bg-[var(--surface-elevated)] px-3 py-3">
+        {ranked.map((p) => {
+          const cfg = configuredProviders.find((entry) => entry.providerId === p.providerId);
+          const name = cfg?.name || p.providerId;
+          const share = max > 0 ? (valueOf(p) / max) * 100 : 0;
+          const costLabel = p.pricing === null ? '—' : formats.cost.format(p.cost);
+          return (
+            <li key={p.providerId} className="flex min-w-0 flex-col gap-1 cursor-pointer group" onClick={() => setSelectedProvider(p.providerId)}>
+              <div className="flex min-w-0 items-center gap-2">
+                <ProviderLogo providerId={p.providerId} alt={name} className="size-4 shrink-0" />
+                <span className="truncate typography-ui-label font-medium text-foreground group-hover:text-primary transition-colors">{name}</span>
+                <span className="ms-auto shrink-0 typography-micro tabular-nums text-muted-foreground">
+                  {dimension === 'tokens' && `${formats.compact.format(p.tokens.total)} · ${costLabel}`}
+                  {dimension === 'cost' && costLabel}
+                  {dimension === 'steps' && `${formats.integer.format(p.steps)} ${t('usageStats.models.bySteps')}`}
+                  {dimension === 'ttft' && (p.avgTtft !== null ? `${Math.round(p.avgTtft)} ms` : '—')}
+                  {dimension === 'tps' && (p.avgTokensPerSecond !== null ? `${formats.decimal.format(p.avgTokensPerSecond)} tok/s` : '—')}
+                  {dimension === 'errorRate' && formats.percent.format(p.errorRate)}
+                </span>
+              </div>
+              <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-edge" aria-hidden="true">
+                <div className="h-full bg-primary" style={{ width: `${Math.max(2, share)}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* Comparison table */}
+      <div className="overflow-x-auto rounded-lg border border-edge bg-[var(--surface-elevated)]">
+        <table className="w-full text-start typography-micro">
+          <thead>
+            <tr className="border-b border-edge text-muted-foreground">
+              <th className="px-3 py-2 text-start font-medium">{t('usageStats.providers.table.provider')}</th>
+              <th className="px-3 py-2 text-end font-medium">{t('usageStats.providers.table.tokens')}</th>
+              <th className="px-3 py-2 text-end font-medium">{t('usageStats.providers.table.cost')}</th>
+              <th className="px-3 py-2 text-end font-medium">{t('usageStats.providers.table.ttft')}</th>
+              <th className="px-3 py-2 text-end font-medium">{t('usageStats.providers.table.tps')}</th>
+              <th className="px-3 py-2 text-end font-medium">{t('usageStats.providers.table.errorRate')}</th>
+              <th className="px-3 py-2 text-end font-medium">{t('usageStats.providers.table.requests')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-edge">
+            {providers.map((p) => {
+              const cfg = configuredProviders.find((entry) => entry.providerId === p.providerId);
+              const name = cfg?.name || p.providerId;
+              const costLabel = p.pricing === null ? '—' : formats.cost.format(p.cost);
+              return (
+                <tr
+                  key={p.providerId}
+                  className="hover:bg-interactive-hover/40 cursor-pointer transition-colors"
+                  onClick={() => setSelectedProvider(p.providerId)}
+                >
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <ProviderLogo providerId={p.providerId} alt={name} className="size-4 shrink-0" />
+                      <span className="font-medium text-foreground">{name}</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-end tabular-nums text-foreground">{formats.compact.format(p.tokens.total)}</td>
+                  <td className="px-3 py-2 text-end tabular-nums text-foreground">{costLabel}</td>
+                  <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{p.avgTtft !== null ? `${Math.round(p.avgTtft)} ms` : '—'}</td>
+                  <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{p.avgTokensPerSecond !== null ? `${formats.decimal.format(p.avgTokensPerSecond)}` : '—'}</td>
+                  <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{formats.percent.format(p.errorRate)}</td>
+                  <td className="px-3 py-2 text-end tabular-nums text-muted-foreground">{formats.integer.format(p.steps)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </Section>
   );
 }

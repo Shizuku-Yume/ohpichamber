@@ -8,6 +8,14 @@ export { normalizeIntent, intentOf } from './intent';
 export type { ToolGroup, ToolPresentation, ToolOutputLanguage } from './types';
 export { KNOWN_TOOL_NAMES } from './presentations';
 export type { KnownToolName } from './presentations';
+export {
+    categorizeTool,
+    TOOL_PERMISSION_GROUPS,
+    GROUP_DESCRIPTIONS,
+    getToolOneLineDescription,
+} from './groups';
+export { useEvalView, splitEvalOutput, evalResultSummary, normalizeEvalLanguage, isToolCallStatusEvent } from './toolView';
+export type { EvalLanguage, EvalTableColumn, EvalView, EvalViewEntry, EvalStatusEvent, EvalCellView, EvalViewData, EvalOutputPart } from './toolView';
 
 /** A runtime row's name may carry a stream index and a `runtime.` prefix. */
 export const toolBaseName = (toolName: string | undefined): string => {
@@ -71,6 +79,18 @@ export const isWebSearchTool = (toolName: string | undefined): boolean => toolBa
 /** The plan tool every todo snapshot comes from. */
 export const isTodoTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'todo';
 
+/** Tools that manage long-term agent memory. */
+export const isMemoryTool = (toolName: string | undefined): boolean => {
+    const name = toolBaseName(toolName);
+    return name === 'retain' || name === 'recall' || name === 'reflect' || name === 'memory_edit' || name === 'learn';
+};
+
+export const isRetainTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'retain';
+export const isRecallTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'recall';
+export const isReflectTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'reflect';
+export const isLearnTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'learn';
+/** Text-to-image generation and editing tool. */
+export const isImageGenerationTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'generate_image';
 /** Rows with a direct in-app destination: reads and skills. */
 export const isStaticTool = (toolName: string | undefined): boolean => {
     const name = toolBaseName(toolName);
@@ -120,8 +140,11 @@ export const isFileChangeTool = (toolName: string | undefined): boolean => {
 /** A tool that runs a command or program. */
 export const isShellTool = (toolName: string | undefined): boolean => {
     const name = toolBaseName(toolName);
-    return name === 'bash' || name === 'eval';
+    return name === 'bash';
 };
+
+/** A tool that evaluates code interactively. */
+export const isEvalTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'eval';
 
 /** A tool whose result is reading or searching the workspace. */
 export const isExplorationTool = (toolName: string | undefined): boolean => toolGrouping(toolName) === 'read' || toolGrouping(toolName) === 'search';

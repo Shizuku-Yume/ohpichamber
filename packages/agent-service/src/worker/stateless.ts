@@ -1,7 +1,17 @@
 import { dirname, join } from 'node:path';
 import { NativeProviderOAuth } from './provider-oauth.ts';
-import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, type MCPConfigurationState } from '@openchamber/agent-contract';
+import { CounterSchema, PositiveCounterSchema, JsonObjectSchema, MCPOAuthPublicConfigurationSchema, MCPConfigurationStateSchema, type MCPConfigurationState, type ToolCatalogEntry } from '@openchamber/agent-contract';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
+import {
+  BUILTIN_TOOLS, HIDDEN_TOOLS,
+  IdaTool, MemoryEditTool, MemoryRetainTool, MemoryRecallTool, MemoryReflectTool,
+  LearnTool, ManageSkillTool, ContextNotesTool, NewContextTool, AskTool,
+  resolveBuiltinToolPlan,
+  type ToolSession,
+} from '@oh-my-pi/pi-coding-agent/tools';
+import { resolveToolTier } from '@oh-my-pi/pi-coding-agent/tools/approval';
+type ToolMetadataSubject = Parameters<typeof resolveToolTier>[0] & { label?: string; description?: string };
+import { HOST_TOOL_NAMES, HOST_TOOL_DESCRIPTIONS, normalizeHostToolEnablement } from './host-tool.ts';
 import { CatalogOperationSchema, CatalogResultSchema, type CatalogOperation, type CatalogResult } from '../catalogs/protocol.ts';
 import type { CompletionWorkerBootstrap, WorkerOperation, WorkerOperationResult } from '../protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
@@ -60,12 +70,22 @@ export class StatelessWorker {
       get skillOptions() { return nativeSkillOptions(runtime.settings); }
     });
     this.mcp = input.mcpConfigPath ? new WorkerMcp({
-      cwd: input.cwd, configPath: input.mcpConfigPath, authStorage: runtime.authStorage,
+      cwd: input.cwd, configPath: input.mcpConfigPath,
+      userConfigPath: join(input.agentDirectory, 'mcp.json'),
+      authStorage: runtime.authStorage,
       worker: { rootSessionId: input.authorizationRootId, workspaceId: input.workspaceId, workerGeneration: input.workerGeneration },
       resolveCredentialRef: reference => this.mcpCredentials.resolve(reference),
       resolveCommand: async transport => transport.command,
-      authorizeServer: (server, proposed) => authorize({ type: 'mcp-server', server, ...(proposed ? { proposed: true } : {}) }),
-      authorizeOAuth: (server, configuration) => authorize({ type: 'mcp-oauth', server, configuration: JsonObjectSchema.parse(Object.fromEntries(Object.entries(MCPOAuthPublicConfigurationSchema.parse(configuration)).filter(([, value]) => value !== undefined))) }),
+      authorizeServer: (server, proposed) => authorize(
+        proposed
+          ? { type: 'mcp-server', server, proposed: true }
+          : { type: 'mcp-server', server }
+      ),
+      authorizeOAuth: (server, configuration) => authorize({
+        type: 'mcp-oauth',
+        server,
+        configuration: JsonObjectSchema.parse(Object.fromEntries(Object.entries(MCPOAuthPublicConfigurationSchema.parse(configuration)).filter(([, value]) => value !== undefined))),
+      }),
       sanitizeTool: tool => tool,
       onCatalog: () => { },
       onRuntimeFailure: error => { process.stderr.write(`${JSON.stringify({ type: 'mcp.runtime.failure', error })}\n`); },
@@ -75,7 +95,6 @@ export class StatelessWorker {
       cwd: input.cwd, agentDirectory: input.agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
       availableToolNames: () => BUILTIN_TOOL_NAMES,
-      permissionPreset: (presetId, proposed) => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId, ...(proposed ? { proposed: true } : {}) }),
     });
     this.completion = new WorkerCompletion(runtime.modelRegistry, input.workspaceId, async (selection, controls) => {
       const resolved = await models.selection(selection, controls);
@@ -110,6 +129,79 @@ export class StatelessWorker {
     if (this.closed) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Workspace worker is closed');
     if (operation.type === 'web-search') return { type: 'web-search', result: await this.webSearch.operation(operation.operation) };
     if (this.webSearch.requiresRestart) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings require a fresh workspace worker');
+    if (operation.type === 'tools.catalog') {
+      const sessionContext: ToolSession = {
+        cwd: this.input.cwd,
+        settings: this.runtime.settings,
+        hasUI: true,
+        enableLsp: true,
+        taskDepth: 0,
+        getSessionFile: () => null,
+        getSessionSpawns: () => null,
+      };
+
+      const plan = await resolveBuiltinToolPlan(sessionContext);
+
+      const allTools = { ...BUILTIN_TOOLS, ...HIDDEN_TOOLS };
+      const tools: ToolCatalogEntry[] = [];
+
+      for (const name of BUILTIN_TOOL_NAMES) {
+        let tool: ToolMetadataSubject | null = null;
+        try {
+          if (Object.hasOwn(allTools, name)) {
+            // SAFETY: Object.hasOwn ensures name is a valid key of allTools
+            const factory = allTools[name as keyof typeof allTools];
+            tool = await factory(sessionContext);
+          }
+        } catch {
+          // direct fallback
+        }
+        if (!tool) {
+          try {
+            switch (name) {
+              case 'ida': tool = new IdaTool(sessionContext); break;
+              case 'memory_edit': tool = new MemoryEditTool(sessionContext); break;
+              case 'retain': tool = new MemoryRetainTool(sessionContext); break;
+              case 'recall': tool = new MemoryRecallTool(sessionContext); break;
+              case 'reflect': tool = new MemoryReflectTool(sessionContext); break;
+              case 'learn': tool = new LearnTool(sessionContext); break;
+              case 'manage_skill': tool = new ManageSkillTool(() => Promise.resolve()); break;
+              case 'context_notes': tool = new ContextNotesTool(sessionContext); break;
+              case 'new_context': tool = new NewContextTool(sessionContext); break;
+              case 'ask': tool = new AskTool(sessionContext); break;
+            }
+          } catch {
+            // direct instantiation fallback
+          }
+        }
+        const tier = tool ? resolveToolTier(tool, {}) : 'exec';
+        const label = tool?.label || name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' ');
+        const description = tool?.description || '';
+        tools.push({
+          name,
+          label,
+          description,
+          tier,
+          availability: plan.names.includes(name),
+        });
+      }
+
+      // Add Host tools
+      const hostToolsEnablement = normalizeHostToolEnablement(this.input.hostTools);
+      for (const name of HOST_TOOL_NAMES) {
+        tools.push({
+          name,
+          label: name.charAt(0).toUpperCase() + name.slice(1).replace(/_/g, ' '),
+          description: HOST_TOOL_DESCRIPTIONS[name] ?? '',
+          tier: 'exec',
+          availability: hostToolsEnablement[name] ?? false,
+        });
+      }
+
+      // MCP tools are appended by the workspace route from the workspace MCP
+      // owner: this process connects no server, so it cannot name them.
+      return { type: 'tools.catalog', catalog: { workspaceId: this.input.workspaceId, tools } };
+    }
     if (operation.type === 'mcp.configuration.read') return { type: 'mcp.configuration', configuration: await this.readConfiguration() };
     if (operation.type === 'catalog') return { type: 'catalog', result: await this.catalog(operation.operation, operation.revision) };
     if (operation.type === 'mcp' && operation.operation.type === 'persist') {
@@ -130,15 +222,17 @@ export class StatelessWorker {
           : [...Object.values(server.transport.headerCredentialRefs ?? {}), ...(server.transport.credentialRef ? [server.transport.credentialRef] : [])];
         for (const reference of references) await this.mcpCredentials.resolve(reference);
       }
-      return { type: 'mcp', result: { type: 'persisted', configuration: await writeNativeMcpConfiguration(path, configuration) } };
+      return { type: 'mcp', result: { type: 'persisted', configuration: await writeNativeMcpConfiguration(path, configuration, join(this.input.agentDirectory, 'mcp.json')) } };
     }
     if (operation.type === 'mcp') {
       if (!this.mcp) throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP storage ownership is unavailable.', true);
       const request = operation.operation;
+      const expected = MCPConfigurationStateSchema.parse(request.configuration);
       const configuration = await this.readConfiguration();
-      if (!configuration || JSON.stringify(configuration) !== JSON.stringify(request.configuration)) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
+      if (!configuration || JSON.stringify(configuration) !== JSON.stringify(expected)) throw new NativeMcpError('CATALOG_CONFLICT', 'MCP configuration revision changed.', false);
       switch (request.type) {
         case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, configuration) } };
+        case 'discover': return { type: 'mcp', result: { type: 'discovered', result: await this.mcp.discover(configuration) } };
         case 'oauth.status': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthRead(request.serverId, configuration) } };
         case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, configuration) } };
         case 'secret.write': {
@@ -163,7 +257,7 @@ export class StatelessWorker {
   private async readConfiguration(): Promise<MCPConfigurationState | null> {
     const path = this.input.mcpConfigPath;
     if (!path) throw new NativeMcpError('MCP_CONFIG_READ_FAILED', 'MCP storage ownership is unavailable.', true);
-    return readNativeMcpConfigurationIfPresent(path, this.input.workspaceId);
+    return readNativeMcpConfigurationIfPresent(path, this.input.workspaceId, join(this.input.agentDirectory, 'mcp.json'));
   }
 
   private async catalog(input: CatalogOperation, revision: string): Promise<CatalogResult> {
@@ -201,6 +295,8 @@ export class StatelessWorker {
       case 'catalog.warming.persist': result = { type: 'catalog.warming', state: await this.warming.persist(workspaceId, operation.request.mode, revision) }; break;
       case 'catalog.warming.apply':
         throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Cache warming application requires a live session runtime');
+      case 'catalog.settings.apply':
+        throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'Settings application requires a live session runtime');
       case 'catalog.settings.read':
         result = { type: 'catalog.settings', state: await this.settingsStore.read(workspaceId, revision) }; break;
       case 'catalog.settings.write':

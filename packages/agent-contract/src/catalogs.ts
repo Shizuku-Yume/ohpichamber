@@ -318,11 +318,15 @@ export const MCPTransportSchema = z.discriminatedUnion('type', [
 ]);
 export type MCPTransport = z.infer<typeof MCPTransportSchema>;
 
+export const MCPServerScopeSchema = z.enum(['project', 'user']);
+export type MCPServerScope = z.infer<typeof MCPServerScopeSchema>;
+
 export const MCPServerConfigSchema = z.strictObject({
   serverId: EntityIdSchema,
   label: z.string().min(1),
   enabled: z.boolean(),
   managed: z.boolean().optional(),
+  scope: MCPServerScopeSchema.default('project'),
   transport: MCPTransportSchema,
 });
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>;
@@ -428,8 +432,8 @@ function validSkillRevisions(revisions: {
   return revisions.appliedSources === null
     ? revisions.runtimeStatus === 'unavailable' && revisions.catalogRevision === '0'
     : revisions.catalogRevision !== '0'
-      && counterAtMost(revisions.appliedSources.workspace, revisions.persistedSources.workspace)
-      && counterAtMost(revisions.appliedSources.agent, revisions.persistedSources.agent);
+    && counterAtMost(revisions.appliedSources.workspace, revisions.persistedSources.workspace)
+    && counterAtMost(revisions.appliedSources.agent, revisions.persistedSources.agent);
 }
 export const SkillsAppliedRevisionsSchema = z.strictObject(SkillsAppliedFields).refine(
   validSkillRevisions, 'Applied skill sources are published captured revisions, not future or empty-success sources',
@@ -493,9 +497,13 @@ function validAggregate(result: {
     && new Set(result.workers.map(({ worker }) => JSON.stringify([worker.rootSessionId, worker.workerGeneration]))).size === result.workers.length;
 }
 
+export const MCPApplyOutcomeSchema = z.enum(['applied', 'saved-needs-auth', 'saved-not-connected']);
+export type MCPApplyOutcome = z.infer<typeof MCPApplyOutcomeSchema>;
+
 export const MCPApplyResultSchema = z.strictObject({
   kind: z.literal('mcp'),
   status: ApplyStatusSchema,
+  outcome: MCPApplyOutcomeSchema.optional(),
   configuration: MCPConfigurationStateSchema,
   workers: z.array(MCPWorkerApplyOutcomeSchema),
 }).refine(validAggregate, 'Aggregate status reflects every unique captured live worker outcome').refine(
@@ -641,3 +649,22 @@ export const SkillExpandResultSchema = z.strictObject({
   worker: CatalogWorkerIdentitySchema, skillId: EntityIdSchema, catalogRevision: CounterSchema, message: z.string().min(1),
 });
 export type SkillExpandResult = z.infer<typeof SkillExpandResultSchema>;
+
+export const ToolTierSchema = z.enum(['read', 'write', 'exec']);
+export type ToolTier = z.infer<typeof ToolTierSchema>;
+
+export const ToolCatalogEntrySchema = z.strictObject({
+  name: z.string().min(1),
+  label: z.string().min(1),
+  description: z.string(),
+  tier: ToolTierSchema,
+  availability: z.boolean(),
+});
+export type ToolCatalogEntry = z.infer<typeof ToolCatalogEntrySchema>;
+
+export const SessionToolsCatalogSchema = z.strictObject({
+  sessionId: EntityIdSchema.optional(),
+  workspaceId: EntityIdSchema.optional(),
+  tools: z.array(ToolCatalogEntrySchema),
+});
+export type SessionToolsCatalog = z.infer<typeof SessionToolsCatalogSchema>;

@@ -7,7 +7,8 @@ import { StatelessWorker } from './stateless.ts';
 import { WorkerPolicy } from './policy.ts';
 import { NativeMcpError } from './mcp.ts';
 import { WorkerHostActions } from './host-actions.ts';
-import { getUsageStats, getUsageTools } from './usage.ts';
+import { getUsageAccounts, getUsageStats, getUsageTools } from './usage.ts';
+import { closePrewarmedNativeRuntime, prewarmNativeRuntime } from './native-runtime.ts';
 
 /** The cause a thrown value carries, whatever its shape. A thrown string is a
  * cause the worker chose, not a missing one; only a value with nothing readable
@@ -81,6 +82,7 @@ function stop(exitCode: number): Promise<void> {
         await owned.close();
         if (bootstrap && process.connected) send({ type: 'lifecycle', workerGeneration: bootstrap.workerGeneration, state: 'closed' });
       }
+      await closePrewarmedNativeRuntime();
     } catch { exitCode = 1; }
     finally { clearTimeout(deadline); process.exit(exitCode); }
   })();
@@ -106,14 +108,15 @@ process.on('message', raw => {
   if (command.type === 'operation') {
     if (stopping || command.workerGeneration !== bootstrap?.workerGeneration) return;
     const owned = resources;
-    const usage = command.operation.type === 'usage.stats' || command.operation.type === 'usage.tools';
+    const usage = command.operation.type === 'usage.stats' || command.operation.type === 'usage.tools' || command.operation.type === 'usage.accounts';
     if ((!owned && !usage) || (usage && bootstrap?.type !== 'usage.bootstrap')) {
       send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId, status: 503, code: 'SERVICE_UNAVAILABLE', detail: 'The worker resources needed by this operation are not available' });
       return;
     }
     // Deliberately not serialized: cancel/abort/interactive replies must interrupt active work.
     void (async () => {
-      if (command.operation.type === 'usage.stats') return { type: 'usage.stats' as const, result: await getUsageStats(command.operation.query, command.operation.references) };
+      if (command.operation.type === 'usage.stats') return { type: 'usage.stats' as const, result: await getUsageStats(command.operation.query, command.operation.sessionFiles) };
+      if (command.operation.type === 'usage.accounts') return { type: 'usage.accounts' as const, result: await getUsageAccounts(command.operation.query) };
       if (command.operation.type === 'usage.tools') return { type: 'usage.tools' as const, result: await getUsageTools(command.operation.query, command.operation.references) };
       if (!owned) throw new Error('Worker resources are unavailable');
       const publishPolicy = owned instanceof StatelessWorker && !isReadOnlyOperation(command.operation);
@@ -125,17 +128,19 @@ process.on('message', raw => {
       send({ type: 'result', workerGeneration: command.workerGeneration, commandId: command.commandId, result });
     }).catch((error: unknown) => {
       const nativeCode = error instanceof NativeMcpError ? ProblemCodeSchema.safeParse(error.code) : undefined;
-      send({ type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
+      send({
+        type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
         status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError ? nativeMcpStatus(error) : 503,
         code: error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE',
-        detail: operationCause(error).slice(0, 200) });
+        detail: operationCause(error).slice(0, 200)
+      });
     });
     return;
   }
   if (bootstrap || stopping) return;
   bootstrap = command;
   if (command.type === 'usage.bootstrap') {
-    // Cold reporting never constructs providers, AuthStorage, a live session, or the policy runtime.
+    // Cold reporting constructs no provider and no live session. Usage reads open OMP's configuration and credential store per request, and send no provider request except the bounded quota probe.
     send({ type: 'lifecycle', workerGeneration: command.workerGeneration, state: 'initialized' });
     send({ type: 'ready', workerGeneration: command.workerGeneration });
     return;
@@ -185,6 +190,14 @@ process.on('message', raw => {
 // A supervisor that pre-warms a worker adopts it only after this reply, so
 // the adoption cannot claim a process that has not finished loading.
 if (process.connected) send({ type: 'idle' });
+if (process.env.PI_CODING_AGENT_DIR) {
+  // The `idle` reply above makes this process adoptable at module load. The
+  // warm-up continues either way: a supervisor that can choose prefers the
+  // spare that also reported `warm`, because adopting this one would move the
+  // rest of the work into the session.
+  void prewarmNativeRuntime({ cwd: process.cwd(), agentDirectory: process.env.PI_CODING_AGENT_DIR })
+    .then(warmed => { if (warmed !== undefined && process.connected) send({ type: 'warm' }); });
+}
 process.once('disconnect', () => { void stop(0); });
 process.once('SIGTERM', () => { void stop(0); });
 process.once('SIGINT', () => { void stop(0); });

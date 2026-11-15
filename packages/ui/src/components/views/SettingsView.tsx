@@ -12,7 +12,7 @@ import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useAgentsStore } from '@/stores/useAgentsStore';
 import { useCommandsStore } from '@/stores/useCommandsStore';
-import { useMcpConfigStore } from '@/stores/useMcpConfigStore';
+import { createMcpDraft, useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { projectSettingsTabForSearchTarget, useProjectSettingsTabStore } from '@/components/sections/projects/projectSettingsTabs';
 import { chatSettingsTabForSearchTarget, useChatSettingsTabStore } from '@/components/sections/openchamber/chatSettingsTabs';
@@ -25,6 +25,8 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { WebSearchPage } from '@/components/sections/websearch/WebSearchPage';
+import { ToolsPage } from '@/components/sections/tools/ToolsPage';
+import { MemoryPage } from '@/components/sections/memory/MemoryPage';
 import { OmpSettingsPage } from '@/components/sections/openchamber/OmpSettingsPage';
 import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
@@ -144,6 +146,8 @@ const pageOrder: SettingsPageSlug[] = [
   // 'agent' group
   'providers',
   'web-search',
+  'tools',
+  'memory',
   'omp',
   'behavior',
   'agents',
@@ -399,10 +403,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (result.id.startsWith('mcp.')) {
       const store = useMcpConfigStore.getState();
       const name = nextUniqueName('new-mcp-server', store.mcpServers.map((server) => server.serverId));
-      store.setMcpDraft({
-        serverId: name, label: name, enabled: true,
-        transport: { type: 'stdio', command: '', args: [] },
-      });
+      store.setMcpDraft(createMcpDraft(name));
       store.setSelectedMcp(name);
       return result.id === 'mcp.create' ? 'mcp.server' : result.id;
     }
@@ -661,7 +662,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <UsagePage />;
       case 'about':
         return (
-          <SettingsPageLayout title={t('settings.page.about.title')} showSaveStatus={false} namedBySidebar>
+          <SettingsPageLayout title={t('settings.page.about.title')} showSaveStatus={false}>
             <AboutSettings />
           </SettingsPageLayout>
         );
@@ -673,6 +674,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <GitPage />;
       case 'integrations':
         return <IntegrationsPage />;
+      case 'tools':
+        return <ToolsPage />;
+      case 'memory':
+        return <MemoryPage />;
       case 'routing':
         return <RoutingPage />;
       case 'extensions':

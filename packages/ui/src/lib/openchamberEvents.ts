@@ -6,6 +6,7 @@ import { subscribeRuntimeEndpointChanged } from './runtime-switch';
 import { canDriveBrowserPage } from './browser/hostCapability';
 import { messageQueueUpdatedEventSchema, type MessageQueueUpdatedEvent } from '@/stores/messageQueueStore';
 import { prWatchUpdatedEventSchema, type PrWatchUpdatedEvent } from '@/sync/pr-watch';
+import { autoReviewUpdatedEventSchema, type AutoReviewUpdatedEvent } from '@/stores/useAutoReviewStore';
 import { z } from 'zod';
 import { trackedItemRecordsSchema } from './trackedItems/model';
 import type { SyncEvent } from './opencode/events';
@@ -91,17 +92,6 @@ const planOpenRequestSchema = z.object({
  sessionId: z.string().min(1).nullable(),
 });
 type PlanOpenRequestEvent = { type: 'plan-open-request' } & z.infer<typeof planOpenRequestSchema>;
-
-/**
- * The agent changed what it remembers. Carries only which store moved, not the
- * entries: listeners re-read from the server, so the event cannot go stale
- * between being sent and being handled.
- */
-type AgentMemoryChangedEvent = {
- type: 'agent-memory-changed';
- scope: 'global' | 'project';
- projectId?: string;
-};
 
 const projectContextChangedSchema = z.object({ projectId: z.string().min(1) });
 type ProjectContextChangedEvent = { type: 'project-context-changed' } & z.infer<typeof projectContextChangedSchema>;
@@ -249,6 +239,7 @@ export type OpenChamberEvent =
  | RoutingSafetySkippedEvent
  | MessageQueueUpdatedEvent
  | PrWatchUpdatedEvent
+ | AutoReviewUpdatedEvent
  | PermissionPolicyEvent
  /** The host follows this space's queue again; what changed in a gap is read from the space. */
  | { type: 'space-queue-stream'; spaceId: string }
@@ -266,7 +257,6 @@ export type OpenChamberEvent =
  | ProjectContextChangedEvent
  | SessionFoldersChangedEvent
  | SessionDraftsChangedEvent
- | AgentMemoryChangedEvent
  | SessionMetadataEvent;
 type Listener = (event: OpenChamberEvent) => void;
 
@@ -460,7 +450,7 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
  if (envelope.type === 'openchamber:guests-changed') {
   for (const listener of listeners) listener({ type: 'guests-changed' });
   return;
-}
+ }
  if (envelope.type === 'openchamber:terminal-sessions-changed') {
   for (const listener of listeners) listener({ type: 'terminal-sessions-changed' });
   return;
@@ -477,7 +467,7 @@ const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) =
   if (runId && parentSessionId) for (const listener of listeners) listener({ type: 'workflow-run-removed', runId, parentSessionId });
   return;
  }
-if (envelope.type === 'openchamber:event-stream-ready') {
+ if (envelope.type === 'openchamber:event-stream-ready') {
   reconnectAttempt = 0;
   const ready = eventStreamReadySchema.safeParse(envelope.properties);
   const connectionId = ready.success ? ready.data.connectionId ?? null : null;
@@ -506,6 +496,14 @@ if (envelope.type === 'openchamber:event-stream-ready') {
  }
  if (envelope.type === 'openchamber:pr-watch.updated') {
   const parsed = prWatchUpdatedEventSchema.safeParse(envelope);
+  if (parsed.success) {
+   for (const listener of listeners) listener(parsed.data);
+  }
+  return;
+ }
+
+ if (envelope.type === 'openchamber:auto-review.updated') {
+  const parsed = autoReviewUpdatedEventSchema.safeParse(envelope);
   if (parsed.success) {
    for (const listener of listeners) listener(parsed.data);
   }
@@ -606,22 +604,6 @@ if (envelope.type === 'openchamber:event-stream-ready') {
  if (envelope.type === 'openchamber:session-folders-changed') {
   const parsed = sessionFoldersChangedSchema.safeParse(envelope.properties);
   if (parsed.success) for (const listener of listeners) listener({ type: 'session-folders-changed', ...parsed.data });
-  return;
- }
-
- if (envelope.type === 'openchamber:agent-memory-changed') {
-  const properties = getEventProperties(envelope.properties);
-  const scope = properties?.scope === 'project' ? 'project' : 'global';
-  const nextEvent: AgentMemoryChangedEvent = {
-   type: 'agent-memory-changed',
-   scope,
-   ...(typeof properties?.projectId === 'string' && properties.projectId.length > 0
-    ? { projectId: properties.projectId }
-    : {}),
-  };
-  for (const listener of listeners) {
-   listener(nextEvent);
-  }
   return;
  }
 

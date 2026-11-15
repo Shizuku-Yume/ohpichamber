@@ -8,8 +8,31 @@ import { resolveGuestFilePath } from '../guests/files.js';
 import { unsupportedRepositoryRootReason } from '../git/repository-root.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
 
-export const PERMISSION_PRESET_IDS = Object.freeze(['ask', 'safety', 'auto']);
-export const isPermissionPresetId = (value) => typeof value === 'string' && PERMISSION_PRESET_IDS.includes(value);
+const GITHUB_READONLY_OPS = new Set(['repo_view', 'file_read', 'search_issues', 'search_prs', 'search_code', 'search_commits', 'search_repos', 'run_watch']);
+const DEBUG_READONLY_ACTIONS = new Set(['output', 'threads', 'stack_trace', 'scopes', 'variables', 'disassemble', 'read_memory', 'loaded_sources', 'modules', 'sessions']);
+
+const sanitizeMcp = name => name?.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '') || '';
+const resolveMcpServerForTool = (toolName, servers) => {
+ if (!toolName.startsWith('mcp__')) return null;
+ const suffix = toolName.slice(5);
+ let best = null;
+ let bestLen = 0;
+ for (const server of servers) {
+  const candidates = [server.serverId, server.name, server.label].filter(Boolean);
+  for (const raw of candidates) {
+   const sanitized = sanitizeMcp(raw);
+   for (const prefix of [`${sanitized}__`, `${sanitized}_`, `${raw}__`, `${raw}_`]) {
+    if (suffix.startsWith(prefix) && suffix.length > prefix.length) {
+     if (prefix.length > bestLen) {
+      bestLen = prefix.length;
+      best = server;
+     }
+    }
+   }
+  }
+ }
+ return best;
+};
 
 // A refusal names the check that refused, so the person reading it can act on it.
 const denied = (reason, code = 'UNAUTHORIZED', status = 403) => ({ allowed: false, code, status, detail: reason });
@@ -84,17 +107,22 @@ export const createWorkerOperationAuthorizer = ({
    const input = request.type === 'tool' ? request.input : request.type === 'shell' ? request.request : null;
    const nativeTool = toolName !== null && ['read', 'write', 'edit', 'grep', 'glob', 'bash', 'provider.use', 'lsp'].includes(toolName);
    const descriptorResult = rawDescriptor === undefined ? null : NativeOperationDescriptorSchema.safeParse(rawDescriptor);
-   if (nativeTool && (!descriptorResult?.success || descriptorResult.data.toolName !== toolName)) return denied('The native operation descriptor is missing or names a different tool', 'INVALID_REQUEST', 400);
+   if ((nativeTool && (!descriptorResult?.success || descriptorResult.data.toolName !== toolName))
+    || (descriptorResult !== null && (!descriptorResult.success || descriptorResult.data.toolName !== toolName))) {
+    return denied('The native operation descriptor is missing or names a different tool', 'INVALID_REQUEST', 400);
+   }
    const descriptor = descriptorResult?.success ? descriptorResult.data : null;
    const exactPolicies = toolName === null ? [] : policies.filter(row => row.target.toolName === toolName && row.target.pattern === JSON.stringify(input));
    if (exactPolicies.some(row => row.decision === 'deny')) return denied('An approval policy denies this exact tool request');
+   const approvalGranted = descriptor?.approvalGrant !== undefined
+    && descriptor.approvalGrant.rootSessionId === scope.rootSessionId
+    && descriptor.approvalGrant.workerGeneration === scope.workerGeneration
+    && request.type === 'tool' && descriptor.approvalGrant.approvalId === request.approvalId
+    && descriptor.approvalGrant.toolCallId === request.toolCallId
+    && (descriptor.approvalGrant.toolName === undefined || descriptor.approvalGrant.toolName === toolName);
    const commandGranted = command => policy.shellCommands.includes(command)
     || exactPolicies.some(row => row.decision === 'allow')
-    || (descriptor?.approvalGrant?.command === command
-     && descriptor.approvalGrant.rootSessionId === scope.rootSessionId
-     && descriptor.approvalGrant.workerGeneration === scope.workerGeneration
-     && request.type === 'tool' && descriptor.approvalGrant.approvalId === request.approvalId
-     && descriptor.approvalGrant.toolCallId === request.toolCallId);
+    || (approvalGranted && (descriptor?.approvalGrant?.command === undefined || descriptor.approvalGrant.command === command || descriptor.approvalGrant.input?.command === command));
    const pathAllowed = async rawPath => {
     const target = FilePathInputSchema.safeParse(rawPath);
     if (!target.success) return false;
@@ -121,8 +149,6 @@ export const createWorkerOperationAuthorizer = ({
    if (request.type === 'shell') return descriptor?.command !== undefined && commandGranted(descriptor.command) ? allowed : denied('The native command has no Host grant');
    if (request.type !== 'tool') return denied('The request type is not authorized for this workspace');
    if (request.agentId !== undefined && !policy.agentIds.includes(request.agentId)) return denied('The agent profile is not in the workspace catalog');
-   if (request.permissionPresetId !== undefined && (!isPermissionPresetId(request.permissionPresetId)
-    || (!request.proposed && !policy.permissionPresetIds.includes(request.permissionPresetId)))) return denied('The permission preset is not available in this workspace');
    if (request.toolName === 'provider.use') {
     const permitted = request.proposed === true
      ? proposedProviderPermitted(descriptor)
@@ -131,11 +157,6 @@ export const createWorkerOperationAuthorizer = ({
     return permitted ? allowed : denied(request.proposed === true
      ? 'The proposed provider and model do not name a complete selection'
      : 'The provider and model are not enabled in this workspace');
-   }
-   if (request.toolName === 'permission.preset') {
-    return request.input.presetId === request.permissionPresetId && isPermissionPresetId(request.input.presetId)
-     && (request.proposed === true || policy.permissionPresetIds.includes(request.input.presetId))
-     ? allowed : denied('The permission preset is not available in this workspace');
    }
    // Native ask only opens a scoped, CAS-protected interaction; it grants no machine capability.
    if (request.toolName === 'ask') return allowed;
@@ -161,46 +182,81 @@ export const createWorkerOperationAuthorizer = ({
      ? denied('Isolated task delegation bypasses the Host authorization hooks')
      : denied('The task name is not a safe path segment', 'INVALID_REQUEST', 400);
    }
-   if (nativeTool && descriptor) {
+   if (descriptor) {
     const internalReadUrls = descriptor.internalReadUrls ?? [];
-    // Internal URLs are OMP-owned resources, not filesystem grants. Only the
-    // read path may pass them through; write/edit/grep/glob stay local.
     if (internalReadUrls.length > 0 && request.toolName !== 'read') return denied('Internal OMP URLs are readable but not writable');
-    for (const target of [...descriptor.sourcePaths, ...descriptor.destinationPaths, ...descriptor.fileOps.flatMap(operation => operation.to === undefined ? [operation.path] : [operation.path, operation.to])]) {
+    for (const target of [...descriptor.destinationPaths, ...descriptor.fileOps.flatMap(operation => operation.to === undefined ? [operation.path] : [operation.path, operation.to])]) {
      if (!await pathAllowed(target)) return denied('The operation targets a path outside the authorized workspace');
     }
-    if (request.toolName === 'bash') return descriptor.command !== undefined && commandGranted(descriptor.command)
-     ? allowed : approvalRequired('The native command requires approval');
-    if (request.toolName === 'lsp') {
-     const action = descriptor.lspAction;
-     if (typeof action !== 'string' || action.length === 0) return denied('The LSP action is missing or empty', 'INVALID_REQUEST', 400);
-     const readOnlyActions = ['diagnostics', 'definition', 'type_definition', 'implementation', 'references', 'hover', 'symbols', 'status', 'capabilities'];
-     const isReadOnly = readOnlyActions.includes(action) || (action === 'code_actions' && request.input?.apply !== true);
-     if (isReadOnly) {
-      if (descriptor.destinationPaths.length > 0 || descriptor.fileOps.length > 0) return denied('A read-only LSP action may not modify files');
-      return policy.fileTools.includes('read') ? allowed : denied('The workspace does not grant file reads');
+    for (const target of descriptor.sourcePaths) {
+     if (!await pathAllowed(target)) {
+      if (request.toolName === 'read') {
+       if (!approvalGranted) return approvalRequired('The operation targets a path outside the authorized workspace');
+      } else {
+       return denied('The operation targets a path outside the authorized workspace');
+      }
      }
-     const mutationActions = ['rename', 'rename_file', 'format'];
-     const isCodeActionApply = action === 'code_actions' && request.input?.apply === true;
-     if (mutationActions.includes(action) || isCodeActionApply) {
-      if (!policy.fileTools.includes('write')) return denied('The workspace does not grant file writes');
-      if (descriptor.destinationPaths.length === 0) return denied('The LSP mutation names no destination path');
-      const granted = descriptor.approvalGrant !== undefined
-       && descriptor.approvalGrant.rootSessionId === scope.rootSessionId
-       && descriptor.approvalGrant.workerGeneration === scope.workerGeneration
-       && descriptor.approvalGrant.approvalId === request.approvalId
-       && descriptor.approvalGrant.toolCallId === request.toolCallId;
-      return granted ? allowed : approvalRequired('The LSP mutation requires approval');
-     }
-     return denied('The LSP action is not authorized');
     }
-    const capability = ['write', 'edit'].includes(request.toolName) ? 'write' : 'read';
-    if (request.toolName === 'edit' && descriptor.effectiveMode === undefined) return denied('The edit operation carries no effective edit mode');
-    const targets = capability === 'write' ? descriptor.destinationPaths : descriptor.sourcePaths;
-    if (internalReadUrls.length > 0 && capability === 'read') return policy.fileTools.includes('read') ? allowed : denied('The workspace does not grant file reads');
-    return targets.length > 0 && policy.fileTools.includes(capability) ? allowed : denied('The workspace does not grant the file capability this operation needs');
    }
-   return policy.toolRequests.some(candidate => isDeepStrictEqual(candidate, request)) ? allowed : denied('The workspace policy does not allow this tool request');
+   if (request.toolName === 'bash') {
+    const command = descriptor?.command ?? input?.command;
+    return (descriptor?.command !== undefined || input?.command !== undefined) && commandGranted(command)
+     ? allowed : approvalRequired('The native command requires approval');
+   }
+   if (request.toolName === 'lsp') {
+    const action = descriptor?.lspAction;
+    if (typeof action !== 'string' || action.length === 0) return denied('The LSP action is missing or empty', 'INVALID_REQUEST', 400);
+    const readOnlyActions = ['diagnostics', 'definition', 'type_definition', 'implementation', 'references', 'hover', 'symbols', 'status', 'capabilities'];
+    const isReadOnly = readOnlyActions.includes(action) || (action === 'code_actions' && request.input?.apply !== true);
+    if (isReadOnly) {
+     if ((descriptor?.destinationPaths?.length ?? 0) > 0 || (descriptor?.fileOps?.length ?? 0) > 0) return denied('A read-only LSP action may not modify files');
+     return policy.fileTools.includes('read') ? allowed : denied('The workspace does not grant file reads');
+    }
+    const mutationActions = ['rename', 'rename_file', 'format'];
+    const isCodeActionApply = action === 'code_actions' && request.input?.apply === true;
+    if (mutationActions.includes(action) || isCodeActionApply) {
+     if (!policy.fileTools.includes('write')) return denied('The workspace does not grant file writes');
+     if (descriptor && descriptor.destinationPaths.length === 0) return denied('The LSP mutation names no destination path');
+     return approvalGranted ? allowed : approvalRequired('The LSP mutation requires approval');
+    }
+    return denied('The LSP action is not authorized');
+   }
+   const isDebugReadOnly = request.toolName === 'debug' && typeof input?.action === 'string' && DEBUG_READONLY_ACTIONS.has(input.action.toLowerCase());
+   const isGithubReadOnly = request.toolName === 'github' && typeof input?.op === 'string' && GITHUB_READONLY_OPS.has(input.op.toLowerCase());
+   const isIdaReadOnly = request.toolName === 'ida' && typeof input?.action === 'string' && input.action.toLowerCase() === 'list';
+   if (!isDebugReadOnly && !isGithubReadOnly && !isIdaReadOnly && ['eval', 'debug', 'ida', 'github', 'security_scan'].includes(request.toolName)) {
+    return approvalGranted ? allowed : approvalRequired(`The ${request.toolName} tool requires approval`);
+   }
+   if (request.toolName.startsWith('mcp__')) {
+    const matchedServer = resolveMcpServerForTool(request.toolName, policy.mcpServers);
+    if (!matchedServer || matchedServer.enabled === false) {
+     return denied('The MCP server is not in the workspace configuration');
+    }
+    return approvalGranted ? allowed : approvalRequired('The MCP tool requires approval');
+   }
+   const isWriteTier = ['write', 'edit', 'ast_edit', 'new_context', 'manage_skill', 'generate_image'].includes(request.toolName)
+    || (request.toolName === 'context_notes' && input?.text !== undefined)
+    || (request.toolName === 'retain' && Array.isArray(input?.items) && input.items.some(i => i?.scope === 'global'))
+    || (request.toolName === 'learn' && Boolean(input?.skill || input?.scope === 'global'));
+   if (isWriteTier) {
+    if (!policy.fileTools.includes('write')) return denied('The workspace does not grant file writes');
+    if (request.toolName === 'edit' && descriptor && descriptor.effectiveMode === undefined) return denied('The edit operation carries no effective edit mode');
+    if (['write', 'edit'].includes(request.toolName) && descriptor && descriptor.destinationPaths.length === 0 && (!descriptor.fileOps || descriptor.fileOps.length === 0)) return denied('The workspace does not grant the file capability this operation needs');
+    return allowed;
+   }
+   const isReadTier = ['read', 'grep', 'glob', 'find', 'ast_grep', 'checkpoint', 'rewind', 'think', 'recall', 'reflect', 'memory_edit'].includes(request.toolName)
+    || request.toolName === 'context_notes'
+    || request.toolName === 'retain'
+    || request.toolName === 'learn'
+    || isDebugReadOnly
+    || isGithubReadOnly
+    || isIdaReadOnly;
+   if (isReadTier) {
+    if (!policy.fileTools.includes('read')) return denied('The workspace does not grant file reads');
+    if (['read', 'grep', 'glob'].includes(request.toolName) && descriptor && descriptor.sourcePaths.length === 0 && (descriptor.internalReadUrls ?? []).length === 0) return denied('The workspace does not grant the file capability this operation needs');
+    return allowed;
+   }
+   return denied('The workspace policy does not allow this tool request');
   } catch { return denied('The Host authorization check failed before it could decide', 'SERVICE_UNAVAILABLE', 503); }
  };
 };

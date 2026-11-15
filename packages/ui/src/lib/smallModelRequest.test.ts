@@ -24,13 +24,14 @@ beforeEach(() => {
   invalidateSettingsCache();
   ompSettingsRoles = {};
   models = [model('chosen', 'large'), model('other', 'haiku')];
-  useConfigStore.setState({ currentProviderId: 'chosen', currentModelId: 'large' });
+  useConfigStore.setState({ currentProviderId: 'chosen', currentModelId: 'large', ompSettings: null, models: [] });
   const scope = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace-a', projectId: 'project-a', name: 'A' });
   const catalog = spyOn(canonicalClient, 'getModels').mockImplementation(async (workspaceId) => ({ workspaceId, revision: '0', models, defaults: { model: null, thinkingLevel: null }, imageModels: [], planRoleAvailable: false }));
   const settingsMock = spyOn(canonicalClient, 'getOmpSettings').mockImplementation(async (workspaceId) => ({
     workspaceId,
     revision: '0',
-    settings: [{ id: 'modelRoles', type: 'record', value: ompSettingsRoles, default: null, configured: true, surface: 'gui' }],
+    totalCount: 1,
+    settings: [{ id: 'modelRoles', type: 'record', value: ompSettingsRoles, default: null, configured: true, placement: { type: 'engine' } }],
   }));
   restorers = [() => scope.mockRestore(), () => catalog.mockRestore(), () => settingsMock.mockRestore()];
 });

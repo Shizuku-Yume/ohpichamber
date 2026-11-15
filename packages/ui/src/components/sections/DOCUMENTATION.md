@@ -286,17 +286,11 @@ and desktop, not by mobile or VS Code; those use the shared MCP Settings page.
 
 ### Usage: what was spent and what is left
 
-The Usage page has two halves. The token report comes from the session store
-(`components/views/usage/UsageStatsView.tsx`, exported as `UsageStatsReport`
-so the page can place it above the quota cards). The quota cards come from the
-quota service, which reads each provider's credential from OMP's auth store.
+The Usage page is an OMP-native dashboard. The token and performance metrics come from OMP's statistics (`stats.db` rollups, `authStorage` usage reports, and session stats) queried through the Agent Service canonical endpoint (`GET /api/agent/v1/usage`), covering all OMP sessions including TUI sessions.
 
-A provider OMP holds no credential for is not a card. It has no readable quota,
-so the page lists nothing for it and offers no inline credential form: adding a
-provider belongs to Providers. `usagePageState.ts` and the per-provider
-credential forms (`QuotaCredentials.tsx`, `ClaudeCodeSignIn.tsx`) are gone with
-that loop; a configured provider that fails keeps its visible error and its
-retained sample.
+The page offers an "All providers" comparison view with a comparative bar breakdown and summary table (tokens including reasoning tokens, cost, TTFT, tok/s, error rate, and requests), as well as dedicated per-provider views for every configured provider, including custom providers. Quota sections appear only for configured, quota-capable providers; unconfigured quota plans are never shown. When a model has unknown pricing (`pricing === null`), cost renders as "—" rather than false $0.00. The token composition legend wraps cleanly without truncation.
+
+A provider OMP holds no credential for is not a card. It has no readable quota, so the page lists nothing for it and offers no inline credential form: adding a provider belongs to Providers. `usagePageState.ts` and the per-provider credential forms (`QuotaCredentials.tsx`, `ClaudeCodeSignIn.tsx`) are gone with that loop; a configured provider that fails keeps its visible error and its retained sample.
 
 ### Policy-blocked MCP servers and skills
 
@@ -600,7 +594,7 @@ only ever sends v2.
 
 | Entity | What the page reads and writes |
 |---|---|
-| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `allowedTools`, `permissionPresetId`, `color` |
+| Agent | `system` (the markdown body), `description`, `model` as `provider/model#variant`, `allowedTools`, `color` |
 | Command | `template` (the markdown body), `description`, `agent`, `model` with `#variant`, `subagent` |
 | MCP server | `type` (required), `command` / `url`, `environment`, `headers`, `disabled`, `codemode`, `timeout: { startup, catalog, execution }`, snake_case `oauth` |
 | Provider | `package` with the `aisdk:` prefix, `settings.baseURL`, `headers`, `body`, models keyed by id with `modelID`, `capabilities`, `variants`, `cost.cache.read/write`, `disabled` |
@@ -628,7 +622,7 @@ the documented way to keep a server configured but inactive, and the page's
 
 Settings lists custom agents so their files remain editable, renameable, and deletable. Hidden built-in agents stay out of Settings and out of the composer pickers, and duplicate and rename read the stored entry so its `hidden` flag survives.
 
-Permissions are edited as the agent contract states them, not as an ordered rule list: `allowedTools` (the tools the agent may call) and the optional `permissionPresetId`, both written through `updateAgent`. The ordered `{ action, resource, effect }` rule editor and its translator were retired with the OpenCode engine, so no editor derives rules from built-in defaults.
+Permissions are edited as the agent contract states them, not as an ordered rule list: `allowedTools` (the tools the agent may call), written through `updateAgent`. The ordered `{ action, resource, effect }` rule editor and its translator were retired with the OpenCode engine, so no editor derives rules from built-in defaults.
 
 ### The legacy-format note
 

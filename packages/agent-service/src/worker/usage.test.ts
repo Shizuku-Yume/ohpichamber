@@ -1,198 +1,195 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { UsageStatsSchema, UsageToolsResponseSchema, type UsageQuery } from '@openchamber/agent-contract';
+import { join } from 'node:path';
+import { UsageAccountsSchema, UsageStatsSchema, UsageToolsResponseSchema, type UsageQuery } from '@openchamber/agent-contract';
 import type { FileEntry, SessionEntry, SessionMessageEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
-import { loadSessionFile } from '@oh-my-pi/pi-coding-agent/session/session-loader';
-import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
+import { getStatsDbPath, setAgentDir } from '@oh-my-pi/pi-utils';
+import { closeDb } from '@oh-my-pi/omp-stats/db';
 import type { UsageSessionReference } from '../protocol.ts';
-import { getUsageStats, getUsageTools, settleUsageSession } from './usage.ts';
-import { currentDb, initDb } from '@oh-my-pi/omp-stats/db';
+import { getUsageAccounts, getUsageStats, getUsageTools } from './usage.ts';
 
-let directory: string;
 const start = Date.parse('2026-03-07T05:00:00Z');
 const end = Date.parse('2026-03-10T04:00:00Z');
-const query: UsageQuery = { from: start, to: end, timezone: 'America/New_York' };
+const query: UsageQuery = { from: start, to: end, timezone: 'UTC' };
+const ENV_KEYS = ['PI_CONFIG_DIR', 'PI_CODING_AGENT_DIR', 'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'] as const;
+const saved = new Map<string, string | undefined>();
+let root: string;
+let agentDir: string;
+let stop: (() => void) | undefined;
 
-beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), 'native-usage-')); await mkdir(join(directory, 'sessions')); });
-afterEach(async () => { await rm(directory, { recursive: true, force: true }); });
+// Each test gets its own OMP home: an agent directory with its own sessions and stats.db, so no fixture leaks into another test.
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'usage-'));
+  agentDir = join(root, 'agent');
+  await mkdir(join(agentDir, 'sessions'), { recursive: true });
+  for (const key of ENV_KEYS) saved.set(key, process.env[key]);
+  process.env.PI_CONFIG_DIR = join(root, 'config');
+  process.env.XDG_DATA_HOME = join(root, 'xdg-data');
+  process.env.XDG_CONFIG_HOME = join(root, 'xdg-config');
+  process.env.XDG_STATE_HOME = join(root, 'xdg-state');
+  process.env.XDG_CACHE_HOME = join(root, 'xdg-cache');
+  setAgentDir(agentDir);
+  closeDb();
+});
+afterEach(async () => {
+  stop?.();
+  stop = undefined;
+  closeDb();
+  for (const key of ENV_KEYS) {
+    const value = saved.get(key);
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
+  await rm(root, { recursive: true, force: true });
+});
 
-function assistant(id: string, parentId: string | null, time: number, amount = 10, model = 'model-a', provider = 'provider-a'): SessionMessageEntry {
-  return { type: 'message', id, parentId, timestamp: new Date(time).toISOString(), message: {
-    role: 'assistant', api: 'openai-completions', provider, model, stopReason: 'stop', timestamp: time,
-    content: [{ type: 'text', text: 'Persisted native response' }], usage: { input: amount, output: 2, cacheRead: 3, cacheWrite: 1, totalTokens: amount + 6,
-      cost: { input: 0.1, output: 0.02, cacheRead: 0.03, cacheWrite: 0.01, total: 0.16 } },
-  } };
+function assistant(id: string, parentId: string | null, time: number, options: { amount?: number; provider?: string; model?: string; reasoning?: number; cost?: number; ttft?: number; duration?: number } = {}): SessionMessageEntry {
+  const amount = options.amount ?? 10;
+  const usage: Record<string, unknown> = {
+    input: amount, output: 2, cacheRead: 3, cacheWrite: 1, totalTokens: amount + 6,
+    cost: { input: 0.1, output: 0.02, cacheRead: 0.03, cacheWrite: 0.01, total: options.cost ?? 0.16 },
+  };
+  if (options.reasoning !== undefined) usage.reasoningTokens = options.reasoning;
+  return {
+    type: 'message', id, parentId, timestamp: new Date(time).toISOString(), message: {
+      role: 'assistant', api: 'openai-completions', provider: options.provider ?? 'provider-a', model: options.model ?? 'model-a',
+      stopReason: 'stop', timestamp: time, content: [{ type: 'text', text: 'Persisted native response' }], usage,
+      ...(options.ttft !== undefined ? { ttft: options.ttft } : {}), ...(options.duration !== undefined ? { duration: options.duration } : {}),
+    } as SessionMessageEntry['message'],
+  };
 }
 function user(id: string, parentId: string | null, time: number): SessionMessageEntry {
   return { type: 'message', id, parentId, timestamp: new Date(time).toISOString(), message: { role: 'user', content: 'Persisted native prompt', timestamp: time } };
 }
-async function transcript(id: string, entries: SessionEntry[], options: { parentSession?: string; workspaceId?: string; projectId?: string; rootSessionId?: string } = {}): Promise<UsageSessionReference> {
-  const sessionFile = join(directory, 'sessions', `${id}.jsonl`);
-  const records: FileEntry[] = [Object.assign({ type: 'session', version: 3, id: `native-${id}`, cwd: directory, timestamp: new Date(start).toISOString() },
-    options.parentSession ? { parentSession: options.parentSession } : {}), ...entries];
-  await writeFile(sessionFile, records.map(entry => JSON.stringify(entry)).join('\n') + '\n');
-  return { sessionId: id, rootSessionId: options.rootSessionId ?? id, workspaceId: options.workspaceId ?? 'workspace-a', projectId: options.projectId ?? 'project-a',
-    cwd: directory, agentDirectory: join(directory, 'agent'), sessionsDirectory: join(directory, 'sessions'), sessionFile };
+
+/** Write a transcript into the agent's sessions folder for `folder` (the project), exactly where OMP writes its own. */
+async function tuiSession(folder: string, id: string, entries: SessionEntry[], parentSession?: string): Promise<string> {
+  const directory = join(agentDir, 'sessions', folder);
+  await mkdir(directory, { recursive: true });
+  const file = join(directory, `${id}.jsonl`);
+  const header = Object.assign({ type: 'session', version: 3, id: `native-${id}`, cwd: join(root, 'workspace'), timestamp: new Date(start).toISOString() },
+    parentSession ? { parentSession } : {});
+  const records: FileEntry[] = [header as FileEntry, ...entries as FileEntry[]];
+  await writeFile(file, records.map(entry => JSON.stringify(entry)).join('\n') + '\n');
+  return file;
 }
 
-test('cold persisted native sessions aggregate accounting and models without changing transcript files', async () => {
-  const first = await transcript('first', [user('00000001', null, start), assistant('00000002', '00000001', start + 1)]);
-  // Persist an additional turn through the actual native writer, not a mocked loader/session manager.
-  const manager = await SessionManager.open(first.sessionFile, first.sessionsDirectory, undefined, { initialCwd: directory, suppressBreadcrumb: true, throwIfMissing: true });
-  manager.appendMessage(assistant('unused-id', null, start + 2, 20).message);
-  await manager.flush();
-  await manager.close();
-  const second = await transcript('second', [user('00000003', null, start + 3), assistant('00000004', '00000003', start + 4, 30, 'model-b', 'provider-b')]);
-  const before = await readFile(first.sessionFile, 'utf8');
-  const native = await loadSessionFile(first.sessionFile, undefined, { throwIfMissing: true });
-  expect(native.malformedRecords).toBe(0);
-  expect(native.invalidHeader).toBe(false);
-  const stats = UsageStatsSchema.parse(await getUsageStats(query, [first, second]));
-  expect(stats).toMatchObject({ sessions: 2, subagents: 0, prompts: 2, steps: 3, partial: false, activeDays: 1, streak: 1,
-    tokens: { input: 60, output: 6, cacheRead: 9, cacheWrite: 3, total: 78, reasoning: null }, tools: { mode: 'none' } });
-  expect(stats.cost).toBeCloseTo(0.48);
-  expect(stats.models.map(model => [model.providerId, model.modelId, model.tokens.total, model.variant])).toEqual([
-    ['provider-a', 'model-a', 42, null], ['provider-b', 'model-b', 36, null],
+test('TUI sessions that no turn ever settled are ingested by OMP sync before the report is built', async () => {
+  await tuiSession('--work--tui', 'tui-only', [user('tu', null, start), assistant('ta', 'tu', start + 1, { amount: 40 })]);
+  const stats = UsageStatsSchema.parse(await getUsageStats(query));
+  expect(stats).toMatchObject({ steps: 1, prompts: 1, sessions: 1, partial: false, tokens: { input: 40 } });
+});
+
+test('a project scope constrains every aggregate, and an empty scope matches nothing', async () => {
+  const projectA = join(agentDir, 'sessions', '--work--a');
+  await tuiSession('--work--a', 'a', [user('ua', null, start), assistant('aa', 'ua', start + 1, { amount: 100, provider: 'prov-a', model: 'model-a', cost: 0.2 })]);
+  await tuiSession('--work--b', 'b', [user('ub', null, start), assistant('ab', 'ub', start + 1, { amount: 1000, provider: 'prov-b', model: 'model-b', cost: 2 })]);
+  // A scope is the exact authorized file set the Host resolves, not a folder:
+  // a folder can hold another workspace's transcripts.
+  const scope = (...files: Array<[string, string, 'root' | 'subagent']>) =>
+    files.map(([file, sessionId, role]) => ({ file, sessionId, role }));
+  const scoped = await getUsageStats(query, scope([join(projectA, 'a.jsonl'), 'a', 'root']));
+  expect(scoped).toMatchObject({ steps: 1, sessions: 1, prompts: 1, activeDays: 1, tokens: { input: 100 } });
+  expect(scoped.cost).toBeCloseTo(0.2);
+  expect(scoped.providers.map(provider => provider.providerId)).toEqual(['prov-a']);
+  expect(scoped.models.map(model => model.modelId)).toEqual(['model-a']);
+  expect(scoped.activity).toEqual([{ date: '2026-03-07', steps: 1 }]);
+  const all = await getUsageStats(query);
+  expect(all).toMatchObject({ steps: 2, prompts: 2, tokens: { input: 1100 } });
+  expect(await getUsageStats(query, [])).toMatchObject({ steps: 0, sessions: 0, prompts: 0, partial: false, models: [] });
+});
+
+test('reasoning is counted once across assistant turns and model_usage auxiliary calls, and output stays inclusive', async () => {
+  const auxiliary: SessionEntry = {
+    type: 'model_usage', id: 'aux', parentId: null, timestamp: new Date(start + 2).toISOString(), purpose: 'summary',
+    api: 'openai-completions', provider: 'prov-a', model: 'model-a', stopReason: 'stop', usage: {
+      input: 5, output: 4, cacheRead: 0, cacheWrite: 0, totalTokens: 9, reasoningTokens: 7,
+      cost: { input: 0.01, output: 0.01, cacheRead: 0, cacheWrite: 0, total: 0.02 },
+    },
+  };
+  const turn = assistant('turn', null, start + 1, { amount: 100, reasoning: 25, provider: 'prov-a' });
+  if (turn.message.role !== 'assistant') throw new Error('fixture assistant expected');
+  turn.message.usage = { ...(turn.message.usage as object), output: 50 } as typeof turn.message.usage;
+  await tuiSession('--work--reason', 'reason', [turn, auxiliary]);
+  const stats = UsageStatsSchema.parse(await getUsageStats(query));
+  expect(stats.tokens.reasoning).toBe(32);
+  expect(stats.models).toEqual([expect.objectContaining({ modelId: 'model-a', tokens: expect.objectContaining({ reasoning: 32, output: 54 }) })]);
+  expect(stats.providers[0]).toMatchObject({ tokens: { reasoning: 32 } });
+});
+
+test('a failed stats database is an error, never an empty report', async () => {
+  await tuiSession('--work--bad', 'bad', [user('bu', null, start), assistant('ba', 'bu', start + 1)]);
+  closeDb();
+  const path = getStatsDbPath();
+  await mkdir(join(path, '..'), { recursive: true });
+  await writeFile(path, 'this is not an sqlite database'.repeat(200));
+  await expect(getUsageStats(query)).rejects.toThrow();
+  await rm(path, { force: true });
+  await rm(`${path}-wal`, { force: true });
+  await rm(`${path}-shm`, { force: true });
+});
+
+test('a configured custom model is priced from OMP’s model registry, not the bundled catalog', async () => {
+  await writeFile(join(agentDir, 'models.yml'), [
+    'providers:', '  lab-custom:', '    baseUrl: http://127.0.0.1:9/v1', '    api: openai-completions', '    auth: none',
+    '    models:', '      - id: custom-x', '        name: Custom X', '        contextWindow: 65536', '        maxTokens: 256',
+    '        cost:', '          input: 2', '          output: 8', '          cacheRead: 0.5', '          cacheWrite: 0', '',
+  ].join('\n'));
+  await tuiSession('--work--custom', 'custom', [user('cu', null, start), assistant('ca', 'cu', start + 1, { provider: 'lab-custom', model: 'custom-x', cost: 0.5 })]);
+  const stats = UsageStatsSchema.parse(await getUsageStats(query));
+  const model = stats.models.find(row => row.providerId === 'lab-custom');
+  expect(model?.pricing).toEqual({ inputPerMillionTokens: 2, outputPerMillionTokens: 8, cacheReadPerMillionTokens: 0.5, cacheWritePerMillionTokens: 0 });
+  expect(model?.cost).toBeCloseTo(0.5);
+  expect(stats.providers.find(row => row.providerId === 'lab-custom')?.pricing).toEqual(model?.pricing);
+});
+
+test('provider TTFT is weighted by request count, not an average of model averages', async () => {
+  await tuiSession('--work--ttft', 'ttft', [
+    assistant('one', null, start + 1, { provider: 'prov-t', model: 'fast', ttft: 100, duration: 1000 }),
+    assistant('two', null, start + 2, { provider: 'prov-t', model: 'slow', ttft: 500, duration: 1000 }),
+    assistant('three', null, start + 3, { provider: 'prov-t', model: 'slow', ttft: 500, duration: 1000 }),
+    assistant('four', null, start + 4, { provider: 'prov-t', model: 'slow', ttft: 500, duration: 1000 }),
   ]);
-  expect(await readFile(first.sessionFile, 'utf8')).toBe(before);
+  const stats = UsageStatsSchema.parse(await getUsageStats(query));
+  expect(stats.providers[0]).toMatchObject({ providerId: 'prov-t', avgTtft: 400 });
+  expect(stats.models.find(model => model.modelId === 'fast')?.avgTtft).toBe(100);
 });
 
-test('viewer calendar activity and streak survive New York spring DST with exact inclusive/exclusive bounds', async () => {
-  const times = [start - 1, start, Date.parse('2026-03-08T06:59:59Z'), Date.parse('2026-03-08T07:00:00Z'), Date.parse('2026-03-09T04:00:00Z'), end];
-  const entries = times.map((time, index) => assistant(`dst${index}`, index === 0 ? null : `dst${index - 1}`, time));
-  const source = await transcript('dst', entries);
-  const stats = await getUsageStats(query, [source]);
-  expect(stats.steps).toBe(4);
-  expect(stats.range).toEqual({ from: start, to: end });
-  expect(stats.activity).toEqual([{ date: '2026-03-07', steps: 1 }, { date: '2026-03-08', steps: 2 }, { date: '2026-03-09', steps: 1 }]);
-  expect(stats.activeDays).toBe(3);
-  expect(stats.streak).toBe(3);
+test('prompt counts are scoped to the selected provider through provider-attributed prompts', async () => {
+  await tuiSession('--work--prompts', 'prompts', [
+    user('p1', null, start + 1), assistant('r1', 'p1', start + 2, { provider: 'prov-x', model: 'm' }),
+    user('p2', null, start + 3), assistant('r2', 'p2', start + 4, { provider: 'prov-y', model: 'm' }),
+  ]);
+  expect(UsageStatsSchema.parse(await getUsageStats(query)).prompts).toBe(2);
+  expect(UsageStatsSchema.parse(await getUsageStats({ ...query, providerId: 'prov-x' }))).toMatchObject({ prompts: 1, steps: 1 });
 });
 
-test('London autumn DST repeated hour stays in one viewer day and UTC has independent buckets', async () => {
-  const times = ['2026-10-24T23:30:00Z', '2026-10-25T00:30:00Z', '2026-10-25T01:30:00Z', '2026-10-26T00:30:00Z'].map(Date.parse);
-  const source = await transcript('london', times.map((time, index) => assistant(`london${index}`, index === 0 ? null : `london${index - 1}`, time)));
-  const window: UsageQuery = { timezone: 'Europe/London', to: Date.parse('2026-10-27T00:00:00Z') };
-  const local = await getUsageStats(window, [source]);
-  expect(local.activity).toEqual([{ date: '2026-10-25', steps: 3 }, { date: '2026-10-26', steps: 1 }]);
-  expect(local.streak).toBe(2);
-  const utc = await getUsageStats({ ...window, timezone: 'UTC' }, [source]);
-  expect(utc.activity).toEqual([{ date: '2026-10-24', steps: 1 }, { date: '2026-10-25', steps: 2 }, { date: '2026-10-26', steps: 1 }]);
-});
-
-test('all/workspace/project scopes inspect only the supplied authorized references', async () => {
-  const first = await transcript('scope-a', [assistant('a', null, start)]);
-  const second = await transcript('scope-b', [assistant('b', null, start)], { projectId: 'project-b' });
-  const third = await transcript('scope-c', [assistant('c', null, start)], { workspaceId: 'workspace-b', projectId: 'project-c' });
-  await transcript('unregistered-secret', [assistant('secret', null, start, 999_999)]);
-  expect((await getUsageStats(query, [first, second, third])).steps).toBe(3);
-  expect((await getUsageStats({ ...query, workspaceId: 'workspace-a' }, [first, second, third])).steps).toBe(2);
-  expect((await getUsageStats({ ...query, workspaceId: 'workspace-a', projectId: 'project-a' }, [first, second, third])).steps).toBe(1);
-  expect((await getUsageStats({ ...query, projectId: 'not-authorized' }, [first, second, third]))).toMatchObject({ steps: 0, partial: false, models: [] });
-  expect((await getUsageStats(query, []))).toMatchObject({ steps: 0, partial: false });
-});
-
-test('malformed, truncated, empty and missing transcripts preserve siblings with sanitized canonical errors; total failure throws', async () => {
-  const good = await transcript('good', [assistant('good-entry', null, start)]);
-  const malformed = await transcript('malformed', [assistant('malformed-entry', null, start)]);
-  const truncated = await transcript('truncated', []);
-  const empty = await transcript('empty', []);
-  const missing = await transcript('missing', []);
-  await writeFile(malformed.sessionFile, (await readFile(malformed.sessionFile, 'utf8')) + '{not json}\n');
-  await writeFile(truncated.sessionFile, (await readFile(truncated.sessionFile, 'utf8')) + '{"type":"message"');
-  await writeFile(empty.sessionFile, '');
-  await rm(missing.sessionFile);
-  const refs = [good, malformed, truncated, empty, missing];
-  const stats = await getUsageStats(query, refs);
-  expect(stats).toMatchObject({ steps: 1, partial: true, errors: { malformed: 'USAGE_SESSION_CORRUPT', truncated: 'USAGE_SESSION_CORRUPT', empty: 'USAGE_SESSION_CORRUPT', missing: 'USAGE_SESSION_UNREADABLE' } });
-  const tools = UsageToolsResponseSchema.parse(await getUsageTools(query, refs));
-  expect(tools.partial).toBe(true);
-  expect(tools.errors).toEqual(stats.errors);
-  expect(JSON.stringify(stats.errors)).not.toContain(directory);
-  await expect(getUsageStats(query, [malformed, missing])).rejects.toThrow('USAGE_UNAVAILABLE');
-  await expect(getUsageTools(query, [truncated, empty])).rejects.toThrow('USAGE_UNAVAILABLE');
-});
-
-test('settlement indexes the transcript and an unchanged repeat request reuses the validated read', async () => {
-  const source = await transcript('warm', [user('warm-u', null, start), assistant('warm-a', 'warm-u', start + 1)]);
-  await settleUsageSession(source.sessionFile);
-  const bytes = await readFile(source.sessionFile, 'utf8');
-  // Pin one exact mtime so the size+mtime key is deterministic across calls.
-  const pinned = new Date('2026-03-07T05:00:00Z');
-  await utimes(source.sessionFile, pinned, pinned);
-  expect((await getUsageStats(query, [source])).steps).toBe(1);
-  // Same size and same pinned mtime, but now unparsable: a re-parse would
-  // refuse it, so returning the same counts proves the validated read was reused.
-  await writeFile(source.sessionFile, 'x'.repeat(bytes.length));
-  await utimes(source.sessionFile, pinned, pinned);
-  expect((await getUsageStats(query, [source])).steps).toBe(1);
-  // Growing the file breaks the key, so the new bytes are validated and refused
-  // instead of being reported as authoritative zeros.
-  await writeFile(source.sessionFile, 'x'.repeat(bytes.length + 1));
-  await utimes(source.sessionFile, pinned, pinned);
-  await expect(getUsageStats(query, [source])).rejects.toThrow('USAGE_UNAVAILABLE');
-});
-
-test('a scoped usage query leaves other sessions\' indexed analytics intact', async () => {
-  const mine = await transcript('scoped-mine', [user('scoped-u', null, start), assistant('scoped-a', 'scoped-u', start + 1)]);
-  const other = await transcript('scoped-other', [user('other-u', null, start), assistant('other-a', 'other-u', start + 1, 40)]);
-  await settleUsageSession(other.sessionFile);
-  await settleUsageSession(mine.sessionFile);
-  await initDb();
-  const db = currentDb();
-  if (!db) throw new Error('The stats database must be open');
-  const rowsFor = (file: string) => (db.query('SELECT entry_id FROM messages WHERE session_file = ?').all(resolve(file)) as Array<{ entry_id: string }>);
-  // `stats.db` is shared with every other session on the machine, including
-  // rows this fixture does not own. A scoped request must not delete those.
-  const foreign = (db.query('SELECT COUNT(*) AS c FROM messages WHERE session_file <> ? AND session_file <> ?').get(resolve(mine.sessionFile), resolve(other.sessionFile)) as { c: number }).c;
-  expect(foreign).toBeGreaterThan(0);
-  const otherRows = rowsFor(other.sessionFile).length;
-  db.query('INSERT OR REPLACE INTO messages (session_file, entry_id, folder, model, provider, api, timestamp, stop_reason, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, total_tokens, premium_requests, cost_input, cost_output, cost_cache_read, cost_cache_write, cost_total, cost_unpriced, agent_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-    .run(resolve(mine.sessionFile), 'sentinel-row', 'f', 'model-a', 'provider-a', 'api', start, 'stop', 1, 1, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 'main');
-  expect((await getUsageStats(query, [mine])).steps).toBe(1);
-  // Nothing outside the requested reference may be touched, and the other
-  // session's own rows must survive untouched.
-  expect((db.query('SELECT COUNT(*) AS c FROM messages WHERE session_file <> ? AND session_file <> ?').get(resolve(mine.sessionFile), resolve(other.sessionFile)) as { c: number }).c).toBe(foreign);
-  expect(rowsFor(other.sessionFile).length).toBe(otherRows);
-  expect(rowsFor(mine.sessionFile).some(row => row.entry_id === 'sentinel-row')).toBe(true);
-  // Leave the shared index exactly as this test found it.
-  db.query('DELETE FROM messages WHERE session_file = ? AND entry_id = ?').run(resolve(mine.sessionFile), 'sentinel-row');
-});
-
-test('active native DAG excludes abandoned branch and deduplicates proven fork lineage, not unrelated short ID collisions', async () => {
-  const prompt = user('shared-u', null, start);
-  const shared = assistant('shared-a', 'shared-u', start + 1);
-  const original = await transcript('original', [prompt, shared, assistant('abandoned', 'shared-a', start + 2, 900), assistant('active', 'shared-a', start + 3, 20)]);
-  const fork = await transcript('fork', [prompt, shared, assistant('fork-only', 'shared-a', start + 4, 30)], { parentSession: original.sessionFile });
-  const idFork = await transcript('id-fork', [prompt, shared, assistant('id-fork-only', 'shared-a', start + 5, 40)], { parentSession: 'native-original' });
-  const unrelated = await transcript('unrelated', [prompt, shared]);
-  const stats = await getUsageStats(query, [original, fork, idFork, unrelated]);
-  expect(stats.steps).toBe(5);
-  expect(stats.prompts).toBe(2);
-  expect(stats.tokens.input).toBe(110);
-  // An unavailable ancestor is metadata, never permission to follow and read it.
-  const detached = await transcript('detached', [assistant('detached-turn', null, start)], { parentSession: join(directory, 'never-authorized.jsonl') });
-  expect((await getUsageStats(query, [detached])).partial).toBe(false);
-});
-
-test('registered child direct spend is included once without inflating root prompt or turn metrics', async () => {
-  const rootTurn = assistant('root-turn', 'root-user', start + 1);
-  if (rootTurn.message.role !== 'assistant') throw new Error('fixture assistant expected');
-  rootTurn.message.content = [{ type: 'toolCall', id: 'task-call', name: 'task', arguments: {} }];
-  const childTurn = assistant('child-turn', 'child-user', start + 2, 50);
-  if (childTurn.message.role !== 'assistant') throw new Error('fixture assistant expected');
-  const taskResult: SessionMessageEntry = { type: 'message', id: 'task-result', parentId: 'root-turn', timestamp: new Date(start + 3).toISOString(), message: {
-    role: 'toolResult', toolCallId: 'task-call', toolName: 'task', content: [], isError: false, timestamp: start + 3, details: { usage: childTurn.message.usage },
-  } };
-  const root = await transcript('root', [user('root-user', null, start), rootTurn, taskResult]);
-  const child = await transcript('child', [user('child-user', null, start), childTurn], { rootSessionId: root.sessionId });
-  const stats = await getUsageStats(query, [root, child]);
-  expect(stats).toMatchObject({ sessions: 1, subagents: 1, prompts: 1, steps: 1, tokens: { input: 60, total: 72, reasoning: null } });
-  expect(stats.cost).toBeCloseTo(0.32);
-  expect(stats.models[0]?.steps).toBe(2);
-  expect(stats.activity).toEqual([{ date: '2026-03-07', steps: 2 }]);
+test('native AuthStorage usage reports and history are projected and carry no credential or identity', async () => {
+  const secret = 'zai-secret-token-7f3a';
+  const server = Bun.serve({
+    port: 0, hostname: '127.0.0.1',
+    fetch(request) {
+      const url = new URL(request.url);
+      if (url.pathname !== '/api/monitor/usage/quota/limit' || request.headers.get('authorization') !== secret) return new Response('denied', { status: 401 });
+      return Response.json({ success: true, data: { level: 'pro', limits: [{ type: 'TOKENS_LIMIT', usage: 1000, currentValue: 400, percentage: 40, unit: 3, number: 5, nextResetTime: Date.parse('2026-03-08T10:00:00Z') }] } });
+    },
+  });
+  stop = () => server.stop(true);
+  await writeFile(join(agentDir, 'models.yml'), `providers:\n  zai:\n    baseUrl: http://127.0.0.1:${server.port}\n`);
+  const auth = await discoverAuthStorage(agentDir, { cwd: root });
+  try {
+    await auth.credentials.upsert('zai', { type: 'api_key', key: secret });
+  } finally {
+    auth.close();
+  }
+  const { accounts, errors } = await getUsageAccounts({ from: start, to: end, timezone: 'UTC' });
+  expect(errors).toEqual({});
+  const parsed = UsageAccountsSchema.parse(accounts);
+  expect(parsed.reports?.[0]).toMatchObject({ provider: 'zai', limits: [{ id: 'zai:tokens:5h', amount: { usedFraction: 0.4, unit: 'tokens' } }] });
+  expect(Array.isArray(parsed.history)).toBe(true);
+  expect(JSON.stringify(accounts)).not.toContain(secret);
+  expect(JSON.stringify(accounts)).not.toMatch(/accountId|accountKey|email|apiKey|accessToken|refreshToken/);
 });
 
 test('tool calls retain successful, failed, synthetic, interrupted, missing and after-window outcomes with null durations', async () => {
@@ -209,133 +206,29 @@ test('tool calls retain successful, failed, synthetic, interrupted, missing and 
       role: 'toolResult', toolCallId: `call-${name}`, toolName: name, isError: name !== 'read' && name !== 'late', timestamp: time,
       content: name === 'recovered' ? [{ type: 'text', text: 'Previous OMP process exited before this tool returned; its outcome is unknown.' }] : [],
     }, name === 'synthetic' ? { details: { __synthetic: true, source: 'assistant_stop_aborted', executed: false } } : {},
-    name === 'interrupted' ? { details: { __interrupted: true, source: 'interrupt_skipped', execution: 'started' } } : {});
+      name === 'interrupted' ? { details: { __interrupted: true, source: 'interrupt_skipped', execution: 'started' } } : {});
     const result: SessionMessageEntry = { type: 'message', id: `result-${name}`, parentId, timestamp: new Date(time).toISOString(), message };
     entries.push(result); parentId = result.id;
   }
-  const source = await transcript('tools', entries);
+  const file = await tuiSession('--work--tools', 'tools', entries);
+  const source: UsageSessionReference = { sessionId: 'tools', rootSessionId: 'tools', workspaceId: 'workspace-a', projectId: 'project-a', cwd: join(root, 'workspace'), agentDirectory: agentDir, sessionsDirectory: join(agentDir, 'sessions', '--work--tools'), sessionFile: file };
   const report = UsageToolsResponseSchema.parse(await getUsageTools(query, [source]));
   expect(report.totals).toEqual({ calls: 7, succeeded: 1, failed: 1, unfinished: 5 });
   expect(report.usage.every(row => row.durationP50 === null)).toBe(true);
   expect(report.usage.find(row => row.name === 'bash')).toMatchObject({ calls: 1, failed: 1 });
-  expect(report.usage.find(row => row.name === 'synthetic')).toMatchObject({ calls: 1, unfinished: 1 });
   const later = await getUsageTools({ ...query, to: end + 1 }, [source]);
   expect(later.totals).toEqual({ calls: 7, succeeded: 2, failed: 1, unfinished: 4 });
 });
 
-test('tools on a shared fork entry count once and a distinct session collision still counts independently', async () => {
-  const turn = assistant('shared-tool', null, start);
-  if (turn.message.role !== 'assistant') throw new Error('fixture assistant expected');
-  turn.message.content = [{ type: 'toolCall', id: 'same-call', name: 'read', arguments: {} }];
-  const root = await transcript('tool-root', [turn]);
-  const fork = await transcript('tool-fork', [turn], { parentSession: root.sessionFile });
-  const unrelated = await transcript('tool-unrelated', [turn]);
-  expect((await getUsageTools(query, [root, fork, unrelated])).totals).toEqual({ calls: 2, succeeded: 0, failed: 0, unfinished: 2 });
-});
-
-test('containment rejects an escaped registered file and symlink target without touching unauthorized transcript', async () => {
-  const good = await transcript('contained', [assistant('ok', null, start)]);
-  const outside = join(directory, 'outside.jsonl');
-  const before = await readFile(good.sessionFile, 'utf8');
+test('a registered path cannot escape its sessions directory through a symlink', async () => {
+  const file = await tuiSession('--work--contain', 'contained', [assistant('ok', null, start)]);
+  const outside = join(root, 'outside.jsonl');
+  const before = await readFile(file, 'utf8');
   await writeFile(outside, before);
-  const escaped = { ...good, sessionId: 'escaped', rootSessionId: 'escaped', sessionFile: outside };
-  const link = join(directory, 'sessions', 'link.jsonl');
+  const link = join(agentDir, 'sessions', '--work--contain', 'link.jsonl');
   await symlink(outside, link);
-  const linked = { ...escaped, sessionId: 'linked', rootSessionId: 'linked', sessionFile: link };
-  const stats = await getUsageStats(query, [good, escaped, linked]);
-  expect(stats).toMatchObject({ steps: 1, partial: true, errors: { escaped: 'USAGE_SESSION_UNREADABLE', linked: 'USAGE_SESSION_UNREADABLE' } });
+  const linked: UsageSessionReference = { sessionId: 'linked', rootSessionId: 'linked', workspaceId: 'w', projectId: 'p', cwd: root, agentDirectory: agentDir, sessionsDirectory: join(agentDir, 'sessions', '--work--contain'), sessionFile: link };
+  const good: UsageSessionReference = { ...linked, sessionId: 'good', rootSessionId: 'good', sessionFile: file };
+  await expect(getUsageTools(query, [good, linked])).resolves.toMatchObject({ partial: true, errors: { linked: 'USAGE_SESSION_UNREADABLE' } });
   expect(await readFile(outside, 'utf8')).toBe(before);
-});
-
-test('accounting snapshot never resolves persisted image blob references or mutates the source', async () => {
-  const prompt = user('image-user', null, start);
-  if (prompt.message.role !== 'user') throw new Error('fixture user expected');
-  prompt.message.content = [{ type: 'image', mimeType: 'image/png', data: `blob:sha256:${'a'.repeat(64)}` }];
-  const source = await transcript('image', [prompt, assistant('image-turn', prompt.id, start + 1)]);
-  const before = await readFile(source.sessionFile, 'utf8');
-  expect((await getUsageStats(query, [source]))).toMatchObject({ prompts: 1, steps: 1, partial: false });
-  expect((await getUsageTools(query, [source]))).toMatchObject({ totals: { calls: 0 }, partial: false });
-  expect(await readFile(source.sessionFile, 'utf8')).toBe(before);
-});
-
-test('invalid semantic records, missing proven IDs, orphan and cyclic lineages cannot silently produce authoritative zeros', async () => {
-  const good = await transcript('semantic-good', [assistant('good', null, start)]);
-  const brokenUsage = await transcript('broken-usage', [assistant('broken', null, start)]);
-  await writeFile(brokenUsage.sessionFile, (await readFile(brokenUsage.sessionFile, 'utf8')).replace('"input":10', '"input":"10"'));
-  const orphan = await transcript('orphan', [assistant('orphan', 'not-present', start)]);
-  const cycle = await transcript('cycle', [assistant('cycle', 'cycle', start)]);
-  const legacy = await transcript('legacy', [assistant('legacy', null, start)]);
-  await writeFile(legacy.sessionFile, (await readFile(legacy.sessionFile, 'utf8')).replace('"version":3', '"version":1'));
-  const stats = await getUsageStats(query, [good, brokenUsage, orphan, cycle, legacy]);
-  expect(stats).toMatchObject({ steps: 1, partial: true, errors: { 'broken-usage': 'USAGE_SESSION_CORRUPT', orphan: 'USAGE_SESSION_CORRUPT', cycle: 'USAGE_SESSION_CORRUPT', legacy: 'USAGE_SESSION_CORRUPT' } });
-});
-
-test('native auxiliary model_usage contributes actual provider usage and cost on the active lineage', async () => {
-  const auxiliary: SessionEntry = { type: 'model_usage', id: 'auxiliary', parentId: null, timestamp: new Date(start).toISOString(), purpose: 'summary',
-    api: 'openai-completions', provider: 'provider-aux', model: 'model-aux', stopReason: 'stop', usage: { input: 5, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 6,
-      cost: { input: 0.01, output: 0.01, cacheRead: 0, cacheWrite: 0, total: 0.02 } } };
-  const source = await transcript('auxiliary', [auxiliary]);
-  expect((await getUsageStats(query, [source]))).toMatchObject({ steps: 1, cost: 0.02, tokens: { total: 6 }, models: [{ providerId: 'provider-aux', modelId: 'model-aux' }] });
-});
-
-test('all-time reports start at the earliest eligible authorized event and empty success has a bounded window', async () => {
-  const source = await transcript('all-time', [user('all-user', null, start), assistant('all-turn', 'all-user', start + 1)]);
-  const future = await transcript('future', [assistant('future', null, end + 1)]);
-  const all: UsageQuery = { to: end, timezone: 'UTC' };
-  expect((await getUsageStats(all, [source, future])).range).toEqual({ from: start, to: end });
-  expect((await getUsageStats(all, [])).range).toEqual({ from: end - 1, to: end });
-  expect((await getUsageStats({ ...all, from: start + 1 }, [source])).range).toEqual({ from: start + 1, to: end });
-});
-
-test('duplicate native IDs within one persisted transcript fail explicitly rather than overwrite accounting', async () => {
-  const good = await transcript('duplicate-good', [assistant('good', null, start)]);
-  const first = assistant('duplicate', null, start);
-  const duplicate = await transcript('duplicate', [first, assistant('duplicate', null, start + 1, 999)]);
-  expect(await getUsageStats(query, [good, duplicate])).toMatchObject({ steps: 1, partial: true, errors: { duplicate: 'USAGE_SESSION_CORRUPT' } });
-});
-
-test('exact registered paths without a storage directory cannot redirect through a symlink', async () => {
-  const source = await transcript('exact', [assistant('exact', null, start)]);
-  const exact: UsageSessionReference = { sessionId: source.sessionId, rootSessionId: source.rootSessionId, workspaceId: source.workspaceId, projectId: source.projectId,
-    sessionFile: source.sessionFile, cwd: source.cwd, agentDirectory: source.agentDirectory };
-  expect((await getUsageStats(query, [exact])).steps).toBe(1);
-  const link = join(directory, 'redirect.jsonl');
-  await symlink(source.sessionFile, link);
-  const redirected = { ...exact, sessionId: 'redirected', rootSessionId: 'redirected', sessionFile: link };
-  await expect(getUsageStats(query, [redirected])).rejects.toThrow('USAGE_UNAVAILABLE');
-});
-
-test('a registered path cannot redirect to an unregistered sibling inside the same storage directory', async () => {
-  const good = await transcript('same-dir-good', [assistant('good-entry', null, start)]);
-  const registered = await transcript('same-dir-registered', [assistant('registered-entry', null, start)]);
-  const secret = await transcript('same-dir-secret', [assistant('secret-entry', null, start, 999_999)]);
-  await rm(registered.sessionFile);
-  await symlink(secret.sessionFile, registered.sessionFile);
-  const stats = await getUsageStats(query, [good, registered]);
-  expect(stats).toMatchObject({ steps: 1, tokens: { input: 10 }, partial: true, errors: { 'same-dir-registered': 'USAGE_SESSION_UNREADABLE' } });
-  expect((await getUsageTools(query, [good, registered]))).toMatchObject({ partial: true, errors: stats.errors });
-  await expect(getUsageStats(query, [registered])).rejects.toThrow('USAGE_UNAVAILABLE');
-});
-
-test('fork siblings deduplicate inherited tokens and tools when their shared native parent is absent, corrupt or unselected', async () => {
-  const parent = await transcript('shared-parent', [], { projectId: 'parent-project' });
-  const shared = assistant('shared-copied-turn', null, start);
-  if (shared.message.role !== 'assistant') throw new Error('fixture assistant expected');
-  shared.message.content = [{ type: 'toolCall', id: 'inherited-call', name: 'read', arguments: {} }];
-  for (const [index, parentSession] of [parent.sessionFile, 'native-shared-parent'].entries()) {
-    const first = await transcript(`detached-first-${index}`, [shared, assistant(`first-only-${index}`, shared.id, start + 1, 20)], { parentSession });
-    const second = await transcript(`detached-second-${index}`, [shared, assistant(`second-only-${index}`, shared.id, start + 2, 30)], { parentSession });
-    const unrelated = await transcript(`detached-unrelated-${index}`, [shared]);
-    const healthy = await getUsageStats(query, [first, second, unrelated]);
-    expect(healthy).toMatchObject({ steps: 4, tokens: { input: 70 }, partial: false });
-    expect((await getUsageTools(query, [first, second, unrelated])).totals).toEqual({ calls: 2, succeeded: 0, failed: 0, unfinished: 2 });
-    await rm(parent.sessionFile, { force: true });
-    expect((await getUsageStats(query, [parent, first, second]))).toMatchObject({ steps: 3, tokens: { input: 60 }, partial: true, errors: { 'shared-parent': 'USAGE_SESSION_UNREADABLE' } });
-    expect((await getUsageTools(query, [parent, first, second]))).toMatchObject({ totals: { calls: 1, unfinished: 1 }, partial: true });
-    await writeFile(parent.sessionFile, '{corrupt parent}\n');
-    expect((await getUsageStats(query, [parent, first, second]))).toMatchObject({ steps: 3, tokens: { input: 60 }, partial: true, errors: { 'shared-parent': 'USAGE_SESSION_CORRUPT' } });
-    expect((await getUsageTools(query, [parent, first, second]))).toMatchObject({ totals: { calls: 1, unfinished: 1 }, partial: true });
-    expect((await getUsageStats({ ...query, projectId: 'project-a' }, [parent, first, second]))).toMatchObject({ steps: 3, tokens: { input: 60 }, partial: false });
-    expect((await getUsageTools({ ...query, projectId: 'project-a' }, [parent, first, second]))).toMatchObject({ totals: { calls: 1, unfinished: 1 }, partial: false });
-  }
 });

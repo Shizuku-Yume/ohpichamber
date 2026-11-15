@@ -158,3 +158,13 @@ An entry leaves this file in one of two ways:
 - **Impact:** automatic compaction looks like a stall, a cleared todo list may linger, and each OMP upgrade can silently diverge plan mode and the command list.
 - **Solution:** consume both events in the projection; add an upgrade-time test that compares the plan-mode mirror and the command allowlist with the pinned OMP package, as the tool presentation coverage test does.
 - **Cost:** small for the events; the drift test needs a stable way to read OMP's TUI-private plan-mode steps.
+
+## Cold new-chat first token waits on OMP session construction
+
+- **Where:** `packages/agent-service/src/supervisor/workers.ts` (spare pool), `packages/agent-service/src/worker/session.ts`, `packages/agent-service/src/worker/catalog-models.ts:730-735`
+- **Added:** 2026-11-15
+- **Priority:** only-if-grows
+- **Problem:** a new chat that skips `prepare` reaches its first `part.delta` in ~720–800 ms against the 600 ms W11 budget (waived 2026-11-15). The cost is `createAgentSession` (~110 ms), agent-loop preparation (~145 ms) and supervisor queueing (~60 ms); a spare cannot build a session graph ahead of time because OMP's `AgentRegistry.global()` is process-wide. Separately, `catalog-models.ts` calls `modelRegistry.reapplyModelPolicies()` on every selection, forcing a full offline catalog rebuild past the mtime gate (~37 ms of a prompt's non-provider time).
+- **Impact:** paths that create a session without a draft (API callers, some automation) see roughly 200 ms more latency than the prepared path.
+- **Solution:** ask OMP for an SDK seam that builds a session graph in a spare process; guard `reapplyModelPolicies()` with a settings/credential revision so unchanged policy skips the rebuild (the staleness tests at `catalog-models.test.ts:133` and `:215` must keep passing).
+- **Cost:** the SDK seam needs an upstream change; the revision guard is small but touches catalog staleness.

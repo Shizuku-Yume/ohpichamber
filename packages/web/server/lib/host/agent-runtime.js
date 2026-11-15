@@ -52,6 +52,7 @@ export {
 export function createHostAgentRuntime({
   dataDir, scopeRuntime, validateDirectoryPath, getEnvironmentForDirectory,
   invokeHostAction, enterprisePolicyOptions, bunPath, entrypoint,
+  resolveHostTools,
 }) {
   const bundledRuntime = resolveWebAgentRuntime();
   const detected = detectSystemOmpRuntime({
@@ -85,7 +86,7 @@ export function createHostAgentRuntime({
     return HostWorkspacePolicySchema.parse({
       ...native,
       // These are contained Host capabilities, not an SDK grant or a bypass of native approval.
-      fileTools: ['read', 'write'], shellCommands: [], toolRequests: [],
+      fileTools: ['read', 'write'], shellCommands: [],
       providerEntry: !isEnterpriseMode(enterprisePolicyOptions),
     });
   };
@@ -103,13 +104,16 @@ export function createHostAgentRuntime({
     const env = process.env.BUN_BE_BUN === '1'
       ? { BUN_BE_BUN: '1', ...baseEnv }
       : baseEnv;
+    // The workspace catalog answers from this admission, so the Host's current
+    // tool enablement travels with it rather than a worker-side default.
+    const hostTools = await resolveHostTools();
     const registration = await readResponse(await service.request(
       `/internal/workspaces/${encodeURIComponent(scope.workspaceId)}`,
       {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId: scope.projectId, cwd: scope.cwd, agentDirectory: scope.agentDirectory,
-          agentDirectoryId: scope.agentDirectoryId, env,
+          agentDirectoryId: scope.agentDirectoryId, env, hostTools,
         }),
       },
     ), HostWorkspaceRegisteredSchema);

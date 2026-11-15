@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { JsonValue } from '@openchamber/agent-contract';
+import { ProposedWorkflowResultSchema, type JsonValue } from '@openchamber/agent-contract';
 import type { CanonicalToolState, CanonicalToolView, RenderedPageAsk, RequestedSecret, RequestedSecretRun } from './toolView';
 
 /**
@@ -87,11 +87,6 @@ const openChamberResultSchema = z
     })
     .catch({});
 
-const proposedWorkflowResultSchema = z.object({
-    ok: z.literal(true),
-    action: z.literal('workflow.run'),
-    data: z.object({ runId: z.string().min(1) }),
-});
 
 const generatedImagesResultSchema = z.object({
     ok: z.literal(true),
@@ -170,19 +165,41 @@ export const renderedPage = (view: CanonicalToolView): ({ html: string; ui?: str
 /** The workflow run an `openchamber_workflow` call proposed, else null. */
 export const proposedWorkflowRunId = (view: CanonicalToolView): string | null => {
     if (view.tool !== OPENCHAMBER_WORKFLOW_TOOL || view.state.status !== 'completed') return null;
-    const envelope = resultEnvelope(view.state, 'ok');
-    const parsed = proposedWorkflowResultSchema.safeParse(envelope);
+    let payload: unknown;
+    if ('metadata' in view.state && view.state.metadata && typeof view.state.metadata === 'object' && Object.keys(view.state.metadata).length > 0) {
+        payload = view.state.metadata;
+    } else if ('output' in view.state && typeof view.state.output === 'string') {
+        try {
+            payload = JSON.parse(view.state.output);
+        } catch {
+            return null;
+        }
+    }
+    const parsed = ProposedWorkflowResultSchema.safeParse(payload);
     return parsed.success ? parsed.data.data.runId : null;
 };
 
-/** The files an `openchamber_image` call saved, in order. */
+/** The files a `generate_image` call saved, in order. */
 export const generatedImagePaths = (view: CanonicalToolView): string[] => {
-    if (view.tool !== OPENCHAMBER_IMAGE_TOOL || view.state.status !== 'completed') return [];
+    if (view.tool !== 'generate_image' && view.tool !== OPENCHAMBER_IMAGE_TOOL) return [];
+    if (view.state.status !== 'completed') return [];
+    const details = resultEnvelope(view.state, 'details');
+    if (details && typeof details === 'object' && !Array.isArray(details)) {
+        const imagePaths = (details as Record<string, unknown>).imagePaths;
+        if (Array.isArray(imagePaths)) {
+            const valid = imagePaths.filter((item): item is string => typeof item === 'string' && Boolean(item));
+            if (valid.length > 0) return valid;
+        }
+    }
+    const directPaths = resultEnvelope(view.state, 'imagePaths');
+    if (Array.isArray(directPaths)) {
+        const valid = directPaths.filter((item): item is string => typeof item === 'string' && Boolean(item));
+        if (valid.length > 0) return valid;
+    }
     const envelope = resultEnvelope(view.state, 'ok');
     const parsed = generatedImagesResultSchema.safeParse(envelope);
     return parsed.success ? parsed.data.data.images.map((image) => image.path) : [];
 };
-
 
 export const secretRunCommandLine = (program: string, args: readonly string[]): string => {
     const hidden = (code: number) => code < 0x20 || (code >= 0x7f && code <= 0x9f) || code === 0x61c

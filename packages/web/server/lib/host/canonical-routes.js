@@ -27,7 +27,7 @@ const WorkspaceResolveRequestSchema = z.strictObject({ directory: z.string().min
 // Only SDK-owned operations appear here. Host session admission, metadata and delivery have their own routers.
 const AGENT_ROUTES = [
  ...FILE_RESOURCE_AGENT_ROUTES,
- { method: 'GET', pattern: /^\/usage$/, response: C.UsageStatsSchema, query: ['from', 'to', 'timezone', 'workspaceId', 'projectId'], usage: true },
+ { method: 'GET', pattern: /^\/usage$/, response: C.UsageStatsSchema, query: ['from', 'to', 'timezone', 'workspaceId', 'projectId', 'providerId'], usage: true },
  { method: 'GET', pattern: /^\/usage\/tools$/, response: C.UsageToolsResponseSchema, query: ['from', 'to', 'timezone', 'workspaceId', 'projectId'], usage: true },
  { method: 'GET', pattern: /^\/subagents$/, response: z.array(C.SubagentSchema), query: ['sessionId'], subagent: true },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/models$/, response: C.ModelCatalogSchema },
@@ -106,6 +106,8 @@ const AGENT_ROUTES = [
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/catalog$/, response: C.SkillsCatalogStateSchema },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/apply$/, request: C.SkillsApplyRequestSchema, response: C.SkillsApplyResultSchema },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/expand$/, request: C.SkillExpandRequestSchema, response: C.SkillExpandResultSchema },
+ { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/tools$/, response: C.SessionToolsCatalogSchema },
+ { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/tools$/, response: C.SessionToolsCatalogSchema },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs$/, response: C.ShellSnapshotSchema, shellObservation: true },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/shell\/jobs$/, request: C.ShellStartRequestSchema, response: C.ShellJobSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/shell\/jobs$/, response: C.ShellSnapshotSchema, shellObservation: true },
@@ -147,7 +149,7 @@ export function registerCanonicalHostRoutes(app, {
  express, service, uiAuthController, tunnelAuthController, isRequestOriginAllowed, enterprisePolicyOptions,
  resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope, listProjects, listWorkspaces,
  resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes,
- skillFileOwner, getSkillRepositoryDependencies, globalEventHub,
+ skillFileOwner, getSkillRepositoryDependencies, globalEventHub, resolveHostTools,
 }) {
  const validService = service && z.function().safeParse(service.request).success && z.function().safeParse(service.getState).success;
  if (!validService) throw new TypeError('Canonical gateway requires the real Agent Service request/getState');
@@ -281,7 +283,7 @@ export function registerCanonicalHostRoutes(app, {
  router.use(express.json({ limit: '1mb', strict: true }));
  router.use(async (req, res) => {
   const route = res.locals.canonicalProxyRoute;
-  const resolveRouteSessionScope = route.shellObservation ? resolveHostSessionScope : resolveSessionScope;
+  const resolveRouteSessionScope = (route.shellObservation || route.stream) ? resolveHostSessionScope : resolveSessionScope;
   const controller = new AbortController();
   const disconnect = () => controller.abort();
   req.once('aborted', disconnect);
@@ -317,8 +319,12 @@ export function registerCanonicalHostRoutes(app, {
     const bootstrap = {
      rootSessionId: scope.rootSessionId ?? sessionId, projectId: scope.projectId, workspaceId: scope.workspaceId,
      cwd: scope.cwd, agentDirectory: scope.agentDirectory, agentDirectoryId: scope.agentDirectoryId,
-     displayPath: scope.displayPath ?? 'workspace'
+     displayPath: scope.displayPath ?? 'workspace',
     };
+    if (typeof resolveHostTools === 'function') {
+     const hostTools = await resolveHostTools().catch(() => null);
+     if (hostTools) bootstrap.hostTools = hostTools;
+    }
     if (scope.env !== undefined) bootstrap.env = scope.env;
     const reopened = await service.request(`/internal/sessions/${encodeURIComponent(sessionId)}/reopen`, {
      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bootstrap), signal: controller.signal,

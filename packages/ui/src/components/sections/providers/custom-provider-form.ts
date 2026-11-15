@@ -23,6 +23,12 @@ export interface ModelRow {
   base?: Model;
 }
 export interface HeaderRow { row: string; name: string; value: string }
+/** What Save does with the uploaded logo image. */
+export type CustomProviderLogoPlan =
+  | { kind: 'keep' }
+  | { kind: 'remove' }
+  | { kind: 'upload'; file: File };
+
 export interface CustomProviderFormState {
   providerId: string;
   name: string;
@@ -35,11 +41,14 @@ export interface CustomProviderFormState {
   headers: HeaderRow[];
   models: ModelRow[];
   icon: CustomProviderIcon | null;
+  /** The logo image: a file picked here, the stored one cleared, or null for whatever is stored. Wins over `icon`. */
+  logo: File | 'removed' | null;
 }
 export interface CustomProviderPersistPlan {
   request: ProviderConfigureRequest;
   apiKey: string;
   icon: CustomProviderIcon | null;
+  logo: CustomProviderLogoPlan;
 }
 
 export type CustomProviderTranslator = (key: I18nKey) => string;
@@ -121,6 +130,7 @@ export function createEmptyCustomProviderForm(
     headers: initial ? [] : [createHeaderRow()],
     models: initial ? initial.models.map(createModelRow) : [createModelRow()],
     icon,
+    logo: null,
   };
 }
 
@@ -233,6 +243,7 @@ export function buildCustomProviderRequest(form: CustomProviderFormState, expect
   return {
     apiKey: form.apiKey,
     icon: form.icon,
+    logo: logoPlanOf(form.logo),
     request: ProviderConfigureRequestSchema.parse({
       expectedRevision,
       configuration: {
@@ -258,4 +269,12 @@ export function buildProviderDiscoveryRequest(form: CustomProviderFormState, edi
   if (form.apiKey) request.apiKey = form.apiKey;
   if (form.credentialRef) request.credentialRef = form.credentialRef;
   return ProviderModelDiscoveryRequestSchema.parse(request);
+}
+
+// Only what the user did in the field changes the stored image; an untouched
+// field keeps whatever is stored, including a logo another client just uploaded.
+function logoPlanOf(logo: CustomProviderFormState['logo']): CustomProviderLogoPlan {
+  if (logo === null) return { kind: 'keep' };
+  if (logo === 'removed') return { kind: 'remove' };
+  return { kind: 'upload', file: logo };
 }

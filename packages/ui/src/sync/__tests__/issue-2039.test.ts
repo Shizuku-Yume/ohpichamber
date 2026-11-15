@@ -151,8 +151,10 @@ beforeEach(async () => {
   spyOn(trustConfirmation, "resolveWorktreeSetupCommands").mockResolvedValue([])
   spyOn(worktreeCreate, "createWorktreeWithDefaults").mockImplementation(async project => {
     createdWorktreeProjects.push(project)
-    return { source: "sdk", name: "generated-branch", path: "/worktrees/generated-branch",
-      projectDirectory: project.path, branch: "generated-branch", label: "generated-branch" }
+    return {
+      source: "sdk", name: "generated-branch", path: "/worktrees/generated-branch",
+      projectDirectory: project.path, branch: "generated-branch", label: "generated-branch"
+    }
   })
 })
 
@@ -379,7 +381,6 @@ describe("issue 2039 draft auto-accept", () => {
 
     expect(activateDirectoryCalls).toEqual(["/repo"])
     expect(applyDefaultModelAgentSelectionCalls.at(-1)).toEqual({
-      projectDefaultAgent: "agent-project",
       projectDefaultModel: "model-project",
       projectDefaultVariant: "variant-project",
     })
@@ -388,7 +389,7 @@ describe("issue 2039 draft auto-accept", () => {
   test("late activation preserves a manual pick and same-project worktree refinements", async () => {
     let finish!: () => void
     activationPending = new Promise<void>((resolve) => { finish = resolve })
-    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo', defaultAgent: 'build' }] })
+    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo' }] })
     useSessionUIStore.getState().openNewSessionDraft({ target: 'project', selectedProjectId: 'project-1', directoryOverride: '/repo' })
     expect(applyDefaultModelAgentSelectionCalls).toHaveLength(1)
     useConfigStore.setState({ selectionSource: 'manual' })
@@ -401,7 +402,7 @@ describe("issue 2039 draft auto-accept", () => {
   test("late project activation cannot replace a newer draft target or a closed draft", async () => {
     let finish!: () => void
     activationPending = new Promise<void>((resolve) => { finish = resolve })
-    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo', defaultAgent: 'project-agent' }] })
+    useProjectsStore.setState({ projects: [{ id: 'project-1', path: '/repo' }] })
     useSessionUIStore.getState().openNewSessionDraft({ target: 'project', selectedProjectId: 'project-1', directoryOverride: '/repo' })
     useSessionUIStore.getState().setNewSessionDraftTarget({ projectId: 'openchamber:chats' })
     const appliedBeforeClose = applyDefaultModelAgentSelectionCalls.length
@@ -453,7 +454,6 @@ describe("issue 2039 draft auto-accept", () => {
 
     expect(activateDirectoryCalls).toEqual(["/repo"])
     expect(applyDefaultModelAgentSelectionCalls.at(-1)).toEqual({
-      projectDefaultAgent: "agent-project",
       projectDefaultModel: "model-project",
       projectDefaultVariant: "variant-project",
     })
@@ -515,6 +515,41 @@ describe("issue 2039 draft auto-accept", () => {
     expect(useSessionUIStore.getState().currentSessionDirectory).toBe("/canonical/worktree")
   })
 
+  test("a draft that never sent does not keep its resolved workspace after it closes", async () => {
+    // The per-draft cache must not outlive the draft: a later draft may reuse
+    // the same path after the workspace changed, and a stale resolution would
+    // admit into the old one.
+    spyOn(canonicalClient, "resolveWorkspace").mockRestore()
+    let nextWorkspaceId = "workspace-first"
+    spyOn(canonicalClient, "resolveWorkspace").mockImplementation(async directory => {
+      resolveWorkspaceCalls.push(directory)
+      return { workspaceId: nextWorkspaceId, projectId: "project-1", name: "Workspace", displayPath: "." }
+    })
+    useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: "/canonical/worktree" })
+    await Promise.resolve()
+    useSessionUIStore.getState().closeNewSessionDraft()
+
+    nextWorkspaceId = "workspace-second"
+    useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: "/canonical/worktree" })
+    await materializeOpenDraftSession({ providerId: "provider", modelId: "model" })
+
+    expect(createSessionCalls[0]?.workspaceId).toBe("workspace-second")
+  })
+
+  test("a failed workspace resolution is retried instead of staying cached", async () => {
+    spyOn(canonicalClient, "resolveWorkspace").mockRestore()
+    let attempt = 0
+    spyOn(canonicalClient, "resolveWorkspace").mockImplementation(async directory => {
+      resolveWorkspaceCalls.push(directory)
+      if (attempt++ === 0) throw new Error("host unavailable")
+      return { workspaceId: "workspace-retry", projectId: "project-1", name: "Workspace", displayPath: "." }
+    })
+    useSessionUIStore.getState().openNewSessionDraft({ directoryOverride: "/canonical/worktree" })
+    await materializeOpenDraftSession({ providerId: "provider", modelId: "model" })
+
+    expect(createSessionCalls[0]?.workspaceId).toBe("workspace-retry")
+  })
+
   test("routes the session by its admitted workspace, not a stale requested-path attachment", async () => {
     registerWorkspaceDirectory("workspace-issue-2039", "/canonical/worktree")
     useSessionUIStore.getState().openNewSessionDraft({
@@ -557,10 +592,12 @@ describe("assistant answer worktree routing", () => {
   })
 
   test("creates a sibling worktree from the captured source worktree directory", async () => {
-    useProjectsStore.setState({ projects: [
-      { id: "project", path: "/repo" },
-      { id: "source-worktree", path: "/worktrees/source" },
-    ] })
+    useProjectsStore.setState({
+      projects: [
+        { id: "project", path: "/repo" },
+        { id: "source-worktree", path: "/worktrees/source" },
+      ]
+    })
     const sourceWorktree = {
       path: "/worktrees/source", projectDirectory: "/repo", branch: "source", label: "source",
     }

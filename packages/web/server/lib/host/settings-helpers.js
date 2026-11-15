@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { createRequire } from 'node:module';
 
-export const isAgentMemoryFeatureAvailable = () => true;
 import { isOverviewFeatureAvailable } from '../overview/feature-flag.js';
 export const isWorkflowFeatureAvailable = () => true;
 import { idleStopSchema } from '../spaces/idle-stop.js';
@@ -465,6 +464,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionTabsEnabled === 'boolean') {
       result.sessionTabsEnabled = candidate.sessionTabsEnabled;
     }
+    if (typeof candidate.terminalCloseOnExit === 'boolean') {
+      result.terminalCloseOnExit = candidate.terminalCloseOnExit;
+    }
     if (typeof candidate.largeTextPasteBehavior === 'string') {
       const mode = candidate.largeTextPasteBehavior.trim();
       if (mode === 'ask' || mode === 'attach' || mode === 'inline' || mode === 'inline-double-paste') {
@@ -486,8 +488,8 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionRecapEnabled === 'boolean') {
       result.sessionRecapEnabled = candidate.sessionRecapEnabled;
     }
-    if (typeof candidate.sessionSuggestionEnabled === 'boolean') {
-      result.sessionSuggestionEnabled = candidate.sessionSuggestionEnabled;
+    if (typeof candidate.suggestionGenerator === 'string' && ['session', 'small', 'off'].includes(candidate.suggestionGenerator)) {
+      result.suggestionGenerator = candidate.suggestionGenerator;
     }
     if (typeof candidate.sessionWorkEnabled === 'boolean') {
       result.sessionWorkEnabled = candidate.sessionWorkEnabled;
@@ -497,12 +499,6 @@ export const createSettingsHelpers = (dependencies) => {
     }
     if (typeof candidate.sessionReviewOfferEnabled === 'boolean') {
       result.sessionReviewOfferEnabled = candidate.sessionReviewOfferEnabled;
-    }
-    if (typeof candidate.sessionWorkKeepInGroup === 'boolean') {
-      result.sessionWorkKeepInGroup = candidate.sessionWorkKeepInGroup;
-    }
-    if (typeof candidate.sessionGoalEnabled === 'boolean') {
-      result.sessionGoalEnabled = candidate.sessionGoalEnabled;
     }
     if (typeof candidate.sessionGoalDefaultBudgetEnabled === 'boolean') {
       result.sessionGoalDefaultBudgetEnabled = candidate.sessionGoalDefaultBudgetEnabled;
@@ -516,9 +512,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.sessionGoalMaxAutoTurns === 'number' && Number.isSafeInteger(candidate.sessionGoalMaxAutoTurns)
       && candidate.sessionGoalMaxAutoTurns >= 1 && candidate.sessionGoalMaxAutoTurns <= 200) {
       result.sessionGoalMaxAutoTurns = candidate.sessionGoalMaxAutoTurns;
-    }
-    if (typeof candidate.autoApplyAgentModel === 'boolean') {
-      result.autoApplyAgentModel = candidate.autoApplyAgentModel;
     }
     if (typeof candidate.planModeAllowAgents === 'boolean') {
       result.planModeAllowAgents = candidate.planModeAllowAgents;
@@ -632,10 +625,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (lastSelectedModel.success) {
       result.lastSelectedModel = lastSelectedModel.data;
     }
-    if (typeof candidate.defaultAgent === 'string') {
-      const trimmed = candidate.defaultAgent.trim();
-      result.defaultAgent = trimmed.length > 0 ? trimmed : undefined;
-    }
     if (typeof candidate.defaultSessionMode === 'string') {
       const mode = candidate.defaultSessionMode.trim();
       if (SESSION_MODE_VALUES.has(mode)) {
@@ -694,9 +683,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.agentControlToolEnabled === 'boolean') {
       result.agentControlToolEnabled = candidate.agentControlToolEnabled;
     }
-    if (typeof candidate.agentMemoryToolEnabled === 'boolean') {
-      result.agentMemoryToolEnabled = candidate.agentMemoryToolEnabled;
-    }
     if (typeof candidate.agentNotifyToolEnabled === 'boolean') {
       result.agentNotifyToolEnabled = candidate.agentNotifyToolEnabled;
     }
@@ -719,12 +705,6 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.showTurnChangedFiles === 'boolean') {
       result.showTurnChangedFiles = candidate.showTurnChangedFiles;
     }
-    if (typeof candidate.showExpandedBashTools === 'boolean') {
-      result.showExpandedBashTools = candidate.showExpandedBashTools;
-    }
-    if (typeof candidate.showExpandedEditTools === 'boolean') {
-      result.showExpandedEditTools = candidate.showExpandedEditTools;
-    }
     if (typeof candidate.timeFormatPreference === 'string') {
       const mode = candidate.timeFormatPreference.trim();
       if (mode === 'auto' || mode === '12h' || mode === '24h') {
@@ -741,12 +721,6 @@ export const createSettingsHelpers = (dependencies) => {
       const mode = candidate.chatRenderMode.trim();
       if (mode === 'sorted' || mode === 'live') {
         result.chatRenderMode = mode;
-      }
-    }
-    if (typeof candidate.messageStreamTransport === 'string') {
-      const mode = candidate.messageStreamTransport.trim();
-      if (mode === 'auto' || mode === 'ws' || mode === 'sse') {
-        result.messageStreamTransport = mode;
       }
     }
     if (typeof candidate.activityRenderMode === 'string') {
@@ -991,7 +965,7 @@ export const createSettingsHelpers = (dependencies) => {
     // registry is the authority on what a client may persist, and the client
     // parses the same document on the way back in.
     for (const key of [
-      'agentImageToolEnabled', 'agentImageModel', 'sessionRetentionIncludeInWork',
+      'sessionRetentionIncludeInWork',
       'dictationAutoSend', 'sttEndpointPath', 'sttCorrectTranscript',
       'sidebarSections', 'sidebarPinLists', 'sidebarHiddenSections',
       'sessionTabsPerWorkspace', 'selectionApprovalText', 'customProviderLogos',
@@ -1013,7 +987,22 @@ export const createSettingsHelpers = (dependencies) => {
     return result;
   };
 
-  const mergePersistedSettings = (current, changes) => ({ ...current, ...changes });
+  const mergePersistedSettings = (current, changes) => {
+    const merged = { ...current, ...changes };
+    delete merged.defaultAgent;
+    delete merged.sessionWorkKeepInGroup;
+    delete merged.messageStreamTransport;
+    delete merged.savePastedImagesAsFiles;
+    if (Array.isArray(merged.projects)) {
+      merged.projects = merged.projects.map((proj) => {
+        if (!proj || typeof proj !== 'object' || !('defaultAgent' in proj)) return proj;
+        const copy = { ...proj };
+        delete copy.defaultAgent;
+        return copy;
+      });
+    }
+    return merged;
+  };
 
   const formatSettingsResponse = (settings) => {
     const sanitized = sanitizeSettingsUpdate(settings);
@@ -1032,9 +1021,6 @@ export const createSettingsHelpers = (dependencies) => {
       ...sanitized,
       hasManagedRemoteTunnelToken,
       hasDesktopUiPassword,
-      // Tells the client whether agent memory exists in this build at all, so
-      // its settings row and panel tab can be absent rather than merely off.
-      agentMemoryFeatureAvailable: isAgentMemoryFeatureAvailable(),
       overviewFeatureAvailable: isOverviewFeatureAvailable(),
       // Whether this build has agent workflows (OPENCHAMBER_WORKFLOWS_ENABLE).
       agentWorkflowFeatureAvailable: isWorkflowFeatureAvailable(),

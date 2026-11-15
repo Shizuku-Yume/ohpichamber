@@ -120,6 +120,20 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
         {agents.length > 0 && <SettingsSidebarSearch value={query} onChange={setQuery} />}
       </div>
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2 overflow-x-hidden">
+        <button
+          type="button"
+          onClick={() => { setSelectedAgent(null); onItemSelect?.(); }}
+          data-settings-item="agents.global-settings"
+          className={cn(
+            'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-start mb-2',
+            selectedAgentName === null
+              ? 'bg-[var(--interactive-active)] text-foreground font-medium'
+              : 'hover:bg-[var(--interactive-hover)] text-muted-foreground'
+          )}
+        >
+          <Icon name="ai-agent" className="size-4 shrink-0" />
+          <span className="truncate">{t('settings.agents.sidebar.globalSettings')}</span>
+        </button>
         {error ? (
           <div role="alert" className="space-y-2 py-3 typography-meta text-destructive">
             <p>{error}</p>

@@ -16,9 +16,11 @@ import type {
   MCPWorkerApplyOutcome, MCPApplyResult, SkillsCatalogState, SkillsApplyResult,
   SkillsWorkerApplyOutcome, SkillExpandRequest, SkillExpandResult, SkillSourceRevisions,
   SkillInstallResult, SkillSourceScope, CatalogOperationError, MCPOAuthRequest, MCPOAuthResult,
+  MCPApplyOutcome,
 } from '@openchamber/agent-contract';
 import { MCPWorkspaceReconnectResultSchema } from '@openchamber/agent-contract';
 import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@openchamber/agent-contract';
+import { MCPToolDiscoverySchema, type MCPDiscoveredTool, type MCPToolDiscovery } from '../worker/mcp/protocol.ts';
 import { WorkerOperationError } from './workers.ts';
 import { PluginWorkerApplyOutcomeSchema, type PluginWorkerApplyOutcome, type PluginRuntimeState } from '@openchamber/agent-contract';
 import type { HostSkillSourceCommit } from './file-resources-host-protocol.ts';
@@ -48,6 +50,10 @@ export interface CatalogWorker {
 export interface CatalogCoordinatorOptions {
   readMcpConfiguration(workspaceId: string): Promise<MCPConfigurationState | null>;
   commitMcp(workspaceId: string, request: MCPConfigureRequest, configuration: MCPConfigurationState): Promise<void>;
+  /** Stateless isolated handshake for one server; the only connectivity evidence without a live worker. */
+  probeMcp(workspaceId: string, serverId: string, configuration: MCPConfigurationState): Promise<MCPConnectionTestResult>;
+  /** Stateless isolated handshake per enabled server, naming the tools a saved profile may select. */
+  discoverMcpTools(workspaceId: string, configuration: MCPConfigurationState): Promise<MCPToolDiscovery>;
 }
 
 export interface CatalogBootstrap {
@@ -219,8 +225,12 @@ export class CatalogCoordinator {
     if (!workspace || !workspace.agentDirectoryIds.includes(worker.identity.agentDirectoryId)) {
       throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The worker workspace or agent directory is not registered in the catalog', {});
     }
+    if (!await this.live(worker)) return;
     const previous = this.workers.get(worker.identity.rootSessionId);
-    if (previous && previous.identity.workerGeneration !== worker.identity.workerGeneration) this.dropWorker(previous);
+    if (previous && previous.identity.workerGeneration !== worker.identity.workerGeneration) {
+      if (await this.live(previous)) return;
+      this.dropWorker(previous);
+    }
     this.workers.set(worker.identity.rootSessionId, worker);
     try {
       await this.ensureHydrated(worker.identity.workspaceId, worker.identity.agentDirectoryId);
@@ -272,6 +282,58 @@ export class CatalogCoordinator {
       this.skillSnapshots.set(rootSessionId, result);
       return result;
     });
+  }
+  /**
+   * Names the workspace's MCP tools from its saved configuration, discovered
+   * through a real handshake, so a profile can select a server's tools before
+   * any session worker applied that configuration. A session snapshot only adds
+   * tools discovery did not report, and never replaces a fresher answer.
+   */
+  async workspaceMcpTools(workspaceId: string): Promise<MCPToolDiscovery> {
+    const configuration = await this.readWorkspaceMcpConfig(workspaceId);
+    let discovery: MCPToolDiscovery;
+    try {
+      discovery = configuration.config.servers.some(server => server.enabled)
+        ? await this.options.discoverMcpTools(workspaceId, configuration)
+        : { workspaceId, persistedRevision: configuration.persistedRevision, tools: [] };
+    } catch {
+      // A discovery failure must not remove tools a session already reported;
+      // the route still answers from the saved configuration revision.
+      discovery = { workspaceId, persistedRevision: configuration.persistedRevision, tools: [] };
+    }
+    const supplemented = new Map(discovery.tools.map(tool => [`${tool.serverId}\u0000${tool.name}`, tool]));
+    for (const tool of this.latestWorkspaceSnapshotTools(workspaceId)) {
+      const key = `${tool.serverId}\u0000${tool.name}`;
+      if (!supplemented.has(key)) supplemented.set(key, tool);
+    }
+    return MCPToolDiscoverySchema.parse({
+      workspaceId,
+      persistedRevision: configuration.persistedRevision,
+      tools: [...supplemented.values()].sort((left, right) => left.serverId.localeCompare(right.serverId) || left.name.localeCompare(right.name)),
+    });
+  }
+
+  /** The newest ready snapshot of one workspace session, chosen deterministically. */
+  private latestWorkspaceSnapshotTools(workspaceId: string): MCPDiscoveredTool[] {
+    const candidates = [...this.mcpSnapshots.values()].filter(
+      snapshot => snapshot.workerCatalog.worker.workspaceId === workspaceId || snapshot.configuration.workspaceId === workspaceId
+    );
+    if (candidates.length === 0) return [];
+    candidates.sort((a, b) => {
+      const aReady = a.workerCatalog.runtimeStatus === 'ready' ? 1 : 0;
+      const bReady = b.workerCatalog.runtimeStatus === 'ready' ? 1 : 0;
+      if (aReady !== bReady) return bReady - aReady;
+      const aApplied = BigInt(a.workerCatalog.appliedRevision ?? '0');
+      const bApplied = BigInt(b.workerCatalog.appliedRevision ?? '0');
+      if (aApplied !== bApplied) return aApplied > bApplied ? -1 : 1;
+      const aCatalog = BigInt(a.workerCatalog.catalogRevision || '0');
+      const bCatalog = BigInt(b.workerCatalog.catalogRevision || '0');
+      if (aCatalog !== bCatalog) return aCatalog > bCatalog ? -1 : 1;
+      const generation = b.workerCatalog.worker.workerGeneration.localeCompare(a.workerCatalog.worker.workerGeneration);
+      if (generation !== 0) return generation;
+      return b.workerCatalog.worker.rootSessionId.localeCompare(a.workerCatalog.worker.rootSessionId);
+    });
+    return candidates[0].workerCatalog.tools.map(tool => ({ serverId: tool.serverId, name: tool.name, description: tool.description }));
   }
   async pluginRuntime(workspaceId: string): Promise<PluginRuntimeState[]> {
     const targets = await this.snapshotWorkers(worker => worker.identity.workspaceId === workspaceId);
@@ -417,10 +479,10 @@ export class CatalogCoordinator {
     owner.configuration = next;
     try { await this.persist(); }
     catch { throw new CatalogCoordinatorError(503, 'MCP_CONFIG_WRITE_FAILED', 'The MCP configuration revision could not be persisted', {}); }
-    return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision });
+    return this.applyMcpNow(workspaceId, { persistedRevision: next.persistedRevision }, true);
   }
 
-  reconnectWorkspaceMcp(workspaceId: string, serverId: string, request: MCPApplyRequest, probe: (configuration: MCPConfigurationState) => Promise<MCPConnectionTestResult>): Promise<MCPWorkspaceReconnectResult> {
+  reconnectWorkspaceMcp(workspaceId: string, serverId: string, request: MCPApplyRequest): Promise<MCPWorkspaceReconnectResult> {
     return this.withWorkspaceMcp(workspaceId, MCPApplyRequestSchema.parse(request).persistedRevision, async configuration => {
       EntityIdSchema.parse(serverId);
       if (!configuration.config.servers.some(server => server.serverId === serverId && server.enabled)) throw new CatalogCoordinatorError(409, 'CATALOG_CONFLICT', 'The MCP server is not configured and enabled', {});
@@ -444,14 +506,14 @@ export class CatalogCoordinator {
       await this.finalizeMcpOutcomes(outcomes);
       const status = aggregate(outcomes);
       const payload: MCPWorkspaceReconnectResult = { workspaceId, serverId, persistedRevision: configuration.persistedRevision, status, workers: outcomes };
-      if (status === 'no-active-workers') payload.probe = await probe(configuration);
+      if (status === 'no-active-workers') payload.probe = await this.options.probeMcp(workspaceId, serverId, configuration);
       const result = MCPWorkspaceReconnectResultSchema.parse(payload);
       if (status === 'partial' || status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_RECONNECT_FAILED', 'The MCP reconnect did not reach every active worker', { result });
       return result;
     });
   }
 
-  private async applyMcpNow(workspaceId: string, request: MCPApplyRequest): Promise<MCPApplyResult> {
+  private async applyMcpNow(workspaceId: string, request: MCPApplyRequest, isConfigure = false): Promise<MCPApplyResult> {
     const input = MCPApplyRequestSchema.parse(request);
     const configuration = this.workspace(workspaceId).configuration;
     if (input.persistedRevision !== configuration.persistedRevision) {
@@ -462,8 +524,25 @@ export class CatalogCoordinator {
       outcomes.push(await this.applyMcpWorker(worker, input, configuration));
     }
     await this.finalizeMcpOutcomes(outcomes);
-    const result = { kind: 'mcp' as const, status: aggregate(outcomes), configuration, workers: outcomes } satisfies MCPApplyResult;
-    if (result.status === 'partial' || result.status === 'failed') throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
+    const status = aggregate(outcomes);
+    let outcome: MCPApplyOutcome = 'applied';
+    if (status === 'no-active-workers') outcome = await this.unattendedMcpOutcome(configuration);
+    else if (status === 'failed' || status === 'partial') {
+      const authNeeded = outcomes.some(o => o.outcome === 'failed' && (
+        o.error.code === 'MCP_AUTH_REQUIRED' ||
+        o.error.code === 'AUTH_REQUIRED' ||
+        /401|auth|sign-in|unauthorized/i.test(o.error.detail) ||
+        /401|auth|sign-in|unauthorized/i.test(o.error.code)
+      ));
+      outcome = authNeeded ? 'saved-needs-auth' : 'saved-not-connected';
+    }
+    const result: MCPApplyResult = { kind: 'mcp' as const, status, outcome, configuration, workers: outcomes };
+    if (!isConfigure && (result.status === 'partial' || result.status === 'failed')) {
+      throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
+    }
+    if (isConfigure && outcome === 'saved-not-connected') {
+      throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
+    }
     return result;
   }
 
@@ -830,6 +909,21 @@ export class CatalogCoordinator {
     return current;
   }
 
+
+  /** No live worker: the stateless probe of each enabled server classifies the saved configuration honestly. */
+  private async unattendedMcpOutcome(configuration: MCPConfigurationState): Promise<MCPApplyOutcome> {
+    const results = await Promise.all(configuration.config.servers.filter(server => server.enabled).map(async server => {
+      try {
+        const probe = await this.options.probeMcp(configuration.workspaceId, server.serverId, configuration);
+        return probe.status === 'connected' ? 'connected' : probe.error.code;
+      } catch {
+        return 'MCP_APPLY_FAILED';
+      }
+    }));
+    if (results.includes('MCP_AUTH_REQUIRED')) return 'saved-needs-auth';
+    if (results.some(result => result !== 'connected')) return 'saved-not-connected';
+    return 'applied';
+  }
   private async finalizeMcpOutcomes(outcomes: MCPWorkerApplyOutcome[]): Promise<void> {
     for (let index = 0; index < outcomes.length; index++) {
       const outcome = outcomes[index];

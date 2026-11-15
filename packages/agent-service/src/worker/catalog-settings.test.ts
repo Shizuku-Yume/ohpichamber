@@ -3,8 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { YAML } from 'bun';
-import { OMP_SETTING_IDS } from '@openchamber/agent-contract';
+import './suggestion.ts';
+import * as contract from '@openchamber/agent-contract';
 import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
+import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_PLACEMENTS } from './settings-ui.ts';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { cfgCompactionThresholdPercent } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { NativeSettings } from './catalog-settings.ts';
@@ -29,31 +31,28 @@ async function fixture() {
   };
 }
 
-test('the allowlist is registered by the pinned package and never names a credential', () => {
-  const all = new Map(orderedSettings().map(setting => [setting.id, setting]));
-  for (const id of OMP_SETTING_IDS) {
-    const setting = all.get(id);
-    expect(setting, id).toBeDefined();
-    expect(setting?.isCredential, id).toBe(false);
-  }
-  for (const setting of orderedSettings()) {
-    if (setting.isCredential) expect(OMP_SETTING_IDS).not.toContain(setting.id);
-  }
-});
+test('the setting list is derived from orderedSettings and never exposes credentials', async () => {
+  expect((contract as Record<string, unknown>).OMP_SETTING_IDS).toBeUndefined();
+  const all = orderedSettings();
+  const credentials = all.filter(s => s.isCredential).map(s => s.id);
+  expect(credentials.length).toBeGreaterThan(0);
 
-test('reads metadata from OMP and omits appearance, path, command and credential settings', async () => {
   const f = await fixture();
   try {
     const state = await f.native.read('workspace_1', '0');
-    expect(state.settings.map(setting => setting.id)).toEqual([...OMP_SETTING_IDS]);
-    expect(state.settings.find(setting => setting.id === 'compaction.thresholdPercent')).toMatchObject({
+    expect(state.totalCount).toBe(all.length);
+    const ids = new Set(state.settings.map(s => s.id));
+    for (const cred of credentials) {
+      expect(ids.has(cred)).toBe(false);
+    }
+    const boundaryIds = Object.keys(OMP_SETTING_PLACEMENTS).filter(id => OMP_SETTING_PLACEMENTS[id].type === 'boundary');
+    for (const id of boundaryIds) expect(ids.has(id), id).toBe(false);
+    const shown = all.filter(s => !s.isCredential && OMP_SETTING_EXPOSED_IDS.has(s.id));
+    expect(state.settings.length).toBe(shown.length);
+    for (const s of all) if (!shown.includes(s)) expect(ids.has(s.id), s.id).toBe(false);
+    expect(state.settings.find(s => s.id === 'compaction.thresholdPercent')).toMatchObject({
       type: 'number', label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
     });
-    const ids = new Set(state.settings.map(setting => setting.id));
-    for (const excluded of ['goal.statusInFooter', 'task.showResolvedModelBadge', 'compaction.remoteEndpoint',
-      'skills.registryUrl', 'skills.customDirectories', 'plan.autosaveDir', 'task.agentAccountPools']) {
-      expect(ids.has(excluded)).toBe(false);
-    }
     expect(JSON.stringify(state)).not.toContain('apiKey');
   } finally { await f.close(); }
 });
@@ -81,23 +80,34 @@ test('writes through OMP Settings, flushes the atomic config file and reloads ex
     expect((await f.native.read('workspace_1', '1')).settings.find(setting => setting.id === 'compaction.thresholdPercent')?.value).toBe(65);
   } finally { await f.close(); }
 });
-test('writes expanded settings: execution flow modes, tui render toggles and tool buffer caps', async () => {
+test('refuses to write a setting no GUI surface places', async () => {
+  const f = await fixture();
+  try {
+    const read = await f.native.read('workspace_1', '0');
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: read.revision,
+      changes: [{ id: 'enabledProviders', value: [] }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    await expect(f.native.write('workspace_1', '1', {
+      expectedRevision: read.revision,
+      changes: [{ id: 'collab.relayUrl', value: 'https://relay.example' }],
+    })).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+  } finally { await f.close(); }
+});
+
+test('writes engine settings and refuses settings no GUI owner writes', async () => {
   const f = await fixture();
   try {
     const read = await f.native.read('workspace_1', '0');
     const written = await f.native.write('workspace_1', '1', {
       expectedRevision: read.revision,
-      changes: [
-        { id: 'steeringMode', value: 'all' },
-        { id: 'tui.renderSvg', value: false },
-        { id: 'tools.artifactSpillThreshold', value: 80 },
-        { id: 'composer.predictions', value: true },
-      ],
+      changes: [{ id: 'tools.artifactSpillThreshold', value: 80 }],
     });
-    expect(written.settings.find(s => s.id === 'steeringMode')).toMatchObject({ value: 'all', configured: true });
-    expect(written.settings.find(s => s.id === 'tui.renderSvg')).toMatchObject({ value: false, configured: true });
     expect(written.settings.find(s => s.id === 'tools.artifactSpillThreshold')).toMatchObject({ value: 80, configured: true });
-    expect(written.settings.find(s => s.id === 'composer.predictions')).toMatchObject({ value: true, configured: true });
+    for (const change of [{ id: 'stt.enabled', value: true }, { id: 'tui.renderSvg', value: false }, { id: 'composer.predictions', value: true }, { id: 'skills.registryUrl', value: 'https://skills.example' }]) {
+      await expect(f.native.write('workspace_1', '1', { expectedRevision: read.revision, changes: [change] }), change.id)
+        .rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    }
   } finally { await f.close(); }
 });
 

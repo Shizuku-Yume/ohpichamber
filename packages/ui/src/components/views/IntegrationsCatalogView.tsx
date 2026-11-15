@@ -25,7 +25,9 @@ import { cn } from '@/lib/utils';
 import { useI18n, type I18nKey } from '@/lib/i18n';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { resolveMcpDirectory, useMcpConfigStore } from '@/stores/useMcpConfigStore';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { resolveMcpDirectory, selectMcpServersForDirectory, useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { getMcpServerStatus, useMcpStore, type McpServerRuntimeState } from '@/stores/useMcpStore';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 import { useSkillsStore, type DiscoveredSkill } from '@/stores/useSkillsStore';
@@ -82,6 +84,10 @@ const mcpStatusOf = (state: McpServerRuntimeState | undefined): 'connected' | 'f
   return 'idle';
 };
 
+/** Sign-in is required only when the authoritative stateless probe of this server says so. */
+const mcpAuthRequired = (state: McpServerRuntimeState | undefined): boolean =>
+  state?.probe?.status === 'failed' && state.probe.error.code === 'MCP_AUTH_REQUIRED';
+
 type ConfirmRequest =
   | { kind: 'plugin-install'; entry: CatalogEntry; component?: CatalogComponent }
   | { kind: 'uninstall'; entry: CatalogEntry };
@@ -130,19 +136,21 @@ const buildCatalogMcpConfig = (
   entry: CatalogEntry,
   component: CatalogMcpComponent,
   values: Record<string, string>,
+  scope: 'project' | 'user' = 'project',
 ): MCPServerConfig => {
   if (component.remote) {
     return {
       serverId: entry.id,
       label: entry.name,
       enabled: true,
+      scope,
       transport: { type: 'http', url: interpolateCatalogTokens(component.remote.url, values) },
     };
   }
   const command = (component.local?.command ?? []).map((part) => interpolateCatalogTokens(part, values));
   const [executable, ...args] = command;
   if (!executable) throw new Error(`The ${entry.name} entry has no command.`);
-  return { serverId: entry.id, label: entry.name, enabled: true, transport: { type: 'stdio', command: executable, args } };
+  return { serverId: entry.id, label: entry.name, enabled: true, scope, transport: { type: 'stdio', command: executable, args } };
 };
 
 const TILE_SIZE = {
@@ -195,6 +203,16 @@ const COMPONENT_ICON = {
   skill: 'box-3',
   extension: 'apps',
 } satisfies Record<CatalogComponent['kind'], IconName>;
+const componentKindLabelKey = (component: CatalogComponent): I18nKey => {
+  if (component.kind === 'plugin') return 'integrationsCatalog.status.plugin';
+  if (component.kind === 'skill') return 'integrationsCatalog.status.skill';
+  if (component.kind === 'extension') return 'integrationsCatalog.status.extension';
+  if (component.local) return 'integrationsCatalog.status.local';
+  if (component.auth === 'token') return 'integrationsCatalog.status.token';
+  if (component.auth === 'none') return 'integrationsCatalog.status.noAuth';
+  return 'integrationsCatalog.status.oauth';
+};
+
 
 export function IntegrationsCatalogView(): React.ReactNode {
   const { t } = useI18n();
@@ -203,14 +221,24 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const settingsDirectory = useSettingsDirectory();
+  const settingsProjectPath = useUIStore((state) => state.settingsProjectPath);
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const projects = useProjectsStore((state) => state.projects);
+  const hasSelectedProject = Boolean(
+    settingsProjectPath
+      ? projects.some((p) => p.path === settingsProjectPath)
+      : activeProjectId && projects.some((p) => p.id === activeProjectId),
+  );
 
-  const mcpServers = useMcpConfigStore((state) => open ? state.mcpServers : EMPTY_MCP_SERVERS);
+  const mcpServers = useMcpConfigStore((state) => open ? selectMcpServersForDirectory(state, settingsDirectory) : EMPTY_MCP_SERVERS);
   const loadMcpConfigs = useMcpConfigStore((state) => state.loadMcpConfigs);
   const createMcp = useMcpConfigStore((state) => state.createMcp);
+  const updateMcp = useMcpConfigStore((state) => state.updateMcp);
   const deleteMcp = useMcpConfigStore((state) => state.deleteMcp);
   const setSelectedMcp = useMcpConfigStore((state) => state.setSelectedMcp);
   const refreshMcpStatus = useMcpStore((state) => state.refresh);
-  const mcpStatuses = useMcpStore((state) => open ? state.getStatusForDirectory(currentDirectory) : EMPTY_MCP_STATUSES);
+  const mcpStatuses = useMcpStore((state) => open ? state.getStatusForDirectory(settingsDirectory) : EMPTY_MCP_STATUSES);
   const pluginCatalog = usePluginsStore((state) => open ? state.catalog : null);
   const loadPlugins = usePluginsStore((state) => state.loadPlugins);
   const installPlugin = usePluginsStore((state) => state.installPlugin);
@@ -240,15 +268,16 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const [confirm, setConfirm] = React.useState<ConfirmRequest | null>(null);
   const [inputValues, setInputValues] = React.useState<Record<string, Record<string, string>>>({});
   const [tokenValues, setTokenValues] = React.useState<Record<string, string>>({});
-
+  const [scopeDialogState, setScopeDialogState] = React.useState<{ entry: CatalogEntry; component?: CatalogComponent } | null>(null);
+  const [selectedScope, setSelectedScope] = React.useState<'project' | 'user'>('project');
   React.useEffect(() => {
     if (!open) return;
-    void loadMcpConfigs();
+    void loadMcpConfigs({ directory: settingsDirectory });
     void loadPlugins({ directory: currentDirectory });
     void loadSkills();
     void loadGuestCatalog();
-    void refreshMcpStatus({ directory: currentDirectory });
-  }, [open, loadMcpConfigs, loadPlugins, loadSkills, refreshMcpStatus, currentDirectory]);
+    void refreshMcpStatus({ directory: settingsDirectory });
+  }, [open, loadMcpConfigs, loadPlugins, loadSkills, refreshMcpStatus, currentDirectory, settingsDirectory]);
 
   React.useEffect(() => {
     if (!open) {
@@ -275,10 +304,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const readToken = React.useCallback((entry: CatalogEntry): string => tokenValues[entry.id] ?? '', [tokenValues]);
   const setTokenValue = (entryId: string, value: string) => setTokenValues((prev) => ({ ...prev, [entryId]: value }));
 
-  const installedMcp = React.useMemo(
-    () => new Set(mcpServers.map((server) => server.serverId)),
-    [mcpServers],
-  );
+  // installedMcp is replaced by runtime-aware isMcpInstalled
   const installedPluginNames = React.useMemo(
     () => new Set((pluginCatalog?.plugins ?? [])
       .filter((plugin) => plugin.target.kind === 'package')
@@ -299,8 +325,13 @@ export function IntegrationsCatalogView(): React.ReactNode {
     [guests],
   );
 
-  const isMcpInstalled = React.useCallback((entry: CatalogEntry): boolean =>
-    installedMcp.has(entry.id), [installedMcp]);
+  const isMcpInstalled = React.useCallback((entry: CatalogEntry): boolean => {
+    const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
+    if (!server) return false;
+    if (!server.enabled) return true;
+    const state = mcpStatuses[entry.id];
+    return mcpStatusOf(state) === 'connected' || state?.probe?.status === 'connected' || mcpAuthRequired(state);
+  }, [mcpServers, mcpStatuses]);
   const isPluginInstalled = React.useCallback((component: CatalogPluginComponent): boolean =>
     installedPluginNames.has(catalogPluginPackageName(component.spec)), [installedPluginNames]);
   const isSkillInstalled = React.useCallback((component: CatalogSkillComponent): boolean =>
@@ -343,31 +374,19 @@ export function IntegrationsCatalogView(): React.ReactNode {
     ]);
   }, [query, t]);
 
-  const componentKindLabelKey = (component: CatalogComponent): I18nKey => {
-    if (component.kind === 'plugin') return 'integrationsCatalog.status.plugin';
-    if (component.kind === 'skill') return 'integrationsCatalog.status.skill';
-    if (component.kind === 'extension') return 'integrationsCatalog.status.extension';
-    if (component.local) return 'integrationsCatalog.status.local';
-    if (component.auth === 'token') return 'integrationsCatalog.status.token';
-    if (component.auth === 'none') return 'integrationsCatalog.status.noAuth';
-    return 'integrationsCatalog.status.oauth';
-  };
 
   const statusOf = React.useCallback((entry: CatalogEntry): CatalogCardStatus => {
-    // Runtime status outranks everything: a bundled entry whose MCP server
-    // failed or was switched off says so even while its skills are installed.
-    const runtime = mcpStatusOf(mcpStatuses[entry.id]);
+    const state = mcpStatuses[entry.id];
+    if (mcpAuthRequired(state)) return { label: t('integrationsCatalog.status.needsAuth'), tone: 'warning' };
+    const runtime = mcpStatusOf(state);
     if (runtime === 'failed') return { label: t('integrationsCatalog.status.failed'), tone: 'warning' };
     if (isEntryInstalled(entry)) {
-      // A switched-off server is known from the config itself, before the
-      // runtime has anything to say about it.
       const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
       if (server && !server.enabled) return { label: t('integrationsCatalog.status.disabled'), tone: 'neutral' };
       return { label: t('integrationsCatalog.status.installed'), tone: 'success' };
     }
     return { label: t(componentKindLabelKey(entry.components[0])), tone: 'neutral' };
   }, [isEntryInstalled, mcpServers, mcpStatuses, t]);
-
   const openInSettings = React.useCallback((entry: CatalogEntry) => {
     const mcp = catalogMcpComponent(entry);
     const plugin = entry.components.find((component): component is CatalogPluginComponent => component.kind === 'plugin');
@@ -380,7 +399,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
       setSettingsPage('skills.catalog');
     }
     setSettingsDialogOpen(true);
-  }, [setSettingsDialogOpen, setSelectedMcp, setSettingsPage, skills]);
+  }, [setSettingsDialogOpen, setSelectedMcp, setSettingsPage]);
 
   /**
    * Opens Settings on the page that owns one component: MCP → its server page,
@@ -403,7 +422,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
       setSettingsPage('extensions');
     }
     setSettingsDialogOpen(true);
-  }, [setSettingsDialogOpen, setSelectedMcp, setSettingsPage]);
+  }, [setSettingsDialogOpen, setSelectedMcp, setSettingsPage, skills]);
 
   /**
    * Writes the entry's token as a workspace credential and references it from
@@ -418,23 +437,21 @@ export function IntegrationsCatalogView(): React.ReactNode {
     const header = component.remote?.tokenHeader;
     const value = token.trim();
     if (!header || value === '') return { ok: true };
-    const workspace = await canonicalClient.resolveWorkspace(resolveMcpDirectory(currentDirectory));
+    const workspace = await canonicalClient.resolveWorkspace(resolveMcpDirectory(settingsDirectory));
     const configuration = await canonicalClient.getWorkspaceMcpConfig(workspace.workspaceId);
     const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, entry.id, {
       persistedRevision: configuration.persistedRevision,
       value,
     });
-    await useMcpConfigStore.getState().loadMcpConfigs({ directory: currentDirectory, force: true });
-    const server = useMcpConfigStore.getState().getMcpByName(entry.id, currentDirectory);
+    await useMcpConfigStore.getState().loadMcpConfigs({ directory: settingsDirectory, force: true });
+    const server = useMcpConfigStore.getState().getMcpByName(entry.id, settingsDirectory);
     if (!server || server.transport.type === 'stdio') return { ok: false, error: entry.name };
-    // `credentialRef` is sent as `Authorization: Bearer <secret>`; any other
-    // header carries the secret verbatim.
     const transport: MCPServerConfig['transport'] = header.name.toLowerCase() === 'authorization'
       ? { ...server.transport, credentialRef: credential.credentialRef }
       : { ...server.transport, headerCredentialRefs: { ...server.transport.headerCredentialRefs, [header.name]: credential.credentialRef } };
-    const updated = await useMcpConfigStore.getState().updateMcp(entry.id, { transport }, currentDirectory);
+    const updated = await useMcpConfigStore.getState().updateMcp(entry.id, { transport }, settingsDirectory);
     return updated.ok ? { ok: true } : { ok: false, error: updated.error };
-  }, [currentDirectory]);
+  }, [settingsDirectory]);
 
   /**
    * One Install pass over every component of the entry: the MCP server, the
@@ -443,18 +460,24 @@ export function IntegrationsCatalogView(): React.ReactNode {
    * confirmation; skills install through the Skills catalog page, which owns
    * the repository scan and the conflict prompt.
    */
-  const installEntry = React.useCallback(async (entry: CatalogEntry, only?: CatalogComponent) => {
+  const installEntry = React.useCallback(async (entry: CatalogEntry, only?: CatalogComponent, targetScope?: 'project' | 'user') => {
     setBusyId(entry.id);
     try {
       let failed = false;
       let errorDetail: string | null = null;
+      let hadAuthPending = false;
+      let allAlreadyInstalled = true;
       let openedSettings = false;
       for (const component of only ? [only] : entry.components) {
         if (component.kind === 'mcp') {
           if (isMcpInstalled(entry)) continue;
+          allAlreadyInstalled = false;
           const values: Record<string, string> = {};
           for (const input of entry.inputs ?? []) values[input.id] = readInput(entry, input.id);
-          const attempted = await createMcp(buildCatalogMcpConfig(entry, component, values))
+          const config = buildCatalogMcpConfig(entry, component, values, targetScope ?? (hasSelectedProject ? 'project' : 'user'));
+          // An existing server is retried by configuring it again; create is only for a new id.
+          const exists = mcpServers.some((server) => server.serverId === entry.id);
+          const attempted = await (exists ? updateMcp(entry.id, config, settingsDirectory) : createMcp(config, settingsDirectory))
             .then((result) => ({ result }))
             .catch((failure: unknown) => ({ failure }));
           if ('failure' in attempted) {
@@ -466,6 +489,10 @@ export function IntegrationsCatalogView(): React.ReactNode {
             failed = true;
             errorDetail = attempted.result.error;
             continue;
+          }
+          if (attempted.result.outcome === 'saved-needs-auth' || component.auth === 'oauth') {
+            hadAuthPending = true;
+            setSelectedId(entry.id);
           }
           if (component.auth === 'token') {
             try {
@@ -482,15 +509,16 @@ export function IntegrationsCatalogView(): React.ReactNode {
             }
           }
           try {
-            await useMcpStore.getState().connect(entry.id, currentDirectory);
+            // The authoritative probe records this server's own state (connected, sign-in required or failed).
+            await useMcpStore.getState().testConnection(entry.id, settingsDirectory);
           } catch (error) {
-            // A failed connect is expected for an OAuth server: the detail
-            // page's sign-in panel is how the user finishes that install.
             if (component.auth !== 'oauth') toast.error(problemMessage(error, t('integrationsCatalog.connect.failed', { name: entry.name })));
           }
+          await useMcpStore.getState().refresh({ directory: settingsDirectory, silent: true });
           if (component.auth === 'oauth') setSelectedId(entry.id);
         } else if (component.kind === 'plugin') {
           if (isPluginInstalled(component)) continue;
+          allAlreadyInstalled = false;
           try {
             const result = await installPlugin({ kind: 'package', spec: component.spec });
             if (result.status === 'failed') failed = true;
@@ -500,6 +528,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
           }
         } else if (component.kind === 'extension') {
           if (isExtensionInstalled(component.guestId)) continue;
+          allAlreadyInstalled = false;
           const result = await installGuest(component.gitUrl);
           if (!result.ok) {
             failed = true;
@@ -507,8 +536,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
           }
         } else {
           if (isSkillInstalled(component)) continue;
-          // The Skills catalog page owns repository installation: it adds the
-          // source, scans it and asks about conflicts.
+          allAlreadyInstalled = false;
           openedSettings = true;
         }
       }
@@ -516,18 +544,23 @@ export function IntegrationsCatalogView(): React.ReactNode {
         setSettingsPage('skills.catalog');
         setSettingsDialogOpen(true);
       }
+      if (allAlreadyInstalled) {
+        // "The already-installed path never toasts success."
+        return;
+      }
       if (failed) {
         toast.error(t('integrationsCatalog.install.failed', { name: entry.name }), {
           description: errorDetail ?? undefined,
         });
+      } else if (hadAuthPending) {
+        toast.info(t('integrationsCatalog.status.needsAuth'));
       } else if (!openedSettings) {
         toast.success(t('integrationsCatalog.install.success', { name: entry.name }));
       }
     } finally {
       setBusyId(null);
     }
-  }, [attachMcpToken, createMcp, currentDirectory, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, readInput, readToken, setSettingsDialogOpen, setSettingsPage, t]);
-
+  }, [attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp]);
   /** One Uninstall pass: removes the MCP server, the plugin entries, and the installed skills. */
   const uninstallEntry = React.useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);
@@ -537,11 +570,12 @@ export function IntegrationsCatalogView(): React.ReactNode {
       let errorDetail: string | null = null;
       const mcp = catalogMcpComponent(entry);
       if (mcp && isMcpInstalled(entry)) {
-        const result = await deleteMcp(entry.id, currentDirectory);
+        const result = await deleteMcp(entry.id, settingsDirectory);
         if (!result.ok) {
           failed = true;
           errorDetail = t('integrationsCatalog.uninstall.mcpDetail', { name: entry.id });
         }
+        void refreshMcpStatus({ directory: settingsDirectory, silent: true });
       }
       for (const component of entry.components) {
         if (component.kind === 'plugin' && isPluginInstalled(component)) {
@@ -588,7 +622,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
     } finally {
       setBusyId(null);
     }
-  }, [currentDirectory, deleteMcp, isExtensionInstalled, isMcpInstalled, isPluginInstalled, skills, t, uninstallPlugin]);
+  }, [currentDirectory, deleteMcp, isExtensionInstalled, isMcpInstalled, isPluginInstalled, refreshMcpStatus, settingsDirectory, skills, t, uninstallPlugin]);
 
   const canInstallEntry = (entry: CatalogEntry): boolean => {
     const mcp = catalogMcpComponent(entry);
@@ -607,6 +641,16 @@ export function IntegrationsCatalogView(): React.ReactNode {
   };
 
   /** Install, or the detail page when the entry still needs a token or a field filled in there. */
+  const promptInstall = (entry: CatalogEntry, component?: CatalogComponent) => {
+    const hasMcp = entry.components.some((c) => c.kind === 'mcp');
+    if (hasMcp && !isMcpInstalled(entry)) {
+      setSelectedScope(hasSelectedProject ? 'project' : 'user');
+      setScopeDialogState({ entry, component });
+      return;
+    }
+    void installEntry(entry, component);
+  };
+
   const requestInstall = (entry: CatalogEntry) => {
     if (!canInstallEntry(entry)) {
       showEntry(entry.id);
@@ -616,7 +660,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
       setConfirm({ kind: 'plugin-install', entry });
       return;
     }
-    void installEntry(entry);
+    promptInstall(entry);
   };
 
   /** The end of a browse row: install, progress, or where the entry stands. */
@@ -904,13 +948,16 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const renderConnection = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const runtime = mcpStatusOf(mcpStatuses[entry.id]);
     const server = mcpServers.find((candidate) => candidate.serverId === entry.id);
+    const isAwaitingAuth = mcpAuthRequired(mcpStatuses[entry.id]);
     const state: { label: string; tone: IntegrationCatalogStatusTone } = runtime === 'disabled' || (server && !server.enabled)
       ? { label: t('integrationsCatalog.status.disabled'), tone: 'neutral' }
       : runtime === 'connected'
         ? { label: t('integrationsCatalog.connection.connected'), tone: 'success' }
-        : runtime === 'failed'
-          ? { label: t('integrationsCatalog.status.failed'), tone: 'warning' }
-          : { label: t('integrationsCatalog.connection.idle'), tone: 'neutral' };
+        : isAwaitingAuth
+          ? { label: t('integrationsCatalog.status.needsAuth'), tone: 'warning' }
+          : runtime === 'failed'
+            ? { label: t('integrationsCatalog.status.savedNotConnected'), tone: 'warning' }
+            : { label: t('integrationsCatalog.connection.idle'), tone: 'neutral' };
     const showSignIn = mcp.auth === 'oauth' && runtime !== 'connected' && runtime !== 'disabled';
     return (
       <section className="flex flex-col gap-3">
@@ -929,8 +976,8 @@ export function IntegrationsCatalogView(): React.ReactNode {
               <p className="mb-3 text-sm text-muted-foreground">{t('integrationsCatalog.oauth.waiting')}</p>
               <McpOAuthSignIn
                 serverId={entry.id}
-                directory={currentDirectory}
-                onConnected={() => { void useMcpStore.getState().connect(entry.id, currentDirectory); }}
+                directory={settingsDirectory}
+                onConnected={() => { void useMcpStore.getState().connect(entry.id, settingsDirectory); }}
               />
             </div>
           ) : null}
@@ -998,7 +1045,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
               onClick={() => {
                 if (component.kind === 'plugin') setConfirm({ kind: 'plugin-install', entry, component });
                 else if (component.kind === 'skill') configureComponent(entry, component);
-                else void installEntry(entry, component);
+                else promptInstall(entry, component);
               }}
             >
               {t('integrationsCatalog.action.install')}
@@ -1196,7 +1243,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
                     disabled={busyId === confirm.entry.id}
                     onClick={() => {
                       setConfirm(null);
-                      void installEntry(confirm.entry, confirm.component);
+                      promptInstall(confirm.entry, confirm.component);
                     }}
                   >
                     {t('integrationsCatalog.action.install')}
@@ -1221,6 +1268,54 @@ export function IntegrationsCatalogView(): React.ReactNode {
                 </DialogFooter>
               </>
             )}
+          </DialogContent>
+        </Dialog>
+      ) : null}
+      {scopeDialogState ? (
+        <Dialog open onOpenChange={(isOpen) => { if (!isOpen) setScopeDialogState(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t('integrationsCatalog.scopeDialog.title')}</DialogTitle>
+              <DialogDescription>{t('integrationsCatalog.scopeDialog.description')}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+              <label className="flex items-center gap-3 rounded-lg border border-[var(--interactive-border)] p-3 cursor-pointer hover:bg-[var(--surface-hover)]">
+                <input
+                  type="radio"
+                  name="mcp-install-scope"
+                  value="project"
+                  checked={selectedScope === 'project'}
+                  onChange={() => setSelectedScope('project')}
+                  className="size-4"
+                />
+                <span className="text-sm font-medium text-foreground">{t('integrationsCatalog.scopeDialog.scope.project')}</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-[var(--interactive-border)] p-3 cursor-pointer hover:bg-[var(--surface-hover)]">
+                <input
+                  type="radio"
+                  name="mcp-install-scope"
+                  value="user"
+                  checked={selectedScope === 'user'}
+                  onChange={() => setSelectedScope('user')}
+                  className="size-4"
+                />
+                <span className="text-sm font-medium text-foreground">{t('integrationsCatalog.scopeDialog.scope.user')}</span>
+              </label>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setScopeDialogState(null)}>
+                {t('settings.common.actions.cancel')}
+              </Button>
+              <Button
+                onClick={() => {
+                  const request = scopeDialogState;
+                  setScopeDialogState(null);
+                  void installEntry(request.entry, request.component, selectedScope);
+                }}
+              >
+                {t('integrationsCatalog.scopeDialog.confirm')}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       ) : null}

@@ -28,6 +28,7 @@ import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { clearSessionPrefetch } from "./session-prefetch-cache"
 import { dropSessionCaches } from "./session-cache"
 import { useInputStore } from "./input-store"
+import { useSessionSuggestionStore } from "@/stores/useSessionSuggestionStore"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { requestSessionArchiveBatch, requestSessionLinksUpdate, requestSessionUnarchiveBatch, type SessionArchiveStamp } from "./session-archive-batch"
 import { markSessionUnreadSeen } from "./session-unread"
@@ -42,7 +43,7 @@ import { recordSessionActionFailure } from "./session-action-failures"
 import { withoutSourceOwnedLinks } from "@/lib/sessionForkInheritance"
 import { canonicalClient, CanonicalApiError } from "@/api/canonicalClient"
 import { SessionMetadataSchema, SessionMetadataPatchSchema, PromptRequestSchema } from "@openchamber/agent-contract"
-import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, SessionCreateRequest, Run } from "@openchamber/agent-contract"
+import type { Session as CanonicalSession, Message as CanonicalMessage, SessionSnapshot, SessionBranchResult, SessionMetadataState, PromptRequest, ApprovalRequest as PermissionRequest, QuestionRequest as FormRequest, ApprovalReply, QuestionReply, JsonValue, JsonObject as Metadata, SessionMetadata, SessionCreateRequest, Run, Workspace } from "@openchamber/agent-contract"
 import { installHostSession, installRuntimeRun, installSessionMetadata, installSessionSnapshot, type RunControlBaseline } from "./event-reducer"
 import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from "@/stores/globalSessions"
 import type { State } from "./types"
@@ -142,6 +143,9 @@ export type SessionSendInput = {
  runtimeKey?: string
  runtimeRevision?: number
  commandId?: string
+ directory?: string | null
+ optimistic?: boolean
+ onOptimisticInsert?: () => void
 }
 
 /**
@@ -150,6 +154,7 @@ export type SessionSendInput = {
  * the canonical turn and user message with this specific send.
  */
 export async function sendMessage(input: SessionSendInput): Promise<Run | null> {
+ useSessionSuggestionStore.getState().clearSuggestion(input.sessionId)
  const runtimeKey = input.runtimeKey ?? getRuntimeKey()
  const runtimeRevision = input.runtimeRevision ?? getRuntimeSwitchRevision()
  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
@@ -167,16 +172,82 @@ export async function sendMessage(input: SessionSendInput): Promise<Run | null> 
   if (result.sessionId !== input.sessionId) throw new Error("Follow-up response identified another session")
   return null
  } else {
-  // Capture the live head before the request: an ack that arrives after the
-  // session already advanced past it and released its run is stale.
-  const baselines = captureRunControlBaselines(input.sessionId)
-  const result = await canonicalClient.createRun(input.sessionId, request, input.commandId)
-  if (result.run.sessionId !== input.sessionId) throw new Error("Run response identified another session")
-  if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
-  // The accepted run is authoritative control state even before its event
-  // arrives; without this the composer can keep offering Send for a live run.
-  publishRuntimeRun(result.run, baselines)
-  return result.run
+  const directory = input.directory ?? getSessionDirectory(input.sessionId)
+  _ensureSessionStream?.(input.sessionId, directory)
+
+  const isOptimistic = Boolean(input.optimistic && _optimisticAdd && _optimisticRemove)
+  let correlationId: string | undefined
+  let pendingMessage: CanonicalMessage | undefined
+  let knownMessageIds: Set<string> | undefined
+
+  if (isOptimistic) {
+   correlationId = `msg_${globalThis.crypto.randomUUID()}`
+   const text = request.input.text
+   const parts: CanonicalMessage['parts'] = [{ type: "text", partId: `part_${globalThis.crypto.randomUUID()}`, content: text }]
+   for (const attachment of request.input.attachments ?? []) {
+    parts.push({
+     type: "attachment",
+     partId: `part_${globalThis.crypto.randomUUID()}`,
+     attachmentId: attachment.attachmentId,
+     name: attachment.name,
+     mediaType: attachment.mediaType,
+     size: attachment.size,
+     uri: attachment.uri,
+    })
+   }
+   pendingMessage = {
+    messageId: correlationId,
+    sessionId: input.sessionId,
+    turnId: `turn_${globalThis.crypto.randomUUID()}`,
+    role: "user",
+    createdAt: Date.now(),
+    parts,
+   }
+   knownMessageIds = new Set(
+    (directory ? _childStores?.getChild(directory)?.getState().message[input.sessionId] : undefined)
+     ?.map((message) => message.messageId) ?? [],
+   )
+   _optimisticAdd!({ sessionId: input.sessionId, directory, message: pendingMessage })
+   input.onOptimisticInsert?.()
+  }
+
+  try {
+   const baselines = captureRunControlBaselines(input.sessionId)
+   const result = await canonicalClient.createRun(input.sessionId, request, input.commandId)
+   if (result.run.sessionId !== input.sessionId) throw new Error("Run response identified another session")
+   if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) throw new Error("runtime changed")
+   publishRuntimeRun(result.run, baselines)
+
+   if (isOptimistic && pendingMessage && knownMessageIds) {
+    reconcileAcceptedSend({
+     runtimeKey,
+     sessionId: input.sessionId,
+     directory,
+     pendingMessage,
+     content: request.input.text,
+     runId: result.run.runId,
+     knownMessageIds,
+    })
+   }
+
+   return result.run
+  } catch (error) {
+   if (isOptimistic && correlationId) {
+    if (!isStaleRuntime(runtimeKey) && runtimeRevision === getRuntimeSwitchRevision()) {
+     _optimisticRemove!({ sessionId: input.sessionId, directory, messageId: correlationId })
+     recordSendFailure({
+      sessionId: input.sessionId,
+      messageId: correlationId,
+      directory: directory ?? null,
+      status: getErrorStatus(error),
+      ambiguous: isAmbiguousSendFailure(error),
+      confirmationChecked: false,
+      reason: error instanceof Error ? error.message : String(error),
+     })
+    }
+   }
+   throw error
+  }
  }
 }
 
@@ -214,14 +285,18 @@ let _getDirectory: () => string = () => ""
 // to reconcile a trailing running tool part after a blocking request is
 // confirmed stale server-side (see recoverStaleBlockingRequest).
 let _enqueueSessionMaterialization: ((directory: string, sessionID: string, messageID: string) => void) | null = null
-type OptimisticAddInput = { sessionId: string; directory?: string | null; message: CanonicalMessage }
-type OptimisticRemoveInput = { sessionId: string; directory?: string | null; messageId: string }
-type OptimisticConfirmInput = OptimisticRemoveInput
+let _ensureSessionStream: ((sessionId: string, directory?: string | null) => void) | null = null
+export type OptimisticAddInput = { sessionId: string; directory?: string | null; message: CanonicalMessage }
+export type OptimisticRemoveInput = { sessionId: string; directory?: string | null; messageId: string }
+export type OptimisticConfirmInput = OptimisticRemoveInput
 
 let _optimisticAdd: ((input: OptimisticAddInput) => void) | null = null
 let _optimisticRemove: ((input: OptimisticRemoveInput) => void) | null = null
 let _optimisticConfirm: ((input: OptimisticConfirmInput) => void) | null = null
 
+export function optimisticAdd(input: OptimisticAddInput): void { _optimisticAdd?.(input) }
+export function optimisticRemove(input: OptimisticRemoveInput): void { _optimisticRemove?.(input) }
+export function optimisticConfirm(input: OptimisticConfirmInput): void { _optimisticConfirm?.(input) }
 /**
  * Revision patch for one or more sessions changing in the same store write.
  *
@@ -297,10 +372,12 @@ export function setActionRefs(
  childStores: ChildStoreManager,
  getDirectory: () => string,
  enqueueSessionMaterialization?: (directory: string, sessionID: string, messageID: string) => void,
+ ensureSessionStream?: (sessionId: string, directory?: string | null) => void,
 ) {
  _childStores = childStores
  _getDirectory = getDirectory
  _enqueueSessionMaterialization = enqueueSessionMaterialization ?? null
+ _ensureSessionStream = ensureSessionStream ?? null
 }
 
 export function setOptimisticRefs(
@@ -766,13 +843,14 @@ export async function createSession(
  selectionTransition?: "submitted-draft",
  selection?: SessionCreateSelection,
  navigation: "open" | "preserve" = "open",
+ resolveWorkspace: (directory: string) => Promise<Workspace> = (directory) => canonicalClient.resolveWorkspace(directory),
 ): Promise<CanonicalSession | null> {
  const runtimeKey = getRuntimeKey()
  const runtimeRevision = getRuntimeSwitchRevision()
  try {
   const effectiveDirectory = directoryOverride ?? dir()
   if (!effectiveDirectory) throw new Error("No directory for session creation")
-  const workspace = await canonicalClient.resolveWorkspace(effectiveDirectory)
+  const workspace = await resolveWorkspace(effectiveDirectory)
   if (isStaleRuntime(runtimeKey) || runtimeRevision !== getRuntimeSwitchRevision()) return null
   const admittedMetadata = { ...metadata }
   const createRequest: SessionCreateRequest = {

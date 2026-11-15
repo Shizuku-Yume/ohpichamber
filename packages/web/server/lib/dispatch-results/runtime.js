@@ -68,11 +68,11 @@ const retryDelay = (failures) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(fa
 const unavailableError = (message, status) => Object.assign(new Error(message), { status });
 
 /** A durable delivery id minted once and reused across retries. */
-const createMessageId = (now) => {
+export const createMessageId = (now) => {
   const time = (BigInt(now) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
   let random = '';
   for (let index = 0; index < 14; index += 1) random += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
-  return `delivery_${time}${random}`;
+  return `msg_${time}${random}`;
 };
 
 export const escapeAttribute = (value) => value
@@ -87,24 +87,65 @@ const messageText = (message) => (Array.isArray(message?.parts) ? message.parts 
   .join('')
   .trim();
 
-const OUTCOME_STATES = { completed: 'completed', failed: 'error', cancelled: 'cancelled' };
-
-export const readDispatchOutcome = (page, dispatchedAt, afterTurnId) => {
-  if (!page || !Array.isArray(page.turns) || !Array.isArray(page.messages)) return null;
-  const turns = page.turns.filter((turn) => turn.status === 'completed' || turn.status === 'failed' || turn.status === 'cancelled');
-  const turn = turns.find((candidate) => {
-    if (afterTurnId !== undefined && candidate.turnId === afterTurnId) return false;
-    return Number(candidate.finishedAt) >= dispatchedAt;
-  });
-  if (!turn) return null;
-  const reply = page.messages.find((message) => message.turnId === turn.turnId && message.role === 'assistant');
-  return {
-    state: OUTCOME_STATES[turn.status],
-    text: reply ? messageText(reply) : '',
-    errorMessage: typeof turn.error === 'string' ? turn.error.trim() : '',
-  };
+const OUTCOME_STATES = {
+  succeeded: 'completed',
+  failed: 'error',
+  interrupted: 'cancelled',
+  stopped: 'cancelled',
+  completed: 'completed',
+  cancelled: 'cancelled',
 };
 
+export const readDispatchOutcome = (pageOrRecords, dispatchedAt, afterTurnOrIdleId, { withText = false } = {}) => {
+  if (Array.isArray(pageOrRecords)) {
+    const records = pageOrRecords;
+    const idleIndex = records.findIndex((record) => record?.type === 'idle');
+    if (idleIndex === -1) return null;
+    const idle = records[idleIndex];
+    if (!idle || !idle.time) return null;
+    const byOrder = afterTurnOrIdleId !== undefined;
+    if (byOrder ? idle.id === afterTurnOrIdleId : idle.time.created < dispatchedAt) return null;
+    const baselineIndex = byOrder && afterTurnOrIdleId !== null
+      ? records.findIndex((record) => record?.id === afterTurnOrIdleId)
+      : -1;
+    const turnRecords = records.slice(idleIndex + 1, baselineIndex === -1 ? undefined : baselineIndex);
+    const replies = turnRecords
+      .filter((record) => record?.type === 'assistant' && (byOrder || record.time?.created >= dispatchedAt));
+    const reply = replies[0];
+    const assistantText = (a) => (Array.isArray(a?.content) ? a.content.map((c) => c?.text || '').join('') : '');
+    const textReply = withText ? replies.find((a) => assistantText(a)) : reply;
+    return {
+      state: OUTCOME_STATES[idle.outcome] ?? idle.outcome,
+      text: textReply ? assistantText(textReply) : '',
+      errorMessage: reply?.error?.message?.trim() ?? '',
+    };
+  }
+  if (!pageOrRecords || !Array.isArray(pageOrRecords.turns) || !Array.isArray(pageOrRecords.messages)) return null;
+  let candidateTurns = pageOrRecords.turns;
+  if (afterTurnOrIdleId) {
+    const baselineIndex = candidateTurns.findIndex((t) => t.turnId === afterTurnOrIdleId);
+    if (baselineIndex !== -1) {
+      candidateTurns = candidateTurns.slice(baselineIndex + 1);
+    }
+  }
+  const matchingTurns = candidateTurns.filter((candidate) => {
+    if (candidate.status !== 'completed' && candidate.status !== 'failed' && candidate.status !== 'cancelled') {
+      return false;
+    }
+    if (afterTurnOrIdleId !== undefined && candidate.turnId === afterTurnOrIdleId) return false;
+    return Number(candidate.finishedAt) >= dispatchedAt;
+  });
+  if (matchingTurns.length === 0) return null;
+  const terminalTurn = matchingTurns.at(-1);
+  const turnIds = new Set(matchingTurns.map((t) => t.turnId));
+  const replies = pageOrRecords.messages.filter((message) => turnIds.has(message.turnId) && message.role === 'assistant');
+  const text = [...replies].reverse().map((message) => messageText(message)).find((content) => content.length > 0) ?? '';
+  return {
+    state: OUTCOME_STATES[terminalTurn.status],
+    text,
+    errorMessage: typeof terminalTurn.error === 'string' ? terminalTurn.error.trim() : '',
+  };
+};
 const outcomeBody = ({ state, text, errorMessage }, sessionId) => {
   const answer = text.length > ANSWER_CHAR_LIMIT
     ? `${text.slice(0, ANSWER_CHAR_LIMIT)}\n\n[Cut at ${ANSWER_CHAR_LIMIT} characters; read the rest with session.messages for ${sessionId}.]`

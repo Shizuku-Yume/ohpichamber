@@ -28,7 +28,7 @@ const WORKSPACE = 'project-workspace';
 const OTHER_WORKSPACE = 'other-workspace';
 const agent = (name: string, agentId = name): Agent => ({
   agentId, name, description: `Profile for ${name}`, model: { providerId: 'provider', modelId: 'model' },
-  allowedTools: ['read', 'edit'], systemPromptOverride: 'Stored instructions', permissionPresetId: 'preset',
+  allowedTools: ['read', 'edit'], systemPromptOverride: 'Stored instructions',
 });
 const catalog = (agents: Agent[], revision = '1', workspaceId = WORKSPACE): AgentCatalog => ({ workspaceId, revision, agents });
 const deferred = <T>() => {

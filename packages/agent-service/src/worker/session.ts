@@ -16,12 +16,14 @@ import type { AgentSessionHandle } from '@oh-my-pi/pi-coding-agent/session/agent
 import type { PromptOptions } from '@oh-my-pi/pi-coding-agent/session/agent-session-types';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
+import { recordSessionRecap } from '@oh-my-pi/pi-coding-agent/session/session-index';
 import { AgentRegistry } from '@oh-my-pi/pi-coding-agent/registry/agent-registry';
 import { JobWidgets } from '@oh-my-pi/pi-coding-agent/job-widgets/registry';
 import { createModelJobCaptionWriter } from '@oh-my-pi/pi-coding-agent/job-widgets/caption';
 import { listServicesTolerant, sendService, serviceLogs, stopService } from '@oh-my-pi/pi-coding-agent/launch/services';
 import { cfgAsyncWidgets } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import type { ToolSession } from '@oh-my-pi/pi-coding-agent/tools';
+import { resolveToolTier } from '@oh-my-pi/pi-coding-agent/tools/approval';
 import { initializeExtensions } from '@oh-my-pi/pi-coding-agent/modes/runtime-init';
 import { executeAcpBuiltinSlashCommand, isAllowedBuiltinCommand, isReadOnlyBuiltinCommand, parseSlashCommand } from './builtin-commands.ts';
 import type { SlashCommandRuntime } from '@oh-my-pi/pi-coding-agent/slash-commands/types';
@@ -56,10 +58,10 @@ import { WorkerMcp, readNativeMcpConfigurationIfPresent } from './mcp.ts';
 import { NativeMcpCredentials } from './mcp-credentials.ts';
 import { WorkerShell } from './shell.ts';
 import { WorkerCompletion } from './completion.ts';
-import { nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
+import { consumePrewarmedNativeRuntime, nativeExtensionRoots, nativeModelsContext, nativeSkillOptions, openNativeRuntime } from './native-runtime.ts';
 import { NativeWebSearch, installWebSearchAuthorization } from './catalog-websearch.ts';
-import type { WorkerAuthorize } from './policy.ts';
-import { createHostToolExtension, HOST_TOOL_DESCRIPTIONS } from './host-tool.ts';
+import { NativeApprovalRequired, type WorkerAuthorize } from './policy.ts';
+import { createHostToolController, normalizeHostToolEnablement, HOST_TOOL_DESCRIPTIONS, type HostToolController, type HostToolName } from './host-tool.ts';
 import { isSingleDevicePath } from './internal-device-path.ts';
 import type { WorkerHostInvoke } from './host-actions.ts';
 import { formatModelString } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
@@ -73,6 +75,7 @@ import { BashTool } from '@oh-my-pi/pi-coding-agent/tools/bash';
 import { cfgTaskPerCallModel } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { nativePluginExtensionPaths } from './native-plugin-loader.ts';
 import { NativeCacheWarming } from './catalog-warming.ts';
+import { SuggestionDriver } from './suggestion.ts';
 import { InternalUrlRouter, resolveLocalRoot } from '@oh-my-pi/pi-coding-agent/internal-urls';
 import { readPlanFile } from '@oh-my-pi/pi-coding-agent/plan-mode/plan-files';
 import { prompt as nativePrompt } from '@oh-my-pi/pi-utils';
@@ -151,6 +154,8 @@ export class WorkerSession {
   private planReviewTask: Promise<void> | undefined;
   private publishedContinuationPending = false;
   private readonly liveSubagents = new Map<string, Subagent>();
+  readonly suggestionDriver: SuggestionDriver;
+  private _draftPresent = false;
   private readonly toolCallToSubagentId = new Map<string, string>();
   // Agent Hub reads: the observer registry tracks live sessions for the tree
   // cost rollup, and the persisted roster is only awaited when the UI asks.
@@ -188,6 +193,7 @@ export class WorkerSession {
     private readonly subagentEventBus: EventBus,
     private readonly webSearch: NativeWebSearch,
     private readonly permissionBridge: NativePermissionBridge,
+    private readonly hostToolsController?: HostToolController,
   ) {
     this.modeController = new WorkerModeController(
       session,
@@ -235,10 +241,18 @@ export class WorkerSession {
       isBlocked: () => this.idleRecapBlocked(),
       scheduledTurn: () => this.scheduledTurn(),
       onRecap: recap => {
+        try { recordSessionRecap(this._sessionId, this.cwd, recap); } catch { /* best-effort recap journal */ }
         // Transient: the recap is a hint about the settled turn, not a durable
         // transcript entry, so it must not become part of the history stream.
         this.emit([{ timestamp: Date.now(), transient: true, event: { type: 'session.recap', recap, createdAt: Date.now() } }]);
       },
+    });
+    this.suggestionDriver = new SuggestionDriver({
+      session,
+      emit: events => this.emit(events),
+      hasDraft: () => this.hasDraft(),
+      isAborted: () => Boolean(this.cancellingRunId),
+      authorize: this.authorizeProviderUse,
     });
     // Subagents restored from persisted transcripts become `parked` refs, so a
     // UI reload still sees the swarm the previous worker built.
@@ -286,6 +300,7 @@ export class WorkerSession {
       if (event.type === 'message_end' || event.type === 'turn_end' || event.type === 'agent_end') void this.bind().catch(() => this.fail());
       if (event.type === 'agent_end') {
         this.scheduleAutoTitle();
+        void this.suggestionDriver.handleAgentEnd(event);
         // Settle this turn's spend into `stats.db`; the analytics index must
         // follow live work instead of waiting for an offline rescan.
         void settleUsageSession(this._sessionFile).catch(() => undefined);
@@ -373,7 +388,8 @@ export class WorkerSession {
   static async open(input: WorkerBootstrapMessage, publish: (inputs: ProjectionInput[]) => void, onInteraction: (interaction: WorkerInteraction) => void, onFatal: () => void, hostAuthorize: WorkerAuthorize, invokeHostAction: WorkerHostInvoke, publishPolicy: (snapshot: HostNativePolicySnapshot) => void, onSubagent: (payload: SubagentLifecyclePayload) => void): Promise<WorkerSession> {
     if (input.mcpConfiguration && !input.mcpConfigPath) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'MCP storage ownership is missing');
     if (input.skillSources && !input.agentDirectoryId) throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Skill source ownership is missing');
-    const runtime = await openNativeRuntime(input);
+    const prewarmed = await consumePrewarmedNativeRuntime(input);
+    const runtime = prewarmed?.runtime ?? await openNativeRuntime(input);
     const { authStorage, settings, modelRegistry } = runtime;
     let manager: SessionManager | undefined;
     let session: AgentSession | undefined;
@@ -425,9 +441,9 @@ export class WorkerSession {
     const worker = { workspaceId: input.workspaceId, rootSessionId: input.rootSessionId, workerGeneration: input.workerGeneration };
     const interaction = new NativeInteraction({ request: onInteraction, currentTurn: () => projection?.currentTurn()?.turnId });
     const observer: ExtensionFactory = api => {
-      api.on('tool_call', async event => {
+      api.on('tool_call', async (event, ctx) => {
         interaction.observeToolCall(event);
-        if (admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
+        if ((!ctx?.agent || ctx.agent.kind === 'main') && admission.profile && admission.profile.allowedTools !== null && !admission.profile.allowedTools.includes(event.toolName)) return { block: true, reason: 'Selected agent profile does not permit this tool' };
         // Host tools route through their domain capability owner; `bash` keeps
         // its own approval path. The set comes from the registered inventory so
         // a newly registered host tool cannot fall to the generic refusal below.
@@ -445,11 +461,52 @@ export class WorkerSession {
         if (internalDevice) return;
         if (event.toolName === 'web_search') {
           try { await authorize({ type: 'web-search' }); }
-          catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
+          catch (error) {
+            return {
+              block: true,
+              reason: error instanceof ProjectionError ? error.message : 'Host policy refused the tool operation',
+            };
+          }
           return;
         }
-        try { await authorizeTool(event.toolName, JsonObjectSchema.parse(JSON.parse(JSON.stringify(event.input)))); }
-        catch { return { block: true, reason: 'Host policy refused the tool operation' }; }
+        const toolInput = JsonObjectSchema.parse(JSON.parse(JSON.stringify(event.input)));
+        try {
+          await authorizeTool(event.toolName, toolInput);
+        } catch (error) {
+          if (error instanceof NativeApprovalRequired) {
+            // This approval comes from the Host authorizer inside `tool_call`,
+            // not from OMP's own gate, so `ctx.ui.approve` has no
+            // `tool_approval_requested` observation to match and would answer
+            // `deny` for every request. Ask the user through the canonical
+            // approval path instead, which the session mode can auto-answer.
+            const approved = await interaction.approveTool(
+              event.toolCallId,
+              event.toolName,
+              toolInput,
+              error.message,
+            );
+            if (!approved) {
+              return { block: true, reason: 'Tool approval was rejected' };
+            }
+            const approvalId = interaction.takeApprovalReceipt(event.toolCallId);
+            if (!approvalId) {
+              return { block: true, reason: 'Tool approval is unavailable' };
+            }
+            try {
+              await authorizeTool(event.toolName, toolInput, { approvalId, toolCallId: event.toolCallId });
+              return;
+            } catch (reauthError) {
+              return {
+                block: true,
+                reason: reauthError instanceof ProjectionError ? reauthError.message : 'Host policy refused the tool operation',
+              };
+            }
+          }
+          return {
+            block: true,
+            reason: error instanceof ProjectionError ? error.message : 'Host policy refused the tool operation',
+          };
+        }
       });
       api.on('before_agent_start', () => undefined);
       api.on('tool_approval_requested', event => { interaction.observeApproval(event); });
@@ -458,7 +515,9 @@ export class WorkerSession {
     };
     const mcpCredentials = new NativeMcpCredentials(authStorage, input.workspaceId);
     const mcp = input.mcpConfigPath ? new WorkerMcp({
-      cwd: input.cwd, configPath: input.mcpConfigPath, worker, authStorage,
+      cwd: input.cwd, configPath: input.mcpConfigPath,
+      userConfigPath: join(input.agentDirectory, 'mcp.json'),
+      worker, authStorage,
       resolveCredentialRef: reference => mcpCredentials.resolve(reference),
       // authorizeServer already checked the Host-resolved command before this resolver is called.
       resolveCommand: async transport => transport.command,
@@ -474,7 +533,10 @@ export class WorkerSession {
       isCurrent: () => !owned || !owned.closed && !owned.failed,
     }) : undefined;
     try {
-      await installWebSearchAuthorization(runtime, hostAuthorize);
+      const [, pluginExtensionPaths] = await Promise.all([
+        installWebSearchAuthorization(runtime, hostAuthorize),
+        prewarmed?.pluginExtensionPaths ?? nativePluginExtensionPaths(input.cwd),
+      ]);
       const directory = input.sessionsDirectory ?? SessionManager.getDefaultSessionDir(input.cwd, input.agentDirectory);
       manager = input.sessionFile
         ? await SessionManager.open(input.sessionFile, directory, undefined, { initialCwd: input.cwd, throwIfMissing: true })
@@ -487,7 +549,6 @@ export class WorkerSession {
         getSessionSpawns: () => '*',
       });
       const subagentEventBus = new EventBus();
-      const pluginExtensionPaths = await nativePluginExtensionPaths(input.cwd);
       const permissionBridge = new NativePermissionBridge(
         (toolCall, options, sessionRuleKey, signal, steeringSignal) => interaction.requestPermission(toolCall, options, sessionRuleKey, signal, steeringSignal),
         toolCall => {
@@ -504,6 +565,12 @@ export class WorkerSession {
       // no such seam.
       cfgTitleRefreshOnReplan.override(settings, false);
       cfgTaskPerCallModel.override(settings, 'on');
+      const initialHostTools = normalizeHostToolEnablement(input.hostTools);
+      const hostToolsController = createHostToolController({
+        scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
+        invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
+        initialEnablement: initialHostTools,
+      });
       const result = await createAgentSession({
         cwd: input.cwd, agentDir: input.agentDirectory, sessionManager: manager, authStorage, modelRegistry, settings,
         initialModelRefreshStrategy: 'offline',
@@ -514,10 +581,7 @@ export class WorkerSession {
           interaction, approval: bashPolicy.approval,
           authorize: (toolCallId, toolInput, approvalId) => authorizeTool('bash', toolInput, { toolCallId, approvalId }),
           nativeAuthorized: (toolCallId, toolInput) => permissionBridge.isNativeAuthorized('bash', toolInput, toolCallId),
-        }), createHostToolExtension({
-          scope: { sessionId: input.rootSessionId, rootSessionId: input.rootSessionId, workspaceId: input.workspaceId },
-          invoke: invocation => invokeHostAction(invocation.request, invocation.signal),
-        })],
+        }), hostToolsController.extension],
         extensionRoots: () => nativeExtensionRoots(settings, pluginExtensionPaths),
         getApiKey: async model => {
           await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
@@ -530,23 +594,30 @@ export class WorkerSession {
       }
       const nativeSession = session;
       nativeSession.setClientBridge(permissionBridge.clientBridge);
+      hostToolsController.bindSession(nativeSession);
       mcp?.attachSession(nativeSession);
       result.setToolUIContext(interaction.ui, true);
       const warming = new NativeCacheWarming({ cwd: input.cwd, agentDirectory: input.agentDirectory, session: nativeSession });
       const catalogs = new WorkerCatalogs({
         ...nativeModelsContext(runtime, () => nativeSession.sessionManager.getSessionId()), worker,
         warming,
+        session: nativeSession,
         cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration,
         get extensionRoots() { return nativeExtensionRoots(settings, pluginExtensionPaths); },
         get options() { return nativeSkillOptions(settings, pluginExtensionPaths); },
-        permissionPreset: (presetId, proposed) => authorize({ type: 'tool', toolName: 'permission.preset', input: { presetId }, permissionPresetId: presetId, ...(proposed ? { proposed: true } : {}) }),
         availableToolNames: () => nativeSession.getAllToolInfos().map(tool => tool.name),
         assertProviderEntryAllowed: () => authorize({ type: 'provider-entry' }),
         publishSkills: async staged => {
-          await nativeSession.refreshSkills();
-          const capture = (skills: typeof staged | typeof nativeSession.skills) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, metadata: skill._source })).sort();
-          const expected = capture(staged), actual = capture(nativeSession.skills);
-          if (expected.length !== actual.length || expected.some((skill, index) => skill !== actual[index])) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill publication changed during application');
+          type SkillPayload = (typeof staged)[number] & { content?: string };
+          const capture = (skills: readonly SkillPayload[]) => skills.map(skill => JSON.stringify({ name: skill.name, description: skill.description, filePath: skill.filePath, baseDir: skill.baseDir, source: skill.source, hide: skill.hide, containRoot: skill.containRoot, content: skill.content, metadata: skill._source })).sort();
+          const expected = capture(staged);
+          const current = capture(nativeSession.skills);
+          const match = expected.length === current.length && expected.every((desc, i) => desc === current[i]);
+          if (!match) {
+            await nativeSession.refreshSkills();
+            const actual = capture(nativeSession.skills);
+            if (expected.length !== actual.length || expected.some((skill, index) => skill !== actual[index])) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skill publication changed during application');
+          }
         },
         setSkillsRuntimeAvailable: available => { admission.skillsAvailable = available; },
       });
@@ -605,7 +676,7 @@ export class WorkerSession {
       const authorizeProviderUse = async (model: { provider: string; id: string; baseUrl: string }): Promise<void> => {
         await authorizeTool('provider.use', { providerId: model.provider, modelId: model.id, endpoint: model.baseUrl });
       };
-      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge);
+      owned = new WorkerSession(nativeSession, authStorage, sessionFile, publish, input.rootSessionId, input.cwd, onFatal, interaction, catalogs, mcp, shell, completion, admission, authorize, authorizeProviderUse, onSubagent, subagentEventBus, new NativeWebSearch(runtime, input.workspaceId, authorize), permissionBridge, hostToolsController);
       // Persisted subagents must be revivable after a worker restart: the factory
       // rebuilds one from its transcript, and the TTL mirrors the native task-agent
       // idle setting so a parked agent is collected exactly when OMP would.
@@ -619,10 +690,19 @@ export class WorkerSession {
       await owned.modeController.goal.reconcile();
       await owned.modeController.restore();
       capturePolicy = async () => {
-        const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId) : null;
-        publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
+        try {
+          const configuration = input.mcpConfigPath ? await readNativeMcpConfigurationIfPresent(input.mcpConfigPath, input.workspaceId, join(input.agentDirectory, 'mcp.json')) : null;
+          publishPolicy(await captureNativePolicy({ projectId: input.projectId, workspaceId: input.workspaceId, cwd: input.cwd, agentDirectory: input.agentDirectory, agentDirectoryId: input.agentDirectoryId ?? input.workerGeneration }, runtime, catalogs.agents, configuration?.config.servers ?? []));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          process.stderr.write(`${JSON.stringify({ type: 'policy.capture.warning', message: message.slice(0, 200) })}\n`);
+        }
       };
-      await capturePolicy();
+      // The first snapshot must exist before the worker reports ready: a session
+      // start is the only chance to publish it, and readers treat a ready worker
+      // as having one. capturePolicy swallows its own failures, so awaiting it
+      // cannot fail the open; it only orders the publish ahead of readiness.
+      const initialPolicyCapture = capturePolicy();
       projection = owned.projection;
       // External MCP servers can take tens of seconds to handshake; the first
       // prompt must not wait for them. Start the connection in the background,
@@ -641,14 +721,16 @@ export class WorkerSession {
           });
       }
       // Skill publications are generation-local; an untouched configuration still has CAS revision zero.
-      if (input.skillSources) await catalogs.skills.apply(input.skillSources, '1');
-      if (input.options) await owned.selectOptions(input.options);
-      await initializeExtensions(nativeSession, {
+      const postInitTasks: Promise<unknown>[] = [];
+      if (input.skillSources) postInitTasks.push(catalogs.skills.apply(input.skillSources, '1'));
+      if (input.options) postInitTasks.push(owned.selectOptions(input.options));
+      postInitTasks.push(initializeExtensions(nativeSession, {
         mode: 'rpc', uiContext: interaction.ui,
         reportSendError: () => owned?.fail(), reportRuntimeError: () => owned?.fail(), onShutdown: onFatal,
-      });
-      // Reopening a transcript must use the latest workspace preference, not restored session state.
-      warming.apply((await warming.read(input.workspaceId, '0')).mode);
+      }));
+      postInitTasks.push(warming.read(input.workspaceId, '0').then(w => warming.apply(w.mode)).catch(() => { }));
+      await Promise.all(postInitTasks);
+      await initialPolicyCapture;
       return owned;
     } catch (error) {
       interaction.close();
@@ -664,6 +746,8 @@ export class WorkerSession {
     }
   }
 
+  private lastSelectedOptions?: string;
+
   private async selectOptions(options: CapturedSendOptions): Promise<void> {
     // Root options select only the model and thinking effort; OMP owns root tools.
     const mode = this.modeController.mode();
@@ -672,6 +756,8 @@ export class WorkerSession {
     const providerId = options.providerId ?? fallback?.providerId;
     const modelId = options.modelId ?? fallback?.modelId;
     if (!providerId || !modelId) throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Selected model is unavailable');
+    const optionsKey = JSON.stringify({ providerId, modelId, variant: options.variant, reasoningEffort: options.reasoningEffort, agentId: options.agentId });
+    if (this.lastSelectedOptions === optionsKey) return;
     const selected = await this.catalogs.resolveSelection({ providerId, modelId }, { variant: options.variant, reasoningEffort: options.reasoningEffort });
     await this.session.setModelTemporary(selected.nativeModel);
     if (selected.reasoningEffort !== null || options.variant !== null || options.reasoningEffort !== null) {
@@ -688,6 +774,7 @@ export class WorkerSession {
       await this.session.restoreNonMCPToolPresentation(this.defaultToolNames, this.defaultMountedNames, this.defaultRegisteredNames);
     }
     this.admission.profile = profile;
+    this.lastSelectedOptions = optionsKey;
   }
 
   seed(): ProjectionSeed { return this.projection.seed(); }
@@ -1242,6 +1329,7 @@ export class WorkerSession {
     const task = (async () => {
       try {
         await this.stopAutoTitle();
+        this.suggestionDriver.cancel();
         await this.session.sessionManager.flush();
         const dispatched = await start();
         await this.bind();
@@ -1261,6 +1349,13 @@ export class WorkerSession {
     })();
     this.promptTask = task.then(() => { }, () => { });
     return task;
+  }
+  async toggleHostTool(toolName: HostToolName, enabled: boolean): Promise<void> {
+    await this.hostToolsController?.toggle(toolName, enabled);
+  }
+
+  async configureHostTools(tools: Partial<Record<HostToolName, boolean>>): Promise<void> {
+    await this.hostToolsController?.configure(tools);
   }
 
   /** Stop an in-flight background title before a user turn or disposal touches provider settings. */
@@ -1341,6 +1436,7 @@ export class WorkerSession {
       case 'oauth': return { type: 'mcp', result: { type: 'oauth', result: await this.mcp.oauthExecute(request.serverId, request.request, request.configuration) } };
       case 'test': return { type: 'mcp', result: { type: 'tested', result: await this.mcp.test(request.serverId, request.configuration) } };
       case 'secret.write': throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP credential writes belong to the workspace owner');
+      case 'discover': throw new ProjectionError(400, 'UNSUPPORTED_CAPABILITY', 'MCP tool discovery belongs to the workspace owner');
     }
   }
 
@@ -1397,6 +1493,14 @@ export class WorkerSession {
         await this.session.reconcileBuiltinTools();
         return { type: 'web-search', result };
       }
+      case 'host-tools.toggle': {
+        await this.toggleHostTool(operation.toolName as HostToolName, operation.enabled);
+        return { type: 'host-tools.toggle', enabled: operation.enabled };
+      }
+      case 'host-tools.configure': {
+        await this.configureHostTools(operation.tools as Partial<Record<HostToolName, boolean>>);
+        return { type: 'host-tools.configure', configured: true };
+      }
       case 'catalog': {
         const applying = operation.operation.type === 'skills.apply';
         if (applying && this.skillsApplying) throw new ProjectionError(409, 'CATALOG_CONFLICT', 'Skill application is already active');
@@ -1408,6 +1512,8 @@ export class WorkerSession {
         } finally { if (applying) this.skillsApplying = false; }
       }
       case 'btw.ask': {
+        this.suggestionDriver.cancel();
+        await this.stopAutoTitle();
         const record = await this.btw.ask(operation.question, operation.recordId);
         return { type: 'btw.ask', recordId: record.id };
       }
@@ -1926,6 +2032,7 @@ export class WorkerSession {
         if (this.preparation || this.projection.activeRun() || this.continuationPending) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         if (this.skillsApplying || !this.admission.skillsAvailable) throw new ProjectionError(503, 'SKILL_APPLY_FAILED', 'Native skills must be successfully applied before prompt admission');
         await this.stopAutoTitle();
+        this.suggestionDriver.cancel();
         this.preparation = this.prepare(operation);
         let prepared: PreparedPrompt;
         try { prepared = await this.preparation; }
@@ -1958,6 +2065,7 @@ export class WorkerSession {
         this.planRevision++;
         this.cancellingRunId = operation.runId;
         await this.stopAutoTitle();
+        this.suggestionDriver.cancel();
         this.interaction.cancelAll();
         await this.session.abort();
         await this.promptTask;
@@ -1997,6 +2105,29 @@ export class WorkerSession {
       }
       case 'branch':
         return this.selectBranch(operation.request);
+      case 'tools.catalog': {
+        const toolInfos = this.session.getAllToolInfos();
+        const tools = toolInfos.map((info) => {
+          const tool = this.session.getToolByName(info.name);
+          const tier = tool ? resolveToolTier(tool, {}) : 'exec';
+          const label = (typeof tool?.label === 'string' && tool.label) ? tool.label : info.name;
+          const description = (typeof tool?.description === 'string' && tool.description) ? tool.description : (info.description || '');
+          return {
+            name: info.name,
+            label,
+            description,
+            tier,
+            availability: true,
+          };
+        });
+        return {
+          type: 'tools.catalog',
+          catalog: {
+            sessionId: this.sessionId,
+            tools,
+          },
+        };
+      }
       case 'delete':
         if (this.preparation || this.projection.activeRun()) throw new ProjectionError(409, 'RUN_ACTIVE', 'A run is already active');
         await this.bind();
@@ -2012,6 +2143,7 @@ export class WorkerSession {
     this.permissionBridge?.stop();
     this.pendingTitleInput = undefined;
     await this.stopAutoTitle();
+    this.suggestionDriver.cancel();
     this.interaction.close();
     // Close the MCP owner first: it disconnects staged transports, so a pending
     // 30 s handshake settles instead of stalling this worker's 5 s shutdown.
@@ -2047,6 +2179,13 @@ export class WorkerSession {
         try { await this.session.dispose(); } finally { this.authStorage.close(); }
       }
     }
+  }
+  hasDraft(): boolean {
+    return this._draftPresent;
+  }
+
+  setDraft(present: boolean): void {
+    this._draftPresent = present;
   }
 }
 

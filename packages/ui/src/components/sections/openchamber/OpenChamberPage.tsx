@@ -12,7 +12,6 @@ import { NotificationSettings } from './NotificationSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { TunnelSettings } from './TunnelSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
-import { OpenChamberToolsSettings } from './OpenChamberToolsSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
 import { GeneralConnectionAndPrivacySettings, GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
@@ -82,10 +81,23 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
         tunnel: t('settings.page.tunnel.title'),
     }[section];
 
+    const pageDescription = {
+        general: t('settings.page.general.description'),
+        visual: t('settings.page.appearance.description'),
+        chat: t('settings.page.chat.description'),
+        sessions: t('settings.page.sessions.description'),
+        shortcuts: t('settings.page.shortcuts.description'),
+        git: undefined,
+        github: undefined,
+        notifications: t('settings.page.notifications.description'),
+        voice: t('settings.page.voice.description'),
+        tunnel: t('settings.page.tunnel.description'),
+    }[section];
+
     return (
         <SettingsPageLayout
             title={pageTitle}
-            namedBySidebar
+            description={pageDescription}
             showSaveStatus
         >
             {renderSectionContent()}
@@ -111,7 +123,6 @@ const GeneralSectionContent: React.FC = () => {
         <>
             {/* Remote hosts too: the Dock badge works there. */}
             {isDesktopShell() && <DesktopAppSettings />}
-            <OpenChamberToolsSettings />
             {isLocalDesktop && <DesktopNetworkSettings />}
             {showPasskeySettings && <PasskeySettings />}
             <GeneralInterfaceSettings />

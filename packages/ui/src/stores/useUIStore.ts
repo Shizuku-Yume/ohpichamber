@@ -1025,18 +1025,14 @@ interface UIStore {
  showReasoningTraces: boolean;
  chatRenderMode: 'live' | 'sorted';
  persistChatDraft: boolean;
- showExpandedBashTools: boolean;
- showExpandedEditTools: boolean;
  sessionWorkAutoOpen: boolean;
- sessionWorkKeepInGroup: boolean;
  streamingAutoFollowEnabled: boolean;
  sessionRecapEnabled: boolean;
- sessionSuggestionEnabled: boolean;
+ suggestionGenerator: 'session' | 'small' | 'off';
  /** The "In work" sidebar block, the Track / Done actions, and sessions going in on a sent message. */
  sessionWorkEnabled: boolean;
  /** Let Jev offer an AI review or a walkthrough after a turn that changed the project. */
  sessionReviewOfferEnabled: boolean;
- sessionGoalEnabled: boolean;
  sessionGoalDefaultBudgetEnabled: boolean;
  sessionGoalDefaultBudget: number;
  collapsibleThinkingBlocks: boolean;
@@ -1081,6 +1077,8 @@ interface UIStore {
  terminalFontSize: number;
  terminalShell: TerminalShell;
  terminalLoginShells: TerminalShell[];
+ /** A terminal or project action tab closes when its process exits; off keeps the exited output. */
+ terminalCloseOnExit: boolean;
  editorFontSize: number;
  uiFont: UiFontOption;
  monoFont: MonoFontOption;
@@ -1161,7 +1159,6 @@ interface UIStore {
  messageSearchReasoningEnabled: boolean;
  /** Who answers the agent's browser actions: `builtin` (the in-app view) or an extension id. */
  browserProvider: string;
- agentMemoryToolEnabled: boolean;
  agentKnowledgeToolEnabled: boolean;
  agentNotifyToolEnabled: boolean;
  agentRenderToolEnabled: boolean;
@@ -1171,21 +1168,11 @@ interface UIStore {
  sessionGoalMaxAutoTurns: number;
  /** How new top-level sessions answer tool permissions. */
  permissionDefaultMode: PermissionMode;
- /** Start a new session on the model the picked agent pins. */
- autoApplyAgentModel: boolean;
  /** Keep the subagent task tool available while Plan mode is active. */
  planModeAllowAgents: boolean;
- agentImageToolEnabled: boolean;
- /** `provider/model` the image tool draws with; empty until the user picks one. */
- agentImageModel: string;
  agentWorkflowToolEnabled: boolean;
  /** The isolated-spaces switch as saved; the server applies it at its next start. */
  isolatedSpacesEnabled: boolean;
- /**
-  * Whether this build has agent memory at all. Server-owned and not
-  * persisted: an unreleased feature must not come back from a stale cache.
-  */
- agentMemoryFeatureAvailable: boolean;
  /**
   * Whether this build has agent workflows (`OPENCHAMBER_WORKFLOWS_ENABLE`).
   * Server-owned and not persisted, for the same reason as the memory flag.
@@ -1198,11 +1185,6 @@ interface UIStore {
  routingFeatureAvailable: boolean;
  /** Whether the overview page exists at all; the server says, from `OPENCHAMBER_OVERVIEW_ENABLED`. */
  overviewFeatureAvailable: boolean;
- /**
-  * When the user last looked at each memory scope, keyed by scope. Drives the
-  * new/changed badges; there is no stored review state.
-  */
- agentMemoryViewedAt: Record<string, number>;
  /** Active tab of the project context panel (notes/todos/plans). */
  projectContextTab: string;
  /**
@@ -1331,9 +1313,6 @@ interface UIStore {
  setRuntimeStatusDialogOpen: (open: boolean) => void;
  setRuntimeStatusText: (text: string) => void;
  setSessionWorkAutoOpen: (value: boolean) => void;
- setSessionWorkKeepInGroup: (value: boolean) => void;
- setShowExpandedBashTools: (value: boolean) => void;
- setShowExpandedEditTools: (value: boolean) => void;
  setOpenCodeStatusDialogOpen: (open: boolean) => void;
  setOpenCodeStatusText: (text: string) => void;
  setScheduledTasksDialogOpen: (open: boolean) => void;
@@ -1365,10 +1344,9 @@ interface UIStore {
  setShowReasoningTraces: (value: boolean) => void;
  setStreamingAutoFollowEnabled: (value: boolean) => void;
  setSessionRecapEnabled: (value: boolean) => void;
- setSessionSuggestionEnabled: (value: boolean) => void;
+ setSuggestionGenerator: (value: 'session' | 'small' | 'off') => void;
  setSessionWorkEnabled: (value: boolean) => void;
  setSessionReviewOfferEnabled: (value: boolean) => void;
- setSessionGoalEnabled: (value: boolean) => void;
  setSessionGoalDefaultBudgetEnabled: (value: boolean) => void;
  setSessionGoalDefaultBudget: (value: number) => void;
  setCollapsibleThinkingBlocks: (value: boolean) => void;
@@ -1397,6 +1375,7 @@ interface UIStore {
  setTerminalFontSize: (size: number) => void;
  setTerminalShell: (shell: TerminalShell) => void;
  setTerminalLoginShells: (shells: TerminalShell[]) => void;
+ setTerminalCloseOnExit: (value: boolean) => void;
  setEditorFontSize: (size: number) => void;
  setUiFont: (font: UiFontOption) => void;
  setMonoFont: (font: MonoFontOption) => void;
@@ -1417,6 +1396,7 @@ interface UIStore {
  ) => void;
  setProviderOrder: (orderedProviderIDs: string[]) => void;
  setCustomProviderIcon: (providerID: string, icon: CustomProviderIcon | null) => void;
+ setCustomProviderLogo: (providerID: string, logo: CustomProviderLogo | null) => void;
  toggleHiddenModel: (providerID: string, modelID: string) => void;
  isHiddenModel: (providerID: string, modelID: string) => boolean;
  hideAllModels: (providerID: string, modelIDs: string[]) => void;
@@ -1445,6 +1425,7 @@ interface UIStore {
  setNotificationMode: (mode: 'always' | 'hidden-only') => void;
  setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
  setSessionTabsEnabled: (value: boolean) => void;
+ setSessionTabsPerWorkspace: (value: boolean) => void;
  setNotifyOnSubtasks: (value: boolean) => void;
  setDockBadgeEnabled: (value: boolean) => void;
  setAlwaysShowScrollbars: (value: boolean) => void;
@@ -1461,24 +1442,18 @@ interface UIStore {
  setMessageSearchEnabled: (value: boolean) => void;
  setMessageSearchReasoningEnabled: (value: boolean) => void;
  setBrowserProvider: (value: string) => void;
- setAgentMemoryToolEnabled: (value: boolean) => void;
  setAgentKnowledgeToolEnabled: (value: boolean) => void;
  setAgentNotifyToolEnabled: (value: boolean) => void;
  setAgentRenderToolEnabled: (value: boolean) => void;
  setSessionGoalChecker: (value: SessionGoalChecker) => void;
  setSessionGoalMaxAutoTurns: (value: number) => void;
  setPermissionDefaultMode: (value: PermissionMode) => void;
- setAutoApplyAgentModel: (value: boolean) => void;
  setPlanModeAllowAgents: (value: boolean) => void;
- setAgentImageToolEnabled: (value: boolean) => void;
- setAgentImageModel: (value: string) => void;
  setAgentWorkflowToolEnabled: (value: boolean) => void;
  setIsolatedSpacesEnabled: (value: boolean) => void;
- setAgentMemoryFeatureAvailable: (value: boolean) => void;
  setAgentWorkflowFeatureAvailable: (value: boolean) => void;
  setRoutingFeatureAvailable: (value: boolean) => void;
  setOverviewFeatureAvailable: (value: boolean) => void;
- markAgentMemoryViewed: (key: string, viewedAt: number) => void;
  setProjectContextTab: (value: string) => void;
  openProjectKnowledgePlan: (directory: string, projectContextId: string, planId: string) => void;
  clearProjectKnowledgePlanRequest: () => void;
@@ -1614,16 +1589,12 @@ export const useUIStore = create<UIStore>()(
     showReasoningTraces: true,
     chatRenderMode: 'live',
     persistChatDraft: true,
-    showExpandedBashTools: false,
-    showExpandedEditTools: false,
     sessionWorkAutoOpen: true,
-    sessionWorkKeepInGroup: false,
     streamingAutoFollowEnabled: true,
     sessionRecapEnabled: true,
-    sessionSuggestionEnabled: true,
+    suggestionGenerator: 'session',
     sessionWorkEnabled: true,
     sessionReviewOfferEnabled: false,
-    sessionGoalEnabled: true,
     sessionGoalDefaultBudgetEnabled: false,
     sessionGoalDefaultBudget: 200_000,
     collapsibleThinkingBlocks: true,
@@ -1651,6 +1622,7 @@ export const useUIStore = create<UIStore>()(
     terminalFontSize: 14,
     terminalShell: 'auto',
     terminalLoginShells: [],
+    terminalCloseOnExit: true,
     editorFontSize: 13,
     uiFont: DEFAULT_UI_FONT,
     monoFont: DEFAULT_MONO_FONT,
@@ -1709,24 +1681,18 @@ export const useUIStore = create<UIStore>()(
     messageSearchEnabled: false,
     messageSearchReasoningEnabled: false,
     browserProvider: 'builtin',
-    agentMemoryToolEnabled: false,
     agentKnowledgeToolEnabled: true,
     agentNotifyToolEnabled: false,
     agentRenderToolEnabled: true,
     sessionGoalChecker: 'classifier',
     sessionGoalMaxAutoTurns: DEFAULT_SESSION_GOAL_MAX_AUTO_TURNS,
     permissionDefaultMode: 'ask',
-    autoApplyAgentModel: false,
     planModeAllowAgents: false,
-    agentImageToolEnabled: false,
-    agentImageModel: '',
     agentWorkflowToolEnabled: true,
     isolatedSpacesEnabled: false,
-    agentMemoryFeatureAvailable: false,
     agentWorkflowFeatureAvailable: false,
     routingFeatureAvailable: false,
     overviewFeatureAvailable: false,
-    agentMemoryViewedAt: {},
     projectContextTab: 'notes',
     projectKnowledgePlanRequest: null,
     inputSpellcheckEnabled: false,
@@ -2549,17 +2515,6 @@ export const useUIStore = create<UIStore>()(
      set({ sessionWorkAutoOpen: value });
     },
 
-    setSessionWorkKeepInGroup: (value) => {
-     set({ sessionWorkKeepInGroup: value });
-    },
-
-    setShowExpandedBashTools: (value) => {
-     set({ showExpandedBashTools: value });
-    },
-
-    setShowExpandedEditTools: (value) => {
-     set({ showExpandedEditTools: value });
-    },
 
     setOpenCodeStatusDialogOpen: (open) => {
      set({ isOpenCodeStatusDialogOpen: open });
@@ -2715,8 +2670,8 @@ export const useUIStore = create<UIStore>()(
      set({ sessionRecapEnabled: value });
     },
 
-    setSessionSuggestionEnabled: (value) => {
-     set({ sessionSuggestionEnabled: value });
+    setSuggestionGenerator: (value) => {
+     set({ suggestionGenerator: value });
     },
 
     setSessionWorkEnabled: (value) => {
@@ -2727,9 +2682,6 @@ export const useUIStore = create<UIStore>()(
      set({ sessionReviewOfferEnabled: value });
     },
 
-    setSessionGoalEnabled: (value) => {
-     set({ sessionGoalEnabled: value });
-    },
 
 
     setSessionGoalDefaultBudgetEnabled: (value) => {
@@ -2861,6 +2813,10 @@ export const useUIStore = create<UIStore>()(
 
     setTerminalLoginShells: (shells) => {
      set({ terminalLoginShells: [...new Set(shells)] });
+    },
+
+    setTerminalCloseOnExit: (value) => {
+     set({ terminalCloseOnExit: value });
     },
 
     setEditorFontSize: (size) => {
@@ -3071,6 +3027,17 @@ export const useUIStore = create<UIStore>()(
      });
     },
 
+    setCustomProviderLogo: (providerID, logo) => {
+     const normalizedProviderID = providerID.trim();
+     if (!normalizedProviderID) return;
+     set((state) => {
+      const next = { ...state.customProviderLogos };
+      if (logo) next[normalizedProviderID] = logo;
+      else delete next[normalizedProviderID];
+      return { customProviderLogos: next };
+     });
+    },
+
     toggleHiddenModel: (providerID, modelID) => {
      set((state) => {
       const exists = state.hiddenModels.some(
@@ -3232,6 +3199,10 @@ export const useUIStore = create<UIStore>()(
      set({ sessionTabsEnabled: value });
     },
 
+    setSessionTabsPerWorkspace: (value) => {
+     set({ sessionTabsPerWorkspace: value });
+    },
+
     setNotifyOnSubtasks: (value) => {
      set({ notifyOnSubtasks: value });
     },
@@ -3270,9 +3241,6 @@ export const useUIStore = create<UIStore>()(
     setBrowserProvider: (value) => {
      set({ browserProvider: value });
     },
-    setAgentMemoryToolEnabled: (value) => {
-     set({ agentMemoryToolEnabled: value });
-    },
     setAgentKnowledgeToolEnabled: (value) => {
      set({ agentKnowledgeToolEnabled: value });
     },
@@ -3297,20 +3265,10 @@ export const useUIStore = create<UIStore>()(
      set({ permissionDefaultMode: value });
     },
 
-    setAutoApplyAgentModel: (value) => {
-     set({ autoApplyAgentModel: value });
-    },
-
     setPlanModeAllowAgents: (value) => {
      set({ planModeAllowAgents: value });
     },
 
-    setAgentImageToolEnabled: (value) => {
-     set({ agentImageToolEnabled: value });
-    },
-    setAgentImageModel: (value) => {
-     set({ agentImageModel: value });
-    },
     setAgentWorkflowToolEnabled: (value) => {
      set({ agentWorkflowToolEnabled: value });
      if (value) return;
@@ -3319,9 +3277,6 @@ export const useUIStore = create<UIStore>()(
       const workflowTabIds = panel.tabs.filter((tab) => tab.mode === 'workflows').map((tab) => tab.id);
       if (workflowTabIds.length > 0) get().closeContextPanelTabs(directory, workflowTabIds);
      }
-    },
-    setAgentMemoryFeatureAvailable: (value) => {
-     set({ agentMemoryFeatureAvailable: value });
     },
     setAgentWorkflowFeatureAvailable: (value) => {
      set({ agentWorkflowFeatureAvailable: value });
@@ -3332,15 +3287,6 @@ export const useUIStore = create<UIStore>()(
     // Losing the feature closes the page, so nothing of it stays on screen.
     setOverviewFeatureAvailable: (value) => {
      set(value ? { overviewFeatureAvailable: true } : { overviewFeatureAvailable: false, isOverviewOpen: false });
-    },
-    markAgentMemoryViewed: (key, viewedAt) => {
-     set((state) => ({
-      // Never moves backwards: a stale unmount landing after a newer look
-      // would otherwise resurrect badges the user has already cleared.
-      agentMemoryViewedAt: viewedAt > (state.agentMemoryViewedAt[key] ?? 0)
-       ? { ...state.agentMemoryViewedAt, [key]: viewedAt }
-       : state.agentMemoryViewedAt,
-     }));
     },
     setProjectContextTab: (value) => {
      set({ projectContextTab: value });
@@ -3789,10 +3735,9 @@ export const useUIStore = create<UIStore>()(
      showReasoningTraces: state.showReasoningTraces,
      streamingAutoFollowEnabled: state.streamingAutoFollowEnabled,
      sessionRecapEnabled: state.sessionRecapEnabled,
-     sessionSuggestionEnabled: state.sessionSuggestionEnabled,
+     suggestionGenerator: state.suggestionGenerator,
      sessionWorkEnabled: state.sessionWorkEnabled,
      sessionReviewOfferEnabled: state.sessionReviewOfferEnabled,
-     sessionGoalEnabled: state.sessionGoalEnabled,
      sessionGoalDefaultBudgetEnabled: state.sessionGoalDefaultBudgetEnabled,
      sessionGoalDefaultBudget: state.sessionGoalDefaultBudget,
      collapsibleThinkingBlocks: state.collapsibleThinkingBlocks,
@@ -3820,6 +3765,7 @@ export const useUIStore = create<UIStore>()(
      terminalFontSize: state.terminalFontSize,
      terminalShell: state.terminalShell,
      terminalLoginShells: state.terminalLoginShells,
+     terminalCloseOnExit: state.terminalCloseOnExit,
      editorFontSize: state.editorFontSize,
      uiFont: state.uiFont,
      monoFont: state.monoFont,
@@ -3863,15 +3809,11 @@ export const useUIStore = create<UIStore>()(
      messageSearchEnabled: state.messageSearchEnabled,
      messageSearchReasoningEnabled: state.messageSearchReasoningEnabled,
      browserProvider: state.browserProvider,
-     agentMemoryToolEnabled: state.agentMemoryToolEnabled,
      agentKnowledgeToolEnabled: state.agentKnowledgeToolEnabled,
      agentNotifyToolEnabled: state.agentNotifyToolEnabled,
      agentRenderToolEnabled: state.agentRenderToolEnabled,
-     agentImageToolEnabled: state.agentImageToolEnabled,
-     agentImageModel: state.agentImageModel,
      agentWorkflowToolEnabled: state.agentWorkflowToolEnabled,
      isolatedSpacesEnabled: state.isolatedSpacesEnabled,
-     agentMemoryViewedAt: state.agentMemoryViewedAt,
      inputSpellcheckEnabled: state.inputSpellcheckEnabled,
      largeTextPasteBehavior: state.largeTextPasteBehavior,
      selectionApprovalText: state.selectionApprovalText,

@@ -45,6 +45,14 @@ export const settlePage = async (client, seconds, { afterLoad = true } = {}) => 
     while (Date.now() - startedAt < seconds * 1000) {
       requestStarted = false
       await wait(QUIET_WINDOW_MS)
+      const clicked = await evaluateValue(client, `(() => {
+        if (!document.querySelector('[data-chat-input="true"]')) {
+          const row = document.querySelector('[data-session-row]')
+          if (row) { row.click(); return true }
+        }
+        return false
+      })()`)
+      if (clicked) await wait(1000)
       const ready = await evaluateValue(client, READY)
       const taskSeconds = Number(metricMap((await client.send("Performance.getMetrics")).metrics).TaskDuration ?? 0)
       const quiet = previous !== null && !requestStarted && taskSeconds - previous < (QUIET_WINDOW_MS / 1000) * QUIET_BUSY_SHARE

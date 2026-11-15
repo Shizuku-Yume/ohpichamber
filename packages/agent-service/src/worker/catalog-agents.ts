@@ -17,7 +17,7 @@ import type { EffectiveExtensionRoots } from '@oh-my-pi/pi-coding-agent/capabili
 import { resolveCliModel } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgTaskDisabledAgents, cfgTaskAgentModelOverrides } from '@oh-my-pi/pi-coding-agent/task/settings';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
-import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, formatModelRef } from '@openchamber/agent-contract';
+import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, type AgentThinkingLevel, formatModelRef } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
 
 export type NativeAgentsContext = {
@@ -26,13 +26,26 @@ export type NativeAgentsContext = {
   modelRegistry: ModelRegistry;
   settings: Settings;
   extensionRoots: EffectiveExtensionRoots;
-  /** `proposed` is true only when this write introduces the preset; reading an
-   * existing profile's preset must satisfy the snapshot membership test. */
-  permissionPreset: (id: string, proposed: boolean) => Promise<void>;
   availableToolNames: () => readonly string[];
 };
-const ProfileMetadataSchema = z.object({ openchamber: AgentSchema.optional() });
+const LegacyOpenChamberMetadataSchema = z.object({
+  permissionPresetId: z.string().optional(),
+}).passthrough().transform(({ permissionPresetId: _preset, ...rest }) => AgentSchema.parse(rest));
 
+const ProfileMetadataSchema = z.object({
+  openchamber: LegacyOpenChamberMetadataSchema.optional(),
+});
+interface AgentFrontmatterFields {
+  name: string;
+  description: string;
+  openchamber: Agent;
+  tools?: string[];
+  model?: string;
+  thinkingLevel?: AgentThinkingLevel;
+  spawns?: string[] | '*';
+  blocking?: boolean;
+  advisor?: boolean | string;
+}
 function profilePath(cwd: string, agentId: string): string {
   return join(cwd, '.omp', 'agents', `profile_${createHash('sha256').update(agentId).digest('hex')}.md`);
 }
@@ -104,7 +117,10 @@ export class NativeAgents {
       try {
         const content = await readFile(definition.filePath, 'utf8');
         const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(content);
-        if (match) metadata = ProfileMetadataSchema.parse(YAML.parse(match[1]));
+        if (match) {
+          const parsed = YAML.parse(match[1]);
+          metadata = ProfileMetadataSchema.parse(parsed);
+        }
       } catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Agent profile metadata could not be read'); }
     }
     const selector = definition.model?.[0];
@@ -132,7 +148,6 @@ export class NativeAgents {
     };
     const systemPromptOverride = profile ? profile.systemPromptOverride : definition.systemPrompt || undefined;
     if (systemPromptOverride !== undefined) candidate.systemPromptOverride = systemPromptOverride;
-    if (profile?.permissionPresetId) candidate.permissionPresetId = profile.permissionPresetId;
     // `inherit` means the session default; the contract expresses that by omitting the level.
     const configured = profile?.thinkingLevel !== undefined ? profile.thinkingLevel : definition.thinkingLevel;
     if (configured !== undefined && configured !== 'inherit') candidate.thinkingLevel = configured;
@@ -154,7 +169,6 @@ export class NativeAgents {
     const definition = (await this.discover()).find(agent => agent.name === agentId);
     if (!definition) throw new ProjectionError(404, 'INVALID_REQUEST', 'Agent profile is unavailable');
     const publicAgent = await this.project(definition);
-    if (publicAgent.permissionPresetId) await this.context.permissionPreset(publicAgent.permissionPresetId, false);
     return publicAgent.systemPromptOverride === undefined
       ? { ...definition }
       : { ...definition, systemPrompt: publicAgent.systemPromptOverride };
@@ -199,11 +213,10 @@ export class NativeAgents {
   }
 
   private async write(agent: Agent, revision: string, existing?: AgentDefinition): Promise<AgentMutationResult> {
-    if (agent.permissionPresetId) await this.context.permissionPreset(agent.permissionPresetId, true);
     if (agent.model && !this.context.modelRegistry.find(agent.model.providerId, agent.model.modelId)) {
       throw new ProjectionError(422, 'MODEL_UNAVAILABLE', 'Agent profile model is unavailable');
     }
-    const fields: Record<string, unknown> = { name: agent.agentId, description: agent.description, openchamber: agent };
+    const fields: AgentFrontmatterFields = { name: agent.agentId, description: agent.description, openchamber: agent };
     if (agent.allowedTools !== null) fields.tools = agent.allowedTools;
     if (agent.model) fields.model = formatModelRef({ providerId: agent.model.providerId, modelId: agent.model.modelId });
     if (agent.thinkingLevel !== undefined) fields.thinkingLevel = agent.thinkingLevel;

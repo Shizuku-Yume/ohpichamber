@@ -495,28 +495,28 @@ interface GitNetworkRuntimeIdentity {
 
 export type GitNetworkTransportActor =
   | {
-      kind: 'provider';
-      provider: string;
-      instance: string;
-      accountId: string;
-      login?: string;
-    }
+    kind: 'provider';
+    provider: string;
+    instance: string;
+    accountId: string;
+    login?: string;
+  }
   | {
-      kind: 'ssh-key';
-      fingerprint: string;
-    };
+    kind: 'ssh-key';
+    fingerprint: string;
+  };
 
 export type GitNetworkTransport =
   | { mode: 'anonymous'; verification: { status: 'anonymous' } }
   | {
-      mode: 'managed';
-      verification: { status: 'verified'; method: 'credential' | 'git-identity' };
-      actor?: GitNetworkTransportActor;
-    }
+    mode: 'managed';
+    verification: { status: 'verified'; method: 'credential' | 'git-identity' };
+    actor?: GitNetworkTransportActor;
+  }
   | {
-      mode: 'system';
-      verification: { status: 'unverified'; reason: 'system-credentials' };
-    };
+    mode: 'system';
+    verification: { status: 'unverified'; reason: 'system-credentials' };
+  };
 
 export interface GitNetworkRemoteTarget {
   name: string;
@@ -549,70 +549,70 @@ type GitNetworkSyncRemoteRequest = {
 
 export type GitNetworkOperationRequest =
   | (ExistingRepositoryNetworkOperationRequest & {
-      operation: 'push';
-      forceWithLease?: { expectedRemoteSha: string };
-      configureUpstream?: boolean;
-      destinationSelectionId?: string;
-      /** A push for review (`destinationRef` is `refs/for/<target>`); the server composes the refspec from these fields. */
-      review?: GitPushReviewIntent;
-    })
+    operation: 'push';
+    forceWithLease?: { expectedRemoteSha: string };
+    configureUpstream?: boolean;
+    destinationSelectionId?: string;
+    /** A push for review (`destinationRef` is `refs/for/<target>`); the server composes the refspec from these fields. */
+    review?: GitPushReviewIntent;
+  })
   | (ExistingRepositoryNetworkOperationRequest & { operation: 'fetch'; fetchScope?: 'ref' })
   | (Omit<ExistingRepositoryNetworkOperationRequest, 'sourceRef' | 'destinationRef'> & {
-      operation: 'fetch';
-      fetchScope: 'remote';
-    })
+    operation: 'fetch';
+    fetchScope: 'remote';
+  })
   | (ExistingRepositoryNetworkOperationRequest & { operation: 'pull' })
   | {
-      operation: 'delete-remote-branch';
-      directory: string;
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      remote: GitNetworkRemoteTarget;
-      destinationRef: string;
-      transportMode: GitNetworkTransportMode;
-    }
+    operation: 'delete-remote-branch';
+    directory: string;
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    remote: GitNetworkRemoteTarget;
+    destinationRef: string;
+    transportMode: GitNetworkTransportMode;
+  }
   | {
-      operation: 'checkout-hydration';
-      directory: string;
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      remote: GitNetworkRemoteTarget;
-    }
+    operation: 'checkout-hydration';
+    directory: string;
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    remote: GitNetworkRemoteTarget;
+  }
   | {
-      operation: 'sync';
-      directory: string;
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      fetch: GitNetworkSyncRemoteRequest;
-      pull: { destinationRef: string };
-      push: GitNetworkSyncRemoteRequest & {
-        forceWithLease?: { expectedRemoteSha: string };
-        destinationSelectionId?: string;
-      };
-    }
+    operation: 'sync';
+    directory: string;
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    fetch: GitNetworkSyncRemoteRequest;
+    pull: { destinationRef: string };
+    push: GitNetworkSyncRemoteRequest & {
+      forceWithLease?: { expectedRemoteSha: string };
+      destinationSelectionId?: string;
+    };
+  }
   | ({
-      operation: 'clone';
-      remoteUrl: string;
-      destinationPath: string;
-      gitIdentityId?: string;
-      /**
-       * The account the cloned repository is associated with for issues and
-       * change requests. Independent of the transport credential, so a
-       * repository can fetch over SSH and still answer to a provider account.
-       */
-      providerAccount?: SourceControlIdentity & { accountId: string };
-      auxiliaryGrants?: Array<{
-        kind: 'submodule' | 'lfs';
-        endpoint: GitNetworkRedactedEndpoint;
-      } & (
+    operation: 'clone';
+    remoteUrl: string;
+    destinationPath: string;
+    gitIdentityId?: string;
+    /**
+     * The account the cloned repository is associated with for issues and
+     * change requests. Independent of the transport credential, so a
+     * repository can fetch over SSH and still answer to a provider account.
+     */
+    providerAccount?: SourceControlIdentity & { accountId: string };
+    auxiliaryGrants?: Array<{
+      kind: 'submodule' | 'lfs';
+      endpoint: GitNetworkRedactedEndpoint;
+    } & (
         | { transportMode: 'managed'; credentialId: string }
         | { transportMode: 'system'; unverifiedConfirmed: true; credentialId?: never }
         | { transportMode: 'anonymous'; credentialId?: never; unverifiedConfirmed?: never }
       )>;
-    } & (
+  } & (
       | { transportMode: 'system'; unverifiedConfirmed: true; credentialAccount?: never; sshCredentialId?: never }
       | { transportMode: 'anonymous'; credentialAccount?: never; sshCredentialId?: never; unverifiedConfirmed?: never }
       | { transportMode: 'managed'; credentialAccount: SourceControlIdentity & { accountId: string }; sshCredentialId?: never; unverifiedConfirmed?: never }
@@ -641,15 +641,15 @@ export type GitManagedSshCredential = {
 
 export type GitManagedSshCandidate =
   | {
-      candidateId: string;
-      label: string;
-      fingerprint: string;
-      capability: { status: 'ready' };
-    }
+    candidateId: string;
+    label: string;
+    fingerprint: string;
+    capability: { status: 'ready' };
+  }
   | {
-      label: string;
-      capability: { status: 'unavailable'; reason: 'unreadable' | 'encrypted-or-unverifiable' | 'insecure-permissions' };
-    };
+    label: string;
+    capability: { status: 'unavailable'; reason: 'unreadable' | 'encrypted-or-unverifiable' | 'insecure-permissions' };
+  };
 
 export type GitManagedSshIntent = { operation: 'inventory' }
   | { operation: 'discover'; passphrase?: string }
@@ -664,78 +664,78 @@ export type GitManagedSshResult =
 
 export type GitNetworkOperationTarget =
   | {
-      operation: 'push';
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      remote: GitNetworkRemoteTarget;
+    operation: 'push';
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    remote: GitNetworkRemoteTarget;
+    sourceRef: string;
+    destinationRef: string;
+    forceWithLease?: { expectedRemoteSha: string };
+    configureUpstream?: boolean;
+  }
+  | {
+    operation: 'fetch';
+    fetchScope: 'remote';
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    remote: GitNetworkRemoteTarget;
+    force: boolean;
+  }
+  | {
+    operation: 'fetch';
+    fetchScope?: 'ref';
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    remote: GitNetworkRemoteTarget;
+    sourceRef: string;
+    destinationRef: string;
+  }
+  | {
+    operation: 'pull';
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    remote: GitNetworkRemoteTarget;
+    sourceRef: string;
+    destinationRef: string;
+  }
+  | {
+    operation: 'delete-remote-branch';
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    remote: GitNetworkRemoteTarget;
+    destinationRef: string;
+  }
+  | {
+    operation: 'checkout-hydration';
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    remote: GitNetworkRemoteTarget;
+    requirements: GitCheckoutHydrationRequirement[];
+  }
+  | {
+    operation: 'sync';
+    repositoryId: string;
+    bindingRevision: number;
+    configRevision: string;
+    fetch: GitNetworkRemoteTarget & { sourceRef: string; destinationRef: string };
+    pull: { destinationRef: string };
+    push: GitNetworkRemoteTarget & {
       sourceRef: string;
       destinationRef: string;
       forceWithLease?: { expectedRemoteSha: string };
-      configureUpstream?: boolean;
-    }
-  | {
-      operation: 'fetch';
-      fetchScope: 'remote';
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      remote: GitNetworkRemoteTarget;
-      force: boolean;
-    }
-  | {
-      operation: 'fetch';
-      fetchScope?: 'ref';
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      remote: GitNetworkRemoteTarget;
-      sourceRef: string;
-      destinationRef: string;
-    }
-  | {
-      operation: 'pull';
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      remote: GitNetworkRemoteTarget;
-      sourceRef: string;
-      destinationRef: string;
-    }
-  | {
-      operation: 'delete-remote-branch';
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      remote: GitNetworkRemoteTarget;
-      destinationRef: string;
-    }
-  | {
-      operation: 'checkout-hydration';
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      remote: GitNetworkRemoteTarget;
-      requirements: GitCheckoutHydrationRequirement[];
-    }
-  | {
-      operation: 'sync';
-      repositoryId: string;
-      bindingRevision: number;
-      configRevision: string;
-      fetch: GitNetworkRemoteTarget & { sourceRef: string; destinationRef: string };
-      pull: { destinationRef: string };
-      push: GitNetworkRemoteTarget & {
-        sourceRef: string;
-        destinationRef: string;
-        forceWithLease?: { expectedRemoteSha: string };
-      };
-    }
-  | {
-      operation: 'clone';
-      remote: GitNetworkRedactedEndpoint;
-      destination: GitNetworkRedactedDestination;
     };
+  }
+  | {
+    operation: 'clone';
+    remote: GitNetworkRedactedEndpoint;
+    destination: GitNetworkRedactedDestination;
+  };
 
 export type GitNetworkOperationStep =
   | 'validated'
@@ -838,45 +838,45 @@ export type GitNetworkOperation =
   | (GitNetworkOperationBase & { state: 'running' })
   | (GitNetworkOperationBase & { state: 'succeeded' })
   | (GitNetworkOperationBase & {
-      state: 'partial';
-      error: GitNetworkOperationError<
-        | 'INVALID_REQUEST'
-        | 'AUTHENTICATION_REQUIRED'
-        | 'AUTHENTICATION_FAILED'
-        | 'TRANSPORT_FAILED'
-        | 'RUNTIME_UNSUPPORTED'
-        | 'GIT_LFS_CLIENT_MISSING'
-        | 'CHECKOUT_TOO_LARGE'
-        | 'UNKNOWN'
-      >;
-    })
+    state: 'partial';
+    error: GitNetworkOperationError<
+      | 'INVALID_REQUEST'
+      | 'AUTHENTICATION_REQUIRED'
+      | 'AUTHENTICATION_FAILED'
+      | 'TRANSPORT_FAILED'
+      | 'RUNTIME_UNSUPPORTED'
+      | 'GIT_LFS_CLIENT_MISSING'
+      | 'CHECKOUT_TOO_LARGE'
+      | 'UNKNOWN'
+    >;
+  })
   | (GitNetworkOperationBase & {
-      state: 'failed';
-      error: GitNetworkOperationError<
-        | 'INVALID_REQUEST'
-        | 'AUTHENTICATION_REQUIRED'
-        | 'AUTHENTICATION_FAILED'
-        | 'TRANSPORT_FAILED'
-        | 'RUNTIME_UNSUPPORTED'
-        | 'GIT_LFS_CLIENT_MISSING'
-        | 'CHECKOUT_TOO_LARGE'
-        | 'UNKNOWN'
-      >;
-    })
+    state: 'failed';
+    error: GitNetworkOperationError<
+      | 'INVALID_REQUEST'
+      | 'AUTHENTICATION_REQUIRED'
+      | 'AUTHENTICATION_FAILED'
+      | 'TRANSPORT_FAILED'
+      | 'RUNTIME_UNSUPPORTED'
+      | 'GIT_LFS_CLIENT_MISSING'
+      | 'CHECKOUT_TOO_LARGE'
+      | 'UNKNOWN'
+    >;
+  })
   | (GitNetworkOperationBase & {
-      state: 'cancelled';
-      error: GitNetworkOperationError<'CANCELLED' | 'TIMEOUT'>;
-    })
+    state: 'cancelled';
+    error: GitNetworkOperationError<'CANCELLED' | 'TIMEOUT'>;
+  })
   | (GitNetworkOperationBase & {
-      state: 'outcome-unknown';
-      error: GitNetworkOperationError<'OUTCOME_UNKNOWN'>;
-    })
+    state: 'outcome-unknown';
+    error: GitNetworkOperationError<'OUTCOME_UNKNOWN'>;
+  })
   | (GitNetworkOperationBase & {
-      state: 'conflicted';
-      error: GitNetworkOperationError<
-        'STALE_REPOSITORY' | 'STALE_BINDING' | 'STALE_CONFIG' | 'REMOTE_CHANGED' | 'CONFLICT'
-      >;
-    });
+    state: 'conflicted';
+    error: GitNetworkOperationError<
+      'STALE_REPOSITORY' | 'STALE_BINDING' | 'STALE_CONFIG' | 'REMOTE_CHANGED' | 'CONFLICT'
+    >;
+  });
 
 export interface GitStashEntry {
   ref: string;
@@ -1521,7 +1521,6 @@ export interface ProjectEntry {
   } | null;
   iconBackground?: string | null;
   color?: string | null;
-  defaultAgent?: string;
   defaultModel?: string;
   /** Variant of `defaultModel`, when that model exposes any. */
   defaultVariant?: string;
@@ -1912,14 +1911,14 @@ export type ChangeRequestListStatusesResult =
 export type RepositoryReferencePage =
   | { connected: false }
   | {
-      connected: true;
-      /** Null when the project has no GitHub remote. */
-      repo: GitHubRepoRef | null;
-      items: RepositoryReference[];
-      cursor: string | null;
-      hasMore: boolean;
-      total: number;
-    };
+    connected: true;
+    /** Null when the project has no GitHub remote. */
+    repo: GitHubRepoRef | null;
+    items: RepositoryReference[];
+    cursor: string | null;
+    hasMore: boolean;
+    total: number;
+  };
 
 /** Why a folder asked for in a search across repositories was left out of it. */
 export type RepositoryReferencesAcrossSkip = 'no-repo' | 'disconnected' | 'invalid-context' | 'error';
@@ -2719,14 +2718,14 @@ export type GitHubPullStatusesResult =
 export type GitHubReferencesResult =
   | { connected: false }
   | {
-      connected: true;
-      /** Null when the project has no GitHub remote. */
-      repo: GitHubRepoRef | null;
-      items: GitHubReference[];
-      cursor: string | null;
-      hasMore: boolean;
-      total: number;
-    };
+    connected: true;
+    /** Null when the project has no GitHub remote. */
+    repo: GitHubRepoRef | null;
+    items: GitHubReference[];
+    cursor: string | null;
+    hasMore: boolean;
+    total: number;
+  };
 
 
 export type GitHubRepoUpstreamResult = {

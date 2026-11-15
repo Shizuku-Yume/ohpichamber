@@ -2,187 +2,83 @@ import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, JsonValueSchema } from './primitives.ts';
 
 /**
- * OMP behaviour settings exposed through the app. Appearance, path, command,
- * credential and remote-endpoint settings are deliberately absent: the route
- * writes OMP's global config, so it must not become a second provider/MCP entry
- * or an egress/path escape hatch. See `.workflow/specs/omp-native-parity.md`.
+ * Where a setting belongs:
+ * - `page`: an OpenChamber page that owns the concept, mapped to `page` and `section`.
+ * - `engine`: the OMP settings page (the long tail of internal settings).
+ * - `tui-only`: terminal presentation or terminal interaction.
+ * - `owned-by`: an existing OpenChamber control already owns and writes the concept,
+ *   named by `owner` (that control's settings-item id).
+ * - `config-only`: a `record`/`array` value no GUI control can edit (no choices to
+ *   render). It is edited in `config.yml` and listed with the OMP page's other
+ *   unrendered settings.
+ * - `hidden`: untabbed or intentionally hidden internal setting.
  */
-export const OMP_SETTING_IDS = [
-  'enabledModels',
-  'modelRoles',
-  'defaultThinkingLevel',
-  'cycleOrder',
-  'modelPresets',
-  'modelRoleStorage',
-  'tier.openai',
-  'tier.anthropic',
-  'tier.google',
-  'tier.subagent',
-  'tier.advisor',
-  'retry.enabled',
-  'retry.maxRetries',
-  'retry.baseDelayMs',
-  'retry.maxDelayMs',
-  'retry.waitForUsageReset',
-  'retry.modelFallback',
-  'retry.fallbackOn',
-  'retry.usageAwareFallback',
-  'retry.usageReservePct',
-  'retry.usageReservePolicy',
-  'retry.fallbackChains',
-  'retry.fallbackRevertPolicy',
-  'thinkingBudgets.minimal',
-  'thinkingBudgets.low',
-  'thinkingBudgets.medium',
-  'thinkingBudgets.high',
-  'thinkingBudgets.xhigh',
-  'thinkingBudgets.max',
-  'compaction.enabled',
-  'compaction.experimentalContextManagement',
-  'compaction.midTurnEnabled',
-  'compaction.methodOrder',
-  'compaction.thresholdPercent',
-  'compaction.thresholdTokens',
-  'compaction.modelThresholds',
-  'compaction.modelThresholdsEnabled',
-  'compaction.handoffSaveToDisk',
-  'compaction.remoteStreamingV2Enabled',
-  'compaction.asyncEnabled',
-  'compaction.reserveTokens',
-  'compaction.keepRecentTokens',
-  'compaction.autoContinue',
-  'compaction.v2RetainedMessageBudget',
-  'compaction.idleEnabled',
-  'compaction.idleThresholdTokens',
-  'compaction.idleTimeoutSeconds',
-  'recap.enabled',
-  'recap.idleSeconds',
-  'compaction.supersedeReads',
-  'compaction.dropUseless',
-  'tools.approval',
-  'tools.approvalMode',
-  'tools.artifactSpillThreshold',
-  'tools.artifactTailBytes',
-  'tools.artifactHeadBytes',
-  'tools.outputMaxColumns',
-  'tools.artifactTailLines',
-  'tools.artifactMaxBytes',
-  'tools.intentTracing',
-  'tools.abortOnFabricatedResult',
-  'tools.speculativeExecution.enabled',
-  'tools.speculativeExecution.maxInFlight',
-  'tools.maxTimeout',
-  'tools.xdev',
-  'tools.xdevDocs',
-  'tools.xdevInlineDevices',
-  'tools.xdevNotices',
-  'out.enabled',
-  'glob.enabled',
-  'grep.enabled',
-  'astGrep.enabled',
-  'astEdit.enabled',
-  'checkpoint.enabled',
-  'async.enabled',
-  'async.widgets',
-  'ask.enabled',
-  'ask.timeout',
-  'ask.notify',
-  'lsp.enabled',
-  'lsp.lazy',
-  'lsp.shared',
-  'lsp.formatOnWrite',
-  'lsp.diagnosticsOnWrite',
-  'lsp.diagnosticsOnEdit',
-  'lsp.diagnosticsDeduplicate',
-  'task.isolation.enabled',
-  'task.isolation.apply',
-  'task.isolation.merge',
-  'task.isolation.commits',
-  'task.eager',
-  'task.batch',
-  'task.speculativeLaunch',
-  'task.enableEffort',
-  'task.maxConcurrency',
-  'task.enableLsp',
-  'task.maxRecursionDepth',
-  'task.maxRuntimeMs',
-  'task.completionProbe',
-  'task.agentIdleTtlMs',
-  'task.softRequestBudget',
-  'task.softRequestBudgetNotice',
-  'task.maxEffort',
-  'task.disabledAgents',
-  'task.agentModelOverrides',
-  'task.agentServiceTierOverrides',
-  'task.agentCompactionThresholdOverrides',
-  'task.agentPrewalk',
-  'task.agentAdvisor',
-  'task.prewalk',
-  'plan.enabled',
-  'plan.defaultOnStartup',
-  'plan.autosave',
-  'goal.enabled',
-  'goal.continuationModes',
-  'skills.enabled',
-  'skills.enableSkillCommands',
-  'skills.enableCodexUser',
-  'skills.enableClaudeUser',
-  'skills.enableClaudeProject',
-  'skills.enablePiUser',
-  'skills.enablePiProject',
-  'skills.enableAgentsUser',
-  'skills.enableAgentsProject',
-  'skills.ignoredSkills',
-  'skills.includeSkills',
-  'mcp.enableProjectConfig',
-  'mcp.startupTimeoutMs',
-  'mcp.renderMarkdownResults',
-  'mcp.notifications',
-  'mcp.notificationDebounceMs',
-  'steeringMode',
-  'followUpMode',
-  'interruptMode',
-  'composer.predictions',
-  'composer.predictionAlternatives',
-  'display.shellVisualization',
-  'extensionRenderers.transcriptPresenters',
-  'providers.openaiResponsesWebsockets',
-  'skills.manualSkills',
-  'spotlight.experiment.enabled',
-  'spotlight.experiment.holdout',
-  'spotlight.experiment.scoreFree',
-  'spotlight.experiment.tools',
-  'spotlight.url',
-  'spotlight.model',
-  'spotlight.thinking',
-  'spotlight.timeoutMs',
-  'task.workerThreads',
-  'tui.colorfulMarkdown',
-  'tui.maxFps',
-  'tui.motion',
-  'tui.spinnerInterval',
-  'update.auto',
-  'tui.renderMermaid',
-  'tui.renderSvg',
-  'tui.autoGraph',
-] as const;
-export const OmpSettingIdSchema = z.enum(OMP_SETTING_IDS);
+export const OmpSettingIdSchema = z.string().min(1);
 export type OmpSettingId = z.infer<typeof OmpSettingIdSchema>;
 
 export const OmpSettingTypeSchema = z.enum(['boolean', 'number', 'string', 'enum', 'array', 'record']);
 export type OmpSettingType = z.infer<typeof OmpSettingTypeSchema>;
 
-/**
- * Where a setting belongs on a GUI surface:
- * - `gui`: an observable behaviour the app offers its own control for.
- * - `tui-only`: terminal presentation or terminal interaction.
- * - `duplicate`: an existing OpenChamber control already owns the concept,
- *   named by `owner` (that control's settings-item id).
- * - `advanced`: an internal tuning knob, left to `config.yml`.
- */
-export const OmpSettingSurfaceSchema = z.enum(['gui', 'tui-only', 'duplicate', 'advanced']);
-export type OmpSettingSurface = z.infer<typeof OmpSettingSurfaceSchema>;
+export const OmpSettingPlacementSchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal('page'),
+    page: z.string().min(1),
+    section: z.string().min(1),
+  }),
+  z.strictObject({
+    type: z.literal('engine'),
+  }),
+  z.strictObject({
+    type: z.literal('tui-only'),
+  }),
+  z.strictObject({
+    type: z.literal('owned-by'),
+    owner: z.string().min(1),
+  }),
+  z.strictObject({
+    type: z.literal('config-only'),
+  }),
+  z.strictObject({
+    type: z.literal('hidden'),
+  }),
+  z.strictObject({
+    type: z.literal('boundary'),
+  }),
+]);
+export type OmpSettingPlacement = z.infer<typeof OmpSettingPlacementSchema>;
 
+export function parsePlacement(raw: string): OmpSettingPlacement {
+  if (raw === 'engine') return { type: 'engine' };
+  if (raw === 'tui-only') return { type: 'tui-only' };
+  if (raw === 'config-only') return { type: 'config-only' };
+  if (raw === 'hidden') return { type: 'hidden' };
+  if (raw === 'boundary') return { type: 'boundary' };
+  if (raw.startsWith('owned-by ')) {
+    const owner = raw.slice('owned-by '.length).trim();
+    if (owner.length > 0) return { type: 'owned-by', owner };
+  }
+  const colonIndex = raw.indexOf(':');
+  if (colonIndex > 0) {
+    const page = raw.slice(0, colonIndex);
+    const section = raw.slice(colonIndex + 1);
+    if (page.length > 0 && section.length > 0) {
+      return { type: 'page', page, section };
+    }
+  }
+  throw new Error(`Invalid placement string: "${raw}"`);
+}
+
+export function formatPlacement(placement: OmpSettingPlacement): string {
+  switch (placement.type) {
+    case 'engine': return 'engine';
+    case 'tui-only': return 'tui-only';
+    case 'boundary': return 'boundary';
+    case 'config-only': return 'config-only';
+    case 'hidden': return 'hidden';
+    case 'owned-by': return `owned-by ${placement.owner}`;
+    case 'page': return `${placement.page}:${placement.section}`;
+  }
+}
 export const OmpSettingOptionSchema = z.strictObject({
   value: z.string(),
   label: z.string().min(1),
@@ -209,21 +105,13 @@ export const OmpSettingSchema = z.strictObject({
   description: z.string().min(1).optional(),
   group: z.string().min(1).optional(),
   tab: z.string().min(1).optional(),
-  /** Which surface renders this setting; see `OmpSettingSurfaceSchema`. */
-  surface: OmpSettingSurfaceSchema,
-  /** The owning settings-item id of a `duplicate`; present exactly then. */
-  owner: z.string().min(1).optional(),
+  /** Placement of this setting across GUI surfaces. */
+  placement: OmpSettingPlacementSchema,
   /** OMP's `ui.condition` name, when the pinned definition declares one. */
   condition: z.string().min(1).optional(),
   /** Whether that condition holds in the snapshot that carried this row. */
   conditionActive: z.boolean().optional(),
 }).refine(
-  (setting) => setting.surface !== 'duplicate' || setting.owner !== undefined,
-  'A duplicate setting names the settings item that owns it',
-).refine(
-  (setting) => setting.surface === 'duplicate' || setting.owner === undefined,
-  'Only a duplicate setting names an owner',
-).refine(
   (setting) => setting.condition === undefined || setting.conditionActive !== undefined,
   'A conditional setting reports whether its condition holds',
 );
@@ -238,6 +126,7 @@ export const OmpSettingsStateSchema = z.strictObject({
    * when the runtime keeps its config in memory.
    */
   configPath: z.string().min(1).optional(),
+  totalCount: z.number().int().nonnegative(),
   settings: z.array(OmpSettingSchema),
 }).refine((state) => new Set(state.settings.map((setting) => setting.id)).size === state.settings.length,
   'OMP setting ids are unique');
@@ -251,7 +140,7 @@ export type OmpSettingsChange = z.infer<typeof OmpSettingsChangeSchema>;
 
 export const OmpSettingsUpdateRequestSchema = z.strictObject({
   expectedRevision: CounterSchema,
-  changes: z.array(OmpSettingsChangeSchema).min(1).max(OMP_SETTING_IDS.length),
+  changes: z.array(OmpSettingsChangeSchema).min(1),
 }).refine((request) => new Set(request.changes.map((change) => change.id)).size === request.changes.length,
   'OMP setting changes name each setting once');
 export type OmpSettingsUpdateRequest = z.infer<typeof OmpSettingsUpdateRequestSchema>;

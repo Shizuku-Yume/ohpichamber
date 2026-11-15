@@ -1,6 +1,8 @@
 import React from 'react';
 import type { ExtensionInventory, ExtensionItem, ExtensionKind, ExtensionScope } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/icon/Icon';
+import type { IconName } from '@/components/icon/icons';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { SettingsSection } from '@/components/sections/shared/SettingsSection';
@@ -9,42 +11,37 @@ import { useI18n } from '@/lib/i18n';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { cn } from '@/lib/utils';
 
-type RowStatus = 'active' | 'disabled' | 'shadowed';
+/** Localized kind names. The worker's own `kinds[].label` is English, so the UI names each kind itself. */
+const KIND_LABEL_KEY = {
+ 'extension-module': 'settings.plugins.kind.extension-module',
+ skill: 'settings.plugins.kind.skill',
+ rule: 'settings.plugins.kind.rule',
+ tool: 'settings.plugins.kind.tool',
+ mcp: 'settings.plugins.kind.mcp',
+ prompt: 'settings.plugins.kind.prompt',
+ instruction: 'settings.plugins.kind.instruction',
+ 'context-file': 'settings.plugins.kind.context-file',
+ hook: 'settings.plugins.kind.hook',
+ 'slash-command': 'settings.plugins.kind.slash-command',
+ ssh: 'settings.plugins.kind.ssh',
+} as const satisfies Record<ExtensionKind, string>;
 
-/** Shadowing wins over the switch, so one status drives the dot and the badge. */
-const statusOf = (item: ExtensionItem): RowStatus => (item.shadowed ? 'shadowed' : item.enabled ? 'active' : 'disabled');
+const KIND_ICON = {
+ 'extension-module': 'puzzle',
+ skill: 'sparkling',
+ rule: 'book-open',
+ tool: 'tools',
+ mcp: 'server',
+ prompt: 'quill-pen',
+ instruction: 'file-text',
+ 'context-file': 'file-code',
+ hook: 'route',
+ 'slash-command': 'slash-commands-2',
+ ssh: 'terminal-box',
+} as const satisfies Record<ExtensionKind, IconName>;
 
-const StatusDot: React.FC<{ status: RowStatus }> = ({ status }) => (
- <span
-  aria-hidden
-  className={cn(
-   'size-2 shrink-0 rounded-full',
-   status === 'active' && 'bg-[var(--status-success)]',
-   status === 'disabled' && 'bg-[var(--status-warning)]',
-   status === 'shadowed' && 'bg-[var(--interactive-selection)]',
-  )}
- />
-);
-
-interface KindGroup {
- kind: ExtensionKind;
- label: string;
- items: ExtensionItem[];
-}
-
-/** Rows grouped by native kind, following the label order the worker reports. */
-const groupByKind = (items: readonly ExtensionItem[], kinds: ExtensionInventory['kinds']): KindGroup[] => {
- const order = new Map(kinds.map((entry, index) => [entry.kind, index]));
- const labelFor = new Map(kinds.map(entry => [entry.kind, entry.label]));
- const groups: KindGroup[] = [];
- for (const item of [...items].sort((left, right) => (order.get(left.kind) ?? 99) - (order.get(right.kind) ?? 99))) {
-  const label = labelFor.get(item.kind) ?? item.kind;
-  const last = groups.at(-1);
-  if (last !== undefined && last.kind === item.kind) last.items.push(item);
-  else groups.push({ kind: item.kind, label, items: [item] });
- }
- return groups;
-};
+/** OMP's bundled rule provider id (`BUILTIN_DEFAULTS_PROVIDER_ID` in its capability registry). */
+const BUNDLED_PROVIDER_ID = 'builtin-defaults';
 
 const ScopeChip: React.FC<{ scope: ExtensionScope }> = ({ scope }) => {
  const { t } = useI18n();
@@ -56,9 +53,21 @@ const ScopeChip: React.FC<{ scope: ExtensionScope }> = ({ scope }) => {
  return <SettingsCardChip>{label}</SettingsCardChip>;
 };
 
+/** Shadowing wins over the switch, so one status drives the pill and the inspector. */
+const StatusPill: React.FC<{ item: ExtensionItem }> = ({ item }) => {
+ const { t } = useI18n();
+ const status = item.shadowed ? 'shadowed' : item.enabled ? 'active' : 'disabled';
+ return (
+  <SettingsCardPill tone={status === 'active' ? 'success' : 'neutral'}>
+   {status === 'shadowed'
+    ? t('settings.openchamber.tunnel.state.inactive')
+    : t(status === 'active' ? 'settings.extensions.status.enabled' : 'settings.extensions.status.disabled')}
+  </SettingsCardPill>
+ );
+};
+
 const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
  const { t } = useI18n();
- const status = statusOf(item);
  const facts = item.metadata === undefined
   ? []
   : [item.metadata.transport, item.metadata.host, item.metadata.username, item.metadata.port]
@@ -67,16 +76,12 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
   <div className="min-w-0 space-y-2 text-start">
    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
     <p className="min-w-0 flex-1 truncate typography-ui-label text-foreground">{item.name}</p>
-    <SettingsCardPill tone={status === 'active' ? 'success' : 'neutral'}>
-     {status === 'shadowed'
-      ? t('settings.openchamber.tunnel.state.inactive')
-      : t(status === 'active' ? 'settings.extensions.status.enabled' : 'settings.extensions.status.disabled')}
-    </SettingsCardPill>
+    <StatusPill item={item} />
     <ScopeChip scope={item.scope} />
    </div>
-   {/* The triggers are regex source. The row already says which triggers an
-       item answers to; the inspector keeps the full patterns behind a
-       disclosure so the catalog stays readable. */}
+   <p className="break-all font-mono typography-micro text-muted-foreground">{item.path}</p>
+   {/* The triggers are regex source. The list row shows only the name and
+       status; the full patterns stay behind a disclosure here. */}
    {item.triggers.length === 0 ? null : (
     <details className="min-w-0">
      <summary className="cursor-pointer typography-micro text-muted-foreground">
@@ -120,6 +125,44 @@ const Inspector: React.FC<{ item: ExtensionItem }> = ({ item }) => {
  );
 };
 
+interface ItemRowProps {
+ item: ExtensionItem;
+ selected: boolean;
+ disabled: boolean;
+ onSelect: () => void;
+ onToggle: (enabled: boolean) => void;
+}
+
+/** One capability: kind icon, name, description and status. Raw triggers and paths stay in the inspector. */
+const ItemRow: React.FC<ItemRowProps> = ({ item, selected, disabled, onSelect, onToggle }) => {
+ const { t } = useI18n();
+ return (
+  <div className={cn('flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5', selected && 'bg-[var(--interactive-selection)]')}>
+   <Icon name={KIND_ICON[item.kind]} className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+   <button
+    type="button"
+    className="min-w-[6rem] flex-1 text-start"
+    aria-pressed={selected}
+    onClick={onSelect}
+   >
+    <span className={cn('block truncate typography-ui-label', !item.enabled && 'text-muted-foreground')}>{item.name}</span>
+    {item.description ? (
+     <span className="block truncate typography-micro text-muted-foreground">{item.description}</span>
+    ) : null}
+   </button>
+   <StatusPill item={item} />
+   {item.toggleable ? (
+    <Switch
+     checked={item.enabled}
+     disabled={disabled || item.shadowed}
+     aria-label={t(item.enabled ? 'settings.extensions.actions.disable.aria' : 'settings.extensions.actions.enable.aria', { name: item.name })}
+     onCheckedChange={onToggle}
+    />
+   ) : null}
+  </div>
+ );
+};
+
 interface ExtensionControlCenterProps {
  inventory: ExtensionInventory;
  disabled: boolean;
@@ -129,27 +172,32 @@ interface ExtensionControlCenterProps {
 }
 
 /**
- * OMP's Extension Control Center: provider master switches with counts, search,
- * kind-grouped rows with trigger badges, and an inspector that explains where
- * each row came from and what it carries.
+ * OMP's Extension Control Center: one switch per discovery source, kind tabs
+ * with counts, bundled rows collapsed behind a count, and an inspector that
+ * shows where a row came from, its path and its trigger patterns.
  */
 export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
  inventory, disabled, onToggleProvider, onToggleUserSource, onToggleItem,
 }) => {
  const { t } = useI18n();
- const [providerId, setProviderId] = React.useState<string>('all');
+ const [kind, setKind] = React.useState<ExtensionKind | 'all'>('all');
  const [query, setQuery] = React.useState('');
  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+ const [bundledOpen, setBundledOpen] = React.useState(false);
 
- const activeProvider = inventory.providers.find(provider => provider.id === providerId);
- const scoped = providerId === 'all' ? inventory.items : inventory.items.filter(item => item.providerId === providerId);
- const filtered = rankByQuery(scoped, query, item => [item.name, item.description ?? '', item.path, item.providerName]);
- // A row from a previous filter must never stay inspected.
- const selected = filtered.find(item => item.id === selectedId) ?? filtered[0] ?? null;
- const groups = groupByKind(filtered, inventory.kinds);
- const countFor = (id: string): number => id === 'all'
-  ? inventory.items.length
-  : inventory.providers.find(provider => provider.id === id)?.itemCount ?? 0;
+ const filtered = rankByQuery(inventory.items, query, item => [item.name, item.description ?? '', item.path, item.providerName]);
+ // Tabs follow the worker's kind order and show only kinds with rows under the current query.
+ const tabs = inventory.kinds
+  .map(entry => ({ kind: entry.kind, count: filtered.filter(item => item.kind === entry.kind).length }))
+  .filter(tab => tab.count > 0);
+ const activeKind = kind === 'all' || tabs.some(tab => tab.kind === kind) ? kind : 'all';
+ const inKind = activeKind === 'all' ? filtered : filtered.filter(item => item.kind === activeKind);
+ // OMP reports its bundled rules under the builtin-defaults provider with user scope, so both mark a bundled row.
+ const visible = inKind.filter(item => item.scope !== 'builtin' && item.providerId !== BUNDLED_PROVIDER_ID);
+ const bundled = inKind.filter(item => item.scope === 'builtin' || item.providerId === BUNDLED_PROVIDER_ID);
+ const shown = bundledOpen ? [...visible, ...bundled] : visible;
+ // A row from a previous filter, or a bundled row once it collapses, is never inspected.
+ const selected = shown.find(item => item.id === selectedId) ?? shown[0] ?? null;
  // A source that discovered nothing is not a source a reader can act on.
  const providers = inventory.providers.filter(provider => provider.itemCount > 0);
 
@@ -169,47 +217,30 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
    )}
    contentClassName="space-y-4"
   >
-   <p className="typography-micro uppercase tracking-wide text-muted-foreground">
-    {t('settings.skills.catalog.page.section.sources')}
-   </p>
-   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-    <Button variant="chip" size="xs" aria-pressed={providerId === 'all'} onClick={() => setProviderId('all')}>
-     {t('settings.agents.page.mode.all')} ({countFor('all')})
-    </Button>
+   <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
     {providers.map(provider => (
-     <div key={provider.id} className="flex min-w-0 items-center gap-1.5">
-      <Button
-       variant="chip"
-       size="xs"
-       aria-pressed={providerId === provider.id}
-       className="min-w-0"
-       onClick={() => setProviderId(provider.id)}
-      >
-       <StatusDot status={provider.enabled ? 'active' : 'disabled'} />
-       <span className="truncate">{provider.displayName} ({provider.itemCount})</span>
-      </Button>
+     <div key={provider.id} className="flex min-w-0 items-center gap-2">
       <Switch
        checked={provider.enabled}
        disabled={disabled}
        aria-label={t(provider.enabled ? 'settings.extensions.actions.disable.aria' : 'settings.extensions.actions.enable.aria', { name: provider.displayName })}
        onCheckedChange={enabled => onToggleProvider(provider.id, enabled)}
       />
+      <span className="min-w-0 truncate typography-meta text-foreground">{provider.displayName} ({provider.itemCount})</span>
+      {provider.foreignUserSource ? (
+       <>
+        <Switch
+         checked={provider.userSourceEnabled}
+         disabled={disabled}
+         aria-label={t('settings.extensions.detail.field.source')}
+         onCheckedChange={enabled => onToggleUserSource(provider.id, enabled)}
+        />
+        <span className="typography-micro text-muted-foreground">{t('settings.extensions.detail.field.source')}</span>
+       </>
+      ) : null}
      </div>
     ))}
    </div>
-
-   {activeProvider?.foreignUserSource !== true ? null : (
-    <div className="flex items-center gap-2">
-     <Switch
-      checked={activeProvider.userSourceEnabled}
-      disabled={disabled}
-      aria-label={t('settings.extensions.detail.field.source')}
-      onCheckedChange={enabled => onToggleUserSource(activeProvider.id, enabled)}
-     />
-     <StatusDot status={activeProvider.userSourceEnabled ? 'active' : 'disabled'} />
-     <span className="typography-meta text-foreground">{t('settings.extensions.detail.field.source')}</span>
-    </div>
-   )}
 
    {filtered.length === 0 ? (
     <p className="py-4 typography-meta text-muted-foreground">
@@ -219,55 +250,52 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
     </p>
    ) : (
     <div className="grid min-w-0 gap-4 @3xl:grid-cols-[minmax(0,1fr)_minmax(0,20rem)]">
-     <div className="min-w-0 space-y-3 text-start">
-      {groups.map(group => (
-       <div key={group.kind} className="min-w-0 space-y-1">
-        <p className="typography-micro uppercase tracking-wide text-muted-foreground">{group.label}</p>
-        {group.items.map(item => {
-         const status = statusOf(item);
-         return (
-          <div
+     <div className="min-w-0 space-y-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+       <Button variant="chip" size="xs" aria-pressed={activeKind === 'all'} onClick={() => setKind('all')}>
+        {t('settings.agents.page.mode.all')}
+        <span className="tabular-nums">{filtered.length}</span>
+       </Button>
+       {tabs.map(tab => (
+        <Button key={tab.kind} variant="chip" size="xs" aria-pressed={activeKind === tab.kind} onClick={() => setKind(tab.kind)}>
+         <Icon name={KIND_ICON[tab.kind]} className="size-3.5" aria-hidden />
+         {t(KIND_LABEL_KEY[tab.kind])}
+         <span className="tabular-nums">{tab.count}</span>
+        </Button>
+       ))}
+      </div>
+
+      <div className="min-w-0 text-start">
+       {visible.map(item => (
+        <ItemRow
+         key={item.id}
+         item={item}
+         selected={selected?.id === item.id}
+         disabled={disabled}
+         onSelect={() => setSelectedId(item.id)}
+         onToggle={enabled => onToggleItem(item.providerId, item.id, enabled)}
+        />
+       ))}
+       {bundled.length === 0 ? null : (
+        <div className="pt-2">
+         <Button variant="ghost" size="xs" aria-expanded={bundledOpen} onClick={() => setBundledOpen(open => !open)}>
+          {bundledOpen
+           ? t('settings.plugins.capabilities.hideBundled')
+           : t('settings.plugins.capabilities.showBundled', { count: bundled.length })}
+         </Button>
+         {bundledOpen ? bundled.map(item => (
+          <ItemRow
            key={item.id}
-           className={cn('flex min-w-0 items-center gap-2 rounded-md px-2 py-1.5',
-            selected?.id === item.id && 'bg-[var(--interactive-selection)]')}
-          >
-           <StatusDot status={status} />
-           <button
-            type="button"
-            className="min-w-[6rem] flex-1 text-start"
-            aria-pressed={selected?.id === item.id}
-            onClick={() => setSelectedId(item.id)}
-           >
-            <span className={cn('block truncate typography-ui-label', !item.enabled && 'text-muted-foreground')}>{item.name}</span>
-            <span className="block truncate font-mono typography-micro text-muted-foreground">{item.path}</span>
-           </button>
-           {item.triggers.length === 0 ? null : (
-            <div className="flex max-w-[40%] shrink items-center justify-end gap-1 overflow-hidden @xl:max-w-[45%]">
-             {item.triggers.slice(0, 2).map(trigger => (
-              <SettingsCardChip key={trigger} title={trigger} className="max-w-[7rem] truncate @xl:max-w-[9rem]">
-               {trigger}
-              </SettingsCardChip>
-             ))}
-             {item.triggers.length > 2 ? (
-              <SettingsCardChip title={item.triggers.slice(2).join(', ')}>
-               +{item.triggers.length - 2}
-              </SettingsCardChip>
-             ) : null}
-            </div>
-           )}
-           {item.toggleable ? (
-            <Switch
-             checked={item.enabled}
-             disabled={disabled || item.shadowed}
-             aria-label={t(item.enabled ? 'settings.extensions.actions.disable.aria' : 'settings.extensions.actions.enable.aria', { name: item.name })}
-             onCheckedChange={enabled => onToggleItem(item.providerId, item.id, enabled)}
-            />
-           ) : null}
-          </div>
-         );
-        })}
-       </div>
-      ))}
+           item={item}
+           selected={selected?.id === item.id}
+           disabled={disabled}
+           onSelect={() => setSelectedId(item.id)}
+           onToggle={enabled => onToggleItem(item.providerId, item.id, enabled)}
+          />
+         )) : null}
+        </div>
+       )}
+      </div>
      </div>
 
      <div className="min-w-0 border-t border-[var(--surface-border)] pt-3 @3xl:border-s @3xl:border-t-0 @3xl:ps-4 @3xl:pt-0">

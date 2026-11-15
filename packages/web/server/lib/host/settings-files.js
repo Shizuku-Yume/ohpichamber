@@ -159,7 +159,7 @@ export const buildPreferencesFields = (previousFields, document, now, { surface 
 export const instancePartOf = (document) => {
   const instance = {};
   for (const [key, value] of Object.entries(document)) {
-    if (value === undefined || isProfileSettingsKey(key)) continue;
+    if (value === undefined || isProfileSettingsKey(key) || key === 'defaultAgent' || key === 'sessionWorkKeepInGroup' || key === 'messageStreamTransport' || key === 'savePastedImagesAsFiles') continue;
     instance[key] = value;
   }
   return instance;

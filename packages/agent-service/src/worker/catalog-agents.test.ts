@@ -8,6 +8,8 @@ import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import { loadBundledAgents } from '@oh-my-pi/pi-coding-agent/task/agents';
 import { NativeAgents } from './catalog-agents.ts';
 import { nativeExtensionRoots, nativeModelsContext, openNativeRuntime } from './native-runtime.ts';
+import { StatelessWorker } from './stateless.ts';
+import { WorkerSession } from './session.ts';
 
 beforeEach(resetSettingsForTest);
 afterEach(resetSettingsForTest);
@@ -35,7 +37,7 @@ test('agent profile mutations round-trip through native markdown and model resol
     }, '2');
     const agents = new NativeAgents({
       cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
-      extensionRoots: nativeExtensionRoots(runtime.settings), permissionPreset: async () => { }, availableToolNames: () => BUILTIN_TOOL_NAMES
+      extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES
     });
     const agent = {
       agentId: 'm212-profile', name: 'Proof profile', description: 'Finite profile selection',
@@ -58,25 +60,21 @@ test('agent profile mutations round-trip through native markdown and model resol
   }
 });
 
-test('an agent write authorizes the preset it introduces, and a profile read does not claim to introduce one', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'catalog-agents-preset-'));
+test('an agent write creates a profile that can be read back', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-agent-write-'));
   const cwd = join(root, 'workspace');
   const agentDirectory = join(root, 'agent');
   await Promise.all([cwd, agentDirectory].map(directory => mkdir(directory, { recursive: true })));
   const runtime = await openNativeRuntime({ cwd, agentDirectory });
-  const calls: Array<{ id: string; proposed: boolean }> = [];
   try {
     const agents = new NativeAgents({
       cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES,
-      permissionPreset: async (id, proposed) => { calls.push({ id, proposed }); },
     });
-    await agents.create({ expectedRevision: '0', agent: { agentId: 'preset-owner', name: 'Preset owner', description: 'Preset proof', model: null, allowedTools: null, permissionPresetId: 'auto' } }, '1');
-    expect(calls).toEqual([{ id: 'auto', proposed: true }]);
-    calls.length = 0;
-    // Reading the profile it just wrote checks the preset against the snapshot.
-    await agents.profile('preset-owner');
-    expect(calls).toEqual([{ id: 'auto', proposed: false }]);
+    await agents.create({ expectedRevision: '0', agent: { agentId: 'test-owner', name: 'Test owner', description: 'Test proof', model: null, allowedTools: null } }, '1');
+    const profile = await agents.profile('test-owner');
+    expect(profile.agentId).toBe('test-owner');
+    expect(profile.name).toBe('Test owner');
   } finally {
     runtime.authStorage.close();
     resetSettingsForTest();
@@ -94,7 +92,7 @@ test('bundled profiles expose only tools installed in the native worker', async 
   try {
     const agents = new NativeAgents({
       cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
-      extensionRoots: nativeExtensionRoots(runtime.settings), permissionPreset: async () => { },
+      extensionRoots: nativeExtensionRoots(runtime.settings),
       availableToolNames: () => ['read', 'grep', 'glob', 'web_search']
     });
     const catalog = await agents.read('workspace_1', '0');
@@ -118,7 +116,7 @@ test('canonical profiles distinguish inherit null, explicit none and exact array
   try {
     const agents = new NativeAgents({
       cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
-      extensionRoots: nativeExtensionRoots(runtime.settings), permissionPreset: async () => { }, availableToolNames: () => available
+      extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => available
     });
     const catalog = await agents.read('workspace_1', '0');
     for (const agentId of ['task', 'sonic']) {
@@ -153,11 +151,11 @@ test('a long-lived native profile reader observes bundled deletion and subsequen
   const readerRegistry = new ModelRegistry(runtime.authStorage, runtime.modelsPath, { settings: readerSettings });
   const owner = new NativeAgents({
     cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
-    extensionRoots: nativeExtensionRoots(runtime.settings), permissionPreset: async () => { }, availableToolNames: () => BUILTIN_TOOL_NAMES
+    extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES
   });
   const reader = new NativeAgents({
     cwd, agentDirectory, modelRegistry: readerRegistry, settings: readerSettings,
-    extensionRoots: nativeExtensionRoots(readerSettings), permissionPreset: async () => { }, availableToolNames: () => BUILTIN_TOOL_NAMES
+    extensionRoots: nativeExtensionRoots(readerSettings), availableToolNames: () => BUILTIN_TOOL_NAMES
   });
   const bundled = loadBundledAgents()[0];
   if (!bundled) throw new Error('Pinned native catalog must contain a bundled profile');
@@ -175,6 +173,82 @@ test('a long-lived native profile reader observes bundled deletion and subsequen
   } finally {
     runtime.authStorage.close();
     readerSettings.cancelPendingSaves();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a profile YAML carrying permissionPresetId is loaded by catalog and workers start', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'legacy-preset-profile-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(join(cwd, '.omp', 'agents'), { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+
+  const legacyProfileContent = `---
+name: legacy-preset
+description: Profile with legacy permissionPresetId
+openchamber:
+  agentId: legacy-preset
+  name: Legacy Preset
+  description: Profile with legacy permissionPresetId
+  model: null
+  allowedTools:
+    - read
+    - bash
+  permissionPresetId: ask
+---
+You are an agent with legacy preset metadata.
+`;
+  await writeFile(join(cwd, '.omp', 'agents', 'legacy-preset.md'), legacyProfileContent, 'utf8');
+
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    const agents = new NativeAgents({
+      cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES
+    });
+    const catalog = await agents.read('workspace_1', '0');
+    const legacy = catalog.agents.find(a => a.agentId === 'legacy-preset');
+    expect(legacy).toBeDefined();
+    expect(legacy?.name).toBe('Legacy Preset');
+    expect(legacy?.allowedTools).toEqual(['read', 'bash']);
+    expect(legacy ? 'permissionPresetId' in legacy : false).toBe(false);
+
+    // Verify stateless worker starts on this workspace
+    const statelessBootstrap = {
+      type: 'completion.bootstrap' as const,
+      workerGeneration: 'legacy-generation-1',
+      authorizationRootId: 'legacy-root-1',
+      workspaceId: 'workspace_1',
+      projectId: 'project_1',
+      cwd,
+      agentDirectory,
+      agentDirectoryId: 'source',
+      catalogRevision: '0',
+    };
+    const statelessWorker = await StatelessWorker.open(statelessBootstrap, async () => ({ allowed: true }));
+    expect(statelessWorker).toBeDefined();
+    await statelessWorker.close();
+
+    // Verify session worker starts on this workspace
+    let publishedSnapshot = false;
+    const sessionWorker = await WorkerSession.open({
+      type: 'bootstrap',
+      rootSessionId: 'legacy-session-root',
+      workerGeneration: 'legacy-session-generation',
+      projectId: 'project_1',
+      workspaceId: 'workspace_1',
+      agentDirectoryId: 'source',
+      cwd,
+      agentDirectory,
+      sessionsDirectory: join(root, 'sessions'),
+    }, () => { }, () => { }, () => { }, async () => ({ allowed: true }), async () => ({ ok: true }), (snapshot) => { publishedSnapshot = Boolean(snapshot); }, () => { });
+    expect(sessionWorker).toBeDefined();
+    expect(publishedSnapshot).toBe(true);
+    await sessionWorker.close();
+  } finally {
+    runtime.authStorage.close();
     resetSettingsForTest();
     await rm(root, { recursive: true, force: true });
   }

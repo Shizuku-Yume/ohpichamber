@@ -47,12 +47,10 @@ const PROVIDERS_RETRY_SOURCE = "loadProviders:retryAfterFailure";
 const PROVIDERS_RETRY_DELAY_MS = 3000;
 
 interface OpenChamberDefaults {
-    defaultAgent?: string;
     autoCreateWorktree?: boolean;
     gitmojiEnabled?: boolean;
     defaultFileViewerPreview?: boolean;
     zenModel?: string;
-    messageStreamTransport?: 'auto' | 'ws' | 'sse';
     dictationEnabled?: boolean;
     dictationAutoSend?: boolean;
     sttProvider?: 'local' | 'openai-compatible';
@@ -90,16 +88,11 @@ let openChamberDefaultsCache: {
     context: ConfigRuntimeContext;
     request: Promise<OpenChamberDefaults | null>;
 } | null = null;
-let openChamberDefaultsUserRevision = 0;
 
-const invalidateOpenChamberDefaultsCache = (): void => {
+export const invalidateOpenChamberDefaultsCache = (): void => {
     openChamberDefaultsCache = null;
 };
 
-const recordOpenChamberDefaultsChange = (): void => {
-    openChamberDefaultsUserRevision += 1;
-    invalidateOpenChamberDefaultsCache();
-};
 
 const fetchOpenChamberDefaults = (context: ConfigRuntimeContext): Promise<OpenChamberDefaults | null> => {
     const now = Date.now();
@@ -126,16 +119,13 @@ const fetchOpenChamberDefaults = (context: ConfigRuntimeContext): Promise<OpenCh
 };
 
 const toOpenChamberDefaults = (data: DesktopSettings): OpenChamberDefaults => {
-    const defaultAgent = data.defaultAgent?.trim() ?? '';
     const zenModel = data.zenModel ?? '';
 
     return {
-        defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
         autoCreateWorktree: data.autoCreateWorktree,
         gitmojiEnabled: data.gitmojiEnabled,
         defaultFileViewerPreview: data.defaultFileViewerPreview,
         zenModel: zenModel.length > 0 ? zenModel : undefined,
-        messageStreamTransport: data.messageStreamTransport,
         dictationEnabled: data.dictationEnabled,
         dictationAutoSend: data.dictationAutoSend,
         sttProvider: data.sttProvider,
@@ -156,7 +146,6 @@ const requestOpenChamberDefaults = async (context: ConfigRuntimeContext): Promis
         markStartupTrace('config.defaults:end', {
             source,
             durationMs: Math.round(ended - started),
-            hasDefaultAgent: Boolean(result?.defaultAgent),
         });
         return result;
     };
@@ -609,9 +598,9 @@ const transformModelsDevResponse = (payload: unknown): Map<string, ModelMetadata
                     typeof modelValue.structured_output === 'boolean' ? modelValue.structured_output : undefined,
                 modalities: modelValue.modalities
                     ? {
-                          input: isStringArray(modelValue.modalities.input) ? modelValue.modalities.input : undefined,
-                          output: isStringArray(modelValue.modalities.output) ? modelValue.modalities.output : undefined,
-                      }
+                        input: isStringArray(modelValue.modalities.input) ? modelValue.modalities.input : undefined,
+                        output: isStringArray(modelValue.modalities.output) ? modelValue.modalities.output : undefined,
+                    }
                     : undefined,
                 cost: modelValue.cost,
                 limit: modelValue.limit,
@@ -885,7 +874,6 @@ const getProjectDefaultsForConfigDirectory = (directory: string | null | undefin
     const projectDirectory = resolveProjectDirectory(configDirectory);
     const project = useProjectsStore.getState().projects.find((entry) => normalizeConfigPath(entry.path) === projectDirectory);
     return {
-        projectDefaultAgent: normalizeOptionalString(project?.defaultAgent),
         projectDefaultModel: normalizeOptionalString(project?.defaultModel),
         projectDefaultVariant: normalizeOptionalString(project?.defaultVariant),
     };
@@ -1039,7 +1027,6 @@ subscribeRuntimeEndpointChanged((detail) => {
         defaultProviders: {},
         settingsDefaultModel: undefined,
         settingsDefaultReasoningEffort: undefined,
-        settingsDefaultAgent: undefined,
         settingsDefaultsLoaded: false,
         settingsZenModel: undefined,
         selectionSource: 'auto',
@@ -1290,14 +1277,12 @@ interface ConfigStore {
     settingsDefaultsLoaded: boolean;
     /** OMP's configured thinking level for a new session; `auto` stays unset on the wire. */
     settingsDefaultReasoningEffort: string | undefined;
-    settingsDefaultAgent: string | undefined;
     // OpenCode server's own global `model` config field ("provider/model"), used as a fallback
     // when neither our settingsDefaultModel nor the resolved agent pins a model.
     settingsAutoCreateWorktree: boolean;
     settingsGitmojiEnabled: boolean;
     settingsDefaultFileViewerPreview: boolean;
     settingsZenModel: string | undefined;
-    settingsMessageStreamTransport: 'auto' | 'ws' | 'sse';
     // Voice provider preference ('browser', 'openai', 'openai-compatible', or 'say' for macOS)
     voiceProvider: 'browser' | 'local' | 'openai' | 'openai-compatible' | 'say';
     setVoiceProvider: (provider: 'browser' | 'local' | 'openai' | 'openai-compatible' | 'say') => void;
@@ -1407,16 +1392,14 @@ interface ConfigStore {
      * does not run on (and would replace Auto).
      */
     setAgent: (agentName: string | undefined, options?: { keepModel?: boolean }) => void;
-    applyDefaultModelAgentSelection: (options?: { projectDefaultAgent?: string; projectDefaultModel?: string; projectDefaultVariant?: string }) => void;
+    applyDefaultModelAgentSelection: (options?: { projectDefaultModel?: string; projectDefaultVariant?: string }) => void;
     /** Replaces an `openchamber/auto` selection this server cannot honour with the default model. */
     dropStaleAutoSelection: () => void;
     setSelectedProvider: (providerId: string) => void;
-    setSettingsDefaultAgent: (agent: string | undefined) => void;
     setSettingsAutoCreateWorktree: (enabled: boolean) => void;
     setSettingsGitmojiEnabled: (enabled: boolean) => void;
     setSettingsDefaultFileViewerPreview: (enabled: boolean) => void;
     setSettingsZenModel: (model: string | undefined) => void;
-    setSettingsMessageStreamTransport: (transport: 'auto' | 'ws' | 'sse') => void;
     getResolvedGitGenerationModel: () => { providerId: string; modelId: string } | null;
     saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
     getAgentModelSelection: (agentName: string) => { providerId: string; modelId: string } | null;
@@ -1605,12 +1588,10 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 settingsDefaultModel: undefined,
                 settingsDefaultsLoaded: false,
                 settingsDefaultReasoningEffort: undefined,
-                settingsDefaultAgent: undefined,
                 settingsAutoCreateWorktree: false,
                 settingsGitmojiEnabled: false,
                 settingsDefaultFileViewerPreview: true,
                 settingsZenModel: undefined,
-                settingsMessageStreamTransport: 'auto',
                 // Voice provider preference - load from localStorage or default to 'browser'
                 voiceProvider: (() => {
                     if (typeof window !== 'undefined') {
@@ -2062,291 +2043,291 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     }
 
                     const promise: Promise<void> = (async () => {
-                    if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                    const loaderStarted = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                    markStartupTrace('loadProviders:start', { directoryKey, source, requestedDirectory, effectiveDirectory });
-                    const existingSnapshot = get().directoryScoped[directoryKey];
-                    const previousProviders = existingSnapshot?.providers ?? (get().activeDirectoryKey === directoryKey ? get().providers : []);
-                    const previousDefaults = existingSnapshot?.defaultProviders ?? (get().activeDirectoryKey === directoryKey ? get().defaultProviders : {});
-                    let lastError: unknown = null;
+                        if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                        const loaderStarted = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                        markStartupTrace('loadProviders:start', { directoryKey, source, requestedDirectory, effectiveDirectory });
+                        const existingSnapshot = get().directoryScoped[directoryKey];
+                        const previousProviders = existingSnapshot?.providers ?? (get().activeDirectoryKey === directoryKey ? get().providers : []);
+                        const previousDefaults = existingSnapshot?.defaultProviders ?? (get().activeDirectoryKey === directoryKey ? get().defaultProviders : {});
+                        let lastError: unknown = null;
 
-                    for (let attempt = 0; attempt < 3; attempt++) {
-                        try {
-                            ensureModelsMetadataFetch(
-                                () => get().modelsMetadata,
-                                (metadata) => {
-                                    if (isConfigRuntimeContextCurrent(runtimeContext)) {
-                                        set({ modelsMetadata: metadata });
-                                    }
-                                },
-                            );
-                            const workspace = await measureStartupTrace(
-                                'loadProviders:workspace',
-                                () => canonicalClient.resolveWorkspace(configDirectory),
-                                { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
-                            );
-                            const [providerCatalog, modelCatalog] = await Promise.all([
-                                measureStartupTrace(
-                                    'loadProviders:providers',
-                                    () => canonicalClient.getProviders(workspace.workspaceId),
-                                    { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
-                                ),
-                                measureStartupTrace(
-                                    'loadProviders:models',
-                                    () => canonicalClient.getModels(workspace.workspaceId),
-                                    { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
-                                ),
-                            ]);
-                            if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                            const processedProviders = combineCanonicalCatalog(providerCatalog, modelCatalog);
-                            // OMP resolves new-session defaults from modelRoles.default and
-                            // defaultThinkingLevel; the app shows these instead of keeping
-                            // its own default model or effort.
-                            // An empty catalog is a directory still starting, not
-                            // evidence that OMP lost its default; keep the last
-                            // resolved default until a real catalog replaces it.
-                            const keepPreviousDefaults = modelCatalog.models.length === 0 && modelCatalog.defaults.model === null;
-                            const ompDefaultModel = modelCatalog.defaults.model
-                                ? modelRefKey(modelCatalog.defaults.model.providerId, modelCatalog.defaults.model.modelId)
-                                : undefined;
-                            const ompDefaultReasoningEffort = modelCatalog.defaults.thinkingLevel ?? undefined;
-                            const defaults = previousDefaults;
-
-                            if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                            // A re-read that returns the same catalog keeps the arrays the
-                            // store already holds, so nothing subscribed to them re-renders.
-                            const nextProviders = isSameProviderCatalog(previousProviders, processedProviders)
-                                ? previousProviders
-                                : processedProviders;
-                            const nextDefaults = isSameDefaults(previousDefaults, defaults) ? previousDefaults : defaults;
-                            set((state) => {
-                                if (!isConfigRuntimeContextCurrent(runtimeContext)) return state;
-                                const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
-                                    providers: [],
-                                    currentProviderId: "",
-                                    currentModelId: "",
-                                    currentAgentName: undefined,
-                                    selectedProviderId: "",
-                                    agentModelSelections: {},
-                                    defaultProviders: {},
-                                };
-
-                                const currentProviderId = state.activeDirectoryKey === directoryKey
-                                    ? state.currentProviderId
-                                    : baseSnapshot.currentProviderId;
-                                const currentModelId = state.activeDirectoryKey === directoryKey
-                                    ? state.currentModelId
-                                    : baseSnapshot.currentModelId;
-                                const currentVariant = state.activeDirectoryKey === directoryKey
-                                    ? state.currentVariant
-                                    : baseSnapshot.currentVariant;
-                                const projectDefaults = getProjectDefaultsForConfigDirectory(fromDirectoryKey(directoryKey));
-                                const resolvedModel = resolveProviderModelSelection({
-                                    providers: nextProviders,
-                                    currentProviderId,
-                                    currentModelId,
-                                    currentVariant,
-                                    preserveCurrent: (state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource) === 'manual',
-                                    settingsDefaultModel: projectDefaults.projectDefaultModel || ompDefaultModel,
-                                    defaultVariant: projectDefaults.projectDefaultModel ? projectDefaults.projectDefaultVariant : undefined,
-                                    allowFallback: state.settingsDefaultsLoaded,
-                                    fallbackPrefs: readFallbackModelPrefs(),
-                                });
-                                const currentSelectedProviderId = state.activeDirectoryKey === directoryKey
-                                    ? state.selectedProviderId
-                                    : baseSnapshot.selectedProviderId;
-                                // The Providers settings selection belongs to the user, not to this
-                                // loader. A refresh may report a different provider set — an OpenCode
-                                // restart drops plugin-registered providers until they re-register —
-                                // and re-deriving a selection here yanked the open provider away
-                                // mid-edit. Keep whatever is selected; only fill in an empty one.
-                                // The add-provider sentinel is kept for the same reason (issue #1765).
-                                const selectedProviderId = currentSelectedProviderId
-                                    ? currentSelectedProviderId
-                                    : (resolvedModel?.providerId ?? nextProviders[0]?.providerId ?? "");
-
-                                const heldVariantSelection = state.activeDirectoryKey === directoryKey
-                                    ? state.currentVariantSelection
-                                    : baseSnapshot.currentVariantSelection;
-                                const pickedVariant = heldVariantSelection?.override;
-                                const nextSnapshot: DirectoryScopedConfig = {
-                                    ...baseSnapshot,
-                                    providers: nextProviders,
-                                    models: modelCatalog.models,
-                                    providersLoaded: true,
-                                    defaultProviders: nextDefaults,
-                                    currentProviderId: resolvedModel?.providerId ?? "",
-                                    currentModelId: resolvedModel?.modelId ?? "",
-                                    currentVariant: variantAfterResolve(heldVariantSelection, resolvedModel?.variant),
-                                    currentVariantSelection: (state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource) === 'manual'
-                                        || pickedVariant !== undefined
-                                        ? heldVariantSelection
-                                        : { override: undefined, inherited: resolvedModel?.variant },
-                                    selectedProviderId,
-                                };
-
-                                if (
-                                    baseSnapshot.providers === nextSnapshot.providers
-                                    && baseSnapshot.models === nextSnapshot.models
-                                    && baseSnapshot.providersLoaded === true
-                                    && baseSnapshot.defaultProviders === nextSnapshot.defaultProviders
-                                    && baseSnapshot.currentProviderId === nextSnapshot.currentProviderId
-                                    && baseSnapshot.currentModelId === nextSnapshot.currentModelId
-                                    && baseSnapshot.currentVariant === nextSnapshot.currentVariant
-                                    && baseSnapshot.selectedProviderId === nextSnapshot.selectedProviderId
-                                    && (state.activeDirectoryKey !== directoryKey || (
-                                        state.providers === nextSnapshot.providers
-                                        && state.models === nextSnapshot.models
-                                        && state.providersLoaded
-                                        && state.defaultProviders === nextSnapshot.defaultProviders
-                                        && state.currentProviderId === nextSnapshot.currentProviderId
-                                        && state.currentModelId === nextSnapshot.currentModelId
-                                        && state.currentVariant === nextSnapshot.currentVariant
-                                        && state.selectedProviderId === nextSnapshot.selectedProviderId
-                                        && state.workspaceId === workspace.workspaceId
-                                        && state.settingsDefaultModel === ompDefaultModel
-                                        && state.settingsDefaultReasoningEffort === ompDefaultReasoningEffort
-                                    ))
-                                ) {
-                                    return state;
-                                }
-
-                                const nextState: Partial<ConfigStore> = {
-                                    directoryScoped: {
-                                        ...state.directoryScoped,
-                                        [directoryKey]: nextSnapshot,
+                        for (let attempt = 0; attempt < 3; attempt++) {
+                            try {
+                                ensureModelsMetadataFetch(
+                                    () => get().modelsMetadata,
+                                    (metadata) => {
+                                        if (isConfigRuntimeContextCurrent(runtimeContext)) {
+                                            set({ modelsMetadata: metadata });
+                                        }
                                     },
-                                };
+                                );
+                                const workspace = await measureStartupTrace(
+                                    'loadProviders:workspace',
+                                    () => canonicalClient.resolveWorkspace(configDirectory),
+                                    { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
+                                );
+                                const [providerCatalog, modelCatalog] = await Promise.all([
+                                    measureStartupTrace(
+                                        'loadProviders:providers',
+                                        () => canonicalClient.getProviders(workspace.workspaceId),
+                                        { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
+                                    ),
+                                    measureStartupTrace(
+                                        'loadProviders:models',
+                                        () => canonicalClient.getModels(workspace.workspaceId),
+                                        { directoryKey, source, requestedDirectory, effectiveDirectory, attempt: attempt + 1 },
+                                    ),
+                                ]);
+                                if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                                const processedProviders = combineCanonicalCatalog(providerCatalog, modelCatalog);
+                                // OMP resolves new-session defaults from modelRoles.default and
+                                // defaultThinkingLevel; the app shows these instead of keeping
+                                // its own default model or effort.
+                                // An empty catalog is a directory still starting, not
+                                // evidence that OMP lost its default; keep the last
+                                // resolved default until a real catalog replaces it.
+                                const keepPreviousDefaults = modelCatalog.models.length === 0 && modelCatalog.defaults.model === null;
+                                const ompDefaultModel = modelCatalog.defaults.model
+                                    ? modelRefKey(modelCatalog.defaults.model.providerId, modelCatalog.defaults.model.modelId)
+                                    : undefined;
+                                const ompDefaultReasoningEffort = modelCatalog.defaults.thinkingLevel ?? undefined;
+                                const defaults = previousDefaults;
 
-                                if (state.activeDirectoryKey === directoryKey) {
-                                    nextState.providers = nextProviders;
-                                    nextState.models = modelCatalog.models;
-                                    nextState.providersLoaded = true;
-                                    nextState.workspaceId = workspace.workspaceId;
-                                    void get().loadOmpSettings(workspace.workspaceId);
-                                    nextState.defaultProviders = nextDefaults;
-                                    nextState.currentProviderId = nextSnapshot.currentProviderId;
-                                    nextState.currentModelId = nextSnapshot.currentModelId;
-                                    nextState.currentVariant = nextSnapshot.currentVariant;
-                                    nextState.currentVariantSelection = nextSnapshot.currentVariantSelection ?? { override: undefined, inherited: nextSnapshot.currentVariant };
-                                    nextState.selectedProviderId = selectedProviderId;
-                                    nextState.settingsDefaultModel = keepPreviousDefaults ? state.settingsDefaultModel : ompDefaultModel;
-                                    nextState.settingsDefaultReasoningEffort = keepPreviousDefaults ? state.settingsDefaultReasoningEffort : ompDefaultReasoningEffort;
-                                }
+                                if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                                // A re-read that returns the same catalog keeps the arrays the
+                                // store already holds, so nothing subscribed to them re-renders.
+                                const nextProviders = isSameProviderCatalog(previousProviders, processedProviders)
+                                    ? previousProviders
+                                    : processedProviders;
+                                const nextDefaults = isSameDefaults(previousDefaults, defaults) ? previousDefaults : defaults;
+                                set((state) => {
+                                    if (!isConfigRuntimeContextCurrent(runtimeContext)) return state;
+                                    const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
+                                        providers: [],
+                                        currentProviderId: "",
+                                        currentModelId: "",
+                                        currentAgentName: undefined,
+                                        selectedProviderId: "",
+                                        agentModelSelections: {},
+                                        defaultProviders: {},
+                                    };
 
-                                return nextState;
-                            });
+                                    const currentProviderId = state.activeDirectoryKey === directoryKey
+                                        ? state.currentProviderId
+                                        : baseSnapshot.currentProviderId;
+                                    const currentModelId = state.activeDirectoryKey === directoryKey
+                                        ? state.currentModelId
+                                        : baseSnapshot.currentModelId;
+                                    const currentVariant = state.activeDirectoryKey === directoryKey
+                                        ? state.currentVariant
+                                        : baseSnapshot.currentVariant;
+                                    const projectDefaults = getProjectDefaultsForConfigDirectory(fromDirectoryKey(directoryKey));
+                                    const resolvedModel = resolveProviderModelSelection({
+                                        providers: nextProviders,
+                                        currentProviderId,
+                                        currentModelId,
+                                        currentVariant,
+                                        preserveCurrent: (state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource) === 'manual',
+                                        settingsDefaultModel: projectDefaults.projectDefaultModel || ompDefaultModel,
+                                        defaultVariant: projectDefaults.projectDefaultModel ? projectDefaults.projectDefaultVariant : undefined,
+                                        allowFallback: state.settingsDefaultsLoaded,
+                                        fallbackPrefs: readFallbackModelPrefs(),
+                                    });
+                                    const currentSelectedProviderId = state.activeDirectoryKey === directoryKey
+                                        ? state.selectedProviderId
+                                        : baseSnapshot.selectedProviderId;
+                                    // The Providers settings selection belongs to the user, not to this
+                                    // loader. A refresh may report a different provider set — an OpenCode
+                                    // restart drops plugin-registered providers until they re-register —
+                                    // and re-deriving a selection here yanked the open provider away
+                                    // mid-edit. Keep whatever is selected; only fill in an empty one.
+                                    // The add-provider sentinel is kept for the same reason (issue #1765).
+                                    const selectedProviderId = currentSelectedProviderId
+                                        ? currentSelectedProviderId
+                                        : (resolvedModel?.providerId ?? nextProviders[0]?.providerId ?? "");
 
-                            if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                            const loaderEnded = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                            markStartupTrace('loadProviders:end', {
-                                directoryKey,
-                                source,
-                                requestedDirectory,
-                                effectiveDirectory,
-                                durationMs: Math.round(loaderEnded - loaderStarted),
-                                providers: processedProviders.length,
-                                models: processedProviders.reduce((count, provider) => count + provider.models.length, 0),
-                            });
-                            _providersLoadedAt.set(directoryKey, Date.now());
-                            persistLoadedCatalog(runtimeContext, directoryKey, source, { providers: nextProviders, defaultProviders: nextDefaults }, false);
-                            return;
-                        } catch (error) {
-                            lastError = error;
-                            markStartupTrace('loadProviders:attemptError', {
-                                directoryKey,
-                                source,
-                                requestedDirectory,
-                                effectiveDirectory,
-                                attempt: attempt + 1,
-                                error: error instanceof Error ? error.message : String(error),
-                            });
-                            const waitMs = 200 * (attempt + 1);
-                            await new Promise((resolve) => setTimeout(resolve, waitMs));
-                            if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                                    const heldVariantSelection = state.activeDirectoryKey === directoryKey
+                                        ? state.currentVariantSelection
+                                        : baseSnapshot.currentVariantSelection;
+                                    const pickedVariant = heldVariantSelection?.override;
+                                    const nextSnapshot: DirectoryScopedConfig = {
+                                        ...baseSnapshot,
+                                        providers: nextProviders,
+                                        models: modelCatalog.models,
+                                        providersLoaded: true,
+                                        defaultProviders: nextDefaults,
+                                        currentProviderId: resolvedModel?.providerId ?? "",
+                                        currentModelId: resolvedModel?.modelId ?? "",
+                                        currentVariant: variantAfterResolve(heldVariantSelection, resolvedModel?.variant),
+                                        currentVariantSelection: (state.activeDirectoryKey === directoryKey ? state.selectionSource : baseSnapshot.selectionSource) === 'manual'
+                                            || pickedVariant !== undefined
+                                            ? heldVariantSelection
+                                            : { override: undefined, inherited: resolvedModel?.variant },
+                                        selectedProviderId,
+                                    };
+
+                                    if (
+                                        baseSnapshot.providers === nextSnapshot.providers
+                                        && baseSnapshot.models === nextSnapshot.models
+                                        && baseSnapshot.providersLoaded === true
+                                        && baseSnapshot.defaultProviders === nextSnapshot.defaultProviders
+                                        && baseSnapshot.currentProviderId === nextSnapshot.currentProviderId
+                                        && baseSnapshot.currentModelId === nextSnapshot.currentModelId
+                                        && baseSnapshot.currentVariant === nextSnapshot.currentVariant
+                                        && baseSnapshot.selectedProviderId === nextSnapshot.selectedProviderId
+                                        && (state.activeDirectoryKey !== directoryKey || (
+                                            state.providers === nextSnapshot.providers
+                                            && state.models === nextSnapshot.models
+                                            && state.providersLoaded
+                                            && state.defaultProviders === nextSnapshot.defaultProviders
+                                            && state.currentProviderId === nextSnapshot.currentProviderId
+                                            && state.currentModelId === nextSnapshot.currentModelId
+                                            && state.currentVariant === nextSnapshot.currentVariant
+                                            && state.selectedProviderId === nextSnapshot.selectedProviderId
+                                            && state.workspaceId === workspace.workspaceId
+                                            && state.settingsDefaultModel === ompDefaultModel
+                                            && state.settingsDefaultReasoningEffort === ompDefaultReasoningEffort
+                                        ))
+                                    ) {
+                                        return state;
+                                    }
+
+                                    const nextState: Partial<ConfigStore> = {
+                                        directoryScoped: {
+                                            ...state.directoryScoped,
+                                            [directoryKey]: nextSnapshot,
+                                        },
+                                    };
+
+                                    if (state.activeDirectoryKey === directoryKey) {
+                                        nextState.providers = nextProviders;
+                                        nextState.models = modelCatalog.models;
+                                        nextState.providersLoaded = true;
+                                        nextState.workspaceId = workspace.workspaceId;
+                                        void get().loadOmpSettings(workspace.workspaceId);
+                                        nextState.defaultProviders = nextDefaults;
+                                        nextState.currentProviderId = nextSnapshot.currentProviderId;
+                                        nextState.currentModelId = nextSnapshot.currentModelId;
+                                        nextState.currentVariant = nextSnapshot.currentVariant;
+                                        nextState.currentVariantSelection = nextSnapshot.currentVariantSelection ?? { override: undefined, inherited: nextSnapshot.currentVariant };
+                                        nextState.selectedProviderId = selectedProviderId;
+                                        nextState.settingsDefaultModel = keepPreviousDefaults ? state.settingsDefaultModel : ompDefaultModel;
+                                        nextState.settingsDefaultReasoningEffort = keepPreviousDefaults ? state.settingsDefaultReasoningEffort : ompDefaultReasoningEffort;
+                                    }
+
+                                    return nextState;
+                                });
+
+                                if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                                const loaderEnded = typeof performance !== 'undefined' ? performance.now() : Date.now();
+                                markStartupTrace('loadProviders:end', {
+                                    directoryKey,
+                                    source,
+                                    requestedDirectory,
+                                    effectiveDirectory,
+                                    durationMs: Math.round(loaderEnded - loaderStarted),
+                                    providers: processedProviders.length,
+                                    models: processedProviders.reduce((count, provider) => count + provider.models.length, 0),
+                                });
+                                _providersLoadedAt.set(directoryKey, Date.now());
+                                persistLoadedCatalog(runtimeContext, directoryKey, source, { providers: nextProviders, defaultProviders: nextDefaults }, false);
+                                return;
+                            } catch (error) {
+                                lastError = error;
+                                markStartupTrace('loadProviders:attemptError', {
+                                    directoryKey,
+                                    source,
+                                    requestedDirectory,
+                                    effectiveDirectory,
+                                    attempt: attempt + 1,
+                                    error: error instanceof Error ? error.message : String(error),
+                                });
+                                const waitMs = 200 * (attempt + 1);
+                                await new Promise((resolve) => setTimeout(resolve, waitMs));
+                                if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                            }
                         }
-                    }
 
-                    if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                    console.error("Failed to load providers:", lastError);
-                    markStartupTrace('loadProviders:error', {
-                        directoryKey,
-                        source,
-                        requestedDirectory,
-                        effectiveDirectory,
-                        error: lastError instanceof Error ? lastError.message : String(lastError),
-                    });
+                        if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                        console.error("Failed to load providers:", lastError);
+                        markStartupTrace('loadProviders:error', {
+                            directoryKey,
+                            source,
+                            requestedDirectory,
+                            effectiveDirectory,
+                            error: lastError instanceof Error ? lastError.message : String(lastError),
+                        });
 
-                    if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                    set((state) => {
-                        if (!isConfigRuntimeContextCurrent(runtimeContext)) return state;
-                        const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
-                            providers: [],
-                            currentProviderId: "",
-                            currentModelId: "",
-                            currentAgentName: undefined,
-                            selectedProviderId: "",
-                            agentModelSelections: {},
-                            defaultProviders: {},
-                        };
+                        if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                        set((state) => {
+                            if (!isConfigRuntimeContextCurrent(runtimeContext)) return state;
+                            const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
+                                providers: [],
+                                currentProviderId: "",
+                                currentModelId: "",
+                                currentAgentName: undefined,
+                                selectedProviderId: "",
+                                agentModelSelections: {},
+                                defaultProviders: {},
+                            };
 
-                        const nextSnapshot: DirectoryScopedConfig = {
-                            ...baseSnapshot,
-                            providers: previousProviders,
-                            defaultProviders: previousDefaults,
-                        };
+                            const nextSnapshot: DirectoryScopedConfig = {
+                                ...baseSnapshot,
+                                providers: previousProviders,
+                                defaultProviders: previousDefaults,
+                            };
 
-                        const nextState: Partial<ConfigStore> = {
-                            directoryScoped: {
-                                ...state.directoryScoped,
-                                [directoryKey]: nextSnapshot,
-                            },
-                        };
+                            const nextState: Partial<ConfigStore> = {
+                                directoryScoped: {
+                                    ...state.directoryScoped,
+                                    [directoryKey]: nextSnapshot,
+                                },
+                            };
 
-                        if (state.activeDirectoryKey === directoryKey) {
-                            nextState.providers = previousProviders;
-                            nextState.defaultProviders = previousDefaults;
+                            if (state.activeDirectoryKey === directoryKey) {
+                                nextState.providers = previousProviders;
+                                nextState.defaultProviders = previousDefaults;
 
-                            if (!state.currentProviderId && !state.currentModelId && state.settingsDefaultModel) {
-                                const parsed = parseModelSelector(state.settingsDefaultModel);
-                                if (parsed) {
-                                    const settingsProvider = previousProviders.find((p) => p.providerId === parsed.providerId);
-                                    const model = settingsProvider?.models.find((entry) => entry.modelId === parsed.modelId);
-                                    if (model) {
-                                        nextState.currentProviderId = parsed.providerId;
-                                        nextState.currentModelId = parsed.modelId;
-                                        nextState.currentVariant = undefined;
+                                if (!state.currentProviderId && !state.currentModelId && state.settingsDefaultModel) {
+                                    const parsed = parseModelSelector(state.settingsDefaultModel);
+                                    if (parsed) {
+                                        const settingsProvider = previousProviders.find((p) => p.providerId === parsed.providerId);
+                                        const model = settingsProvider?.models.find((entry) => entry.modelId === parsed.modelId);
+                                        if (model) {
+                                            nextState.currentProviderId = parsed.providerId;
+                                            nextState.currentModelId = parsed.modelId;
+                                            nextState.currentVariant = undefined;
 
-                                        nextSnapshot.currentProviderId = parsed.providerId;
-                                        nextSnapshot.currentModelId = parsed.modelId;
-                                        nextSnapshot.currentVariant = undefined;
+                                            nextSnapshot.currentProviderId = parsed.providerId;
+                                            nextSnapshot.currentModelId = parsed.modelId;
+                                            nextSnapshot.currentVariant = undefined;
 
-                                        // Only adopt this as the settings selection when the user has
-                                        // none; a failed refresh must not move an existing one.
-                                        if (!state.selectedProviderId) {
-                                            nextState.selectedProviderId = parsed.providerId;
-                                            nextSnapshot.selectedProviderId = parsed.providerId;
+                                            // Only adopt this as the settings selection when the user has
+                                            // none; a failed refresh must not move an existing one.
+                                            if (!state.selectedProviderId) {
+                                                nextState.selectedProviderId = parsed.providerId;
+                                                nextSnapshot.selectedProviderId = parsed.providerId;
+                                            }
                                         }
                                     }
                                 }
                             }
+
+                            return nextState;
+                        });
+
+                        // Nothing else re-reads a directory whose providers never loaded: the
+                        // composer would wait on the missing catalog until something unrelated,
+                        // such as Settings → Providers, asked again. One delayed retry covers a
+                        // server that was still starting this directory.
+                        if (source !== PROVIDERS_RETRY_SOURCE && !get().directoryScoped[directoryKey]?.providersLoaded) {
+                            setTimeout(() => {
+                                if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
+                                const state = get();
+                                if (state.activeDirectoryKey !== directoryKey || state.directoryScoped[directoryKey]?.providersLoaded) return;
+                                void state.loadProviders({ directory: fromDirectoryKey(directoryKey), source: PROVIDERS_RETRY_SOURCE });
+                            }, PROVIDERS_RETRY_DELAY_MS);
                         }
-
-                        return nextState;
-                    });
-
-                    // Nothing else re-reads a directory whose providers never loaded: the
-                    // composer would wait on the missing catalog until something unrelated,
-                    // such as Settings → Providers, asked again. One delayed retry covers a
-                    // server that was still starting this directory.
-                    if (source !== PROVIDERS_RETRY_SOURCE && !get().directoryScoped[directoryKey]?.providersLoaded) {
-                        setTimeout(() => {
-                            if (!isConfigRuntimeContextCurrent(runtimeContext)) return;
-                            const state = get();
-                            if (state.activeDirectoryKey !== directoryKey || state.directoryScoped[directoryKey]?.providersLoaded) return;
-                            void state.loadProviders({ directory: fromDirectoryKey(directoryKey), source: PROVIDERS_RETRY_SOURCE });
-                        }, PROVIDERS_RETRY_DELAY_MS);
-                    }
                     })().finally(() => {
                         if (_inFlightProviders.get(inFlightKey) === promise) _inFlightProviders.delete(inFlightKey);
                     });
@@ -2359,11 +2340,11 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     const { providers } = get();
                     const provider = providers.find((p) => p.providerId === providerId);
                     const isAuto = providerId === AUTO_PROVIDER_ID && hasProviderModel(providers, AUTO_PROVIDER_ID, AUTO_MODEL_ID);
- 
+
                     if (!provider && !isAuto) {
                         return;
                     }
- 
+
                     const firstModel = provider?.models[0];
                     const newModelId = isAuto ? AUTO_MODEL_ID : (firstModel?.modelId || "");
 
@@ -2423,7 +2404,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             agentModelSelections: state.agentModelSelections,
                             defaultProviders: state.defaultProviders,
                         };
- 
+
                         const variantReset = variantResetForModelChange(state, state.currentProviderId, modelId);
                         const nextSnapshot: DirectoryScopedConfig = {
                             ...baseSnapshot,
@@ -2431,7 +2412,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                             currentModelId: modelId,
                             selectionSource: "manual",
                         };
- 
+
                         return {
                             ...variantReset,
                             currentModelId: modelId,
@@ -2557,7 +2538,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     get().setCurrentVariantOverride(nextOverride, inheritedVariant);
                     return nextOverride ?? undefined;
                 },
- 
+
                 setSelectedProvider: (providerId: string) => {
                     set((state) => {
                         const directoryKey = state.activeDirectoryKey;
@@ -2630,21 +2611,17 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
 
                 loadSessionDefaults: async () => {
                     const runtimeContext = captureConfigRuntimeContext();
-                    const revision = openChamberDefaultsUserRevision;
                     const defaults = await fetchOpenChamberDefaults(runtimeContext);
                     if (!isConfigRuntimeContextCurrent(runtimeContext) || !defaults) return false;
 
                     set((state) => {
-                        const edited = revision !== openChamberDefaultsUserRevision;
                         const next: Partial<ConfigStore> = {
                             configRuntimeKey: runtimeContext.runtimeKey,
                             settingsDefaultsLoaded: true,
-                            settingsDefaultAgent: edited ? state.settingsDefaultAgent : defaults.defaultAgent,
                             settingsAutoCreateWorktree: defaults.autoCreateWorktree ?? false,
                             settingsGitmojiEnabled: defaults.gitmojiEnabled ?? false,
                             settingsDefaultFileViewerPreview: defaults.defaultFileViewerPreview ?? true,
                             settingsZenModel: defaults.zenModel,
-                            settingsMessageStreamTransport: defaults.messageStreamTransport ?? state.settingsMessageStreamTransport,
                             dictationEnabled: typeof defaults.dictationEnabled === 'boolean' ? defaults.dictationEnabled : state.dictationEnabled,
                             dictationAutoSend: defaults.dictationAutoSend ?? state.dictationAutoSend,
                             sttProvider: defaults.sttProvider ?? state.sttProvider,
@@ -3043,11 +3020,6 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                 },
 
 
-                 setSettingsDefaultAgent: (agent: string | undefined) => {
-                     recordOpenChamberDefaultsChange();
-                     set({ settingsDefaultAgent: agent });
-                     if (!useSessionUIStore.getState().currentSessionId) get().applyDefaultModelAgentSelection();
-                 },
 
                 setSettingsAutoCreateWorktree: (enabled: boolean) => {
                     set({ settingsAutoCreateWorktree: enabled });
@@ -3065,9 +3037,6 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     set({ settingsZenModel: model });
                 },
 
-                setSettingsMessageStreamTransport: (transport: 'auto' | 'ws' | 'sse') => {
-                    set({ settingsMessageStreamTransport: transport });
-                },
 
                 getResolvedGitGenerationModel: () => {
                     const state = get();
@@ -3214,19 +3183,19 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('dictationEnabled', String(enabled));
                     }
-                    updateDesktopSettings({ dictationEnabled: enabled }).catch(() => {});
+                    updateDesktopSettings({ dictationEnabled: enabled }).catch(() => { });
                 },
 
                 setDictationAutoSend: (enabled: boolean) => {
                     set({ dictationAutoSend: enabled });
                     getSafeStorage().setItem('dictationAutoSend', String(enabled));
-                    updateDesktopSettings({ dictationAutoSend: enabled }).catch(() => {});
+                    updateDesktopSettings({ dictationAutoSend: enabled }).catch(() => { });
                 },
 
                 setSttCorrectTranscript: (enabled: boolean) => {
                     set({ sttCorrectTranscript: enabled });
                     globalThis.localStorage?.setItem('sttCorrectTranscript', String(enabled));
-                    updateDesktopSettings({ sttCorrectTranscript: enabled }).catch(() => {});
+                    updateDesktopSettings({ sttCorrectTranscript: enabled }).catch(() => { });
                 },
 
                 setSttProvider: (provider: 'local' | 'openai-compatible') => {
@@ -3234,7 +3203,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttProvider', provider);
                     }
-                    updateDesktopSettings({ sttProvider: provider }).catch(() => {});
+                    updateDesktopSettings({ sttProvider: provider }).catch(() => { });
                 },
 
                 setSttServerUrl: (url: string) => {
@@ -3242,14 +3211,14 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttServerUrl', url);
                     }
-                    updateDesktopSettings({ sttServerUrl: url }).catch(() => {});
+                    updateDesktopSettings({ sttServerUrl: url }).catch(() => { });
                 },
 
 
                 setSttEndpointPath: (path: string) => {
                     set({ sttEndpointPath: path });
                     getSafeStorage().setItem('sttEndpointPath', path);
-                    updateDesktopSettings({ sttEndpointPath: path }).catch(() => {});
+                    updateDesktopSettings({ sttEndpointPath: path }).catch(() => { });
                 },
 
                 setSttModel: (model: string) => {
@@ -3257,7 +3226,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttModel', model);
                     }
-                    updateDesktopSettings({ sttModel: model }).catch(() => {});
+                    updateDesktopSettings({ sttModel: model }).catch(() => { });
                 },
 
                 setSttLocalModel: (model: string) => {
@@ -3265,7 +3234,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttLocalModel', model);
                     }
-                    updateDesktopSettings({ sttLocalModel: model }).catch(() => {});
+                    updateDesktopSettings({ sttLocalModel: model }).catch(() => { });
                 },
                 ompSettings: null,
                 loadOmpSettings: async (targetWorkspaceId?: string) => {
@@ -3284,7 +3253,7 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('sttLanguage', lang);
                     }
-                    updateDesktopSettings({ sttLanguage: lang }).catch(() => {});
+                    updateDesktopSettings({ sttLanguage: lang }).catch(() => { });
                 },
 
                 setShowMessageTTSButtons: (show: boolean) => {
@@ -3645,20 +3614,18 @@ export const useConfigStore: ConfigStoreWithPersist = create<ConfigStore>()(
                     agentModelSelections: state.agentModelSelections,
                     defaultProviders: state.defaultProviders,
                     settingsDefaultModel: state.settingsDefaultModel,
-                    settingsDefaultAgent: state.settingsDefaultAgent,
                     settingsAutoCreateWorktree: state.settingsAutoCreateWorktree,
                     settingsGitmojiEnabled: state.settingsGitmojiEnabled,
                     settingsDefaultFileViewerPreview: state.settingsDefaultFileViewerPreview,
                     settingsZenModel: state.settingsZenModel,
-                    settingsMessageStreamTransport: state.settingsMessageStreamTransport,
                     dictationEnabled: state.dictationEnabled,
                     dictationAutoSend: state.dictationAutoSend,
                     speechRate: state.speechRate,
                     speechPitch: state.speechPitch,
                     speechVolume: state.speechVolume,
                 }),
-             },
-         ),
+            },
+        ),
     ),
 );
 
@@ -3716,7 +3683,7 @@ let unsubscribeConfigStoreChanges: (() => void) | null = null;
 
 if (!unsubscribeConfigStoreChanges) {
     unsubscribeConfigStoreChanges = subscribeToConfigChanges(async (event) => {
-            const tasks: Promise<void>[] = [];
+        const tasks: Promise<void>[] = [];
 
 
 

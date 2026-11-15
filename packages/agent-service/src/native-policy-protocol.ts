@@ -1,6 +1,6 @@
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { EntityIdSchema, JsonObjectSchema, JsonValueSchema, ProblemCodeSchema, MCPServerConfigSchema } from '@openchamber/agent-contract';
+import { EntityIdSchema, JsonObjectSchema, JsonValueSchema, ProblemCodeSchema, MCPServerConfigSchema, ApprovalGrantSchema, type ApprovalGrant } from '@openchamber/agent-contract';
 
 const PrivatePathSchema = z.string().min(1).refine(isAbsolute);
 /** OMP internal URL schemes the Host passes to the SDK instead of resolving. */
@@ -15,7 +15,7 @@ export const HostNativePolicySnapshotSchema = z.strictObject({
   projectId: EntityIdSchema, workspaceId: EntityIdSchema, agentDirectoryId: EntityIdSchema,
   cwd: PrivatePathSchema, agentDirectory: PrivatePathSchema,
   providers: z.array(z.strictObject({ providerId: EntityIdSchema, modelId: EntityIdSchema, endpoint: z.string().url().optional() })),
-  mcpServers: z.array(MCPServerConfigSchema), agentIds: z.array(EntityIdSchema), permissionPresetIds: z.array(EntityIdSchema),
+  mcpServers: z.array(MCPServerConfigSchema), agentIds: z.array(EntityIdSchema),
 });
 export type HostNativePolicySnapshot = z.infer<typeof HostNativePolicySnapshotSchema>;
 const NativeEditModeSchema = z.enum(['apply_patch', 'hashline', 'none', 'patch', 'replace', 'sloppy']);
@@ -24,8 +24,8 @@ export const NativePolicyContextSchema = z.strictObject({
   providerId: EntityIdSchema.optional(), modelId: EntityIdSchema.optional(), endpoint: z.string().url().optional(),
 });
 export type NativePolicyContext = z.infer<typeof NativePolicyContextSchema>;
-const NativeApprovalGrantSchema = z.strictObject({ approvalId: EntityIdSchema, toolCallId: EntityIdSchema, rootSessionId: EntityIdSchema, workerGeneration: EntityIdSchema, epoch: EntityIdSchema, command: z.string().min(1) });
-export type NativeApprovalGrant = z.infer<typeof NativeApprovalGrantSchema>;
+export const NativeApprovalGrantSchema = ApprovalGrantSchema;
+export type NativeApprovalGrant = ApprovalGrant;
 export const NativeLspActionSchema = z.enum([
   'diagnostics',
   'definition',
@@ -57,24 +57,22 @@ export const NativeOperationDescriptorSchema = z.strictObject({
 });
 export type NativeOperationDescriptor = z.infer<typeof NativeOperationDescriptorSchema>;
 const HostToolActions = {
-  openchamber: ['projects.list', 'models.list', 'session.list', 'session.create', 'session.send', 'session.fork', 'session.status', 'session.messages', 'session.link', 'schedule.list', 'schedule.create', 'schedule.update', 'schedule.run', 'schedule.delete', 'schedule.toggle', 'file.open'],
+  openchamber: ['projects.list', 'models.list', 'session.list', 'session.create', 'session.send', 'session.fork', 'session.status', 'session.messages', 'session.link', 'pr.watch', 'pr.unwatch', 'schedule.list', 'schedule.create', 'schedule.update', 'schedule.run', 'schedule.delete', 'schedule.toggle', 'file.open'],
   web: ['browser.open', 'browser.snapshot', 'browser.click', 'browser.type', 'browser.scroll', 'browser.back', 'browser.forward', 'browser.inspect', 'browser.capture', 'browser.resize'],
-  memory: ['memory.read', 'memory.list', 'memory.save', 'memory.delete'],
   openchamber_knowledge: ['knowledge.list', 'knowledge.save', 'knowledge.delete', 'knowledge.show'],
   notify: ['notify.send'],
-  openchamber_image: ['image.generate'],
   openchamber_render: ['render.page'],
+  openchamber_workflow: ['workflow.check', 'workflow.run', 'workflow.status', 'workflow.result', 'workflow.stop', 'workflow.resume', 'workflow.save', 'workflow.list', 'workflow.answer'],
 } as const;
 export const HostActionRequestSchema = z.discriminatedUnion('toolName', [
   z.strictObject({ toolName: z.literal('openchamber'), action: z.enum(HostToolActions.openchamber), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('web'), action: z.enum(HostToolActions.web), input: JsonObjectSchema, sessionId: EntityIdSchema }),
-  z.strictObject({ toolName: z.literal('memory'), action: z.enum(HostToolActions.memory), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('openchamber_knowledge'), action: z.enum(HostToolActions.openchamber_knowledge), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   z.strictObject({ toolName: z.literal('notify'), action: z.enum(HostToolActions.notify), input: JsonObjectSchema, sessionId: EntityIdSchema }),
-  z.strictObject({ toolName: z.literal('openchamber_image'), action: z.enum(HostToolActions.openchamber_image), input: JsonObjectSchema, sessionId: EntityIdSchema }),
   // A page that waits for the user's answer is resolved by its own call, so
   // the call's identity travels with the request.
   z.strictObject({ toolName: z.literal('openchamber_render'), action: z.enum(HostToolActions.openchamber_render), input: JsonObjectSchema, sessionId: EntityIdSchema, toolCallId: EntityIdSchema.optional() }),
+  z.strictObject({ toolName: z.literal('openchamber_workflow'), action: z.enum(HostToolActions.openchamber_workflow), input: JsonObjectSchema, sessionId: EntityIdSchema }),
 ]);
 export type HostActionRequest = z.infer<typeof HostActionRequestSchema>;
 export const HostActionResultSchema = z.discriminatedUnion('ok', [

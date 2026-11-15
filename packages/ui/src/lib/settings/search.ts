@@ -1,5 +1,4 @@
 import type { I18nKey } from '@/lib/i18n/store';
-import { useUIStore } from '@/stores/useUIStore';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
 import { getCustomizableShortcutActions } from '@/lib/shortcuts';
@@ -33,14 +32,13 @@ export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContex
   isLinux: boolean;
 }
 
-const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
-  {
-    id: 'omp.behaviour',
-    page: 'omp',
-    titleKey: 'settings.page.omp.title',
-    descriptionKey: 'settings.page.omp.description',
-    keywords: ['omp', 'compaction', 'retry', 'approval', 'thinking', 'budget', 'skills', 'mcp', 'lsp', 'model roles', 'enabled models', 'plan', 'goal', 'config.yml'],
-  },
+/**
+ * The settings search index. Every `titleKey`/`descriptionKey` must exist in the
+ * English dictionary: a key with no copy resolves to the key itself and shows a
+ * raw `settings.…` string, so an entry without copy is dead weight, not a row.
+ * `search.test.ts` holds that invariant.
+ */
+export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
     id: 'omp.advanced',
     page: 'omp',
@@ -55,116 +53,290 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['model roles', 'roles', 'models', 'thinking effort', 'assignments'],
   },
   {
-    id: 'omp.modelRoles.default',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.default.label',
-    descriptionKey: 'settings.omp.modelRoles.role.default.desc',
-    keywords: ['model role', 'default', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.smol',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.smol.label',
-    descriptionKey: 'settings.omp.modelRoles.role.smol.desc',
-    keywords: ['model role', 'smol', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.slow',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.slow.label',
-    descriptionKey: 'settings.omp.modelRoles.role.slow.desc',
-    keywords: ['model role', 'slow', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.vision',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.vision.label',
-    descriptionKey: 'settings.omp.modelRoles.role.vision.desc',
-    keywords: ['model role', 'vision', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.plan',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.plan.label',
-    descriptionKey: 'settings.omp.modelRoles.role.plan.desc',
-    keywords: ['model role', 'plan', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.commit',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.commit.label',
-    descriptionKey: 'settings.omp.modelRoles.role.commit.desc',
-    keywords: ['model role', 'commit', 'role'],
-  },
-  {
-    id: 'omp.modelRoles.tiny',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.tiny.label',
-    descriptionKey: 'settings.omp.modelRoles.role.tiny.desc',
-    keywords: ['model role', 'tiny', 'role'],
-  },
-  {
     id: 'omp.modelRoles.memory',
-    page: 'omp',
+    page: 'memory',
     titleKey: 'settings.omp.modelRoles.role.memory.label',
     descriptionKey: 'settings.omp.modelRoles.role.memory.desc',
     keywords: ['model role', 'memory', 'role'],
   },
   {
     id: 'omp.modelRoles.task',
-    page: 'omp',
+    page: 'agents',
     titleKey: 'settings.omp.modelRoles.role.task.label',
     descriptionKey: 'settings.omp.modelRoles.role.task.desc',
     keywords: ['model role', 'task', 'role'],
   },
   {
     id: 'omp.modelRoles.advisor',
-    page: 'omp',
+    page: 'agents',
     titleKey: 'settings.omp.modelRoles.role.advisor.label',
     descriptionKey: 'settings.omp.modelRoles.role.advisor.desc',
     keywords: ['model role', 'advisor', 'role'],
   },
   {
-    id: 'omp.modelRoles.widget',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.widget.label',
-    descriptionKey: 'settings.omp.modelRoles.role.widget.desc',
-    keywords: ['model role', 'widget', 'role'],
-  },
-  {
     id: 'omp.modelRoles.image',
-    page: 'omp',
+    page: 'tools',
     titleKey: 'settings.omp.modelRoles.role.image.label',
     descriptionKey: 'settings.omp.modelRoles.role.image.desc',
     keywords: ['model role', 'image', 'role'],
   },
   {
-    id: 'omp.modelRoles.web',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.web.label',
-    descriptionKey: 'settings.omp.modelRoles.role.web.desc',
-    keywords: ['model role', 'web', 'role'],
+    id: 'omp.autoResume',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.autoResume.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.autoResume.description' as I18nKey,
   },
   {
-    id: 'omp.modelRoles.speech',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.speech.label',
-    descriptionKey: 'settings.omp.modelRoles.role.speech.desc',
-    keywords: ['model role', 'speech', 'role'],
+    id: 'omp.btw.inject',
+    page: 'chat',
+    titleKey: 'settings.omp.items.btw.inject.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.btw.inject.description' as I18nKey,
   },
   {
-    id: 'omp.modelRoles.dictation',
-    page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.dictation.label',
-    descriptionKey: 'settings.omp.modelRoles.role.dictation.desc',
-    keywords: ['model role', 'dictation', 'role'],
+    id: 'omp.magicKeywords.enabled',
+    page: 'chat',
+    titleKey: 'settings.omp.items.magicKeywords.enabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.magicKeywords.enabled.description' as I18nKey,
   },
   {
-    id: 'omp.modelRoles.judge',
+    id: 'omp.magicKeywords.ultrathink',
+    page: 'chat',
+    titleKey: 'settings.omp.items.magicKeywords.ultrathink.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.magicKeywords.ultrathink.description' as I18nKey,
+  },
+  {
+    id: 'omp.magicKeywords.chillax',
+    page: 'chat',
+    titleKey: 'settings.omp.items.magicKeywords.chillax.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.magicKeywords.chillax.description' as I18nKey,
+  },
+  {
+    id: 'omp.magicKeywords.orchestrate',
+    page: 'chat',
+    titleKey: 'settings.omp.items.magicKeywords.orchestrate.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.magicKeywords.orchestrate.description' as I18nKey,
+  },
+  {
+    id: 'omp.magicKeywords.workflow',
+    page: 'chat',
+    titleKey: 'settings.omp.items.magicKeywords.workflow.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.magicKeywords.workflow.description' as I18nKey,
+  },
+  {
+    id: 'omp.magicKeywords.jevify',
+    page: 'chat',
+    titleKey: 'settings.omp.items.magicKeywords.jevify.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.magicKeywords.jevify.description' as I18nKey,
+  },
+  {
+    id: 'omp.contextPromotion.enabled',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.contextPromotion.enabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.contextPromotion.enabled.description' as I18nKey,
+  },
+  {
+    id: 'omp.extendedContext',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.extendedContext.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.extendedContext.description' as I18nKey,
+  },
+  {
+    id: 'omp.branchSummary.enabled',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.branchSummary.enabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.branchSummary.enabled.description' as I18nKey,
+  },
+  {
+    id: 'omp.compaction.enabled',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.compaction.enabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.compaction.enabled.description' as I18nKey,
+  },
+  {
+    id: 'omp.compaction.thresholdPercent',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.compaction.thresholdPercent.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.compaction.thresholdPercent.description' as I18nKey,
+  },
+  {
+    id: 'omp.compaction.thresholdTokens',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.compaction.thresholdTokens.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.compaction.thresholdTokens.description' as I18nKey,
+  },
+  {
+    id: 'omp.compaction.idleEnabled',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.compaction.idleEnabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.compaction.idleEnabled.description' as I18nKey,
+  },
+  {
+    id: 'omp.compaction.idleThresholdTokens',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.compaction.idleThresholdTokens.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.compaction.idleThresholdTokens.description' as I18nKey,
+  },
+  {
+    id: 'omp.compaction.idleTimeoutSeconds',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.compaction.idleTimeoutSeconds.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.compaction.idleTimeoutSeconds.description' as I18nKey,
+  },
+  {
+    id: 'omp.lsp.enabled',
     page: 'omp',
-    titleKey: 'settings.omp.modelRoles.role.judge.label',
-    descriptionKey: 'settings.omp.modelRoles.role.judge.desc',
-    keywords: ['model role', 'judge', 'role'],
+    titleKey: 'settings.omp.items.lsp.enabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.lsp.enabled.description' as I18nKey,
+  },
+  {
+    id: 'omp.lsp.formatOnWrite',
+    page: 'omp',
+    titleKey: 'settings.omp.items.lsp.formatOnWrite.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.lsp.formatOnWrite.description' as I18nKey,
+  },
+  {
+    id: 'omp.temperature',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.temperature.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.temperature.description' as I18nKey,
+  },
+  {
+    id: 'omp.topP',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.topP.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.topP.description' as I18nKey,
+  },
+  {
+    id: 'omp.topK',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.topK.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.topK.description' as I18nKey,
+  },
+  {
+    id: 'omp.minP',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.minP.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.minP.description' as I18nKey,
+  },
+  {
+    id: 'omp.presencePenalty',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.presencePenalty.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.presencePenalty.description' as I18nKey,
+  },
+  {
+    id: 'omp.repetitionPenalty',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.repetitionPenalty.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.repetitionPenalty.description' as I18nKey,
+  },
+  {
+    id: 'omp.textVerbosity',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.textVerbosity.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.textVerbosity.description' as I18nKey,
+  },
+  {
+    id: 'omp.retry.maxRetries',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.retry.maxRetries.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.retry.maxRetries.description' as I18nKey,
+  },
+  {
+    id: 'omp.retry.waitForUsageReset',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.retry.waitForUsageReset.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.retry.waitForUsageReset.description' as I18nKey,
+  },
+  {
+    id: 'omp.retry.modelFallback',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.retry.modelFallback.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.retry.modelFallback.description' as I18nKey,
+  },
+  {
+    id: 'omp.retry.fallbackOn',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.retry.fallbackOn.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.retry.fallbackOn.description' as I18nKey,
+  },
+  {
+    id: 'omp.retry.usageAwareFallback',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.retry.usageAwareFallback.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.retry.usageAwareFallback.description' as I18nKey,
+  },
+  {
+    id: 'omp.retry.usageReservePct',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.retry.usageReservePct.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.retry.usageReservePct.description' as I18nKey,
+  },
+  {
+    id: 'omp.retry.usageReservePolicy',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.retry.usageReservePolicy.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.retry.usageReservePolicy.description' as I18nKey,
+  },
+  {
+    id: 'omp.retry.fallbackRevertPolicy',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.retry.fallbackRevertPolicy.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.retry.fallbackRevertPolicy.description' as I18nKey,
+  },
+  {
+    id: 'omp.task.isolation.enabled',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.task.isolation.enabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.task.isolation.enabled.description' as I18nKey,
+  },
+  {
+    id: 'omp.task.maxConcurrency',
+    page: 'omp',
+    titleKey: 'settings.omp.items.task.maxConcurrency.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.task.maxConcurrency.description' as I18nKey,
+  },
+  {
+    id: 'omp.task.maxRecursionDepth',
+    page: 'omp',
+    titleKey: 'settings.omp.items.task.maxRecursionDepth.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.task.maxRecursionDepth.description' as I18nKey,
+  },
+  {
+    id: 'omp.plan.enabled',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.plan.enabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.plan.enabled.description' as I18nKey,
+  },
+  {
+    id: 'omp.plan.defaultOnStartup',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.plan.defaultOnStartup.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.plan.defaultOnStartup.description' as I18nKey,
+  },
+  {
+    id: 'omp.plan.autosave',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.plan.autosave.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.plan.autosave.description' as I18nKey,
+  },
+  {
+    id: 'omp.goal.enabled',
+    page: 'sessions',
+    titleKey: 'settings.omp.items.goal.enabled.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.goal.enabled.description' as I18nKey,
+  },
+  {
+    id: 'omp.skills.enableSkillCommands',
+    page: 'omp',
+    titleKey: 'settings.omp.items.skills.enableSkillCommands.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.skills.enableSkillCommands.description' as I18nKey,
+  },
+  {
+    id: 'omp.mcp.enableProjectConfig',
+    page: 'omp',
+    titleKey: 'settings.omp.items.mcp.enableProjectConfig.label' as I18nKey,
+    descriptionKey: 'settings.omp.items.mcp.enableProjectConfig.description' as I18nKey,
   },
   {
     id: 'chat.activity-default',
@@ -294,6 +466,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['terminal', 'shell', 'bash', 'zsh', 'fish', 'pwsh', 'powershell'],
   },
   {
+    id: 'appearance.terminal-close-on-exit',
+    page: 'general',
+    titleKey: 'settings.openchamber.visual.field.terminalCloseOnExit',
+    descriptionKey: 'settings.openchamber.visual.field.terminalCloseOnExitInfo',
+    keywords: ['terminal', 'exit', 'close', 'tab', 'shell'],
+  },
+  {
     id: 'appearance.editor-font-size',
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.editorFontSize',
@@ -381,12 +560,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['security', 'app link', 'deep link', 'scheme', 'protocol', 'obsidian', 'notion'],
   },
   {
-    id: 'chat.message-transport',
-    page: 'general',
-    titleKey: 'settings.openchamber.visual.section.messageStreamTransport',
-    keywords: ['streaming', 'sse', 'websocket'],
-  },
-  {
     id: 'chat.session-recap',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.sessionRecap',
@@ -399,10 +572,10 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['recap', 'suggestion', 'subagent'],
   },
   {
-    id: 'chat.session-suggestion',
+    id: 'chat.suggestion-generator',
     page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.sessionSuggestion',
-    keywords: ['suggestion', 'assist', 'small model', 'follow up'],
+    titleKey: 'settings.openchamber.visual.field.suggestionGenerator',
+    keywords: ['suggestion', 'generator', 'next prompt', 'prediction', 'small model'],
   },
   {
     id: 'chat.session-review-offer',
@@ -412,14 +585,8 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['review', 'walkthrough', 'changes', 'diff', 'jev', 'classification'],
   },
   {
-    id: 'chat.session-goal',
-    page: 'chat',
-    titleKey: 'settings.openchamber.visual.field.sessionGoal',
-    keywords: ['goal', 'objective', 'auto continue'],
-  },
-  {
     id: 'chat.session-goal-budget',
-    page: 'chat',
+    page: 'sessions',
     titleKey: 'settings.openchamber.visual.goal.budgetLabel',
     keywords: ['goal', 'budget', 'tokens', 'limit'],
   },
@@ -582,6 +749,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {
+    id: 'chat.persist-drafts',
+    page: 'chat',
+    titleKey: 'settings.openchamber.visual.field.persistDraftMessages',
+    keywords: ['draft', 'message'],
+  },
+  {
     id: 'chat.large-text-paste',
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.largeTextPaste',
@@ -623,13 +796,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   },
   {
     id: 'chat.session-goal-checker',
-    page: 'chat',
+    page: 'sessions',
     titleKey: 'settings.openchamber.visual.goal.checkerLabel',
     keywords: ['goal', 'progress', 'check', 'jev', 'classification', 'small model'],
   },
   {
     id: 'chat.session-goal-max-turns',
-    page: 'chat',
+    page: 'sessions',
     titleKey: 'settings.openchamber.visual.goal.maxTurnsLabel',
     keywords: ['goal', 'turns', 'limit', 'continuations', 'safety'],
   },
@@ -652,6 +825,15 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.defaultThinking',
     keywords: ['thinking', 'reasoning', 'variant'],
+  },
+  {
+    // The fallback chain is an OMP record the generic row cannot draw; this
+    // selector writes it, so a search for the chain lands on the real control.
+    id: 'sessions.fallback-model',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.defaults.field.fallbackModel',
+    descriptionKey: 'settings.openchamber.defaults.field.fallbackModelInfo',
+    keywords: ['fallback', 'retry', 'chain', 'model'],
   },
   {
     id: 'sessions.default-mode',
@@ -830,8 +1012,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['desktop', 'quake', 'dropdown', 'hotkey', 'shortcut', 'height', 'global', 'background', 'tray', 'terminal'],
     isAvailable: (ctx) => ctx.isDesktopLocalOrigin,
   },
-
-
   {
     id: 'sessions.desktop-ui-password',
     page: 'general',
@@ -857,41 +1037,31 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   },
   {
     id: 'sessions.agent-control-tool',
-    page: 'general',
+    page: 'tools',
     titleKey: 'settings.openchamber.tools.field.agentControlTool',
     descriptionKey: 'settings.openchamber.tools.field.agentControlToolInfo',
     keywords: ['agent', 'tool', 'orchestration', 'openchamber', 'sessions', 'schedule', 'control'],
   },
   {
     id: 'sessions.agent-web-tool',
-    page: 'general',
+    page: 'tools',
     titleKey: 'settings.openchamber.tools.field.agentWebTool',
     descriptionKey: 'settings.openchamber.tools.field.agentWebToolInfo',
     keywords: ['agent', 'tool', 'web', 'browser', 'page', 'preview', 'openchamber'],
   },
   {
     id: 'sessions.browser-provider',
-    page: 'general',
+    page: 'tools',
     titleKey: 'settings.openchamber.tools.browserProvider.label',
     descriptionKey: 'settings.openchamber.tools.browserProvider.info',
     keywords: ['agent', 'browser', 'provider', 'extension', 'chrome', 'server', 'headless'],
   },
   {
     id: 'sessions.agent-notify-tool',
-    page: 'general',
+    page: 'tools',
     titleKey: 'settings.openchamber.tools.field.agentNotifyTool',
     descriptionKey: 'settings.openchamber.tools.field.agentNotifyToolInfo',
     keywords: ['agent', 'tool', 'notify', 'notification', 'alert', 'ping', 'openchamber'],
-  },
-  {
-    id: 'sessions.agent-memory-tool',
-    page: 'general',
-    titleKey: 'settings.openchamber.tools.field.agentMemoryTool',
-    descriptionKey: 'settings.openchamber.tools.field.agentMemoryToolInfo',
-    keywords: ['agent', 'tool', 'memory', 'remember', 'recall', 'preferences', 'openchamber'],
-    // Unreleased: searching for a setting that is not rendered would take the
-    // user to an empty spot on the page.
-    isAvailable: () => useUIStore.getState().agentMemoryFeatureAvailable,
   },
   {
     id: 'git.gitlab-account',
@@ -1024,12 +1194,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'projects',
     titleKey: 'settings.projects.page.field.projectName',
     keywords: ['label', 'display name', 'project metadata'],
-  },
-  {
-    id: 'projects.default-agent',
-    page: 'projects',
-    titleKey: 'settings.projects.page.field.projectAgent',
-    keywords: ['agent', 'default', 'new chat', 'project metadata'],
   },
   {
     id: 'projects.default-model',
@@ -1319,6 +1483,12 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['api key', 'oauth', 'credentials', 'accounts', 'switch account', 'disconnect'],
   },
   {
+    id: 'providers.logo',
+    page: 'providers',
+    titleKey: 'settings.providers.page.logo.title',
+    keywords: ['logo', 'image', 'upload', 'icon', 'picture', 'svg', 'png'],
+  },
+  {
     id: 'providers.models',
     page: 'providers',
     titleKey: 'settings.providers.page.models.title',
@@ -1504,7 +1674,6 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['background', 'push'],
     isAvailable: (ctx) => ctx.isWeb && !ctx.isDesktop,
   },
-
   {
     id: 'integrations.first-party',
     page: 'integrations',

@@ -24,9 +24,10 @@ afterAll(async () => {
 
 const endpoint = '/api/agent/v1/workspaces/workspace_1/settings';
 const state = {
-  workspaceId: 'workspace_1', revision: '7', settings: [{
+  workspaceId: 'workspace_1', revision: '7', totalCount: 1, settings: [{
     id: 'compaction.thresholdPercent', type: 'number', value: 50, default: -1, configured: true,
-    label: 'Compaction Threshold', group: 'Compaction', tab: 'context', surface: 'gui',
+    label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
+    placement: { type: 'page', page: 'context', section: 'compaction' },
   }],
 };
 const updated = { ...state, revision: '8', settings: [{ ...state.settings[0], value: 60 }] };
@@ -122,7 +123,7 @@ describe('canonical OMP settings Host boundary', () => {
       { expectedRevision: 7, changes: [{ id: 'compaction.thresholdPercent', value: 60 }] },
       { expectedRevision: '7', changes: [] },
       { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }, { id: 'compaction.thresholdPercent', value: 70 }] },
-      { expectedRevision: '7', changes: [{ id: 'compaction.remoteEndpoint', value: 'https://example.test' }] },
+      { expectedRevision: '7', changes: [{ id: '', value: 'https://example.test' }] },
       { expectedRevision: '7', changes: [{ id: 'compaction.thresholdPercent', value: 60 }], workspaceId: 'workspace_foreign' },
     ]) assertProblem(await request(app).put(endpoint).set('Authorization', `Bearer ${token}`).send(body), 400, 'INVALID_REQUEST');
     assertProblem(await request(app).put(endpoint).set('Authorization', `Bearer ${token}`).type('text').send('60'), 415, 'UNSUPPORTED_MEDIA_TYPE');

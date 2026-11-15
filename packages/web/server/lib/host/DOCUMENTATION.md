@@ -128,6 +128,15 @@ The composed Node Host/Bun scenario has verified these boundaries on Linux, incl
 
 Authentication requires a validated UI cookie (`ui-session` or signed `ui-passwordless`), a paired bearer token, or a tunnel session. URL/Guest asset tokens and `X-Internal-Secret` are not external credentials. Protected routes use `allowAnonymousSession: false`. Mutations and requests with an explicit `Origin` header require `isRequestOriginAllowed(req)`; disallowed or opaque `Origin: null` headers are refused with 403 `INVALID_ORIGIN`. Enterprise mode policy is read at use time and returns 403 `enterprise_mode` for provider entry operations. Responses use `Cache-Control: no-store`.
 
+### Speculative session preparation
+
+`POST /api/agent/v1/sessions/prepare` and `DELETE /api/agent/v1/sessions/prepare` manage bounded speculative preparation for fast new-chat latency:
+- `POST /prepare` accepts `{ projectId, workspaceId }` and starts background session admission and worker warmup. If an admission is already in flight or prepared for the workspace, the existing promise is returned (at most 1 prepared session per workspace).
+- `POST /sessions` checks for an existing preparation in the workspace. If preparation is in flight, `create` joins the in-flight promise and adopts the prepared session once resolved, ensuring single ownership and preventing concurrent admission 409 conflicts. If preparation rejected or does not exist, `create` falls back to normal session creation.
+- Prepared sessions are idle-reaped after 5 minutes using unreferenced timers (`timer.unref?.()`).
+- `DELETE /prepare` discards the speculative session and tears down its admitted worker when the composer draft is closed.
+- Canonical session service lifecycle `close()` clears all pending timers and discards remaining prepared sessions during host shutdown.
+
 ### Explicit credential handoff and private resolution
 
 `POST /api/agent/v1/credentials/preflight` accepts `application/json` (up to 256 KiB) matching `SelectedCredentialHandoffRequestSchema`:
@@ -196,9 +205,13 @@ Native Bash descriptors include their working directory as a source path. The Ho
 
 ### Worker operation authorization and native questions
 
-`worker-operation-authorizer.js` authorizes native worker operations against Host workspace scopes, path containment rules, and approval policies. It defines and enforces `PERMISSION_PRESET_IDS` ('ask', 'safety', 'auto') without relying on external permission state machines. After evaluating scope, path containment, agent profile, preset constraints, and explicit policy denials, the authorizer allows the native `ask` and `task` tool names. `ask` only opens a scoped, CAS-protected interaction; `task` starts a non-isolated SDK child under the captured workspace and the worker already applies the selected profile's `allowedTools` gate. Every child tool call on that path re-enters this authorizer, so neither name grants a host machine capability or an unknown-tool authorization. Isolated task requests are refused because SDK isolation drops the programmatic authorization extensions, and caller-supplied child names must be one safe path segment.
+`worker-operation-authorizer.js` authorizes native worker operations against Host workspace scopes, path containment rules, and approval policies by capability tier without relying on external permission state machines. After evaluating scope, path containment, agent profile, and explicit policy denials, the authorizer evaluates tool calls by tier:
+- **Read tier** (`read`, `grep`, `glob`, `find`, `ast_grep`, `checkpoint`, `rewind`, `think`, `recall`, `reflect`, `memory_edit`, plus read-only `context_notes`, `retain`, `learn`, and read-only sub-actions of `debug`, `ida`, and `github`): allowed after the path check, requiring `policy.fileTools` read permission. A read targeting an outside workspace path returns `approvalRequired` (becoming an approval card auto-answered under `auto` mode, and allowed when approved with a matching approval grant).
+- **Write tier** (`write`, `edit`, `ast_edit`, `new_context`, `manage_skill`, plus text-bearing `context_notes`, global `retain`/`learn`, and LSP mutations): requires `policy.fileTools` write permission and workspace containment. Writes and edits outside the workspace stay hard-denied regardless of mode or grants.
+- **Exec tier** (`bash`, `eval`, `debug`, `ida`, `github`, `security_scan`): returns `approvalRequired` unless an authoritative approval grant matches the root session, worker generation, approval ID, and tool call ID. `bash` also checks policy shell commands and exact persistent approval policies.
+- **MCP tools** (`mcp__*`): validated against `policy.mcpServers`; unconfigured servers are hard-denied. Configured servers return `approvalRequired` per call, allowed when accompanied by an approval grant.
+- Session-local tools (`ask`, `yield`, `goal`, `todo`, `wait`): allowed without machine capability grants. `task` admits safe non-isolated child delegation; isolated delegation is refused because it bypasses authorization hooks.
 
-Native `goal` and `todo` operations are also session-local: they read or update OMP's current goal or task phases, including the agent's completion declaration. They pass the same workspace/source, profile, preset and explicit-deny checks, but need no separate machine capability grant. Subsequent provider turns and file, shell or network tool calls still pass their own authorization. This policy is shared by Web, Electron and hosted mobile through the Host gateway; it does not bypass OMP's own tool approval rules.
 Native LSP operations require an action-specific descriptor. Read-only query methods (`hover`, `definition`, `type_definition`, `implementation`, `references`, `symbols`, `diagnostics`, `status`, `capabilities`, and `code_actions` without apply) require workspace-contained target paths and `read` permission in `policy.fileTools`. Mutations (`rename`, `rename_file`, `format`, and `code_actions` with `apply: true`) require `write` permission in `policy.fileTools`, exact destination file targets within the workspace, and an authoritative approval grant matching the root session, worker generation, approval ID, and tool call ID. Unsupported methods, escaped paths, malformed parameters, and ungranted mutations fail closed.
 
 

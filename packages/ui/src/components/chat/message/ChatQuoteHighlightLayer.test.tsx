@@ -71,21 +71,21 @@ test('loads an older quote source before scrolling to it', async () => {
         const render = async (sessionId = 'session') => act(async () => {
             root.render(
                 <ChatColumnSessionContext.Provider value={{ sessionId, directory: '/repo' }}>
-                <ChatQuoteHighlightLayer
-                    store={store}
-                    scrollNode={scrollNode}
-                    loadHistoryUntilMessage={async (messageId) => {
-                        events.push(`load:${messageId}`);
-                        if (sourceState === 'failed') throw new Error('History unavailable');
-                        if (sourceState === 'pending') return new Promise<boolean>((resolve) => { finishLoad = resolve; });
-                        return sourceState === 'available';
-                    }}
-                    scrollToMessage={async (messageId) => {
-                        events.push(`scroll:${messageId}`);
-                        return true;
-                    }}
-                    scrollToUiPageRow={() => { pageRowScrolls += 1; return true; }}
-                />
+                    <ChatQuoteHighlightLayer
+                        store={store}
+                        scrollNode={scrollNode}
+                        loadHistoryUntilMessage={async (messageId) => {
+                            events.push(`load:${messageId}`);
+                            if (sourceState === 'failed') throw new Error('History unavailable');
+                            if (sourceState === 'pending') return new Promise<boolean>((resolve) => { finishLoad = resolve; });
+                            return sourceState === 'available';
+                        }}
+                        scrollToMessage={async (messageId) => {
+                            events.push(`scroll:${messageId}`);
+                            return true;
+                        }}
+                        scrollToUiPageRow={() => { pageRowScrolls += 1; return true; }}
+                    />
                 </ChatColumnSessionContext.Provider>,
             );
         });
@@ -98,12 +98,26 @@ test('loads an older quote source before scrolling to it', async () => {
         expect(events).toEqual(['load:older-message', 'scroll:older-message']);
         await frame();
         expect(highlights.size).toBe(0);
-        for (let index = 0; index < 15; index += 1) await frame();
+        // Frame retry keeps polling while the row mounts
+        expect(frames.size).toBe(1);
+        for (let index = 0; index < 15; index += 1) {
+            expect(frames.size).toBe(1);
+            await frame();
+        }
+        expect(frames.size).toBe(1);
         // Expansion and lazy Markdown can commit after the first scroll frame.
         scrollNode.innerHTML = '<div data-message-id="older-message"><div data-chat-quote-root><p>Earlier <strong>quoted</strong> text here.</p></div></div>';
         await act(async () => { await dom.happyDOM.waitUntilComplete(); });
         await frame();
         expect([...highlights.get('oc-chat-quote') ?? []].map((range) => range.toString())).toEqual(['quoted text']);
+
+        highlights.clear();
+        await act(async () => {
+            revealHandler?.('exhaust-frames', { text: 'never mounts', prefix: '', suffix: '', start: 0 });
+        });
+        for (let index = 0; index < 25; index += 1) await frame();
+        expect(frames.size).toBe(0);
+        expect(highlights.size).toBe(0);
 
         highlights.clear();
         await act(async () => {

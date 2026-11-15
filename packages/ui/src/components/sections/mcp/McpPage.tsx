@@ -735,7 +735,7 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
   const handleImport = () => {
     try {
       const imported = parseImportedMcpSnippet(snippet);
-      setDraft({ ...imported, serverId: initial.serverId });
+      setDraft({ ...imported, serverId: initial.serverId, scope: draft.scope ?? initial.scope ?? 'project' });
       setImportOpen(false);
       setSnippet('');
       setImportError(null);
@@ -942,6 +942,33 @@ const McpEditor: React.FC<{ initial: MCPServerConfig; directory: string | null; 
                 <code className="typography-micro text-muted-foreground">{draft.serverId}</code>
               </>
             )}
+          </SettingsFieldRow>
+          <SettingsFieldRow
+            label={t('settings.mcp.page.fields.scope')}
+            controlClassName="flex-wrap @xl:w-auto @xl:flex-1"
+          >
+            <Select
+              value={draft.scope ?? 'project'}
+              onValueChange={(val) => {
+                if (!isReadOnly) {
+                  setDraft((value) => ({ ...value, scope: val as 'project' | 'user' }));
+                  requestSave();
+                }
+              }}
+              disabled={busy || isReadOnly}
+            >
+              <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+                <SelectValue>
+                  {draft.scope === 'user'
+                    ? t('settings.mcp.grid.scope.user')
+                    : t('settings.mcp.grid.scope.project')}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="project">{t('settings.mcp.grid.scope.project')}</SelectItem>
+                <SelectItem value="user">{t('settings.mcp.grid.scope.user')}</SelectItem>
+              </SelectContent>
+            </Select>
           </SettingsFieldRow>
 
           <SettingsCheckboxRow

@@ -37,9 +37,6 @@
     "agentRenderToolEnabled": {
       "scope": "instance"
     },
-    "agentImageToolEnabled": {
-      "scope": "instance"
-    },
     "permissionDefaultMode": {
       "scope": "profile"
     },
@@ -49,14 +46,8 @@
     "sessionGoalMaxAutoTurns": {
       "scope": "profile"
     },
-    "autoApplyAgentModel": {
-      "scope": "profile"
-    },
     "planModeAllowAgents": {
       "scope": "profile"
-    },
-    "agentImageModel": {
-      "scope": "instance"
     },
     "agentWorkflowToolEnabled": {
       "scope": "instance"
@@ -205,18 +196,11 @@
     "agentNotifyToolEnabled": {
       "scope": "instance"
     },
-    "agentMemoryToolEnabled": {
-      "scope": "instance"
-    },
     "isolatedSpacesEnabled": {
       "scope": "instance"
     },
     "isolatedSpacesIdleStop": {
       "scope": "instance"
-    },
-    "agentMemoryFeatureAvailable": {
-      "scope": "instance",
-      "computed": true
     },
     "agentWorkflowFeatureAvailable": {
       "scope": "instance",
@@ -437,12 +421,6 @@
     "showTurnChangedFiles": {
       "scope": "profile"
     },
-    "showExpandedBashTools": {
-      "scope": "profile"
-    },
-    "showExpandedEditTools": {
-      "scope": "profile"
-    },
     "toolJsonViewMode": {
       "scope": "profile"
     },
@@ -450,9 +428,6 @@
       "scope": "profile"
     },
     "weekStartPreference": {
-      "scope": "profile"
-    },
-    "messageStreamTransport": {
       "scope": "profile"
     },
     "diffLayoutPreference": {
@@ -505,6 +480,14 @@
     },
     "autoCreateWorktree": {
       "scope": "profile"
+    },
+    "terminalCloseOnExit": {
+      "scope": "profile",
+      "surfaces": [
+        "web",
+        "desktop",
+        "mobile"
+      ]
     },
     "sessionTabsEnabled": {
       "scope": "profile",
@@ -603,9 +586,6 @@
     "shortcutOverrides": {
       "scope": "profile"
     },
-    "defaultAgent": {
-      "scope": "profile"
-    },
     "zenModel": {
       "scope": "profile"
     },
@@ -639,7 +619,7 @@
     "sessionRecapEnabled": {
       "scope": "profile"
     },
-    "sessionSuggestionEnabled": {
+    "suggestionGenerator": {
       "scope": "profile"
     },
     "sessionWorkEnabled": {
@@ -660,12 +640,6 @@
         "desktop",
         "mobile"
       ]
-    },
-    "sessionWorkKeepInGroup": {
-      "scope": "profile"
-    },
-    "sessionGoalEnabled": {
-      "scope": "profile"
     },
     "sessionGoalDefaultBudgetEnabled": {
       "scope": "profile"
@@ -875,10 +849,6 @@
       "local": true
     },
     "alwaysShowScrollbars": {
-      "scope": "device",
-      "local": true
-    },
-    "agentMemoryViewedAt": {
       "scope": "device",
       "local": true
     },

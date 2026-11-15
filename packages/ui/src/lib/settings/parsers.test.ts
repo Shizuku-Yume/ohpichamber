@@ -22,7 +22,7 @@ describe('parseCustomProviderLogos', () => {
 });
 
 describe('parseProjects', () => {
-  test('keeps per-project agent, model and thinking defaults across a settings round trip', () => {
+  test('keeps per-project model and thinking defaults and drops defaultAgent across a settings round trip', () => {
     const projects = [
       { path: '/repo/app', label: 'App', defaultAgent: ' reviewer ', defaultModel: 'openai/gpt-5.6', defaultVariant: 'low' },
       { path: '/repo/lib', defaultAgent: ' ', defaultModel: '  ', defaultVariant: 42 },
@@ -30,10 +30,10 @@ describe('parseProjects', () => {
     ];
     const parsed = parseProjects(projects, { projects });
 
-    expect(parsed?.map((project) => [project.path, project.defaultAgent, project.defaultModel, project.defaultVariant])).toEqual([
-      ['/repo/app', 'reviewer', 'openai/gpt-5.6', 'low'],
-      ['/repo/lib', undefined, undefined, undefined],
-      ['/repo/legacy', undefined, undefined, undefined],
+    expect(parsed?.map((project) => [project.path, project.defaultModel, project.defaultVariant])).toEqual([
+      ['/repo/app', 'openai/gpt-5.6', 'low'],
+      ['/repo/lib', undefined, undefined],
+      ['/repo/legacy', undefined, undefined],
     ]);
     expect(parseProjects(parsed, { projects: parsed })).toEqual(parsed);
   });

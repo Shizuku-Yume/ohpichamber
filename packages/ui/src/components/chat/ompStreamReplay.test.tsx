@@ -1,7 +1,9 @@
-import { afterAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Window } from 'happy-dom';
+mock.module('./markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
+mock.module('@/components/chat/markdown/markdown-shiki.worker.ts?worker&url', () => ({ default: 'blob:test-shiki-worker' }));
 import type {
     CanonicalEvent,
     Message,
@@ -19,6 +21,12 @@ import { useStreamingTextThrottle } from './hooks/useStreamingTextThrottle';
 import { resolveAssistantDisplayText } from './message/parts/assistantTextVisibility';
 import { TodoCard } from './message/parts/TodoCard';
 import { latestTodoPhases } from './todoHistory';
+import { SyncProvider } from '@/sync/sync-context';
+import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
+import { getDefaultTheme } from '@/lib/theme/themes';
+// Loaded after the mock so the worker URL never reaches Bun's loader.
+const { default: ToolPart } = await import('./message/parts/ToolPart');
+import { loadMarkdownRendererModule } from './markdownRendererLoader';
 
 // Replays one OMP turn — thinking, a call carrying `input.i`, its prose, and a
 // todo snapshot — through the real reducer and the real presentation pieces,
@@ -31,13 +39,40 @@ for (const [name, value] of Object.entries({
     window: browser,
     document: browser.document,
     navigator: browser.navigator,
+    localStorage: browser.localStorage,
     Node: browser.Node,
     Element: browser.Element,
     HTMLElement: browser.HTMLElement,
+    requestAnimationFrame: browser.requestAnimationFrame.bind(browser),
+    cancelAnimationFrame: browser.cancelAnimationFrame.bind(browser),
     IS_REACT_ACT_ENVIRONMENT: true,
 })) {
     Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
 }
+const unexpectedChange = (): never => { throw new Error('Theme should not change'); };
+const defaultTheme = getDefaultTheme(false);
+const themeContext: ThemeContextValue = {
+    currentTheme: defaultTheme,
+    availableThemes: [defaultTheme],
+    setTheme: unexpectedChange,
+    customThemesLoading: false,
+    reloadCustomThemes: unexpectedChange,
+    importTheme: unexpectedChange,
+    deleteImportedTheme: unexpectedChange,
+    customThemeIds: [],
+    isSystemPreference: false,
+    setSystemPreference: unexpectedChange,
+    themeMode: 'light',
+    setThemeMode: unexpectedChange,
+    lightThemeId: defaultTheme.metadata.id,
+    darkThemeId: getDefaultTheme(true).metadata.id,
+    setLightThemePreference: unexpectedChange,
+    setDarkThemePreference: unexpectedChange,
+};
+
+beforeAll(async () => {
+    await loadMarkdownRendererModule();
+});
 
 afterAll(() => {
     browser.close();
@@ -231,6 +266,262 @@ describe('OMP stream replay', () => {
             await waited.promise;
         });
         expect(prose()).toBe(PROSE);
+
+        act(() => root.unmount());
+        container.remove();
+    });
+    test('a three-cell eval (js and py, one failing cell, table and JSON views, nested tool calls) renders titled cells with highlighted code, step timeline advancing while running, structured output and failure marker', async () => {
+        const assistantMessageId = 'message-eval-assistant';
+        const call: Part = {
+            type: 'tool_call',
+            partId: 'part-eval-call',
+            toolCallId: 'call-eval-1',
+            toolName: 'eval',
+            input: {
+                title: 'Data processing pipeline',
+                language: 'js',
+                code: 'const data = loadData();',
+            },
+            status: 'running',
+        };
+
+        // 1. Initial tool.started event
+        const startEvents: CanonicalEvent[] = [
+            event(101, 'turn.started', { turnId: 'turn-eval', runId: 'run-eval', userMessageId: 'message-user' }),
+            event(102, 'message.created', { messageId: assistantMessageId, turnId: 'turn-eval', role: 'assistant', providerId: 'anthropic', modelId: 'claude-opus-4-1' }),
+            event(103, 'part.started', { messageId: assistantMessageId, part: call }),
+            event(104, 'tool.started', { toolCallId: 'call-eval-1', toolName: 'eval', input: call.input }),
+        ];
+
+        let state = initialState();
+        for (const item of startEvents) {
+            const res = applyDirectoryEvent(state, item);
+            state = res.state;
+        }
+
+        const container = document.createElement('div');
+        document.body.append(container);
+        const root = createRoot(container);
+
+        // Verify running state while running before results:
+        act(() => {
+            root.render(
+                <SyncProvider directory="/workspace">
+                    <I18nProvider>
+                        <ThemeSystemContext.Provider value={themeContext}>
+                            <ToolPart
+                                part={call}
+                                sessionId={SESSION_ID}
+                                directory="/workspace"
+                                isExpanded
+                                isMobile={false}
+                                onToggle={() => { }}
+                            />
+                        </ThemeSystemContext.Provider>
+                    </I18nProvider>
+                </SyncProvider>
+            );
+        });
+
+        const runningCell = container.querySelector('[data-testid="eval-cell-block"]');
+        expect(runningCell).not.toBeNull();
+        expect(runningCell?.getAttribute('data-cell-status')).toBe('running');
+        expect(container.querySelector('[data-testid="eval-step-running"]')).not.toBeNull();
+
+        // 2. Stream partial update (streaming result with 1st cell running and read status event)
+        const partialResult: Part = {
+            type: 'tool_result',
+            partId: 'part-eval-result',
+            toolCallId: 'call-eval-1',
+            toolName: 'eval',
+            isError: false,
+            output: {
+                content: [{ type: 'text', text: 'reading data...' }],
+                details: {
+                    cells: [
+                        {
+                            index: 0,
+                            title: 'Data loading',
+                            code: 'const data = loadData();',
+                            language: 'js',
+                            output: '',
+                            status: 'running',
+                            durationMs: 150,
+                            statusEvents: [
+                                { op: 'read', path: 'raw_data.csv', chars: 512 },
+                            ],
+                        },
+                    ],
+                },
+            },
+        };
+
+        const updateEvents: CanonicalEvent[] = [
+            event(105, 'part.started', { messageId: assistantMessageId, part: partialResult }),
+        ];
+        for (const item of updateEvents) {
+            const res = applyDirectoryEvent(state, item);
+            state = res.state;
+        }
+
+        act(() => {
+            root.render(
+                <SyncProvider directory="/workspace">
+                    <I18nProvider>
+                        <ThemeSystemContext.Provider value={themeContext}>
+                            <ToolPart
+                                part={partialResult}
+                                pairedCall={call}
+                                sessionId={SESSION_ID}
+                                directory="/workspace"
+                                isExpanded
+                                isMobile={false}
+                                onToggle={() => { }}
+                            />
+                        </ThemeSystemContext.Provider>
+                    </I18nProvider>
+                </SyncProvider>
+            );
+        });
+
+        // Running state is preserved when pairedCall is running
+        const activeStepList = container.querySelector('[data-testid="eval-step-list"]');
+        expect(activeStepList?.textContent).toContain('512 chars from raw_data.csv');
+        expect(activeStepList?.textContent).toContain('Last completed');
+        expect(container.querySelector('[data-testid="eval-step-running"]')).not.toBeNull();
+
+        // 3. Complete final result with 3 cells (js, py, py failing), views and nested tool calls
+        const finalResult: Part = {
+            type: 'tool_result',
+            partId: 'part-eval-result',
+            toolCallId: 'call-eval-1',
+            toolName: 'eval',
+            isError: true,
+            output: {
+                content: [{ type: 'text', text: 'pipeline finished with 1 error' }],
+                details: {
+                    cells: [
+                        {
+                            index: 0,
+                            title: 'Data loading',
+                            code: 'const data = loadData();',
+                            language: 'js',
+                            output: 'Loaded rows:\nTABLE_DATA',
+                            views: [
+                                {
+                                    text: 'TABLE_DATA',
+                                    view: {
+                                        kind: 'table',
+                                        columns: [{ head: 'id' }, { head: 'metric', numeric: true }],
+                                        rows: [['#1', '100'], ['#2', '200']],
+                                    },
+                                },
+                            ],
+                            status: 'complete',
+                            durationMs: 250,
+                            statusEvents: [
+                                { op: 'read', path: 'raw_data.csv', chars: 512 },
+                                { op: 'write', path: 'clean.csv', chars: 320 },
+                            ],
+                        },
+                        {
+                            index: 1,
+                            title: 'Model evaluation',
+                            code: 'import numpy as np\nscores = evaluate(data)',
+                            language: 'py',
+                            output: 'METRICS_JSON',
+                            views: [
+                                {
+                                    text: 'METRICS_JSON',
+                                    view: {
+                                        kind: 'json',
+                                        value: { accuracy: 0.96, latencyMs: 12 },
+                                    },
+                                },
+                            ],
+                            status: 'complete',
+                            durationMs: 450,
+                            statusEvents: [
+                                { op: 'grep', pattern: 'benchmark', count: 3 },
+                                { op: 'run', cmd: 'python evaluate.py', code: 0 },
+                            ],
+                        },
+                        {
+                            index: 2,
+                            title: 'Deployment step',
+                            code: 'deploy_model(scores)',
+                            language: 'py',
+                            output: 'HTTPError: 500 Internal Server Error',
+                            status: 'error',
+                            durationMs: 200,
+                            exitCode: 1,
+                            statusEvents: [
+                                { op: 'log', message: 'deploying to cluster' },
+                            ],
+                        },
+                    ],
+                },
+            },
+        };
+
+        const finalCompletedCall: Part = { ...call, status: 'completed' };
+
+        const completeEvents: CanonicalEvent[] = [
+            event(106, 'tool.completed', { toolCallId: 'call-eval-1', status: 'completed' }),
+            event(107, 'turn.completed', { turnId: 'turn-eval', runId: 'run-eval' }),
+        ];
+        for (const item of completeEvents) {
+            const res = applyDirectoryEvent(state, item);
+            state = res.state;
+        }
+
+        act(() => {
+            root.render(
+                <SyncProvider directory="/workspace">
+                    <I18nProvider>
+                        <ThemeSystemContext.Provider value={themeContext}>
+                            <ToolPart
+                                part={finalResult}
+                                pairedCall={finalCompletedCall}
+                                sessionId={SESSION_ID}
+                                directory="/workspace"
+                                isExpanded
+                                isMobile={false}
+                                onToggle={() => { }}
+                            />
+                        </ThemeSystemContext.Provider>
+                    </I18nProvider>
+                </SyncProvider>
+            );
+        });
+
+        // Summary row: "3 cells · 900ms · 4 tool calls"
+        expect(container.textContent).toContain('3 cells · 900ms · 4 tool calls');
+
+        // All 3 titled cells rendered with highlighted code
+        const finalCells = container.querySelectorAll('[data-testid="eval-cell-block"]');
+        expect(finalCells.length).toBe(3);
+
+        // Cell 0: js, titled "Data loading", table view
+        expect(finalCells[0]?.textContent).toContain('1/3 · Data loading');
+        expect(finalCells[0]?.textContent).toContain('js');
+        expect(finalCells[0]?.textContent).toContain('const data = loadData()');
+        expect(finalCells[0]?.querySelector('[data-testid="eval-view-table"]')).not.toBeNull();
+        expect(finalCells[0]?.querySelector('[data-testid="eval-view-table"]')?.textContent).toContain('#1');
+        expect(finalCells[0]?.querySelector('[data-testid="eval-view-table"]')?.textContent).toContain('100');
+
+        // Cell 1: py, titled "Model evaluation", json view
+        expect(finalCells[1]?.textContent).toContain('2/3 · Model evaluation');
+        expect(finalCells[1]?.textContent).toContain('python');
+        expect(finalCells[1]?.textContent).toContain('import numpy');
+        expect(finalCells[1]?.querySelector('[data-testid="eval-view-json"]')).not.toBeNull();
+
+        // Cell 2: failing cell with failure marker
+        expect(finalCells[2]?.textContent).toContain('3/3 · Deployment step');
+        expect(finalCells[2]?.getAttribute('data-cell-status')).toBe('error');
+        const failureBadge = finalCells[2]?.querySelector('[data-testid="eval-cell-failure"]');
+        expect(failureBadge).not.toBeNull();
+        expect(failureBadge?.textContent).toContain('Exit code: 1');
 
         act(() => root.unmount());
         container.remove();

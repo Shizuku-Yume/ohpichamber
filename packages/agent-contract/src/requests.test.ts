@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { ApprovalDecisionSchema, ApprovalReplySchema, ApprovalRequestSchema, ApprovalResolutionSchema, QuestionReplySchema, QuestionRequestSchema, RequestCASSchema, PlanReviewSchema, PlanReviewResponseSchema } from './requests.ts';
+import { ApprovalDecisionSchema, ApprovalGrantSchema, ApprovalReplySchema, ApprovalRequestSchema, ApprovalResolutionSchema, QuestionReplySchema, QuestionRequestSchema, RequestCASSchema, PlanReviewSchema, PlanReviewResponseSchema } from './requests.ts';
 
 const cas = { version: '1', epoch: 'epoch-1', workerGeneration: 'worker-1' };
 const pendingApproval = {
@@ -117,8 +117,10 @@ describe('request wire schemas', () => {
 });
 
 const review = { type: 'plan-review', title: 'Implement review', planReference: 'local://review-plan.md', planText: '# Review\nImplement the plan.' };
-const pending = { questionId: 'question', sessionId: 'session', turnId: 'turn', prompt: review.title, schema: review,
-  status: 'pending', version: '1', epoch: 'epoch', workerGeneration: 'worker', requestedAt: 1 };
+const pending = {
+  questionId: 'question', sessionId: 'session', turnId: 'turn', prompt: review.title, schema: review,
+  status: 'pending', version: '1', epoch: 'epoch', workerGeneration: 'worker', requestedAt: 1
+};
 
 test('plan review is a reconnectable canonical question containing only a local plan reference', () => {
   expect(PlanReviewSchema.parse(review)).toEqual(review);
@@ -139,4 +141,28 @@ test('plan review actions reject malformed feedback and preserve terminal questi
     expect(QuestionRequestSchema.safeParse({ ...pending, status: 'answered', version: '2', response, answeredAt: 2, resolvedAt: 2 }).success).toBe(false);
   }
   expect(QuestionRequestSchema.safeParse({ ...pending, status: 'expired', version: '2', resolvedAt: 2 }).success).toBe(true);
+});
+
+test('approval grant schema validates tool grants with toolName and input or legacy command', () => {
+  const grant = {
+    approvalId: 'app-1',
+    toolCallId: 'call-1',
+    rootSessionId: 'session-1',
+    workerGeneration: 'gen-1',
+    epoch: 'epoch-1',
+    command: 'echo hi',
+    toolName: 'bash',
+    input: { command: 'echo hi' },
+  };
+  expect(ApprovalGrantSchema.parse(grant)).toEqual(grant);
+  const toolGrant = {
+    approvalId: 'app-2',
+    toolCallId: 'call-2',
+    rootSessionId: 'session-1',
+    workerGeneration: 'gen-1',
+    epoch: 'epoch-1',
+    toolName: 'eval',
+    input: { code: '1 + 1' },
+  };
+  expect(ApprovalGrantSchema.parse(toolGrant)).toEqual(toolGrant);
 });

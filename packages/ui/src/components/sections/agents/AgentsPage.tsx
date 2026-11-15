@@ -1,11 +1,20 @@
 import React from 'react';
 import type { AutosaveResult } from '@/components/sections/shared/SettingsAutosave';
-import type { Agent, AgentThinkingLevel } from '@openchamber/agent-contract';
+import type { Agent, AgentThinkingLevel, JsonValue, ToolCatalogEntry } from '@openchamber/agent-contract';
+import { CanonicalApiError } from '@/api/canonicalClient';
+import { useSettingsModels } from '@/hooks/useSettingsModels';
+import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
+import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
+import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
+import { parseRolesRecord, roleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { OMP_TOOL_NAMES } from '@/lib/toolPresentation';
+import { canonicalClient } from '@/api/canonicalClient';
+import { useSessionUIStore } from '@/sync/session-ui-store';
+import { normalizePath } from '@/lib/pathNormalization';
+import { AgentPermissionsEditor } from './AgentPermissionsEditor';
 import { toast } from '@/components/ui';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { selectAgentsForDirectory, useAgentsStore } from '@/stores/useAgentsStore';
@@ -21,10 +30,9 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_HELPER_CLASS,
+  SETTINGS_OPTION_STACK_CLASS,
   SETTINGS_SELECT_ROW_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
-import { Icon } from '@/components/icon/Icon';
 
 interface FormState {
   name: string;
@@ -32,7 +40,6 @@ interface FormState {
   model: Agent['model'];
   systemPromptOverride: string;
   allowedTools: string[] | null;
-  permissionPresetId: string;
   thinkingLevel: AgentThinkingLevel | 'default';
   spawns: string;
 }
@@ -43,7 +50,6 @@ const fieldsForAgent = (agent: Agent): FormState => ({
   model: agent.model,
   systemPromptOverride: agent.systemPromptOverride ?? '',
   allowedTools: agent.allowedTools === null ? null : [...agent.allowedTools],
-  permissionPresetId: agent.permissionPresetId ?? '',
   thinkingLevel: agent.thinkingLevel ?? 'default',
   spawns: agent.spawns === '*' ? '*' : Array.isArray(agent.spawns) ? agent.spawns.join(', ') : '',
 });
@@ -56,7 +62,6 @@ const fieldsEqual = (left: FormState, right: FormState): boolean =>
   left.model?.providerId === right.model?.providerId && left.model?.modelId === right.model?.modelId &&
   left.systemPromptOverride === right.systemPromptOverride &&
   toolsEqual(left.allowedTools, right.allowedTools) &&
-  left.permissionPresetId === right.permissionPresetId &&
   left.thinkingLevel === right.thinkingLevel &&
   left.spawns === right.spawns;
 
@@ -86,6 +91,46 @@ export const AgentsPage: React.FC = () => {
     updateAgent: state.updateAgent, loadAgents: state.loadAgents,
     agentDraft: state.agentDraft, setAgentDraft: state.setAgentDraft, setSelectedAgent: state.setSelectedAgent,
   })));
+  const models = useSettingsModels(settingsDirectory);
+  const { state: ompState, form: ompForm, updateSetting: updateOmpSetting, getSectionSettings, loading: ompLoading } = useOmpPageSettings('agents');
+  const subagentSettings = getSectionSettings('subagents');
+  const prewalkSettings = getSectionSettings('prewalk');
+  const advisorSettings = getSectionSettings('advisor');
+
+  const modelRolesSetting = ompState?.settings.find((s) => s.id === 'modelRoles');
+  const rolesMap = React.useMemo(() => parseRolesRecord(modelRolesSetting?.value), [modelRolesSetting?.value]);
+  const roleSelectors = React.useMemo(
+    () => Object.fromEntries(Object.entries(rolesMap).map(([role, value]) => [role, roleSelector(value)])),
+    [rolesMap],
+  );
+
+  const handleRoleChange = React.useCallback(
+    async (role: 'task' | 'advisor', selector: string) => {
+      if (!ompState) return;
+      const nextRoles: Record<string, JsonValue> = { ...rolesMap };
+      if (selector) nextRoles[role] = selector;
+      else delete nextRoles[role];
+      try {
+        await canonicalClient.updateOmpSettings(ompState.workspaceId, {
+          expectedRevision: ompState.revision,
+          changes: [{ id: 'modelRoles', value: nextRoles }],
+        });
+      } catch (err) {
+        if (err instanceof CanonicalApiError && err.problem.status === 409) {
+          const latest = await canonicalClient.getOmpSettings(ompState.workspaceId);
+          const latestRoles = parseRolesRecord(latest.settings.find((s) => s.id === 'modelRoles')?.value);
+          const merged: Record<string, JsonValue> = { ...latestRoles };
+          if (selector) merged[role] = selector;
+          else delete merged[role];
+          await canonicalClient.updateOmpSettings(latest.workspaceId, {
+            expectedRevision: latest.revision,
+            changes: [{ id: 'modelRoles', value: merged }],
+          });
+        }
+      }
+    },
+    [ompState, rolesMap],
+  );
   const agents = useAgentsStore((state) => selectAgentsForDirectory(state, settingsDirectory));
   const revision = useAgentsStore((state) => state.revisionsByDirectory[directoryKey]);
   const catalogError = useAgentsStore((state) => state.errorsByDirectory[directoryKey]);
@@ -103,20 +148,60 @@ export const AgentsPage: React.FC = () => {
   const savedRef = React.useRef<FormState | null>(null);
   const savingRef = React.useRef(false);
   const [form, setForm] = React.useState<FormState>({
-    name: '', description: '', model: null, systemPromptOverride: '', allowedTools: null, permissionPresetId: '',
+    name: '', description: '', model: null, systemPromptOverride: '', allowedTools: null,
     thinkingLevel: 'default', spawns: '',
   });
   const formRef = React.useRef(form);
   formRef.current = form;
-  // Every tool the agent may be granted: the canonical OMP registry first,
-  // then any name the agent already carries (extension, MCP or host tool). The
-  // grid is the single editor, so a name outside the registry still needs a
-  // control.
-  const toolChoices: string[] = React.useMemo(() => [
-    ...OMP_TOOL_NAMES,
-    ...(source?.allowedTools ?? []).filter((tool) => !OMP_TOOL_NAMES.includes(tool)),
-  ], [source]);
-  const [toolsEditing, setToolsEditing] = React.useState(false);
+  const [toolsCatalog, setToolsCatalog] = React.useState<ToolCatalogEntry[]>([]);
+  const [toolsCatalogError, setToolsCatalogError] = React.useState<string | null>(null);
+  const [catalogRetryCount, setCatalogRetryCount] = React.useState(0);
+  React.useEffect(() => {
+    let active = true;
+    const loadCatalog = async () => {
+      setToolsCatalogError(null);
+      try {
+        if (!settingsDirectory) {
+          if (active) setToolsCatalog([]);
+          return;
+        }
+        const workspace = await canonicalClient.resolveWorkspace(settingsDirectory);
+        let loadedTools: ToolCatalogEntry[] | null = null;
+        const currentSessionId = useSessionUIStore.getState().currentSessionId;
+        if (currentSessionId) {
+          const sessionDir = useSessionUIStore.getState().getDirectoryForSession(currentSessionId);
+          const matchesOwnership = Boolean(
+            sessionDir &&
+            settingsDirectory &&
+            normalizePath(sessionDir) === normalizePath(settingsDirectory)
+          );
+          if (matchesOwnership) {
+            try {
+              const catalog = await canonicalClient.getTools({ sessionId: currentSessionId });
+              loadedTools = catalog.tools;
+            } catch {
+              // Fall back to workspace endpoint
+            }
+          }
+        }
+        if (!loadedTools) {
+          const catalog = await canonicalClient.getTools({ workspaceId: workspace.workspaceId });
+          loadedTools = catalog.tools;
+        }
+        if (active) {
+          setToolsCatalog(loadedTools);
+          setToolsCatalogError(null);
+        }
+      } catch (err) {
+        if (active) {
+          setToolsCatalog([]);
+          setToolsCatalogError(err instanceof Error ? err.message : 'SERVICE_UNAVAILABLE');
+        }
+      }
+    };
+    void loadCatalog();
+    return () => { active = false; };
+  }, [settingsDirectory, catalogRetryCount]);
   const [isCreating, setIsCreating] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -128,7 +213,6 @@ export const AgentsPage: React.FC = () => {
       entityRef.current = null;
       savedRef.current = null;
       revisionRef.current = undefined;
-      setToolsEditing(false);
       setSaveError(null);
       return;
     }
@@ -142,27 +226,28 @@ export const AgentsPage: React.FC = () => {
     savedRef.current = next;
     hydratedSelectionRef.current = selectionKey;
     setForm(next);
-    setToolsEditing(false);
     setSaveError(null);
   }, [source, revision, selectionKey]);
 
   const buildAgent = React.useCallback((name: string): Agent | null => {
     const entity = entityRef.current;
     if (!entity) return null;
+    let allowedTools = form.allowedTools === null ? null : [...form.allowedTools];
+    if (toolsCatalogError) {
+      allowedTools = savedRef.current?.allowedTools ?? entity.allowedTools ?? null;
+    }
     const agent: Agent = {
       ...entity,
       name,
       description: form.description,
       model: form.model,
-      allowedTools: form.allowedTools === null ? null : [...form.allowedTools],
+      allowedTools,
     };
     // An untouched optional prompt retains its exact native representation.
     if (form.systemPromptOverride !== (entity.systemPromptOverride ?? '')) {
       if (form.systemPromptOverride) agent.systemPromptOverride = form.systemPromptOverride;
       else delete agent.systemPromptOverride;
     }
-    if (form.permissionPresetId) agent.permissionPresetId = form.permissionPresetId;
-    else delete agent.permissionPresetId;
     if (form.thinkingLevel !== 'default') agent.thinkingLevel = form.thinkingLevel;
     else delete agent.thinkingLevel;
     const spawnsTrimmed = form.spawns.trim();
@@ -170,12 +255,13 @@ export const AgentsPage: React.FC = () => {
     else if (spawnsTrimmed.length > 0) agent.spawns = spawnsTrimmed.split(',').map((s) => s.trim()).filter(Boolean);
     else delete agent.spawns;
     return agent;
-  }, [form]);
+  }, [form, toolsCatalogError]);
 
   const save = React.useCallback(async (): Promise<AutosaveResult> => {
     const saved = savedRef.current;
     if (isNewAgent || !selectedAgent || !saved || hydratedSelectionRef.current !== selectionKey) return AUTOSAVE_UNCHANGED;
     if (fieldsEqual(form, saved)) return AUTOSAVE_UNCHANGED;
+    if (toolsCatalogError && form.allowedTools !== saved.allowedTools) return AUTOSAVE_UNCHANGED;
     const agent = buildAgent(selectedAgent.name);
     const expectedRevision = revisionRef.current;
     if (!agent || expectedRevision === undefined) return autosaveFailed(t('common.unavailable'));
@@ -200,7 +286,7 @@ export const AgentsPage: React.FC = () => {
     } finally {
       savingRef.current = false;
     }
-  }, [isNewAgent, selectedAgent, selectionKey, form, buildAgent, updateAgent, settingsDirectory, t]);
+  }, [isNewAgent, selectedAgent, selectionKey, form, buildAgent, updateAgent, settingsDirectory, toolsCatalogError, t]);
   const autosave = useAutosave(save);
   const { requestSave } = autosave;
 
@@ -235,15 +321,95 @@ export const AgentsPage: React.FC = () => {
 
   const error = saveError || catalogError;
   if (!selectedAgentName) {
-    return <div className="flex h-full items-center justify-center">
-      <div className="text-center text-muted-foreground">
-        <Icon name="robot-2" className="mx-auto mb-3 h-12 w-12 opacity-50" />
-        {error ? <p role="alert">{error}</p> : <>
-          <p>{t('settings.agents.page.empty.title')}</p>
-          <p className="typography-meta mt-1 opacity-75">{t('settings.agents.page.empty.description')}</p>
-        </>}
-      </div>
-    </div>;
+    return (
+      <SettingsPageLayout
+        title={t('settings.agents.page.globalTitle')}
+        description={t('settings.agents.page.globalDescription')}
+        showSaveStatus
+      >
+        <div className="space-y-6">
+          {/* Subagents */}
+          <SettingsSection
+            title={t('settings.omp.section.subagents.title')}
+            description={t('settings.omp.section.subagents.description')}
+            divider={false}
+            settingsItem="agents.section.subagents"
+          >
+            <div className={SETTINGS_OPTION_STACK_CLASS}>
+              <ModelRoleEditor
+                role="task"
+                roles={roleSelectors}
+                models={models}
+                directory={settingsDirectory ?? undefined}
+                disabled={ompLoading}
+                label={t('settings.omp.modelRoles.role.task.label')}
+                info={t('settings.omp.modelRoles.role.task.desc')}
+                settingsItem="omp.modelRoles.task"
+                onChange={(selector) => void handleRoleChange('task', selector)}
+              />
+              {subagentSettings.map((s) => (
+                <OmpRowControl
+                  key={s.id}
+                  setting={s}
+                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting(s.id, val)}
+                />
+              ))}
+            </div>
+          </SettingsSection>
+
+          {/* Prewalk */}
+          <SettingsSection
+            title={t('settings.agents.section.prewalk.title')}
+            description={t('settings.agents.section.prewalk.description')}
+            settingsItem="agents.section.prewalk"
+          >
+            <div className={SETTINGS_OPTION_STACK_CLASS}>
+              {prewalkSettings.map((s) => (
+                <OmpRowControl
+                  key={s.id}
+                  setting={s}
+                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting(s.id, val)}
+                />
+              ))}
+            </div>
+          </SettingsSection>
+
+          {/* Advisor */}
+          <SettingsSection
+            title={t('settings.agents.section.advisor.title')}
+            description={t('settings.agents.section.advisor.description')}
+            settingsItem="agents.section.advisor"
+          >
+            <div className={SETTINGS_OPTION_STACK_CLASS}>
+              <ModelRoleEditor
+                role="advisor"
+                roles={roleSelectors}
+                models={models}
+                directory={settingsDirectory ?? undefined}
+                disabled={ompLoading}
+                label={t('settings.omp.modelRoles.role.advisor.label')}
+                info={t('settings.omp.modelRoles.role.advisor.desc')}
+                settingsItem="omp.modelRoles.advisor"
+                onChange={(selector) => void handleRoleChange('advisor', selector)}
+              />
+              {advisorSettings.map((s) => (
+                <OmpRowControl
+                  key={s.id}
+                  setting={s}
+                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting(s.id, val)}
+                />
+              ))}
+            </div>
+          </SettingsSection>
+        </div>
+      </SettingsPageLayout>
+    );
   }
 
   return <SettingsPageLayout
@@ -325,99 +491,25 @@ export const AgentsPage: React.FC = () => {
           label={t('settings.agents.page.field.allowedTools')}
           controlClassName="w-full max-w-none flex-col items-stretch"
         >
-          {form.allowedTools === null && !toolsEditing ? (
-            <div className="flex items-center justify-between gap-2 py-1">
-              <p className={SETTINGS_HELPER_CLASS}>{t('settings.agents.page.field.allowedToolsInherit')}</p>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => setToolsEditing(true)}
-              >
-                {t('settings.agents.page.field.allowedToolsEdit')}
+          {toolsCatalogError && (
+            <div role="status" className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between gap-2">
+              <span>{t('common.unavailable')}</span>
+              <Button size="xs" variant="outline" onClick={() => setCatalogRetryCount((c) => c + 1)}>
+                {t('settings.agents.page.permissionsEditor.actions.retry')}
               </Button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setToolsEditing(false);
-                    setForm((current) => ({ ...current, allowedTools: null }));
-                    requestSave();
-                  }}
-                >
-                  {t('settings.agents.page.field.allowedToolsUseDefault')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setToolsEditing(true);
-                    setForm((current) => ({ ...current, allowedTools: [...OMP_TOOL_NAMES] }));
-                    requestSave();
-                  }}
-                >
-                  {t('settings.providers.page.actions.showAll')}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => {
-                    setToolsEditing(true);
-                    setForm((current) => ({ ...current, allowedTools: [] }));
-                    requestSave();
-                  }}
-                >
-                  {t('settings.providers.page.actions.hideAll')}
-                </Button>
-              </div>
-
-              {/* One control per tool: the checkbox grid is the editor. A tool
-                  the agent already names but the registry does not carry
-                  (an extension or MCP tool) keeps its own checkbox, so the
-                  list stays complete and nothing is edited twice. */}
-              <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @3xl:grid-cols-4">
-                {toolChoices.map((tool) => {
-                  const checked = (form.allowedTools ?? []).includes(tool);
-                  return (
-                    <label
-                      key={tool}
-                      className="flex cursor-pointer items-center gap-2 rounded-md border border-border/40 p-2 text-xs font-mono hover:bg-[var(--surface-subtle)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => {
-                          setToolsEditing(true);
-                          const currentTools = form.allowedTools ?? [];
-                          const next = e.target.checked
-                            ? [...currentTools, tool]
-                            : currentTools.filter((t) => t !== tool);
-                          setForm((current) => ({ ...current, allowedTools: next }));
-                          requestSave();
-                        }}
-                        className="size-3.5 rounded border-border text-primary focus:ring-primary"
-                      />
-                      <span className="truncate">{tool}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
           )}
+          <AgentPermissionsEditor
+            allowedTools={form.allowedTools}
+            toolsCatalog={toolsCatalog}
+            disabled={Boolean(toolsCatalogError)}
+            onChange={(nextTools) => {
+              if (toolsCatalogError) return;
+              setForm((current) => ({ ...current, allowedTools: nextTools }));
+              requestSave();
+            }}
+          />
         </SettingsStackedField>
-        <SettingsFieldRow settingsItem="agents.permission-preset" label={t('settings.agents.page.field.permissionPreset')}>
-          <Input value={form.permissionPresetId}
-            aria-label={t('settings.agents.page.field.permissionPreset')}
-            onChange={(event) => setForm({ ...form, permissionPresetId: event.target.value })}
-            className="h-8 w-64 px-2" />
-        </SettingsFieldRow>
       </SettingsSection>
       {isNewAgent && <div className="flex items-center gap-2 pb-8">
         <Button onClick={() => void handleCreate()} disabled={isCreating || !form.name.trim()} size="xs" className="!font-normal">

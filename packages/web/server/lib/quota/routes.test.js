@@ -19,7 +19,7 @@ const createApp = (overrides = {}) => {
 describe('selected quota routes', () => {
   it('lists only public workspace catalog selections', async () => {
     const response = await request(createApp()).get('/api/quota/providers');
-    expect(response.body).toEqual({ providers: ['deepseek'] });
+    expect(response.body).toEqual({ providers: ['deepseek'], nativeToLogical: {} });
   });
   it('returns a normal unconfigured result when no provider credential is selected', async () => {
     const response = await request(createApp({

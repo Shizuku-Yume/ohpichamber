@@ -46,7 +46,6 @@ export const ProjectsPage: React.FC = () => {
       icon: data.icon,
       color: data.color,
       iconBackground: data.iconBackground,
-      defaultAgent: data.defaultAgent ?? null,
       defaultModel: data.defaultModel ?? null,
       defaultVariant: data.defaultVariant ?? null,
     });
@@ -80,7 +79,7 @@ export const ProjectsPage: React.FC = () => {
 
   if (!selectedProject) {
     return (
-      <SettingsPageLayout title={t('settings.page.projects.title')} showSaveStatus namedBySidebar>
+      <SettingsPageLayout title={t('settings.page.projects.title')} showSaveStatus>
         <p className="typography-meta text-muted-foreground">{t('settings.projects.page.empty.noProjects')}</p>
       </SettingsPageLayout>
     );

@@ -1,7 +1,12 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SessionJournal } from '../../../../agent-service/src/projection/journal.ts';
 import { createOpenChamberControlService } from './service.js';
+import { createPrWatchRuntime, parsePullRequestUrl } from '../pr-watch/runtime.js';
+import { trackedItemKey } from '../tracked-items/items.js';
 
 const scopeForWorkspace = {
   projectId: 'project-1',
@@ -16,11 +21,9 @@ const otherScope = { ...scopeForWorkspace, workspaceId: 'workspace-2', cwd: '/re
 const createHarness = (settings = {
   agentControlToolEnabled: true,
   agentWebToolEnabled: true,
-  agentMemoryToolEnabled: true,
   agentNotifyToolEnabled: true,
-  agentImageToolEnabled: true,
-  agentImageModel: 'openrouter/openai/gpt-image-2',
   agentRenderToolEnabled: true,
+  agentWorkflowToolEnabled: true,
 }, overrides = {}) => {
   const created = [];
   const sent = [];
@@ -145,7 +148,7 @@ describe('OpenChamber control service canonical consumers', () => {
   });
   it('creates native goals before CLI create, send and fork prompts', async () => {
     const h = createHarness({
-      agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true,
+      agentControlToolEnabled: true, agentWebToolEnabled: true,
       agentNotifyToolEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5000
     });
     const created = await h.control.execute('session.create', {
@@ -231,12 +234,7 @@ describe('OpenChamber control service canonical consumers', () => {
       ok: true,
       value: { title: 'Ask', answer: { answered: true, summary: 'chose one' } },
     });
-    const disabled = createHarness({ agentRenderToolEnabled: false }).control;
-    await expect(disabled.invokeHostAction(scope, {
-      toolName: 'openchamber_render', action: 'render.page', sessionId: 'session-1', input: call,
-    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber_render tool is disabled' });
   });
-
   it('returns canonical project and workspace-scoped model projections', async () => {
     const { control, requests } = createHarness();
 
@@ -267,22 +265,18 @@ describe('OpenChamber control service canonical consumers', () => {
     await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
       toolName: 'openchamber', action: 'unsupported.action', sessionId: 'session-1', input: {},
     })).resolves.toMatchObject({ ok: false, code: 'INVALID_REQUEST', status: 400 });
-    const disabled = createHarness({ agentControlToolEnabled: false, agentWebToolEnabled: true, agentMemoryToolEnabled: true, agentNotifyToolEnabled: false }).control;
-    await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'openchamber', action: 'session.status', sessionId: 'session-1', input: { sessionId: 'session-1' },
-    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber tool is disabled' });
-    await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'notify', action: 'notify.send', sessionId: 'session-1', input: { title: 't' },
-    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'notify tool is disabled' });
-    await expect(disabled.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'openchamber_image', action: 'image.generate', sessionId: 'session-1', input: { prompt: 'a cat' },
-    })).resolves.toEqual({ ok: false, code: 'UNAUTHORIZED', status: 403, detail: 'openchamber_image tool is disabled' });
-    const imageResult = await control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
-      toolName: 'openchamber_image', action: 'image.generate', sessionId: 'session-1', input: { prompt: 'a cat' },
+    const workflowHarness = createHarness(undefined, {
+      workflowRuntime: {
+        executeAction: async (action, input) => ({ runId: 'run-1', status: 'started', script: input.script }),
+      },
+    }).control;
+    const workflowResult = await workflowHarness.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_workflow', action: 'workflow.run', sessionId: 'session-1', input: { script: 'workflow.js' },
     });
-    expect(imageResult.ok).toBe(true);
-    expect(imageResult.value.model).toBe('openrouter/openai/gpt-image-2');
-    expect(imageResult.value.images).toHaveLength(1);
+    expect(workflowResult).toEqual({ ok: true, value: { runId: 'run-1', status: 'started', script: 'workflow.js' } });
+    await expect(control.invokeHostAction({ rootSessionId: 'session-1', ...scopeForWorkspace }, {
+      toolName: 'openchamber_workflow', action: 'unsupported.action', sessionId: 'session-1', input: {},
+    })).resolves.toEqual({ ok: false, code: 'INVALID_REQUEST', status: 400, detail: 'Unsupported openchamber_workflow action: unsupported.action' });
     const conflictHarness = createHarness(undefined, {
       resolveProjectContextId: async () => 'project-1',
       projectContextRuntime: {
@@ -351,5 +345,118 @@ describe('browser.close over the browser control bridge', () => {
     const { control } = createHarness(undefined, { browserControl: { request } });
     await expect(control.execute('browser.close', { tabId: 'tab-1' }, '/repo/app')).resolves.toEqual({ closed: true });
     expect(request).toHaveBeenCalledWith('browser.close', { tabId: 'tab-1' }, expect.objectContaining({ timeoutMs: 20_000 }));
+  });
+});
+
+describe('pr.watch and pr.unwatch over prWatchRuntime', () => {
+  it('throws 503 when prWatch is not configured', async () => {
+    const { control } = createHarness();
+    await expect(control.execute('pr.watch', { url: 'https://github.com/acme/repo/pull/1' }, '/repo/app', { contextSessionId: 'session-1' }))
+      .rejects.toMatchObject({ statusCode: 503 });
+    await expect(control.execute('pr.unwatch', {}, '/repo/app', { contextSessionId: 'session-1' }))
+      .rejects.toMatchObject({ statusCode: 503 });
+  });
+
+  it('dispatches pr.watch with explicit and context session/directory', async () => {
+    const watch = vi.fn(async () => ({ watching: { sessionID: 'session-1', number: 1, status: 'pending' }, next: 'message on change' }));
+    const unwatch = vi.fn(async () => ({ watching: false, stopped: true }));
+    const prWatch = { watch, unwatch };
+    const { control } = createHarness(undefined, { prWatch });
+
+    const result = await control.execute('pr.watch', { url: 'https://github.com/acme/repo/pull/1' }, '/repo/app', { contextSessionId: 'session-1' });
+    expect(result).toMatchObject({ watching: { sessionID: 'session-1', number: 1 } });
+    expect(watch).toHaveBeenCalledWith({ sessionID: 'session-1', directory: '/repo/app', url: 'https://github.com/acme/repo/pull/1' });
+
+    const unwatchResult = await control.execute('pr.unwatch', {}, '/repo/app', { contextSessionId: 'session-1' });
+    expect(unwatchResult).toEqual({ watching: false, stopped: true });
+    expect(unwatch).toHaveBeenCalledWith('session-1');
+  });
+
+  it('dispatches pr.watch with explicit sessionId and resolves session directory', async () => {
+    const watch = vi.fn(async () => ({ watching: { sessionID: 'session-1', number: 2 } }));
+    const prWatch = { watch, unwatch: vi.fn() };
+    const { control } = createHarness(undefined, { prWatch });
+
+    await control.execute('pr.watch', { sessionId: 'session-1', url: 'https://github.com/acme/repo/pull/2' });
+    expect(watch).toHaveBeenCalledWith({ sessionID: 'session-1', directory: '/repo/app', url: 'https://github.com/acme/repo/pull/2' });
+  });
+
+  it('creates watch via Host action and wakes session on PR update', async () => {
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pr-watch-action-'));
+    try {
+      const hub = {
+        subscribeEvent: () => () => { },
+        subscribeStatus: () => () => { },
+        retainSession: async () => ({ release: async () => { } }),
+      };
+      const sentWakes = [];
+      const sessionService = {
+        open: async (sessionId) => ({ session: { sessionId, runtimeStatus: 'idle', workspaceId: 'workspace-1' } }),
+        list: async () => ({ items: [] }),
+        send: async (sessionId, payload, commandKey) => {
+          sentWakes.push({ sessionId, payload, commandKey });
+          return { ok: true };
+        },
+      };
+      const broadcasts = [];
+      const prWatchRuntime = createPrWatchRuntime({
+        sessionService,
+        broadcastUiEvent: (e) => broadcasts.push(e),
+        dataDir,
+        quietMs: 0,
+      });
+      prWatchRuntime.start(hub);
+
+      let listener = () => { };
+      const trackedItems = {
+        setServerInterest: vi.fn(),
+        subscribe: (l) => { listener = l; return () => { }; },
+      };
+      const readers = {
+        sourceControl: vi.fn(async () => ({
+          status: 'ok',
+          pulls: [{
+            owner: 'acme', repo: 'app', number: 42, state: 'open', title: 'Feature', headSha: 'c1',
+            checks: { state: 'pending' }, activity: 1,
+          }],
+        })),
+      };
+      prWatchRuntime.attach({ trackedItems, readers });
+
+      const { control } = createHarness(undefined, { prWatch: prWatchRuntime });
+
+      const result = await control.execute('pr.watch', {
+        url: 'https://github.com/acme/app/pull/42',
+      }, '/repo/app', { contextSessionId: 'session-1' });
+
+      expect(result.watching).toMatchObject({
+        sessionID: 'session-1',
+        number: 42,
+        status: 'pending',
+      });
+      expect(broadcasts.some((b) => b.type === 'openchamber:pr-watch.updated' && b.properties.sessionID === 'session-1')).toBe(true);
+
+      listener([{
+        key: trackedItemKey(parsePullRequestUrl('https://github.com/acme/app/pull/42')),
+        state: {
+          owner: 'acme', repo: 'app', number: 42, state: 'open', title: 'Feature', headSha: 'c1',
+          checks: { state: 'success' }, mergeableState: 'clean', activity: 1,
+        },
+        requestedAt: Date.now() + 10,
+      }]);
+
+      const deadline = Date.now() + 2000;
+      while (sentWakes.length === 0 && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+
+      expect(sentWakes).toHaveLength(1);
+      expect(sentWakes[0].sessionId).toBe('session-1');
+      expect(sentWakes[0].payload.input.context[0].text).toContain('Pull request #42: every check passed');
+      prWatchRuntime.stop();
+      await prWatchRuntime.flush();
+    } finally {
+      await fs.rm(dataDir, { recursive: true, force: true });
+    }
   });
 });

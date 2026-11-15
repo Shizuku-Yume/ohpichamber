@@ -298,6 +298,16 @@ export class CanonicalClient {
     const { projectId, workspaceId } = input;
     return request('/api/agent/v1/sessions', scoped(C.SessionCreateAckSchema, result => result.session.projectId === projectId && result.session.workspaceId === workspaceId), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headersFor(commandId) }, body: bodyFor(C.SessionCreateRequestSchema, input) });
   }
+  prepareSession(input: { projectId: string; workspaceId: string }): Promise<{ ok: boolean; sessionId?: string }> {
+    return request('/api/agent/v1/sessions/prepare', z.object({ ok: z.boolean(), sessionId: z.string().optional() }), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
+    });
+  }
+  discardPreparedSession(input: { workspaceId: string }): Promise<{ ok: boolean }> {
+    return request('/api/agent/v1/sessions/prepare', z.object({ ok: z.boolean() }), {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input)
+    });
+  }
   deleteSession(sessionId: string): Promise<SessionDeleteAck> {
     return request(`/api/agent/v1/sessions/${id(sessionId)}`, scoped(C.SessionDeleteAckSchema, result => result.sessionId === sessionId), { method: 'DELETE' });
   }
@@ -482,6 +492,14 @@ export class CanonicalClient {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/config`, scoped(C.ProviderConfigurationReadSchema, result => result.configuration.providerId === providerId));
   }
   getAgents(workspaceId: string): Promise<AgentCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/agents`, scoped(C.AgentCatalogSchema, result => result.workspaceId === workspaceId)); }
+  getTools(scope: { sessionId?: string; workspaceId?: string } | string): Promise<C.SessionToolsCatalog> {
+    const sessionId = typeof scope === 'string' ? scope : scope.sessionId;
+    const workspaceId = typeof scope === 'string' ? undefined : scope.workspaceId;
+    const path = sessionId
+      ? `/api/agent/v1/sessions/${id(sessionId)}/tools`
+      : `/api/agent/v1/workspaces/${id(workspaceId!)}/tools`;
+    return request(path, C.SessionToolsCatalogSchema);
+  }
   createAgent(workspaceId: string, input: AgentCreateRequest): Promise<AgentMutationResult> {
     const agentId = input.agent.agentId;
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/agents`, scoped(C.AgentMutationResultSchema, result => result.agentId === agentId), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: bodyFor(C.AgentCreateRequestSchema, input) });

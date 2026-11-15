@@ -21,6 +21,10 @@ import {
   SettingsCheckboxRow,
 } from '@/components/sections/shared/SettingsSection';
 import { UsageStatsReport } from '@/components/views/usage/UsageStatsView';
+import { useUsageStatsStore } from '@/components/views/usage/usageStatsStore';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { quotaCardProviderIds, hasQuotaData } from './usageProviderRows';
+import { resolveQuotaProviderId } from '@/components/chat/work-status/usageHeadline';
 
 const formatTime = (timestamp: number | null, timeFormatPreference: TimeFormatPreference) => {
   if (!timestamp) return '-';
@@ -225,7 +229,7 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
 
       {usage?.consoleBudgets ? <ConsoleBudgetsSection consoleBudgets={usage.consoleBudgets} /> : null}
 
-      {Object.keys(usage?.windows ?? {}).length === 0 && providerModels.length === 0 && !usage?.consoleBudgets ? (
+      {!error && !hasQuotaData(usage) ? (
         <div>
           <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noQuotaWindowsTitle')}</p>
           <p className="typography-meta text-muted-foreground mt-1">{t('settings.usage.page.state.noQuotaWindowsDescription')}</p>
@@ -243,16 +247,45 @@ const ProviderQuota: React.FC<{ providerId: QuotaProviderId; settingsItem?: stri
  */
 export const UsagePage: React.FC = () => {
   const { t } = useI18n();
+  const selectedProvider = useUsageStatsStore((state) => state.selectedProvider);
+  const quotaProviders = useQuotaProviders();
   const results = useQuotaStore((state) => state.results);
-  const quotaPhase = useQuotaStore((state) => state.phase);
+  const refreshErrors = useQuotaStore((state) => state.refreshErrors);
+  const nativeToLogical = useQuotaStore((state) => state.nativeToLogical);
+  const configProviders = useConfigStore((state) => state.providers);
   useQuotaAutoRefresh(true, true);
 
-  // `configured` is the provider's own answer about the credential OMP holds.
-  // A provider that has none is left out rather than shown as an empty card.
-  const configuredProviderIds = React.useMemo(
-    () => results.filter((entry) => entry.configured).map((entry) => entry.providerId),
-    [results],
+  const quotaCardIds = React.useMemo(
+    () => quotaCardProviderIds(quotaProviders, results, refreshErrors),
+    [quotaProviders, refreshErrors, results],
   );
+
+  if (selectedProvider !== null) {
+    const cfg = configProviders.find((p) => p.providerId === selectedProvider);
+    const providerName = cfg?.name || selectedProvider;
+    const quotaId = quotaProviders.find((p) => p.id === resolveQuotaProviderId(selectedProvider, nativeToLogical))?.id ?? null;
+
+    return (
+      <SettingsPageLayout title={providerName} showSaveStatus={false}>
+        <SettingsSection
+          title={t('usageStats.title')}
+          divider={false}
+          settingsItem="usage.statistics"
+          contentClassName="space-y-0"
+        >
+          <UsageStatsReport />
+        </SettingsSection>
+
+        {quotaId && quotaCardIds.includes(quotaId) ? (
+          <ProviderQuota providerId={quotaId} />
+        ) : (
+          <SettingsSection title={t('settings.usage.page.section.quotas')} settingsItem="usage.quotas">
+            <p className="typography-micro text-muted-foreground">{t('usageStats.providers.noQuota')}</p>
+          </SettingsSection>
+        )}
+      </SettingsPageLayout>
+    );
+  }
 
   return (
     <SettingsPageLayout title={t('settings.page.usage.title')} showSaveStatus>
@@ -265,28 +298,15 @@ export const UsagePage: React.FC = () => {
         <UsageStatsReport />
       </SettingsSection>
 
-      {configuredProviderIds.length === 0 ? (
-        <SettingsSection title={t('settings.usage.page.section.quotas')} settingsItem="usage.quotas">
-          {/* An unloaded catalog is not "no providers": while the phase is
-              unknown the page says so instead of claiming there is nothing. */}
-          {quotaPhase === 'unknown' ? (
-            <p className="typography-ui-label text-foreground">{t('settings.usage.state.unknown')}</p>
-          ) : (
-            <>
-              <p className="typography-ui-label text-foreground">{t('settings.usage.page.state.noConfiguredProvidersTitle')}</p>
-              <p className="typography-meta text-muted-foreground mt-1">
-                {t('settings.usage.page.state.noConfiguredProvidersDescription')}
-              </p>
-            </>
-          )}
-        </SettingsSection>
-      ) : configuredProviderIds.map((providerId, index) => (
-        <ProviderQuota
-          key={providerId}
-          providerId={providerId}
-          settingsItem={index === 0 ? 'usage.quotas' : undefined}
-        />
-      ))}
+      {quotaCardIds.length > 0 ? (
+        quotaCardIds.map((providerId, index) => (
+          <ProviderQuota
+            key={providerId}
+            providerId={providerId}
+            settingsItem={index === 0 ? 'usage.quotas' : undefined}
+          />
+        ))
+      ) : null}
     </SettingsPageLayout>
   );
 };

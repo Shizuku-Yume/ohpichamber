@@ -230,7 +230,6 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
         : null;
       const iconBackground = normalizeIconBackground(candidate.iconBackground);
       const color = typeof candidate.color === 'string' ? candidate.color.trim() : '';
-      const defaultAgent = typeof candidate.defaultAgent === 'string' ? candidate.defaultAgent.trim() : '';
       const defaultModel = typeof candidate.defaultModel === 'string' ? candidate.defaultModel.trim() : '';
       const defaultVariant = typeof candidate.defaultVariant === 'string' ? candidate.defaultVariant.trim() : '';
       const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null;
@@ -252,7 +251,6 @@ export const createSettingsNormalizationRuntime = (dependencies) => {
         ...(icon ? { icon } : {}),
         ...(iconBackground ? { iconBackground } : {}),
         ...(color ? { color } : {}),
-        ...(defaultAgent ? { defaultAgent } : {}),
         ...(defaultModel && defaultModel.includes('/') ? { defaultModel } : {}),
         // A variant is meaningless without the model it belongs to.
         ...(defaultModel && defaultModel.includes('/') && defaultVariant ? { defaultVariant } : {}),

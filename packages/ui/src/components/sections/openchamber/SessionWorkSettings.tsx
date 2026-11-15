@@ -2,9 +2,10 @@ import React from 'react';
 import { SettingsCheckboxRow, SettingsInset, SettingsSection } from '@/components/sections/shared/SettingsSection';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
 import { useI18n } from '@/lib/i18n';
+import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { selectSafetyNetAvailable, useRoutingStore } from '@/stores/useRoutingStore';
-
+import { updateDesktopSettings } from '@/lib/persistence';
 /**
  * "In work": the sidebar block and the Track / Done actions, and whether Jev
  * moves sessions in on its own. Jev runs on the OpenChamber server.
@@ -13,10 +14,13 @@ export const SessionWorkSettings: React.FC = () => {
   const { t } = useI18n();
   const enabled = useUIStore((state) => state.sessionWorkEnabled);
   const autoOpen = useUIStore((state) => state.sessionWorkAutoOpen);
-  const keepInGroup = useUIStore((state) => state.sessionWorkKeepInGroup);
+  const keepInGroup = useSessionDisplayStore((state) => state.keepWorkInPlace);
   const setEnabled = useUIStore((state) => state.setSessionWorkEnabled);
   const setAutoOpen = useUIStore((state) => state.setSessionWorkAutoOpen);
-  const setKeepInGroup = useUIStore((state) => state.setSessionWorkKeepInGroup);
+  const setKeepInGroup = React.useCallback((value: boolean) => {
+    useSessionDisplayStore.getState().setKeepWorkInPlace(value);
+    void updateDesktopSettings({ sidebarKeepWorkInPlace: value });
+  }, []);
   const jevAvailable = useRoutingStore(selectSafetyNetAvailable);
 
   return (

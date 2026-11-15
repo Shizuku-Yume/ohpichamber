@@ -38,6 +38,7 @@ import { buildPageSignalsSource, startPageSignals } from "./perf/page-signals.mj
 import { expandProjects, expandSessionLists, settlePage } from "./perf/scenario.mjs"
 import { rendererMainThread, traceWindow } from "./perf/trace-analysis.mjs"
 
+import { formatModelRef } from "../packages/agent-contract/src/index.ts"
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const cliPath = join(repoRoot, "packages/web/bin/cli.js")
 
@@ -756,6 +757,11 @@ const main = async () => {
     loaded = client.once("Page.loadEventFired", 60_000)
     await client.send("Page.reload", { ignoreCache: false })
     await loaded
+    await evaluateValue(client, `(() => {
+      const row = document.querySelector('[data-session-row]')
+      if (row && !document.querySelector('[data-chat-input="true"]')) row.click()
+    })()`)
+    await wait(500)
 
     console.log(`Opened the session; settling for up to ${options.settle}s.`)
     const settle = await settlePage(client, options.settle)
@@ -1000,7 +1006,7 @@ const main = async () => {
       viewedSessionId: options.viewSession ?? sessionId,
       directory: options.dir,
       prompt: options.prompt,
-      model: dispatchResult?.model ? `${dispatchResult.model.providerID}/${dispatchResult.model.modelID}` : options.model,
+      model: dispatchResult?.model ? formatModelRef({ providerId: dispatchResult.model.providerID, modelId: dispatchResult.model.modelID }) : options.model,
       agent: dispatchResult?.agent ?? options.agent,
       reachedIdle: becameIdle,
       quiet,

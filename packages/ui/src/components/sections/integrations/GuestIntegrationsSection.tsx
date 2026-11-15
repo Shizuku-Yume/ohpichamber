@@ -301,139 +301,139 @@ export const GuestIntegrationCard: React.FC<GuestIntegrationCardProps> = ({ gues
         setOpen(nextOpen);
       }}
     >
-          <div className="space-y-3">
-            {auth === 'oauth' ? (
-              <>
-                <SettingsStackedField
-                  label={t('settings.integrations.guests.field.clientId')}
-                  controlClassName="w-full max-w-none"
-                >
-                  <Input
-                    value={clientId}
-                    onChange={(event) => setClientId(event.target.value)}
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="h-8 min-w-0 flex-1 rounded-md px-3"
-                    disabled={isBusy}
-                  />
-                </SettingsStackedField>
-                <SettingsStackedField
-                  label={t('settings.integrations.guests.field.clientSecret')}
-                  controlClassName="w-full max-w-none"
-                >
-                  <Input
-                    type="password"
-                    value={clientSecret}
-                    onChange={(event) => setClientSecret(event.target.value)}
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="h-8 min-w-0 flex-1 rounded-md px-3"
-                    disabled={isBusy}
-                  />
-                </SettingsStackedField>
-              </>
-            ) : null}
-            {needsUsername ? (
-              <SettingsStackedField
-                label={integration.token?.usernameLabel ?? t('settings.integrations.guests.field.username')}
-                controlClassName="w-full max-w-none"
-              >
-                <Input
-                  value={username}
-                  onChange={(event) => setUsername(event.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="h-8 min-w-0 flex-1 rounded-md px-3"
-                  disabled={isBusy}
-                />
-              </SettingsStackedField>
-            ) : null}
-            {auth === 'token' ? (
-              <SettingsStackedField
-                label={t('settings.integrations.guests.field.token')}
-                info={t('settings.integrations.guests.field.token.info')}
-                controlClassName="w-full max-w-none"
-              >
-                <Input
-                  type="password"
-                  value={token}
-                  onChange={(event) => setToken(event.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="h-8 min-w-0 flex-1 rounded-md px-3"
-                  disabled={isBusy}
-                />
-              </SettingsStackedField>
-            ) : null}
-            {(integration.settings ?? []).map((field) => (
-              <SettingsStackedField
-                key={field.id}
-                label={field.label}
-                controlClassName="w-full max-w-none"
-              >
-                <Input
-                  type={field.secret ? 'password' : undefined}
-                  placeholder={field.secret && status?.secretsSet.includes(field.id) ? t('settings.integrations.guest.secret.saved') : undefined}
-                  value={settings[field.id] ?? ''}
-                  onChange={(event) => {
-                    setSettings((current) => ({ ...current, [field.id]: event.target.value }));
-                  }}
-                  onBlur={() => void saveDeclaredSettings()}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="h-8 min-w-0 flex-1 rounded-md px-3"
-                  disabled={isBusy}
-                />
-              </SettingsStackedField>
-            ))}
-            {auth === 'oauth' ? (
-              <SettingsStackedField
-                label={t('settings.integrations.guests.field.redirectUri')}
-                info={t('settings.integrations.guests.field.redirectUri.info')}
-                controlClassName="w-full max-w-none"
-              >
-                <Input
-                  value={status?.redirectUri ?? ''}
-                  readOnly
-                  className="h-8 min-w-0 flex-1 rounded-md px-3"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={!status?.redirectUri}
-                  onClick={() => void copyRedirect()}
-                >
-                  {copied
-                    ? t('settings.integrations.guests.actions.copied')
-                    : t('settings.integrations.guests.actions.copyRedirect')}
-                </Button>
-              </SettingsStackedField>
-            ) : null}
-            <div className="flex flex-wrap items-center gap-2">
-              {connected ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  disabled={isBusy}
-                  onClick={() => void disconnect()}
-                >
-                  {t('settings.integrations.guests.actions.disconnect')}
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={isBusy || isWaiting}
-                  onClick={() => void startConnect()}
-                >
-                  {isBusy ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : null}
-                  {t('settings.integrations.guests.actions.connect')}
-                </Button>
-              )}
-            </div>
-          </div>
+      <div className="space-y-3">
+        {auth === 'oauth' ? (
+          <>
+            <SettingsStackedField
+              label={t('settings.integrations.guests.field.clientId')}
+              controlClassName="w-full max-w-none"
+            >
+              <Input
+                value={clientId}
+                onChange={(event) => setClientId(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className="h-8 min-w-0 flex-1 rounded-md px-3"
+                disabled={isBusy}
+              />
+            </SettingsStackedField>
+            <SettingsStackedField
+              label={t('settings.integrations.guests.field.clientSecret')}
+              controlClassName="w-full max-w-none"
+            >
+              <Input
+                type="password"
+                value={clientSecret}
+                onChange={(event) => setClientSecret(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className="h-8 min-w-0 flex-1 rounded-md px-3"
+                disabled={isBusy}
+              />
+            </SettingsStackedField>
+          </>
+        ) : null}
+        {needsUsername ? (
+          <SettingsStackedField
+            label={integration.token?.usernameLabel ?? t('settings.integrations.guests.field.username')}
+            controlClassName="w-full max-w-none"
+          >
+            <Input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              className="h-8 min-w-0 flex-1 rounded-md px-3"
+              disabled={isBusy}
+            />
+          </SettingsStackedField>
+        ) : null}
+        {auth === 'token' ? (
+          <SettingsStackedField
+            label={t('settings.integrations.guests.field.token')}
+            info={t('settings.integrations.guests.field.token.info')}
+            controlClassName="w-full max-w-none"
+          >
+            <Input
+              type="password"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              className="h-8 min-w-0 flex-1 rounded-md px-3"
+              disabled={isBusy}
+            />
+          </SettingsStackedField>
+        ) : null}
+        {(integration.settings ?? []).map((field) => (
+          <SettingsStackedField
+            key={field.id}
+            label={field.label}
+            controlClassName="w-full max-w-none"
+          >
+            <Input
+              type={field.secret ? 'password' : undefined}
+              placeholder={field.secret && status?.secretsSet.includes(field.id) ? t('settings.integrations.guest.secret.saved') : undefined}
+              value={settings[field.id] ?? ''}
+              onChange={(event) => {
+                setSettings((current) => ({ ...current, [field.id]: event.target.value }));
+              }}
+              onBlur={() => void saveDeclaredSettings()}
+              autoComplete="off"
+              spellCheck={false}
+              className="h-8 min-w-0 flex-1 rounded-md px-3"
+              disabled={isBusy}
+            />
+          </SettingsStackedField>
+        ))}
+        {auth === 'oauth' ? (
+          <SettingsStackedField
+            label={t('settings.integrations.guests.field.redirectUri')}
+            info={t('settings.integrations.guests.field.redirectUri.info')}
+            controlClassName="w-full max-w-none"
+          >
+            <Input
+              value={status?.redirectUri ?? ''}
+              readOnly
+              className="h-8 min-w-0 flex-1 rounded-md px-3"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={!status?.redirectUri}
+              onClick={() => void copyRedirect()}
+            >
+              {copied
+                ? t('settings.integrations.guests.actions.copied')
+                : t('settings.integrations.guests.actions.copyRedirect')}
+            </Button>
+          </SettingsStackedField>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {connected ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={isBusy}
+              onClick={() => void disconnect()}
+            >
+              {t('settings.integrations.guests.actions.disconnect')}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isBusy || isWaiting}
+              onClick={() => void startConnect()}
+            >
+              {isBusy ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : null}
+              {t('settings.integrations.guests.actions.connect')}
+            </Button>
+          )}
+        </div>
+      </div>
     </IntegrationCatalogCard>
   );
 };
@@ -456,15 +456,17 @@ export const GuestIntegrationsSection: React.FC<{ divider?: boolean }> = ({ divi
   // The channels an approved extension serves, with their accounts; a load that
   // fails keeps the last list, never an empty one.
   const refreshChannels = React.useCallback(async () => {
-    const loaded = await loadNotificationChannels();
+    const result = await loadNotificationChannels();
     if (getRuntimeKey() !== ownerRuntimeKey) return;
-    if (loaded === null) {
-      if (!channelsLoadFailedRef.current) toast.error(t('settings.integrations.channels.toast.loadFailed'));
-      channelsLoadFailedRef.current = true;
+    if (!result.ok) {
+      if (!result.absent) {
+        if (!channelsLoadFailedRef.current) toast.error(t('settings.integrations.channels.toast.loadFailed'));
+        channelsLoadFailedRef.current = true;
+      }
       return;
     }
     channelsLoadFailedRef.current = false;
-    setChannels(loaded);
+    setChannels(result.channels);
   }, [ownerRuntimeKey, t]);
 
   React.useEffect(() => {

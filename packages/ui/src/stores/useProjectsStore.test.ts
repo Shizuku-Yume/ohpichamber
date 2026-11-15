@@ -12,11 +12,13 @@ describe("useProjectsStore settings synchronization", () => {
     const directoryState = useDirectoryStore.getState()
     const sdkDirectory = hostFilesystem.getDirectory()
     try {
-      useProjectsStore.getState().synchronizeFromSettings({ projects: [
-        { id: "drive", path: "c:\\" },
-        { id: "lower", path: "c:\\Users\\Developer\\Project\\" },
-        { id: "upper", path: "C:/Users/Developer/Project" },
-      ] })
+      useProjectsStore.getState().synchronizeFromSettings({
+        projects: [
+          { id: "drive", path: "c:\\" },
+          { id: "lower", path: "c:\\Users\\Developer\\Project\\" },
+          { id: "upper", path: "C:/Users/Developer/Project" },
+        ]
+      })
       expect(useProjectsStore.getState().projects.map((project) => project.path)).toEqual(["C:/", "C:/Users/Developer/Project"])
     } finally {
       useProjectsStore.setState(previous, true)
@@ -167,22 +169,14 @@ describe("useProjectsStore default model and thinking level", () => {
     expect(project?.defaultVariant).toBe(undefined)
   })
 
-  test("persists and clears a project default agent", () => {
-    seed({ id: "project-a", path: "/repo" })
-
-    useProjectsStore.getState().updateProjectMeta("project-a", { defaultAgent: "plan" })
-    expect(useProjectsStore.getState().projects[0]?.defaultAgent).toBe("plan")
-
-    useProjectsStore.getState().updateProjectMeta("project-a", { defaultAgent: "   " })
-    expect(useProjectsStore.getState().projects[0]?.defaultAgent).toBe(undefined)
-  })
-
-  test("sanitizes a project default agent from settings", () => {
-    useProjectsStore.getState().synchronizeFromSettings({
+  test("ignores and drops a project default agent from settings", () => {
+    const legacySettings = {
       projects: [{ id: "project-a", path: "/repo", defaultAgent: "  plan  " }],
-    })
+    };
+    useProjectsStore.getState().synchronizeFromSettings(legacySettings as DesktopSettings);
 
-    expect(useProjectsStore.getState().projects[0]?.defaultAgent).toBe("plan")
+    const first = useProjectsStore.getState().projects[0];
+    expect(first ? ('defaultAgent' in first) : false).toBe(false);
   })
 })
 

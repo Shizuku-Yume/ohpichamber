@@ -210,9 +210,10 @@ export function createCanonicalQueueRuntime({ store, service, resolveAttachments
     getState: (scope) => store.getState(queueScope(scope)),
     append: async (scope, commandId, request) => {
       void ensureSessionObserved(scope).catch(() => {});
-      const admitted = { ...request, request: assertRootPromptAdmission(request.request) };
-      const captured = assertRootPromptAdmission(await capturePrompt(scope, admitted.request));
-      const queue = await store.append(queueScope(scope), commandId, { ...admitted, request: captured });
+      const isRoot = scope.parentSessionId === undefined;
+      const admitted = { ...request, request: isRoot ? assertRootPromptAdmission(request.request) : request.request };
+      const captured = await capturePrompt(scope, admitted.request);
+      const queue = await store.append(queueScope(scope), commandId, { ...admitted, request: isRoot ? assertRootPromptAdmission(captured) : captured });
       changed(scope, queue); schedule(scope); return queue;
     },
     remove: async (scope, request) => {

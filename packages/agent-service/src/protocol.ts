@@ -1,4 +1,4 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
+import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, SessionToolsCatalogSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
 import { GoalControlRequestSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -7,7 +7,7 @@ import { CatalogOperationSchema, CatalogResultSchema } from './catalogs/protocol
 import { McpOperationSchema, McpResultSchema } from './worker/mcp/protocol.ts';
 import { ShellOperationSchema, ShellResultSchema } from './shell/protocol.ts';
 import { CompletionOperationSchema, CompletionResultSchema } from './completion/protocol.ts';
-import { UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema } from '@openchamber/agent-contract';
+import { UsageAccountsSchema, UsageQuerySchema, UsageStatsSchema, UsageToolsResponseSchema } from '@openchamber/agent-contract';
 import { SubagentSchema, SubagentTranscriptResponseSchema, SubagentTreeCostResponseSchema } from '@openchamber/agent-contract';
 import { NativePolicyContextSchema, HostActionRequestSchema, HostActionResultSchema, HostNativePolicySnapshotSchema } from './native-policy-protocol.ts';
 import { WebSearchOperationSchema, WebSearchResultSchema } from './worker/websearch/protocol.ts';
@@ -31,6 +31,7 @@ export const WorkerBootstrapSchema = z.strictObject({
   catalogRevision: CounterSchema.optional(), mcpConfiguration: MCPConfigurationStateSchema.optional(),
   pluginRevision: CounterSchema.optional(),
   skillSources: SkillSourceRevisionsSchema.optional(),
+  hostTools: z.record(z.string(), z.boolean()).optional(),
 });
 export type WorkerBootstrap = z.infer<typeof WorkerBootstrapSchema>;
 export const WorkerBootstrapMessageSchema = WorkerBootstrapSchema.omit({ env: true }).extend({
@@ -45,6 +46,7 @@ export const CompletionWorkerBootstrapSchema = z.strictObject({
   agentDirectory: PrivatePathSchema, agentDirectoryId: EntityIdSchema,
   catalogRevision: CounterSchema,
   mcpConfigPath: PrivatePathSchema.optional(),
+  hostTools: z.record(z.string(), z.boolean()).optional(),
 });
 export type CompletionWorkerBootstrap = z.infer<typeof CompletionWorkerBootstrapSchema>;
 
@@ -56,6 +58,9 @@ const UsageSessionReferenceSchema = z.strictObject({
   sessionsDirectory: PrivatePathSchema.optional(), parentSessionId: EntityIdSchema.optional(),
 });
 export type UsageSessionReference = z.infer<typeof UsageSessionReferenceSchema>;
+/** One authorized transcript: its session identity, and whether it is a root session or a subagent's. */
+export const UsageScopeFileSchema = z.strictObject({ file: PrivatePathSchema, sessionId: EntityIdSchema, role: z.enum(['root', 'subagent']) });
+export type UsageScopeFile = z.infer<typeof UsageScopeFileSchema>;
 export const UsageAuthorizationSchema = z.array(z.strictObject({ workspaceId: EntityIdSchema, projectId: EntityIdSchema }));
 
 /** `proposed` marks a value the authorized operation itself introduces. The authorizer then
@@ -67,7 +72,7 @@ export const WorkerPolicyRequestSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp-server'), server: MCPServerConfigSchema, proposed: z.literal(true).optional() }),
   z.strictObject({ type: z.literal('mcp-oauth'), server: MCPServerConfigSchema, configuration: JsonObjectSchema, proposed: z.literal(true).optional() }),
   z.strictObject({ type: z.literal('shell'), request: ShellStartRequestSchema }),
-  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), permissionPresetId: EntityIdSchema.optional(), approvalId: EntityIdSchema.optional(), toolCallId: EntityIdSchema.optional(), proposed: z.literal(true).optional() }),
+  z.strictObject({ type: z.literal('tool'), toolName: z.string().min(1), input: JsonObjectSchema, agentId: EntityIdSchema.optional(), approvalId: EntityIdSchema.optional(), toolCallId: EntityIdSchema.optional(), proposed: z.literal(true).optional() }),
 ]);
 export type WorkerPolicyRequest = z.infer<typeof WorkerPolicyRequestSchema>;
 export const WorkerPolicyResultSchema = z.discriminatedUnion('allowed', [
@@ -106,9 +111,13 @@ export const WorkerOperationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('mcp'), operation: McpOperationSchema }),
   z.strictObject({ type: z.literal('shell'), operation: ShellOperationSchema }),
   z.strictObject({ type: z.literal('completion'), operation: CompletionOperationSchema }),
-  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
+  z.strictObject({ type: z.literal('usage.stats'), query: UsageQuerySchema, sessionFiles: z.array(UsageScopeFileSchema).optional() }),
   z.strictObject({ type: z.literal('usage.tools'), query: UsageQuerySchema, references: z.array(UsageSessionReferenceSchema) }),
+  z.strictObject({ type: z.literal('usage.accounts'), query: UsageQuerySchema }),
   z.strictObject({ type: z.literal('mcp.configuration.read') }),
+  z.strictObject({ type: z.literal('host-tools.toggle'), toolName: z.string().min(1), enabled: z.boolean() }),
+  z.strictObject({ type: z.literal('host-tools.configure'), tools: z.record(z.string(), z.boolean()) }),
+  z.strictObject({ type: z.literal('tools.catalog') }),
 ]);
 export type WorkerOperation = z.infer<typeof WorkerOperationSchema> | { type: 'question.resolve'; questionId: string; action: 'answer' | 'cancel'; response?: JsonValue };
 const WorkerApprovalInteractionSchema = z.strictObject({
@@ -162,8 +171,12 @@ const WorkerOperationResultSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('shell'), result: ShellResultSchema }),
   z.strictObject({ type: z.literal('completion'), result: CompletionResultSchema }),
   z.strictObject({ type: z.literal('usage.stats'), result: UsageStatsSchema }),
+  z.strictObject({ type: z.literal('usage.accounts'), result: z.strictObject({ accounts: UsageAccountsSchema, errors: z.record(z.string().min(1), z.string()) }) }),
   z.strictObject({ type: z.literal('usage.tools'), result: UsageToolsResponseSchema }),
   z.strictObject({ type: z.literal('mcp.configuration'), configuration: MCPConfigurationStateSchema.nullable() }),
+  z.strictObject({ type: z.literal('host-tools.toggle'), enabled: z.boolean() }),
+  z.strictObject({ type: z.literal('host-tools.configure'), configured: z.literal(true) }),
+  z.strictObject({ type: z.literal('tools.catalog'), catalog: SessionToolsCatalogSchema }),
 ]);
 export type WorkerOperationResult = z.infer<typeof WorkerOperationResultSchema>;
 const WorkerOperationCommandSchema = z.strictObject({
@@ -182,6 +195,9 @@ export const WorkerReplySchema = z.discriminatedUnion('type', [
   // A pre-warmed worker reports that its module graph is loaded and it is
   // waiting for a bootstrap. Only then is adopting it faster than spawning.
   z.strictObject({ type: z.literal('idle') }),
+  // A spare that finished its background warm-up. Adoption still ranks by
+  // `idle`; this only lets the supervisor prefer a spare with nothing left to pay.
+  z.strictObject({ type: z.literal('warm') }),
   z.strictObject({ type: z.literal('ready'), workerGeneration: EntityIdSchema }),
   z.strictObject({ type: z.literal('error'), workerGeneration: EntityIdSchema, code: ProblemCodeSchema, detail: z.string().min(1).max(200).optional() }),
   z.strictObject({ type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema, status: z.number().int().min(400).max(599), detail: z.string().min(1).max(200) }),

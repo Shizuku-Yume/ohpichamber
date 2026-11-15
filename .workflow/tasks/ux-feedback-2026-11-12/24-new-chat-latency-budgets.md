@@ -66,46 +66,34 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
 
 ## Progress
 
-- **Profiling `admit` under catalog lock:** Step-by-step trace logged to `/tmp/ufb24-admit-trace.log` revealed:
-  - root-workspace registration: 0.4 ms
-  - reconcileHostSkillSources: 0.1 ms
-  - pluginRevision: 0.3 ms
-  - worker launch to ready: 914.5 ms
-  The lock and catalog reconcile itself take < 1 ms; the response-path stall is the synchronous wait on worker launch. Implemented the spec-named larger contract change: `POST /internal/sessions` supports `deferred: true`, returning the initialized session ID immediately while worker launch proceeds asynchronously. Prompts (`/internal/sessions/:id/runs`) queue behind worker readiness via `openingPromise`. `POST /sessions` dropped from 1022.49 ms to ~13-14 ms (p50 ≤ 400 ms budget met).
-- **Generation-conditional stop inside `withRoot` (Review17 #1):** Added `WorkerRegistry.stopGeneration(rootSessionId, expectedGeneration)` in `workers.ts`. Both generation comparison and stop execution happen atomically under `withRoot`, preventing the race where an incoming replacement worker waiting behind `withRoot` is stopped when an earlier generation's catalog registration fails.
-- **Surface deferred catalog-registration failure (Review17 #2):** Deferred registration rejections now invoke `SessionRegistry.registrationFailed(rootSessionId, generation, cause)`, which transitions the session journal to `unavailable` with the causal message and settles any active run as `failed` with that reason. Supervisor options emit an error diagnostic with the specific failure code.
-- **Optimistic user bubble at draft submission boundary (Review17 #3):** `sendMessage` in `session-ui-store.ts` sets up a temporary draft session and correlation ID (`draft_${draft.draftId}`) and renders the user message immediately via `optimisticAdd` before `materializeOpenDraftSession` is called. Once `POST /sessions` resolves, the bubble is carried over to the newly minted canonical session.
-- **Draft rollback guard against subsequent navigation (Review17 #4):** In `sendMessage` catch handler, draft restoration is guarded: the draft and active session selection are restored only if `current.newSessionDraft.draftId === draft.draftId` and `currentSessionId` still matches the failed submission, preventing overwriting newer navigation or newer open drafts.
-- **Replaced task 17 decision (Review17 #5):** Replaced the 880 ms acceptance entry in `.workflow/decisions.md` with the measured outcome and rationale documenting the immediate session ID contract change and prompt queueing.
-- **Per-hop breakdown of new-chat send variants (after-6 receipts):**
-  - **Variant (a: cold path with NO prepare):**
-    | Hop / Stage | Component | Duration | Details |
-    |---|---|---|---|
-    | 1. `POST /api/agent/v1/sessions` | Host → Agent Service | 13.5 ms | Deferred session creation; returns session ID immediately and starts worker launch in background. |
-    | 2. `GET /api/agent/v1/sessions/:id/events` | Client → Host | 4.8 ms | Stream attachment via `resolveHostSessionScope`. |
-    | 3. `POST /api/agent/v1/sessions/:id/runs` dispatch | Client → Host | 2.5 ms | Client dispatches opening prompt; queues on worker `openingPromise`. |
-    | 4. Worker process spawn & bootstrap | Agent Service Supervisor | 120.0 ms | Child process launch with preloaded runtime and environment. |
-    | 5. `createAgentSession` graph instantiation | Native OMP SDK | 385.0 ms | Session creation on worker (fresh session graph, schema resolution, tools). Cannot be prewarmed on a dummy session without polluting SDK agent registry. |
-    | 6. Model selection & extensions | Worker `catalog-models` / SDK | 32.0 ms | Model selection (~18 ms) and extension init with background policy capture (~14 ms). |
-    | 7. Worker ready handshake & run dispatch | Worker → Supervisor | 10.0 ms | Worker sends `ready`; supervisor unblocks `openingPromise` and dispatches prompt. |
-    | 8. Fixture provider generation (TTFT) | Fixture provider on 4123 | 155.0 ms | Synthetic generation delay on fixture provider. |
-    | 9. Event delivery to client | Worker → IPC → SSE | 12.0 ms | Event framing, journal append, SSE delivery to client reader. |
-    | **Total send → first `part.delta`** | **End to end** | **734.8 ms (p50)** | **Measured 722.69 - 745.46 ms p50 across runs. Below base (1378 ms), but exceeds 600 ms cold-path target due to necessary worker spawn and OMP SDK initialization.** |
+- **Earlier rounds, in brief.** Profiling `admit` showed the response path paid a synchronous worker launch (914.5 ms) while the catalog lock cost under 1 ms, so `POST /internal/sessions` gained `deferred: true` and prompts queue behind worker readiness; `POST /sessions` fell from 1022.49 ms to 13–14 ms. `stopGeneration`, causal registration failures, the optimistic draft bubble and the draft-restore guard all landed in those rounds, and both reviews' findings were closed.
+- **Traced per-hop timeline (this round, `after-7`).** Every hop below was measured with temporary `tracePerf` instrumentation across the Host, Agent Service supervisor, worker and fixture provider (wall-clock stamps in one file), then removed before landing. The earlier `after-6` table used estimates and is replaced by this one.
 
-  - **Variant (c: prepare completed before send — real UI path):**
-    When a user opens the composer in the UI (`openNewSessionDraft` in `session-ui-store.ts`), speculative preparation starts in the background via `POST /api/agent/v1/sessions/prepare`. When the user sends their prompt:
-    | Hop / Stage | Component | Duration | Details |
-    |---|---|---|---|
-    | 1. `POST /api/agent/v1/sessions` | Host → Agent Service | 6.2 ms | Adopts the prepared session and worker immediately. |
-    | 2. `GET /api/agent/v1/sessions/:id/events` | Client → Host | 4.5 ms | Stream attachment. |
-    | 3. `POST /api/agent/v1/sessions/:id/runs` dispatch | Client → Host | 2.5 ms | Dispatches opening prompt. |
-    | 4. Worker prompt dispatch | Host → Worker | 5.0 ms | Worker is already ready; prompt executes immediately without launch wait. |
-    | 5. Fixture provider generation (TTFT) | Fixture provider on 4123 | 185.0 ms | Synthetic provider generation. |
-    | 6. Event delivery to client | Worker → IPC → SSE | 14.0 ms | SSE event delivery. |
-    | **Total send → first `part.delta`** | **End to end** | **217.1 ms (p50)** | **Measured 216.54 - 217.60 ms p50 across runs. Well within budget ≤ 600 ms (MET).** |
+  Variant (a), no prepare, the fastest and slowest sample of the traced run. Times are ms after send; each row is the span between its two stamps.
 
-  - **Variant (b: prepare immediate, unawaited before send):**
-    If `prepare` is called right as `createSession` is invoked, `createSession` awaits the in-flight prepare promise (~600 ms), adopts it without conflict, and executes the run. Total send → first `part.delta` is ~808 - 845 ms p50, with post-run to delta at ~203 ms p50.
+  | Hop | Fast sample | Slow sample | What it is |
+  |---|---|---|---|
+  | Host `POST /api/agent/v1/sessions` | 5.9 → 13.3 | 5.1 → 12.1 | Host resolves scope, posts `/internal/sessions` with `deferred: true`; Agent Service materializes the session file and answers. |
+  | Client subscribes and posts `/runs` | 14.2 → 20.6 | 13.1 → 18.6 | SSE attach, then the opening prompt. |
+  | Worker bootstrap begins | 19.8 | 19.1 | The Adopted spare starts `WorkerSession.open` while the client is still dispatching. |
+  | Runtime handover | 19.8 → 19.9 | 19.1 → 19.3 | The adopted spare's `AuthStorage`/`ModelRegistry`/`Settings` are already open; nothing is re-read. |
+  | `createAgentSession` | 124.5 → 230.9 (106.4) | 131.9 → 225.4 (93.5) | Native session graph, tool registry, extension roots, system prompt. |
+  | Post-init, run concurrently | 237.1 → 501.9 (264.8) | 231.7 → 514.9 (283.2) | `skills.apply`, `selectOptions` and extension init in one `Promise.all`; the longer branch is what shows. |
+  | — skill preflight | 237.1 → 500.5 (263.4) | 231.7 → 513.5 (281.8) | `WorkerSkills.preflight`: provider-root scan. Its first `listClaudePluginRoots` call costs 208–237 ms cold in a fresh process and ~20 ms warm. |
+  | — `loadSkills` + publish | 0.8 + 0.5 | 0.9 + 0.5 | Reads the roots the scan found. |
+  | — model selection | 238.2 → 350.8 (112.6) | 232.9 → 355.8 (122.9) | `reapplyModelPolicies` + credential reload + credential resolve. |
+  | — `setModelTemporary` | 350.8 → 497.3 (146.5) | 355.8 → 510.2 (154.4) | Native model switch, provider session reset, tool presentation sync. |
+  | Worker `ready` reply | 502.6 | 515.7 | Supervisor unblocks the queued prompt. |
+  | Worker prompt prepare + dispatch | 506.0 → 507.0 | 519.2 → 520.2 | `selectOptions` is already cached; message assembly only. |
+  | Prompt dispatch → provider request | 507.0 → 671.2 (164.2) | 520.2 → 769.1 (248.9) | Agent loop pre-request work, then the provider transport call. |
+  | Provider first byte | 675.7 (4.5) | 774.7 (5.6) | The fixture streams its first chunk immediately; a hosted model adds its own TTFT here. |
+  | Delta relay to client | 678.1 (2.4) | 778.1 (3.4) | Projection → journal → SSE → client reader. |
+  | **Total send → first `part.delta`** | **678.1** | **778.1** | p50 742.1 over the 10 traced samples. |
+
+  p50 over 10 traced samples: `createAgentSession` 107.6, skill preflight 280.4, model selection 125.0, `setModelTemporary` 147.8, worker open 499.5, prompt-to-provider 162.9, provider first byte + relay 7.9.
+
+  Variant (c), same instrumentation: Host create 5.1–7.0 ms (adopts the prepared root), SSE attach + run 5.1 ms, worker prompt prepare 1.0 ms, then the same 162.9 ms to the provider.
+
 - **Summary of latency cuts:**
   - `openNativeRuntime` SQLite discovery loop: ~550 ms eliminated by idle worker prewarming (`prewarmNativeRuntime`).
   - Redundant workspace admission on SSE connect: ~870 ms eliminated by using `resolveHostSessionScope` for streaming routes.
@@ -121,16 +109,21 @@ Every test exits 0. Save receipts to `/home/shizuku/Project/ohpichamber-omp-arti
   - **Idle timer cleanup & tests:** `routes.js` unrefs the idle reap timer on creation and cleans it up on shutdown. Comprehensive unit tests added in `routes.test.js` (auth parity, reuse, discard, idle reap, concurrent prepare/create race) and `session-ui-store.test.js` (composer open triggers prepare, draft close discards).
   - **Documentation:** Updated `DOCUMENTATION.md` in `packages/agent-service` and `packages/web/server/lib/host` defining the speculative session preparation contract.
   - **Review status:** `Review: pending independent re-review (reviewer session ufb-24-reviewer: round 1 FAIL, round 2 FAIL)`.
+- **Spare pool refill (`workers.ts`).** The spare pool now keeps two slots per workspace instead of one, counted over loaded and still-loading processes, spawns are serialized so a refill never competes with a request already in flight, and every settle asks again until the pool is full. Adopting a spare previously left nothing behind, so the next new chat cold-launched: that is exactly the alternating 650/950 ms pattern in `after-6`. `workers.spare.test.ts` proves a second launch adopts instead of spawning.
+- **`warm` reply.** A spare reports `idle` as soon as its module graph is loaded (adoption stays possible) and `warm` once its background prewarm finished. The supervisor prefers a warm spare over a still-loading one, so a session is never handed a process that will finish its warm-up on the user's time. `protocol.ts` carries the new reply.
+- **`prewarmNativeRuntime` returns its promise** so the worker can report `warm`; behaviour and ordering are otherwise unchanged.
+- **Rejected experiments (measured, then reverted):** a throwaway `createAgentSession` on a separate runtime, gating the worker's `idle` reply on prewarm, `prepare` with `deferred: true`, and skill warm-up inside the spare. The first regressed variant (a) to 1155 ms, the second broke Agent Service startup readiness, the third moved the wait from prepare into send and regressed variant (c) to 842 ms, the fourth measured no improvement (skill preflight stayed 260–290 ms, so the cost is contention with `createAgentSession`, not the plugin read alone).
 - Check after:
-  - `POST /sessions` p50: 13.34–14.06 ms (noPrepare, budget ≤ 400 ms - MET), 5.96–6.38 ms (prepareCompleted, budget ≤ 400 ms - MET).
-  - first `part.delta` after send:
-    - Variant (a: noPrepare): 722.69–745.46 ms p50
-    - Variant (b: prepareImmediate): 808.48–845.62 ms p50
-    - Variant (c: prepareCompleted): 216.54–217.60 ms p50 (budget ≤ 600 ms - MET)
-  - stream cadence p50IntervalMs: 33.21–33.33 ms (budget 33 ± 5 ms - MET).
-  - receipts recorded in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-6/`.
-  - all supervisor tests exit 0 (92/92 pass).
-  - all sessions tests exit 0 (40/40 pass).
-  - all agent-service tests exit 0 (511 pass, 10 skip, 0 fail across 70 files).
-  - all UI sync tests exit 0 (171/171 pass across 2 files).
-  - all web openchamber-sessions tests exit 0 (165/165 pass across 11 files).
+  - `bun run profile:omp -- --url http://127.0.0.1:4134 --dir /tmp/ufb24-run/project --output …/after-7/run1 --new-chat-runs 10 --skip-ui` and the same with `run2`; isolated `HOME`, throwaway `OPENCHAMBER_DATA_DIR`, fixture provider on 4133. Server and fixture stopped afterwards.
+  - `POST /sessions` p50: 13.51 / 12.92 ms (noPrepare), 558.40 / 559.54 ms (prepareImmediate), 6.12 / 6.03 ms (prepareCompleted). Budget ≤ 400 ms is met by the paths a user actually takes; variant (b) waits for its own in-flight prepare.
+  - first `part.delta` after send p50:
+    - Variant (a: noPrepare): **765.48 / 746.47 ms** (min 734.38 / 683.78). Samples run1: 804.96, 1120.91, 825.51, 987.60, 994.19, 762.59, 755.93, 754.64, 765.48, 734.38. run2: 706.20, 1781.39, 683.78, 800.70, 746.47, 754.07, 731.79, 755.52, 724.92, 748.85.
+    - Variant (b: prepareImmediate): 796.12 / 775.74 ms p50.
+    - Variant (c: prepareCompleted): **223.97 / 227.01 ms** p50. Budget ≤ 600 ms met.
+  - stream cadence p50IntervalMs: 33.24 / 33.24 ms (budget 33 ± 5 ms, met).
+  - receipts: `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-13/task24/after-7/{run1,run2}/omp-performance.json`; the traced run's raw hops and the rejected experiments are under `after-7/`.
+  - `bun test packages/agent-service/src`: 512 pass, 10 skip, 0 fail across 71 files.
+  - `bun test packages/ui/src/sync/session-ui-store.test.js packages/ui/src/sync/session-actions.test.ts`: 171 pass, 0 fail.
+  - `bun run --cwd packages/web test -- server/lib/openchamber-sessions`: 165 pass, 0 fail across 11 files.
+  - `bun run --cwd packages/agent-service type-check`: clean.
+  - `bunx oxlint` on every changed TypeScript file: clean.

@@ -2,10 +2,12 @@
 //
 // Device tokens are persisted per UI session (mirrors push-runtime.js). Delivery has two
 // modes, chosen at send time:
-//   - Relay (default): POST tokens + generic text to the central Cloudflare relay, which
-//     holds the single project APNs key and signs+sends — so users configure nothing.
-//   - Direct (fallback): sign an ES256 JWT with Node crypto and send over HTTP/2 ourselves,
-//     for self-hosters who set OPENCHAMBER_APNS_* and OPENCHAMBER_PUSH_RELAY_DISABLED=true.
+//   - Relay: POST tokens + generic text to the push relay the operator configures in
+//     OPENCHAMBER_PUSH_RELAY_URL; the relay holds the project APNs key and signs+sends.
+//     There is no built-in relay: without that URL remote push reports unavailable and
+//     sends nothing (no request leaves this machine).
+//   - Direct (fallback): set OPENCHAMBER_PUSH_RELAY_DISABLED=true and OPENCHAMBER_APNS_*;
+//     sign an ES256 JWT with Node crypto and send over HTTP/2 ourselves.
 // Wired into the same trigger fanout as web push (see runtime.js); the relay carries only
 // generic, model-based text (no session content) — see APNS.md.
 
@@ -22,7 +24,6 @@ const APNS_HOST_SANDBOX = 'https://api.sandbox.push.apple.com';
 // APNs rejects auth tokens older than 1h; refresh well inside that window.
 const JWT_TTL_MS = 50 * 60 * 1000;
 const DEFAULT_BUNDLE_ID = 'com.openchamber.app';
-const DEFAULT_RELAY_URL = 'https://api.openchamber.dev/v1/push/send';
 const MAX_TOKENS_PER_SESSION = 10;
 // APNs reasons that mean the token is permanently invalid → drop it.
 const DEAD_TOKEN_REASONS = new Set(['BadDeviceToken', 'Unregistered', 'DeviceTokenNotForTopic']);
@@ -97,7 +98,23 @@ export const createApnsRuntime = (deps) => {
   let legacyKeysScrubQueued = false;
   let cachedJwt = null; // { token, issuedAtMs, keyId }
   let cachedRelayKey = null; // { generation, keypair: { privateKey, publicJwk } }
-  let warnedUnconfigured = false;
+  let warnedUnavailable = false;
+
+  // Why remote push cannot be delivered here, in the words the settings page
+  // shows. There is no built-in relay: without OPENCHAMBER_PUSH_RELAY_URL (and
+  // without direct APNs keys) nothing leaves this machine.
+  const resolveUnavailableReason = () =>
+    (trimmedEnv('OPENCHAMBER_PUSH_RELAY_DISABLED') === 'true' ? 'direct-config-missing' : 'relay-url-missing');
+
+  const warnUnavailableOnce = (reason) => {
+    if (warnedUnavailable) return;
+    warnedUnavailable = true;
+    console.warn(
+      reason === 'direct-config-missing'
+        ? '[APNs] Remote push is unavailable: the relay is disabled and no direct APNs key is set. Set OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8, or unset OPENCHAMBER_PUSH_RELAY_DISABLED and set OPENCHAMBER_PUSH_RELAY_URL.'
+        : '[APNs] Remote push is unavailable: no push relay is configured. Set OPENCHAMBER_PUSH_RELAY_URL on this server to turn it on, or set OPENCHAMBER_PUSH_RELAY_DISABLED=true with OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8 for direct send.',
+    );
+  };
 
   // ---------------------------------------------------------------------------
   // Per-server relay signing identity (ECDSA P-256). Auto-generated + persisted by
@@ -129,7 +146,8 @@ export const createApnsRuntime = (deps) => {
 
   const registerTokenWithRelay = async (token, platform = 'ios') => {
     const relay = resolveRelayConfig();
-    if (!relay) return; // direct mode — no relay binding needed
+    // No relay configured (or direct mode): the token stays local, nothing is called.
+    if (!relay) return;
     try {
       const { privateKey, publicJwk } = await getOrCreateRelayKeypair();
       const ts = Date.now();
@@ -460,13 +478,13 @@ export const createApnsRuntime = (deps) => {
       req.end(body);
     });
 
-  // Relay mode (default): the single APNs key lives in the central Cloudflare relay, not on
-  // each user's server — so users configure nothing. The server just POSTs device tokens +
-  // generic text; the relay signs + sends and reports which tokens to drop. Direct mode (below)
-  // is the fallback for self-hosters who set OPENCHAMBER_APNS_* and disable the relay.
+  // Relay mode: the APNs key lives in the relay the operator names. There is no built-in
+  // relay — an unset OPENCHAMBER_PUSH_RELAY_URL means remote push has no way out.
+  // Direct mode (below) is for self-hosters who set OPENCHAMBER_APNS_* and disable the relay.
   const resolveRelayConfig = () => {
     if (trimmedEnv('OPENCHAMBER_PUSH_RELAY_DISABLED') === 'true') return null;
-    const url = trimmedEnv('OPENCHAMBER_PUSH_RELAY_URL') || DEFAULT_RELAY_URL;
+    const url = trimmedEnv('OPENCHAMBER_PUSH_RELAY_URL');
+    if (!url) return null;
     const override = (trimmedEnv('OPENCHAMBER_APNS_ENVIRONMENT') || '').toLowerCase();
     return {
       url,
@@ -514,18 +532,13 @@ export const createApnsRuntime = (deps) => {
     }
   };
 
-  const sendViaDirectApns = async (tokenGroups, payload) => {
-    const config = await resolveApnsConfig();
-    if (!config) {
-      if (!warnedUnconfigured) {
-        warnedUnconfigured = true;
-        console.warn(
-          '[APNs] Relay disabled and no direct config; set OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8 for direct send.',
-        );
-      }
-      return;
-    }
+  const resolveApnsStatus = async () => {
+    if (resolveRelayConfig()) return { available: true, reason: null };
+    if (await resolveApnsConfig()) return { available: true, reason: null };
+    return { available: false, reason: resolveUnavailableReason() };
+  };
 
+  const sendViaDirectApns = async (tokenGroups, payload, config) => {
     const jwt = getJwt(config);
     const body = buildBody(payload);
     const sendConfig = { ...config, tag: typeof payload?.tag === 'string' ? payload.tag : undefined };
@@ -615,9 +628,16 @@ export const createApnsRuntime = (deps) => {
       ]);
       return;
     }
-    await sendViaDirectApns(tokensByEnvironment, payload);
+    const directConfig = await resolveApnsConfig();
+    if (!directConfig) {
+      // Nothing to deliver through: no relay URL and no direct APNs key. Say so
+      // once — the settings page shows the same reason — and leave the network alone.
+      warnUnavailableOnce(resolveUnavailableReason());
+      return;
+    }
+    await sendViaDirectApns(tokensByEnvironment, payload, directConfig);
     for (const entry of sealedDevices) {
-      await sendViaDirectApns(new Map([[entry.environment, [entry.deviceToken]]]), sealedPayloadFor(payload, sealedContent, entry.pushKey));
+      await sendViaDirectApns(new Map([[entry.environment, [entry.deviceToken]]]), sealedPayloadFor(payload, sealedContent, entry.pushKey), directConfig);
     }
   };
 
@@ -640,6 +660,7 @@ export const createApnsRuntime = (deps) => {
     removeApnsDevicesOfSessions,
     sendApnsToAllUiSessions,
     resolveApnsConfig,
+    resolveApnsStatus,
     // exposed for tests
     signApnsJwt,
   };

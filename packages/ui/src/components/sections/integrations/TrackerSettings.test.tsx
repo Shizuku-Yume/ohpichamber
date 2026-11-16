@@ -170,6 +170,32 @@ describe('TrackerSettings', () => {
     expect(buttonLabels()).toContain('Disconnect');
   });
 
+  test('shows the broker setting instead of a Connect button when the server cannot sign in', async () => {
+    status = {
+      connected: false,
+      signIn: { reason: 'broker-url-missing', setting: 'OPENCHAMBER_LINEAR_BROKER_URL', settingsKey: 'linearBrokerUrl' },
+    };
+    await mount(linearLikeTrackerDescriptor());
+
+    expect(buttonLabels()).not.toContain('Connect');
+    expect(container.textContent).toContain('OAuth broker');
+    expect(container.textContent).toContain('OPENCHAMBER_LINEAR_BROKER_URL');
+    expect(container.textContent).toContain('linearBrokerUrl');
+  });
+
+  test('keeps a stored workspace usable when the server cannot start a new sign-in', async () => {
+    status = {
+      ...connectedStatus,
+      signIn: { reason: 'broker-url-missing', setting: 'OPENCHAMBER_LINEAR_BROKER_URL', settingsKey: 'linearBrokerUrl' },
+    };
+    await mount(linearLikeTrackerDescriptor());
+
+    // Only the sign-in affordance is gone; the connected account and its actions stay.
+    expect(container.textContent).toContain('Acme Org');
+    expect(buttonLabels()).not.toContain('Connect');
+    expect(buttonLabels()).toContain('Disconnect');
+  });
+
   test('keeps waiting for the browser sign-in when the opening status read failed', async () => {
     statusFailures = 1;
     await mount(linearLikeTrackerDescriptor());

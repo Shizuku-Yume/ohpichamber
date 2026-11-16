@@ -120,7 +120,10 @@ on the source-control side (`lib/source-control/`).
   tracker (`components/sections/integrations/`), with the account switch and a
   second sign-in only where `multipleAccounts` is set, `TrackerProjectMapping`
   where `projectMapping` is, `TrackerSessionComments` where `sessionComments`
-  is, and browser sign-in only where `authMethods` has `oauth`.
+  is, and browser sign-in only where `authMethods` has `oauth`. A status may
+  carry `signIn` when the server cannot start sign-in at all (Linear without a
+  broker or redirect URI): the card then draws no sign-in button and shows the
+  reason with the setting that enables it.
 
 ## Decisions
 

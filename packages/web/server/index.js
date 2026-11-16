@@ -523,6 +523,7 @@ const apnsRuntime = createApnsRuntime({
 const addOrUpdateApnsToken = (...args) => apnsRuntime.addOrUpdateApnsToken(...args);
 const removeApnsToken = (...args) => apnsRuntime.removeApnsToken(...args);
 const sendApnsToAllUiSessions = (...args) => apnsRuntime.sendApnsToAllUiSessions(...args);
+const resolveApnsStatus = (...args) => apnsRuntime.resolveApnsStatus(...args);
 
 const TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW = 128;
 const TERMINAL_INPUT_WS_REBIND_WINDOW_MS = 60 * 1000;
@@ -1994,6 +1995,7 @@ async function main(options = {}) {
   removePushSubscription,
   addOrUpdateApnsToken,
   removeApnsToken,
+  resolveApnsStatus,
   updateUiVisibility,
   clearPendingPushBadge: () => clearPendingPushBadge(),
   isUiVisible,

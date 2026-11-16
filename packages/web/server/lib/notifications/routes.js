@@ -24,6 +24,10 @@ const parsePushUnsubscribeBody = (body) => {
 
 export const NOTIFICATION_SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
+/** The settings that turn native push on, named in the UI's unavailable copy. */
+export const NATIVE_PUSH_RELAY_SETTING = 'OPENCHAMBER_PUSH_RELAY_URL';
+export const NATIVE_PUSH_RELAY_DISABLED_SETTING = 'OPENCHAMBER_PUSH_RELAY_DISABLED';
+
 export const registerNotificationRoutes = (app, dependencies) => {
   const {
     uiAuthController,
@@ -47,6 +51,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
     getPendingBlockingRequestsSnapshot,
     getSessionState,
     setPushInitialized,
+    resolveApnsStatus,
   } = dependencies;
 
   const ensureSessionWatcher = async () => {
@@ -59,6 +64,29 @@ export const registerNotificationRoutes = (app, dependencies) => {
       console.warn('[OpenCodeWatcher] lazy start failed:', error?.message ?? error);
     }
   };
+
+  // Whether this server can deliver remote iOS/Android push at all, and why not.
+  // A client reads this instead of guessing: with no relay URL and no direct APNs
+  // key the server sends nothing, and the settings page says so.
+  app.get('/api/push/native-status', async (_req, res) => {
+    if (typeof resolveApnsStatus !== 'function') {
+      return res.status(404).json({ error: 'Native push status is unavailable' });
+    }
+    try {
+      const status = await resolveApnsStatus();
+      return res.json({
+        available: status.available === true,
+        reason: status.reason ?? null,
+        relaySetting: NATIVE_PUSH_RELAY_SETTING,
+        ...(status.reason === 'direct-config-missing'
+          ? { disabledSetting: NATIVE_PUSH_RELAY_DISABLED_SETTING }
+          : {}),
+      });
+    } catch (error) {
+      console.warn('[Push] Failed to read native push status:', error?.message ?? error);
+      return res.status(500).json({ error: 'Failed to read native push status' });
+    }
+  });
 
   app.get('/api/push/vapid-public-key', async (_req, res) => {
     try {

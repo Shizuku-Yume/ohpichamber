@@ -153,6 +153,34 @@ test('legacy chat web-role selections survive non-selection updates and unknown 
   } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
+test('a fallback reorder with no selected primary reads back in the order the user set', async () => {
+  // The page writes `retry.fallbackChains.web` and the next read used to
+  // re-derive the list through `resolveRoleChain`, which starts at the implicit
+  // `@web` primary and therefore promoted `web/parallel` back to the first row.
+  // A user who never picked a primary saw a reorder snap back.
+  const { directory, bootstrap } = await fixture();
+  const runtime = await openNativeRuntime(bootstrap);
+  try {
+    const search = new NativeWebSearch(runtime, bootstrap.workspaceId, async () => {});
+    const initial = await search.operation({ type: 'read' });
+    if (initial.type !== 'state') throw new Error('Expected native search state');
+    expect(initial.state.selectedProviderId).toBeNull();
+    expect(initial.state.fallbackProviderIds.slice(0, 2)).toEqual(['web/parallel', 'web/hosted']);
+
+    const reordered = ['web/hosted', 'web/parallel', 'web/exa'];
+    const applied = await search.operation({ type: 'update', request: { expectedRevision: '0', fallbackProviderIds: reordered } });
+    expect(applied).toMatchObject({ type: 'mutated', result: { persistence: 'persisted', status: 'applied', state: {
+      selectedProviderId: null, fallbackProviderIds: reordered,
+    } } });
+
+    // The same state survives a cold read, so a reload keeps the user's order.
+    const read = await search.operation({ type: 'read' });
+    if (read.type !== 'state') throw new Error('Expected native search state');
+    expect(read.state.selectedProviderId).toBeNull();
+    expect(read.state.fallbackProviderIds).toEqual(reordered);
+  } finally { runtime.authStorage.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
 test('an empty native web-role pool reports no selection and rejects new selectors', async () => {
   const { directory, bootstrap } = await fixture();
   const runtime = await openNativeRuntime(bootstrap);

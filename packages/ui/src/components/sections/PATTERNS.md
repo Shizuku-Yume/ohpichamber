@@ -69,7 +69,7 @@ Do not introduce raw `<Tooltip>`-based info icons.
 ## Expandable rows
 
 `SettingsDisclosure` is for a flat list of items that each expand into an
-editor (a routing category, a custom preset). Its header is one ghost toggle
+editor (a routing category). Its header is one ghost toggle
 with a chevron, the item name and an optional quiet summary; an `accessory`
 such as `SettingsCheckboxRow` sits beside the toggle so it stays a separate
 hit target, and it adds its own focus stop, so a header with an accessory is

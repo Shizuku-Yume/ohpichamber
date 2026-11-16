@@ -33,6 +33,8 @@ import { JevAccessNote } from '@/components/sections/classification/JevAccessNot
 
 const DEFAULT_VARIANT_VALUE = '__default__';
 const SAVE_DEBOUNCE_MS = 500;
+/** The server's cap on categories; beyond it every save is a 400. */
+const MAX_CATEGORIES = 32;
 
 
 /**
@@ -134,6 +136,7 @@ const CategoryRow: React.FC<{
     : undefined;
   const missingName = category.name.trim().length === 0;
   const missingDescription = category.description.trim().length === 0;
+  const displayName = category.name.trim() || category.id;
 
   // A freshly added category opens with its description empty, which is what
   // the user must fill first; put the caret there instead of making them hunt.
@@ -145,14 +148,14 @@ const CategoryRow: React.FC<{
 
   return (
     <SettingsDisclosure
-      title={category.name || category.id}
+      title={displayName}
       secondary={summary}
       accessory={(
         <SettingsCheckboxRow
           checked={category.enabled}
           onChange={(checked) => onChange({ enabled: checked })}
-          label={<span className="sr-only">{t('settings.routing.category.enabled')}</span>}
-          ariaLabel={t('settings.routing.category.enabledAria', { name: category.name || category.id })}
+          label={<span className="sr-only">{t('settings.routing.category.enabledAria', { name: displayName })}</span>}
+          ariaLabel={t('settings.routing.category.enabledAria', { name: displayName })}
         />
       )}
       expanded={expanded}
@@ -339,7 +342,7 @@ export const RoutingPage: React.FC = () => {
 
   const addCategory = () => {
     const name = newCategoryName.trim();
-    if (!name || !draft) return;
+    if (!name || !draft || draft.categories.length >= MAX_CATEGORIES) return;
     const base = slugify(name) || `category-${Date.now()}`;
     let id = base;
     let counter = 2;
@@ -358,6 +361,9 @@ export const RoutingPage: React.FC = () => {
   };
 
   const toggleCategory = (id: string) => {
+    // A row held open by the invalid-draft gate stays open: collapsing it would
+    // hide the reason saves are blocked and drop its focused field.
+    if (draft && invalidCategoryIds(draft).includes(id)) return;
     setExpandedIds((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
   };
 
@@ -467,7 +473,9 @@ export const RoutingPage: React.FC = () => {
               <p className={SETTINGS_HELPER_CLASS}>{t('settings.routing.categories.description')}</p>
               <p className={SETTINGS_HELPER_CLASS}>{readinessText}</p>
               {invalidDraft ? (
-                <p className={SETTINGS_HELPER_CLASS}>{t('settings.routing.categories.invalidDraft')}</p>
+                <p className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-warning)]')}>
+                  {t('settings.routing.categories.invalidDraft')}
+                </p>
               ) : null}
               <div>
                 {draft.categories.map((category) => (
@@ -506,7 +514,12 @@ export const RoutingPage: React.FC = () => {
                   className="min-w-0 flex-1"
                   maxLength={60}
                 />
-                <Button size="xs" variant="outline" onClick={addCategory} disabled={newCategoryName.trim().length === 0}>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={addCategory}
+                  disabled={newCategoryName.trim().length === 0 || draft.categories.length >= MAX_CATEGORIES}
+                >
                   {t('settings.routing.categories.add')}
                 </Button>
               </SettingsFieldRow>

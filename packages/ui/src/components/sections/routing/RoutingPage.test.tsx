@@ -169,7 +169,13 @@ describe('RoutingPage', () => {
       config: mockConfig,
       builtins: mockConfig.categories,
       load: async () => {},
-      saveConfig: async (config: RoutingConfig) => { saveCalls.push(config); },
+      // Mirrors the server's schema: it trims both fields, rejects an empty one,
+      // and caps the list at 32, so a leaked invalid save would report an error.
+      saveConfig: async (config: RoutingConfig) => {
+        saveCalls.push(config);
+        const invalid = config.categories.some((category) => category.name.trim().length === 0 || category.description.trim().length === 0);
+        if (invalid || config.categories.length > 32) throw new Error('Invalid routing config');
+      },
     });
 
     useConfigStore.setState({
@@ -395,6 +401,33 @@ describe('RoutingPage', () => {
     const added = saveCalls[0].categories.find((category) => !category.builtin && category.name === 'Research');
     expect(added).toBeDefined();
     expect(added?.id).not.toBe('research');
+  });
+
+  test('Add is disabled at the server cap of 32 categories', async () => {
+    const many = Array.from({ length: 32 }, (_, index) => ({
+      id: `category-${index}`,
+      builtin: false,
+      enabled: true,
+      name: `Category ${index}`,
+      description: `Tasks for bucket ${index}`,
+      model: null,
+      variant: null,
+      agent: null,
+    }));
+    useRoutingStore.setState({
+      config: { ...mockConfig, categories: many },
+      builtins: mockConfig.categories,
+    });
+
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    const addInput = document.querySelector<HTMLInputElement>('[aria-label="settings.routing.categories.addLabel"]');
+    if (!addInput) throw new Error('Missing add input');
+    await setInputValue(addInput, 'Extra');
+    const addButton = buttonContaining('settings.routing.categories.add');
+    expect(addButton.disabled).toBe(true);
   });
 
   test('thinking select displays reasoning effort options rather than legacy model variants', async () => {

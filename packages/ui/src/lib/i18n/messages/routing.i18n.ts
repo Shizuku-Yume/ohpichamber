@@ -1298,7 +1298,7 @@ export const routingI18n = {
     'settings.routing.status.notReady': 'O Auto ainda não está disponível.',
     'settings.routing.categories.title': 'Categorias',
     'settings.routing.categories.removedTitle': 'Categorias removidas',
-    'settings.routing.categories.invalidDraft': 'As alterações não são guardadas até todas as categorias terem um nome e uma descrição.',
+    'settings.routing.categories.invalidDraft': 'As alterações não são salvas até todas as categorias terem um nome e uma descrição.',
     'settings.routing.categories.description': 'O Auto classifica pedidos lendo estes nomes e descrições, então escreva-os como instruções: o que pertence à categoria e o que não pertence.',
     'settings.routing.categories.addLabel': 'Nova categoria',
     'settings.routing.categories.addPlaceholder': 'Nome',

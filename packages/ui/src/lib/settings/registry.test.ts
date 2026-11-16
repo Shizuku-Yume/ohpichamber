@@ -358,6 +358,21 @@ describe('settings registry', () => {
     expect(useUIStore.getState().terminalShell).toBe('fish');
   });
 
+  test('shows reasoning traces by default and treats an absent key as unchosen', () => {
+    expect(useUIStore.getInitialState().showReasoningTraces).toBe(true);
+    const original = useUIStore.getState().showReasoningTraces;
+    try {
+      useUIStore.getState().setShowReasoningTraces(true);
+      // A snapshot without the key must not flip the default.
+      applySettingsToStores({});
+      expect(useUIStore.getState().showReasoningTraces).toBe(true);
+      applySettingsToStores({ showReasoningTraces: false });
+      expect(useUIStore.getState().showReasoningTraces).toBe(false);
+    } finally {
+      useUIStore.getState().setShowReasoningTraces(original);
+    }
+  });
+
   test('persists archived-only retention as an opt-in boolean and enforces its delete action', () => {
     expect(useUIStore.getInitialState().sessionRetentionOnlyArchived).toBe(false);
     expect(parseSettingsDocument({ sessionRetentionOnlyArchived: true })).toEqual({ sessionRetentionOnlyArchived: true });

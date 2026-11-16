@@ -1,4 +1,4 @@
-import { MCP_OAUTH_LOOPBACK_REDIRECT_URI } from '@openchamber/agent-contract';
+import { MCP_OAUTH_HOST_CALLBACK_PATH, MCP_OAUTH_LOOPBACK_REDIRECT_URI } from '@openchamber/agent-contract';
 import { isDesktopShell } from '@/lib/desktop';
 import { isRelayModeActive } from '@/lib/relay/runtime-tunnel';
 import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
@@ -14,14 +14,9 @@ import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
  *   Host): the public Host route, which receives the code on the Host and hands
  *   it to the `complete` action.
  * Relay mode has no browser-reachable Host origin (the tunnel only carries the
- * app's own requests), so it keeps the Agent Service callback and the panel's
- * pasted-callback fallback.
+ * app's own requests), and no loopback listener either, so the panel keeps the
+ * pasted-callback path as the only way to finish there.
  */
-
-/** The Host route that receives the code for a non-local runtime. The Host owns
- * it (`packages/web/server/lib/host/mcp-oauth-callback.js`); the UI only names
- * it in the redirect it hands the provider. */
-export const MCP_OAUTH_HOST_CALLBACK_PATH = '/api/agent/v1/mcp/oauth/callback';
 
 const LOOPBACK_HOSTNAMES: Record<string, true> = {
   localhost: true,
@@ -81,3 +76,17 @@ export const currentMcpOAuthRedirect = (): string => resolveMcpOAuthRedirect({
   desktopShell: isDesktopShell(),
   relayActive: isRelayModeActive(),
 });
+
+/**
+ * Whether the panel may open the authorization page on its own.
+ *
+ * Under a relay neither callback reaches this machine: the E2EE tunnel only
+ * carries the app's own requests, so no browser can deliver the code to the
+ * Agent Service. Opening the page automatically there would promise a handoff
+ * that cannot finish, so the user opens it deliberately and pastes the callback
+ * back. Every other runtime returns to a listener that really exists.
+ */
+export const shouldAutoOpenMcpAuthorization = (context: { readonly relayActive: boolean }): boolean => !context.relayActive;
+
+/** Whether this runtime's sign-in may open its authorization page on its own. */
+export const currentMcpOAuthAutoOpen = (): boolean => shouldAutoOpenMcpAuthorization({ relayActive: isRelayModeActive() });

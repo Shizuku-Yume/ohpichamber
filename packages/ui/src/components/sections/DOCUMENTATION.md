@@ -236,13 +236,25 @@ two install hooks, `autoStart` and `onAutoStartConsumed`.
 Every start names the redirect the runtime can actually complete
 (`mcpOAuthRedirect.ts`): the Agent Service's pinned loopback callback
 (`MCP_OAUTH_LOOPBACK_REDIRECT_URI`, `http://localhost:38471/callback`) when the
-UI runs on the Host machine, and `<Host origin>/api/agent/v1/mcp/oauth/callback`
-otherwise — remote web, Capacitor mobile, and a desktop window connected to
-another Host (including over its SSH tunnel). Relay mode keeps the loopback
-redirect because no Host origin is browser-reachable there. A redirect URI the
-user types keeps its meaning. The Host route receives the code on the Host and
-hands it to the `complete` action; the panel's poll then sees the flow finish
-the same way it does for a loopback callback.
+UI runs on the Host machine, and `<Host base>/api/agent/v1/mcp/oauth/callback`
+(the Host serves that path and validates the `state` it issued) otherwise —
+remote web, same-origin web on a LAN address, Capacitor mobile, and a desktop
+window connected to another Host (including over its SSH tunnel). A redirect
+URI the user types keeps its meaning.
+
+Relay mode is the one exception on both ends: the E2EE tunnel carries only the
+app's own requests, so neither the loopback listener nor the Host callback is
+reachable by the browser that consents. The panel keeps the loopback redirect
+and does **not** open the authorization page on its own there
+(`currentMcpOAuthAutoOpen`); the pending panel offers Open in browser and the
+pasted-callback field, and the user finishes the flow by pasting the callback
+URL or code. This is a known limitation of relay sign-in, not a fallback path
+with a listener behind it.
+
+A non-local redirect also makes the worker drop OMP's `launchUrl` from the
+pending flow: OMP advertises a `/launch` page for any loopback hostname even
+when the flow only holds a random-port placeholder or the Host's own port, and
+that page would be a dead route.
 
 Without `autoStart` the panel shows the form: client ID, client secret,
 scopes and redirect URI, then Authorize. The client secret is written through

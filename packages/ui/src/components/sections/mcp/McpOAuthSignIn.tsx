@@ -18,7 +18,7 @@ import { useI18n } from '@/lib/i18n';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { openExternalUrl } from '@/lib/url';
 import { problemMessage } from '@/lib/problemMessage';
-import { currentMcpOAuthRedirect } from './mcpOAuthRedirect';
+import { currentMcpOAuthAutoOpen, currentMcpOAuthRedirect } from './mcpOAuthRedirect';
 
 /** A flow the Agent Service holds stays answerable well after a browser handoff. */
 const POLL_INTERVAL_MS = 1_500;
@@ -114,7 +114,10 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
       setPolling({ flowId: result.pendingFlow.flowId });
       setTimedOut(false);
       setElapsedMs(0);
-      if (options.openBrowser === true) openAuthorizationUrlOnce(result.pendingFlow);
+      // Under a relay no callback reaches this machine, so an automatic browser
+      // handoff would promise a finish that cannot happen; the pending panel
+      // asks for the pasted callback instead.
+      if (options.openBrowser === true && currentMcpOAuthAutoOpen()) openAuthorizationUrlOnce(result.pendingFlow);
       return;
     }
     activeFlow.current = null;

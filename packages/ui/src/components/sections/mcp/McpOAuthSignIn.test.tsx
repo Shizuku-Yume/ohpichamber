@@ -39,6 +39,10 @@ let reads: MCPOAuthResult[] = [];
 let startFailure: Error | null = null;
 /** Failures the poll's own read takes before it answers, as a dropped connection would. */
 let pollFailures = 0;
+/** Whether the UI is connected through an E2EE relay instead of a Host address. */
+let relayActive = false;
+const actualRelay = await import('@/lib/relay/runtime-tunnel');
+mock.module('@/lib/relay/runtime-tunnel', () => ({ ...actualRelay, isRelayModeActive: () => relayActive }));
 const actual = await import('@/api/canonicalClient');
 const { CanonicalApiError } = actual;
 mock.module('@/api/canonicalClient', () => ({
@@ -72,7 +76,7 @@ let root: Root;
 
 beforeEach(() => {
   root = createRoot(container);
-  requests = []; credentials = []; reconnects = 0; reads = [unauthenticated]; startFailure = null; pollFailures = 0;
+  requests = []; credentials = []; reconnects = 0; reads = [unauthenticated]; startFailure = null; pollFailures = 0; relayActive = false;
   openSpy.mockClear();
 });
 afterEach(async () => {
@@ -366,4 +370,16 @@ test('a remote runtime hands the Host its own callback instead of a loopback URI
   } finally {
     delete windowWithRuntime.__OPENCHAMBER_API_BASE_URL__;
   }
+});
+
+test('a relay sign-in starts without opening a browser it cannot finish', async () => {
+  relayActive = true;
+  await render({ autoStart: true });
+  await settle();
+  // The start still happens (the provider page is one click away), but no
+  // browser opens: the relay carries only the app's requests, so the code can
+  // never come back on its own and the panel offers the pasted callback.
+  expect(starts()).toHaveLength(1);
+  expect(openSpy).not.toHaveBeenCalled();
+  expect([...container.querySelectorAll('button')].some(button => button.textContent === 'Open in browser')).toBe(true);
 });

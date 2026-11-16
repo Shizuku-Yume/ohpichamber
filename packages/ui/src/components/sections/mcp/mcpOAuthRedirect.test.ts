@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { MCP_OAUTH_LOOPBACK_CALLBACK_PORT, MCP_OAUTH_LOOPBACK_REDIRECT_URI } from '@openchamber/agent-contract';
-import { MCP_OAUTH_HOST_CALLBACK_PATH, resolveMcpOAuthRedirect, type McpOAuthRedirectContext } from './mcpOAuthRedirect';
+import { MCP_OAUTH_HOST_CALLBACK_PATH, MCP_OAUTH_LOOPBACK_CALLBACK_PORT, MCP_OAUTH_LOOPBACK_REDIRECT_URI } from '@openchamber/agent-contract';
+import { resolveMcpOAuthRedirect, shouldAutoOpenMcpAuthorization, type McpOAuthRedirectContext } from './mcpOAuthRedirect';
 
 const REMOTE = 'https://chamber.example.test';
 const LOCAL_HOST = 'http://127.0.0.1:4126';
@@ -33,6 +33,14 @@ describe('MCP OAuth redirect choice', () => {
       .toBe(MCP_OAUTH_LOOPBACK_REDIRECT_URI);
   });
 
+  test('same-origin web on a non-loopback address returns through that address', () => {
+    // The Host is bound to the LAN address and the page is served from it, so
+    // the instance base is empty and the page origin is the only Host identity.
+    expect(resolveMcpOAuthRedirect(context({
+      apiBaseUrl: '', pageOrigin: 'http://192.168.1.20:4126', runtimeKey: 'url:http://192.168.1.20:4126',
+    }))).toBe(`http://192.168.1.20:4126${MCP_OAUTH_HOST_CALLBACK_PATH}`);
+  });
+
   test('web opened from another machine returns through the Host origin', () => {
     expect(resolveMcpOAuthRedirect(context({ runtimeKey: `url:${REMOTE}`, apiBaseUrl: REMOTE, pageOrigin: REMOTE })))
       .toBe(`${REMOTE}${MCP_OAUTH_HOST_CALLBACK_PATH}`);
@@ -61,4 +69,14 @@ test('a Host served under a subpath keeps that prefix', () => {
   expect(resolveMcpOAuthRedirect(context({
     runtimeKey: 'url:https://example.test/openchamber', apiBaseUrl: 'https://example.test/openchamber/', pageOrigin: 'https://example.test',
   }))).toBe(`https://example.test/openchamber${MCP_OAUTH_HOST_CALLBACK_PATH}`);
+});
+
+describe('MCP OAuth automatic browser open', () => {
+  test('every runtime but relay may open the authorization page on its own', () => {
+    expect(shouldAutoOpenMcpAuthorization({ relayActive: false })).toBe(true);
+    // A relay carries only the app's own requests, so no browser can deliver the
+    // code; the panel asks for a pasted callback instead of opening a page that
+    // could never finish.
+    expect(shouldAutoOpenMcpAuthorization({ relayActive: true })).toBe(false);
+  });
 });

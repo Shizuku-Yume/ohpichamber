@@ -19,8 +19,10 @@ import * as C from '@openchamber/agent-contract';
  * a browser that keeps reloading a callback must not grow Host memory.
  */
 
-/** The public redirect the UI writes into a remote flow's `redirectUri`. */
-export const MCP_OAUTH_CALLBACK_PATH = '/api/agent/v1/mcp/oauth/callback';
+/** The public redirect the UI writes into a remote flow's `redirectUri`. The
+ * path itself lives in the contract, which the UI reads too, so the two sides
+ * cannot drift; this name keeps the Host modules' existing spelling. */
+export const MCP_OAUTH_CALLBACK_PATH = C.MCP_OAUTH_HOST_CALLBACK_PATH;
 
 /** The worker's own budget for one browser handoff; a state never outlives it. */
 const FLOW_BUDGET_MS = 5 * 60_000;

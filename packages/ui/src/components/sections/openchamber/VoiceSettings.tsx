@@ -44,7 +44,7 @@ import { SettingsInlineLink } from '@/components/sections/classification/JevAcce
 import { selectSmallModelAvailability, useSmallModelStore } from '@/stores/useSmallModelStore';
 import { useUIStore } from '@/stores/useUIStore';
 
-const VOICE_TEXT_INPUT_CLASS = 'oc-surface-elevated oc-raised oc-field w-full min-w-0 h-8 rounded-md bg-surface-elevated px-3 typography-ui-label text-foreground placeholder:text-muted-foreground focus:outline-none';
+const VOICE_TEXT_INPUT_CLASS = 'oc-surface-elevated oc-raised oc-field w-full min-w-0 h-7 rounded-md bg-surface-elevated px-3 typography-ui-label text-foreground placeholder:text-muted-foreground focus:outline-none';
 
 // languageHint: the model takes the dictation language instead of detecting it.
 const LOCAL_STT_MODELS = [
@@ -1080,7 +1080,7 @@ export const VoiceSettings: React.FC = () => {
                         )}
 
                         {voiceProvider === 'openai' && (
-                            <SettingsStackedField
+                            <SettingsFieldRow
                                 label={(
                                     <span className={cn(!isOpenAIAvailable && 'text-[var(--status-error)]')}>
                                         {t('settings.voice.page.field.apiKey')}
@@ -1093,12 +1093,12 @@ export const VoiceSettings: React.FC = () => {
                                         : t('settings.voice.page.field.apiKeyHintProvide')}
                             >
                                 <VoiceApiKeyField kind="openai" />
-                            </SettingsStackedField>
+                            </SettingsFieldRow>
                         )}
 
                         {voiceProvider === 'openai-compatible' && (
                             <div className={SETTINGS_SPACE_ROW_CLASS}>
-                                <SettingsStackedField
+                                <SettingsFieldRow
                                     label={(
                                         <span className={cn(!openaiCompatibleUrl.trim() && 'text-[var(--status-error)]')}>
                                             {t('settings.voice.page.field.serverUrl')}
@@ -1106,7 +1106,7 @@ export const VoiceSettings: React.FC = () => {
                                     )}
                                     info={t('settings.voice.page.field.serverUrlHint')}
                                 >
-                                    <div className="relative w-full">
+                                    <div className={cn('relative', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
                                         <input
                                             type="text"
                                             value={openaiCompatibleUrl}
@@ -1124,23 +1124,23 @@ export const VoiceSettings: React.FC = () => {
                                             </button>
                                         )}
                                     </div>
-                                </SettingsStackedField>
-                                <SettingsStackedField
+                                </SettingsFieldRow>
+                                <SettingsFieldRow
                                     label={t('settings.voice.page.field.apiKey')}
-                                    description={t('settings.voice.page.field.apiKeyOptional')}
+                                    info={t('settings.voice.page.field.apiKeyOptional')}
                                 >
                                     <VoiceApiKeyField kind="openaiCompatible" />
-                                </SettingsStackedField>
-                                <SettingsStackedField label={t('settings.voice.page.field.model')}>
+                                </SettingsFieldRow>
+                                <SettingsFieldRow label={t('settings.voice.page.field.model')}>
                                     <input
                                         type="text"
                                         value={openaiCompatibleTtsModel}
                                         onChange={(e) => setOpenaiCompatibleTtsModel(e.target.value)}
                                         placeholder="speaches-ai/Kokoro-82M-v1.0-ONNX"
-                                        className={VOICE_TEXT_INPUT_CLASS}
+                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_LONG_TEXT_CLASS)}
                                     />
-                                </SettingsStackedField>
-                                <SettingsStackedField
+                                </SettingsFieldRow>
+                                <SettingsFieldRow
                                     settingsItem="voice.tts-endpoint-path"
                                     label={t('settings.voice.page.field.endpointPath')}
                                     info={t('settings.voice.page.field.endpointPathHint')}
@@ -1152,10 +1152,10 @@ export const VoiceSettings: React.FC = () => {
                                         dir="ltr"
                                         onChange={(e) => setOpenaiCompatibleTtsEndpointPath(e.target.value)}
                                         placeholder="/audio/speech"
-                                        className={VOICE_TEXT_INPUT_CLASS}
+                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS)}
                                     />
-                                </SettingsStackedField>
-                                <SettingsStackedField
+                                </SettingsFieldRow>
+                                <SettingsFieldRow
                                     label={t('settings.voice.page.field.voice')}
                                     info={t('settings.voice.page.field.voiceIdentifierHint')}
                                 >
@@ -1164,12 +1164,12 @@ export const VoiceSettings: React.FC = () => {
                                         value={openaiCompatibleVoice}
                                         onChange={(e) => setOpenaiCompatibleVoice(e.target.value)}
                                         placeholder="af_sky"
-                                        className={VOICE_TEXT_INPUT_CLASS}
+                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS)}
                                     />
                                     <Button size="sm" variant="ghost" className={SETTINGS_ICON_BUTTON_CLASS} onClick={previewCompatibleVoice} title={t('settings.voice.page.actions.preview')} aria-label={t('settings.voice.page.actions.preview')} disabled={!openaiCompatibleUrl.trim()}>
                                         {previewIcon(isCompatiblePreviewPlaying)}
                                     </Button>
-                                </SettingsStackedField>
+                                </SettingsFieldRow>
                             </div>
                         )}
 
@@ -1399,24 +1399,23 @@ export const VoiceSettings: React.FC = () => {
                         )}
 
                         {sttProvider === 'local' && LOCAL_STT_MODELS.find((entry) => entry.id === sttLocalModel)?.languageHint && (
-                            <SettingsStackedField
+                            <SettingsFieldRow
                                 label={t('settings.voice.page.field.language')}
                                 info={t('settings.voice.page.field.sttLanguageHint')}
-                                controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                             >
                                 <input
                                     type="text"
                                     value={sttLanguage}
                                     onChange={(e) => setSttLanguage(e.target.value)}
                                     placeholder="auto"
-                                    className={VOICE_TEXT_INPUT_CLASS}
+                                    className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS)}
                                 />
-                            </SettingsStackedField>
+                            </SettingsFieldRow>
                         )}
 
                         {sttProvider === 'openai-compatible' && (
                             <div className={SETTINGS_SPACE_ROW_CLASS}>
-                                <SettingsStackedField
+                                <SettingsFieldRow
                                     label={(
                                         <span className={cn(!sttServerUrl.trim() && 'text-[var(--status-error)]')}>
                                             {t('settings.voice.page.field.serverUrl')}
@@ -1424,7 +1423,7 @@ export const VoiceSettings: React.FC = () => {
                                     )}
                                     info={t('settings.voice.page.field.sttServerUrlHint')}
                                 >
-                                    <div className="relative w-full">
+                                    <div className={cn('relative', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
                                         <input
                                             type="text"
                                             value={sttServerUrl}
@@ -1442,23 +1441,23 @@ export const VoiceSettings: React.FC = () => {
                                             </button>
                                         )}
                                     </div>
-                                </SettingsStackedField>
-                                <SettingsStackedField
+                                </SettingsFieldRow>
+                                <SettingsFieldRow
                                     label={t('settings.voice.page.field.apiKey')}
-                                    description={t('settings.voice.page.field.apiKeyOptional')}
+                                    info={t('settings.voice.page.field.apiKeyOptional')}
                                 >
                                     <VoiceApiKeyField kind="stt" />
-                                </SettingsStackedField>
-                                <SettingsStackedField label={t('settings.voice.page.field.model')}>
+                                </SettingsFieldRow>
+                                <SettingsFieldRow label={t('settings.voice.page.field.model')}>
                                     <input
                                         type="text"
                                         value={sttModel}
                                         onChange={(e) => setSttModel(e.target.value)}
                                         placeholder="deepdml/faster-whisper-large-v3-turbo-ct2"
-                                        className={VOICE_TEXT_INPUT_CLASS}
+                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_LONG_TEXT_CLASS)}
                                     />
-                                </SettingsStackedField>
-                                <SettingsStackedField
+                                </SettingsFieldRow>
+                                <SettingsFieldRow
                                     settingsItem="voice.stt-endpoint-path"
                                     label={t('settings.voice.page.field.endpointPath')}
                                     info={t('settings.voice.page.field.endpointPathHint')}
@@ -1470,22 +1469,21 @@ export const VoiceSettings: React.FC = () => {
                                         dir="ltr"
                                         onChange={(e) => setSttEndpointPath(e.target.value)}
                                         placeholder="/audio/transcriptions"
-                                        className={VOICE_TEXT_INPUT_CLASS}
+                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS)}
                                     />
-                                </SettingsStackedField>
-                                <SettingsStackedField
+                                </SettingsFieldRow>
+                                <SettingsFieldRow
                                     label={t('settings.voice.page.field.language')}
                                     info={t('settings.voice.page.field.sttLanguageHint')}
-                                    controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                                 >
                                     <input
                                         type="text"
                                         value={sttLanguage}
                                         onChange={(e) => setSttLanguage(e.target.value)}
                                         placeholder="auto"
-                                        className={VOICE_TEXT_INPUT_CLASS}
+                                        className={cn(VOICE_TEXT_INPUT_CLASS, SETTINGS_WIDTH_SHORT_TEXT_CLASS)}
                                     />
-                                </SettingsStackedField>
+                                </SettingsFieldRow>
                             </div>
                         )}
 

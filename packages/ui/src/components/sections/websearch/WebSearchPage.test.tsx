@@ -3,6 +3,7 @@ import { Window } from 'happy-dom';
 import type { Root } from 'react-dom/client';
 import type { WebSearchSnapshot } from '@/stores/useWebSearchStore';
 import type { WebSearchProviderEntry } from '@openchamber/agent-contract';
+import { dict as en } from '@/lib/i18n/messages/en';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -188,6 +189,12 @@ describe('WebSearchPage', () => {
     ...overrides,
   });
 
+  // Expected copy comes from the English dictionary, so a wording change in a
+  // locale file cannot silently pass these assertions.
+  const addFallbackLabel = en['settings.webSearch.native.addFallback'];
+  const removeLabel = (provider: string) =>
+    en['settings.webSearch.native.removeFallback'].replace('{provider}', provider);
+
   const fallbackSnapshot = (fallbackProviderIds: string[]): WebSearchSnapshot => ({
     workspaceId: 'workspace-1',
     scope: getWebSearchScopeKey(),
@@ -237,41 +244,58 @@ describe('WebSearchPage', () => {
     const section = container.querySelector('[data-settings-item="web-search.fallbacks"]');
     if (!(section instanceof HTMLElement)) throw new Error('The fallback section did not render');
     const handles = () => Array.from(section.querySelectorAll<HTMLButtonElement>('button[aria-label^="Drag "]'));
-    const rowNames = () => handles().map((handle) => handle.parentElement?.querySelector('.typography-ui-label.text-foreground')?.textContent);
-    return { section, saved, handles, rowNames };
+    // A row is the sortable item that wraps each handle; its content is the
+    // sibling list of ordinal, name, optional pill and remove button.
+    const rows = () => handles().map((handle) => handle.parentElement).filter((row): row is HTMLElement => row !== null);
+    const rowNames = () => rows().map((row) => row.querySelector('.typography-ui-label.text-foreground')?.textContent);
+    const rowOrdinals = () => rows().map((row) => row.querySelector('.tabular-nums')?.textContent);
+    // Only `SettingsCardPill` renders a rounded-full span inside a row, so this
+    // counts status pills structurally instead of matching their copy.
+    const rowPillCounts = () => rows().map((row) => row.querySelectorAll('span.rounded-full').length);
+    const helperLines = () => Array.from(section.querySelectorAll('p.typography-meta')).map((line) => line.textContent);
+    const addButton = () => [...section.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.includes(addFallbackLabel));
+    return { section, saved, handles, rows, rowNames, rowOrdinals, rowPillCounts, helperLines, addButton };
   };
 
   // An empty chain says so in one line and offers only the add action; there is
   // no row chrome and no always-"configured" pill to suggest otherwise.
   test('an empty fallback chain shows one helper line and the add action', async () => {
-    const { section, rowNames } = await renderWithSnapshot(fallbackSnapshot([]));
+    const page = await renderWithSnapshot(fallbackSnapshot([]));
 
-    expect(rowNames()).toEqual([]);
-    expect(section.textContent).toContain('No fallbacks. The primary provider answers alone.');
-    const add = [...section.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent?.includes('Add fallback provider'));
-    expect(add).toBeInstanceOf(HTMLButtonElement);
-    expect(add?.disabled).toBe(false);
+    expect(page.rowNames()).toEqual([]);
+    expect(page.helperLines()).toEqual([en['settings.webSearch.native.fallbacksEmpty']]);
+    expect(page.addButton()).toBeInstanceOf(HTMLButtonElement);
+    expect(page.addButton()?.disabled).toBe(false);
   });
 
-  test('nothing addable disables the add action and explains why', async () => {
+  // With no rows and nothing addable, the empty-state line is the only helper:
+  // a second "nothing to add" line would say the same thing twice.
+  test('an empty chain with nothing addable shows exactly one helper line', async () => {
     const snapshot = fallbackSnapshot([]);
-    snapshot.providers = [entry('tavily', 'Tavily'), entry('serper', 'Serper', { configured: false, credentialConfigured: false })];
-    const { section } = await renderWithSnapshot(snapshot);
+    snapshot.providers = [entry('tavily', 'Tavily'), entry('serper', 'Serper', { configured: false, requiresCredential: false, credentialConfigured: false })];
+    const page = await renderWithSnapshot(snapshot);
 
-    const add = [...section.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent?.includes('Add fallback provider'));
-    expect(add?.disabled).toBe(true);
-    expect(section.textContent).toContain('Every configured provider is already a fallback, or none is configured.');
+    expect(page.rowNames()).toEqual([]);
+    expect(page.helperLines()).toEqual([en['settings.webSearch.native.fallbacksEmpty']]);
+    expect(page.addButton()?.disabled).toBe(true);
+  });
+
+  test('nothing addable with existing rows disables the add action and explains why', async () => {
+    const snapshot = fallbackSnapshot(['brave', 'exa']);
+    snapshot.providers = [entry('tavily', 'Tavily'), entry('brave', 'Brave Search'), entry('exa', 'Exa')];
+    const page = await renderWithSnapshot(snapshot);
+
+    expect(page.addButton()?.disabled).toBe(true);
+    expect(page.helperLines()).toEqual([en['settings.webSearch.native.addFallbackNone']]);
   });
 
   // The primary provider and an unconfigured provider are never offered; a
   // picked provider is appended to the chain in one write.
   test('the add menu lists only addable providers and appends the pick', async () => {
-    const { section, saved, rowNames } = await renderWithSnapshot(fallbackSnapshot(['brave', 'searxng']));
+    const page = await renderWithSnapshot(fallbackSnapshot(['brave', 'searxng']));
 
-    const trigger = [...section.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent?.includes('Add fallback provider'));
+    const trigger = page.addButton();
     if (!trigger) throw new Error('The add-fallback trigger did not render');
     await act(async () => { trigger.click(); });
     const items = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
@@ -279,56 +303,59 @@ describe('WebSearchPage', () => {
     expect(items().map((item) => item.textContent?.trim())).toEqual(['Exa']);
 
     await act(async () => { items()[0]?.click(); });
-    expect(saved).toEqual([['brave', 'searxng', 'exa']]);
-    expect(rowNames()).toEqual(['Brave Search', 'SearXNG', 'Exa']);
+    expect(page.saved).toEqual([['brave', 'searxng', 'exa']]);
+    expect(page.rowNames()).toEqual(['Brave Search', 'SearXNG', 'Exa']);
   });
 
   // A fallback carries a pill only when its key or setup is missing; removal is
   // an icon-only ghost button addressed by its localised label.
   test('a row shows a warning only when setup is missing and removes by icon label', async () => {
-    const { section, saved, handles, rowNames } = await renderWithSnapshot(fallbackSnapshot(['brave', 'serper']));
+    const page = await renderWithSnapshot(fallbackSnapshot(['brave', 'serper']));
 
-    expect(rowNames()).toEqual(['Brave Search', 'Serper']);
-    const rows = handles().map((handle) => handle.parentElement);
-    expect(rows[0]?.textContent).toContain('Needs a key');
-    expect(rows[1]?.textContent).toContain('Needs setup');
+    expect(page.rowNames()).toEqual(['Brave Search', 'Serper']);
+    expect(page.rowPillCounts()).toEqual([1, 1]);
+    const [keyRow, setupRow] = page.rows();
+    expect(keyRow?.textContent).toContain(en['settings.webSearch.card.needsKey']);
+    expect(setupRow?.textContent).toContain(en['settings.webSearch.card.needsSetup']);
 
-    const remove = section.querySelector<HTMLButtonElement>('button[aria-label="Remove Brave Search from fallbacks"]');
+    const remove = page.section.querySelector<HTMLButtonElement>(`button[aria-label="${removeLabel('Brave Search')}"]`);
     expect(remove).toBeInstanceOf(HTMLButtonElement);
     expect(remove?.textContent?.trim()).toBe('');
     await act(async () => { remove?.click(); });
-    expect(saved[saved.length - 1]).toEqual(['serper']);
-    expect(rowNames()).toEqual(['Serper']);
+    expect(page.saved[page.saved.length - 1]).toEqual(['serper']);
+    expect(page.rowNames()).toEqual(['Serper']);
   });
 
   // A fully configured fallback says nothing: the list already implies that a
   // row was addable, so only a missing key or setup is worth a pill.
   test('a fully configured fallback carries no status pill', async () => {
-    const { section } = await renderWithSnapshot(fallbackSnapshot(['exa']));
+    const page = await renderWithSnapshot(fallbackSnapshot(['exa']));
 
-    expect(section.textContent).toContain('Exa');
-    expect(section.textContent).not.toContain('Configured');
+    expect(page.rowNames()).toEqual(['Exa']);
+    expect(page.rowPillCounts()).toEqual([0]);
   });
 
   // The chain is saved whole and in order, so a keyboard drag writes the same
-  // complete list a mouse drag does.
+  // complete list a mouse drag does; the ordinals follow the new order.
   test('a fallback reorders with the keyboard handle and saves the new order', async () => {
-    const { saved, handles, rowNames } = await renderWithSnapshot(fallbackSnapshot(['brave', 'searxng']));
+    const page = await renderWithSnapshot(fallbackSnapshot(['brave', 'searxng']));
 
-    expect(rowNames()).toEqual(['Brave Search', 'SearXNG']);
-    handles().forEach((handle, index) => {
+    expect(page.rowNames()).toEqual(['Brave Search', 'SearXNG']);
+    expect(page.rowOrdinals()).toEqual(['1', '2']);
+    page.handles().forEach((handle, index) => {
       if (handle.parentElement) handle.parentElement.getBoundingClientRect = () => new DOMRect(0, index * 40, 400, 36);
     });
     const press = (target: EventTarget, code: string) => {
       target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code, key: code === 'Space' ? ' ' : code }));
     };
-    const searxngHandle = handles()[1];
+    const searxngHandle = page.handles()[1];
     if (!searxngHandle) throw new Error('The SearXNG handle did not render');
     await act(async () => { press(searxngHandle, 'Space'); });
     await act(async () => { press(document, 'ArrowUp'); });
     await act(async () => { press(document, 'Space'); });
 
-    expect(saved).toEqual([['searxng', 'brave']]);
-    expect(rowNames()).toEqual(['SearXNG', 'Brave Search']);
+    expect(page.saved).toEqual([['searxng', 'brave']]);
+    expect(page.rowNames()).toEqual(['SearXNG', 'Brave Search']);
+    expect(page.rowOrdinals()).toEqual(['1', '2']);
   });
 });

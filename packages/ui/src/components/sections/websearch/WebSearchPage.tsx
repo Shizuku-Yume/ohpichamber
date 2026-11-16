@@ -260,7 +260,7 @@ const FallbacksSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
             onReorder={(providerIds) => void commit({ fallbackProviderIds: providerIds })}
             renderRow={(row, index) => (
               <div className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="typography-meta w-4 shrink-0 text-right tabular-nums text-muted-foreground">{index + 1}</span>
+                <span className="typography-meta w-4 shrink-0 text-end tabular-nums text-muted-foreground">{index + 1}</span>
                 <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">{row.label}</span>
                 <FallbackStatus provider={row.provider} />
                 <Button
@@ -301,7 +301,7 @@ const FallbacksSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          {addable.length === 0 ? (
+          {addable.length === 0 && rows.length > 0 ? (
             <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.addFallbackNone')}</p>
           ) : null}
         </div>

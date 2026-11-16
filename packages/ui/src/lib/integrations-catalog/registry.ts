@@ -2442,7 +2442,7 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
           requires: ['python'],
           envInputs: [
             { id: 'url', envName: 'GRAFANA_URL', labelKey: 'integrationsCatalog.entry.grafana.env.url', required: true },
-            { id: 'apiKey', envName: 'GRAFANA_API_KEY', labelKey: 'integrationsCatalog.entry.grafana.env.apiKey' },
+            { id: 'apiKey', envName: 'GRAFANA_SERVICE_ACCOUNT_TOKEN', labelKey: 'integrationsCatalog.entry.grafana.env.apiKey' },
           ],
         },
       },

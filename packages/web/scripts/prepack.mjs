@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { prepareWebAgentRuntime, resolveBunExecutable } from './prepare-agent-runtime.mjs';
+import { stageChangelog } from './stage-changelog.mjs';
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = path.resolve(webRoot, '../..');
@@ -29,13 +30,17 @@ export function runPrepack() {
     fs.cpSync(path.join(sdkSource, 'dist'), path.join(sdkTarget, 'dist'), { recursive: true });
   }
 
-  // 3. Stage agent runtime unless running lightweight unit-test pack checks under Vitest
+  // 3. Stage the bundled changelog the release-notes route reads; the app has
+  // no network source for its notes.
+  stageChangelog({ root: webRoot, repoRoot: workspaceRoot });
+
+  // 4. Stage agent runtime unless running lightweight unit-test pack checks under Vitest
   const runtimeManifest = path.join(webRoot, 'resources', 'agent-runtime', 'manifest.json');
   if (!fs.existsSync(runtimeManifest) && process.env.VITEST !== 'true') {
     prepareWebAgentRuntime({ bunPath });
   }
 
-  // 4. Backup package.json once (idempotent if prepack is invoked nested)
+  // 5. Backup package.json once (idempotent if prepack is invoked nested)
   const manifestPath = path.join(webRoot, 'package.json');
   const currentContent = fs.readFileSync(manifestPath, 'utf8');
   const originalContent = fs.existsSync(backupPath)
@@ -45,7 +50,7 @@ export function runPrepack() {
     fs.writeFileSync(backupPath, originalContent, 'utf8');
   }
 
-  // 5. Transform package.json for clean standalone distribution
+  // 6. Transform package.json for clean standalone distribution
   const manifest = JSON.parse(originalContent);
   if (manifest.dependencies) {
     delete manifest.dependencies['@openchamber/agent-contract'];
@@ -55,6 +60,7 @@ export function runPrepack() {
   delete manifest.bundleDependencies;
   const files = new Set(manifest.files || []);
   files.add('resources/agent-runtime');
+  files.add('resources/changelog');
   files.add('resources/standalone-sdk');
   files.add('scripts/standalone-loader.mjs');
   manifest.files = Array.from(files);

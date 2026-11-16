@@ -33,7 +33,6 @@
 - `core-routes.js`: Registers server status and system endpoints, browser session authentication, WebAuthn passkeys, device pairing, theme endpoints, and common request body parsing middleware.
 - `feature-routes-runtime.js`: Registers Host feature route domains (filesystems, environments, quotas, walkthroughs, git, dev servers, session folders, project context, scheduled tasks, tracked items).
 - `models-metadata.js`: In-process cache and client projection helper for the `models.dev` catalog.
-- `npm-registry-config.js` (`npm-registry-config.d.ts`): Resolves npm registry endpoints and authentication headers from `.npmrc` or environment configurations.
 - `openchamber-routes.js`: Registers OpenChamber update checks, update installations, enterprise policy, and model catalog endpoints.
 - `server-utils-runtime.js`: Utility helpers for PATH augmentation, executable resolution, and SSE data payload parsing.
 - `session-runtime.js`: In-memory state machine for session activity phases, attention status, and blocking requests, driven by Canonical `/api/agent/v1` events and snapshots.
@@ -240,7 +239,7 @@ The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/pe
     6. Browser auth, passkeys, and client pairing (`registerAuthAndAccessRoutes`)
     7. TTS routes (`registerTtsRoutes`)
     8. Notification subscription and delivery routes (`registerNotificationRoutes`)
-    9. OpenChamber updater and model catalog routes (`registerOpenChamberRoutes`)
+    9. OpenChamber release-notes and model catalog routes (`registerOpenChamberRoutes`)
   - Returns `{ uiAuthController }`.
 
 ### cli-options.js
@@ -289,14 +288,10 @@ The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/pe
 - `getModelsMetadata({ url, ttlMs, timeoutMs } = {})`: Fetches and caches the `models.dev` model catalog in memory (default 10-minute TTL), with fallback to stale cache on network failures.
 - `toClientModelsMetadata(metadata)`: Projects the raw catalog to provider IDs and client-needed model capabilities (`id`, `name`, `tool_call`, `reasoning`, `temperature`, `attachment`, `structured_output`, `modalities`, `cost`, `limit`, `knowledge`, `release_date`, `last_updated`).
 
-### npm-registry-config.js
-- `resolveNpmRegistryRequest(packageName, metadataPath)`: Parses npm registry configuration from process environment (`npm_config_*`, `NPM_CONFIG_*`) and user `.npmrc`. Supports scoped registries (such as `@scope:registry`) and resolves Bearer token or Basic authentication headers. Exported type declarations live in `npm-registry-config.d.ts`.
-
 ### openchamber-routes.js
 - `registerOpenChamberRoutes(app, dependencies)`:
   - `GET /api/openchamber/enterprise-policy`: Returns public enterprise mode policy.
-  - `GET /api/openchamber/update-check`: Checks for application updates.
-  - `POST /api/openchamber/update-install`: Initiates update installation (delegated to Electron `desktopUpdater`, systemd transient units, macOS launchd kickstarts, or Windows `.cmd` scripts).
+  - `GET /api/openchamber/release-notes`: Returns the bundled changelog's release notes for `version`, or for the range since `since`. Nothing is fetched; a missing bundle answers 503.
   - `GET /api/openchamber/models-metadata`: Returns projected `models.dev` metadata.
 
 ### server-utils-runtime.js

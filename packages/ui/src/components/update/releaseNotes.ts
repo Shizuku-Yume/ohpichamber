@@ -62,8 +62,8 @@ export function parseReleaseNotesMarkdown(content: string): ReleaseNotesContent 
 
 /**
  * The releases of `version`, newest first: what an update from `since`
- * brings, or `version` alone. Null when the server could not read the notes
- * (offline, GitHub down, a server without the route); an empty list when the
+ * brings, or `version` alone, read by the Host from the changelog bundled with
+ * the app. Null when the notes could not be read; an empty list when the
  * changelog has none for it.
  */
 export async function fetchReleaseNotes(version: string, since: string | null, signal?: AbortSignal): Promise<ReleaseNotesRelease[] | null> {

@@ -240,9 +240,9 @@ and the open chat stay; a crash they cause still stops at the fourth crash.
 | `agent-runtime.mjs` | Resolves the staged Bun binary and agent-service entrypoint for the Host; rejects ASAR paths because Bun must read physical files |
 | `scripts/bundle-main.mjs` | Bundles Electron main code into `dist-bundle/{entry,main,early-startup}.mjs` for packaging |
 | `scripts/rebuild-native.mjs` | Rebuilds native modules against the Electron runtime |
-| `scripts/package.mjs` | Runs `electron-builder`, with unsigned Windows builds when signing env is missing. With `OPENCHAMBER_DESKTOP_CHANNEL=canary` it passes the configuration from `scripts/canary-build-config.mjs`, which swaps in the Canary icons |
+| `scripts/package.mjs` | Runs `electron-builder`, with unsigned Windows builds when signing env is missing |
 | `scripts/windows-signpath.mjs` | Two-pass Windows build for SignPath signing, and the electron-builder sign hook it uses (see *Windows signing through SignPath*) |
-| `resources/` | Packaged web assets, icons, macOS entitlements, and the NSIS include for the Windows installer. Every file in `resources/icons` is written by `bun run brand:generate` (`scripts/brand`); do not edit them by hand. `resources/icons-canary` holds Canary's: its `AppIcon.icon` is hand-made, the rest is generated from it |
+| `resources/` | Packaged web assets, icons, macOS entitlements, and the NSIS include for the Windows installer. Every file in `resources/icons` is written by `bun run brand:generate` (`scripts/brand`); do not edit them by hand |
 
 ## Development
 
@@ -266,19 +266,14 @@ token. Older servers without identity metadata remain supported. HTTP 401 and
 local trusted UI may invoke the probe; remote page IPC rejects it before the
 main process makes a request.
 `/api/version` must advertise `api.runtime-url.v1` and report an
-`openchamberVersion` of 2 or later, or the host is Incompatible and the app asks
-to update OpenChamber on the server. A server before 2.0 runs OpenCode 1.x with
-the same API version and capabilities, so its own version is the only thing that
-tells it apart. A version that does not parse does not block.
+`openchamberVersion` of 2 or later, or the host is Incompatible and the app
+refuses to open it. A server before 2.0 runs OpenCode 1.x with the same API
+version and capabilities, so its own version is the only thing that tells it
+apart. A version that does not parse does not block.
 
-The Incompatible recovery screen can ask the host to update itself
-(`desktop_host_update_server`, local pages only, `remote-host-update.mjs`). The
-command takes only a saved host id and reads the address, client token, and
-request headers from the hosts file, so a page cannot aim the token at another
-address. It posts to the host's `/api/openchamber/update-install`, the route
-every server since 1.9 serves to its own web UI, and reports `started`, `auth`,
-or `failed` with the host's reason. The renderer then probes the host until it
-answers compatible and restarts the app to boot against it again.
+There is no way to update a remote host from the desktop app: the host's update
+routes and the desktop command that called them are gone with the rest of the
+remote update path. A host updates itself, and the app probes it again.
 
 Every exit aborts the attempt's requests and cancels unused response bodies before
 clearing the deadline timer. This includes early HTTP classifications and a
@@ -603,31 +598,19 @@ Add new native capabilities in this order:
 3. Gate privileged commands in main process logic so remote pages cannot access local filesystem or shell capabilities. A command added to `COMMANDS_SAFE_FOR_REMOTE` takes input from, and answers, another server's page: parse what it stores and strip credentials from what it returns (`remote-page-policy.mjs`). Splash colours, for example, end up in the trusted splash page, and `desktop_hosts_get` hands remote pages the host list without tokens or auth headers.
 4. Keep shared UI runtime contracts in `packages/ui` and server/runtime APIs in `packages/web` when the behavior is not inherently native.
 
-## Update channels and Canary
+## Updates
 
-The desktop app updates from one of two channels, chosen under Settings → About → Updates and stored as `desktopUpdateChannel` in `settings.json`:
+The desktop app has one update channel: the latest full release of this fork on GitHub Releases, published from `Shizuku-Yume/ohpichamber` (the `github` provider of electron-updater, set in `build.publish` of `package.json`). There is no channel switch and no mirror: a check reads `latest.yml` from the repository's newest release, and Linux reads `latest-linux.yml` or `latest-linux-arm64.yml`.
 
-- **Stable**: the latest full release on GitHub (the `github` provider of electron-updater), read from the R2 mirror first (`https://downloads.openchamber.dev/desktop/stable/`, the `generic` provider) and falling back to GitHub for an hour after the mirror fails.
-- **Canary**: the nightly build of `main`. `.github/workflows/canary.yml` builds it when `main` moved and replaces the files of one pre-release tagged `canary`; the app reads the mirror first and that pre-release's manifests as the fallback (the `generic` provider on `releases/download/canary/`). Stable never sees them, because the GitHub provider reads only the latest full release.
+`applyUpdaterFeed` (`main.mjs`) sets the feed URL before every check. Windows ARM64 builds set electron-updater's `channel` to `latest-arm64`, because the release publishes that architecture's manifest beside `latest.yml`; every other platform reads the default `latest`. `updater-check.mjs` takes electron-updater's verdict instead of comparing versions itself, keeps a downloaded payload across checks, and treats a missing manifest before the first release as "no update". Electron is the only updater: the web and CLI update checks are gone.
 
-Picking Canary checks at once and offers the Canary build as an ordinary update; after it installs, the app is Canary and keeps updating from Canary. Picking Stable from a Canary build offers the latest release, which is older: `applyUpdaterChannel` (`main.mjs`) sets `allowDowngrade` for exactly that case, and `updater-check.mjs` takes electron-updater's verdict instead of comparing versions itself. A release build never downgrades. Without a stored pick the app follows its own build, so a Canary build downloaded from the canary pre-release stays on Canary and is not offered the older release on its first check. On a Linux .deb or .rpm install the downgrade tells the package manager the older package is wanted (`linux-package-install.mjs`), or it would keep the newer one. Every check re-reads the stored channel, so a switch needs no restart; a switch during a running check waits for that check first, because electron-updater answers a running check for the feed it started on.
+Settings → About shows the installed version with the release notes bundled into the app. Nothing is fetched to render them, and there is no update-check control there. The update flow is the one the app has always used: a background check, an in-app download with progress, then `desktop_restart` hands the downloaded payload to the platform installer.
 
-A Canary build is the release app with other icons: same name, bundle id, install location, profile and `openchamber://` registration, so an update replaces one with the other in place. `OPENCHAMBER_DESKTOP_CHANNEL=canary` while packaging makes `scripts/package.mjs` apply `scripts/canary-build-config.mjs`, which only swaps `resources/icons` for `resources/icons-canary` (Dock and taskbar icon, menu bar and tray glyphs). Its version is the release it leads to with a `canary` pre-release part, `2.5.4-canary.20261030.123` on a `main` at 2.5.3: above the latest release, so Stable installs update into it, and below the next one; the workflow sets it in every workspace. A remote host reached over SSH gets the same Canary version from npm, like a release build installs its own: the workflow publishes the GitHub pre-release only after `@openchamber/web` reached npm, so every Canary desktop build has its version there.
+On Linux the payload installs through the system package manager for a `.deb` or `.rpm` install (`linux-package-install.mjs`, one elevated call so the password prompt does not freeze the window) and through AppImage replacement otherwise. `updater-capability.mjs` refuses an update when the running copy is neither an AppImage nor an installed package.
 
-### Why a channel switch and not a separate Canary app
+### Testing the update path without publishing
 
-A separate app (own name, id, profile) was built first. It meant two installs, two Dock icons and two sets of windows for one set of data, and most of the identity code existed only to keep them apart. One app that moves between channels is what people know from browsers' release channels, and going back is one update.
-
-### Why Stable after Canary downgrades at once and not at the next release
-
-Waiting for the next release would leave the person on a build they asked to leave for up to a few days. The downgrade is offered right away, knowing that a Canary build may have written settings or data in a form the older release does not read yet.
-
-### Why Stable reads a mirror on R2 and not GitHub alone
-
-GitHub's release downloads fail now and then, answering 504 from `releases/download` for hours while its API serves the same files, and they download at a few MB/s. R2 is served by Cloudflare's network with free egress and downloaded about twice as fast in a measurement on 2.7.0. GitHub stays the fallback, so a broken mirror costs one failed request an hour, never an update.
-### Why one rolling pre-release and not a release per night
-
-The download link stays the same, the releases page does not fill up with nightly entries, and the update feed is one fixed address.
+A build that carries the `OPENCHAMBER_UPDATER_E2E_BUILD=1` marker in its main bundle, run with `OPENCHAMBER_E2E=1` and `OPENCHAMBER_UPDATER_E2E_URL` pointing at a loopback feed, reads that feed instead of GitHub. `scripts/updater-e2e-fixture.mjs` stages and serves it. All three gates are required; the startup log line `updater feed configured { provider: 'generic', target: 'http://127.0.0.1:<port>/' }` is the only proof a run is reading the local feed rather than GitHub. See the updater testing reference in `openchamber-change-discipline`.
 
 ## Logs And Data
 

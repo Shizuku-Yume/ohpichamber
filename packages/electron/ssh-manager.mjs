@@ -384,7 +384,7 @@ const parseVersionToken = (raw) => {
   for (const token of String(raw).split(/\s+/)) {
     let candidate = token.trim().replace(/^v/, '');
     candidate = candidate.replace(/[,)]+$/g, '');
-    // A Canary build carries a pre-release part: 2.5.4-canary.20261030.1.
+    // A pre-release version such as 1.0.0-beta.1 is still a version token.
     if (/^\d+(\.\d+)+(-[0-9A-Za-z.]+)?$/.test(candidate)) {
       return candidate;
     }

@@ -16,7 +16,6 @@ type OnboardingScreenProps = {
   /** Host label for recovery context */
   recoveryHostLabel?: string;
   /** Saved host the recovery is about */
-  recoveryHostId?: string;
   localAvailable?: boolean;
 };
 
@@ -26,7 +25,6 @@ export function OnboardingScreen({
   recoveryVariant = 'missing-default-host',
   recoveryHostUrl,
   recoveryHostLabel,
-  recoveryHostId,
   localAvailable = true,
 }: OnboardingScreenProps) {
   const [showRecoveryRemoteForm, setShowRecoveryRemoteForm] = React.useState(false);
@@ -43,7 +41,6 @@ export function OnboardingScreen({
         variant={recoveryVariant}
         hostUrl={recoveryHostUrl}
         hostLabel={recoveryHostLabel}
-        hostId={recoveryHostId}
         onChooseRemote={() => setShowRecoveryRemoteForm(true)}
         showRemoteForm={showRecoveryRemoteForm}
         onCloseRemoteForm={() => setShowRecoveryRemoteForm(false)}

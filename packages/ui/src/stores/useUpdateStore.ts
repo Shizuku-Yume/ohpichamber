@@ -1,23 +1,14 @@
 import { create } from 'zustand';
-import { z } from 'zod';
 import type { UpdateInfo, UpdateProgress } from '@/lib/desktop';
-import { getDeviceInfo } from '@/lib/device';
-import { useUIStore } from './useUIStore';
 import {
   checkForDesktopUpdates,
   downloadDesktopUpdate,
   restartToApplyUpdate,
-  isDesktopLocalOriginActive,
   isElectronShell,
-  isWebRuntime,
 } from '@/lib/desktop';
 import { formatMessage, useI18nStore } from '@/lib/i18n/store';
 import { getUpdateInstallErrorMessage } from '@/lib/updateInstallError';
 import { getUpdateCheckErrorMessage } from '@/lib/updateCheckError';
-import { runtimeFetch } from '@/lib/runtime-fetch';
-import { getClientPlatform, isCapacitorApp } from '@/lib/platform';
-
-declare const __APP_VERSION__: string | undefined;
 
 type UpdateState = {
   checking: boolean;
@@ -28,205 +19,17 @@ type UpdateState = {
   info: UpdateInfo | null;
   progress: UpdateProgress | null;
   error: string | null;
-  runtimeType: 'desktop' | 'web' | 'mobile' | null;
+  /** The desktop app is the only runtime that updates itself in place. */
+  runtimeType: 'desktop' | null;
   lastChecked: number | null;
-  nextCheckInSec: number | null;
 };
 
 interface UpdateStore extends UpdateState {
-  checkForUpdates: () => Promise<number | null>;
+  checkForUpdates: () => Promise<void>;
   downloadUpdate: () => Promise<void>;
   restartToUpdate: () => Promise<void>;
   dismiss: () => void;
   reset: () => void;
-}
-
-type ClientRuntime = 'desktop' | 'web' | 'mobile';
-
-const CLIENT_INSTALL_ID_KEY = 'openchamber.update-install-id';
-
-function getClientInstallId(): string | undefined {
-  if (typeof window === 'undefined' || typeof crypto.randomUUID !== 'function') return undefined;
-
-  try {
-    const existing = window.localStorage.getItem(CLIENT_INSTALL_ID_KEY)?.trim();
-    if (existing) return existing;
-
-    const installId = crypto.randomUUID();
-    window.localStorage.setItem(CLIENT_INSTALL_ID_KEY, installId);
-    return installId;
-  } catch {
-    return undefined;
-  }
-}
-
-function detectDeviceClass(): 'mobile' | 'tablet' | 'desktop' | 'unknown' {
-  if (typeof window === 'undefined') return 'unknown';
-  try {
-    const { deviceType } = getDeviceInfo();
-    return deviceType;
-  } catch {
-    return 'unknown';
-  }
-}
-
-function detectArch(): 'arm64' | 'x64' | 'unknown' {
-  const electronArch = typeof window !== 'undefined'
-    ? window.__OPENCHAMBER_ELECTRON__?.arch?.toLowerCase?.()
-    : undefined;
-  if (electronArch === 'arm64' || electronArch === 'aarch64') return 'arm64';
-  if (electronArch === 'x64' || electronArch === 'amd64' || electronArch === 'x86_64') return 'x64';
-
-  const nav = typeof navigator !== 'undefined' ? (navigator as Navigator & { userAgentData?: { architecture?: string } }).userAgentData : undefined;
-  const fromUAData = nav?.architecture?.toLowerCase?.();
-  if (fromUAData === 'arm' || fromUAData === 'arm64' || fromUAData === 'aarch64') return 'arm64';
-  if (fromUAData === 'x86' || fromUAData === 'x64' || fromUAData === 'amd64') return 'x64';
-
-  const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
-  if (ua.includes('aarch64') || ua.includes('arm64') || ua.includes('armv')) return 'arm64';
-  if (ua.includes('x86_64') || ua.includes('x64') || ua.includes('amd64') || ua.includes('win64')) return 'x64';
-  return 'unknown';
-}
-
-function detectPlatform(): 'macos' | 'windows' | 'linux' | 'web' | 'android' | 'ios' {
-  const clientPlatform = getClientPlatform();
-  if (clientPlatform === 'android' || clientPlatform === 'ios') return clientPlatform;
-  if (typeof navigator === 'undefined') return 'web';
-  const platform = (navigator.platform || '').toLowerCase();
-  if (platform.includes('mac')) return 'macos';
-  if (platform.includes('win')) return 'windows';
-  if (platform.includes('linux')) return 'linux';
-  return 'web';
-}
-
-function mapRuntimeParams(runtime: ClientRuntime): URLSearchParams {
-  // Check if user has opted out of usage reporting (default: true/enabled from UI store)
-  const shouldReportUsage = useUIStore.getState().reportUsage;
-  
-  const params = new URLSearchParams({ reportUsage: shouldReportUsage ? 'true' : 'false' });
-  params.set('deviceClass', detectDeviceClass());
-  params.set('arch', detectArch());
-  params.set('platform', detectPlatform());
-  if (shouldReportUsage && (runtime === 'desktop' || runtime === 'mobile')) {
-    const installId = getClientInstallId();
-    if (installId) params.set('installId', installId);
-  }
-  if (runtime === 'desktop') {
-    params.set('appType', 'desktop-electron');
-    params.set('instanceMode', isDesktopLocalOriginActive() ? 'local' : 'remote');
-    return params;
-  }
-
-  if (runtime === 'mobile') {
-    params.set('appType', 'mobile-capacitor');
-    params.set('instanceMode', 'remote');
-    return params;
-  }
-
-  params.set('appType', 'web');
-  params.set('instanceMode', 'unknown');
-  return params;
-}
-
-export function parseUpdateCheckResponse(data: {
-  available?: boolean;
-  version?: string;
-  currentVersion?: string;
-  body?: string;
-  releaseUrl?: string;
-  downloadUrl?: string;
-  nextSuggestedCheckInSec?: number;
-  packageManager?: string;
-  updateCommand?: string;
-  installBlocked?: string;
-  requiredOpenCodeVersion?: string;
-  openCodeVersion?: string;
-}): UpdateInfo {
-  const openCodeTooOld = data.installBlocked === 'opencode-version'
-    && Boolean(data.requiredOpenCodeVersion && data.openCodeVersion);
-  return {
-    available: data.available ?? false,
-    version: data.version,
-    currentVersion: data.currentVersion ?? 'unknown',
-    body: data.body,
-    releaseUrl: data.releaseUrl,
-    downloadUrl: data.downloadUrl,
-    nextSuggestedCheckInSec:
-      typeof data.nextSuggestedCheckInSec === 'number' && Number.isFinite(data.nextSuggestedCheckInSec)
-        ? data.nextSuggestedCheckInSec
-        : undefined,
-    packageManager: data.packageManager,
-    updateCommand: data.updateCommand,
-    installBlocked: openCodeTooOld ? 'opencode-version' : data.installBlocked === 'service-manager'
-      || data.installBlocked === 'manual-install'
-      || data.installBlocked === 'desktop-host'
-      ? data.installBlocked
-      : undefined,
-    requiredOpenCodeVersion: openCodeTooOld ? data.requiredOpenCodeVersion : undefined,
-    openCodeVersion: openCodeTooOld ? data.openCodeVersion : undefined,
-  };
-}
-
-async function checkForWebUpdates(runtime: ClientRuntime, currentVersion?: string): Promise<UpdateInfo | null> {
-  try {
-    const params = mapRuntimeParams(runtime);
-    if (currentVersion) params.set('currentVersion', currentVersion);
-    const response = await runtimeFetch(`/api/openchamber/update-check?${params.toString()}`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      // Background check — keep sockets free for interactive traffic at startup.
-      priority: 'low',
-    });
-
-    if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}`);
-    }
-
-    return parseUpdateCheckResponse(await response.json());
-  } catch (error) {
-    console.warn('Failed to check for updates:', error);
-    return null;
-  }
-}
-
-const updateCheckFailure = z.object({ error: z.string().trim().min(1) });
-
-/**
- * Checks the OpenChamber server the native app is connected to, not the app
- * itself. The shared store's `mobile` check is about the app build (store or
- * APK updates); this asks the server about its own version, exactly like a
- * browser on that server would, so the result can be installed through the
- * server's own update route. Throws on failure so callers never read a failed
- * check as "up to date".
- */
-export async function checkConnectedServerForUpdates(): Promise<UpdateInfo> {
-  const params = mapRuntimeParams('web');
-  // The app's own check already reports usage for this install; asking about
-  // the server must not count the phone a second time as a web client.
-  params.set('reportUsage', 'false');
-  const response = await runtimeFetch(`/api/openchamber/update-check?${params.toString()}`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    // A desktop host that cannot update itself (for example a Linux build
-    // outside its AppImage) explains why in `error`; keep that reason.
-    const failure = updateCheckFailure.safeParse(payload);
-    throw new Error(failure.success ? failure.data.error : `Server responded with ${response.status}`);
-  }
-  return parseUpdateCheckResponse(payload ?? {});
-}
-
-function detectRuntimeType(): 'desktop' | 'web' | 'mobile' | null {
-  if (isCapacitorApp()) {
-    return 'mobile';
-  }
-  if (isElectronShell()) {
-    return 'desktop';
-  }
-  if (isWebRuntime()) return 'web';
-  return null;
 }
 
 const initialState: UpdateState = {
@@ -240,84 +43,52 @@ const initialState: UpdateState = {
   error: null,
   runtimeType: null,
   lastChecked: null,
-  nextCheckInSec: null,
 };
 
+/**
+ * The desktop app's own update, checked against its GitHub Releases feed
+ * through the Electron updater. Other runtimes install updates outside the
+ * app, so they never set an update here.
+ */
 export const useUpdateStore = create<UpdateStore>()((set, get) => ({
   ...initialState,
 
   checkForUpdates: async () => {
-    const runtime = detectRuntimeType();
-    if (!runtime) return null;
+    if (!isElectronShell()) return;
 
-    set({ checking: true, error: null, runtimeType: runtime });
+    set({ checking: true, error: null, runtimeType: 'desktop' });
 
     try {
-      let info: UpdateInfo | null = null;
-      let suggestedSec: number | null = null;
-
-      if (runtime === 'desktop') {
-        const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined;
-        const [desktopResult, apiResult] = await Promise.allSettled([
-          checkForDesktopUpdates(),
-          checkForWebUpdates('desktop', appVersion),
-        ]);
-        const desktopInfo = desktopResult.status === 'fulfilled' ? desktopResult.value : null;
-        if (desktopResult.status === 'rejected') throw desktopResult.reason;
-        if (!desktopInfo) {
-          throw new Error(formatMessage(useI18nStore.getState().dictionary, 'updateDialog.error.restartUnavailable'));
-        }
-        suggestedSec = apiResult.status === 'fulfilled'
-          ? (apiResult.value?.nextSuggestedCheckInSec ?? null)
-          : null;
-        const previousVersion = get().info?.version ?? null;
-        const offeredVersion = desktopInfo.version ?? null;
-        const versionChanged =
-          previousVersion !== null &&
-          offeredVersion !== null &&
-          previousVersion !== offeredVersion;
-        set({
-          checking: false,
-          available: desktopInfo.available,
-          info: desktopInfo,
-          lastChecked: Date.now(),
-          nextCheckInSec: suggestedSec,
-          ...(!desktopInfo.available || versionChanged
-            ? { downloaded: false, progress: null }
-            : {}),
-        });
-
-        return suggestedSec;
-      } else if (runtime === 'web') {
-        info = await checkForWebUpdates('web');
-        suggestedSec = info?.nextSuggestedCheckInSec ?? null;
-      } else if (runtime === 'mobile') {
-        const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : undefined;
-        info = await checkForWebUpdates('mobile', appVersion);
-        suggestedSec = info?.nextSuggestedCheckInSec ?? null;
+      const info = await checkForDesktopUpdates();
+      if (!info) {
+        throw new Error(formatMessage(useI18nStore.getState().dictionary, 'updateDialog.error.restartUnavailable'));
       }
-
+      const previousVersion = get().info?.version ?? null;
+      const offeredVersion = info.version ?? null;
+      const versionChanged =
+        previousVersion !== null &&
+        offeredVersion !== null &&
+        previousVersion !== offeredVersion;
       set({
         checking: false,
-        available: info?.available ?? false,
+        available: info.available,
         info,
         lastChecked: Date.now(),
-        nextCheckInSec: suggestedSec,
+        ...(!info.available || versionChanged
+          ? { downloaded: false, progress: null }
+          : {}),
       });
-      return suggestedSec;
     } catch (error) {
       set({
         checking: false,
         error: error instanceof Error ? getUpdateCheckErrorMessage(error) : 'Failed to check for updates',
       });
-      return null;
     }
   },
 
   downloadUpdate: async () => {
     const { available, runtimeType, downloading } = get();
 
-    // For web runtime, there's no download - user uses in-app update or CLI
     if (runtimeType !== 'desktop' || !available || downloading) {
       return;
     }
@@ -335,9 +106,8 @@ export const useUpdateStore = create<UpdateStore>()((set, get) => ({
           ? {
             ...state.info,
             ...desktopInfo,
-            // Keep the richer sidecar-sourced changelog; desktopInfo.body is
-            // often the bare "See release notes at..." fallback from the
-            // updater and would otherwise clobber the nice changelog.
+            // Keep the richer changelog; desktopInfo.body is often the bare
+            // "See release notes at..." fallback from the updater.
             body: state.info.body || desktopInfo.body,
             available: state.info.available,
           }

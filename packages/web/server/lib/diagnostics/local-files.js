@@ -231,7 +231,6 @@ export async function collectLocalFileDiagnostics({ electronLogPath, home = os.h
     ...(electronLogPath ? [{ name: 'desktop', folder: path.dirname(electronLogPath), matches: (name) => /^main(?:\.\d+)?\.log$/.test(name) }] : []),
     ...(Number.isInteger(webPort) && webPort > 0 ? [{ name: 'web', folder: path.join(dataDir, 'logs'), matches: (name) => name === `openchamber-${webPort}.log` }] : []),
     ...(process.platform === 'darwin' ? [{ name: 'startup', folder: path.join(home, 'Library', 'Logs', 'OpenChamber'), matches: (name) => /^startup(?:\.err)?\.log$/.test(name) }] : []),
-    { name: 'update', folder: dataDir, matches: (name) => name === 'update-install.log' },
   ];
   const { events: journalEvents, coverage: journalCoverage } = journal.snapshot();
   const events = [...journalEvents];

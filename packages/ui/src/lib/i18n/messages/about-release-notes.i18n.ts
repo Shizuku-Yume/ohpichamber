@@ -2,7 +2,6 @@
 export const aboutReleaseNotesI18n = {
   en: {
     'settings.openchamber.about.releaseNotes.current': "What's new in {version}",
-    'settings.openchamber.about.releaseNotes.since': "What's new since {version}",
     'settings.openchamber.about.releaseNotes.allReleases': 'All releases',
     'releaseNotes.showAll': 'Show all',
     'releaseNotes.group.new': 'New',
@@ -13,7 +12,6 @@ export const aboutReleaseNotesI18n = {
   },
   nl: {
     'settings.openchamber.about.releaseNotes.current': 'Nieuw in {version}',
-    'settings.openchamber.about.releaseNotes.since': 'Nieuw sinds {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'Alle releases',
     'releaseNotes.showAll': 'Alles tonen',
     'releaseNotes.group.new': 'Nieuw',
@@ -24,7 +22,6 @@ export const aboutReleaseNotesI18n = {
   },
   de: {
     'settings.openchamber.about.releaseNotes.current': 'Neu in {version}',
-    'settings.openchamber.about.releaseNotes.since': 'Neu seit {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'Alle Versionen',
     'releaseNotes.showAll': 'Alle anzeigen',
     'releaseNotes.group.new': 'Neu',
@@ -35,7 +32,6 @@ export const aboutReleaseNotesI18n = {
   },
   es: {
     'settings.openchamber.about.releaseNotes.current': 'Novedades de {version}',
-    'settings.openchamber.about.releaseNotes.since': 'Novedades desde {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'Todas las versiones',
     'releaseNotes.showAll': 'Mostrar todo',
     'releaseNotes.group.new': 'Nuevo',
@@ -46,7 +42,6 @@ export const aboutReleaseNotesI18n = {
   },
   fr: {
     'settings.openchamber.about.releaseNotes.current': 'Nouveautés de la {version}',
-    'settings.openchamber.about.releaseNotes.since': 'Nouveautés depuis la {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'Toutes les versions',
     'releaseNotes.showAll': 'Tout afficher',
     'releaseNotes.group.new': 'Nouveau',
@@ -57,7 +52,6 @@ export const aboutReleaseNotesI18n = {
   },
   ja: {
     'settings.openchamber.about.releaseNotes.current': '{version} の新機能',
-    'settings.openchamber.about.releaseNotes.since': '{version} 以降の新機能',
     'settings.openchamber.about.releaseNotes.allReleases': 'すべてのリリース',
     'releaseNotes.showAll': 'すべて表示',
     'releaseNotes.group.new': '新機能',
@@ -68,7 +62,6 @@ export const aboutReleaseNotesI18n = {
   },
   'pt-BR': {
     'settings.openchamber.about.releaseNotes.current': 'Novidades da {version}',
-    'settings.openchamber.about.releaseNotes.since': 'Novidades desde a {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'Todas as versões',
     'releaseNotes.showAll': 'Mostrar tudo',
     'releaseNotes.group.new': 'Novo',
@@ -79,7 +72,6 @@ export const aboutReleaseNotesI18n = {
   },
   uk: {
     'settings.openchamber.about.releaseNotes.current': 'Що нового в {version}',
-    'settings.openchamber.about.releaseNotes.since': 'Що нового після {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'Усі релізи',
     'releaseNotes.showAll': 'Показати все',
     'releaseNotes.group.new': 'Нове',
@@ -90,7 +82,6 @@ export const aboutReleaseNotesI18n = {
   },
   ko: {
     'settings.openchamber.about.releaseNotes.current': '{version}의 새로운 기능',
-    'settings.openchamber.about.releaseNotes.since': '{version} 이후 새로운 기능',
     'settings.openchamber.about.releaseNotes.allReleases': '모든 릴리스',
     'releaseNotes.showAll': '모두 보기',
     'releaseNotes.group.new': '새 기능',
@@ -101,7 +92,6 @@ export const aboutReleaseNotesI18n = {
   },
   pl: {
     'settings.openchamber.about.releaseNotes.current': 'Nowości w {version}',
-    'settings.openchamber.about.releaseNotes.since': 'Nowości od {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'Wszystkie wydania',
     'releaseNotes.showAll': 'Pokaż wszystko',
     'releaseNotes.group.new': 'Nowe',
@@ -112,7 +102,6 @@ export const aboutReleaseNotesI18n = {
   },
   'zh-CN': {
     'settings.openchamber.about.releaseNotes.current': '{version} 新增内容',
-    'settings.openchamber.about.releaseNotes.since': '{version} 以来的新内容',
     'settings.openchamber.about.releaseNotes.allReleases': '所有版本',
     'releaseNotes.showAll': '全部显示',
     'releaseNotes.group.new': '新功能',
@@ -123,7 +112,6 @@ export const aboutReleaseNotesI18n = {
   },
   'zh-TW': {
     'settings.openchamber.about.releaseNotes.current': '{version} 新增內容',
-    'settings.openchamber.about.releaseNotes.since': '{version} 以來的新內容',
     'settings.openchamber.about.releaseNotes.allReleases': '所有版本',
     'releaseNotes.showAll': '全部顯示',
     'releaseNotes.group.new': '新功能',
@@ -134,7 +122,6 @@ export const aboutReleaseNotesI18n = {
   },
   tr: {
     'settings.openchamber.about.releaseNotes.current': '{version} sürümündeki yenilikler',
-    'settings.openchamber.about.releaseNotes.since': '{version} sürümünden bu yana yenilikler',
     'settings.openchamber.about.releaseNotes.allReleases': 'Tüm sürümler',
     'releaseNotes.showAll': 'Tümünü göster',
     'releaseNotes.group.new': 'Yeni',
@@ -145,7 +132,6 @@ export const aboutReleaseNotesI18n = {
   },
   ar: {
     'settings.openchamber.about.releaseNotes.current': 'الجديد في {version}',
-    'settings.openchamber.about.releaseNotes.since': 'الجديد منذ {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'كل الإصدارات',
     'releaseNotes.showAll': 'عرض الكل',
     'releaseNotes.group.new': 'جديد',
@@ -156,7 +142,6 @@ export const aboutReleaseNotesI18n = {
   },
   he: {
     'settings.openchamber.about.releaseNotes.current': 'מה חדש ב-{version}',
-    'settings.openchamber.about.releaseNotes.since': 'מה חדש מאז {version}',
     'settings.openchamber.about.releaseNotes.allReleases': 'כל הגרסאות',
     'releaseNotes.showAll': 'הצגת הכול',
     'releaseNotes.group.new': 'חדש',

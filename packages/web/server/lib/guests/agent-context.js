@@ -103,8 +103,8 @@ export const createGuestAgentContext = ({ listGuests, instructions, fsPromises =
 
 /**
  * The skill pinned to the running app, so an agent never has to work out which
- * SDK fits it. Canary and Stable publish the SDK at the app's exact version.
- * An engine floor takes `X.Y.Z` only, so a Canary build gives its core version.
+ * SDK fits it. The SDK is published at the app's exact version.
+ * An engine floor takes `X.Y.Z` only, so a pre-release build gives its core version.
  */
 const pinAuthoringSkill = (template, openchamberVersion) => {
   const core = parseOpenChamberVersion(openchamberVersion);

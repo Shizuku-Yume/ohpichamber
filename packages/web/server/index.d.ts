@@ -47,20 +47,6 @@ export interface DesktopRuntimeConfig {
   requestHeaders: Record<string, string>;
 }
 
-export interface DesktopUpdateInfo {
-  available: boolean;
-  currentVersion?: string;
-  version?: string | null;
-  body?: string | null;
-  date?: string | null;
-}
-
-export interface DesktopUpdater {
-  check: () => Promise<DesktopUpdateInfo>;
-  install: () => Promise<DesktopUpdateInfo>;
-  restart: () => Promise<void> | void;
-}
-
 export interface StartWebUiServerOptions {
   port?: number;
   host?: string;
@@ -74,7 +60,6 @@ export interface StartWebUiServerOptions {
   tunnelConfigPath?: string | null;
   tunnelToken?: string;
   tunnelHostname?: string;
-  desktopUpdater?: DesktopUpdater;
   /** App-owned built-in resources outside Electron's ASAR archive. */
   builtInExtensionsDir?: string;
   onDesktopNotification?: (payload: DesktopNotificationPayload) => void;

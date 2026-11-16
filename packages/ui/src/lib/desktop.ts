@@ -4,8 +4,11 @@ import { getInjectedBootOutcome } from '@/lib/desktopBoot';
 import { getRuntimeBearerTokenSync } from '@/lib/runtime-auth';
 import { getRuntimeApiBaseUrl, getRuntimeKey } from '@/lib/runtime-switch';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { isUpdateChannel, type UpdateChannel } from '@/lib/updateChannel';
 
+/**
+ * What the desktop updater reports for its own feed: the release it offers,
+ * the version running now, and the notes and date of the offered release.
+ */
 export type UpdateInfo = {
  available: boolean;
  version?: string;
@@ -13,23 +16,6 @@ export type UpdateInfo = {
  body?: string;
  date?: string;
  releaseUrl?: string;
- downloadUrl?: string;
- nextSuggestedCheckInSec?: number;
- // Web-specific fields
- packageManager?: string;
- updateCommand?: string;
- /**
-  * The server cannot install this update itself. `service-manager`: run
-  * `updateCommand` by hand. `manual-install`: no package manager installed
-  * this copy, so the new version is installed the way this one was.
-  * `desktop-host`: a desktop installed from a Linux package asks for the
-  * administrator password on its own screen, so it updates only there.
-  * `opencode-version`: the new version needs OpenCode
-  * `requiredOpenCodeVersion`, newer than the server's `openCodeVersion`.
-  */
- installBlocked?: 'service-manager' | 'manual-install' | 'desktop-host' | 'opencode-version';
- requiredOpenCodeVersion?: string;
- openCodeVersion?: string;
 };
 
 export type UpdateProgress = {
@@ -242,41 +228,6 @@ export const setDesktopLaunchAtLogin = async (enabled: boolean): Promise<LaunchA
   return result;
  } catch (error) {
   console.warn('Failed to set launch at login status', error);
-  return null;
- }
-};
-
-// What main answers; the channel is checked, not trusted, like the other statuses.
-type UpdateChannelStatus = { channel?: string };
-
-const parseUpdateChannelStatus = (result: UpdateChannelStatus | null): UpdateChannel | null => (
- isUpdateChannel(result?.channel) ? result.channel : null
-);
-
-/** The update channel the desktop app follows; null where the app does not update itself. */
-export const getDesktopUpdateChannel = async (): Promise<UpdateChannel | null> => {
- if (!canUseElectronDesktopIPC() || !isDesktopLocalOriginActive()) {
-  return null;
- }
-
- try {
-  return parseUpdateChannelStatus(await invokeDesktop<UpdateChannelStatus>('desktop_get_update_channel'));
- } catch (error) {
-  console.warn('Failed to get the update channel', error);
-  return null;
- }
-};
-
-/** Stores the channel; the next update check reads it. Returns the stored channel, or null when it was not saved. */
-export const setDesktopUpdateChannel = async (channel: UpdateChannel): Promise<UpdateChannel | null> => {
- if (!canUseElectronDesktopIPC() || !isDesktopLocalOriginActive()) {
-  return null;
- }
-
- try {
-  return parseUpdateChannelStatus(await invokeDesktop<UpdateChannelStatus>('desktop_set_update_channel', { channel }));
- } catch (error) {
-  console.warn('Failed to set the update channel', error);
   return null;
  }
 };

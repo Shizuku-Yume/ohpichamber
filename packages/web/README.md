@@ -67,7 +67,6 @@ openchamber connect-url --server http://host:3000 --qr
 openchamber connect-url --port 3000 --qr
 openchamber logs                     # Follow latest instance logs
 openchamber stop                     # Stop server
-openchamber update                   # Update to latest version
 ```
 
 `startup enable` snapshots your current environment into the native service so startup behaves like you launched `openchamber` from the same shell. This preserves provider tokens, PATH, SSH agent settings, and other CLI auth/config env vars. Use `--no-env-snapshot` for a minimal service env.
@@ -133,7 +132,6 @@ The Host starts the supervised Bun OMP Agent Service automatically behind `/api/
 | `OPENCHAMBER_FS_UPLOAD_MAX_BYTES` | Maximum file upload size in bytes (default: 100 MiB) |
 | `OPENCHAMBER_PROXY_TIMEOUT_MS` | OpenCode upstream proxy deadline in milliseconds. Accepts integers from `0` to `2147483647`; defaults to `240000` (4 minutes). Invalid values warn and keep the default. `0` disables this proxy deadline, allowing unbounded waits until the client disconnects. Other client and upstream timeouts still apply. VS Code's separate extension bridge is unchanged. |
 | `OPENCHAMBER_TERMINAL_SHELL` | Preferred terminal shell executable used by the `Auto` setting before platform defaults |
-| `npm_config_registry` / `NPM_CONFIG_REGISTRY` | Registry used for plugin metadata and npm version checks. Scoped registry settings and the user's `.npmrc` are also honored. The lowercase value takes precedence when both are set. |
 
 </details>
 

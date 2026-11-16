@@ -19,7 +19,7 @@ it('configures managed HTTPS through the web Git adapter, HTTP route and binding
   const account = { provider: 'github', instance: 'github.com', accountId: 'credential-one' };
   const resolvedAccount = {
     accountId: account.accountId, credentialId: account.accountId, credentialRevision: 2,
-    providerUserId: 'github.com#42', status: 'valid', secret: 'canary-runtime-secret',
+    providerUserId: 'github.com#42', status: 'valid', secret: 'runtime-secret',
     source: 'oauth', user: { id: 42, login: 'safe-user' },
   };
   const service = createBindingService({
@@ -73,7 +73,7 @@ it('configures managed HTTPS through the web Git adapter, HTTP route and binding
       status: 'available', transport: 'https', provider: 'github', instance: 'github.com',
       source: 'oauth', username: 'safe-user', providerUserId: 'github.com#42',
     });
-    expect(JSON.stringify(read.binding?.remotes[0].presentation)).not.toMatch(/credential-one|canary-runtime-secret/);
+    expect(JSON.stringify(read.binding?.remotes[0].presentation)).not.toMatch(/credential-one|runtime-secret/);
     const auxiliary = await configureWebAuxiliaryBinding({
       operation: 'configure', directory: '/private/host/repo', expectedRepositoryId: 'repo_one', expectedRevision: 1,
       expectedConfigRevision: 'config_one', parentRemote: 'origin', expectedParentFingerprint: 'fingerprint',
@@ -90,8 +90,8 @@ it('configures managed HTTPS through the web Git adapter, HTTP route and binding
     await expect(configureWebTransportBinding({ ...intent, expectedRevision: 2, credentialAccount: { ...account, provider: 'gitlab', instance: 'https://gitlab.com' } }, transportFetch))
       .rejects.toMatchObject({ code: 'INVALID_SOURCE_CONTROL_BINDING' });
     expect(record.revision).toBe(2);
-    expect(bodyLog.join('')).not.toMatch(/canary-runtime-secret|credentialId|rawUrl/);
-    expect(responseLog.join('')).not.toMatch(/canary-runtime-secret|\/private\/host|rawUrl|private-transport/);
+    expect(bodyLog.join('')).not.toMatch(/runtime-secret|credentialId|rawUrl/);
+    expect(responseLog.join('')).not.toMatch(/runtime-secret|\/private\/host|rawUrl|private-transport/);
     expect(bodyLog).toHaveLength(6);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));

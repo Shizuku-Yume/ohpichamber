@@ -43,7 +43,6 @@ describe('useUpdateStore restartToUpdate', () => {
       error: null,
       runtimeType: 'desktop',
       lastChecked: null,
-      nextCheckInSec: null,
     })
   })
 

@@ -159,7 +159,7 @@ export const devTapeSvg = ({ size = 1024 } = {}) => (
 /**
  * `cubeShare` is the cube's height as a share of the square (1 = touches the
  * edges). `background` fills the square; `tape` adds the development-copy tape;
- * `colors` repaints the cube (Canary's blue).
+ * `colors` repaints the cube.
  */
 export const noTileIconSvg = ({ size = 1024, background = null, cubeShare = 1, tape = false, colors = NO_TILE } = {}) => {
   const view = 106 / cubeShare;

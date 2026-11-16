@@ -531,24 +531,38 @@ export type AutoFillNotice =
   | 'partial';
 
 /**
+ * The distinct ids no source answered for, in the order given. Ids a source
+ * cap kept out of a request belong here too: nobody asked, so nobody answered,
+ * and the reader is told which models stayed empty rather than left to guess.
+ */
+export function unresolvedAutoFillIds(ids: readonly string[], answers: ModelCatalogAnswers): string[] {
+  const seen = new Set<string>();
+  const unresolved: string[] = [];
+  for (const id of ids) {
+    const modelId = id.trim();
+    if (!modelId || answers.has(modelId) || seen.has(modelId)) continue;
+    seen.add(modelId);
+    unresolved.push(modelId);
+  }
+  return unresolved;
+}
+
+/**
  * What the fill reports, in order of what the reader must know: a refused or
  * failed lookup first (a catalog-only result must never read as success), then
  * the case where no source answered at all, then "nothing left to fill", then
- * ids that stayed unknown, and last the ids beyond a source's cap, which
- * nobody even asked about.
+ * the ids that stayed unknown.
  */
 export function autoFillNoticeFor(input: {
   lookup: 'enterprise' | 'failed' | null;
   answered: number;
   filled: number;
   unresolved: readonly string[];
-  overCap: readonly string[];
 }): AutoFillNotice | null {
   if (input.lookup) return input.lookup;
   if (input.answered === 0) return 'none';
   if (input.filled === 0) return 'nothing';
   if (input.unresolved.length > 0) return 'partial';
-  if (input.overCap.length > 0) return 'partial';
   return null;
 }
 
@@ -559,10 +573,15 @@ export function createDiscoveredModelRow(model: ProviderModelDiscoveryResult['mo
   return applyModelCatalogInfo([row], new Map([[row.modelId.trim(), model.catalog]])).models[0];
 }
 
-/** Records that the user set this field by hand, so auto-fill stops touching it. */
+/**
+ * Records that the user set this field by hand, so auto-fill stops touching it.
+ * The typing also retires the field's provenance: a value the user wrote (or
+ * cleared) came from the user, not from the catalog that filled it before.
+ */
 export function markModelFieldTyped(row: ModelRow, field: ModelAutoFillField): ModelRow {
-  if (row.typed.has(field)) return row;
-  return { ...row, typed: new Set([...row.typed, field]) };
+  if (row.typed.has(field) && row.filledFrom[field] === undefined) return row;
+  const { [field]: _retired, ...filledFrom } = row.filledFrom;
+  return { ...row, typed: new Set([...row.typed, field]), filledFrom };
 }
 
 /** A row whose id the freshly discovered list no longer carries. */

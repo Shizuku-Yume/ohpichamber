@@ -33,6 +33,7 @@ import {
   applyModelCatalogInfo,
   autoFillIds,
   autoFillNoticeFor,
+  unresolvedAutoFillIds,
   buildCustomProviderRequest,
   buildProviderDiscoveryRequest,
   createDiscoveredModelRow,
@@ -229,10 +230,12 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
   };
 
   const addDiscoveredModels = (modelIds: string[]) => {
-    const wanted = new Set(modelIds);
+    const wanted = new Set(modelIds.map((modelId) => modelId.trim()));
     setForm((previous) => {
       const existing = new Set(previous.models.map((model) => model.modelId.trim()).filter(Boolean));
+      // Discovery may pad an id; the row and the dialog both carry it trimmed.
       const added = (discoveredModels ?? [])
+        .map((model) => ({ ...model, modelId: model.modelId.trim() }))
         .filter((model) => wanted.has(model.modelId) && !existing.has(model.modelId))
         .map(createDiscoveredModelRow);
       // The blank starter row of a new form gives way to the imported models.
@@ -306,18 +309,15 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       const preview = applyModelCatalogInfo(form.models, answers);
       setForm((previous) => ({ ...previous, models: applyModelCatalogInfo(previous.models, answers).models }));
       if (!isCurrent()) return;
-      // An id beyond the enrich cap may still have been answered by the second
-      // leg; only ids that stayed unknown are reported.
-      const unansweredCap = overCap.filter((modelId) => !answers.has(modelId));
-      const unanswered = candidates.slice(AUTO_FILL_OPENROUTER_LIMIT)
-        .filter((modelId, index, all) => !answers.has(modelId) && all.indexOf(modelId) === index);
-      setUnresolvedModelIds([...unanswered, ...unansweredCap]);
+      // Every id either source did not answer, including ids a cap kept out of
+      // a request: those are exactly the rows whose limits stay empty.
+      const unresolved = unresolvedAutoFillIds([...candidates, ...overCap], answers);
+      setUnresolvedModelIds(unresolved);
       setAutoFillNotice(autoFillNoticeFor({
         lookup: lookupNotice,
         answered: answers.size,
         filled: preview.filled,
-        unresolved: unanswered,
-        overCap: unansweredCap,
+        unresolved,
       }));
     } catch (error) {
       if (!isCurrent()) return;

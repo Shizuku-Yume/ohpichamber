@@ -307,10 +307,12 @@ export const CustomProviderModelsDialog: React.FC<CustomProviderModelsDialogProp
                 grouping.groups.map((group) => (
                   <div key={group.family} className="py-1">
                     <SettingsGroupTitle>{group.family}</SettingsGroupTitle>
-                    {group.rows.map(renderRow)}
+                    <div className="divide-y divide-[var(--surface-subtle)]">{group.rows.map(renderRow)}</div>
                   </div>
                 ))
-              ) : visible.map(renderRow)}
+              ) : (
+                <div className="divide-y divide-[var(--surface-subtle)]">{visible.map(renderRow)}</div>
+              )}
             </ScrollableOverlay>
           </div>
 

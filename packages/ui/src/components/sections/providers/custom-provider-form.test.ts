@@ -6,6 +6,7 @@ import {
   autoFillIds,
   autoFillNoticeFor,
   catalogInputs,
+  unresolvedAutoFillIds,
   buildCustomProviderRequest,
   createDiscoveredModelRow,
   createEmptyCustomProviderForm,
@@ -338,17 +339,15 @@ test('the OpenRouter step asks only for ids the OMP catalog did not answer', () 
 });
 
 test('an enterprise refusal is reported even when no catalog answered any id', () => {
-  expect(autoFillNoticeFor({ lookup: 'enterprise', answered: 0, filled: 0, unresolved: ['a', 'b'], overCap: [] })).toBe('enterprise');
-  expect(autoFillNoticeFor({ lookup: 'failed', answered: 0, filled: 0, unresolved: [], overCap: [] })).toBe('failed');
+  expect(autoFillNoticeFor({ lookup: 'enterprise', answered: 0, filled: 0, unresolved: ['a', 'b'] })).toBe('enterprise');
+  expect(autoFillNoticeFor({ lookup: 'failed', answered: 0, filled: 0, unresolved: [] })).toBe('failed');
 });
 
 test('the notice tells no-data, nothing-to-fill and partial apart', () => {
-  expect(autoFillNoticeFor({ lookup: null, answered: 0, filled: 0, unresolved: ['a'], overCap: [] })).toBe('none');
-  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 0, unresolved: [], overCap: [] })).toBe('nothing');
-  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 1, unresolved: ['b'], overCap: [] })).toBe('partial');
-  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 1, unresolved: [], overCap: [] })).toBeNull();
-  // An id nobody even asked about is reported too, not passed off as answerable.
-  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 1, unresolved: [], overCap: ['c'] })).toBe('partial');
+  expect(autoFillNoticeFor({ lookup: null, answered: 0, filled: 0, unresolved: ['a'] })).toBe('none');
+  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 0, unresolved: [] })).toBe('nothing');
+  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 1, unresolved: ['b'] })).toBe('partial');
+  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 1, unresolved: [] })).toBeNull();
 });
 
 test('catalog inputs are written text first regardless of the source order', () => {
@@ -403,4 +402,63 @@ test('discovered ids compare trimmed against form rows', () => {
   expect(staleModelIds([row], [{ modelId: ' kept ' }])).toEqual([]);
   expect(idsToAdd([row], [{ modelId: ' kept ' }, { modelId: ' new ' }])).toEqual(['new']);
   expect(discoveryRows([{ modelId: ' kept ', name: 'Kept' }], [row])[0]!.formRow).toBe(row);
+});
+
+test('a real-path fill reports exactly the ids no source answered', () => {
+  // Six models in the form: the OMP catalog knows three, OpenRouter one more,
+  // and two stay unknown — those two are what the notice must list.
+  const ids = ['known-a', 'known-b', 'known-c', 'openrouter-d', 'unknown-e', 'unknown-f'];
+  const answers = new Map<string, ModelCatalogInfo>([
+    ['known-a', catalog()],
+    ['known-b', catalog()],
+    ['known-c', catalog()],
+    ['openrouter-d', catalog({ source: 'openrouter' })],
+  ]);
+  // The first 200 of the catalog's misses go to the Host route, so with a
+  // short list every id reaches the unresolved set.
+  const candidates = unresolvedAutoFillIds(ids, answers);
+  expect(candidates).toEqual(['unknown-e', 'unknown-f']);
+  expect(autoFillNoticeFor({ lookup: null, answered: answers.size, filled: 3, unresolved: candidates })).toBe('partial');
+
+  // A deduped list: the same id twice in the form is reported once.
+  expect(unresolvedAutoFillIds(['ghost', 'ghost', 'known-a'], answers)).toEqual(['ghost']);
+});
+
+test('ids a source cap kept out of the request are reported as unresolved', () => {
+  const answers = new Map([['asked', catalog()]]);
+  const overCap = ['beyond-cap-1', 'beyond-cap-2'];
+  const unresolved = unresolvedAutoFillIds(['asked', ...overCap], answers);
+  expect(unresolved).toEqual(['beyond-cap-1', 'beyond-cap-2']);
+  expect(autoFillNoticeFor({ lookup: null, answered: 1, filled: 1, unresolved })).toBe('partial');
+});
+
+test('typing into a filled field retires its source label', () => {
+  const row = createModelRow({ modelId: 'claude-opus-4-6', name: 'Claude Opus 4.6' });
+  const filled = applyModelCatalogInfo([row], new Map([['claude-opus-4-6', catalog()]])).models[0]!;
+  expect(filled.filledFrom.contextWindow).toBe('omp-catalog');
+
+  const typed = markModelFieldTyped(filled, 'contextWindow');
+  expect(typed.typed.has('contextWindow')).toBe(true);
+  expect(typed.filledFrom.contextWindow).toBeUndefined();
+  // The other fields keep their provenance.
+  expect(typed.filledFrom.maxOutputTokens).toBe('omp-catalog');
+  // Clearing the limit keeps it typed, so auto-fill leaves it empty.
+  expect(autoFillFields({ ...typed, contextWindow: '' }, catalog())).not.toContain('contextWindow');
+});
+
+test('add-all takes a padded discovered id and adds it trimmed', () => {
+  const discovered = [
+    { modelId: ' model-a ', name: 'A' },
+    { modelId: 'model-b', name: 'B' },
+  ];
+  const addable = idsToAdd([], discovered);
+  expect(addable).toEqual(['model-a', 'model-b']);
+
+  // What the form's add path does with those ids.
+  const wanted = new Set(addable);
+  const added = discovered
+    .map((model) => ({ ...model, modelId: model.modelId.trim() }))
+    .filter((model) => wanted.has(model.modelId));
+  expect(added.map((model) => model.modelId)).toEqual(['model-a', 'model-b']);
+  expect(added.map((model) => createDiscoveredModelRow(model).modelId)).toEqual(['model-a', 'model-b']);
 });

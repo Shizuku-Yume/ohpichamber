@@ -12,7 +12,7 @@ import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
 import { formatGoalTokens } from '@/lib/sessionGoalMetadata';
 import { cn } from '@/lib/utils';
-import { modelModalitiesForKind, type ModelFieldErrors, type ModelRow } from './custom-provider-form';
+import { modelModalitiesForKind, type ModelAutoFillField, type ModelFieldErrors, type ModelRow } from './custom-provider-form';
 
 type ModelTextField = 'modelId' | 'name' | 'contextWindow' | 'maxOutputTokens';
 
@@ -24,6 +24,8 @@ interface CustomProviderModelRowProps {
   onChange: (key: ModelTextField, value: string) => void;
   onToggleModality: (modality: Model['modalities'][number]) => void;
   onToolsChange: (tools: boolean) => void;
+  /** The row changed a field by hand; auto-fill must never overwrite it. */
+  onUserEdit: (field: ModelAutoFillField) => void;
   onRemove?: () => void;
   disabled?: boolean;
 }
@@ -46,6 +48,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
   onChange,
   onToggleModality,
   onToolsChange,
+  onUserEdit,
   onRemove,
   disabled = false,
 }) => {
@@ -71,6 +74,13 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
   const fieldError = (message?: string) => (
     message ? <p className="typography-meta text-[var(--status-error)]">{message}</p> : null
   );
+
+  // A filled value names where it came from; a typed one needs no label.
+  const sourceNote = (field: ModelAutoFillField) => {
+    const source = model.filledFrom[field];
+    if (!source) return null;
+    return <p className={cn('mt-0.5', SETTINGS_HELPER_CLASS)}>{t(`settings.providers.page.custom.models.source.${source}`)}</p>;
+  };
 
   return (
     <div className="border-b border-border/50 last:border-b-0">
@@ -150,7 +160,10 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
               <Input
                 inputMode="numeric"
                 value={model.contextWindow}
-                onChange={(event) => onChange('contextWindow', event.target.value)}
+                onChange={(event) => {
+                  onUserEdit('contextWindow');
+                  onChange('contextWindow', event.target.value);
+                }}
                 placeholder="128000"
                 className="h-8 rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.contextWindow)}
@@ -158,13 +171,17 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                 disabled={disabled}
               />
               {fieldError(errors?.contextWindow)}
+              {sourceNote('contextWindow')}
             </div>
             <div className="flex flex-col gap-1">
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.maxOutputTokens')}</label>
               <Input
                 inputMode="numeric"
                 value={model.maxOutputTokens}
-                onChange={(event) => onChange('maxOutputTokens', event.target.value)}
+                onChange={(event) => {
+                  onUserEdit('maxOutputTokens');
+                  onChange('maxOutputTokens', event.target.value);
+                }}
                 placeholder="16384"
                 className="h-8 rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.maxOutputTokens)}
@@ -172,6 +189,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                 disabled={disabled}
               />
               {fieldError(errors?.maxOutputTokens)}
+              {sourceNote('maxOutputTokens')}
             </div>
           </div>
 
@@ -182,7 +200,10 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                 <SettingsCheckboxRow
                   key={modality}
                   checked={model.modalities.includes(modality)}
-                  onChange={() => onToggleModality(modality)}
+                  onChange={() => {
+                    onUserEdit('modalities');
+                    onToggleModality(modality);
+                  }}
                   disabled={disabled || (model.modalities.includes(modality)
                     && (baseModalityCount === 1 && (modality === 'text' || modality === 'image')))}
                   label={modality}
@@ -190,15 +211,37 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
                 />
               ))}
             </div>
+            {sourceNote('modalities')}
           </div>
 
-          <SettingsCheckboxRow
-            checked={model.toolsSupported === true}
-            onChange={onToolsChange}
-            disabled={disabled}
-            label={t('settings.providers.page.custom.models.tools')}
-            ariaLabel={t('settings.providers.page.custom.models.tools')}
-          />
+          <div className="space-y-1">
+            <SettingsCheckboxRow
+              checked={model.toolsSupported === true}
+              onChange={(tools) => {
+                onUserEdit('toolsSupported');
+                onToolsChange(tools);
+              }}
+              disabled={disabled}
+              label={t('settings.providers.page.custom.models.tools')}
+              ariaLabel={t('settings.providers.page.custom.models.tools')}
+            />
+            {sourceNote('toolsSupported')}
+          </div>
+
+          {/* Reasoning and pricing have no control here, so their provenance
+              is read as a line of its own. */}
+          {model.filledFrom.reasoning || model.filledFrom.pricing ? (
+            <p className={SETTINGS_HELPER_CLASS}>
+              {([
+                model.filledFrom.reasoning
+                  ? `${t('settings.providers.page.models.capability.reasoning')} · ${t(`settings.providers.page.custom.models.source.${model.filledFrom.reasoning}`)}`
+                  : null,
+                model.filledFrom.pricing
+                  ? `${t('settings.providers.page.custom.models.pricing')} · ${t(`settings.providers.page.custom.models.source.${model.filledFrom.pricing}`)}`
+                  : null,
+              ]).filter(Boolean).join(' · ')}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </div>

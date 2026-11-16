@@ -166,20 +166,53 @@ serves), `usesMachineCredentials` counts that as credentials: the card shows
 OpenCode config is switched on (`activation: "enabled"`) even without a key, so
 activation alone is not a sign-in signal.
 
-The custom-provider form can discover models before save through
-`POST /api/provider/discover-models`. Discovery is a one-time prefill the user
-starts with "Find models": they pick which returned models to add, the review
-panel closes, and nothing stays in sync with the provider afterwards (a
-maintainer decision; never add a recurring refresh). Provider metadata wins
-field by field and models.dev fills the gaps. Discovery failure never removes
-rows or blocks saving.
+The custom-provider form can discover models before save through the Canonical
+API's `POST /api/agent/v1/workspaces/:id/providers/discover`. Discovery is a
+one-time prefill the user starts with "Find models", and it opens
+`CustomProviderModelsDialog` rather than an inline panel: the dialog lists
+every returned model (plus form rows the fresh list no longer carries, marked
+stale) with filter chips 全部/All, 失效/Stale, 文本/Text, 图片/Image,
+嵌入/Embedding and 音频/Audio, each showing its count. Per-model add and remove
+are icon buttons, capability chips (text, image, reasoning, tools, context
+window) reuse the `ProvidersPage` badge style, and the list groups by family
+only when every visible row names one. "Add all models" adds exactly the
+returned ids the form does not hold; each added row is prefilled from its
+catalog entry. "Remove stale models" lists the ids it would drop in a
+confirmation dialog first, and each stale row can also be removed alone.
+Nothing stays in sync with the provider afterwards (a maintainer decision;
+never add a recurring refresh). Discovery failure never removes rows or blocks
+saving.
+
+Staleness follows the form row, not how it was created: a hand-added row whose
+id the endpoint does not return is stale too, and the confirmation names it
+before anything is removed. Family grouping is evaluated over the currently
+visible rows, so a filter that hides the anonymous rows may turn the list into
+groups, and clearing it returns the flat list.
+
+"Try to fill in model info" fills only fields the user has not set. It asks
+`POST /api/agent/v1/workspaces/:id/providers/enrich` first — an offline read of
+OMP's bundled catalog that never touches the network — then, for the ids that
+answer did not cover, the Host route `POST /api/openchamber/openrouter/model-info`
+with model ids only (never keys or the endpoint). That route refuses with
+`403` `code: "enterprise_mode"` under enterprise policy and answers `502` when
+the upstream lookup fails; either way the fill keeps the catalog-only result
+and says so, so a partial lookup never reads as a complete one. Ids beyond
+each source's cap (500 for enrich, 200 for the Host route) are reported with
+the unknown ids instead of being silently skipped; the partial notice names at
+most ten of them and counts the rest through a translated "and N more" phrase,
+and unknown ids outrank "nothing left to fill" so a repeat fill still lists the
+models whose limits stayed empty. Every filled value carries its source under
+the control ("From the OMP model catalog" / "From OpenRouter").
+Provenance is per field: a value the user typed is never overwritten, while a
+previously filled value may be corrected by a later read — including a limit
+the user cleared, which stays typed and therefore stays empty.
 
 Model rows render collapsed (name, id, limits, non-text inputs) so a provider
 with dozens of models stays scannable; a row added by hand opens, and a row
-with a validation error opens on submit. Capabilities are written to the
-OpenCode config only when they are known (saved config, discovery, or the
-user's edit, `capabilitiesKnown`); otherwise the key is left out so a save
-never replaces what OpenCode knows about a model with a text-only default.
+with a validation error opens on submit. A capability is written only when it
+is known (a saved model, a catalog answer, or the user's edit); an unknown
+tool-support value is left out of the request so a save never replaces what
+the native runner knows with a text-only default.
 
 Custom-provider icons are OpenChamber profile preferences, keyed by provider
 ID. They are not written into OpenCode config because OpenCode has no provider

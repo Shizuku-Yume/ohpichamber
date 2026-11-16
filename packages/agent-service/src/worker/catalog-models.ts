@@ -27,7 +27,9 @@ import {
  ProviderConfigurationSchema, ProviderConfigureRequestSchema, ProviderDeleteRequestSchema,
  ProviderMutationResultSchema, PositiveCounterSchema, ProviderConfigurationReadSchema,
  ProviderModelDiscoveryRequestSchema, ProviderModelDiscoveryResultSchema,
+ ProviderModelEnrichRequestSchema, ProviderModelEnrichResultSchema,
  type ProviderConfigurationRead, type ProviderModelDiscoveryRequest, type ProviderModelDiscoveryResult,
+ type ProviderModelEnrichRequest, type ProviderModelEnrichResult,
  type Model, type ModelCatalog, type ModelConfigureRequest, type ModelDeleteRequest,
  type ModelMutationResult, type ModelSelection, type Provider, type ProviderCatalog,
  type ProviderConfigureRequest, type ProviderDeleteRequest, type ProviderMutationResult,
@@ -36,6 +38,7 @@ import {
  formatModelRef,
 } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
+import { catalogModelInfo } from './catalog-model-info.ts';
 
 export type NativeCatalogModel = NonNullable<CreateAgentSessionOptions['model']>;
 export type NativeReasoningEffort = NonNullable<NativeCatalogModel['thinking']>['efforts'][number];
@@ -553,6 +556,10 @@ export class NativeModels {
      };
      if (contextWindow) discoveredModel.contextWindow = contextWindow;
      if (maxOutputTokens) discoveredModel.maxOutputTokens = maxOutputTokens;
+     // One request stays one request: discovery carries the same offline
+     // catalog hint auto-fill would return for this id.
+     const catalog = catalogModelInfo(modelId, request.providerId);
+     if (catalog) discoveredModel.catalog = catalog;
      models.push(discoveredModel);
     }
     if (request.protocol === 'generate-content' && payload.nextPageToken) url.searchParams.set('pageToken', payload.nextPageToken);
@@ -566,6 +573,24 @@ export class NativeModels {
    if (error instanceof ProjectionError) throw error;
    throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Provider model discovery failed');
   }
+ }
+
+ /**
+  * Fill capability metadata for model ids from the bundled catalog. Offline by
+  * design: no endpoint, credential, or provider-entry gate participates, and an
+  * unknown id simply comes back without a `catalog` block.
+  */
+ async enrichProviderModels(input: ProviderModelEnrichRequest): Promise<ProviderModelEnrichResult> {
+  const request = ProviderModelEnrichRequestSchema.parse(input);
+  const models: ProviderModelEnrichResult['models'] = [];
+  const seen = new Set<string>();
+  for (const { modelId } of request.models) {
+   if (seen.has(modelId)) continue;
+   seen.add(modelId);
+   const catalog = catalogModelInfo(modelId, request.providerId);
+   models.push(catalog ? { modelId, catalog } : { modelId });
+  }
+  return ProviderModelEnrichResultSchema.parse({ models });
  }
 
  defaultCredentialRef(providerId: string): string | null {

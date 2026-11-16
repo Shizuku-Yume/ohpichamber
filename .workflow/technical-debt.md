@@ -179,3 +179,14 @@ An entry leaves this file in one of two ways:
 - **Impact:** one abandoned create row permanently blocks session creation for every workspace whose root overlaps it, surviving host restarts, with no user-facing recovery path.
 - **Solution:** give the admission row an owner generation or start timestamp so a row whose process is gone is recoverable instead of authoritative, and remove the row on abort/failed-create like the normal release. Preserve the overlap guard for a genuinely live admission.
 - **Cost:** touches admission lifecycle in the metadata store and its tests; get the "live but slow" versus "abandoned" distinction right, since weakening the guard allows overlapping native session creates.
+
+## A user-scope credential reference breaks every other workspace's MCP save
+
+- **Where:** `packages/agent-service/src/worker/mcp-credentials.ts:12-20` (provider name hashes the writing workspace), `packages/agent-service/src/worker/mcp.ts:313-393` (the user MCP file is shared by every workspace), `packages/agent-service/src/worker/stateless.ts:220-223` (save resolves every reference before writing)
+- **Added:** 2026-11-16
+- **Effort:** ux-feedback-2026-11-15
+- **Priority:** worth-doing
+- **Problem:** a catalog entry installed at user scope writes its token as a workspace credential (`mcp_<uuid>`) and stores that reference in `~/.omp/agent/mcp.json`, which every workspace shares. `NativeMcpCredentials` prefixes the stored provider with a hash of the writing workspace, so another workspace that loads and saves that file fails the resolution check with 403 `MCP credential does not belong to this workspace`. Task 06 hit this for environment values and now forces project scope when any `envInputs` value is filled (`.workflow/decisions.md` 2026-11-16); token entries at user scope are unchanged and keep the hazard.
+- **Impact:** installing any token catalog entry (Linear, Sentry, …) at user scope can make unrelated workspaces unable to save MCP configuration until the reference is removed by hand.
+- **Solution:** either force project scope for every credential-carrying catalog install, or make user-file references resolvable from any workspace (workspace-independent provider name) while keeping project-file references workspace-scoped. Whichever path is chosen, add a save-from-another-workspace test.
+- **Cost:** small in the UI (same scope guard as env installs); the credential-name change touches the store's provider naming and needs a migration story for existing refs.

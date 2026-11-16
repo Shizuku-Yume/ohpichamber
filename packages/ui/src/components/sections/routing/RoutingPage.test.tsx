@@ -226,6 +226,7 @@ describe('RoutingPage', () => {
 
     expect(saveCalls.length).toBe(0);
     expect(saveStateCalls).not.toContain('error');
+    expect(saveStateCalls).not.toContain('saving');
     expect(container.textContent).toContain('settings.routing.category.descriptionRequired');
 
     const description = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
@@ -265,6 +266,7 @@ describe('RoutingPage', () => {
 
     expect(saveCalls.length).toBe(0);
     expect(saveStateCalls).not.toContain('error');
+    expect(saveStateCalls).not.toContain('saving');
     expect(container.textContent).toContain('settings.routing.category.descriptionRequired');
 
     const name = container.querySelector<HTMLInputElement>('[aria-label="settings.routing.category.name"]');
@@ -301,6 +303,98 @@ describe('RoutingPage', () => {
 
     expect(saveCalls.length).toBe(0);
     expect(saveStateCalls).not.toContain('error');
+    expect(saveStateCalls).not.toContain('saving');
+  });
+
+  test('an invalid category stays open, says why, and holds unrelated edits until it is fixed', async () => {
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    await act(async () => {
+      buttonContaining('Hard').click();
+    });
+    const description = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!description) throw new Error('Missing description field');
+    await setInputValue(description, '');
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    expect(container.textContent).toContain('settings.routing.categories.invalidDraft');
+
+    // An unrelated edit rides along in the same draft; nothing is sent while the
+    // category is invalid, and the section says so.
+    saveCalls.length = 0;
+    saveStateCalls.length = 0;
+    const preserveCacheRow = [...container.querySelectorAll<HTMLElement>('[role="button"]')]
+      .find((row) => row.textContent?.includes('settings.routing.auto.preserveCache'));
+    if (!preserveCacheRow) throw new Error('Missing preserve-cache row');
+    await act(async () => {
+      preserveCacheRow.click();
+    });
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    expect(saveCalls.length).toBe(0);
+    expect(saveStateCalls).not.toContain('saving');
+    expect(container.textContent).toContain('settings.routing.categories.invalidDraft');
+
+    // The invalid row cannot be collapsed, so its reason stays on screen.
+    await act(async () => {
+      buttonContaining('Hard').click();
+    });
+    expect(container.querySelector('[aria-label="settings.routing.category.description"]')).not.toBeNull();
+
+    const reopenedDescription = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!reopenedDescription) throw new Error('Missing description field');
+    await setInputValue(reopenedDescription, 'Hard reasoning and architecture again');
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    expect(saveCalls.length).toBe(1);
+    expect(saveCalls[0].preserveCache).toBe(false);
+    const hard = saveCalls[0].categories.find((category) => category.id === 'hard');
+    expect(hard?.description).toBe('Hard reasoning and architecture again');
+    expect(container.textContent).not.toContain('settings.routing.categories.invalidDraft');
+  });
+
+  test('a new category never takes the id of a removed built-in', async () => {
+    const researchBuiltin = {
+      id: 'research',
+      builtin: true,
+      enabled: true,
+      name: 'Research',
+      description: 'Reading and comparing sources',
+      model: null,
+      variant: null,
+      agent: null,
+    };
+    useRoutingStore.setState({ builtins: [...mockConfig.categories, researchBuiltin] });
+
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    const addInput = document.querySelector<HTMLInputElement>('[aria-label="settings.routing.categories.addLabel"]');
+    if (!addInput) throw new Error('Missing add input');
+    await setInputValue(addInput, 'Research');
+    await act(async () => {
+      buttonContaining('settings.routing.categories.add').click();
+    });
+    const description = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!description) throw new Error('Missing description field');
+    await setInputValue(description, 'Summarising papers');
+    await act(async () => {
+      await sleep(DEBOUNCE_SETTLE_MS);
+    });
+
+    expect(saveCalls.length).toBe(1);
+    const added = saveCalls[0].categories.find((category) => !category.builtin && category.name === 'Research');
+    expect(added).toBeDefined();
+    expect(added?.id).not.toBe('research');
   });
 
   test('thinking select displays reasoning effort options rather than legacy model variants', async () => {

@@ -48,6 +48,15 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
   return trimmed(server) === trimmed(draft);
 };
 
+/**
+ * Ids of the categories the server would reject: it trims both fields and
+ * requires each to be non-empty. The save gate and the page's own signal use
+ * the same list, so what the page says and what it sends cannot drift apart.
+ */
+const invalidCategoryIds = (config: RoutingConfig): string[] => config.categories
+  .filter((category) => category.name.trim().length === 0 || category.description.trim().length === 0)
+  .map((category) => category.id);
+
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 /** The thinking efforts OMP reports for one model; 'off' plus reasoningOptions. Empty when the model has none. */
 const useModelReasoningEfforts = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
@@ -117,11 +126,14 @@ const CategoryRow: React.FC<{
   const descriptionRef = React.useRef<HTMLTextAreaElement>(null);
   const efforts = useModelReasoningEfforts(category.model?.providerID, category.model?.modelID);
   const shownVariant = knownVariant(category.variant, efforts);
+  const errorId = React.useId();
+  const nameErrorId = `${errorId}-name`;
+  const descriptionErrorId = `${errorId}-description`;
   const summary = category.model
     ? `${category.model.modelID}${shownVariant ? ` / ${shownVariant}` : ''}`
-    : t('settings.routing.model.useFallback');
-  const nameError = category.name.trim().length === 0 ? t('settings.routing.category.nameRequired') : undefined;
-  const descriptionError = category.description.trim().length === 0 ? t('settings.routing.category.descriptionRequired') : undefined;
+    : undefined;
+  const missingName = category.name.trim().length === 0;
+  const missingDescription = category.description.trim().length === 0;
 
   // A freshly added category opens with its description empty, which is what
   // the user must fill first; put the caret there instead of making them hunt.
@@ -148,19 +160,24 @@ const CategoryRow: React.FC<{
       className={cn(!category.enabled && 'opacity-60')}
     >
       <SettingsTwoColumn>
-        <SettingsStackedField
-          label={t('settings.routing.category.name')}
-          description={nameError}
-          descriptionPlacement="after"
-        >
-          <Input
-            value={category.name}
-            onChange={(event) => onChange({ name: event.target.value })}
-            aria-label={t('settings.routing.category.name')}
-            inputSize="compact"
-            className="w-full"
-            maxLength={60}
-          />
+        <SettingsStackedField label={t('settings.routing.category.name')}>
+          <div className="w-full">
+            <Input
+              value={category.name}
+              onChange={(event) => onChange({ name: event.target.value })}
+              aria-label={t('settings.routing.category.name')}
+              aria-invalid={missingName || undefined}
+              aria-describedby={missingName ? nameErrorId : undefined}
+              inputSize="compact"
+              className="w-full"
+              maxLength={60}
+            />
+            {missingName ? (
+              <p id={nameErrorId} className="mt-1 typography-meta text-[var(--status-error)]">
+                {t('settings.routing.category.nameRequired')}
+              </p>
+            ) : null}
+          </div>
         </SettingsStackedField>
         <SettingsStackedField label={t('settings.routing.category.model')} info={t('settings.routing.category.modelInfo')}>
           <ModelSelector
@@ -184,18 +201,25 @@ const CategoryRow: React.FC<{
       <SettingsStackedField
         label={t('settings.routing.category.description')}
         info={t('settings.routing.category.descriptionInfo')}
-        description={descriptionError}
-        descriptionPlacement="after"
       >
-        <Textarea
-          ref={descriptionRef}
-          value={category.description}
-          onChange={(event) => onChange({ description: event.target.value })}
-          aria-label={t('settings.routing.category.description')}
-          rows={5}
-          maxLength={2000}
-          className="w-full"
-        />
+        <div className="w-full">
+          <Textarea
+            ref={descriptionRef}
+            value={category.description}
+            onChange={(event) => onChange({ description: event.target.value })}
+            aria-label={t('settings.routing.category.description')}
+            aria-invalid={missingDescription || undefined}
+            aria-describedby={missingDescription ? descriptionErrorId : undefined}
+            rows={5}
+            maxLength={2000}
+            className="w-full"
+          />
+          {missingDescription ? (
+            <p id={descriptionErrorId} className="mt-1 typography-meta text-[var(--status-error)]">
+              {t('settings.routing.category.descriptionRequired')}
+            </p>
+          ) : null}
+        </div>
       </SettingsStackedField>
       <div className="flex flex-wrap items-center gap-2">
         {onReset ? (
@@ -250,7 +274,7 @@ export const RoutingPage: React.FC = () => {
     // The server trims both fields and rejects an empty one with a 400. Sending
     // the draft anyway would report a failure on every keystroke and leave the
     // config unsaveable, so an invalid draft stays pending for the next edit.
-    if (pending.config.categories.some((category) => category.name.trim().length === 0 || category.description.trim().length === 0)) {
+    if (invalidCategoryIds(pending.config).length > 0) {
       return saveChainRef.current;
     }
     pendingRef.current = null;
@@ -319,7 +343,11 @@ export const RoutingPage: React.FC = () => {
     const base = slugify(name) || `category-${Date.now()}`;
     let id = base;
     let counter = 2;
-    while (draft.categories.some((category) => category.id === id)) id = `${base}-${counter++}`;
+    // A built-in id is never stored as a user category, so a new category must
+    // not take the id of a built-in the user removed.
+    while (draft.categories.some((category) => category.id === id) || builtins.some((builtin) => builtin.id === id)) {
+      id = `${base}-${counter++}`;
+    }
     update((config) => ({
       ...config,
       categories: [...config.categories, { id, builtin: false, enabled: true, name, description: '', model: null, variant: null, agent: null }],
@@ -351,6 +379,12 @@ export const RoutingPage: React.FC = () => {
   const removeCategory = (id: string) => {
     update((config) => ({ ...config, categories: config.categories.filter((category) => category.id !== id) }));
   };
+
+  // An invalid draft blocks the whole-config save, so the offending rows stay
+  // open and the section says why: collapsing the row must not hide the reason
+  // unrelated edits are not being sent.
+  const invalidIds = draft ? invalidCategoryIds(draft) : [];
+  const invalidDraft = invalidIds.length > 0;
 
   const enabledCount = draft?.categories.filter((category) => category.enabled).length ?? 0;
   const removedBuiltins = builtins.filter((builtin) => !draft?.categories.some((category) => category.id === builtin.id));
@@ -432,12 +466,15 @@ export const RoutingPage: React.FC = () => {
             <div className={SETTINGS_SPACE_ROW_CLASS}>
               <p className={SETTINGS_HELPER_CLASS}>{t('settings.routing.categories.description')}</p>
               <p className={SETTINGS_HELPER_CLASS}>{readinessText}</p>
-              <div className={SETTINGS_SPACE_ROW_CLASS}>
+              {invalidDraft ? (
+                <p className={SETTINGS_HELPER_CLASS}>{t('settings.routing.categories.invalidDraft')}</p>
+              ) : null}
+              <div>
                 {draft.categories.map((category) => (
                   <CategoryRow
                     key={category.id}
                     category={category}
-                    expanded={expandedIds.includes(category.id)}
+                    expanded={expandedIds.includes(category.id) || invalidIds.includes(category.id)}
                     autoFocusDescription={focusCategoryId === category.id}
                     onDescriptionFocused={() => setFocusCategoryId(null)}
                     onToggle={() => toggleCategory(category.id)}
@@ -458,15 +495,11 @@ export const RoutingPage: React.FC = () => {
                   </div>
                 </SettingsControlGroup>
               ) : null}
-              <SettingsFieldRow
-                label={t('settings.routing.categories.addLabel')}
-                settingsItem="routing.add-category"
-                controlClassName="min-w-0 @xl:flex-1"
-              >
+              <SettingsFieldRow label={t('settings.routing.categories.addLabel')} settingsItem="routing.add-category">
                 <Input
                   value={newCategoryName}
                   onChange={(event) => setNewCategoryName(event.target.value)}
-                  onKeyDown={(event) => { if (event.key === 'Enter') addCategory(); }}
+                  onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) addCategory(); }}
                   placeholder={t('settings.routing.categories.addPlaceholder')}
                   aria-label={t('settings.routing.categories.addLabel')}
                   inputSize="compact"

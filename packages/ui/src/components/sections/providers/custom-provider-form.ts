@@ -166,6 +166,15 @@ export function normalizeModelModalities(
   return kept;
 }
 
+/**
+ * A catalog's text/image inputs in the editor's order: text first. The writer
+ * and the pickers read the list as-is, so an OpenRouter answer that lists
+ * `image` before `text` must not produce a row that reads image-first.
+ */
+export function catalogInputs(input: readonly ('text' | 'image')[]): Array<'text' | 'image'> {
+  return (['text', 'image'] as const).filter((modality) => input.includes(modality));
+}
+
 /** A canonical model's kind as far as the editor can tell; absent kinds are chat. */
 function nativeKindOf(modalities: readonly Model['modalities'][number][]): NativeModelKind {
   if (modalities.includes('embedding')) return 'embedding';

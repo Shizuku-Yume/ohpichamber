@@ -8,8 +8,9 @@ import {
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
-import { useI18n, type I18nKey } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
+import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import {
   SettingsSection,
   SETTINGS_DESCRIPTION_CLASS,
@@ -25,127 +26,32 @@ import {
   type AutosaveResult,
 } from '@/components/sections/shared/SettingsAutosave';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
-import { optionSlug } from '@/components/sections/shared/ompRowHelpers';
+import { OmpReadSummaryPresetRow } from '@/components/sections/shared/OmpReadSummaryPresetRow';
 import { Icon } from '@/components/icon/Icon';
-
-/**
- * One section per OMP tab group. Keyed by the group name OMP itself carries, so
- * a new group is a visible missing entry here instead of a raw heading.
- */
-const SECTION_METADATA: Record<string, { titleKey: I18nKey; descriptionKey: I18nKey }> = {
-  'Retry & Fallback': {
-    titleKey: 'settings.omp.group.retry_fallback.label',
-    descriptionKey: 'settings.omp.section.retry.description',
-  },
-  Compaction: {
-    titleKey: 'settings.omp.group.compaction.label',
-    descriptionKey: 'settings.omp.section.compaction.description',
-  },
-  LSP: {
-    titleKey: 'settings.omp.group.lsp.label',
-    descriptionKey: 'settings.omp.section.lsp.description',
-  },
-  Subagents: {
-    titleKey: 'settings.omp.section.subagents.title',
-    descriptionKey: 'settings.omp.section.subagents.description',
-  },
-  Modes: {
-    titleKey: 'settings.omp.group.modes.label',
-    descriptionKey: 'settings.omp.section.modes.description',
-  },
-  'Commands & Skills': {
-    titleKey: 'settings.omp.group.commands_skills.label',
-    descriptionKey: 'settings.omp.section.commands.description',
-  },
-  'Discovery & MCP': {
-    titleKey: 'settings.omp.section.integrations.title',
-    descriptionKey: 'settings.omp.section.integrations.description',
-  },
-  Agent: {
-    titleKey: 'settings.omp.section.agent.title',
-    descriptionKey: 'settings.omp.section.agent.description',
-  },
-  Bash: {
-    titleKey: 'settings.omp.section.bash.title',
-    descriptionKey: 'settings.omp.section.bash.description',
-  },
-  Developer: {
-    titleKey: 'settings.omp.section.developer.title',
-    descriptionKey: 'settings.omp.section.developer.description',
-  },
-  Editing: {
-    titleKey: 'settings.omp.section.editing.title',
-    descriptionKey: 'settings.omp.section.editing.description',
-  },
-  'Eval & Runtimes': {
-    titleKey: 'settings.omp.section.eval_runtimes.title',
-    descriptionKey: 'settings.omp.section.eval_runtimes.description',
-  },
-  Execution: {
-    titleKey: 'settings.omp.section.execution.title',
-    descriptionKey: 'settings.omp.section.execution.description',
-  },
-  Experimental: {
-    titleKey: 'settings.omp.section.experimental.title',
-    descriptionKey: 'settings.omp.section.experimental.description',
-  },
-  Extensions: {
-    titleKey: 'settings.omp.section.extensions.title',
-    descriptionKey: 'settings.omp.section.extensions.description',
-  },
-  Notifications: {
-    titleKey: 'settings.omp.section.notifications.title',
-    descriptionKey: 'settings.omp.section.notifications.description',
-  },
-  'Output Limits': {
-    titleKey: 'settings.omp.section.output_limits.title',
-    descriptionKey: 'settings.omp.section.output_limits.description',
-  },
-  'Read Summaries': {
-    titleKey: 'settings.omp.section.read_summaries.title',
-    descriptionKey: 'settings.omp.section.read_summaries.description',
-  },
-  Reading: {
-    titleKey: 'settings.omp.section.reading.title',
-    descriptionKey: 'settings.omp.section.reading.description',
-  },
-  'Rules (TTSR)': {
-    titleKey: 'settings.omp.section.ttsr.title',
-    descriptionKey: 'settings.omp.section.ttsr.description',
-  },
-  Thinking: {
-    titleKey: 'settings.omp.section.thinking.title',
-    descriptionKey: 'settings.omp.section.thinking.description',
-  },
-};
-
-interface ResolvedSection {
-  readonly id: string;
-  readonly titleKey?: I18nKey;
-  readonly descriptionKey?: I18nKey;
-  readonly rows: readonly OmpSetting[];
-}
-
-/** The section a row belongs to: OMP's own group, with ids as a fallback head. */
-function resolveSectionInfo(setting: OmpSetting): { id: string; titleKey?: I18nKey; descriptionKey?: I18nKey } {
-  const group = setting.group ?? '';
-  if (group !== '') {
-    return { id: optionSlug(group), ...SECTION_METADATA[group] };
-  }
-  // A row without a group is placed by its id's head, so it still lands in a
-  // named section instead of an untitled bucket.
-  const head = setting.id.split('.')[0];
-  const byHead = { 'retry': 'Retry & Fallback', 'compaction': 'Compaction', 'lsp': 'LSP', 'task': 'Subagents', 'plan': 'Modes', 'goal': 'Modes' }[head];
-  if (byHead !== undefined) return { id: optionSlug(byHead), ...SECTION_METADATA[byHead] };
-  return { id: optionSlug(head) };
-}
+import {
+  OMP_SETTINGS_LAYOUT,
+  READ_SUMMARY_PRESET_SETTING_IDS,
+  isPresetEntry,
+  useOmpSettingsTabStore,
+  type OmpLayoutEntry,
+  type OmpSettingsTab,
+} from './ompSettingsLayout';
 
 type Values = Record<string, OmpSettingValue>;
 
+/**
+ * Settings → OMP. Four tabs split what used to be one 93-row wall: the switches
+ * a session starts with, editing and reading, execution and tools, and the
+ * internal tuning that used to be mixed in. `ompSettingsLayout.ts` owns the
+ * order; the tab lives in its store, so a search result can open the tab that
+ * holds its target before the page highlights it.
+ */
 export const OmpSettingsPage: React.FC = () => {
   const { t } = useI18n();
   const directory = useSettingsDirectory();
   const files = useRuntimeAPIs().files;
+  const tab = useOmpSettingsTabStore((state) => state.tab);
+  const setTab = useOmpSettingsTabStore((state) => state.setTab);
   const [state, setState] = React.useState<OmpSettingsState | null>(null);
   const [form, setForm] = React.useState<Values>({});
   const [loading, setLoading] = React.useState(true);
@@ -270,35 +176,80 @@ export const OmpSettingsPage: React.FC = () => {
     [autosave]
   );
 
+  // The preset writes all its keys in one PATCH: `save()` diffs the whole form
+  // against the snapshot, so merging here is what makes it one request.
+  const onPresetApply = React.useCallback((changes: Values) => {
+    setForm((current) => ({ ...current, ...changes }));
+    autosave.requestSave();
+  }, [autosave]);
+
   /** Rows the page draws: engine placement, in the snapshot, and condition holds. */
-  const visible = React.useMemo(() => {
+  const drawn = React.useMemo(() => {
     if (!state) return null;
-    const engineSettings = state.settings.filter((setting) => (
-      setting.placement.type === 'engine' && setting.conditionActive !== false
-    ));
-
-    const sectionOrder: string[] = [];
-    const sectionMap = new Map<string, { id: string; titleKey?: I18nKey; descriptionKey?: I18nKey; rows: OmpSetting[] }>();
-
-    for (const setting of engineSettings) {
-      const info = resolveSectionInfo(setting);
-      if (!sectionMap.has(info.id)) {
-        sectionOrder.push(info.id);
-        sectionMap.set(info.id, { ...info, rows: [] });
-      }
-      sectionMap.get(info.id)!.rows.push(setting);
-    }
-
-    const sections: ResolvedSection[] = sectionOrder.map((id) => sectionMap.get(id)!);
-    const total = state.totalCount;
-    const shownCount = engineSettings.length;
-    const hiddenCount = Math.max(0, total - shownCount);
-
-    return {
-      sections,
-      hiddenCount,
-    };
+    return new Map(
+      state.settings
+        .filter((setting) => setting.placement.type === 'engine' && setting.conditionActive !== false)
+        .map((setting) => [setting.id, setting] as const),
+    );
   }, [state]);
+
+  const presetValues = React.useMemo<Values | null>(() => {
+    if (!drawn) return null;
+    const values: Values = {};
+    for (const id of READ_SUMMARY_PRESET_SETTING_IDS) {
+      const setting = drawn.get(id);
+      if (!setting) return null;
+      values[id] = form[id] !== undefined ? form[id] : setting.value;
+    }
+    return values;
+  }, [drawn, form]);
+
+  const renderEntry = (entry: OmpLayoutEntry): React.ReactNode => {
+    if (!isPresetEntry(entry)) {
+      const setting = drawn?.get(entry);
+      if (!setting) return null;
+      return (
+        <OmpRowControl
+          key={setting.id}
+          setting={setting}
+          value={form[setting.id] !== undefined ? form[setting.id] : setting.value}
+          disabled={loading}
+          onChange={(value) => {
+            const isSelectNumber = setting.type === 'number' && Boolean(setting.options && setting.options.length > 0);
+            if (setting.type === 'number' && !isSelectNumber) {
+              onChange(setting, value);
+            } else {
+              onImmediate(setting, value);
+            }
+          }}
+        />
+      );
+    }
+    if (!presetValues) {
+      // A snapshot that omits one of the preset's thresholds cannot say what
+      // the tuple is, and Custom would be a guess. The switch still owns its
+      // own row, so it stays editable instead of disappearing with the preset.
+      const setting = drawn?.get('read.summarize.enabled');
+      if (!setting) return null;
+      return (
+        <OmpRowControl
+          key={setting.id}
+          setting={setting}
+          value={form[setting.id] !== undefined ? form[setting.id] : setting.value}
+          disabled={loading}
+          onChange={(value) => onImmediate(setting, value)}
+        />
+      );
+    }
+    return (
+      <OmpReadSummaryPresetRow
+        key="read.summarize.enabled"
+        values={presetValues}
+        disabled={loading}
+        onApply={onPresetApply}
+      />
+    );
+  };
 
   const revealConfig = React.useCallback(() => {
     const path = state?.configPath;
@@ -309,6 +260,13 @@ export const OmpSettingsPage: React.FC = () => {
     });
   }, [files, state?.configPath]);
 
+  const tabs = React.useMemo<Array<SortableTabsStripItem & { id: OmpSettingsTab }>>(() => (
+    OMP_SETTINGS_LAYOUT.map((layoutTab) => ({
+      id: layoutTab.id,
+      label: t(`settings.omp.tab.${layoutTab.id}`),
+    }))
+  ), [t]);
+
   if (loading && !state) {
     return (
       <SettingsPageLayout title={t('settings.page.omp.title')} description={t('settings.page.omp.description')}>
@@ -316,7 +274,7 @@ export const OmpSettingsPage: React.FC = () => {
       </SettingsPageLayout>
     );
   }
-  if (loadFailed || !state || !visible) {
+  if (loadFailed || !state) {
     return (
       <SettingsPageLayout
         title={t('settings.page.omp.title')}
@@ -328,61 +286,80 @@ export const OmpSettingsPage: React.FC = () => {
     );
   }
 
+  const activeTab = OMP_SETTINGS_LAYOUT.find((layoutTab) => layoutTab.id === tab) ?? OMP_SETTINGS_LAYOUT[0];
+  const counts = state.placementCounts;
+  // Tab content is resolved per group, so a group whose rows are all missing
+  // from the snapshot (or gated off by a condition) does not leave a heading.
+  const activeGroups = activeTab.groups
+    .map((group) => ({
+      id: group.id,
+      rows: group.entries.map(renderEntry).filter((row): row is React.ReactElement => row !== null),
+    }))
+    .filter((group) => group.rows.length > 0);
+
   return (
     <SettingsPageLayout
       title={t('settings.page.omp.title')}
       description={t('settings.page.omp.description')}
       onBlurCapture={autosave.onBlurCapture}
     >
-      {visible.sections.map((section, index) => (
+      <div className="mb-8">
+        <SortableTabsStrip
+          items={tabs}
+          activeId={activeTab.id}
+          onSelect={(id) => {
+            const next = tabs.find((item) => item.id === id);
+            if (next) setTab(next.id);
+          }}
+          layoutMode="fit"
+          variant="active-pill"
+          pillSize="form"
+          className="h-8 max-w-[28rem]"
+        />
+      </div>
+      {activeGroups.map((group, index) => (
         <SettingsSection
-          key={section.id}
-          title={t(section.titleKey ?? 'settings.omp.advanced')}
-          description={section.descriptionKey ? t(section.descriptionKey) : undefined}
+          key={group.id}
+          title={t(`settings.omp.group.${group.id}`)}
           divider={index > 0}
-          settingsItem={`omp.section.${section.id}`}
         >
-          <div className={SETTINGS_SPACE_ROW_CLASS}>
-            {section.rows.map((setting) => (
-              <OmpRowControl
-                key={setting.id}
-                setting={setting}
-                value={form[setting.id] !== undefined ? form[setting.id] : setting.value}
-                disabled={loading}
-                onChange={(value) => {
-                  const isSelectNumber = setting.type === 'number' && Boolean(setting.options && setting.options.length > 0);
-                  if (setting.type === 'number' && !isSelectNumber) {
-                    onChange(setting, value);
-                  } else {
-                    onImmediate(setting, value);
-                  }
-                }}
-              />
-            ))}
-          </div>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>{group.rows}</div>
         </SettingsSection>
       ))}
-      < SettingsSection
-        title={t('settings.omp.advanced')}
-        settingsItem="omp.advanced"
-        headerAction={
-          state.configPath && files.revealPath ? (
-            <Button variant="outline" size="sm" onClick={revealConfig}>
-              <Icon name="file-text" className="size-3.5 mr-1" />
-              {t('settings.omp.openConfig')}
-            </Button>
-          ) : undefined
-        }
-      >
-        <p className={SETTINGS_DESCRIPTION_CLASS}>
-          {t('settings.omp.advancedDescription', { count: visible.hiddenCount })}
-        </p>
-        {
-          state.configPath ? (
+      {activeTab.id === 'advanced' ? (
+        <SettingsSection
+          title={t('settings.omp.configFile.title')}
+          settingsItem="omp.configFile"
+          divider={activeGroups.length > 0}
+          headerAction={
+            state.configPath && files.revealPath ? (
+              <Button variant="outline" size="sm" onClick={revealConfig}>
+                <Icon name="file-text" className="size-3.5 mr-1" />
+                {t('settings.omp.openConfig')}
+              </Button>
+            ) : undefined
+          }
+        >
+          {counts.tuiOnly > 0 ? (
+            <p className={SETTINGS_DESCRIPTION_CLASS}>
+              {t('settings.omp.configFile.terminal', { count: counts.tuiOnly })}
+            </p>
+          ) : null}
+          {counts.elsewhere > 0 ? (
+            <p className={SETTINGS_DESCRIPTION_CLASS}>
+              {t('settings.omp.configFile.elsewhere', { count: counts.elsewhere })}
+            </p>
+          ) : null}
+          {counts.boundary > 0 ? (
+            <p className={SETTINGS_DESCRIPTION_CLASS}>
+              {t('settings.omp.configFile.egress', { count: counts.boundary })}
+            </p>
+          ) : null}
+          {state.configPath ? (
             <p className={`${SETTINGS_HELPER_CLASS} font-mono break-all`}>{state.configPath}</p>
-          ) : null
-        }
-      </SettingsSection>
-    </SettingsPageLayout >
+          ) : null}
+        </SettingsSection>
+      ) : null}
+    </SettingsPageLayout>
   );
 };

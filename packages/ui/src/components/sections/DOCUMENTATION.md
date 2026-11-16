@@ -4,6 +4,34 @@ One directory per Settings page. `shared/` holds the page chrome and controls
 every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
 which primitive to reach for.
 
+## The OMP page
+
+`openchamber/OmpSettingsPage.tsx` draws the agent settings whose placement is
+`engine`, one tab at a time. `openchamber/ompSettingsLayout.ts` owns the table:
+four tabs (`common`, `editing`, `execution`, `advanced`) of named groups of
+setting ids, ordered impact-first — a switch that turns a capability on comes
+before the knobs that tune it. The page renders that order instead of OMP's own
+`group`, whose declaration order interleaved unrelated areas.
+
+Rules the module holds:
+
+- A row appears only when the snapshot carries it with placement `engine` and
+  `conditionActive !== false`; a layout id missing from the snapshot is skipped,
+  and a group whose rows all disappear leaves no heading. Rows are keyed by id,
+  so a condition flip does not move scroll.
+- The layout table is total and injective over the engine ids the agent service
+  exposes (`ompSettingsLayout.test.ts` compares it with the placement table), so
+  a row cannot reach the page without a place, and none can appear twice.
+- `read.summarize.enabled` is owned by the read-summary preset entry, which
+  writes that switch and its four thresholds in one PATCH; the thresholds stay
+  editable under `advanced`.
+- The closing section of `advanced` names the config file and splits what the
+  page leaves out by reason — terminal-only, already on another page, egress
+  only. It is not a single misleading count.
+- Settings search derives one entry per layout id (`lib/settings/search.ts`),
+  and `ompSettingsTabForSearchTarget` maps an anchor to the tab that draws it;
+  `SettingsView` sets that tab before it highlights the row.
+
 ## Autosave on the OpenCode configuration pages
 
 `agents/`, `commands/`, `skills/`, `mcp/`, `plugins/` and `behavior/` edit files

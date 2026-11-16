@@ -923,7 +923,12 @@ export class WorkerMcp extends MCPManager {
             flowId: entry.flowId,
             authorizationUrl: info.url,
           };
-          if (info.launchUrl !== undefined) pendingCandidate.launchUrl = info.launchUrl;
+          // OMP advertises a `/launch` URL on its loopback listener whenever the
+          // redirect has a loopback hostname, even when that listener is only a
+          // random-port placeholder or another program's port (an SSH tunnel's
+          // route, say). When the code comes back through `complete`, no such
+          // listener is serving `/launch`, so the browser would hit a dead port.
+          if (info.launchUrl !== undefined && !entry.requiresCallbackInput) pendingCandidate.launchUrl = info.launchUrl;
           if (info.instructions !== undefined) pendingCandidate.instructions = info.instructions;
           const pendingFlow = MCPOAuthPendingFlowSchema.parse(pendingCandidate);
           entry.pendingFlow = pendingFlow;

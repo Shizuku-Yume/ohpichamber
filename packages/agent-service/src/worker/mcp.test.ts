@@ -700,6 +700,7 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
       // The redirect the caller named reaches the Host, so the flow must not
       // advertise a loopback launch target for it.
       expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(hostRedirect);
+      expect(started.pendingFlow.launchUrl).toBeUndefined();
 
       const state = authorizationUrl.searchParams.get('state');
       if (!state) throw new Error('Missing state');
@@ -708,6 +709,28 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
         callbackInput: `${hostRedirect}?code=stub-code&state=${state}`,
       }, configuration);
       expect(completed).toMatchObject({ serverId: 'linear', status: 'authenticated', authenticated: true });
+    });
+  });
+
+  test('a loopback-shaped redirect the flow does not bind advertises no launch URL', async () => {
+    // An SSH tunnel's Host is a loopback address on a port this worker does not
+    // own. OMP still offers a `/launch` URL for any loopback hostname, but that
+    // port belongs to the Host, so the browser would hit a dead route there.
+    const tunnelRedirect = 'http://127.0.0.1:62545/api/agent/v1/mcp/oauth/callback';
+    await withOAuthWorker('issue', async ({ mcp, configuration }) => {
+      const started = await mcp.oauthExecute('linear', {
+        action: 'start', ...owner, oauth: { redirectUri: tunnelRedirect },
+      }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      expect(started.pendingFlow.launchUrl).toBeUndefined();
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      const state = authorizationUrl.searchParams.get('state');
+      if (!state) throw new Error('Missing state');
+      const completed = await mcp.oauthExecute('linear', {
+        action: 'complete', ...owner, flowId: started.pendingFlow.flowId,
+        callbackInput: `${tunnelRedirect}?code=stub-code&state=${state}`,
+      }, configuration);
+      expect(completed).toMatchObject({ status: 'authenticated', authenticated: true });
     });
   });
 

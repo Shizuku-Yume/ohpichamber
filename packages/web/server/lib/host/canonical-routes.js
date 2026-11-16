@@ -103,7 +103,7 @@ const AGENT_ROUTES = [
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/apply$/, request: C.MCPApplyRequestSchema, response: C.MCPApplyResultSchema },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/servers\/[^/]+\/reconnect$/, request: C.MCPReconnectRequestSchema, response: C.MCPCatalogReadSchema },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, response: C.MCPOAuthResultSchema },
- { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, request: C.MCPOAuthRequestSchema, response: C.MCPOAuthResultSchema },
+ { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, request: C.MCPOAuthRequestSchema, response: C.MCPOAuthResultSchema, mcpOAuth: true },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/catalog$/, response: C.SkillsCatalogStateSchema },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/apply$/, request: C.SkillsApplyRequestSchema, response: C.SkillsApplyResultSchema },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/expand$/, request: C.SkillExpandRequestSchema, response: C.SkillExpandResultSchema },
@@ -395,6 +395,9 @@ export function registerCanonicalHostRoutes(app, {
      return problem(res, 403, 'enterprise_mode', 'Provider entry is not available in enterprise mode.');
     if (route.mcpOAuth && parsed.data.action === 'start' && isEnterpriseMode(enterprisePolicyOptions))
      return problem(res, 403, 'enterprise_mode', 'MCP sign-in is not available in enterprise mode.');
+    // The pending flow's `complete` must address the same owner its `start`
+    // did, so the Host records the route it is proxying rather than guessing.
+    if (route.mcpOAuth) res.locals.canonicalMcpOAuthPath = `${PREFIX}${req.path}`;
     if ('workspaceId' in parsed.data && parsed.data.workspaceId !== scope?.workspaceId)
      return problem(res, 403, 'UNAUTHORIZED', 'The request does not match the selected workspace.');
     if (groups?.websearchProviderId !== undefined && parsed.data.providerId !== decodeURIComponent(groups.websearchProviderId))
@@ -456,7 +459,8 @@ export function registerCanonicalHostRoutes(app, {
     // that server's pending states so a stale callback cannot replay one.
     if (result.status === 'pending' && scope) {
      mcpOAuthPendingFlows.record({
-      authorizationUrl: result.pendingFlow.authorizationUrl, workspaceId: scope.workspaceId, serverId: result.serverId,
+      authorizationUrl: result.pendingFlow.authorizationUrl, completionPath: res.locals.canonicalMcpOAuthPath,
+      workspaceId: scope.workspaceId, serverId: result.serverId,
       flowId: result.pendingFlow.flowId, persistedRevision: result.persistedRevision, workerGeneration: result.worker.workerGeneration,
      });
     } else mcpOAuthPendingFlows.dropServer(scope?.workspaceId ?? result.worker.workspaceId, result.serverId);

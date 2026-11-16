@@ -243,6 +243,48 @@ describe('MCP OAuth Host callback route', () => {
     expect(requests).toHaveLength(0);
   });
 
+  it('completes a session-scoped start through the session route it started on', async () => {
+    const sessionEndpoint = '/api/agent/v1/sessions/session_1/mcp/servers/server_1/oauth';
+    app = express();
+    registerCommonRequestMiddleware(app, { express });
+    registerCanonicalHostRoutes(app, {
+      express,
+      service: {
+        getState: () => ({ phase: 'ready' }),
+        request: async (url, init) => {
+          requests.push({ url, init });
+          return Response.json(onProxy(url, init));
+        },
+      },
+      uiAuthController: auth,
+      tunnelAuthController: createTunnelAuth(),
+      isRequestOriginAllowed: (await createRequestSecurityRuntime({ readSettingsFromDiskMigrated: async () => ({}) })).isRequestOriginAllowed,
+      enterprisePolicyOptions: { env: {}, readFile: () => JSON.stringify({ enterpriseMode: false }) },
+      resolveWorkspaceScope: async () => null,
+      resolveWorkspaceDirectory: async () => null,
+      resolveSessionScope: async (id) => (id === 'session_1'
+        ? { sessionId: 'session_1', rootSessionId: 'session_1', projectId: 'project_1', workspaceId, agentDirectoryId: 'agent_1', cwd: directory, agentDirectory: path.join(directory, 'agent') }
+        : null),
+      resolveHostSessionScope: async () => null,
+      listProjects: async () => ({ items: [], errors: {} }),
+      listWorkspaces: async () => ({ items: [], errors: {} }),
+      resolveCredentialHandoff: async () => { throw new Error('unused'); },
+      queueRoutes: () => { },
+      sessionRoutes: () => { },
+      attachmentRoutes: () => { },
+    });
+
+    requests.length = 0;
+    await request(app)
+      .post(sessionEndpoint)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ action: 'start', persistedRevision: '3', workerGeneration: 'generation_1' })
+      .expect(200);
+    await request(app).get(`${callbackEndpoint}?code=the-code&state=${STATE}`).expect(200);
+    const completeCall = requests.find(entry => JSON.parse(entry.init.body).action === 'complete');
+    expect(completeCall.url).toBe(sessionEndpoint);
+  });
+
   it('refuses to complete when the Agent Service is not running', async () => {
     await startSignIn().expect(200);
     servicePhase = 'starting';

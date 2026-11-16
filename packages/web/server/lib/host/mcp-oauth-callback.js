@@ -81,7 +81,7 @@ export const createMcpOAuthPendingFlows = ({
   return entry;
  };
  /** Record one pending flow; the returned entry is what `complete` addresses. */
- const record = ({ authorizationUrl, workspaceId, serverId, flowId, persistedRevision, workerGeneration }) => {
+ const record = ({ authorizationUrl, completionPath, workspaceId, serverId, flowId, persistedRevision, workerGeneration }) => {
   if (typeof authorizationUrl !== 'string') return null;
   let state;
   try { state = new URL(authorizationUrl).searchParams.get('state'); } catch { return null; }
@@ -89,7 +89,7 @@ export const createMcpOAuthPendingFlows = ({
   sweep();
   while (entries.size >= maxEntries) entries.delete(entries.keys().next().value);
   const entry = {
-   workspaceId, serverId, flowId, persistedRevision, workerGeneration,
+   completionPath, workspaceId, serverId, flowId, persistedRevision, workerGeneration,
    expiresAt: now() + Math.min(ttlMs, FLOW_BUDGET_MS),
   };
   entries.set(state, entry);
@@ -160,10 +160,9 @@ export const completeMcpOAuthCallback = async ({ service, pendingFlows, query, c
   callbackInput: callbackUrl,
  };
  try {
-  const response = await service.request(
-   `/api/agent/v1/workspaces/${encodeURIComponent(entry.workspaceId)}/mcp/servers/${encodeURIComponent(entry.serverId)}/oauth`,
-   { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
-  );
+  const response = await service.request(entry.completionPath, {
+   method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
   // A refused consent carries no code, so `complete` aborts the flow with its
   // own failure sentence; the pending poll reports that to the panel. The
   // browser still gets the provider's words here.

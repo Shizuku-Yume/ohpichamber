@@ -21,7 +21,7 @@ const state = {
     speechPitch: 1,
     speechVolume: 1,
     voiceApiKeys: {},
-    refreshVoiceApiKeys: async () => {},
+    refreshVoiceApiKeys: async () => { },
 };
 mock.module('@/stores/useConfigStore', () => ({
     useConfigStore: Object.assign((select: (value: typeof state) => unknown) => select(state), { getState: () => state }),
@@ -33,7 +33,7 @@ mock.module('@/lib/voice/browserVoiceService', () => ({ browserVoiceService: { w
 mock.module('@/stores/useSmallModelStore', () => ({ useSmallModelStore: () => ({}), selectSmallModelAvailability: () => false }));
 mock.module('@/stores/useUIStore', () => ({ useUIStore: () => ({}) }));
 mock.module('@/components/sections/classification/JevAccessNote', () => ({ SettingsInlineLink: () => null }));
-mock.module('@/components/ui', () => ({ toast: { error: () => {} } }));
+mock.module('@/components/ui', () => ({ toast: { error: () => { } } }));
 mock.module('@/components/icon/Icon', () => ({ Icon: ({ name }: { name: string }) => <span data-icon={name} /> }));
 mock.module('@/components/ui/select', () => ({
     Select: () => null, SelectContent: () => null, SelectItem: () => null,
@@ -43,8 +43,10 @@ const Wrapper = ({ children }: PropsWithChildren) => <div>{children}</div>;
 mock.module('@/components/sections/shared/SettingsSection', () => ({
     SettingsSection: Wrapper, SettingsFieldRow: Wrapper, SettingsStackedField: Wrapper,
     SettingsCheckboxRow: () => null, SettingsChipGroup: () => null,
-    SETTINGS_NUMBER_INPUT_CLASS: '', SETTINGS_SELECT_ROW_TRIGGER_CLASS: '', SETTINGS_CONTROL_CLUSTER_CLASS: '',
-    SETTINGS_HELPER_CLASS: '', SETTINGS_ICON_BUTTON_CLASS: '', SETTINGS_OPTION_STACK_CLASS: '',
+    SETTINGS_WIDTH_NUMBER_CLASS: '', SETTINGS_WIDTH_SELECT_CLASS: '', SETTINGS_WIDTH_LONG_TEXT_CLASS: '',
+    SETTINGS_WIDTH_SHORT_TEXT_CLASS: '', SETTINGS_NUMBER_STEPPER_ROW_CLASS: '',
+    SETTINGS_HELPER_CLASS: '', SETTINGS_ICON_BUTTON_CLASS: '', SETTINGS_SPACE_CHECKBOX_CLASS: '',
+    SETTINGS_SPACE_ROW_CLASS: '',
 }));
 
 type FocusEvent = { id: string; state: 'paused' | 'gained' | 'lost' };
@@ -58,7 +60,7 @@ mock.module('@capacitor/core', () => ({
         release: async ({ id }: { id: string }) => { released.push(id); },
         addListener: async (_event: string, callback: typeof handler) => {
             handler = callback;
-            return { remove: async () => {} };
+            return { remove: async () => { } };
         },
     }),
 }));
@@ -117,7 +119,7 @@ beforeEach(async () => {
     playError = undefined;
     pause = () => { pendingPlay?.reject(new DOMException('Play interrupted by pause', 'AbortError')); };
     Object.assign(globalThis, {
-        Audio: function (src: string) {
+        Audio: function(src: string) {
             const player = document.createElement('audio');
             player.src = src;
             player.play = async () => {
@@ -126,7 +128,7 @@ beforeEach(async () => {
                 await pendingPlay?.promise;
             };
             player.pause = () => { pauseCalls += 1; pause(); };
-            player.load = () => {};
+            player.load = () => { };
             players.push(player);
             return player;
         },
@@ -182,7 +184,7 @@ test('Settings preview keeps a pending play through transient loss and resumes t
 
 test('gain before the interrupted play rejects cannot finish a resumed Settings preview', async () => {
     pendingPlay = deferred<void>();
-    pause = () => {};
+    pause = () => { };
     await clickPreview();
     await respond();
     await focus('paused');

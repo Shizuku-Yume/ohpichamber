@@ -6,14 +6,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   SettingsCheckboxRow,
   SettingsChipGroup,
-  SettingsStackedField,
-  SETTINGS_NUMBER_INPUT_CLASS,
+  SettingsFieldRow,
+  SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { NumberInput } from '@/components/ui/number-input';
 import { inferUnit, isSentinelOption, optionSlug } from './ompRowHelpers';
 
-/** One registry row: label and description from the locale, control from type/options. */
+/**
+ * One registry row: label and description from the locale, control from type/options.
+ *
+ * A boolean is an enable/disable switch, so it is a checkbox row; every other
+ * type has a separate value control, so it is a field row (label left, control
+ * trailing) exactly like the rest of Settings. The shared width classes keep
+ * every OMP picker on the same right edge as the page's own rows.
+ */
 export const OmpRowControl: React.FC<{
   setting: OmpSetting;
   value: OmpSettingValue;
@@ -56,7 +66,7 @@ export const OmpRowControl: React.FC<{
         : isSentinel ? t('settings.omp.value.default') : currentValue;
 
       return (
-        <SettingsStackedField label={label} info={description} settingsItem={anchor}>
+        <SettingsFieldRow label={label} info={description} settingsItem={anchor}>
           <Select
             value={currentValue}
             onValueChange={(next) => {
@@ -69,7 +79,7 @@ export const OmpRowControl: React.FC<{
             }}
             disabled={disabled}
           >
-            <SelectTrigger className="w-48" aria-label={label}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={label}>
               <SelectValue>{selectedLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -83,47 +93,48 @@ export const OmpRowControl: React.FC<{
               })}
             </SelectContent>
           </Select>
-        </SettingsStackedField>
+        </SettingsFieldRow>
       );
     }
 
     const unit = inferUnit(setting.id);
     return (
-      <SettingsStackedField label={label} info={description} settingsItem={anchor}>
-        <div className="flex items-center gap-2">
+      <SettingsFieldRow label={label} info={description} settingsItem={anchor}>
+        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
           <NumberInput
             value={typeof value === 'number' && value !== -1 ? value : undefined}
             placeholder={t('settings.omp.value.default')}
             onValueChange={onChange}
             onClear={() => onChange(null)}
             disabled={disabled}
-            className={SETTINGS_NUMBER_INPUT_CLASS}
+            className={SETTINGS_WIDTH_NUMBER_CLASS}
             aria-label={label}
           />
           {unit ? <span className={SETTINGS_NUMBER_UNIT_CLASS}>{t(`settings.omp.unit.${unit}` as I18nKey)}</span> : null}
         </div>
-      </SettingsStackedField>
+      </SettingsFieldRow>
     );
   }
 
   if (setting.type === 'string') {
     return (
-      <SettingsStackedField label={label} info={description} settingsItem={anchor}>
+      <SettingsFieldRow label={label} info={description} settingsItem={anchor}>
         <Input
           value={value === null || value === undefined ? '' : String(value)}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
-          className="max-w-md"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
           aria-label={label}
         />
-      </SettingsStackedField>
+      </SettingsFieldRow>
     );
   }
 
   const choices = setting.options ?? (setting.enumValues ?? []).map((choice) => ({ value: choice, label: choice }));
   const current = value === null || value === undefined ? '' : String(value);
   return (
-    <SettingsStackedField label={label} info={description} settingsItem={anchor}>
+    <SettingsFieldRow label={label} info={description} settingsItem={anchor}>
       <SettingsChipGroup
         value={current}
         aria-label={label}
@@ -134,7 +145,6 @@ export const OmpRowControl: React.FC<{
         })}
         onChange={(next) => onChange(next)}
       />
-    </SettingsStackedField>
+    </SettingsFieldRow>
   );
 };
-

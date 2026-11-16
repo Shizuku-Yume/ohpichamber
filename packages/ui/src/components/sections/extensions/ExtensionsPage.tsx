@@ -6,6 +6,7 @@ import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLay
 import {
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsFieldRow,
   SettingsSection,
 } from '@/components/sections/shared/SettingsSection';
@@ -145,7 +146,7 @@ const SocketOverrideRow: React.FC<{
   };
 
   return (
-    <div className="space-y-1">
+    <div>
       {editing ? (
         <div className="flex min-w-0 items-center gap-1">
           <Input
@@ -412,7 +413,7 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
       )}
     >
       {hasNotices ? (
-        <SettingsSection divider={false} contentClassName="space-y-2">
+        <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
           {state.enterpriseBlocked ? (
             <div className="rounded-lg bg-[var(--status-warning)]/10 p-3 typography-meta text-[var(--status-warning)]">
               {t('settings.extensions.enterpriseBlocked')}
@@ -454,7 +455,7 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
       <SettingsSection
         title={t('settings.extensions.detail.section.details')}
         divider={hasNotices}
-        contentClassName="space-y-3"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <div>
           <SettingsFieldRow label={t('settings.extensions.detail.field.source')}>
@@ -490,7 +491,7 @@ const ExtensionDetail: React.FC<ExtensionHandlers & { guest: InstalledGuest; onB
       </SettingsSection>
 
       {hasPermissions ? (
-        <SettingsSection title={t('settings.extensions.detail.section.permissions')} contentClassName="space-y-3">
+        <SettingsSection title={t('settings.extensions.detail.section.permissions')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
           {permissions ? (
             <p className="typography-meta text-foreground">{t('settings.extensions.service.permissions', { list: permissions })}</p>
           ) : null}

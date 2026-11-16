@@ -3,7 +3,7 @@ import React from 'react';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Icon } from '@/components/icon/Icon';
 import { errorToastKey, updateErrorToastKey } from '@/components/sections/extensions/extensionToasts';
-import { SettingsSection } from '@/components/sections/shared/SettingsSection';
+import { SettingsSection, SETTINGS_SPACE_ROW_CLASS } from '@/components/sections/shared/SettingsSection';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -219,7 +219,7 @@ export const CatalogExtensionsSection: React.FC<CatalogExtensionsSectionProps> =
         info={t('settings.integrations.extensionCatalog.info')}
         divider={divider}
         settingsItem="integrations.extensions"
-        contentClassName="space-y-3"
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         {CATALOG_EXTENSIONS.map(renderCard)}
       </SettingsSection>

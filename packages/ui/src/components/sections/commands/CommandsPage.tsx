@@ -17,7 +17,8 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 interface CommandForm {
@@ -131,17 +132,18 @@ export const CommandsPage: React.FC = () => {
     description={isNew ? t('settings.commands.page.subtitle.new') : t('settings.commands.page.subtitle.edit')}
     onBlurCapture={autosave.onBlurCapture}>
     <fieldset className="min-w-0">
-      <SettingsSection title={t('settings.commands.page.section.identity')} divider={false} contentClassName="space-y-0">
+      <SettingsSection title={t('settings.commands.page.section.identity')} divider={false}>
         {isNew && <SettingsFieldRow settingsItem="commands.name" label={t('settings.commands.page.field.commandName')}>
           <div className="flex items-center">
             <span className="typography-ui-label text-muted-foreground mr-1">/</span>
             <Input value={form.name} onChange={event => setForm({ ...form, name: event.target.value })}
-              placeholder={t('settings.commands.page.field.commandNamePlaceholder')} className="h-7 w-40 px-2" />
+              placeholder={t('settings.commands.page.field.commandNamePlaceholder')} inputSize="compact"
+              className={SETTINGS_WIDTH_SHORT_TEXT_CLASS} />
           </div>
           <Select value={form.scope} onValueChange={scope => {
             if (scope === 'agent' || scope === 'workspace') setForm({ ...form, scope });
           }}>
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
               <SelectValue placeholder={t('settings.agents.page.field.scopePlaceholder')}>
                 {form.scope === 'workspace' ? t('settings.common.scope.project') : t('settings.common.scope.global')}
               </SelectValue>
@@ -172,11 +174,11 @@ export const CommandsPage: React.FC = () => {
           <Input value={form.argumentHint} onChange={event => setForm({ ...form, argumentHint: event.target.value })}
             aria-label="$ARGUMENTS"
             inputSize="compact"
-            className="w-64 px-2"
+            className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
           />
         </SettingsFieldRow>
       </SettingsSection>
-      <SettingsSection title={t('settings.commands.page.section.executionContext')} contentClassName="space-y-0">
+      <SettingsSection title={t('settings.commands.page.section.executionContext')}>
         <SettingsFieldRow settingsItem="commands.model" label={t('settings.agents.page.field.overrideModel')}>
           <ModelSelector providerId={form.modelSelection?.providerId ?? ''} modelId={form.modelSelection?.modelId ?? ''}
             directory={directory ?? undefined} onChange={(providerId, modelId) => {

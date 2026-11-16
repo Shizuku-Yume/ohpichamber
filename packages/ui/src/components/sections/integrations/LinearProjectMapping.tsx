@@ -3,8 +3,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   SettingsControlGroup,
   SettingsFieldRow,
-  SETTINGS_FIELDS_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
@@ -106,7 +106,7 @@ export function LinearProjectMapping({
   };
 
   return (
-    <div className={SETTINGS_FIELDS_STACK_CLASS}>
+    <div className={SETTINGS_SPACE_ROW_CLASS}>
       {projects.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {t('settings.integrations.linear.mapping.emptyProjects')}
@@ -129,7 +129,7 @@ export function LinearProjectMapping({
           }}
         >
           <SelectTrigger
-            className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+            className={SETTINGS_WIDTH_SELECT_CLASS}
             aria-label={t('settings.integrations.linear.mapping.defaultProject.aria')}
           >
             <SelectValue placeholder={t('settings.integrations.linear.mapping.defaultProject.placeholder')}>
@@ -161,7 +161,7 @@ export function LinearProjectMapping({
             {t('settings.integrations.linear.mapping.emptyTeams')}
           </p>
         ) : (
-          <div className={SETTINGS_FIELDS_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {(mapping.teams ?? []).map((team) => (
               <SettingsFieldRow
                 key={team.id}
@@ -182,7 +182,7 @@ export function LinearProjectMapping({
                   }}
                 >
                   <SelectTrigger
-                    className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+                    className={SETTINGS_WIDTH_SELECT_CLASS}
                     aria-label={t('settings.integrations.linear.mapping.teams.aria', { team: team.key })}
                   >
                     <SelectValue placeholder={t('settings.integrations.linear.mapping.teams.useDefault')}>

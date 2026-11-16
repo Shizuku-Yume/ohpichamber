@@ -18,7 +18,7 @@ instead of reaching into their private classes or declaring local equivalents.
 </SettingsPageLayout>
 ```
 
-- `SettingsPageLayout` owns scrolling, page padding, the `@container` context, and the quiet save indicator (`showSaveStatus`). The entity editors use the autosave contract instead ([save feedback](../PATTERNS.md#save-feedback)).
+- `SettingsPageLayout` owns scrolling, page padding, the `@container` context, the `max-w-[840px]` page cap, and the quiet save indicator (`showSaveStatus`). It takes no padding utility of its own (`px-6 py-6 @3xl:px-12 @3xl:py-8` is the page's inset). The entity editors use the autosave contract instead ([save feedback](../PATTERNS.md#save-feedback)).
 - Every settings page renders its title and description, matching the v2.7.0 release and the fork's own pages. A detail page (one agent, provider, server) keeps its visible title. A line the user must read (a consequence, a warning) goes into the content, not the page description.
 - Sections separate with a top border (`divider`, default true); the first section under the page header passes `divider={false}`.
 - Section titles are real headers (L2). Do not nest an umbrella section around a list of `SettingsControlGroup`s when each group deserves its own header — promote groups to sections instead (see the Chat page precedent).
@@ -49,19 +49,121 @@ Placement rules:
 
 The settings pane is far narrower than the viewport (3-pane dialog). All
 pane content responds to the pane via container queries — `@xl:` (36rem) and
-`@3xl:` (48rem) — never viewport `sm:`/`lg:`. `SettingsPageLayout` provides
-the `@container` scope; `SettingsFieldRow`, `SettingsTwoColumn`, and the
-trigger-width constants already carry the right variants.
+`@3xl:` (48rem) — never viewport `sm:`/`md:`/`lg:`/`xl:`/`2xl:`. `SettingsPageLayout`
+provides the `@container` scope; `SettingsFieldRow`, `SettingsTwoColumn`,
+`SettingsSection`, and the width constants already carry the right variants,
+so a page adds no breakpoint of its own. A viewport breakpoint in pane
+content sizes against the window and breaks inside the dialog.
 
 Exception: `SettingsView` navigation chrome (outside the pane) uses viewport
 `sm:` to give phones 44px touch rows and plain `bg-background`; keep that
 pattern when touching nav.
 
+Dialogs size to the window, so a `Dialog`/`AlertDialog` body may use viewport
+breakpoints; its control widths still follow the row rules. A hover-only
+opacity affordance (`md:group-hover:opacity-100`) is desktop pointer
+behaviour, not a pane width, and also passes. The layout guard describes both
+in [layout guard](#layout-guard).
+
+## Rows
+
+One row pattern covers Settings, whatever the control:
+
+- `SettingsFieldRow` — label in a fixed `@xl:w-56` column; the control column
+  is `flex-1` and packs its content to the trailing edge (`alignEnd`, default
+  true). Below `@xl` the row stacks to label above control, so a narrow pane
+  never overflows. This is the default for every control row.
+- `SettingsStackedField` — only inside `SettingsTwoColumn` cells and for
+  controls too wide for the row's control column. A `SettingsFieldRow`
+  overflows a half-width cell.
+- `SettingsCheckboxRow` — booleans and independent on/off options.
+- `SettingsDisclosure` — a flat list item that expands into an editor. One ghost
+  toggle header (chevron, name, optional quiet summary) with an optional
+  `accessory` beside it, and the editor renders only while expanded. No card
+  or divide/border chrome; the rows' own padding sets their rhythm.
+- `OmpRowControl` — one OMP registry row per primitive: numbers, strings and
+  enums render as field rows; booleans render as checkbox rows.
+
+## Widths
+
+Controls take their width from these named classes. A settings control
+carries no raw width utility of its own: the guard rejects `w-48`, `w-[…]`,
+`w-fit`, `max-w-md`, `min-w-[1rem]` and their variants on a control's
+`className`, and in any `controlClassName`, `containerClassName` or
+`triggerClassName`. `w-full`, `min-w-0`, `max-w-none` and `max-w-full`
+express fill or shrink and stay allowed.
+
+| Control | Class | Value |
+|---|---|---|
+| Select trigger in a field row | `SETTINGS_WIDTH_SELECT_CLASS` | `w-full @xl:w-56` |
+| Short text input (name, id, path) | `SETTINGS_WIDTH_SHORT_TEXT_CLASS` | `w-full @xl:w-56` |
+| Textarea, long text, stacked control cluster | `SETTINGS_WIDTH_LONG_TEXT_CLASS` | `w-full max-w-[24rem]` |
+| `NumberInput` stepper input | `SETTINGS_WIDTH_NUMBER_CLASS` inside `SETTINGS_NUMBER_STEPPER_ROW_CLASS` | `typography-ui-label w-[calc(5.75rem+5ch)]` |
+| Select trigger in a stacked cell or dialog | `SETTINGS_SELECT_TRIGGER_CLASS` | `w-fit max-w-[28ch]` |
+| Custom dropdown trigger (ModelSelector, AgentSelector) | `SETTINGS_CUSTOM_TRIGGER_CLASS` | `dropdownTriggerVariants()` + hug |
+
+A select and a short text input share `@xl:w-56`, and the row packs its
+control right, so every select in one section ends on the same right edge.
+The number stepper keeps its own font-relative width and never grows; its
+unit label uses `SETTINGS_NUMBER_UNIT_CLASS`. A control that must fill the
+whole row passes `controlClassName` from the call site; a dialog textarea
+uses the documented opt-out in [control sizing](controls.md#standard-sizes-and-widths).
+
 ## Spacing
 
-- Sections own vertical rhythm: divider + `py-8` come from `SettingsSection`.
-- Fields inside a column: `SETTINGS_FIELDS_STACK_CLASS` (`space-y-4`).
-- Checkbox/radio lists: `SETTINGS_OPTION_STACK_CLASS` (`space-y-1.5`).
-- Groups requiring a title and visible description: separate them from preceding controls with `space-y-6` on the parent. Keep simple checkbox/radio lists compact. The title sits closer to its own description and controls than to the preceding group; use `SettingsControlGroup`'s internal spacing.
-- Two-column areas: `SettingsTwoColumn` (`@3xl:grid-cols-2`); use `SettingsStackedField` inside cells (a `SettingsFieldRow` overflows half-width columns).
-- No elevated backgrounds, rounded rows, or hover fills without explicit UX value.
+Sections own vertical rhythm; pages only list them.
+
+- Between sections: `SettingsSection`'s top border and `py-8`. Never wrap
+  sections in a non-zero `space-y-*` on a page: it doubles the gap and
+  bypasses `SettingsPageLayout`'s first-section rule. `space-y-0` is the
+  allowed "no extra spacing" spelling.
+- Between titled groups inside one section's content:
+  `SETTINGS_SPACE_SECTION_CLASS` (`space-y-6`).
+- Field rows and mixed shapes (a field row beside a checkbox row, a role
+  editor beside OMP rows): `SETTINGS_SPACE_ROW_CLASS` (`space-y-4`). A plain
+  list of field rows stacks directly; each row carries `py-1`.
+- Pure checkbox and radio lists: `SETTINGS_SPACE_CHECKBOX_CLASS`
+  (`space-y-1.5`), already applied inside `SettingsRadioGroup`.
+- `SettingsControlGroup` owns the spacing of its title, description and
+  controls (`space-y-2`). Space the group itself with the stack class that
+  matches its neighbours; its `contentClassName` takes no `space-y-*` of its
+  own.
+- Two-column areas: `SettingsTwoColumn` (`@3xl:grid-cols-2`), fields inside
+  as `SettingsStackedField`.
+- No elevated backgrounds, rounded rows, or hover fills without explicit UX
+  value.
+
+## Layout Guard
+
+`packages/ui/src/components/sections/settingsLayoutGuard.test.ts` scans the
+TSX under `components/sections` and reports the offending `file:line` for:
+
+- W — a raw width utility (`w-48`, `w-[…]`, `w-fit`, `max-w-md`,
+  `min-w-[1rem]`, with or without a variant prefix) on a settings control
+  (`Input`, `Textarea`, `NumberInput`, `Select`/`SelectTrigger`, the
+  model/agent/project pickers, `SettingsColorField`) or in a
+  `controlClassName`, `containerClassName` or `triggerClassName`. `w-full`,
+  `min-w-0`, `max-w-none` and `max-w-full` pass: they say fill, shrink, or
+  stay in the column.
+- S — a non-zero `space-y-*` on a wrapper with `SettingsSection` among its
+  direct children. `space-y-0` is the allowed "no extra spacing" spelling.
+- P — any padding utility on `SettingsPageLayout`.
+- B — a viewport breakpoint (`sm:`–`2xl:`) in pane content. Exempt: elements
+  inside a `Dialog`/`AlertDialog` body, values whose every viewport prefix is
+  a hover-only opacity affordance (`md:group-hover:opacity-100`), and the
+  sidebar/navigation files and project-settings dialog shell in the guard's
+  file exception list.
+- N — `SETTINGS_WIDTH_NUMBER_CLASS` outside a `SETTINGS_NUMBER_STEPPER_ROW_CLASS`
+  row.
+- G — margin, non-zero `gap-*` and non-zero `space-x-*`/`space-y-*` on a
+  settings control or on `SettingsFieldRow`/`SettingsStackedField`/`SettingsCheckboxRow`
+  (`className` and `controlClassName`), plus non-zero `space-y-*` in a
+  `SettingsSection` or `SettingsControlGroup` `contentClassName`. Zero
+  values (`m-0`, `gap-0`, `space-y-0`) pass, and a generic `div` wrapper may
+  carry its own gap.
+
+File exceptions stay narrow: sidebar/navigation chrome (the Responsiveness
+exception above), the project settings dialog shell, and two shared editors
+that are not settings field rows (`SettingsColorField` for widths,
+`EnvironmentVariablesEditor` for widths). `shared/SettingsSection.tsx` is
+excluded because it defines the vocabulary.

@@ -7,7 +7,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { formatShortcutForDisplay, getCustomizableShortcutActions, UNASSIGNED_SHORTCUT } from '@/lib/shortcuts';
 import {
   SettingsCheckboxRow,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
   SettingsFieldRow,
 } from '@/components/sections/shared/SettingsSection';
 import { useUIStore } from '@/stores/useUIStore';
@@ -144,7 +144,7 @@ export const DesktopQuakeModeSettings: React.FC<DesktopQuakeModeSettingsProps> =
             disabled={quake.isSaving}
           >
             <SelectTrigger
-              className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+              className={SETTINGS_WIDTH_SELECT_CLASS}
               aria-label={t('settings.openchamber.desktopNetwork.field.quakeModeHeightAria')}
             >
               <SelectValue>{formatHeight(Number(heightValue))}</SelectValue>

@@ -69,7 +69,7 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
   ].filter(Boolean).join(' · ');
 
   const fieldError = (message?: string) => (
-    message ? <p className="mt-1 typography-meta text-[var(--status-error)]">{message}</p> : null
+    message ? <p className="typography-meta text-[var(--status-error)]">{message}</p> : null
   );
 
   return (
@@ -116,26 +116,26 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
       {expanded ? (
         <div id={editorId} className="space-y-3 pb-4 ps-7 pe-1 pt-1">
           <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-            <div>
+            <div className="flex flex-col gap-1">
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.idLabel')}</label>
               <Input
                 value={model.modelId}
                 onChange={(event) => onChange('modelId', event.target.value)}
                 placeholder={t('settings.providers.page.custom.models.idPlaceholder')}
-                className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+                className="h-8 rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.modelId)}
                 aria-label={t('settings.providers.page.custom.models.idLabel')}
                 disabled={disabled}
               />
               {fieldError(errors?.modelId)}
             </div>
-            <div>
+            <div className="flex flex-col gap-1">
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.nameLabel')}</label>
               <Input
                 value={model.name}
                 onChange={(event) => onChange('name', event.target.value)}
                 placeholder={t('settings.providers.page.custom.models.namePlaceholder')}
-                className="mt-1 h-8 rounded-md px-3"
+                className="h-8 rounded-md px-3"
                 aria-invalid={Boolean(errors?.name)}
                 aria-label={t('settings.providers.page.custom.models.nameLabel')}
                 disabled={disabled}
@@ -145,28 +145,28 @@ export const CustomProviderModelRow: React.FC<CustomProviderModelRowProps> = ({
           </div>
 
           <div className="grid grid-cols-1 gap-2 @xl:grid-cols-2">
-            <div>
+            <div className="flex flex-col gap-1">
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.contextWindow')}</label>
               <Input
                 inputMode="numeric"
                 value={model.contextWindow}
                 onChange={(event) => onChange('contextWindow', event.target.value)}
                 placeholder="128000"
-                className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+                className="h-8 rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.contextWindow)}
                 aria-label={t('settings.providers.page.custom.models.contextWindow')}
                 disabled={disabled}
               />
               {fieldError(errors?.contextWindow)}
             </div>
-            <div>
+            <div className="flex flex-col gap-1">
               <label className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.providers.page.custom.models.maxOutputTokens')}</label>
               <Input
                 inputMode="numeric"
                 value={model.maxOutputTokens}
                 onChange={(event) => onChange('maxOutputTokens', event.target.value)}
                 placeholder="16384"
-                className="mt-1 h-8 rounded-md px-3 font-mono text-xs"
+                className="h-8 rounded-md px-3 font-mono text-xs"
                 aria-invalid={Boolean(errors?.maxOutputTokens)}
                 aria-label={t('settings.providers.page.custom.models.maxOutputTokens')}
                 disabled={disabled}

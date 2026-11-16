@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Icon } from '@/components/icon/Icon';
 import { useI18n } from '@/lib/i18n';
+import { SETTINGS_SELECT_TRIGGER_CLASS } from '@/components/sections/shared/SettingsSection';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useSkillsCatalogStore, type SkillsCatalogItem } from '@/stores/useSkillsCatalogStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -132,7 +133,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
                   if (value === 'workspace' || value === 'agent') setScope(value);
                 }}
               >
-                <SelectTrigger className="w-fit gap-1.5">
+                <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
                   {scope === 'agent'
                     ? <Icon name="user-3" className="h-3.5 w-3.5" />
                     : <Icon name="folder" className="h-3.5 w-3.5" />}
@@ -166,7 +167,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
                     onValueChange={value => setTargetProjectId(value)}
                     disabled={projects.length === 1}
                   >
-                    <SelectTrigger className="w-fit">
+                    <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS}>
                       <SelectValue placeholder={t('settings.skills.catalog.installSkill.field.chooseProjectPlaceholder')}>
                         {selectedTargetProject ? (selectedTargetProject.label || selectedTargetProject.path) : undefined}
                       </SelectValue>

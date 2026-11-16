@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { cn } from '@/lib/utils';
+import { SETTINGS_WIDTH_LONG_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
 
 /**
  * Card grid for Settings pages that browse a set of things with a glanceable
@@ -228,7 +229,7 @@ export const SettingsCardSearch: React.FC<{
   /** 28px, to match the dropdowns and buttons of a toolbar row. */
   compact?: boolean;
 }> = ({ value, onChange, placeholder, className, compact = false }) => (
-  <div className={cn('relative mb-4 max-w-[24rem]', className)}>
+  <div className={cn('relative mb-4', SETTINGS_WIDTH_LONG_TEXT_CLASS, className)}>
     <Icon
       name="search"
       className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"

@@ -20,12 +20,15 @@ import {
     SettingsFieldRow,
     SettingsStackedField,
     SettingsChipGroup,
-    SETTINGS_NUMBER_INPUT_CLASS,
-    SETTINGS_SELECT_ROW_TRIGGER_CLASS,
-    SETTINGS_CONTROL_CLUSTER_CLASS,
+    SETTINGS_WIDTH_NUMBER_CLASS,
+    SETTINGS_WIDTH_SELECT_CLASS,
+    SETTINGS_WIDTH_SHORT_TEXT_CLASS,
+    SETTINGS_WIDTH_LONG_TEXT_CLASS,
     SETTINGS_HELPER_CLASS,
     SETTINGS_ICON_BUTTON_CLASS,
-    SETTINGS_OPTION_STACK_CLASS,
+    SETTINGS_NUMBER_STEPPER_ROW_CLASS,
+    SETTINGS_SPACE_CHECKBOX_CLASS,
+    SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { browserVoiceService } from '@/lib/voice/browserVoiceService';
 import { startFocusedReading } from '@/lib/voice/readingAudioFocus';
@@ -656,7 +659,7 @@ const VoiceApiKeyField: React.FC<{ kind: VoiceApiKeyKind }> = ({ kind }) => {
     }, [draft, save]);
 
     return (
-        <div className={cn('relative', SETTINGS_CONTROL_CLUSTER_CLASS)}>
+        <div className={cn('relative', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
             <input
                 type="password"
                 value={draft}
@@ -1003,9 +1006,10 @@ export const VoiceSettings: React.FC = () => {
         }, setIsCompatiblePreviewPlaying);
     }, [isCompatiblePreviewPlaying, playAudioPreview, openaiCompatibleUrl, openaiCompatibleVoice, openaiCompatibleTtsModel, openaiCompatibleTtsEndpointPath, speechRate, t]);
 
-    // A fixed-width slider with its value beside it, the same on every row,
-    // so the three rows read as one column. Phones get a stepper instead.
-    const sliderClass = "w-40 flex-none h-1.5 bg-[var(--interactive-border)] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0 disabled:opacity-50";
+    // A slider that shares the stacked long-text width with its value beside it,
+    // so the three rows read as one column and end at the row's trailing edge.
+    // Phones get a stepper inside the number row instead.
+    const sliderClass = "min-w-0 flex-1 h-1.5 bg-[var(--interactive-border)] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0 disabled:opacity-50";
     const sliderValueClass = 'typography-ui-label w-12 shrink-0 text-end tabular-nums text-muted-foreground';
     const previewIcon = (playing: boolean) => (playing ? <Icon name="stop" className="w-3.5 h-3.5" /> : <Icon name="play" className="w-3.5 h-3.5" />);
 
@@ -1015,7 +1019,7 @@ export const VoiceSettings: React.FC = () => {
                 settingsItem="voice.playback"
                 title={t('settings.voice.page.section.playbackAndSummary')}
                 divider={false}
-                contentClassName="space-y-3"
+                contentClassName={SETTINGS_SPACE_ROW_CLASS}
             >
                 <SettingsCheckboxRow
                     checked={showMessageTTSButtons}
@@ -1093,7 +1097,7 @@ export const VoiceSettings: React.FC = () => {
                         )}
 
                         {voiceProvider === 'openai-compatible' && (
-                            <div className="space-y-3">
+                            <div className={SETTINGS_SPACE_ROW_CLASS}>
                                 <SettingsStackedField
                                     label={(
                                         <span className={cn(!openaiCompatibleUrl.trim() && 'text-[var(--status-error)]')}>
@@ -1186,7 +1190,7 @@ export const VoiceSettings: React.FC = () => {
                                                     setLocalTtsVoiceId(option.speakerId);
                                                 }}
                                             >
-                                                <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+                                                <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                                                     <SelectValue placeholder={t('settings.voice.page.field.selectVoicePlaceholder')}>
                                                         {(value) => localTtsVoiceOptions.find((v) => localTtsVoiceKey(v.modelId, v.speakerId) === value)?.label ?? value}
                                                     </SelectValue>
@@ -1209,7 +1213,7 @@ export const VoiceSettings: React.FC = () => {
                                     {voiceProvider === 'openai' && isOpenAIAvailable && (
                                         <>
                                             <Select value={openaiVoice} onValueChange={setOpenaiVoice}>
-                                                <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+                                                <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                                                     <SelectValue placeholder={t('settings.voice.page.field.selectVoicePlaceholder')}>
                                                         {(value) => OPENAI_VOICE_OPTIONS.find((v) => v.value === value)?.label ?? value}
                                                     </SelectValue>
@@ -1229,7 +1233,7 @@ export const VoiceSettings: React.FC = () => {
                                     {voiceProvider === 'say' && isSayAvailable && sayVoices.length > 0 && (
                                         <>
                                             <Select value={sayVoice} onValueChange={setSayVoice}>
-                                                <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+                                                <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                                                     <SelectValue placeholder={t('settings.voice.page.field.selectVoicePlaceholder')} />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -1247,7 +1251,7 @@ export const VoiceSettings: React.FC = () => {
                                     {voiceProvider === 'browser' && filteredBrowserVoices.length > 0 && (
                                         <>
                                             <Select value={browserVoice || '$auto'} onValueChange={(value) => setBrowserVoice(value === '$auto' ? '' : value)}>
-                                                <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}>
+                                                <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                                                     <SelectValue placeholder={t('settings.voice.page.field.auto')}>
                                                         {(value) => (value === '$auto' ? t('settings.voice.page.field.auto') : value)}
                                                     </SelectValue>
@@ -1269,9 +1273,11 @@ export const VoiceSettings: React.FC = () => {
 
                             <SettingsFieldRow label={t('settings.voice.page.field.speechRate')}>
                                 {isMobile ? (
-                                    <NumberInput value={speechRate} onValueChange={setSpeechRate} min={0.5} max={2} step={0.1} className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')} />
+                                    <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                        <NumberInput value={speechRate} onValueChange={setSpeechRate} min={0.5} max={2} step={0.1} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    </div>
                                 ) : (
-                                    <div className="flex h-8 items-center gap-2">
+                                    <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex h-8 items-center gap-2`}>
                                         <input type="range" min={0.5} max={2} step={0.1} value={speechRate} onChange={(e) => setSpeechRate(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechRate')} />
                                         <span className={sliderValueClass}>{`${speechRate.toFixed(1)}×`}</span>
                                     </div>
@@ -1280,9 +1286,11 @@ export const VoiceSettings: React.FC = () => {
 
                             <SettingsFieldRow label={t('settings.voice.page.field.speechPitch')}>
                                 {isMobile ? (
-                                    <NumberInput value={speechPitch} onValueChange={setSpeechPitch} min={0.5} max={2} step={0.1} className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')} />
+                                    <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                        <NumberInput value={speechPitch} onValueChange={setSpeechPitch} min={0.5} max={2} step={0.1} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    </div>
                                 ) : (
-                                    <div className="flex h-8 items-center gap-2">
+                                    <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex h-8 items-center gap-2`}>
                                         <input type="range" min={0.5} max={2} step={0.1} value={speechPitch} onChange={(e) => setSpeechPitch(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechPitch')} />
                                         <span className={sliderValueClass}>{speechPitch.toFixed(1)}</span>
                                     </div>
@@ -1291,9 +1299,11 @@ export const VoiceSettings: React.FC = () => {
 
                             <SettingsFieldRow label={t('settings.voice.page.field.speechVolume')}>
                                 {isMobile ? (
-                                    <NumberInput value={Math.round(speechVolume * 100)} onValueChange={(v) => setSpeechVolume(v / 100)} min={0} max={100} step={10} className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')} />
+                                    <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                        <NumberInput value={Math.round(speechVolume * 100)} onValueChange={(v) => setSpeechVolume(v / 100)} min={0} max={100} step={10} className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')} />
+                                    </div>
                                 ) : (
-                                    <div className="flex h-8 items-center gap-2">
+                                    <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex h-8 items-center gap-2`}>
                                         <input type="range" min={0} max={1} step={0.1} value={speechVolume} onChange={(e) => setSpeechVolume(Number(e.target.value))} className={sliderClass} aria-label={t('settings.voice.page.field.speechVolume')} />
                                         <span className={sliderValueClass}>{`${Math.round(speechVolume * 100)}%`}</span>
                                     </div>
@@ -1315,7 +1325,7 @@ export const VoiceSettings: React.FC = () => {
                         </div>
 
                         {(voiceProvider === 'local' || voiceProvider === 'say' || voiceProvider === 'openai' || voiceProvider === 'openai-compatible') && (
-                            <div className={SETTINGS_OPTION_STACK_CLASS}>
+                            <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
                                 {(voiceProvider === 'local' || voiceProvider === 'say') && (
                                     <SettingsCheckboxRow
                                         checked={ttsFollowTextLanguage}
@@ -1343,7 +1353,7 @@ export const VoiceSettings: React.FC = () => {
             <SettingsSection
                 settingsItem="voice.speech-recognition"
                 title={t('settings.voice.page.section.speechRecognition')}
-                contentClassName="space-y-3"
+                contentClassName={SETTINGS_SPACE_ROW_CLASS}
             >
                 <SettingsCheckboxRow
                     checked={dictationEnabled}
@@ -1392,7 +1402,7 @@ export const VoiceSettings: React.FC = () => {
                             <SettingsStackedField
                                 label={t('settings.voice.page.field.language')}
                                 info={t('settings.voice.page.field.sttLanguageHint')}
-                                controlClassName="max-w-[8rem]"
+                                controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                             >
                                 <input
                                     type="text"
@@ -1405,7 +1415,7 @@ export const VoiceSettings: React.FC = () => {
                         )}
 
                         {sttProvider === 'openai-compatible' && (
-                            <div className="space-y-3">
+                            <div className={SETTINGS_SPACE_ROW_CLASS}>
                                 <SettingsStackedField
                                     label={(
                                         <span className={cn(!sttServerUrl.trim() && 'text-[var(--status-error)]')}>
@@ -1466,7 +1476,7 @@ export const VoiceSettings: React.FC = () => {
                                 <SettingsStackedField
                                     label={t('settings.voice.page.field.language')}
                                     info={t('settings.voice.page.field.sttLanguageHint')}
-                                    controlClassName="max-w-[8rem]"
+                                    controlClassName={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                                 >
                                     <input
                                         type="text"

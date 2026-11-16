@@ -695,3 +695,67 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
     }, 'fail');
   });
 });
+
+describe('MCP failure detail credential scrubbing', () => {
+  test('a child error that echoes an injected connection string never reaches the detail', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mcp-scrub-'));
+    const agentDir = join(root, 'agent');
+    const projectDir = join(root, 'project');
+    await mkdir(agentDir, { recursive: true });
+    await mkdir(projectDir, { recursive: true });
+    // A handshake that fails after echoing the env value it was given, the way a
+    // provider prints its DSN in a startup error.
+    const childPath = join(root, 'failing-mcp.js');
+    await writeFile(childPath, [
+      'let buffer = "";',
+      'process.stdin.setEncoding("utf8");',
+      'process.stdin.on("data", chunk => {',
+      '  buffer += chunk;',
+      '  const lines = buffer.split("\\n");',
+      '  buffer = lines.pop() ?? "";',
+      '  for (const line of lines) {',
+      '    if (!line.trim()) continue;',
+      '    const request = JSON.parse(line);',
+      '    if (request.id === undefined) continue;',
+      '    process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, error: { code: -32000, message: `connect failed: ${process.env.MDB_MCP_CONNECTION_STRING}` } }) + "\\n");',
+      '  }',
+      '});',
+    ].join('\n'), 'utf8');
+    const connectionString = 'mongodb://fake-user:fake-pass@127.0.0.1:1/fakedb';
+    try {
+      const authStorage = await discoverAuthStorage(agentDir, { cwd: projectDir });
+      await authStorage.credentials.set('provider-credential-mongo', { type: 'api_key', key: connectionString, source: 'login' });
+      const configuration: MCPConfigurationState = {
+        workspaceId: 'workspace-1', persistedRevision: '0',
+        config: {
+          servers: [{
+            serverId: 'mongodb', label: 'MongoDB', enabled: true,
+            transport: { type: 'stdio', command: 'bun', args: [childPath], envCredentialRefs: { MDB_MCP_CONNECTION_STRING: 'credential-mongo' } },
+          }],
+        },
+      };
+      const mcp = new WorkerMcp({
+        cwd: projectDir,
+        configPath: join(projectDir, '.omp', 'mcp.json'),
+        worker: { rootSessionId: 'root-1', workspaceId: 'workspace-1', workerGeneration: 'generation-1' },
+        authStorage,
+        resolveCredentialRef: async reference => `provider-${reference}`,
+        resolveCommand: async command => command.command,
+        authorizeServer: async () => { },
+        authorizeOAuth: async () => { },
+        sanitizeTool: tool => tool,
+        onCatalog: () => { },
+        onRuntimeFailure: () => { },
+        isCurrent: () => true,
+      });
+      const probe = await mcp.test('mongodb', configuration);
+      expect(probe.status).toBe('failed');
+      if (probe.status !== 'failed') throw new Error('The handshake must fail');
+      expect(probe.error.detail).toContain('[redacted]');
+      expect(probe.error.detail).not.toContain('fake-pass');
+      expect(probe.error.detail).not.toContain(connectionString);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 30_000);
+});

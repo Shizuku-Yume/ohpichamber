@@ -93,6 +93,26 @@ function isAuthError(detail: string, config?: SDKMCPServerConfig): boolean {
   return mcpAuthRequired({ detail, config });
 }
 
+/**
+ * The child's own error text can quote what it was given, including an injected
+ * credential (a provider that prints its DSN). The worker holds the resolved
+ * values it handed this transport, so remove them from the detail here — the one
+ * place a failure detail is formed — before it reaches the catalog, the problem
+ * body or a toast. Values under four characters are skipped: blanking a token
+ * that short would mangle ordinary prose without hiding anything.
+ */
+function scrubCredentialValues(detail: string, config: SDKMCPServerConfig): string {
+  const remote = config.type === 'http' || config.type === 'sse';
+  const values = remote
+    ? Object.values(config.headers ?? {}).flatMap(value => value.startsWith('Bearer ') ? [value, value.slice('Bearer '.length)] : [value])
+    : Object.values(config.env ?? {});
+  let scrubbed = detail;
+  for (const value of values.filter(value => value.trim().length >= 4).sort((left, right) => right.length - left.length)) {
+    scrubbed = scrubbed.split(value).join('[redacted]');
+  }
+  return scrubbed;
+}
+
 /** Credential references OpenChamber keeps beside a server's native entry (references only, never values). */
 const CredentialMappingSchema = z.strictObject({
   credentialRef: EntityIdSchema.optional(),
@@ -1119,7 +1139,7 @@ export class WorkerMcp extends MCPManager {
       const failedEntry = status.failed.find(f => f.name === server.serverId);
       const errorMsg = failedEntry?.error || result.errors.get(server.serverId);
       if (errorMsg || status.pending.length || !status.connected.includes(server.serverId) || !manager.getConnection(server.serverId)?.tools) {
-        const detail = errorMsg || (status.pending.length ? 'MCP handshake timed out' : 'MCP handshake or tools failed');
+        const detail = scrubCredentialValues(errorMsg || (status.pending.length ? 'MCP handshake timed out' : 'MCP handshake or tools failed'), config);
         const isAuth = isAuthError(detail, config);
         throw new NativeMcpError(isAuth ? 'MCP_AUTH_REQUIRED' : 'MCP_APPLY_FAILED', detail, true);
       }
@@ -1128,7 +1148,7 @@ export class WorkerMcp extends MCPManager {
     } catch (err) {
       await this.#release([manager]);
       if (err instanceof NativeMcpError) throw err;
-      const detail = err instanceof Error ? err.message : String(err);
+      const detail = scrubCredentialValues(err instanceof Error ? err.message : String(err), config);
       const isAuth = isAuthError(detail, config);
       throw new NativeMcpError(isAuth ? 'MCP_AUTH_REQUIRED' : 'MCP_APPLY_FAILED', detail, true);
     }

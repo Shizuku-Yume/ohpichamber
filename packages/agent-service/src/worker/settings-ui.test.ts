@@ -143,6 +143,19 @@ test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page
   for (const id of ['skills.registryUrl', 'plan.autosaveDir', 'tui.renderSvg', 'stt.enabled', 'collab.relayUrl']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
   }
+  // Terminal renderer switches, print mode, and two silent egress toggles have
+  // no GUI consumer: they stay in config.yml and the route refuses them.
+  for (const id of [
+    'read.renderMarkdown', 'read.toolResultPreview', 'mcp.renderMarkdownResults',
+    'async.printWake', 'extensionRenderers.assistantText',
+  ]) {
+    expect(OMP_SETTING_PLACEMENTS[id], id).toEqual({ type: 'tui-only' });
+    expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
+  }
+  for (const id of ['dev.autoqa', 'spotlight.experiment.enabled']) {
+    expect(OMP_SETTING_PLACEMENTS[id], id).toEqual({ type: 'boundary' });
+    expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
+  }
   // Record/Array engine settings with no generic choices cannot be edited via GUI controls and stay in config.yml
   for (const id of ['tools.approval', 'bash.patterns', 'model.toolCallLoopGuard.exemptTools']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(false);
@@ -150,6 +163,47 @@ test('only GUI-owned settings are exposed: boundary, tui-only and unwritten page
   for (const id of ['compaction.thresholdPercent', 'recap.enabled', 'defaultThinkingLevel', 'modelRoles', 'steeringMode', 'plan.enabled', 'goal.enabled', 'retry.fallbackChains']) {
     expect(OMP_SETTING_EXPOSED_IDS.has(id), id).toBe(true);
   }
+});
+
+test('a moved row is absent from state and refused on write', async () => {
+  const f = await fixture();
+  try {
+    const state = await f.native.read('workspace_1', '0');
+    const byId = new Map(state.settings.map(setting => [setting.id, setting]));
+    const moved = [
+      'read.renderMarkdown', 'read.toolResultPreview', 'mcp.renderMarkdownResults',
+      'async.printWake', 'extensionRenderers.assistantText',
+      'dev.autoqa', 'spotlight.experiment.enabled',
+    ];
+    for (const id of moved) {
+      expect(byId.has(id), id).toBe(false);
+      await expect(f.native.write('workspace_1', '1', {
+        expectedRevision: state.revision,
+        changes: [{ id, value: true }],
+      }), id).rejects.toMatchObject({ status: 400, code: 'INVALID_REQUEST' });
+    }
+  } finally { await f.close(); }
+});
+
+test('the auto thinking ceiling reports its condition against defaultThinkingLevel', async () => {
+  const f = await fixture();
+  try {
+    // OMP's `autoThinkingActive` is `defaultThinkingLevel === "auto"`, so the
+    // ceiling row only applies to the auto preset. The pinned default is
+    // `high`, where the row has no effect and the page hides it.
+    const read = await f.native.read('workspace_1', '0');
+    const before = new Map(read.settings.map(setting => [setting.id, setting]));
+    expect(before.get('providers.autoThinkingMaxEffort')).toMatchObject({
+      condition: 'autoThinkingActive', conditionActive: false,
+    });
+
+    await f.native.write('workspace_1', '1', {
+      expectedRevision: read.revision,
+      changes: [{ id: 'defaultThinkingLevel', value: 'auto' }],
+    });
+    const after = new Map((await f.native.read('workspace_1', '2')).settings.map(setting => [setting.id, setting]));
+    expect(after.get('providers.autoThinkingMaxEffort')).toMatchObject({ conditionActive: true });
+  } finally { await f.close(); }
 });
 
 test('every exposed page row is drawn by the section a GUI owner renders', () => {
@@ -197,12 +251,12 @@ test('a value no generic row can draw is owned by the control that writes it, or
   }
 });
 
-test('every exposed OMP row has a label and description in all fifteen locales', () => {
-  // `OmpRowControl` renders the locale and falls back to OMP's English copy, so
-  // a row without a translation shows English in a Chinese UI — and a row whose
-  // OMP label is empty used to show its raw id (`modelRoles`). The ids come from
-  // the placement table, not a hand list, so a newly exposed row cannot join the
-  // page without copy.
+/**
+ * The locale dictionaries in `omp-settings.i18n.ts`, read as text because the UI
+ * package is not an import target for the worker: the file is the source the
+ * page renders from, so a key missing there is missing in the app.
+ */
+function readDictionaries(): Map<string, Map<string, string>> {
   const source = readFileSync(
     String(new URL('../../../ui/src/lib/i18n/messages/omp-settings.i18n.ts', import.meta.url).pathname),
     'utf8',
@@ -215,6 +269,16 @@ test('every exposed OMP row has a label and description in all fifteen locales',
     }
     dictionaries.set(block[1], entries);
   }
+  return dictionaries;
+}
+
+test('every exposed OMP row has a label and description in all fifteen locales', () => {
+  // `OmpRowControl` renders the locale and falls back to OMP's English copy, so
+  // a row without a translation shows English in a Chinese UI — and a row whose
+  // OMP label is empty used to show its raw id (`modelRoles`). The ids come from
+  // the placement table, not a hand list, so a newly exposed row cannot join the
+  // page without copy.
+  const dictionaries = readDictionaries();
   expect([...dictionaries.keys()].sort()).toEqual([
     'ar', 'de', 'en', 'es', 'fr', 'he', 'ja', 'ko', 'nl', 'pl', 'pt-BR', 'tr', 'uk', 'zh-CN', 'zh-TW',
   ]);
@@ -242,6 +306,62 @@ test('every exposed OMP row has a label and description in all fifteen locales',
   }
   expect(missing).toEqual([]);
   expect(untranslated).toEqual([]);
+});
+
+test('every engine option has a label and, where OMP describes it, a description in all fifteen locales', () => {
+  // Enum chips and number selects render OMP's raw English option label when the
+  // slug key is missing, so a zh-CN user reads `prose-only` or `Very aggressive`.
+  // Only `engine` rows are in scope here: they are the rows the OMP page draws.
+  // Rows placed on Sessions, Chat, Tools and the other concept pages keep OMP's
+  // own option labels. Every value an engine control offers needs copy in all
+  // fifteen locales, and an option OMP describes needs its helper line
+  // translated too. The values come from OMP's own descriptors, not a hand list.
+  // The slug rule mirrors `optionSlug` in
+  // `packages/ui/src/components/sections/shared/ompRowHelpers.ts`, which this
+  // package cannot import.
+  const dictionaries = readDictionaries();
+  const english = dictionaries.get('en')!;
+  const byId = new Map(orderedSettings().map((setting) => [setting.id, setting]));
+  // Keyed by i18n key so one missing option lists the locales still to write
+  // instead of one line per locale.
+  const missing = new Map<string, string[]>();
+  const untranslated = new Map<string, string[]>();
+  for (const [locale, entries] of dictionaries) {
+    for (const id of OMP_SETTING_EXPOSED_IDS) {
+      if (OMP_SETTING_PLACEMENTS[id]?.type !== 'engine') continue;
+      const setting = byId.get(id);
+      if (!setting) continue;
+      const declared = setting.ui?.options;
+      if (setting.type !== 'enum' && !Array.isArray(declared)) continue;
+      const options: readonly { value: string; description?: string }[] = Array.isArray(declared)
+        ? declared.map((option) => ({ value: String(option.value), description: option.description }))
+        : (setting.enumValues ?? []).map((value) => ({ value: String(value) }));
+      for (const option of options) {
+        const value = String(option.value).trim();
+        // A number row's `default` sentinel is drawn with the shared label, not
+        // an option label; `-1` means unlimited and reads as its own choice.
+        if (setting.type === 'number' && value === 'default') continue;
+        const slug = setting.type === 'number' && value === '-1'
+          ? 'unlimited'
+          : value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        const keys = [`settings.omp.items.${id}.options.${slug}`];
+        if (option.description !== undefined) keys.push(`${keys[0]}.description`);
+        for (const key of keys) {
+          if (!entries.has(key)) {
+            missing.set(key, [...(missing.get(key) ?? []), locale]);
+            continue;
+          }
+          if (key.endsWith('.description') && locale !== 'en' && entries.get(key) === english.get(key)) {
+            untranslated.set(key, [...(untranslated.get(key) ?? []), locale]);
+          }
+        }
+      }
+    }
+  }
+  const format = (found: Map<string, string[]>) =>
+    [...found].map(([key, locales]) => `${key} :: ${locales.join(', ')}`);
+  expect(format(missing)).toEqual([]);
+  expect(format(untranslated)).toEqual([]);
 });
 
 test('every owned-by owner is an anchor a control emits', () => {

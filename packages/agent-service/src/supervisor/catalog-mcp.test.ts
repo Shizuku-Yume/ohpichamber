@@ -404,19 +404,23 @@ test('a probe that reports an auth challenge is a saved sign-in, not a failed in
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('a genuinely non-auth probe failure still throws saved-not-connected', async () => {
+test('a genuinely non-auth probe failure still throws saved-not-connected and names the server cause', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'workspace-mcp-not-connected-'));
   let stored: MCPConfigurationState | null = null;
   try {
     const coordinator = new CatalogCoordinator(directory, {
       readMcpConfiguration: async () => stored,
-      probeMcp: failedProbe('MCP_APPLY_FAILED', 'ECONNREFUSED 127.0.0.1:14032'),
+      probeMcp: failedProbe('MCP_APPLY_FAILED', 'MCP subprocess closed stdout before responding'),
       commitMcp: async (_id, _input, next) => { stored = next; },
     });
     await coordinator.initialize();
     await coordinator.registerWorkspace('workspace', 'agent');
     await expect(coordinator.configureWorkspaceMcp('workspace', { expectedPersistedRevision: '0', config: { servers: [server] } }))
-      .rejects.toMatchObject({ code: 'MCP_APPLY_FAILED', details: { result: { status: 'no-active-workers', outcome: 'saved-not-connected' } } });
+      .rejects.toMatchObject({
+        code: 'MCP_APPLY_FAILED',
+        message: 'MCP subprocess closed stdout before responding',
+        details: { result: { status: 'no-active-workers', outcome: 'saved-not-connected', workers: [] } },
+      });
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

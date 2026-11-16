@@ -35,7 +35,7 @@ const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => 
     });
   }
   if (url.includes('/omp')) {
-    return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 0, settings: [] });
+    return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 0, placementCounts: { tuiOnly: 0, boundary: 0, elsewhere: 0 }, settings: [] });
   }
   return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
 });

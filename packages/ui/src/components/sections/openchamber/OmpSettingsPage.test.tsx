@@ -3,7 +3,7 @@ import type { Spy } from 'bun:test';
 import type { Root } from 'react-dom/client';
 import type { CanonicalClient } from '@/api/canonicalClient';
 import { Window } from 'happy-dom';
-import type { ModelCatalog, OmpSetting, OmpSettingsState } from '@openchamber/agent-contract';
+import type { OmpSetting, OmpSettingsState } from '@openchamber/agent-contract';
 
 const browser = new Window({ url: 'http://localhost/' });
 Object.assign(globalThis, {
@@ -21,6 +21,7 @@ Object.assign(globalThis, {
   FocusEvent: browser.FocusEvent,
   CustomEvent: browser.CustomEvent,
   KeyboardEvent: browser.KeyboardEvent,
+  MouseEvent: browser.MouseEvent,
   PointerEvent: browser.PointerEvent,
   MutationObserver: browser.MutationObserver,
   ResizeObserver: browser.ResizeObserver,
@@ -42,96 +43,136 @@ const { createRoot } = await import('react-dom/client');
 const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
 const { CanonicalApiError, canonicalClient } = await import('@/api/canonicalClient');
 const { OmpSettingsPage } = await import('./OmpSettingsPage');
+const { useOmpSettingsTabStore } = await import('./ompSettingsLayout');
 const { ompSettingsI18n } = await import('@/lib/i18n/messages/omp-settings.i18n');
 
 const CONFIG_PATH = '/home/user/.omp/agent/config.yml';
+const en = ompSettingsI18n.en;
 
 /** One row per placement, so the page's filtering is observable. */
-const setting = (overrides: Partial<OmpSetting> & Pick<OmpSetting, 'id' | 'type'>): OmpSetting => ({
-  value: null, default: null, configured: false, placement: { type: 'engine' },
-  ...overrides,
-} as OmpSetting);
+const setting = (row: Pick<OmpSetting, 'id' | 'type'> & Partial<OmpSetting>): OmpSetting => ({
+  value: null,
+  default: null,
+  configured: false,
+  placement: { type: 'engine' },
+  ...row,
+});
 
-const state = {
+const state: OmpSettingsState = {
   workspaceId: 'workspace_1',
   revision: '7',
   configPath: CONFIG_PATH,
-  totalCount: 15,
+  totalCount: 40,
+  // Counted by the worker from its placement table: tui-only and boundary rows
+  // never reach `settings`, so the page cannot derive these.
+  placementCounts: { tuiOnly: 2, boundary: 1, elsewhere: 4 },
   settings: [
-    setting({ id: 'compaction.enabled', type: 'boolean', value: true, label: 'Auto-Compact', group: 'Compaction', tab: 'context' }),
+    // Common tab: a switch, a three-choice enum and a numeric picker.
+    setting({ id: 'bash.enabled', type: 'boolean', value: true, label: 'Bash', group: 'Bash', tab: 'shell' }),
     setting({
-      id: 'compaction.thresholdPercent', type: 'number', value: 50, label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
+      id: 'features.unexpectedStopDetection', type: 'enum', value: 'mechanical',
+      label: 'Unexpected Stops', group: 'Agent', tab: 'interaction',
+      enumValues: ['off', 'mechanical', 'smart'],
+    }),
+    setting({
+      id: 'task.maxConcurrency', type: 'number', value: 32, label: 'Max Concurrent Tasks', group: 'Subagents',
       options: [
         { value: 'default', label: 'Default' },
-        { value: '50', label: '50%' },
+        { value: '8', label: '8' },
+        { value: '32', label: '32' },
       ],
     }),
-    // Terminal presentation and internals must not reach the page.
+    // The auto thinking ceiling is gated by OMP's own condition.
+    setting({
+      id: 'providers.autoThinkingMaxEffort', type: 'enum', value: 'xhigh',
+      condition: 'autoThinkingActive', conditionActive: false,
+      label: 'Auto Thinking Ceiling', group: 'Thinking', tab: 'model',
+      enumValues: ['xhigh', 'max'],
+    }),
+    // Editing tab: reading rows plus the five settings the preset owns.
+    setting({ id: 'readLineNumbers', type: 'boolean', value: true, label: 'Line Numbers', group: 'Reading' }),
+    setting({
+      id: 'read.defaultLimit', type: 'number', value: -1, default: -1, label: 'Default Read Limit', group: 'Reading',
+      options: [
+        { value: 'default', label: 'Default' },
+        { value: '200', label: '200' },
+        { value: '500', label: '500' },
+      ],
+    }),
+    setting({ id: 'read.summarize.enabled', type: 'boolean', value: true, label: 'Read Summaries' }),
+    setting({ id: 'read.summarize.prose', type: 'boolean', value: true, label: 'Prose Summaries' }),
+    setting({ id: 'read.summarize.minTotalLines', type: 'number', value: 20, label: 'Minimum File Length' }),
+    setting({ id: 'read.summarize.minBodyLines', type: 'number', value: 4, label: 'Body Lines' }),
+    setting({ id: 'read.summarize.minCommentLines', type: 'number', value: 6, label: 'Comment Lines' }),
+    setting({ id: 'read.summarize.unfoldUntil', type: 'number', value: 50, label: 'Unfold Target' }),
+    setting({ id: 'read.summarize.unfoldLimit', type: 'number', value: 100, label: 'Unfold Ceiling' }),
+    setting({ id: 'lsp.enabled', type: 'boolean', value: true, label: 'LSP', group: 'LSP', tab: 'lsp' }),
+    // Execution tab.
+    setting({ id: 'mcp.startupTimeoutMs', type: 'number', value: 250, label: 'MCP Startup Window', group: 'Discovery & MCP' }),
+    setting({
+      id: 'tools.artifactSpillThreshold', type: 'number', value: 50, label: 'Artifact Spill Threshold', group: 'Output Limits',
+      options: [
+        { value: 'default', label: 'Default' },
+        { value: '50', label: '50 KB' },
+      ],
+    }),
+    // Advanced tab.
+    setting({ id: 'tools.format', type: 'enum', value: 'auto', label: 'Tool Calling Mode', group: 'Experimental', enumValues: ['auto', 'native'] }),
+    // Two short, unexplained choices stay chips; a longer or explained list is a select.
+    setting({ id: 'ttsr.contextMode', type: 'enum', value: 'keep', label: 'TTSR Context Mode', group: 'Rules (TTSR)', enumValues: ['discard', 'keep'] }),
+    // Terminal presentation, page rows, owned-by rows and egress rows are counted, never drawn.
     setting({ id: 'tui.maxFps', type: 'number', value: 30, placement: { type: 'tui-only' }, label: 'Max FPS' }),
     setting({ id: 'cycleOrder', type: 'array', value: ['smol', 'default'], placement: { type: 'tui-only' } }),
     setting({ id: 'tools.artifactTailLines', type: 'number', value: 1000, placement: { type: 'page', page: 'tools', section: 'limits' } }),
-    // A concept another page owns is not drawn here at all.
-    setting({ id: 'enabledModels', type: 'array', value: [], placement: { type: 'owned-by', owner: 'providers.models' } }),
     setting({ id: 'recap.enabled', type: 'boolean', value: true, placement: { type: 'page', page: 'chat', section: 'recap' } }),
-    // One row per section, so every heading renders and is checked as prose.
-    setting({ id: 'lsp.enabled', type: 'boolean', value: true, label: 'LSP', group: 'LSP', tab: 'lsp' }),
-    setting({ id: 'task.maxConcurrency', type: 'number', value: 3, label: 'Task concurrency', group: 'Subagents' }),
-    setting({ id: 'skills.enabled', type: 'boolean', value: true, label: 'Skills', group: 'Commands & Skills' }),
-    setting({ id: 'mcp.enableProjectConfig', type: 'boolean', value: false, label: 'Project MCP config', group: 'Discovery & MCP' }),
-    // OMP's own condition gates these two.
-    setting({ id: 'retry.usageReservePct', type: 'number', value: 15, condition: 'usageAwareFallbackEnabled', conditionActive: false, label: 'Usage reserve', group: 'Retry & Fallback' }),
-    setting({ id: 'plan.defaultOnStartup', type: 'boolean', value: false, condition: 'planModeEnabled', conditionActive: true, label: 'Start in plan mode', group: 'Modes' }),
-    // Chips come from the enumerated options.
-    setting({
-      id: 'retry.fallbackOn', type: 'enum', value: 'any', label: 'Fall Back On', group: 'Retry & Fallback',
-      enumValues: ['any', 'usage-limit', 'except-usage-limit'],
-    }),
-    // The role record is drawn by the shared role editor on Defaults, Agents,
-    // Tools and Memory, never by a generic row.
+    setting({ id: 'enabledModels', type: 'array', value: [], placement: { type: 'owned-by', owner: 'providers.models' } }),
     setting({
       id: 'modelRoles', type: 'record', value: { vision: 'anthropic/claude-3-7-sonnet:high' },
       label: 'Model Roles', placement: { type: 'owned-by', owner: 'omp.modelRoles' },
     }),
-  ],
-};
-
-const mockModelCatalog = {
-  workspaceId: 'workspace_1',
-  revision: '1',
-  imageModels: [], planRoleAvailable: true,
-  defaults: { model: { providerId: 'anthropic', modelId: 'claude-3-7-sonnet' }, thinkingLevel: 'auto' },
-  models: [
-    {
-      modelId: 'claude-3-7-sonnet', provider: 'anthropic', name: 'Claude 3.7 Sonnet',
-      modalities: ['text', 'image'], contextWindow: 200000, maxOutputTokens: 64000,
-      reasoningEffortSupported: true,
-      reasoningOptions: [
-        { reasoningEffort: 'low', label: 'Low', budgetTokens: 2048 },
-        { reasoningEffort: 'high', label: 'High', budgetTokens: 32000 },
-      ],
-      variants: [], pricing: null,
-    },
+    setting({ id: 'dev.autoqa', type: 'boolean', value: false, placement: { type: 'boundary' }, label: 'Auto QA' }),
   ],
 };
 
 let resolveWorkspace: Spy<CanonicalClient['resolveWorkspace']>;
 let getSettings: Spy<CanonicalClient['getOmpSettings']>;
 let updateSettings: Spy<CanonicalClient['updateOmpSettings']>;
-let getModels: Spy<CanonicalClient['getModels']>;
 let container: HTMLDivElement;
 let root: Root;
 
 const settle = async () => {
-  await act(async () => { await new Promise<void>(resolve => setTimeout(resolve, 0)); });
+  await act(async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 0);
+    await promise;
+  });
+};
+
+const render = async () => {
+  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+  await settle();
+};
+
+const row = (id: string) => container.querySelector(`[data-settings-item="omp.${id}"]`);
+
+const TABS = ['common', 'editing', 'execution', 'advanced'] as const;
+
+/** Click a tab by position, so a test never depends on finished copy. */
+const switchTab = async (name: typeof TABS[number]) => {
+  const button = container.querySelectorAll('[role="tab"]')[TABS.indexOf(name)];
+  if (!(button instanceof HTMLElement)) throw new Error(`tab ${name} missing`);
+  await act(async () => { button.click(); });
+  await settle();
+  expect(useOmpSettingsTabStore.getState().tab).toBe(name);
 };
 
 beforeEach(async () => {
+  useOmpSettingsTabStore.setState({ tab: 'common' });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'workspace_1', projectId: 'project_1', name: 'repo' });
-  getSettings = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(state as unknown as OmpSettingsState);
-  getModels = spyOn(canonicalClient, 'getModels').mockResolvedValue(mockModelCatalog as unknown as ModelCatalog);
+  getSettings = spyOn(canonicalClient, 'getOmpSettings').mockResolvedValue(state);
   updateSettings = spyOn(canonicalClient, 'updateOmpSettings').mockImplementation(async (_workspaceId, request) => ({
     ...state,
     revision: String(Number(request.expectedRevision) + 1),
@@ -139,7 +180,7 @@ beforeEach(async () => {
       const change = request.changes.find(candidate => candidate.id === entry.id);
       return change ? { ...entry, value: change.value } : entry;
     }),
-  }) as unknown as OmpSettingsState);
+  }));
 });
 
 afterEach(async () => {
@@ -147,58 +188,52 @@ afterEach(async () => {
   resolveWorkspace.mockRestore();
   getSettings.mockRestore();
   updateSettings.mockRestore();
-  getModels.mockRestore();
   container.remove();
   browser.close();
 });
 
-test('renders only the engine rows and saves a changed value with the captured revision', async () => {
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-  await settle();
+test('renders only the layout rows of the active tab and saves a changed value with the captured revision', async () => {
+  await render();
 
-  const enabledRow = container.querySelector('[data-settings-item="omp.compaction.enabled"]');
-  expect(enabledRow?.textContent).toContain('Compaction');
-  const thresholdRow = container.querySelector('[data-settings-item="omp.compaction.thresholdPercent"]');
-  expect(thresholdRow?.textContent).toContain('Compact at');
+  const enabledRow = row('bash.enabled');
+  expect(enabledRow?.textContent).toContain('Bash');
+  // Common is the default tab: an editing row is not in the document yet.
+  expect(row('lsp.enabled')).toBeNull();
 
   if (!(enabledRow instanceof HTMLElement)) throw new Error('settings row missing');
   await act(async () => { enabledRow.click(); });
   await settle();
   expect(updateSettings).toHaveBeenCalledWith('workspace_1', {
     expectedRevision: '7',
-    changes: [{ id: 'compaction.enabled', value: false }],
+    changes: [{ id: 'bash.enabled', value: false }],
   });
 });
 
+test('switching tabs shows the rows of that tab and remembers the last tab', async () => {
+  await render();
+  expect(row('lsp.enabled')).toBeNull();
+
+  await switchTab('editing');
+  expect(row('lsp.enabled')).not.toBeNull();
+  expect(row('bash.enabled')).toBeNull();
+  expect(useOmpSettingsTabStore.getState().tab).toBe('editing');
+
+  await switchTab('execution');
+  expect(row('mcp.startupTimeoutMs')).not.toBeNull();
+  expect(row('lsp.enabled')).toBeNull();
+
+  await switchTab('advanced');
+  expect(row('tools.format')).not.toBeNull();
+});
+
 test('renders a number setting with a default option as a select showing Default for -1 and 默认 in zh-CN', async () => {
-  const numberSettingState = {
-    ...state,
-    settings: [
-      setting({
-        id: 'compaction.thresholdPercent',
-        type: 'number',
-        value: -1,
-        default: -1,
-        label: 'Compaction Threshold',
-        tab: 'context',
-        options: [
-          { value: 'default', label: 'Default' },
-          { value: '10', label: '10%' },
-          { value: '50', label: '50%' },
-        ],
-      }),
-    ],
-  };
-  getSettings.mockResolvedValueOnce(numberSettingState as unknown as OmpSettingsState);
+  await render();
+  await switchTab('editing');
 
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-  await settle();
-
-  const select = container.querySelector('[data-settings-item="omp.compaction.thresholdPercent"]');
+  const select = row('read.defaultLimit');
   expect(select).not.toBeNull();
   expect(select?.textContent).toContain('Default');
 
-  // In zh-CN
   await act(async () => {
     useI18nStore.getState().setLocale('zh-CN');
   });
@@ -206,11 +241,10 @@ test('renders a number setting with a default option as a select showing Default
     await settle();
   }
   try {
-    getSettings.mockResolvedValueOnce(numberSettingState as unknown as OmpSettingsState);
-    await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-    await settle();
-    const selectZh = container.querySelector('[data-settings-item="omp.compaction.thresholdPercent"]');
-    expect(selectZh?.textContent).toContain('默认');
+    await render();
+    await switchTab('editing');
+    const selectZh = row('read.defaultLimit');
+    expect(selectZh?.textContent).toContain(ompSettingsI18n['zh-CN']['settings.omp.value.default']);
   } finally {
     await act(async () => {
       useI18nStore.getState().setLocale('en');
@@ -221,41 +255,124 @@ test('renders a number setting with a default option as a select showing Default
   }
 });
 
-test('leaves terminal-only, page and duplicate settings off the page', async () => {
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-  await settle();
+test('hides the auto thinking ceiling while its condition is off and shows it when it holds', async () => {
+  const withCondition = (conditionActive: boolean) => ({
+    ...state,
+    settings: state.settings.map((entry) => (
+      entry.id === 'providers.autoThinkingMaxEffort' ? { ...entry, conditionActive } : entry
+    )),
+  });
 
-  for (const id of ['tui.maxFps', 'cycleOrder', 'tools.artifactTailLines', 'enabledModels', 'recap.enabled']) {
-    expect(`${id}: ${container.querySelector(`[data-settings-item="omp.${id}"]`) === null}`).toBe(`${id}: true`);
+  getSettings.mockResolvedValueOnce(withCondition(false));
+  await render();
+  expect(row('providers.autoThinkingMaxEffort')).toBeNull();
+
+  // The snapshot is fetched on mount, so a new read needs a new mount.
+  await act(async () => root.unmount());
+  getSettings.mockResolvedValueOnce(withCondition(true));
+  root = createRoot(container);
+  await render();
+  expect(row('providers.autoThinkingMaxEffort')).not.toBeNull();
+});
+
+test('leaves terminal-only, page and duplicate settings off every tab', async () => {
+  await render();
+  for (const tabName of TABS) {
+    await switchTab(tabName);
+    for (const id of ['tui.maxFps', 'cycleOrder', 'tools.artifactTailLines', 'enabledModels', 'recap.enabled', 'dev.autoqa']) {
+      expect(`${tabName} ${id}: ${row(id) === null}`).toBe(`${tabName} ${id}: true`);
+    }
   }
-  // The page counts what it left out instead of drawing it.
-  expect(container.textContent).toContain('7 settings');
 });
 
-test('hides a row whose condition is off and keeps one whose condition holds', async () => {
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-  await settle();
-
-  expect(container.querySelector('[data-settings-item="omp.retry.usageReservePct"]')).toBeNull();
-  expect(container.querySelector('[data-settings-item="omp.plan.defaultOnStartup"]')).not.toBeNull();
-});
-
-test('offers the config file for the settings it does not render', async () => {
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-  await settle();
+test('the config file footer counts what it leaves out by reason', async () => {
+  await render();
+  await switchTab('advanced');
 
   expect(container.textContent).toContain(CONFIG_PATH);
-  const openConfig = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('Open config.yml'));
+  const sentence = (key: 'terminal' | 'elsewhere' | 'egress', count: number) =>
+    (en[`settings.omp.configFile.${key}` as const] as string).replace('{count}', String(count));
+  // The counts come from the state's own placement counts, not from the rows
+  // this tab (or any tab) draws: tui-only and boundary rows are absent from
+  // `settings` altogether.
+  expect(container.textContent).toContain(sentence('terminal', 2));
+  expect(container.textContent).toContain(sentence('elsewhere', 4));
+  expect(container.textContent).toContain(sentence('egress', 1));
+
+  const openConfig = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(en['settings.omp.openConfig'] as string));
   if (!openConfig) throw new Error('open config button missing');
   await act(async () => { openConfig.click(); });
   expect(revealPath).toHaveBeenCalledWith(CONFIG_PATH);
 });
 
-test('model roles live on concept-owning pages and stay off the OMP page', async () => {
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
+test('omits a config-file sentence whose count is zero', async () => {
+  getSettings.mockResolvedValueOnce({
+    ...state,
+    placementCounts: { tuiOnly: 0, boundary: 3, elsewhere: 0 },
+  });
+  await render();
+  await switchTab('advanced');
+
+  const sentence = (key: 'terminal' | 'elsewhere' | 'egress', count: number) =>
+    (en[`settings.omp.configFile.${key}` as const] as string).replace('{count}', String(count));
+  expect(container.textContent).not.toContain(sentence('terminal', 0));
+  expect(container.textContent).not.toContain(sentence('elsewhere', 0));
+  expect(container.textContent).toContain(sentence('egress', 3));
+});
+
+test('applying the read-summary preset sends one update carrying every changed key', async () => {
+  await render();
+  await switchTab('editing');
+
+  const presetRow = row('read.summarize.enabled');
+  expect(presetRow?.textContent).toContain(en['settings.omp.preset.readSummary.options.balanced']);
+  const trigger = presetRow?.querySelector<HTMLElement>('[role="combobox"]');
+  if (!trigger) throw new Error('preset trigger missing');
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+  });
+  const aggressive = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]'))
+    .find((option) => option.textContent === en['settings.omp.preset.readSummary.options.aggressive']);
+  if (!aggressive) throw new Error('aggressive option missing');
+  await act(async () => { aggressive.click(); });
   await settle();
 
-  // Model roles are managed on owning pages, not on the OMP page
+  expect(updateSettings).toHaveBeenCalledTimes(1);
+  const [, request] = updateSettings.mock.calls[0];
+  expect(request.expectedRevision).toBe('7');
+  expect([...request.changes].sort((left, right) => left.id.localeCompare(right.id))).toEqual([
+    { id: 'read.summarize.minBodyLines', value: 3 },
+    { id: 'read.summarize.minCommentLines', value: 4 },
+    { id: 'read.summarize.unfoldLimit', value: 60 },
+    { id: 'read.summarize.unfoldUntil', value: 30 },
+  ]);
+});
+
+test('keeps the read-summary switch editable when a preset threshold is missing', async () => {
+  // The preset maps five settings to one choice; a snapshot that omits any of
+  // the four thresholds cannot describe the tuple, so the switch stays a plain
+  // checkbox rather than disappearing with the picker.
+  getSettings.mockResolvedValueOnce({
+    ...state,
+    settings: state.settings.filter((entry) => entry.id !== 'read.summarize.unfoldLimit'),
+  });
+  await render();
+  await switchTab('editing');
+
+  const target = row('read.summarize.enabled');
+  expect(target).not.toBeNull();
+  expect(target?.querySelector('[role="combobox"]')).toBeNull();
+  if (!(target instanceof HTMLElement)) throw new Error('read-summary row missing');
+  await act(async () => { target.click(); });
+  await settle();
+  expect(updateSettings).toHaveBeenLastCalledWith('workspace_1', {
+    expectedRevision: '7',
+    changes: [{ id: 'read.summarize.enabled', value: false }],
+  });
+});
+
+test('model roles live on concept-owning pages and stay off the OMP page', async () => {
+  await render();
   for (const role of ['default', 'smol', 'slow', 'commit', 'vision', 'image', 'memory', 'task', 'advisor']) {
     expect(`${role}: ${container.querySelector(`[data-settings-item="omp.modelRoles.${role}"]`) === null}`).toBe(`${role}: true`);
   }
@@ -263,46 +380,43 @@ test('model roles live on concept-owning pages and stay off the OMP page', async
 
 test('shows a retry path when the settings read fails', async () => {
   getSettings.mockRejectedValue(new Error('offline'));
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-  await settle();
-  expect(container.textContent).toContain(ompSettingsI18n.en['settings.omp.loadFailed']);
-  expect(container.textContent).toContain(ompSettingsI18n.en['settings.omp.retry']);
+  await render();
+  expect(container.textContent).toContain(en['settings.omp.loadFailed']);
+  expect(container.textContent).toContain(en['settings.omp.retry']);
 });
 
 test('retries once at the refreshed revision when another mutation wins', async () => {
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-  await settle();
-  getSettings.mockResolvedValueOnce({ ...state, revision: '8' } as unknown as OmpSettingsState);
+  await render();
+  getSettings.mockResolvedValueOnce({ ...state, revision: '8' });
   updateSettings.mockRejectedValueOnce(new CanonicalApiError({
     type: 'urn:ohpichamber:problem:CATALOG_CONFLICT', title: 'Request refused', status: 409,
     code: 'CATALOG_CONFLICT', detail: 'stale revision', retryable: false,
   }));
-  const row = container.querySelector('[data-settings-item="omp.compaction.enabled"]');
-  if (!(row instanceof HTMLElement)) throw new Error('settings row missing');
-  await act(async () => { row.click(); });
+  const target = row('bash.enabled');
+  if (!(target instanceof HTMLElement)) throw new Error('settings row missing');
+  await act(async () => { target.click(); });
   await settle();
   expect(updateSettings).toHaveBeenCalledTimes(2);
   expect(updateSettings).toHaveBeenLastCalledWith('workspace_1', {
     expectedRevision: '8',
-    changes: [{ id: 'compaction.enabled', value: false }],
+    changes: [{ id: 'bash.enabled', value: false }],
   });
 });
 
-test('shows the choices as chips and never a raw control for an enum', async () => {
-  await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-  await settle();
+test('shows a short enum as chips and never a raw control', async () => {
+  await render();
+  await switchTab('advanced');
 
-  const row = container.querySelector('[data-settings-item="omp.retry.fallbackOn"]');
-  expect(row).not.toBeNull();
-  const chips = row?.querySelector('[role="group"]');
+  const target = row('ttsr.contextMode');
+  expect(target).not.toBeNull();
+  const chips = target?.querySelector('[role="group"]');
   expect(chips).not.toBeNull();
-  // Three short choices; the selected one is pressed.
   const buttons = chips?.querySelectorAll('button');
-  expect(buttons?.length).toBe(3);
+  expect(buttons?.length).toBe(2);
   expect(Array.from(buttons ?? []).some(button => button.getAttribute('aria-pressed') === 'true')).toBe(true);
 });
 
-test('renders every page row translated in zh-CN with no raw setting id on screen', async () => {
+test('renders every drawn row and heading translated in zh-CN with no raw setting id on screen', async () => {
   await act(async () => {
     useI18nStore.getState().setLocale('zh-CN');
   });
@@ -310,31 +424,25 @@ test('renders every page row translated in zh-CN with no raw setting id on scree
     await settle();
   }
   try {
-    await act(async () => { root.render(<I18nProvider><OmpSettingsPage /></I18nProvider>); });
-    await settle();
+    await render();
+    const dictionary = useI18nStore.getState().dictionary;
+    expect(container.textContent).toContain(dictionary['settings.omp.items.bash.enabled.label']);
 
-    expect(container.textContent).toContain(ompSettingsI18n['zh-CN']['settings.omp.items.lsp.enabled.label']);
-    expect(container.textContent).toContain(ompSettingsI18n['zh-CN']['settings.omp.items.compaction.enabled.label']);
     // A section heading is addressed by key like every row, so a heading the
-    // vocabulary forgot would render as `settings.omp.group.<id>.label`.
-    for (const key of [
-      'settings.omp.group.retry_fallback.label',
-      'settings.omp.group.compaction.label',
-      'settings.omp.group.lsp.label',
-      'settings.omp.group.modes.label',
-      'settings.omp.group.commands_skills.label',
-    ] as const) {
-      expect(container.textContent, key).toContain(ompSettingsI18n['zh-CN'][key]);
+    // vocabulary forgot would render as `settings.omp.group.<id>`.
+    for (const tabName of TABS) {
+      await switchTab(tabName);
+      expect(container.textContent).not.toContain('settings.omp.group.');
+      expect(container.textContent).not.toContain('settings.omp.tab.');
     }
-    expect(container.textContent).not.toContain('settings.omp.group.');
     // Every heading comes from the locale, never from OMP's own group name: a
     // group the vocabulary missed would show its raw English name here.
     for (const rawGroup of ['Compaction', 'Subagents', 'Commands & Skills', 'Discovery & MCP', 'Modes', 'Retry & Fallback']) {
       expect(`${rawGroup}: ${(container.textContent ?? '').includes(rawGroup)}`).toBe(`${rawGroup}: false`);
     }
     // No raw `setting.id` leaks: the ids are snake/dot vocabulary, never prose.
-    for (const raw of ['compaction.enabled', 'compaction.thresholdPercent', 'retry.fallbackOn', 'plan.defaultOnStartup', 'modelRoles']) {
-      expect(`${raw}: ${(container.textContent ?? "").includes(raw)}`).toBe(`${raw}: false`);
+    for (const raw of ['bash.enabled', 'read.defaultLimit', 'features.unexpectedStopDetection', 'modelRoles']) {
+      expect(`${raw}: ${(container.textContent ?? '').includes(raw)}`).toBe(`${raw}: false`);
     }
   } finally {
     await act(async () => {

@@ -6,7 +6,7 @@ import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { cfgAdvisorEnabled } from '@oh-my-pi/pi-coding-agent/advisor/settings';
 import { cfgComposerPredictions } from '@oh-my-pi/pi-coding-agent/modes/settings';
 import { cfgPlanEnabled } from '@oh-my-pi/pi-coding-agent/plan-mode/settings';
-import { cfgRetryUsageAwareFallback } from '@oh-my-pi/pi-coding-agent/session/settings';
+import { cfgRetryUsageAwareFallback, cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
 /**
@@ -196,8 +196,11 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'edit.autoRepair.enabled': 'engine',
   'readLineNumbers': 'engine',
   'read.defaultLimit': 'engine',
-  'read.renderMarkdown': 'engine',
-  'read.toolResultPreview': 'engine',
+  // `read.renderMarkdown` only sets `details.contentType`, and
+  // `read.toolResultPreview` is read by OMP's transcript helpers; both are
+  // consumed by pi-tui renderers only, and this app's transcript reads neither.
+  'read.renderMarkdown': 'tui-only',
+  'read.toolResultPreview': 'tui-only',
   'read.summarize.enabled': 'engine',
   'read.summarize.prose': 'engine',
   'read.summarize.minBodyLines': 'engine',
@@ -474,17 +477,25 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'tools.speculativeExecution.maxInFlight': 'engine',
   'tools.maxTimeout': 'engine',
   'async.enabled': 'engine',
-  'async.printWake': 'engine',
+  // `--wait-async` keeps print mode alive across job results; this app never
+  // runs print mode, so nothing in the GUI reads the flag.
+  'async.printWake': 'tui-only',
   'async.widgets': 'engine',
   'tools.xdev': 'engine',
   'tools.xdevDocs': 'engine',
   'tools.xdevInlineDevices': 'config-only',
   'tools.xdevNotices': 'engine',
-  'dev.autoqa': 'engine',
+  // `dev.autoqa` posts tool grievances to https://qa.omp.sh and the fork never
+  // registers a consent handler, so this toggle silently re-arms recording
+  // with no GUI consent surface. It crosses the enterprise boundary and stays
+  // in config.yml like `dev.autoqaPush.endpoint`.
+  'dev.autoqa': 'boundary',
   'dev.autoqaPush.endpoint': 'boundary',
   'extensionHandlers.toolCallTimeoutMs': 'engine',
   'extensionHandlers.modeControl': 'engine',
-  'extensionRenderers.assistantText': 'engine',
+  // `getAssistantTextRenderers`/`getLinkSchemes` have no consumer in this app;
+  // the switch only changes OMP's terminal renderer.
+  'extensionRenderers.assistantText': 'tui-only',
   'extensionRenderers.transcriptPresenters': 'tui-only',
   'browser.enabled': 'tools:available',
   'browser.cdpUrl': 'boundary',
@@ -503,10 +514,14 @@ const RAW_PLACEMENTS: Readonly<Record<string, string>> = {
   'ida.idleCloseSec': 'tools:ida',
   'mcp.enableProjectConfig': 'engine',
   'mcp.startupTimeoutMs': 'engine',
-  'mcp.renderMarkdownResults': 'engine',
+  // `setMcpRenderMarkdownResults` is a pi-tui renderer switch.
+  'mcp.renderMarkdownResults': 'tui-only',
   'mcp.notifications': 'engine',
   'mcp.notificationDebounceMs': 'engine',
-  'spotlight.experiment.enabled': 'engine',
+  // `spotlight.experiment.enabled` ships tool output to
+  // https://cloud.stencil.so with a Stencil credential: egress, not a GUI
+  // behaviour.
+  'spotlight.experiment.enabled': 'boundary',
 
   // --- Untabbed settings explicitly placed ---
   // The role record is drawn by the shared `ModelRoleEditor`, not by a generic
@@ -610,6 +625,9 @@ const CONDITIONS: Readonly<Record<string, (settings: Settings) => boolean>> = {
   usageAwareFallbackEnabled: (settings) => cfgRetryUsageAwareFallback.get(settings) === true,
   planModeEnabled: (settings) => cfgPlanEnabled.get(settings) === true,
   planAutosaveEnabled: (settings) => cfgPlanEnabled.get(settings) === true,
+  // OMP's `settings-ui.ts` gates this on `cfgDefaultThinkingLevel === "auto"`;
+  // the auto thinking ceiling only applies to the auto preset.
+  autoThinkingActive: (settings) => cfgDefaultThinkingLevel.get(settings) === 'auto',
 };
 
 export interface OmpSettingPresentation {

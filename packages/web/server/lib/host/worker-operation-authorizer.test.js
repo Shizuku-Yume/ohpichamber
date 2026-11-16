@@ -36,7 +36,6 @@ beforeAll(async () => {
 describe('Host MCP OAuth authorization', () => {
   it('refuses MCP sign-in under enterprise policy and sanitizes flow endpoints otherwise', async () => {
     expect(await authorize(scope, { type: 'mcp-oauth', server, configuration: {} })).toMatchObject({ allowed: false, code: 'enterprise_mode', status: 403 });
-    expect(await authorize(scope, { type: 'mcp-oauth', server, configuration: {} })).not.toEqual({ allowed: true });
     expect(await authorize(scope, { type: 'provider-entry' })).toMatchObject({ allowed: false, code: 'enterprise_mode', status: 403 });
     expect(await applyAuthorize(scope, { type: 'mcp-oauth', server, configuration: {} })).toEqual({ allowed: true });
     const configuration = Object.fromEntries(endpointFields.map(field => [field, `https://oauth.example/${field}?resource=tools`]));

@@ -1340,3 +1340,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** a provider name or OMP-side convention needs a leading dot or hyphen.
 - **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - `OmpSettingsState` carries `placementCounts`, because the page cannot count rows it never receives
+
+- **Decided:** `OmpSettingsState` gains `placementCounts: { tuiOnly, boundary, elsewhere }`. The Agent Service computes all three from the placement table over every registry row: `tuiOnly` and `boundary` count rows by placement, and `elsewhere` counts the rows state actually carries for another Settings page (`page` or `owned-by`). The 高级 config.yml footer renders those three numbers as its three sentences instead of deriving them.
+- **Instead of:** letting `OmpSettingsPage` count the rows it has and label the remainder "not shown", or adding the absent rows to `settings` with a `hidden` flag for the page to filter.
+- **Because:** `tui-only` and `boundary` rows never reach `state().settings`, so the page sees neither their ids nor their placement; anything it computed would have to infer the split from `totalCount` minus what it drew, which cannot distinguish terminal presentation from egress from another page's owner. Shipping absent rows in `settings` would have widened the write surface to rows the page must never offer. The measured footer is `tuiOnly: 83`, `elsewhere: 179`, `boundary: 42` over 602 registry / 265 exposed rows.
+- **Mine:** yes
+- **Revisit when:** OMP exposes placement in a runtime API, or another surface needs the same split.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - `providers.autoThinkingMaxEffort` sits on 常用 and `read.summarize.enabled` is owned by the preset row
+
+- **Decided:** `providers.autoThinkingMaxEffort` is placed on 常用 in the `toolsAndModels` group, gated by the new `autoThinkingActive` condition (shown only when `defaultThinkingLevel` is `auto`), rather than on 高级. `read.summarize.enabled` has no row of its own: the `preset.readSummary` row owns it and writes it together with the four thresholds, and 编辑与读取 remains the tab that row lives on.
+- **Instead of:** putting the auto ceiling with the other model-internals tuning on 高级, and giving `read.summarize.enabled` its own switch beside the preset.
+- **Because:** the ceiling only scales the automatic thinking level, so a user who never sets `auto` never acts on it — 高级 would advertise a knob that does nothing for them. A separate enable switch next to a preset that already sets it produced two controls for one value and a state where the switch contradicts the preset.
+- **Mine:** yes
+- **Revisit when:** OMP makes the auto ceiling apply outside the `auto` preset, or the preset stops writing `enabled`.
+- **Effort:** ux-feedback-2026-11-15

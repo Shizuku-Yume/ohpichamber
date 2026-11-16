@@ -140,6 +140,8 @@ export const createWorkerOperationAuthorizer = ({
     return policy.providerEntry ? allowed : denied('The workspace does not allow provider credential entry');
    }
    if (request.type === 'mcp-server' || request.type === 'mcp-oauth') {
+    if (request.type === 'mcp-oauth' && isEnterpriseMode(enterprisePolicyOptions))
+     return denied('MCP sign-in is not available in enterprise mode', 'enterprise_mode', 403);
     const permitted = request.proposed === true
      ? proposedServerPermitted(request.server)
      : policy.mcpServers.some(server => isDeepStrictEqual(server, request.server));

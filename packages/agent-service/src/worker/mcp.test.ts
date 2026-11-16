@@ -9,8 +9,9 @@ import {
   WorkerMcp,
 } from './mcp.ts';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
-import { ProblemCodeSchema } from '@openchamber/agent-contract';
+import { MCP_OAUTH_LOOPBACK_CALLBACK_PORT, MCP_OAUTH_LOOPBACK_REDIRECT_URI, ProblemCodeSchema } from '@openchamber/agent-contract';
 import type { MCPConfigurationState } from '@openchamber/agent-contract';
+import { ProjectionError } from '../projection/journal.ts';
 import { operationErrorDetail, WorkerReplySchema } from '../protocol.ts';
 
 describe('MCP configuration management and unmanaged projection', () => {
@@ -672,6 +673,67 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
     });
   });
 
+  test('a local start pins the dedicated loopback redirect instead of a random fallback', async () => {
+    await withOAuthWorker('issue', async ({ mcp, configuration }) => {
+      const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      // A provider registers the URI it first saw; the pinned port makes every
+      // later attempt use the same one, so a registered client keeps working.
+      expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(MCP_OAUTH_LOOPBACK_REDIRECT_URI);
+      expect(MCP_OAUTH_LOOPBACK_REDIRECT_URI).toBe(`http://localhost:${MCP_OAUTH_LOOPBACK_CALLBACK_PORT}/callback`);
+      // The launch target must point at the same loopback listener the provider
+      // will call back, not a different port.
+      expect(started.pendingFlow.launchUrl).toBe(`http://localhost:${MCP_OAUTH_LOOPBACK_CALLBACK_PORT}/launch`);
+      await mcp.oauthExecute('linear', { action: 'cancel', ...owner, flowId: started.pendingFlow.flowId }, configuration);
+    });
+  });
+
+  test('a Host redirect completes through callbackInput without a loopback listener', async () => {
+    const hostRedirect = 'https://chamber.example.test/api/agent/v1/mcp/oauth/callback';
+    await withOAuthWorker('issue', async ({ mcp, configuration }) => {
+      const started = await mcp.oauthExecute('linear', {
+        action: 'start', ...owner, oauth: { redirectUri: hostRedirect },
+      }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      // The redirect the caller named reaches the Host, so the flow must not
+      // advertise a loopback launch target for it.
+      expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(hostRedirect);
+      expect(started.pendingFlow.launchUrl).toBeUndefined();
+
+      const state = authorizationUrl.searchParams.get('state');
+      if (!state) throw new Error('Missing state');
+      const completed = await mcp.oauthExecute('linear', {
+        action: 'complete', ...owner, flowId: started.pendingFlow.flowId,
+        callbackInput: `${hostRedirect}?code=stub-code&state=${state}`,
+      }, configuration);
+      expect(completed).toMatchObject({ serverId: 'linear', status: 'authenticated', authenticated: true });
+    });
+  });
+
+  test('a loopback-shaped redirect the flow does not bind advertises no launch URL', async () => {
+    // An SSH tunnel's Host is a loopback address on a port this worker does not
+    // own. OMP still offers a `/launch` URL for any loopback hostname, but that
+    // port belongs to the Host, so the browser would hit a dead route there.
+    const tunnelRedirect = 'http://127.0.0.1:62545/api/agent/v1/mcp/oauth/callback';
+    await withOAuthWorker('issue', async ({ mcp, configuration }) => {
+      const started = await mcp.oauthExecute('linear', {
+        action: 'start', ...owner, oauth: { redirectUri: tunnelRedirect },
+      }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      expect(started.pendingFlow.launchUrl).toBeUndefined();
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      const state = authorizationUrl.searchParams.get('state');
+      if (!state) throw new Error('Missing state');
+      const completed = await mcp.oauthExecute('linear', {
+        action: 'complete', ...owner, flowId: started.pendingFlow.flowId,
+        callbackInput: `${tunnelRedirect}?code=stub-code&state=${state}`,
+      }, configuration);
+      expect(completed).toMatchObject({ status: 'authenticated', authenticated: true });
+    });
+  });
+
   test('a token exchange failure after the handoff is reported once on the next read', async () => {
     await withOAuthWorker('issue', async ({ mcp, configuration, base }) => {
       const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
@@ -693,5 +755,50 @@ describe('MCP OAuth failure pass-through through WorkerMcp', () => {
       const after = await mcp.oauthRead('linear', configuration);
       expect(after).not.toHaveProperty('error');
     }, 'fail');
+  });
+});
+
+describe('MCP OAuth policy refusal', () => {
+  test('an enterprise-mode refusal keeps its code instead of becoming a provider failure', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'mcp-oauth-policy-'));
+    try {
+      const agentDir = join(home, '.omp', 'agent');
+      const projectDir = join(home, 'project');
+      await mkdir(agentDir, { recursive: true });
+      await mkdir(projectDir, { recursive: true });
+      const userPath = join(agentDir, 'mcp.json');
+      const projectPath = join(projectDir, '.omp', 'mcp.json');
+      await writeFile(userPath, `${JSON.stringify({
+        mcpServers: { linear: { type: 'http', url: 'https://mcp.linear.app/mcp' } },
+      }, null, 2)}\n`, 'utf8');
+      const configuration = await readNativeMcpConfigurationIfPresent(projectPath, 'workspace-1', userPath);
+      if (!configuration) throw new Error('user-scope server must be readable');
+      const authStorage = await discoverAuthStorage(agentDir, { cwd: projectDir });
+      const mcp = new WorkerMcp({
+        cwd: projectDir,
+        configPath: projectPath,
+        userConfigPath: userPath,
+        worker: { rootSessionId: 'root-1', workspaceId: 'workspace-1', workerGeneration: 'generation-1' },
+        authStorage,
+        resolveCredentialRef: async reference => reference,
+        resolveCommand: async command => command.command,
+        authorizeServer: async () => { },
+        // The Host refuses the crossing the way its authorizer does.
+        authorizeOAuth: async () => {
+          throw new ProjectionError(403, 'enterprise_mode', 'MCP sign-in is not available in enterprise mode.');
+        },
+        sanitizeTool: tool => tool,
+        onCatalog: () => { },
+        onRuntimeFailure: () => { },
+        isCurrent: () => true,
+      });
+      await expect(mcp.oauthExecute('linear', {
+        action: 'start', persistedRevision: configuration.persistedRevision, workerGeneration: 'generation-1',
+      }, configuration)).rejects.toMatchObject({
+        code: 'enterprise_mode', status: 403, message: 'MCP sign-in is not available in enterprise mode.',
+      });
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
   });
 });

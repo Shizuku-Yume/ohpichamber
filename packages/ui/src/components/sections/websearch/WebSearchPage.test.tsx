@@ -14,6 +14,7 @@ Object.assign(globalThis, {
   Element: browser.Element,
   HTMLElement: browser.HTMLElement,
   HTMLInputElement: browser.HTMLInputElement,
+  HTMLButtonElement: browser.HTMLButtonElement,
   Event: browser.Event,
   MouseEvent: browser.MouseEvent,
   DOMRect: browser.DOMRect,
@@ -176,42 +177,41 @@ describe('WebSearchPage', () => {
     expect(loads).toBe(1);
   });
 
-  // The fallback chain is an ordered list saved whole: a drag, an add and a
-  // remove each write the complete chain, and the primary provider or an
-  // unconfigured provider is never offered in the add menu.
-  test('fallback providers reorder, add and remove through the saved chain', async () => {
+  const entry = (providerId: string, name: string, overrides: Partial<WebSearchProviderEntry> = {}): WebSearchProviderEntry => ({
+    providerId,
+    name,
+    configured: true,
+    requiresCredential: true,
+    isSelfHosted: false,
+    credentialConfigured: true,
+    credentialWritable: true,
+    ...overrides,
+  });
+
+  const fallbackSnapshot = (fallbackProviderIds: string[]): WebSearchSnapshot => ({
+    workspaceId: 'workspace-1',
+    scope: getWebSearchScopeKey(),
+    revision: '1',
+    enabled: true,
+    selectedProviderId: 'tavily',
+    fallbackProviderIds,
+    timeoutSeconds: 30,
+    providers: [
+      entry('tavily', 'Tavily'),
+      entry('brave', 'Brave Search', { credentialConfigured: false }),
+      entry('exa', 'Exa'),
+      entry('searxng', 'SearXNG', { requiresCredential: false, credentialConfigured: false }),
+      entry('serper', 'Serper', { configured: false, requiresCredential: false, credentialConfigured: false }),
+    ],
+  });
+
+  const renderWithSnapshot = async (initial: WebSearchSnapshot) => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
 
-    const scope = getWebSearchScopeKey();
-    const entry = (providerId: string, name: string, overrides: Partial<WebSearchProviderEntry> = {}): WebSearchProviderEntry => ({
-      providerId,
-      name,
-      configured: true,
-      requiresCredential: true,
-      isSelfHosted: false,
-      credentialConfigured: true,
-      credentialWritable: true,
-      ...overrides,
-    });
-    let snapshot: WebSearchSnapshot = {
-      workspaceId: 'workspace-1',
-      scope,
-      revision: '1',
-      enabled: true,
-      selectedProviderId: 'tavily',
-      fallbackProviderIds: ['brave', 'searxng'],
-      timeoutSeconds: 30,
-      providers: [
-        entry('tavily', 'Tavily'),
-        entry('brave', 'Brave Search'),
-        entry('exa', 'Exa'),
-        entry('searxng', 'SearXNG', { requiresCredential: false, credentialConfigured: false }),
-        entry('serper', 'Serper', { configured: false, credentialConfigured: false }),
-      ],
-    };
     const saved: string[][] = [];
+    let snapshot = initial;
     useWebSearchStore.setState({
       state: { kind: 'ready', snapshot },
       error: null,
@@ -220,7 +220,7 @@ describe('WebSearchPage', () => {
       load: async () => { },
       update: async (changes) => {
         if (changes.fallbackProviderIds) saved.push(changes.fallbackProviderIds);
-        snapshot = { ...snapshot, fallbackProviderIds: changes.fallbackProviderIds ?? snapshot.fallbackProviderIds };
+        snapshot = { ...snapshot, ...changes, fallbackProviderIds: changes.fallbackProviderIds ?? snapshot.fallbackProviderIds };
         useWebSearchStore.setState({ state: { kind: 'ready', snapshot } });
         return true;
       },
@@ -238,45 +238,97 @@ describe('WebSearchPage', () => {
     if (!(section instanceof HTMLElement)) throw new Error('The fallback section did not render');
     const handles = () => Array.from(section.querySelectorAll<HTMLButtonElement>('button[aria-label^="Drag "]'));
     const rowNames = () => handles().map((handle) => handle.parentElement?.querySelector('.typography-ui-label.text-foreground')?.textContent);
-    const press = (target: EventTarget, code: string) => {
-      target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code, key: code === 'Space' ? ' ' : code }));
-    };
+    return { section, saved, handles, rowNames };
+  };
+
+  // An empty chain says so in one line and offers only the add action; there is
+  // no row chrome and no always-"configured" pill to suggest otherwise.
+  test('an empty fallback chain shows one helper line and the add action', async () => {
+    const { section, rowNames } = await renderWithSnapshot(fallbackSnapshot([]));
+
+    expect(rowNames()).toEqual([]);
+    expect(section.textContent).toContain('No fallbacks. The primary provider answers alone.');
+    const add = [...section.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.includes('Add fallback provider'));
+    expect(add).toBeInstanceOf(HTMLButtonElement);
+    expect(add?.disabled).toBe(false);
+  });
+
+  test('nothing addable disables the add action and explains why', async () => {
+    const snapshot = fallbackSnapshot([]);
+    snapshot.providers = [entry('tavily', 'Tavily'), entry('serper', 'Serper', { configured: false, credentialConfigured: false })];
+    const { section } = await renderWithSnapshot(snapshot);
+
+    const add = [...section.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.includes('Add fallback provider'));
+    expect(add?.disabled).toBe(true);
+    expect(section.textContent).toContain('Every configured provider is already a fallback, or none is configured.');
+  });
+
+  // The primary provider and an unconfigured provider are never offered; a
+  // picked provider is appended to the chain in one write.
+  test('the add menu lists only addable providers and appends the pick', async () => {
+    const { section, saved, rowNames } = await renderWithSnapshot(fallbackSnapshot(['brave', 'searxng']));
+
+    const trigger = [...section.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent?.includes('Add fallback provider'));
+    if (!trigger) throw new Error('The add-fallback trigger did not render');
+    await act(async () => { trigger.click(); });
+    const items = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    // Serper is unconfigured and Tavily is the primary, so only Exa is offered.
+    expect(items().map((item) => item.textContent?.trim())).toEqual(['Exa']);
+
+    await act(async () => { items()[0]?.click(); });
+    expect(saved).toEqual([['brave', 'searxng', 'exa']]);
+    expect(rowNames()).toEqual(['Brave Search', 'SearXNG', 'Exa']);
+  });
+
+  // A fallback carries a pill only when its key or setup is missing; removal is
+  // an icon-only ghost button addressed by its localised label.
+  test('a row shows a warning only when setup is missing and removes by icon label', async () => {
+    const { section, saved, handles, rowNames } = await renderWithSnapshot(fallbackSnapshot(['brave', 'serper']));
+
+    expect(rowNames()).toEqual(['Brave Search', 'Serper']);
+    const rows = handles().map((handle) => handle.parentElement);
+    expect(rows[0]?.textContent).toContain('Needs a key');
+    expect(rows[1]?.textContent).toContain('Needs setup');
+
+    const remove = section.querySelector<HTMLButtonElement>('button[aria-label="Remove Brave Search from fallbacks"]');
+    expect(remove).toBeInstanceOf(HTMLButtonElement);
+    expect(remove?.textContent?.trim()).toBe('');
+    await act(async () => { remove?.click(); });
+    expect(saved[saved.length - 1]).toEqual(['serper']);
+    expect(rowNames()).toEqual(['Serper']);
+  });
+
+  // A fully configured fallback says nothing: the list already implies that a
+  // row was addable, so only a missing key or setup is worth a pill.
+  test('a fully configured fallback carries no status pill', async () => {
+    const { section } = await renderWithSnapshot(fallbackSnapshot(['exa']));
+
+    expect(section.textContent).toContain('Exa');
+    expect(section.textContent).not.toContain('Configured');
+  });
+
+  // The chain is saved whole and in order, so a keyboard drag writes the same
+  // complete list a mouse drag does.
+  test('a fallback reorders with the keyboard handle and saves the new order', async () => {
+    const { saved, handles, rowNames } = await renderWithSnapshot(fallbackSnapshot(['brave', 'searxng']));
 
     expect(rowNames()).toEqual(['Brave Search', 'SearXNG']);
-
-    // Drag SearXNG above Brave Search with the handle. Rows get fixed rectangles so the drop target is known.
     handles().forEach((handle, index) => {
       if (handle.parentElement) handle.parentElement.getBoundingClientRect = () => new DOMRect(0, index * 40, 400, 36);
     });
+    const press = (target: EventTarget, code: string) => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, code, key: code === 'Space' ? ' ' : code }));
+    };
     const searxngHandle = handles()[1];
     if (!searxngHandle) throw new Error('The SearXNG handle did not render');
     await act(async () => { press(searxngHandle, 'Space'); });
     await act(async () => { press(document, 'ArrowUp'); });
     await act(async () => { press(document, 'Space'); });
+
     expect(saved).toEqual([['searxng', 'brave']]);
     expect(rowNames()).toEqual(['SearXNG', 'Brave Search']);
-
-    // The add menu offers only the configured provider that is not primary and not already in the chain.
-    const trigger = section.querySelector<HTMLElement>('[role="combobox"]');
-    if (!trigger) throw new Error('The add-fallback select did not render');
-    await act(async () => {
-      trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
-    });
-    expect(Array.from(document.querySelectorAll('[role="option"]')).map((option) => option.textContent)).toEqual(['Exa']);
-    await act(async () => {
-      const exa = document.querySelector<HTMLElement>('[role="option"]');
-      exa?.click();
-    });
-    expect(saved[saved.length - 1]).toEqual(['searxng', 'brave', 'exa']);
-    // The add menu resets to its placeholder after a pick.
-    expect(trigger.textContent).toContain('Add fallback provider');
-    expect(trigger.textContent).not.toContain('Exa');
-
-    // Removing a fallback saves the chain without it.
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label="Remove Brave Search from fallbacks"]')?.click();
-    });
-    expect(saved[saved.length - 1]).toEqual(['searxng', 'exa']);
-    expect(rowNames()).toEqual(['SearXNG', 'Exa']);
   });
 });

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
-import type { MCPOAuthResult } from '@openchamber/agent-contract';
+import type { MCPOAuthResult, MCPServerConfig } from '@openchamber/agent-contract';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Element as HappyElement, HTMLElement, Window } from 'happy-dom';
@@ -563,14 +563,25 @@ const confirmScopeInstall = async (body: HappyElement) => {
   await settle();
 };
 
-test('installing a local entry writes env values before the save and references them from the transport', async () => {
+const notConnectedMcpMutation = (server: MCPServerConfig): McpMutationResult => ({
+  ok: false as const,
+  outcome: 'saved-not-connected' as const,
+  error: 'The MCP server could not connect.',
+  result: {
+    kind: 'mcp' as const,
+    status: 'no-active-workers' as const,
+    outcome: 'saved-not-connected' as const,
+    configuration: { workspaceId: 'workspace', persistedRevision: '1', config: { servers: [server] } },
+    workers: [],
+  },
+});
+
+test('installing a local entry saves it enabled, then writes env credentials and references them', async () => {
   useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
   useUIStore.setState({ settingsProjectPath: '/repo' });
-  const savedServers: Array<Record<string, unknown>> = [];
+  const savedServers: MCPServerConfig[] = [];
   const saves: string[] = [];
   useMcpConfigStore.setState({
-    // A new env-carrying server is first staged disabled so the credential
-    // route has a configured server that cannot fail its own apply.
     createMcp: async (config) => {
       saves.push('create');
       const merged = { ...grafanaServer, ...config };
@@ -592,15 +603,15 @@ test('installing a local entry writes env values before the save and references 
 
   expect(saves).toEqual(['create', 'update']);
   expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid', 'fake-key-0000']);
-  // The staging save is disabled and carries no secret; the enabling save
-  // carries only references.
-  const staged = savedServers[0];
-  expect(staged.enabled).toBe(false);
-  const saved = savedServers.at(-1);
-  expect(saved?.enabled).toBe(true);
-  const transport = saved?.transport as Record<string, unknown> | undefined;
+  // The first save is an ordinary enabled server without references; the save
+  // after the credential writes carries only references.
+  const first = savedServers[0];
+  expect(first.enabled).toBe(true);
+  expect(first.transport.type === 'stdio' ? first.transport.envCredentialRefs : undefined).toBeUndefined();
+  const last = savedServers.at(-1);
+  const transport = last?.transport;
   expect(transport?.type).toBe('stdio');
-  expect(transport?.envCredentialRefs).toEqual({
+  expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({
     GRAFANA_URL: 'credential-grafana-1',
     GRAFANA_API_KEY: 'credential-grafana-2',
   });
@@ -610,12 +621,76 @@ test('installing a local entry writes env values before the save and references 
     expect(serialized.includes('fake-key-0000')).toBe(false);
   }
   expect(errors).toEqual([]);
+  expect(successes).toEqual(['Grafana installed for all your projects']);
 });
 
-test('a handshake failure after the env credentials are saved keeps the references', async () => {
+test('a first save that only persisted still gets its env credentials and the second result decides the toast', async () => {
   useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
   useUIStore.setState({ settingsProjectPath: '/repo' });
-  const savedServers: Array<Record<string, unknown>> = [];
+  const savedServers: MCPServerConfig[] = [];
+  useMcpConfigStore.setState({
+    // The server is saved but cannot connect before its environment exists:
+    // the store re-publishes the persisted configuration and returns ok:false
+    // with that result, which is not this install's outcome.
+    createMcp: async (config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return notConnectedMcpMutation(merged);
+    },
+    updateMcp: async (_serverId, config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+  });
+
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid', apiKey: 'fake-key-0000' });
+  await confirmScopeInstall(body);
+
+  expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid', 'fake-key-0000']);
+  const last = savedServers.at(-1);
+  const transport = last?.transport;
+  expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({
+    GRAFANA_URL: 'credential-grafana-1',
+    GRAFANA_API_KEY: 'credential-grafana-2',
+  });
+  // The first save's connection failure is not reported: the save after the
+  // references succeeded.
+  expect(errors).toEqual([]);
+  expect(successes).toEqual(['Grafana installed for all your projects']);
+});
+
+test('a refused first save writes no credentials and reports that refusal', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const saves: string[] = [];
+  useMcpConfigStore.setState({
+    // No persisted result: the save itself was refused, so there is no server
+    // for a credential to belong to.
+    createMcp: async () => {
+      saves.push('create');
+      return { ok: false as const, error: 'The proposed MCP server is disabled or is not managed by OpenChamber' };
+    },
+    updateMcp: async () => {
+      saves.push('update');
+      return appliedMcpMutation();
+    },
+  });
+
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
+  await confirmScopeInstall(body);
+
+  expect(saves).toEqual(['create']);
+  expect(credentialWrites).toEqual([]);
+  expect(errors).toEqual(['Could not install Grafana']);
+});
+
+test('the save after the env references reports its own handshake failure', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const savedServers: MCPServerConfig[] = [];
   useMcpConfigStore.setState({
     createMcp: async (config) => {
       const merged = { ...grafanaServer, ...config };
@@ -623,8 +698,7 @@ test('a handshake failure after the env credentials are saved keeps the referenc
       useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
       return appliedMcpMutation();
     },
-    // The final, enabled save is saved but cannot connect: a real handshake
-    // failure, not a missing credential.
+    // Saved with the references, but Grafana itself refused the handshake.
     updateMcp: async (_serverId, config) => {
       const merged = { ...grafanaServer, ...config };
       savedServers.push(merged);
@@ -637,7 +711,8 @@ test('a handshake failure after the env credentials are saved keeps the referenc
   await confirmScopeInstall(body);
 
   expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid']);
-  const transport = savedServers.at(-1)?.transport as Record<string, unknown> | undefined;
-  expect(transport?.envCredentialRefs).toEqual({ GRAFANA_URL: 'credential-grafana-1' });
+  const last = savedServers.at(-1);
+  const transport = last?.transport;
+  expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({ GRAFANA_URL: 'credential-grafana-1' });
   expect(errors).toEqual(['Could not install Grafana']);
 });

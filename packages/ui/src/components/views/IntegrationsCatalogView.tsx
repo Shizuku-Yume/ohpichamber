@@ -27,7 +27,7 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { resolveMcpDirectory, selectMcpServersForDirectory, useMcpConfigStore } from '@/stores/useMcpConfigStore';
+import { resolveMcpDirectory, selectMcpServersForDirectory, useMcpConfigStore, type McpMutationResult } from '@/stores/useMcpConfigStore';
 import { getMcpServerStatus, useMcpStore, type McpServerRuntimeState } from '@/stores/useMcpStore';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 import { useSkillsStore, type DiscoveredSkill } from '@/stores/useSkillsStore';
@@ -537,58 +537,62 @@ export function IntegrationsCatalogView(): React.ReactNode {
           const filledEnv = component.local && (component.local.envInputs?.length ?? 0) > 0
             ? readFilledEnvValues(entry, component)
             : [];
-          // A local server that needs its environment cannot connect before the
-          // values and their references exist, so they are written first. The
-          // credential route addresses a configured server, which for a new id
-          // is a disabled staging save: an apply with nothing enabled cannot
-          // fail, and the next save enables it with the references.
-          let envRefs: Record<string, string> = existingEnvRefs;
-          let staged = false;
-          if (filledEnv.length > 0 && !existingServer) {
-            const staging = await createMcp({ ...config, enabled: false }, settingsDirectory)
+          // The credential route addresses a configured server, and an env
+          // reference is what lets a local server connect. So the server is
+          // saved first (enabled, as usual), then each value is written as a
+          // workspace credential, then one save adds the references. A first
+          // save that persisted but could not connect is expected here and is
+          // not the install's outcome; the save after the references is.
+          let attempted: { result: McpMutationResult } | { failure: unknown };
+          if (filledEnv.length > 0) {
+            const firstConfig: MCPServerConfig = config.transport.type === 'stdio' && Object.keys(existingEnvRefs).length > 0
+              ? { ...config, transport: { ...config.transport, envCredentialRefs: existingEnvRefs } }
+              : config;
+            const firstSave = await (existingServer ? updateMcp(entry.id, firstConfig, settingsDirectory) : createMcp(firstConfig, settingsDirectory))
               .then((result) => ({ result }))
               .catch((failure) => ({ failure }));
-            if ('failure' in staging) {
+            if ('failure' in firstSave) {
               failed = true;
-              errorDetail = staging.failure instanceof Error ? staging.failure.message : String(staging.failure);
+              errorDetail = firstSave.failure instanceof Error ? firstSave.failure.message : String(firstSave.failure);
               continue;
             }
-            if (!staging.result.ok) {
+            // No `result` means the save itself was refused (authorization,
+            // validation, conflict), so nothing was persisted to reference.
+            if (!firstSave.result.ok && firstSave.result.result === undefined) {
               failed = true;
-              errorDetail = staging.result.error;
+              errorDetail = firstSave.result.error;
               continue;
             }
-            staged = true;
-          }
-          if (filledEnv.length > 0) {
+            let written: { ok: true; refs: Record<string, string> } | { ok: false; error: string };
             try {
-              const written = await writeMcpEnvCredentials(entry, filledEnv);
-              if (!written.ok) {
-                failed = true;
-                errorDetail = written.error;
-                if (staged) await deleteMcp(entry.id, settingsDirectory).catch(() => undefined);
-                continue;
-              }
-              envRefs = { ...envRefs, ...written.refs };
+              written = await writeMcpEnvCredentials(entry, filledEnv);
             } catch (failure) {
               failed = true;
               errorDetail = failure instanceof Error ? failure.message : String(failure);
-              if (staged) await deleteMcp(entry.id, settingsDirectory).catch(() => undefined);
               continue;
             }
+            if (!written.ok) {
+              // The server stays saved without its environment, as a token
+              // install stays saved when its credential write fails.
+              failed = true;
+              errorDetail = written.error;
+              continue;
+            }
+            const refs = { ...existingEnvRefs, ...written.refs };
+            const finalConfig: MCPServerConfig = config.transport.type === 'stdio'
+              ? { ...config, transport: { ...config.transport, envCredentialRefs: refs } }
+              : config;
+            attempted = await updateMcp(entry.id, finalConfig, settingsDirectory)
+              .then((result) => ({ result }))
+              .catch((failure) => ({ failure }));
+          } else {
+            attempted = await (existingServer ? updateMcp(entry.id, config, settingsDirectory) : createMcp(config, settingsDirectory))
+              .then((result) => ({ result }))
+              .catch((failure) => ({ failure }));
           }
-          const savedConfig: MCPServerConfig = Object.keys(envRefs).length > 0 && config.transport.type === 'stdio'
-            ? { ...config, transport: { ...config.transport, envCredentialRefs: envRefs } }
-            : config;
-          const attempted = await (staged || existingServer ? updateMcp(entry.id, savedConfig, settingsDirectory) : createMcp(savedConfig, settingsDirectory))
-            .then((result) => ({ result }))
-            .catch((failure) => ({ failure }));
           if ('failure' in attempted) {
             failed = true;
             errorDetail = attempted.failure instanceof Error ? attempted.failure.message : String(attempted.failure);
-            // The staging save is the catalog's own disabled placeholder; an
-            // enabling save that could not be attempted leaves nothing to keep.
-            if (staged) await deleteMcp(entry.id, settingsDirectory).catch(() => undefined);
             continue;
           }
           // A server saved with authorization pending is a sign-in, not a
@@ -671,7 +675,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
     } finally {
       setBusyId(null);
     }
-  }, [attachMcpToken, createMcp, deleteMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readFilledEnvValues, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp, writeMcpEnvCredentials]);
+  }, [attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readFilledEnvValues, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp, writeMcpEnvCredentials]);
   /** One Uninstall pass: removes the MCP server, the plugin entries, and the installed skills. */
   const uninstallEntry = React.useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);

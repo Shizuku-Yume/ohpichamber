@@ -411,7 +411,8 @@ interface SettingsDisclosureProps {
   secondary?: React.ReactNode;
   /**
    * Trailing control (a checkbox row, say). It sits beside the toggle rather
-   * than inside it, so it stays its own hit target.
+   * than inside it, so it stays its own hit target — and adds its own focus
+   * stop, so a header is two tab stops rather than one.
    */
   accessory?: React.ReactNode;
   expanded: boolean;
@@ -446,13 +447,16 @@ export const SettingsDisclosure: React.FC<SettingsDisclosureProps> = ({
           type="button"
           variant="ghost"
           aria-expanded={expanded}
-          aria-controls={contentId}
+          aria-controls={expanded ? contentId : undefined}
           onClick={onToggle}
           className="flex h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1.5"
         >
           <Icon
-            name={expanded ? 'arrow-down-s' : 'arrow-right-s'}
-            className="size-4 shrink-0 text-muted-foreground"
+            name="arrow-right-s"
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground transition-transform duration-150',
+              expanded && 'rotate-90 rtl:-rotate-90',
+            )}
           />
           <span className={cn(SETTINGS_FIELD_LABEL_CLASS, 'min-w-0 truncate font-medium')}>
             {title}

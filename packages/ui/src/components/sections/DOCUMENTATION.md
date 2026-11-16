@@ -233,6 +233,17 @@ the panel only shows them.
 Props: `serverId`, `directory`, `onConnected` (runs the server's connect) and
 two install hooks, `autoStart` and `onAutoStartConsumed`.
 
+Every start names the redirect the runtime can actually complete
+(`mcpOAuthRedirect.ts`): the Agent Service's pinned loopback callback
+(`MCP_OAUTH_LOOPBACK_REDIRECT_URI`, `http://localhost:38471/callback`) when the
+UI runs on the Host machine, and `<Host origin>/api/agent/v1/mcp/oauth/callback`
+otherwise — remote web, Capacitor mobile, and a desktop window connected to
+another Host (including over its SSH tunnel). Relay mode keeps the loopback
+redirect because no Host origin is browser-reachable there. A redirect URI the
+user types keeps its meaning. The Host route receives the code on the Host and
+hands it to the `complete` action; the panel's poll then sees the flow finish
+the same way it does for a loopback callback.
+
 Without `autoStart` the panel shows the form: client ID, client secret,
 scopes and redirect URI, then Authorize. The client secret is written through
 the dedicated credential endpoint and only its reference travels in the start
@@ -282,6 +293,11 @@ Failures are read by their stable code:
   beside the client-ID field, which is revealed and focused, so a client id
   the provider already approved can be typed and retried. Figma is the known
   case: its registration endpoint answers 403 to unlisted clients.
+- `enterprise_mode` — the Host refused MCP sign-in because the administrator's
+  policy does not allow it. The panel shows
+  `integrationsCatalog.oauth.enterpriseMode` as an info line (in every locale)
+  rather than the Host's fixed English sentence: the user can act on it by
+  asking their administrator.
 - Anything else — the provider's message in red with the form still available.
 
 A flow that fails after the browser handoff (consent denied, state mismatch,

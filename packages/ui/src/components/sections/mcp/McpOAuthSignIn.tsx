@@ -12,6 +12,7 @@ import { useI18n } from '@/lib/i18n';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { openExternalUrl } from '@/lib/url';
 import { problemMessage } from '@/lib/problemMessage';
+import { currentMcpOAuthRedirect } from './mcpOAuthRedirect';
 
 /** A flow the Agent Service holds stays answerable well after a browser handoff. */
 const POLL_INTERVAL_MS = 1_500;
@@ -86,6 +87,15 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
     });
   }, []);
 
+  /** The line for a sign-in failure: policy refusals read as policy in the
+   * user's language, a cancel is neutral, and everything else is the provider's
+   * own sentence in red. */
+  const failureLine = React.useCallback((code: string, detail: string): OAuthError => {
+    if (code === 'enterprise_mode') return { text: t('integrationsCatalog.oauth.enterpriseMode'), tone: 'info' };
+    if (code === 'MCP_OAUTH_CANCELLED') return { text: t('integrationsCatalog.oauth.cancelled'), tone: 'neutral' };
+    return { text: detail, tone: 'error' };
+  }, [t]);
+
   const applyResult = React.useCallback((result: MCPOAuthResult, workspace: string, options: { openBrowser?: boolean } = {}) => {
     setState(result);
     if (result.status === 'pending') {
@@ -109,21 +119,20 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
     // A flow that failed after the browser handoff reports it here; the panel
     // keeps its form so the user can retry, and stops waiting either way.
     if (result.status === 'unauthenticated' && result.error) {
-      setError({
-        text: result.error.detail,
-        tone: result.error.code === 'MCP_OAUTH_CANCELLED' ? 'neutral' : 'error',
-      });
+      setError(failureLine(result.error.code, result.error.detail));
       return;
     }
     // Either way of finishing (poll or a pasted callback) reaches this one
     // place, so the server connects at most once.
     if (result.status === 'authenticated') void connectOnce();
-  }, [connectOnce, openAuthorizationUrlOnce]);
+  }, [connectOnce, failureLine, openAuthorizationUrlOnce]);
 
   const handleFailure = React.useCallback(async (failure: Error, workspace: string) => {
     const code = failure instanceof CanonicalApiError ? failure.problem.code : undefined;
-    if (code === 'MCP_OAUTH_CANCELLED') {
-      setError({ text: t('integrationsCatalog.oauth.cancelled'), tone: 'neutral' });
+    // A Host refusal (enterprise mode) and a cancel are not provider failures;
+    // `failureLine` says so in the user's language.
+    if (code === 'enterprise_mode' || code === 'MCP_OAUTH_CANCELLED') {
+      setError(failureLine(code, problemMessage(failure, t('integrationsCatalog.oauth.failed'))));
       return;
     }
     if (code === 'MCP_OAUTH_IN_PROGRESS') {
@@ -142,7 +151,7 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
       return;
     }
     setError({ text: problemMessage(failure, t('integrationsCatalog.oauth.failed')), tone: 'error' });
-  }, [applyResult, serverId, t]);
+  }, [applyResult, failureLine, serverId, t]);
 
   const perform = async (
     action: MCPOAuthRequest['action'],
@@ -162,13 +171,15 @@ export const McpOAuthSignIn: React.FC<McpOAuthSignInProps> = ({ serverId, direct
     try {
       let request: MCPOAuthRequest;
       if (action === 'start') {
-        const oauth: MCPOAuthConfigInput = {};
+        // The redirect is chosen by the runtime, not by whoever serves the page:
+        // a local flow returns to the Agent Service's pinned loopback listener,
+        // and a remote or mobile one returns to the Host's public callback. A
+        // value the user typed keeps its meaning.
+        const oauth: MCPOAuthConfigInput = { redirectUri: redirectUri.trim() || currentMcpOAuthRedirect() };
         const trimmedClientId = clientId.trim();
         const trimmedScopes = scopes.trim();
-        const trimmedRedirectUri = redirectUri.trim();
         if (trimmedClientId) oauth.clientId = trimmedClientId;
         if (trimmedScopes) oauth.scopes = trimmedScopes;
-        if (trimmedRedirectUri) oauth.redirectUri = trimmedRedirectUri;
         if (clientSecret) {
           assertRuntime();
           const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace, serverId, { persistedRevision: base.persistedRevision, value: clientSecret });

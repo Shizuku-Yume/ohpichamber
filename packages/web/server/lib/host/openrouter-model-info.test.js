@@ -289,6 +289,16 @@ describe('OpenRouter model info route', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('answers 413 for a request body over 64 KiB without calling OpenRouter', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(listPayload));
+    const app = createApp({ fetchImpl });
+
+    // One valid id plus padding, so only the parser's size limit can refuse it.
+    const body = JSON.stringify({ modelIds: ['anthropic/claude-sonnet-4.6'], padding: 'x'.repeat(65 * 1024) });
+    assertProblem(await request(app).post(ENDPOINT).set('Content-Type', 'application/json').send(body), 413, 'PAYLOAD_TOO_LARGE');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('serves repeated lookups from one cached fetch', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(listPayload));
     const app = createApp({ fetchImpl });

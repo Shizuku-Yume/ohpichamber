@@ -29,6 +29,7 @@ const UNIT_LABEL_KEYS = {
   kilobytes: 'settings.omp.unit.kilobytes',
   lines: 'settings.omp.unit.lines',
   columns: 'settings.omp.unit.columns',
+  calls: 'settings.omp.unit.calls',
 } satisfies Record<OmpRowUnit, I18nKey>;
 
 /** One option as the row draws it: already in the locale, with its explanation. */

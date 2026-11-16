@@ -8,7 +8,8 @@ export type OmpRowUnit =
   | 'milliseconds'
   | 'kilobytes'
   | 'lines'
-  | 'columns';
+  | 'columns'
+  | 'calls';
 
 /**
  * Suffix → unit, longest first so `Milliseconds` cannot be read as `Ms` and
@@ -42,12 +43,15 @@ interface UnitOverrides {
  * - `read.summarize.unfoldUntil` and `unfoldLimit` count visible summary lines
  *   but carry no `Lines` suffix, so they are listed here rather than by a
  *   looser suffix rule that would also match unrelated ids.
+ * - `model.toolCallLoopGuard.threshold` counts consecutive identical tool
+ *   calls, so it takes the count chip its neighbours on the page show.
  */
 const UNIT_OVERRIDES: UnitOverrides = {
   'tools.artifactMaxBytes': null,
   'tools.outputMaxColumns': null,
   'read.summarize.unfoldUntil': 'lines',
   'read.summarize.unfoldLimit': 'lines',
+  'model.toolCallLoopGuard.threshold': 'calls',
 };
 
 /** True when `id` ends with `suffix` as a whole camelCase word. */

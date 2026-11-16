@@ -33,6 +33,7 @@ import {
   applyModelCatalogInfo,
   autoFillIds,
   autoFillNoticeFor,
+  autoFillNoticeIds,
   unresolvedAutoFillIds,
   buildCustomProviderRequest,
   buildProviderDiscoveryRequest,
@@ -140,6 +141,12 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     return () => URL.revokeObjectURL(url);
   }, [pickedLogoFile]);
   const disabled = busy || discovering || autoFilling;
+  // A long list of ids would bury the row; the count carries the rest, and a
+  // bare `(+N)` reads in every language without another key.
+  const partialNoticeIds = autoFillNoticeIds(unresolvedModelIds);
+  const partialNoticeModels = partialNoticeIds.hidden > 0
+    ? `${partialNoticeIds.shown.join(', ')} (+${partialNoticeIds.hidden})`
+    : partialNoticeIds.shown.join(', ');
 
   const setField = (key: 'providerId' | 'name' | 'endpoint' | 'apiKey', value: string) => {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -219,6 +226,9 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       if (lifetime.current && runtime === getRuntimeKey()) {
         setDiscoveredModels(result.models);
         setModelsDialogOpen(true);
+        // The reviewed list changed; an old fill summary no longer describes it.
+        setAutoFillNotice(null);
+        setUnresolvedModelIds([]);
       }
     } catch (error) {
       if (lifetime.current && runtime === getRuntimeKey()) {
@@ -243,6 +253,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       return { ...previous, models: [...kept, ...added] };
     });
     setModelErrors([]);
+    setAutoFillNotice(null);
   };
 
   const removeModelRows = (modelIds: string[]) => {
@@ -253,6 +264,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       return { ...previous, models: models.length > 0 ? models : [createModelRow()] };
     });
     setModelErrors([]);
+    setAutoFillNotice(null);
   };
 
   const markTyped = (index: number, field: ModelAutoFillField) => {
@@ -565,8 +577,9 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           {discoveryError ? <p className="typography-meta text-[var(--status-error)]" role="alert">{discoveryError}</p> : null}
           {autoFillNotice ? (
             <p className="typography-meta text-muted-foreground" role="status">
-              {t(`settings.providers.page.custom.models.autofill.notice.${autoFillNotice}`,
-                { models: unresolvedModelIds.join(', ') })}
+              {autoFillNotice === 'partial'
+                ? t('settings.providers.page.custom.models.autofill.notice.partial', { models: partialNoticeModels })
+                : t(`settings.providers.page.custom.models.autofill.notice.${autoFillNotice}`)}
             </p>
           ) : null}
           {discoveredModels ? (

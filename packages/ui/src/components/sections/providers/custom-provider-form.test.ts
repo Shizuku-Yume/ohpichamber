@@ -5,6 +5,7 @@ import {
   autoFillFields,
   autoFillIds,
   autoFillNoticeFor,
+  autoFillNoticeIds,
   catalogInputs,
   unresolvedAutoFillIds,
   buildCustomProviderRequest,
@@ -461,4 +462,25 @@ test('add-all takes a padded discovered id and adds it trimmed', () => {
     .filter((model) => wanted.has(model.modelId));
   expect(added.map((model) => model.modelId)).toEqual(['model-a', 'model-b']);
   expect(added.map((model) => createDiscoveredModelRow(model).modelId)).toEqual(['model-a', 'model-b']);
+});
+
+test('unknown ids outrank "nothing to fill" on a repeat or prefilled fill', () => {
+  // A discovery already prefilled the catalogued rows, so this fill writes
+  // nothing — while two models still have no limits from any source.
+  expect(autoFillNoticeFor({ lookup: null, answered: 4, filled: 0, unresolved: ['x'] })).toBe('partial');
+  // Nothing was written and nothing is unknown: that is the "nothing" case.
+  expect(autoFillNoticeFor({ lookup: null, answered: 4, filled: 0, unresolved: [] })).toBe('nothing');
+  // No source answered at all still says so, with or without ids left.
+  expect(autoFillNoticeFor({ lookup: null, answered: 0, filled: 0, unresolved: ['x'] })).toBe('none');
+});
+
+test('the partial notice names at most ten unknown ids and counts the rest', () => {
+  const ids = Array.from({ length: 13 }, (_, index) => `unknown-${index + 1}`);
+  const capped = autoFillNoticeIds(ids);
+  expect(capped.shown).toHaveLength(10);
+  expect(capped.shown[9]).toBe('unknown-10');
+  expect(capped.hidden).toBe(3);
+
+  expect(autoFillNoticeIds(['a', 'b'])).toEqual({ shown: ['a', 'b'], hidden: 0 });
+  expect(autoFillNoticeIds([])).toEqual({ shown: [], hidden: 0 });
 });

@@ -547,11 +547,16 @@ export function unresolvedAutoFillIds(ids: readonly string[], answers: ModelCata
   return unresolved;
 }
 
+/** How many unknown ids the partial notice names before counting the rest. */
+export const AUTO_FILL_NOTICE_ID_LIMIT = 10;
+
 /**
  * What the fill reports, in order of what the reader must know: a refused or
  * failed lookup first (a catalog-only result must never read as success), then
- * the case where no source answered at all, then "nothing left to fill", then
- * the ids that stayed unknown.
+ * the case where no source answered at all, then the ids that stayed unknown,
+ * and only then "nothing left to fill". Unknown ids outrank "nothing": a
+ * second click, or a discovery that already prefilled the catalogued rows,
+ * fills nothing while those models still have no limits.
  */
 export function autoFillNoticeFor(input: {
   lookup: 'enterprise' | 'failed' | null;
@@ -561,9 +566,15 @@ export function autoFillNoticeFor(input: {
 }): AutoFillNotice | null {
   if (input.lookup) return input.lookup;
   if (input.answered === 0) return 'none';
-  if (input.filled === 0) return 'nothing';
   if (input.unresolved.length > 0) return 'partial';
+  if (input.filled === 0) return 'nothing';
   return null;
+}
+
+/** The ids a notice names, and how many it leaves to a count. */
+export function autoFillNoticeIds(ids: readonly string[]): { shown: string[]; hidden: number } {
+  const shown = ids.slice(0, AUTO_FILL_NOTICE_ID_LIMIT);
+  return { shown, hidden: Math.max(0, ids.length - shown.length) };
 }
 
 /** A row imported from a discovery result, prefilled from what the catalog already knows. */

@@ -110,10 +110,11 @@ export const createMcpOAuthPendingFlows = ({
  * that the Host would then present as its own.
  */
 export const callbackUrlForRequest = (req) => {
- const protoHeader = req.headers?.['x-forwarded-proto'];
- const proto = (typeof protoHeader === 'string' ? protoHeader.split(',')[0].trim() : '') || req.protocol || 'http';
- const hostHeader = req.headers?.['x-forwarded-host'] ?? req.headers?.host;
- const host = typeof hostHeader === 'string' ? hostHeader.split(',')[0].trim() : '';
+ // `req.protocol` and `req.host` honour the app's `trust proxy` setting, so a
+ // direct client cannot spoof the address the Host reports as its own; only a
+ // trusted proxy's `X-Forwarded-Proto`/`X-Forwarded-Host` is read.
+ const proto = typeof req.protocol === 'string' && req.protocol ? req.protocol : 'http';
+ const host = typeof req.host === 'string' ? req.host : '';
  const original = typeof req.originalUrl === 'string' ? req.originalUrl : MCP_OAUTH_CALLBACK_PATH;
  const queryIndex = original.indexOf('?');
  const search = queryIndex === -1 ? '' : original.slice(queryIndex);

@@ -135,6 +135,24 @@ describe('MCP OAuth Host callback route', () => {
     expect(requests.filter(entry => JSON.parse(entry.init.body).action === 'complete')).toHaveLength(1);
   });
 
+  it('ignores a spoofed forwarded host from a direct client', async () => {
+    await startSignIn().expect(200);
+
+    await request(app)
+      .get(`${callbackEndpoint}?code=the-code&state=${STATE}`)
+      .set('X-Forwarded-Host', 'attacker.example')
+      .set('X-Forwarded-Proto', 'https')
+      .expect(200);
+
+    const completeCall = requests.find(entry => JSON.parse(entry.init.body).action === 'complete');
+    const body = JSON.parse(completeCall.init.body);
+    // The app does not trust a direct client as a proxy, so `req.host` and
+    // `req.protocol` keep the real address and the spoofed pair never lands in
+    // the callback input the worker exchanges.
+    expect(body.callbackInput).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:\\d+${callbackEndpoint}\\?code=the-code&state=${STATE}$`));
+    expect(body.callbackInput).not.toContain('attacker.example');
+  });
+
   it('refuses an unknown state without touching the Agent Service', async () => {
     await startSignIn().expect(200);
     requests.length = 0;

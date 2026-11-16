@@ -1340,3 +1340,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** a provider name or OMP-side convention needs a leading dot or hyphen.
 - **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - MCP OAuth callback state is bound to the flow, not the initiating browser session
+
+- **Decided:** the public `GET /api/agent/v1/mcp/oauth/callback` route accepts a `state` that the Host recorded from the proxied `start` response's authorization URL. It does not bind that state to the browser session, cookie or IP that started the flow, matching the existing guest and extension-tracker public callbacks (`guests/routes.js`, `trackers/routes.js`).
+- **Instead of:** adding a second, session-bound nonce to the redirect and rejecting a callback from a different browser.
+- **Because:** the workspace MCP credential store is shared by every surface and user of that workspace, so a completed sign-in is not scoped to the browser that began it. Binding to a session cookie would break the intended remote and mobile case (the consent browser is often a different browser profile, or the system browser rather than the Capacitor webview), and it would not add authority the credential store does not already carry. The accepted risk is a login-CSRF-class one: an attacker who obtains a live `state` can finish a sign-in the victim started, which yields the same credential the victim was already granting.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** MCP credentials become per-user or per-device, or the Host gains a session-bound consent surface.
+- **Effort:** ux-feedback-2026-11-15

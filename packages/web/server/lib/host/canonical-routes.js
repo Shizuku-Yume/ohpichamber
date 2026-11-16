@@ -151,7 +151,6 @@ export function registerCanonicalHostRoutes(app, {
  resolveWorkspaceScope, resolveWorkspaceDirectory, resolveSessionScope, resolveHostSessionScope, listProjects, listWorkspaces,
  resolveCredentialHandoff, queueRoutes, sessionRoutes, attachmentRoutes,
  skillFileOwner, getSkillRepositoryDependencies, globalEventHub, resolveHostTools,
- mcpOAuthPendingFlows: injectedMcpOAuthPendingFlows,
 }) {
  const validService = service && z.function().safeParse(service.request).success && z.function().safeParse(service.getState).success;
  if (!validService) throw new TypeError('Canonical gateway requires the real Agent Service request/getState');
@@ -181,7 +180,7 @@ export function registerCanonicalHostRoutes(app, {
  // The provider's browser redirect carries no UI bearer, so this page cannot
  // authenticate. Its authority is the `state` the Host issued when it saw the
  // matching `start` response; `completeMcpOAuthCallback` consumes that entry.
- const mcpOAuthPendingFlows = injectedMcpOAuthPendingFlows ?? createMcpOAuthPendingFlows();
+ const mcpOAuthPendingFlows = createMcpOAuthPendingFlows();
  router.get(MCP_OAUTH_CALLBACK_PATH.slice(PREFIX.length), async (req, res) => {
   const sendPage = ({ status, title, message }) => res.status(status).type('html').send(renderMcpOAuthCallbackPage({ title, message }));
   if (isEnterpriseMode(enterprisePolicyOptions))

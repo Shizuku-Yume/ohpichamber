@@ -613,7 +613,7 @@ test('installing a local entry saves it enabled, then writes env credentials and
   expect(transport?.type).toBe('stdio');
   expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({
     GRAFANA_URL: 'credential-grafana-1',
-    GRAFANA_API_KEY: 'credential-grafana-2',
+    GRAFANA_SERVICE_ACCOUNT_TOKEN: 'credential-grafana-2',
   });
   for (const server of savedServers) {
     const serialized = JSON.stringify(server);
@@ -654,7 +654,7 @@ test('a first save that only persisted still gets its env credentials and the se
   const transport = last?.transport;
   expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({
     GRAFANA_URL: 'credential-grafana-1',
-    GRAFANA_API_KEY: 'credential-grafana-2',
+    GRAFANA_SERVICE_ACCOUNT_TOKEN: 'credential-grafana-2',
   });
   // The first save's connection failure is not reported: the save after the
   // references succeeded.
@@ -715,4 +715,51 @@ test('the save after the env references reports its own handshake failure', asyn
   const transport = last?.transport;
   expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({ GRAFANA_URL: 'credential-grafana-1' });
   expect(errors).toEqual(['Could not install Grafana']);
+});
+
+/** The user-scope radio in the scope dialog, which env credentials forbid. */
+const scopeRadios = () => [...browser.document.body.querySelectorAll('input[name="mcp-install-scope"]')];
+const userScopeRadio = () => scopeRadios().find((radio) => radio.getAttribute('value') === 'user');
+
+test('a filled env value makes the install project-scope only', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
+  await clickButton('Install');
+
+  expect(scopeRadios().map((radio) => radio.getAttribute('value'))).toEqual(['project', 'user']);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(true);
+  expect(scopeRadios()[0]?.hasAttribute('checked')).toBe(true);
+  expect(body.textContent?.includes('Environment values are stored per project, so this server installs at project scope only.')).toBe(true);
+});
+
+test('an entry with every env value empty keeps both scopes', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'MCP Toolbox');
+  if (!card) throw new Error('MCP Toolbox card missing');
+  await act(async () => card.click());
+  await settle();
+  await clickButton('Install');
+
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
+});
+
+test('a filled env value without a selected project blocks Install and says why', async () => {
+  useProjectsStore.setState({ projects: [], activeProjectId: null });
+  useUIStore.setState({ settingsProjectPath: null });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'Grafana');
+  if (!card) throw new Error('Grafana card missing');
+  await act(async () => card.click());
+  await settle();
+  const urlField = browser.document.body.querySelector('#catalog-env-grafana-url');
+  if (!urlField) throw new Error('GRAFANA_URL field missing');
+  await setInputValue(urlField, 'https://grafana.example.invalid');
+
+  const install = [...browser.document.body.querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === 'Install');
+  if (!install) throw new Error('Install button missing');
+  expect(install.disabled).toBe(true);
+  expect(browser.document.body.textContent?.includes('Environment values are stored per project, so this server installs at project scope only.')).toBe(true);
 });

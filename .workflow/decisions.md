@@ -1340,3 +1340,13 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** a provider name or OMP-side convention needs a leading dot or hyphen.
 - **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - Catalog installs that collect environment values are project-scope only
+
+- **Decided:** when any `envInputs` value is filled, a catalog MCP install writes workspace credentials and therefore installs at project scope only. The scope dialog disables the user option and says why, and with no project selected the Install button stays disabled. An entry whose env values are all empty keeps both scopes.
+- **Instead of:** allowing user scope with credential references in the shared user MCP file.
+- **Because:** `NativeMcpCredentials` prefixes every reference with a hash of the writing workspace (`packages/agent-service/src/worker/mcp-credentials.ts:12`), and the user MCP file is shared by every workspace (`packages/agent-service/src/worker/mcp.ts:391-393`); a reference written in one workspace makes another workspace's config save fail when the worker resolves it (`stateless.ts:220-223`). The same hazard already exists for catalog token entries saved at user scope and was not changed here.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** credential references become workspace-independent, or the user MCP file can carry per-workspace server entries.
+- **Effort:** ux-feedback-2026-11-15

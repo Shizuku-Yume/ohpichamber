@@ -9222,7 +9222,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Secrets are write-only. Leave the API key blank to keep the stored credential.",
   "settings.providers.native.configuredHeaders": "Configured header names: {names}",
   "settings.providers.native.replaceHeaders": "Replace all stored headers",
-  "settings.providers.native.discoveryHint": "Review discovered models before saving. Enter missing context and output limits; no limits are guessed.",
   "settings.providers.native.invalidConfiguration": "Check the provider ID, endpoint, unique header and model names, positive model limits, and model metadata JSON.",
   "settings.providers.native.browserCookies": "Complete sign-in and paste the {cookies} cookie value.",
   "settings.providers.native.oauthFailureHint": "Sign-in could not complete. If the provider configuration changed, cancel this attempt and start sign-in again.",

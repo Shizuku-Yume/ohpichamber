@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Geheimen zijn alleen schrijfbaar. Laat de API-sleutel leeg om de opgeslagen inloggegevens te behouden.",
   "settings.providers.native.configuredHeaders": "Ingestelde headernamen: {names}",
   "settings.providers.native.replaceHeaders": "Alle opgeslagen headers vervangen",
-  "settings.providers.native.discoveryHint": "Controleer gevonden modellen vóór het opslaan. Vul ontbrekende context- en uitvoerlimieten in; er worden geen limieten geraden.",
   "settings.providers.native.invalidConfiguration": "Controleer de provider-ID, het eindpunt, unieke header- en modelnamen, positieve modellimieten en de JSON-modelmetadata.",
   "settings.providers.native.browserCookies": "Voltooi het aanmelden en plak de waarde van de cookie {cookies}.",
   "settings.providers.native.oauthFailureHint": "Aanmelden kon niet worden voltooid. Als de providerconfiguratie is gewijzigd, annuleer deze poging en meld u opnieuw aan.",

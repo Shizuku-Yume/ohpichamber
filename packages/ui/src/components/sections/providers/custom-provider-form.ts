@@ -295,7 +295,7 @@ export function validateCustomProviderForm(
     if (!row.maxOutputTokens.trim()) errors.maxOutputTokens = t('settings.providers.page.custom.error.required');
     else if (!positiveInteger(row.maxOutputTokens)) errors.maxOutputTokens = t('settings.providers.page.custom.error.positiveInteger');
     else if (positiveInteger(row.contextWindow) && Number(row.maxOutputTokens) > Number(row.contextWindow)) {
-      errors.maxOutputTokens = t('settings.providers.native.invalidConfiguration');
+      errors.maxOutputTokens = t('settings.providers.page.custom.error.maxOutputExceedsContext');
     }
     return errors;
   });
@@ -313,7 +313,7 @@ export function validateCustomProviderForm(
       const headerName = row.name.trim();
       if (!headerName && !row.value) return errors;
       if (!headerName) errors.name = t('settings.providers.page.custom.error.required');
-      else if (!HEADER_NAME_PATTERN.test(headerName)) errors.name = t('settings.providers.native.invalidConfiguration');
+      else if (!HEADER_NAME_PATTERN.test(headerName)) errors.name = t('settings.providers.page.custom.error.headerName.format');
       if (!row.value) errors.value = t('settings.providers.page.custom.error.required');
       return errors;
     })
@@ -412,7 +412,7 @@ export function autoFillFields(row: ModelRow, catalog: ModelCatalogInfo): ModelA
   if (fillableLimit(row, 'contextWindow', String(catalog.contextWindow))) fields.push('contextWindow');
   if (fillableLimit(row, 'maxOutputTokens', String(catalog.maxTokens))) fields.push('maxOutputTokens');
   if (!row.typed.has('modalities')) {
-    const next = catalog.input.filter((input) => input === 'text' || input === 'image');
+    const next = catalogInputs(catalog.input);
     if (next.length > 0 && !sameModalities(next, row.modalities)) fields.push('modalities');
   }
   if (!row.typed.has('toolsSupported') && row.toolsSupported === undefined && catalog.toolsSupported !== undefined) fields.push('toolsSupported');
@@ -449,7 +449,9 @@ export function applyModelCatalogInfo(
     const catalog = answers.get(row.modelId.trim());
     if (!catalog) return row;
     const fields = autoFillFields(row, catalog);
-    if (fields.length === 0 && catalog.family === undefined) return row;
+    // A family alone groups the dialog row; it is not a value the user reads
+    // in the form, so a family-only answer counts as nothing filled.
+    if (fields.length === 0) return row;
     filled += 1;
     const filledFrom = { ...row.filledFrom };
     const updated: ModelRow = { ...row, filledFrom };
@@ -458,9 +460,10 @@ export function applyModelCatalogInfo(
       if (field === 'contextWindow') updated.contextWindow = String(catalog.contextWindow);
       else if (field === 'maxOutputTokens') updated.maxOutputTokens = String(catalog.maxTokens);
       else if (field === 'modalities') {
-        const nativeKind = nativeKindOf(catalog.input);
+        const inputs = catalogInputs(catalog.input);
+        const nativeKind = nativeKindOf(inputs);
         updated.nativeKind = nativeKind;
-        updated.modalities = normalizeModelModalities(nativeKind, catalog.input);
+        updated.modalities = normalizeModelModalities(nativeKind, inputs);
       } else if (field === 'toolsSupported') updated.toolsSupported = catalog.toolsSupported;
       else if (field === 'reasoning') updated.reasoningEffortSupported = catalog.reasoning;
       else if (field === 'pricing') {
@@ -497,6 +500,58 @@ export function idsMissingCatalog(
   return ids;
 }
 
+/** Each request keeps to its own id limit: the agent contract caps 500, the Host route 200. */
+export const AUTO_FILL_ENRICH_LIMIT = 500;
+export const AUTO_FILL_OPENROUTER_LIMIT = 200;
+
+/** The distinct model ids a fill would ask about, in form order. */
+export function autoFillIds(models: readonly ModelRow[]): string[] {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const row of models) {
+    const modelId = row.modelId.trim();
+    if (!modelId || seen.has(modelId)) continue;
+    seen.add(modelId);
+    ids.push(modelId);
+  }
+  return ids;
+}
+
+/** Why a fill has nothing more to say, when it does. */
+export type AutoFillNotice =
+  /** The OpenRouter leg was refused by enterprise policy. */
+  | 'enterprise'
+  /** The OpenRouter leg failed. */
+  | 'failed'
+  /** No source knew any of the ids. */
+  | 'none'
+  /** Every row already had its own value. */
+  | 'nothing'
+  /** Some ids stayed unknown; they are listed in the notice. */
+  | 'partial';
+
+/**
+ * What the fill reports, in order of what the reader must know: a refused or
+ * failed lookup first (a catalog-only result must never read as success), then
+ * the case where no source answered at all, then "nothing left to fill", then
+ * ids that stayed unknown, and last the ids beyond a source's cap, which
+ * nobody even asked about.
+ */
+export function autoFillNoticeFor(input: {
+  lookup: 'enterprise' | 'failed' | null;
+  answered: number;
+  filled: number;
+  unresolved: readonly string[];
+  overCap: readonly string[];
+}): AutoFillNotice | null {
+  if (input.lookup) return input.lookup;
+  if (input.answered === 0) return 'none';
+  if (input.filled === 0) return 'nothing';
+  if (input.unresolved.length > 0) return 'partial';
+  if (input.overCap.length > 0) return 'partial';
+  return null;
+}
+
 /** A row imported from a discovery result, prefilled from what the catalog already knows. */
 export function createDiscoveredModelRow(model: ProviderModelDiscoveryResult['models'][number]): ModelRow {
   const row = createModelRow(model);
@@ -512,7 +567,9 @@ export function markModelFieldTyped(row: ModelRow, field: ModelAutoFillField): M
 
 /** A row whose id the freshly discovered list no longer carries. */
 export function staleModelIds(models: readonly ModelRow[], discovered: readonly { modelId: string }[]): string[] {
-  const known = new Set(discovered.map((model) => model.modelId));
+  // Ids compare trimmed on both sides: a discovery result may pad an id that
+  // a form row already carries without the padding.
+  const known = new Set(discovered.map((model) => model.modelId.trim()));
   return models
     .map((row) => row.modelId.trim())
     .filter((modelId) => modelId !== '' && !known.has(modelId));
@@ -524,9 +581,10 @@ export function idsToAdd(models: readonly ModelRow[], discovered: readonly { mod
   const seen = new Set<string>();
   const ids: string[] = [];
   for (const model of discovered) {
-    if (existing.has(model.modelId) || seen.has(model.modelId)) continue;
-    seen.add(model.modelId);
-    ids.push(model.modelId);
+    const modelId = model.modelId.trim();
+    if (!modelId || existing.has(modelId) || seen.has(modelId)) continue;
+    seen.add(modelId);
+    ids.push(modelId);
   }
   return ids;
 }
@@ -565,15 +623,18 @@ export function discoveryRows(
     const modelId = row.modelId.trim();
     if (modelId && !formById.has(modelId)) formById.set(modelId, row);
   }
-  const discoveredIds = new Set(discovered.map((model) => model.modelId));
-  const rows: DiscoveryRow[] = discovered.map((model) => ({
-    kind: 'discovered',
-    modelId: model.modelId,
-    name: model.name,
-    catalog: model.catalog,
-    formRow: formById.get(model.modelId),
-    family: model.catalog?.family,
-  }));
+  const discoveredIds = new Set(discovered.map((model) => model.modelId.trim()));
+  const rows: DiscoveryRow[] = discovered.map((model) => {
+    const modelId = model.modelId.trim();
+    return {
+      kind: 'discovered',
+      modelId,
+      name: model.name,
+      catalog: model.catalog,
+      formRow: formById.get(modelId),
+      family: model.catalog?.family,
+    };
+  });
   for (const [modelId, formRow] of formById) {
     if (discoveredIds.has(modelId)) continue;
     rows.push({ kind: 'stale', modelId, name: formRow.name, formRow, family: formRow.family });
@@ -589,7 +650,9 @@ export function discoveryRows(
 export function matchesDiscoveryFilter(row: DiscoveryRow, filter: DiscoveryFilter): boolean {
   if (filter === 'all') return true;
   if (filter === 'stale') return row.kind === 'stale';
-  const inputs = row.catalog?.input ?? row.formRow?.modalities ?? [];
+  // A discovered model with no catalog and no form row still accepts text:
+  // every custom provider model can, so the chip counts it rather than hiding it.
+  const inputs = row.catalog?.input ?? row.formRow?.modalities ?? ['text'];
   if (filter === 'text' || filter === 'image') return inputs.includes(filter);
   if (filter === 'embedding') return row.formRow?.nativeKind === 'embedding';
   return row.formRow?.nativeKind === 'tts' || row.formRow?.nativeKind === 'stt';

@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "機密值僅供寫入。將 API 金鑰留空可保留已儲存的憑證。",
   "settings.providers.native.configuredHeaders": "已設定的標頭名稱：{names}",
   "settings.providers.native.replaceHeaders": "取代全部已儲存的標頭",
-  "settings.providers.native.discoveryHint": "儲存前請檢查探索到的模型。填寫缺少的上下文和輸出限制；不會猜測限制。",
   "settings.providers.native.invalidConfiguration": "請檢查供應商 ID、端點、標頭與模型名稱的唯一性、正數模型限制及中繼資料 JSON。",
   "settings.providers.native.browserCookies": "完成登入並貼上 {cookies} Cookie 的值。",
   "settings.providers.native.oauthFailureHint": "無法完成登入。如果供應商設定已變更，請取消這次嘗試並重新登入。",

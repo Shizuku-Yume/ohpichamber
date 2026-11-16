@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Gizli değerler yalnızca yazılabilir. Saklanan kimlik bilgisini korumak için API anahtarını boş bırakın.",
   "settings.providers.native.configuredHeaders": "Yapılandırılmış başlık adları: {names}",
   "settings.providers.native.replaceHeaders": "Saklanan tüm başlıkları değiştir",
-  "settings.providers.native.discoveryHint": "Kaydetmeden önce bulunan modelleri inceleyin. Eksik bağlam ve çıktı sınırlarını girin; sınırlar tahmin edilmez.",
   "settings.providers.native.invalidConfiguration": "Sağlayıcı kimliğini, uç noktayı, benzersiz başlık ve model adlarını, pozitif model sınırlarını ve üst veri JSON’unu kontrol edin.",
   "settings.providers.native.browserCookies": "Oturum açmayı tamamlayıp {cookies} çerezinin değerini yapıştırın.",
   "settings.providers.native.oauthFailureHint": "Oturum açma tamamlanamadı. Sağlayıcı yapılandırması değiştiyse bu denemeyi iptal edip yeniden oturum açın.",

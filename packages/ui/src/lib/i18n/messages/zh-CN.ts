@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "密钥仅可写入。将 API 密钥留空可保留已存储的凭据。",
   "settings.providers.native.configuredHeaders": "已配置的请求头名称：{names}",
   "settings.providers.native.replaceHeaders": "替换全部已存储的请求头",
-  "settings.providers.native.discoveryHint": "保存前请检查发现的模型。填写缺失的上下文和输出限制；不会猜测限制。",
   "settings.providers.native.invalidConfiguration": "请检查提供商 ID、端点、请求头和模型名称的唯一性、正数模型限制以及元数据 JSON。",
   "settings.providers.native.browserCookies": "完成登录并粘贴 {cookies} Cookie 的值。",
   "settings.providers.native.oauthFailureHint": "无法完成登录。如果提供商配置已更改，请取消本次尝试并重新登录。",

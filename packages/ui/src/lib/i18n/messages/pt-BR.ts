@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Segredos são somente para gravação. Deixe a chave API vazia para manter a credencial salva.",
   "settings.providers.native.configuredHeaders": "Nomes dos cabeçalhos configurados: {names}",
   "settings.providers.native.replaceHeaders": "Substituir todos os cabeçalhos salvos",
-  "settings.providers.native.discoveryHint": "Revise os modelos encontrados antes de salvar. Preencha os limites de contexto e saída ausentes; nenhum limite é presumido.",
   "settings.providers.native.invalidConfiguration": "Verifique o ID do provedor, endpoint, nomes únicos de cabeçalhos e modelos, limites positivos e metadados JSON.",
   "settings.providers.native.browserCookies": "Conclua o login e cole o valor do cookie {cookies}.",
   "settings.providers.native.oauthFailureHint": "Não foi possível concluir o login. Se a configuração do provedor mudou, cancele esta tentativa e entre novamente.",

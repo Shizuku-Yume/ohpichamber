@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Los secretos solo se pueden escribir. Deja la clave API vacía para conservar la credencial guardada.",
   "settings.providers.native.configuredHeaders": "Nombres de cabeceras configuradas: {names}",
   "settings.providers.native.replaceHeaders": "Reemplazar todas las cabeceras guardadas",
-  "settings.providers.native.discoveryHint": "Revisa los modelos encontrados antes de guardar. Introduce los límites de contexto y salida que falten; no se inventan límites.",
   "settings.providers.native.invalidConfiguration": "Revisa el ID del proveedor, el endpoint, los nombres únicos de cabeceras y modelos, los límites positivos y el JSON de metadatos.",
   "settings.providers.native.browserCookies": "Completa el inicio de sesión y pega el valor de la cookie {cookies}.",
   "settings.providers.native.oauthFailureHint": "No se pudo completar el inicio de sesión. Si cambió la configuración del proveedor, cancela este intento e inicia sesión de nuevo.",

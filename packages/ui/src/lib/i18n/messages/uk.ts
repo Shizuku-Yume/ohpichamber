@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Секрети доступні лише для запису. Залиште API-ключ порожнім, щоб зберегти наявні облікові дані.",
   "settings.providers.native.configuredHeaders": "Назви налаштованих заголовків: {names}",
   "settings.providers.native.replaceHeaders": "Замінити всі збережені заголовки",
-  "settings.providers.native.discoveryHint": "Перегляньте знайдені моделі перед збереженням. Укажіть відсутні ліміти контексту й виводу; ліміти не вгадуються.",
   "settings.providers.native.invalidConfiguration": "Перевірте ID провайдера, кінцеву точку, унікальність назв заголовків і моделей, додатні ліміти та JSON метаданих моделі.",
   "settings.providers.native.browserCookies": "Завершіть вхід і вставте значення cookie {cookies}.",
   "settings.providers.native.oauthFailureHint": "Не вдалося завершити вхід. Якщо конфігурація провайдера змінилася, скасуйте цю спробу та почніть вхід знову.",

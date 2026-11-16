@@ -28,7 +28,11 @@ import { ProviderLogoImageControl } from './ProviderLogoImageControl';
 import { cn } from '@/lib/utils';
 import {
   CUSTOM_PROVIDER_PROTOCOLS,
+  AUTO_FILL_ENRICH_LIMIT,
+  AUTO_FILL_OPENROUTER_LIMIT,
   applyModelCatalogInfo,
+  autoFillIds,
+  autoFillNoticeFor,
   buildCustomProviderRequest,
   buildProviderDiscoveryRequest,
   createDiscoveredModelRow,
@@ -44,6 +48,7 @@ import {
   type CustomProviderFieldErrors,
   type CustomProviderProtocol,
   type CustomProviderTranslator,
+  type AutoFillNotice,
   type HeaderFieldErrors,
   type ModelAutoFillField,
   type ModelFieldErrors,
@@ -107,7 +112,9 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
   const [autoFilling, setAutoFilling] = React.useState(false);
   // A fill that had to stop at the OMP catalog says so instead of reading as
   // a complete answer; a fill that wrote nothing says that too.
-  const [autoFillNotice, setAutoFillNotice] = React.useState<'enterprise' | 'failed' | 'none' | 'nothing' | null>(null);
+  const [autoFillNotice, setAutoFillNotice] = React.useState<AutoFillNotice | null>(null);
+  // Ids no source could answer for, listed in the partial notice.
+  const [unresolvedModelIds, setUnresolvedModelIds] = React.useState<string[]>([]);
   // Rows open for editing. A provider can carry dozens of imported models, so
   // saved and imported rows start collapsed; a row added by hand opens.
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(() => (
@@ -259,23 +266,31 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
    * says so; a value the user typed is never replaced.
    */
   const autoFillModels = async () => {
-    const ids = [...new Set(form.models.map((model) => model.modelId.trim()).filter(Boolean))];
+    const ids = autoFillIds(form.models);
     if (ids.length === 0) return;
     setAutoFilling(true);
     setAutoFillNotice(null);
+    setUnresolvedModelIds([]);
     const runtime = getRuntimeKey();
     const answers = new Map<string, ModelCatalogInfo>();
     const isCurrent = () => lifetime.current && runtime === getRuntimeKey();
+    // A refusal or failure of the OpenRouter leg outlives the later summary:
+    // the catalog-only result must never read as a complete one.
+    let lookupNotice: 'enterprise' | 'failed' | null = null;
+    // Each source has its own cap; ids beyond a cap were never asked about.
+    const enrichIds = ids.slice(0, AUTO_FILL_ENRICH_LIMIT);
+    const overCap = ids.slice(AUTO_FILL_ENRICH_LIMIT);
     try {
       const enriched = await canonicalClient.enrichProviderModels(workspaceId, {
         ...(form.providerId.trim() ? { providerId: form.providerId.trim() } : {}),
-        models: ids.map((modelId) => ({ modelId })),
+        models: enrichIds.map((modelId) => ({ modelId })),
       });
       if (!isCurrent()) return;
       for (const entry of enriched.models) {
         if (entry.catalog) answers.set(entry.modelId, entry.catalog);
       }
-      const missing = idsMissingCatalog(form.models, answers).slice(0, 200);
+      const candidates = idsMissingCatalog(form.models, answers);
+      const missing = candidates.slice(0, AUTO_FILL_OPENROUTER_LIMIT);
       if (missing.length > 0) {
         try {
           const openRouter = await canonicalClient.openRouterModelInfo(missing);
@@ -283,8 +298,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           for (const entry of openRouter.models) answers.set(entry.modelId, entry.catalog);
         } catch (error) {
           if (!isCurrent()) return;
-          const refused = error instanceof CanonicalApiError && error.problem.code === 'enterprise_mode';
-          setAutoFillNotice(refused ? 'enterprise' : 'failed');
+          lookupNotice = error instanceof CanonicalApiError && error.problem.code === 'enterprise_mode' ? 'enterprise' : 'failed';
         }
       }
       // Applied to the rows the form holds now, so a field typed while the
@@ -292,8 +306,19 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       const preview = applyModelCatalogInfo(form.models, answers);
       setForm((previous) => ({ ...previous, models: applyModelCatalogInfo(previous.models, answers).models }));
       if (!isCurrent()) return;
-      if (answers.size === 0) setAutoFillNotice('none');
-      else if (preview.filled === 0) setAutoFillNotice('nothing');
+      // An id beyond the enrich cap may still have been answered by the second
+      // leg; only ids that stayed unknown are reported.
+      const unansweredCap = overCap.filter((modelId) => !answers.has(modelId));
+      const unanswered = candidates.slice(AUTO_FILL_OPENROUTER_LIMIT)
+        .filter((modelId, index, all) => !answers.has(modelId) && all.indexOf(modelId) === index);
+      setUnresolvedModelIds([...unanswered, ...unansweredCap]);
+      setAutoFillNotice(autoFillNoticeFor({
+        lookup: lookupNotice,
+        answered: answers.size,
+        filled: preview.filled,
+        unresolved: unanswered,
+        overCap: unansweredCap,
+      }));
     } catch (error) {
       if (!isCurrent()) return;
       const refused = error instanceof CanonicalApiError && error.problem.code === 'enterprise_mode';
@@ -540,7 +565,8 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           {discoveryError ? <p className="typography-meta text-[var(--status-error)]" role="alert">{discoveryError}</p> : null}
           {autoFillNotice ? (
             <p className="typography-meta text-muted-foreground" role="status">
-              {t(`settings.providers.page.custom.models.autofill.notice.${autoFillNotice}`)}
+              {t(`settings.providers.page.custom.models.autofill.notice.${autoFillNotice}`,
+                { models: unresolvedModelIds.join(', ') })}
             </p>
           ) : null}
           {discoveredModels ? (

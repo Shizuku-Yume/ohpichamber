@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "シークレットは書き込み専用です。保存済みの認証情報を保持するには API キーを空欄にしてください。",
   "settings.providers.native.configuredHeaders": "設定済みヘッダー名：{names}",
   "settings.providers.native.replaceHeaders": "保存済みヘッダーをすべて置き換える",
-  "settings.providers.native.discoveryHint": "保存前に検出されたモデルを確認してください。不足しているコンテキストと出力の上限を入力してください。上限は推測されません。",
   "settings.providers.native.invalidConfiguration": "プロバイダー ID、エンドポイント、ヘッダー名とモデル名の重複、正のモデル上限、メタデータ JSON を確認してください。",
   "settings.providers.native.browserCookies": "サインインを完了し、Cookie「{cookies}」の値を貼り付けてください。",
   "settings.providers.native.oauthFailureHint": "サインインを完了できませんでした。プロバイダー設定が変更された場合は、この試行をキャンセルしてサインインをやり直してください。",

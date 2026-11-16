@@ -5,6 +5,7 @@ import {
   SettingsGroupTitle,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
+  SETTINGS_ICON_BUTTON_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { Button } from '@/components/ui/button';
@@ -122,7 +123,7 @@ const ModelLine: React.FC<{
           type="button"
           variant="ghost"
           size="icon"
-          className="size-7 shrink-0 text-muted-foreground hover:text-[var(--status-error)]"
+          className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0 text-muted-foreground hover:text-[var(--status-error)]')}
           disabled={busy}
           onClick={() => onRemove(row.modelId)}
           aria-label={t('settings.providers.page.custom.models.dialog.removeModelAria', { model: row.modelId })}
@@ -135,7 +136,7 @@ const ModelLine: React.FC<{
           type="button"
           variant="ghost"
           size="icon"
-          className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+          className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0 text-muted-foreground hover:text-foreground')}
           disabled={busy}
           onClick={() => onAdd(row.modelId)}
           aria-label={t('settings.providers.page.custom.models.dialog.addModelAria', { model: row.modelId })}
@@ -166,6 +167,19 @@ export const CustomProviderModelsDialog: React.FC<CustomProviderModelsDialogProp
   const { confirm, dialog: confirmDialog } = useConfirmDialog();
   const [filter, setFilter] = React.useState<DiscoveryFilter>('all');
   const [query, setQuery] = React.useState('');
+  // Opening this dialog from the settings window makes that window
+  // `aria-hidden` while its trigger keeps focus, which browsers report and
+  // then hide from assistive tech; focus moves in here on open instead.
+  const searchRef = React.useRef<HTMLInputElement | null>(null);
+  const surfaceRef = React.useRef<HTMLDivElement | null>(null);
+  const focusIntoDialog = React.useCallback(() => {
+    const target = searchRef.current ?? surfaceRef.current;
+    if (!target) return true;
+    // A control that already took focus (an autoFocus button) keeps it.
+    const dialog = target.closest('[data-slot="dialog-content"]');
+    if (dialog?.contains(document.activeElement)) return true;
+    return target;
+  }, []);
 
   const rows = React.useMemo(() => discoveryRows(discovered, models), [discovered, models]);
   const staleIds = React.useMemo(() => staleModelIds(models, discovered), [models, discovered]);
@@ -185,7 +199,11 @@ export const CustomProviderModelsDialog: React.FC<CustomProviderModelsDialogProp
       action: t('settings.providers.page.custom.models.dialog.removeStaleAction'),
       destructive: true,
     });
-    if (confirmed) onRemove(staleIds);
+    if (!confirmed) return;
+    onRemove(staleIds);
+    // The rows the dialog was reviewing are gone; a stale-only view would read
+    // as an empty list, so it returns to all before the next look.
+    setFilter('all');
   };
 
   const filterOptions = discoveryFilterValues.map((value) => ({
@@ -206,7 +224,7 @@ export const CustomProviderModelsDialog: React.FC<CustomProviderModelsDialogProp
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" initialFocus={focusIntoDialog}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-1.5">
               {t('settings.providers.page.custom.models.dialog.title')}
@@ -217,7 +235,7 @@ export const CustomProviderModelsDialog: React.FC<CustomProviderModelsDialogProp
             </DialogDescription>
           </DialogHeader>
 
-          <div className="@container space-y-3">
+          <div ref={surfaceRef} tabIndex={-1} className="@container space-y-3 outline-none">
             <div className="flex flex-wrap items-center gap-2">
               <SettingsChipGroup
                 value={filter}
@@ -257,6 +275,7 @@ export const CustomProviderModelsDialog: React.FC<CustomProviderModelsDialogProp
                   aria-hidden
                 />
                 <Input
+                  ref={searchRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={(event) => {

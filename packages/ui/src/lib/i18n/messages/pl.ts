@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Sekrety można tylko zapisywać. Pozostaw klucz API pusty, aby zachować zapisane poświadczenia.",
   "settings.providers.native.configuredHeaders": "Nazwy skonfigurowanych nagłówków: {names}",
   "settings.providers.native.replaceHeaders": "Zastąp wszystkie zapisane nagłówki",
-  "settings.providers.native.discoveryHint": "Sprawdź znalezione modele przed zapisaniem. Uzupełnij brakujące limity kontekstu i wyjścia; limity nie są zgadywane.",
   "settings.providers.native.invalidConfiguration": "Sprawdź ID dostawcy, punkt końcowy, unikalność nazw nagłówków i modeli, dodatnie limity modelu oraz metadane JSON.",
   "settings.providers.native.browserCookies": "Dokończ logowanie i wklej wartość pliku cookie {cookies}.",
   "settings.providers.native.oauthFailureHint": "Nie udało się dokończyć logowania. Jeśli konfiguracja dostawcy się zmieniła, anuluj tę próbę i zaloguj się ponownie.",

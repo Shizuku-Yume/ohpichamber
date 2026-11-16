@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Les secrets sont accessibles uniquement en écriture. Laissez la clé API vide pour conserver l’identifiant enregistré.",
   "settings.providers.native.configuredHeaders": "Noms des en-têtes configurés : {names}",
   "settings.providers.native.replaceHeaders": "Remplacer tous les en-têtes enregistrés",
-  "settings.providers.native.discoveryHint": "Vérifiez les modèles trouvés avant d’enregistrer. Renseignez les limites de contexte et de sortie manquantes ; aucune limite n’est devinée.",
   "settings.providers.native.invalidConfiguration": "Vérifiez l’ID du fournisseur, le point d’accès, les noms uniques des en-têtes et modèles, les limites positives et les métadonnées JSON.",
   "settings.providers.native.browserCookies": "Terminez la connexion et collez la valeur du cookie {cookies}.",
   "settings.providers.native.oauthFailureHint": "La connexion n’a pas pu aboutir. Si la configuration du fournisseur a changé, annulez cette tentative et recommencez la connexion.",

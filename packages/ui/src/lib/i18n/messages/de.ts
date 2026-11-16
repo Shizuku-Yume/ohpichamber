@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "Geheimnisse können nur geschrieben werden. Lass den API-Schlüssel leer, um die gespeicherten Zugangsdaten zu behalten.",
   "settings.providers.native.configuredHeaders": "Konfigurierte Headernamen: {names}",
   "settings.providers.native.replaceHeaders": "Alle gespeicherten Header ersetzen",
-  "settings.providers.native.discoveryHint": "Prüfe gefundene Modelle vor dem Speichern. Ergänze fehlende Kontext- und Ausgabelimits; Limits werden nicht geschätzt.",
   "settings.providers.native.invalidConfiguration": "Prüfe Anbieter-ID, Endpunkt, eindeutige Header- und Modellnamen, positive Modelllimits und die JSON-Modellmetadaten.",
   "settings.providers.native.browserCookies": "Schließe die Anmeldung ab und füge den Wert des Cookies {cookies} ein.",
   "settings.providers.native.oauthFailureHint": "Die Anmeldung konnte nicht abgeschlossen werden. Falls sich die Anbieterkonfiguration geändert hat, brich diesen Versuch ab und starte die Anmeldung erneut.",

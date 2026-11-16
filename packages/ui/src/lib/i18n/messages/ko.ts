@@ -9183,7 +9183,6 @@ export const dict = {
   "settings.providers.native.secretHint": "비밀 값은 쓰기 전용입니다. 저장된 자격 증명을 유지하려면 API 키를 비워 두세요.",
   "settings.providers.native.configuredHeaders": "설정된 헤더 이름: {names}",
   "settings.providers.native.replaceHeaders": "저장된 모든 헤더 교체",
-  "settings.providers.native.discoveryHint": "저장 전에 검색된 모델을 검토하세요. 누락된 컨텍스트와 출력 제한을 입력하세요. 제한을 추측하지 않습니다.",
   "settings.providers.native.invalidConfiguration": "제공자 ID, 엔드포인트, 헤더와 모델 이름의 중복, 양수 모델 제한, 메타데이터 JSON을 확인하세요.",
   "settings.providers.native.browserCookies": "로그인을 완료하고 {cookies} 쿠키 값을 붙여넣으세요.",
   "settings.providers.native.oauthFailureHint": "로그인을 완료할 수 없습니다. 제공자 설정이 변경되었다면 이 시도를 취소하고 다시 로그인하세요.",

@@ -1324,6 +1324,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Revisit when:** OMP's selector grammar changes.
 - **Effort:** ux-feedback-2026-11-15
 
+## 2026-11-16 - MCP sign-in failure is a contract-visible result, and a closed registration asks for the client ID
+
+- **Decided:** the sign-in contract gains `MCP_OAUTH_IN_PROGRESS` (HTTP 409), `MCP_OAUTH_CLIENT_REGISTRATION_REJECTED` (HTTP 422) and an optional `error` on the unauthenticated `MCPOAuthResult`. A closed client registration reveals and focuses the client-ID field and shows the provider's own sentence; nothing is pre-filled, because no client ID is known, and no app-registration link is added. A failure after the browser handoff has no request left to throw from, so it is reported once through `MCPOAuthResult.unauthenticated.error`. The OAuth redirect stays `http://localhost:3000/callback` here and belongs to task 05.
+- **Instead of:** keeping one opaque `MCP_OAUTH_FAILED` and a `CATALOG_CONFLICT` for a second start, or adding a link to each provider's app-registration page.
+- **Because:** the panel must distinguish "already signing in" from a real conflict and must show why a handoff failed, and polling every 1.5 s otherwise resets to plain unauthenticated. A registration link would need per-provider URLs nobody maintains.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP exposes a provider registration directory, or the redirect origin moves to the Host.
 ## 2026-11-16 - Custom provider IDs keep a leading letter or digit
 
 - **Decided:** the provider-ID pattern is `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`, narrower than the bare character set in "Provider IDs follow OMP's selector grammar": the first character must be a letter or digit. IDs like `.`, `..` or `-x` are refused.
@@ -1331,4 +1339,14 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** the same id reaches logo routes and settings keys, so a leading `.` reads as a hidden file, a leading `-` reads as a CLI flag, and `.`/`..` read as path segments. The narrower first character costs no real provider name.
 - **Mine:** yes
 - **Revisit when:** a provider name or OMP-side convention needs a leading dot or hyphen.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - MCP OAuth callback state is bound to the flow, not the initiating browser session
+
+- **Decided:** the public `GET /api/agent/v1/mcp/oauth/callback` route accepts a `state` that the Host recorded from the proxied `start` response's authorization URL. It does not bind that state to the browser session, cookie or IP that started the flow, matching the existing guest and extension-tracker public callbacks (`guests/routes.js`, `trackers/routes.js`).
+- **Instead of:** adding a second, session-bound nonce to the redirect and rejecting a callback from a different browser.
+- **Because:** the workspace MCP credential store is shared by every surface and user of that workspace, so a completed sign-in is not scoped to the browser that began it. Binding to a session cookie would break the intended remote and mobile case (the consent browser is often a different browser profile, or the system browser rather than the Capacitor webview), and it would not add authority the credential store does not already carry. The accepted risk is a login-CSRF-class one: an attacker who obtains a live `state` can finish a sign-in the victim started, which yields the same credential the victim was already granting.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** MCP credentials become per-user or per-device, or the Host gains a session-bound consent surface.
 - **Effort:** ux-feedback-2026-11-15

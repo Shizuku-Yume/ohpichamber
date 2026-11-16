@@ -9,7 +9,8 @@ import {
   SettingsSection,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { selectProvidersForDirectory, useConfigStore } from '@/stores/useConfigStore';
 
@@ -67,7 +68,7 @@ const ChatDefaultsSection: React.FC<{ form: ProjectIdentityFormState }> = ({ for
             value={defaultVariant ?? NO_VARIANT_VALUE}
             onValueChange={(value) => form.handleDefaultVariantChange(value === NO_VARIANT_VALUE ? undefined : value)}
           >
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('settings.projects.page.field.projectThinking')}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={t('settings.projects.page.field.projectThinking')}>
               <SelectValue>
                 {defaultVariant ? formatVariantLabel(defaultVariant) : t('settings.projects.page.option.thinkingDefault')}
               </SelectValue>
@@ -143,7 +144,7 @@ const TeamFileSection: React.FC<{ projectRef: ProjectRef; setupState: ProjectSet
     <SettingsSection
       title={t('settings.projects.team.title')}
       settingsItem="projects.shared"
-      contentClassName="space-y-5"
+      contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
       {!setup ? (
         <ProjectSetupUnavailable setupState={setupState} />

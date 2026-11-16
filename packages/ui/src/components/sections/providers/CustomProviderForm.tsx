@@ -4,9 +4,9 @@ import {
   SettingsCheckboxRow,
   SettingsSection,
   SettingsStackedField,
-  SETTINGS_CONTROL_CLUSTER_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
   SETTINGS_FIELD_LABEL_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
   SETTINGS_SELECT_TRIGGER_CLASS,
@@ -361,12 +361,12 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
   };
 
   return (
-    <form onSubmit={submit} className="space-y-0">
+    <form onSubmit={submit}>
       <SettingsSection
         title={isEdit ? t('settings.providers.page.custom.editTitle') : t('settings.providers.page.custom.title')}
         divider={false}
         settingsItem="providers.custom"
-        contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.native.customDescription')}</p>
 
@@ -532,9 +532,9 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
       <SettingsSection
         title={t('settings.providers.page.custom.models.title')}
-        contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
-        <div className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
+        <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2`}>
           <div className="flex flex-wrap items-center gap-1.5">
             <Button
               type="button"
@@ -585,7 +585,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           ) : null}
         </div>
 
-        <div className={SETTINGS_CONTROL_CLUSTER_CLASS}>
+        <div className={SETTINGS_WIDTH_LONG_TEXT_CLASS}>
           {form.models.map((model, index) => (
             <CustomProviderModelRow
               key={model.row}
@@ -626,11 +626,11 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
 
       <SettingsSection
         title={t('settings.providers.page.custom.headers.title')}
-        contentClassName={SETTINGS_FIELDS_STACK_CLASS}
+        contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <p className={SETTINGS_HELPER_CLASS}>{t('settings.providers.page.custom.headers.description')}</p>
         {isEdit ? (
-          <div className="space-y-2">
+          <div className="flex flex-col gap-2">
             {form.headerNames.length > 0 ? (
               <p className="typography-meta text-muted-foreground">
                 {t('settings.providers.native.configuredHeaders', { names: form.headerNames.join(', ') })}
@@ -651,10 +651,10 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         {form.replaceHeaders ? (
           <>
             {form.headers.map((header, index) => (
-              <div key={header.row} className={`${SETTINGS_CONTROL_CLUSTER_CLASS} space-y-2`}>
+              <div key={header.row} className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2`}>
                 <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="flex flex-col gap-1">
                       <label className={SETTINGS_FIELD_LABEL_CLASS}>
                         {t('settings.providers.page.custom.headers.keyLabel')}
                       </label>
@@ -663,15 +663,15 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                         onChange={(event) => setHeader(index, 'name', event.target.value)}
                         disabled={busy}
                         placeholder={t('settings.providers.page.custom.headers.keyPlaceholder')}
-                        className="mt-1 h-7 rounded-md px-3 font-mono text-xs"
+                        className="h-7 rounded-md px-3 font-mono text-xs"
                         aria-invalid={Boolean(headerErrors[index]?.name)}
                         aria-label={t('settings.providers.page.custom.headers.keyLabel')}
                       />
                       {headerErrors[index]?.name ? (
-                        <p className="mt-1 typography-meta text-[var(--status-error)]">{headerErrors[index]?.name}</p>
+                        <p className="typography-meta text-[var(--status-error)]">{headerErrors[index]?.name}</p>
                       ) : null}
                     </div>
-                    <div>
+                    <div className="flex flex-col gap-1">
                       <label className={SETTINGS_FIELD_LABEL_CLASS}>
                         {t('settings.providers.page.custom.headers.valueLabel')}
                       </label>
@@ -682,12 +682,12 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                         disabled={busy}
                         placeholder={t('settings.providers.page.custom.headers.valuePlaceholder')}
                         autoComplete="new-password"
-                        className="mt-1 h-7 rounded-md px-3 font-mono text-xs"
+                        className="h-7 rounded-md px-3 font-mono text-xs"
                         aria-invalid={Boolean(headerErrors[index]?.value)}
                         aria-label={t('settings.providers.page.custom.headers.valueLabel')}
                       />
                       {headerErrors[index]?.value ? (
-                        <p className="mt-1 typography-meta text-[var(--status-error)]">{headerErrors[index]?.value}</p>
+                        <p className="typography-meta text-[var(--status-error)]">{headerErrors[index]?.value}</p>
                       ) : null}
                     </div>
                   </div>

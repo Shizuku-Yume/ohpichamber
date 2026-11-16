@@ -5,7 +5,7 @@ const configuration: MCPConfigurationState = { workspaceId: 'workspace', persist
 let pending = Promise.withResolvers<MCPConfigurationState>();
 let configRead = () => Promise.resolve(configuration);
 let failRead = false;
-const configure = mock(async (_workspaceId: string, request: MCPConfigureRequest) => ({ kind: 'mcp' as const, status: 'no-active-workers' as const, configuration: { ...configuration, persistedRevision: '4', config: request.config }, workers: [] }));
+const configure = mock(async (_workspaceId: string, request: MCPConfigureRequest) => ({ kind: 'mcp' as const, status: 'no-active-workers' as const, outcome: 'applied' as const, configuration: { ...configuration, persistedRevision: '4', config: request.config }, workers: [] }));
 const testServer = mock(async (): Promise<MCPConnectionTestResult> => ({ workspaceId: 'workspace', serverId: 'tools', persistedRevision: '3', status: 'connected', toolCount: 2 }));
 const resolveWorkspace = mock(async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }));
 // Load the store only after installing its canonical transport seam.

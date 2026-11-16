@@ -96,7 +96,7 @@ beforeEach(() => {
     applyResultsByDirectory: {},
     updateMcp: async () => {
       updateCalls += 1;
-      return { ok: true, result: { kind: 'mcp', status: 'no-active-workers', workers: [], configuration }, outcome: 'applied' as const };
+      return { ok: true, result: { kind: 'mcp', status: 'no-active-workers', workers: [], outcome: 'applied' as const, configuration }, outcome: 'applied' as const };
     },
   });
 });

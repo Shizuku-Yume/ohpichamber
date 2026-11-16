@@ -15,7 +15,7 @@ import {
  SettingsRadioGroup,
  SettingsRadioOption,
  SettingsCheckboxRow,
- SETTINGS_OPTION_STACK_CLASS,
+ SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 
@@ -199,7 +199,7 @@ export const GitSettings: React.FC = () => {
 
  return (
   <SettingsSection title={t('settings.openchamber.git.title')}>
-   <div className={SETTINGS_OPTION_STACK_CLASS}>
+   <div className={SETTINGS_SPACE_ROW_CLASS}>
     <ModelRoleEditor
      role={COMMIT_ROLE}
      roles={roleSelectors}

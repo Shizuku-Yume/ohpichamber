@@ -115,7 +115,6 @@ export const GitPage: React.FC = () => {
       <SettingsPageLayout
         title={t('settings.page.git.title')}
         showSaveStatus
-        className="px-4 @xl:px-6 @3xl:px-12"
       >
         <SettingsSection
           title={t('settings.gitIdentities.page.section.title')}
@@ -306,46 +305,46 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
           />
         }
       >
-      <div className="flex items-center gap-3 min-w-0">
-        {iconProvider ? (
-          <span className="inline-flex shrink-0" style={{ color: iconColor }}>
-            <ProviderIcon descriptor={iconProvider} className="w-4 h-4 shrink-0" />
-          </span>
-        ) : (
-          <Icon name={iconName ?? 'git-branch'} className="w-4 h-4 shrink-0" style={{ color: iconColor }} />
-        )}
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="typography-ui-label text-foreground truncate">{identityDisplayName(profile, t)}</span>
-            {isDefault && (
-              <span className="typography-micro text-primary bg-primary/12 px-1 rounded flex-shrink-0 leading-none pb-px border border-primary/25">
-                {t('settings.gitIdentities.page.badge.default')}
-              </span>
-            )}
-          </div>
-          <div className="typography-micro text-muted-foreground truncate leading-tight">
-            {!isReadOnly && noteKey
-              ? <span className={noteIsWarning ? 'text-[var(--status-warning)]' : undefined}>{t(noteKey)}</span>
-              : profile.userEmail}
+        <div className="flex items-center gap-3 min-w-0">
+          {iconProvider ? (
+            <span className="inline-flex shrink-0" style={{ color: iconColor }}>
+              <ProviderIcon descriptor={iconProvider} className="w-4 h-4 shrink-0" />
+            </span>
+          ) : (
+            <Icon name={iconName ?? 'git-branch'} className="w-4 h-4 shrink-0" style={{ color: iconColor }} />
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="typography-ui-label text-foreground truncate">{identityDisplayName(profile, t)}</span>
+              {isDefault && (
+                <span className="typography-micro text-primary bg-primary/12 px-1 rounded flex-shrink-0 leading-none pb-px border border-primary/25">
+                  {t('settings.gitIdentities.page.badge.default')}
+                </span>
+              )}
+            </div>
+            <div className="typography-micro text-muted-foreground truncate leading-tight">
+              {!isReadOnly && noteKey
+                ? <span className={noteIsWarning ? 'text-[var(--status-warning)]' : undefined}>{t(noteKey)}</span>
+                : profile.userEmail}
+            </div>
           </div>
         </div>
-      </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            size="icon"
-            variant="ghost"
-            className={cn('shrink-0 opacity-100 transition-opacity pointer-fine:hidden', isMobile ? 'size-9' : 'h-6 w-6 md:opacity-0 md:group-hover:opacity-100')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Icon name="more" className={isMobile ? 'size-4' : 'h-3.5 w-3.5'} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-fit min-w-28">
-          {renderMenuItems(DropdownMenuItem)}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className={cn('shrink-0 opacity-100 transition-opacity pointer-fine:hidden', isMobile ? 'size-9' : 'h-6 w-6 md:opacity-0 md:group-hover:opacity-100')}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Icon name="more" className={isMobile ? 'size-4' : 'h-3.5 w-3.5'} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-fit min-w-28">
+            {renderMenuItems(DropdownMenuItem)}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-fit min-w-28">
         {renderMenuItems(ContextMenuItem)}

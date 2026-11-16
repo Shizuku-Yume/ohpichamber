@@ -19,8 +19,8 @@ shape is genuinely missing.
 
 - Flat hierarchy through spacing and typography; no cards, boxed backgrounds, or row chrome.
 - Secondary helper text is hidden behind an info icon (`info` prop) by default; the default view stays quiet.
-- Controls take their chrome from the shared primitives (`dropdownTriggerVariants()` for selects; no per-call size) and capped widths — no full-bleed inputs. See [control sizing](references/controls.md#standard-sizes-and-widths) for inputs beside dropdowns.
-- Layouts respond to the settings pane width via container queries (`@xl:` / `@3xl:`), never viewport `sm:`/`lg:` breakpoints (the pane is much narrower than the viewport inside the dialog).
+- Controls take their chrome from the shared primitives (`dropdownTriggerVariants()` for selects; no per-call size) and their width from the named width classes. A control carries no raw `w-*`/`max-w-*`/`min-w-[…]`, and neither does a `controlClassName`; `w-full`, `min-w-0`, `max-w-none` and `max-w-full` are the allowed fill/shrink tokens. See [widths](references/layout.md#widths) for which class each control takes and [control sizing](references/controls.md#standard-sizes-and-widths) for inputs beside dropdowns.
+- Layouts respond to the settings pane width via container queries (`@xl:` / `@3xl:`), never viewport `sm:`–`2xl:` breakpoints (the pane is much narrower than the viewport inside the dialog). Dialog bodies and hover-only opacity affordances are the sanctioned exceptions.
 - Checkbox/radio state comes before labels; selected states are subtle.
 
 ## References by topic
@@ -39,16 +39,45 @@ Consult only the branches affected by the change; these are ordinary module refe
 |---|---|
 | Page wrapper (title, description, save status, scrolling, `@container`) | `SettingsPageLayout` |
 | Titled block with divider | `SettingsSection` (`divider={false}` for the first one) |
-| Label left / control right | `SettingsFieldRow` |
-| Label above control (two-column cells, wide controls) | `SettingsStackedField` |
+| Label left / control right | `SettingsFieldRow` (the default row) |
+| Label above control (two-column cells, wide controls only) | `SettingsStackedField` |
+| Flat list of items that each expand into an editor | `SettingsDisclosure` |
 | Boolean | `SettingsCheckboxRow` |
+| OMP registry row (number, string, enum, boolean from one setting) | `OmpRowControl` |
 | Mutually exclusive list | `SettingsRadioGroup` + `SettingsRadioOption` |
 | Short segmented options | `SettingsChipGroup` |
 | Sub-cluster with a quiet L3 title inside a section | `SettingsControlGroup` |
 | Two-column area on wide panes | `SettingsTwoColumn` |
 | Helper text on demand (hover + tap) | `info` prop or `SettingsInfoHint` |
 
+`SettingsFieldRow` is the row for every control; `SettingsStackedField` is
+only for two-column cells and controls too wide for a row. Row shapes, the
+width class each control takes, and the section/row/checkbox spacing classes
+are defined once in [layout](references/layout.md).
+
+`settingsLayoutGuard.test.ts` under `packages/ui` enforces the mechanical
+part and reports `file:line`: no raw width on a settings control or in a
+`controlClassName`, no non-zero `space-y-*` on a wrapper around sections, no
+page padding on `SettingsPageLayout` (the page cap stays `max-w-[840px]`), no
+viewport breakpoint in pane content, `SETTINGS_WIDTH_NUMBER_CLASS` only
+inside its stepper row, and no margin/gap/stack on a control or row
+primitive. [Layout guard](references/layout.md#layout-guard) lists every rule
+and its sanctioned exceptions.
+
 Do not introduce raw `<Tooltip>`-based info icons.
+
+## Expandable rows
+
+`SettingsDisclosure` is for a flat list of items that each expand into an
+editor (a routing category). Its header is one ghost toggle
+with a chevron, the item name and an optional quiet summary; an `accessory`
+such as `SettingsCheckboxRow` sits beside the toggle so it stays a separate
+hit target, and it adds its own focus stop, so a header with an accessory is
+two tab stops rather than one. The editor renders only while expanded. Do not
+wrap a list of disclosures in cards or give the rows `divide-*`/border chrome:
+the list stays flat, like every other settings stack, and each row's own
+padding sets the rhythm between them. For a single always-visible control use
+`SettingsFieldRow`; for a one-time reveal of helper copy use the `info` prop.
 
 ## Description Policy (info hints)
 
@@ -83,6 +112,6 @@ Dynamic entity rows normally are not indexed. See [search registry rules](refere
 - Built from shared primitives; no ad-hoc page/section/row markup.
 - Description placement follows the policy above; warnings/syntax/status remain visible.
 - Container-query (`@xl:`/`@3xl:`) responsiveness — no viewport breakpoints in pane content.
-- Controls use the standard size and width caps; no stretched full-width inputs.
+- Rows follow the one row pattern; control widths and section stacks come from the named classes, and `settingsLayoutGuard.test.ts` passes ([layout guard](references/layout.md#layout-guard)).
 - Search registry, anchor, page, localization, and availability agree.
 - Nearby Settings precedent and relevant tests remain consistent.

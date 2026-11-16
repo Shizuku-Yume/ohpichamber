@@ -8,7 +8,7 @@ import {
   SettingsRadioOption,
   SettingsSection,
   SETTINGS_DESCRIPTION_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -161,7 +161,7 @@ export const ClassificationProvidersPage: React.FC<ClassificationProvidersPagePr
           divider={false}
           settingsItem="providers.classification"
         >
-          <div className={SETTINGS_FIELDS_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {status ? <p className={SETTINGS_HELPER_CLASS}>{status}</p> : null}
             <SettingsRadioGroup aria-label={t('settings.classification.jev.title')}>
               <SettingsRadioOption

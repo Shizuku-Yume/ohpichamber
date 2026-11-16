@@ -15,13 +15,14 @@ const codes = [
   'CREDENTIAL_WRITE_FAILED', 'SHELL_NOT_FOUND', 'SHELL_OUTPUT_UNAVAILABLE', 'SHELL_STOP_TIMEOUT',
   'MCP_CONFIG_READ_FAILED', 'MCP_CREDENTIAL_UNAVAILABLE', 'WORKER_GENERATION_CONFLICT',
   'MCP_OAUTH_FAILED', 'MCP_OAUTH_CANCELLED', 'MCP_OAUTH_NOT_FOUND',
+  'MCP_OAUTH_IN_PROGRESS', 'MCP_OAUTH_CLIENT_REGISTRATION_REJECTED',
 ];
 const statusFor = (code: typeof codes[number]): number => {
   if (['APPROVAL_CONFLICT', 'QUESTION_CONFLICT', 'METADATA_CONFLICT', 'QUEUE_CONFLICT', 'CATALOG_CONFLICT', 'COMMAND_IN_FLIGHT'].includes(code)) return 409;
-  if (['WORKER_GENERATION_CONFLICT', 'MCP_OAUTH_CANCELLED'].includes(code)) return 409;
+  if (['WORKER_GENERATION_CONFLICT', 'MCP_OAUTH_CANCELLED', 'MCP_OAUTH_IN_PROGRESS'].includes(code)) return 409;
   if (['SESSION_BRANCH_CONFLICT', 'SESSION_RELOCATION_CONFLICT', 'SESSION_READ_ONLY'].includes(code)) return 409;
   if (code === 'MCP_OAUTH_NOT_FOUND') return 404;
-  if (['MCP_CREDENTIAL_UNAVAILABLE', 'MCP_OAUTH_FAILED'].includes(code)) return 422;
+  if (['MCP_CREDENTIAL_UNAVAILABLE', 'MCP_OAUTH_FAILED', 'MCP_OAUTH_CLIENT_REGISTRATION_REJECTED'].includes(code)) return 422;
   if (code === 'MCP_CONFIG_READ_FAILED') return 503;
   if (['APPROVAL_EXPIRED', 'QUESTION_EXPIRED', 'RESYNC_REQUIRED'].includes(code)) return 410;
   if (['INVALID_CURSOR', 'IDEMPOTENCY_CONFLICT'].includes(code)) return 400;
@@ -53,7 +54,7 @@ describe('error schemas', () => {
     }
   });
   test('OAuth upstream failures and owner conflicts retain their actual HTTP status', () => {
-    for (const [code, status] of [['MCP_OAUTH_FAILED', 422], ['MCP_OAUTH_FAILED', 502], ['MCP_OAUTH_CANCELLED', 409], ['WORKER_GENERATION_CONFLICT', 409], ['MCP_OAUTH_NOT_FOUND', 404], ['MCP_CREDENTIAL_UNAVAILABLE', 422], ['MCP_CONFIG_READ_FAILED', 503]] as const) {
+    for (const [code, status] of [['MCP_OAUTH_FAILED', 422], ['MCP_OAUTH_FAILED', 502], ['MCP_OAUTH_CANCELLED', 409], ['MCP_OAUTH_IN_PROGRESS', 409], ['MCP_OAUTH_CLIENT_REGISTRATION_REJECTED', 422], ['MCP_OAUTH_CLIENT_REGISTRATION_REJECTED', 403], ['WORKER_GENERATION_CONFLICT', 409], ['MCP_OAUTH_NOT_FOUND', 404], ['MCP_CREDENTIAL_UNAVAILABLE', 422], ['MCP_CONFIG_READ_FAILED', 503]] as const) {
       const problem = { type: `urn:ohpichamber:problem:${code}`, title: 'OAuth operation refused', detail: 'Operation unavailable', code, status, retryable: status >= 500 };
       expect(ProblemDetailsSchema.parse(problem)).toEqual(problem);
       expect(ProblemDetailsSchema.safeParse({ ...problem, status: 500 }).success).toBe(false);
@@ -61,14 +62,18 @@ describe('error schemas', () => {
   });
   test('native branch and relocation conflicts serialize as 409 while cursor recovery remains 410', () => {
     for (const code of ['SESSION_BRANCH_CONFLICT', 'SESSION_RELOCATION_CONFLICT', 'SESSION_READ_ONLY'] as const) {
-      const problem = { type: `urn:ohpichamber:problem:${code}`, title: 'Native session control refused',
-        status: 409, detail: 'The native session owner changed', code, retryable: false };
+      const problem = {
+        type: `urn:ohpichamber:problem:${code}`, title: 'Native session control refused',
+        status: 409, detail: 'The native session owner changed', code, retryable: false
+      };
       expect(ProblemDetailsSchema.parse(JSON.parse(JSON.stringify(problem)))).toEqual(problem);
       expect(ProblemDetailsSchema.safeParse({ ...problem, status: 410 }).success).toBe(false);
       expect(ProblemDetailsSchema.safeParse({ ...problem, status: 500 }).success).toBe(false);
     }
-    const cursor = { type: 'urn:ohpichamber:problem:RESYNC_REQUIRED', title: 'Snapshot required',
-      status: 410, detail: 'The cursor epoch changed', code: 'RESYNC_REQUIRED', retryable: false };
+    const cursor = {
+      type: 'urn:ohpichamber:problem:RESYNC_REQUIRED', title: 'Snapshot required',
+      status: 410, detail: 'The cursor epoch changed', code: 'RESYNC_REQUIRED', retryable: false
+    };
     expect(ProblemDetailsSchema.parse(cursor)).toEqual(cursor);
     expect(ProblemDetailsSchema.safeParse({ ...cursor, status: 409 }).success).toBe(false);
   });

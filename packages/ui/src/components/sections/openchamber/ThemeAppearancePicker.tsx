@@ -11,6 +11,7 @@ import type { Theme, ThemeMode } from '@/types/theme';
 import {
   SettingsChipGroup,
   SettingsSection,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '../shared/SettingsSection';
 import { ThemeImportButton } from './ThemeImportButton';
 import { ThemeSchematic, type ThemeSchematicLayout } from './ThemeSchematic';
@@ -182,7 +183,7 @@ export function ThemeAppearancePicker() {
         info={t('settings.openchamber.visual.field.themeImportInfoTooltip')}
         headerAction={<ThemeImportButton />}
       >
-        <div className="space-y-3">
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           <div className="flex flex-wrap items-center justify-between gap-2">
           <SettingsChipGroup<ThemeVariant>
             value={variant}
@@ -216,7 +217,7 @@ export function ThemeAppearancePicker() {
             onChange={setQuery}
             placeholder={t('settings.themeImport.search')}
             compact
-            className={cn('mb-0', isMobile ? 'w-full max-w-none' : 'w-56')}
+            className="mb-0 min-w-0 flex-1"
           />
           </div>
           <ThemeList

@@ -31,6 +31,7 @@ import {
   SettingsChipGroup,
   SettingsSection,
   SettingsStackedField,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 
@@ -556,7 +557,7 @@ export const MagicPromptsPage: React.FC = () => {
               : undefined
           }
           settingsItem={isVisiblePromptId(block.id) ? 'magic-prompts.visible-prompt' : 'magic-prompts.instructions'}
-          contentClassName="space-y-3"
+          contentClassName={SETTINGS_SPACE_ROW_CLASS}
         >
           <Textarea
             aria-label={tUnsafe(block.titleKey)}

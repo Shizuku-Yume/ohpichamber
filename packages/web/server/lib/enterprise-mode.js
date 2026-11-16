@@ -41,6 +41,10 @@ import { z } from 'zod';
  *   the Host still refuses it, so auto-fill answers from the bundled catalog.
  *   Provider entry above is a different operation; this gate is only about the
  *   lookup request.
+ * - MCP sign-in is refused: starting an OAuth flow (`host/canonical-routes.js`
+ *   and the worker `mcp-oauth` authorization branch), and the public browser
+ *   callback that finishes it (`host/mcp-oauth-callback.js`). Servers that need
+ *   no sign-in still connect.
  * - Jev classification is off, unless the administrator pinned their own
  *   endpoint (`routing/runtime.js`).
  * - External tunnels are refused: Cloudflare and ngrok see plain text

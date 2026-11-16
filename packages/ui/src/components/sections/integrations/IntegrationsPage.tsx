@@ -1,6 +1,6 @@
 import React from 'react';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsSection } from '@/components/sections/shared/SettingsSection';
+import { SettingsSection, SETTINGS_SPACE_ROW_CLASS } from '@/components/sections/shared/SettingsSection';
 import { useI18n } from '@/lib/i18n';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -73,7 +73,7 @@ export const IntegrationsPage: React.FC = () => {
           info={t('settings.integrations.firstParty.info')}
           divider={false}
           settingsItem="integrations.first-party"
-          contentClassName="space-y-3"
+          contentClassName={SETTINGS_SPACE_ROW_CLASS}
         >
           {servedSourceControl.map((descriptor) => (
             <SourceControlProviderCard key={descriptor.id} descriptor={descriptor} />

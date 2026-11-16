@@ -21,6 +21,7 @@ import type {
 import { MCPWorkspaceReconnectResultSchema } from '@openchamber/agent-contract';
 import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@openchamber/agent-contract';
 import { MCPToolDiscoverySchema, type MCPDiscoveredTool, type MCPToolDiscovery } from '../worker/mcp/protocol.ts';
+import { mcpAuthRequired } from '../mcp-auth.ts';
 import { WorkerOperationError } from './workers.ts';
 import { PluginWorkerApplyOutcomeSchema, type PluginWorkerApplyOutcome, type PluginRuntimeState } from '@openchamber/agent-contract';
 import type { HostSkillSourceCommit } from './file-resources-host-protocol.ts';
@@ -123,6 +124,7 @@ function applyFailureCause(result: { workers: Array<{ outcome: string; error?: {
   const causes = [...new Set(result.workers.flatMap(worker => worker.outcome === 'failed' && worker.error?.detail ? [worker.error.detail] : []))];
   return causes.length > 0 ? causes.join('; ') : fallback;
 }
+
 
 function operationError(error: Error | undefined, fallbackCode: string, fallbackDetail: string): CatalogOperationError {
   if (error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError) {
@@ -528,12 +530,7 @@ export class CatalogCoordinator {
     let outcome: MCPApplyOutcome = 'applied';
     if (status === 'no-active-workers') outcome = await this.unattendedMcpOutcome(configuration);
     else if (status === 'failed' || status === 'partial') {
-      const authNeeded = outcomes.some(o => o.outcome === 'failed' && (
-        o.error.code === 'MCP_AUTH_REQUIRED' ||
-        o.error.code === 'AUTH_REQUIRED' ||
-        /401|auth|sign-in|unauthorized/i.test(o.error.detail) ||
-        /401|auth|sign-in|unauthorized/i.test(o.error.code)
-      ));
+      const authNeeded = outcomes.some(o => o.outcome === 'failed' && mcpAuthRequired(o.error));
       outcome = authNeeded ? 'saved-needs-auth' : 'saved-not-connected';
     }
     const result: MCPApplyResult = { kind: 'mcp' as const, status, outcome, configuration, workers: outcomes };
@@ -915,12 +912,12 @@ export class CatalogCoordinator {
     const results = await Promise.all(configuration.config.servers.filter(server => server.enabled).map(async server => {
       try {
         const probe = await this.options.probeMcp(configuration.workspaceId, server.serverId, configuration);
-        return probe.status === 'connected' ? 'connected' : probe.error.code;
+        return probe.status === 'connected' ? 'connected' as const : probe.error;
       } catch {
-        return 'MCP_APPLY_FAILED';
+        return { code: 'MCP_APPLY_FAILED', detail: 'MCP probe failed' };
       }
     }));
-    if (results.includes('MCP_AUTH_REQUIRED')) return 'saved-needs-auth';
+    if (results.some(result => result !== 'connected' && mcpAuthRequired(result))) return 'saved-needs-auth';
     if (results.some(result => result !== 'connected')) return 'saved-not-connected';
     return 'applied';
   }

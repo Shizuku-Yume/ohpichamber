@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Icon } from "@/components/icon/Icon";
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
+import { SETTINGS_SELECT_TRIGGER_CLASS } from '@/components/sections/shared/SettingsSection';
 
 import { loadDesktopSettings, updateDesktopSettings } from '@/lib/persistence';
 import type { SkillCatalogConfig } from '@/lib/desktop';
@@ -323,7 +324,7 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
                   invalidateScan();
                 }}
               >
-                <SelectTrigger className="w-fit" aria-label={t('settings.skills.catalog.shared.auth.description')}>
+                <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('settings.skills.catalog.shared.auth.description')}>
                   <span>
                     {selectedIdentityValue === 'none'
                       ? t('settings.skills.catalog.shared.auth.default')

@@ -9,7 +9,10 @@ import {
   WorkerMcp,
 } from './mcp.ts';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
+import { MCP_OAUTH_LOOPBACK_CALLBACK_PORT, MCP_OAUTH_LOOPBACK_REDIRECT_URI, ProblemCodeSchema } from '@openchamber/agent-contract';
 import type { MCPConfigurationState } from '@openchamber/agent-contract';
+import { ProjectionError } from '../projection/journal.ts';
+import { operationErrorDetail, WorkerReplySchema } from '../protocol.ts';
 
 describe('MCP configuration management and unmanaged projection', () => {
   test('returns null when configuration file is absent', async () => {
@@ -456,6 +459,344 @@ describe('user-scope OAuth through WorkerMcp on real files', () => {
       expect(status).toMatchObject({ serverId: 'figma', status: 'unauthenticated', authenticated: false });
       const disconnected = await mcp.oauthExecute('figma', { action: 'disconnect', persistedRevision: configuration.persistedRevision, workerGeneration: 'generation-1' }, configuration);
       expect(disconnected).toMatchObject({ serverId: 'figma', status: 'unauthenticated' });
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('MCP OAuth failure pass-through through WorkerMcp', () => {
+  /** A loopback authorization server: the MCP endpoint challenges anonymously,
+   * protected-resource metadata names this origin as the issuer, and dynamic
+   * client registration is either closed (`unapproved_client`) or open. */
+  function oauthStub(registration: 'reject' | 'issue', token: 'ok' | 'fail' = 'ok') {
+    let base = '';
+    const server = Bun.serve({
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch(request) {
+        const url = new URL(request.url);
+        if (url.pathname === '/mcp') {
+          return new Response('unauthorized', {
+            status: 401,
+            headers: { 'WWW-Authenticate': `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"` },
+          });
+        }
+        if (url.pathname === '/.well-known/oauth-protected-resource') {
+          return Response.json({ resource: `${base}/mcp`, authorization_servers: [base] });
+        }
+        if (url.pathname === '/.well-known/oauth-authorization-server') {
+          return Response.json({
+            issuer: base,
+            authorization_endpoint: `${base}/authorize`,
+            token_endpoint: `${base}/token`,
+            registration_endpoint: `${base}/register`,
+          });
+        }
+        if (url.pathname === '/register' && request.method === 'POST') {
+          return registration === 'reject'
+            ? new Response('unapproved_client', { status: 403 })
+            : Response.json({ client_id: 'stub-client' });
+        }
+        if (url.pathname === '/authorize') return new Response('consent', { status: 200 });
+        if (url.pathname === '/token' && request.method === 'POST') {
+          return token === 'fail'
+            ? new Response('invalid_grant: code expired', { status: 400 })
+            : Response.json({ access_token: 'stub-access', refresh_token: 'stub-refresh', expires_in: 3600 });
+        }
+        return new Response('not found', { status: 404 });
+      },
+    });
+    base = `http://127.0.0.1:${server.port}`;
+    return { server, base };
+  }
+
+  async function withOAuthWorker(
+    registration: 'reject' | 'issue',
+    run: (fixture: { mcp: WorkerMcp; configuration: MCPConfigurationState; base: string }) => Promise<void>,
+    token: 'ok' | 'fail' = 'ok',
+  ): Promise<void> {
+    const home = await mkdtemp(join(tmpdir(), 'mcp-oauth-flow-'));
+    const stub = oauthStub(registration, token);
+    try {
+      const agentDir = join(home, '.omp', 'agent');
+      const projectDir = join(home, 'project');
+      await mkdir(agentDir, { recursive: true });
+      await mkdir(projectDir, { recursive: true });
+      const userPath = join(agentDir, 'mcp.json');
+      const projectPath = join(projectDir, '.omp', 'mcp.json');
+      await writeFile(userPath, `${JSON.stringify({
+        mcpServers: { linear: { type: 'http', url: `${stub.base}/mcp` } },
+      }, null, 2)}\n`, 'utf8');
+      const configuration = await readNativeMcpConfigurationIfPresent(projectPath, 'workspace-1', userPath);
+      if (!configuration) throw new Error('user-scope server must be readable');
+      const authStorage = await discoverAuthStorage(agentDir, { cwd: projectDir });
+      const mcp = new WorkerMcp({
+        cwd: projectDir,
+        configPath: projectPath,
+        userConfigPath: userPath,
+        worker: { rootSessionId: 'root-1', workspaceId: 'workspace-1', workerGeneration: 'generation-1' },
+        authStorage,
+        resolveCredentialRef: async reference => reference,
+        resolveCommand: async command => command.command,
+        authorizeServer: async () => { },
+        authorizeOAuth: async () => { },
+        sanitizeTool: tool => tool,
+        onCatalog: () => { },
+        onRuntimeFailure: () => { },
+        isCurrent: () => true,
+      });
+      await run({ mcp, configuration, base: stub.base });
+    } finally {
+      stub.server.stop(true);
+      await rm(home, { recursive: true, force: true });
+    }
+  }
+
+  /** Attach the rejection handler at creation: a flow call can settle while the
+   * test is still awaiting the next action, and an unobserved rejection reads as
+   * a crash rather than the code under test. */
+  function outcome<T>(promise: Promise<T>): Promise<{ value: T } | { error: unknown }> {
+    return promise.then(value => ({ value }), error => ({ error }));
+  }
+
+  const owner = { persistedRevision: '0', workerGeneration: 'generation-1' };
+
+  /** The flow settles off the request path, so a poll can still observe the
+   * pending flow right after the browser answered. Poll the way the panel does,
+   * with a bounded wait so a hang fails the test instead of stalling it. */
+  async function settledRead(mcp: WorkerMcp, configuration: MCPConfigurationState) {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const result = await mcp.oauthRead('linear', configuration);
+      if (result.status !== 'pending') return result;
+      await Bun.sleep(10);
+    }
+    throw new Error('The OAuth flow never settled');
+  }
+
+  test('a closed dynamic client registration keeps the provider message and a stable code', async () => {
+    await withOAuthWorker('reject', async ({ mcp, configuration, base }) => {
+      const rejection = await outcome(mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration));
+      if (!('error' in rejection)) throw new Error('A rejected registration must not produce a pending flow');
+      if (!(rejection.error instanceof NativeMcpError)) throw rejection.error;
+      expect(rejection.error.code).toBe('MCP_OAUTH_CLIENT_REGISTRATION_REJECTED');
+      // The panel pre-fills its client-ID field from this sentence, which names
+      // the endpoint, the status and the provider's own payload: an opaque
+      // "MCP OAuth authentication failed." would erase all three.
+      expect(rejection.error.message).toContain('dynamic client registration was rejected');
+      expect(rejection.error.message).toContain('unapproved_client');
+      expect(rejection.error.message).toContain(`${base}/register`);
+      expect(rejection.error.message).toContain('oauth.clientId');
+
+      // The sentence must survive the worker wire, not only this call: the
+      // panel reads the problem detail, so the send-site bound has to admit an
+      // MCP OAuth cause whole while it still trims every other code.
+      const code = ProblemCodeSchema.parse(rejection.error.code);
+      const detail = operationErrorDetail(code, rejection.error.message);
+      expect(detail).toBe(rejection.error.message);
+      expect(detail).toContain('oauth.clientId');
+      expect(WorkerReplySchema.safeParse({
+        type: 'operation.error', workerGeneration: 'generation-1', commandId: 'command-1',
+        code, status: 422, detail,
+      }).success).toBe(true);
+      const other = 'x'.repeat(2_000);
+      expect(operationErrorDetail('MCP_APPLY_FAILED', other)).toBe('x'.repeat(200));
+      expect(WorkerReplySchema.safeParse({
+        type: 'operation.error', workerGeneration: 'generation-1', commandId: 'command-1',
+        code: 'MCP_APPLY_FAILED', status: 503, detail: operationErrorDetail('MCP_APPLY_FAILED', other),
+      }).success).toBe(true);
+    });
+  });
+
+  test('a second start while pending reports in-progress and cancel reports cancellation', async () => {
+    await withOAuthWorker('issue', async ({ mcp, configuration, base }) => {
+      const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const flow = started.pendingFlow;
+      expect(flow.authorizationUrl.startsWith(`${base}/authorize?`)).toBe(true);
+
+      const duplicate = await outcome(mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration));
+      if (!('error' in duplicate)) throw new Error('A second start must not open a second flow');
+      if (!(duplicate.error instanceof NativeMcpError)) throw duplicate.error;
+      expect(duplicate.error.code).toBe('MCP_OAUTH_IN_PROGRESS');
+
+      // A joined completion before the cancel observes the flow's own outcome,
+      // so the panel renders a sign-in that ended rather than a generic failure.
+      const completing = outcome(mcp.oauthExecute('linear', {
+        action: 'complete', ...owner, flowId: flow.flowId,
+      }, configuration));
+      const cancelled = await mcp.oauthExecute('linear', {
+        action: 'cancel', ...owner, flowId: flow.flowId,
+      }, configuration);
+      expect(cancelled).toMatchObject({ serverId: 'linear', status: 'unauthenticated', authenticated: false });
+      // A user cancel is neutral: no error for the panel to render as a failure.
+      expect(cancelled).not.toHaveProperty('error');
+      const ended = await completing;
+      if (!('error' in ended)) throw new Error('The joined completion must report the cancellation');
+      if (!(ended.error instanceof NativeMcpError)) throw ended.error;
+      expect(ended.error.code).toBe('MCP_OAUTH_CANCELLED');
+    });
+  });
+
+  /** The flow fails after the browser handoff: the panel has only oauthRead to
+   * poll, so the cause must arrive there. A raw fetch to the callback server is
+   * the browser; the state nonce comes from the authorization URL. */
+
+  test('a consent denial after the handoff is reported once on the next read', async () => {
+    await withOAuthWorker('issue', async ({ mcp, configuration, base }) => {
+      const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const flow = started.pendingFlow;
+      const authorizationUrl = new URL(flow.authorizationUrl);
+      expect(base.startsWith('http://127.0.0.1:')).toBe(true);
+
+      // The provider's consent screen redirects to the callback server with
+      // error=access_denied; that redirect target is the flow's own redirect_uri.
+      const callbackUrl = new URL(authorizationUrl.searchParams.get('redirect_uri') ?? '');
+      callbackUrl.search = `?error=access_denied&error_description=${encodeURIComponent('The user denied the request')}&state=${authorizationUrl.searchParams.get('state')}`;
+      // The callback server answers a denial with 500; the browser status is not
+      // the outcome — the flow's error is.
+      expect((await fetch(callbackUrl)).status).toBe(500);
+
+      const failing = await outcome(settledRead(mcp, configuration));
+      if ('error' in failing) throw failing.error;
+      if (failing.value.status !== 'unauthenticated') throw new Error('The failing poll must still report unauthenticated');
+      expect(failing.value.error?.code).toBe('MCP_OAUTH_FAILED');
+      expect(failing.value.error?.detail).toContain('Authorization failed');
+      expect(failing.value.error?.detail).toContain('The user denied the request');
+      expect(failing.value.error?.retryable).toBe(false);
+
+      // Exactly once: the failure is retired by the read that reported it.
+      const after = await mcp.oauthRead('linear', configuration);
+      expect(after).toMatchObject({ serverId: 'linear', status: 'unauthenticated', authenticated: false });
+      expect(after).not.toHaveProperty('error');
+    });
+  });
+
+  test('a local start pins the dedicated loopback redirect instead of a random fallback', async () => {
+    await withOAuthWorker('issue', async ({ mcp, configuration }) => {
+      const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      // A provider registers the URI it first saw; the pinned port makes every
+      // later attempt use the same one, so a registered client keeps working.
+      expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(MCP_OAUTH_LOOPBACK_REDIRECT_URI);
+      expect(MCP_OAUTH_LOOPBACK_REDIRECT_URI).toBe(`http://localhost:${MCP_OAUTH_LOOPBACK_CALLBACK_PORT}/callback`);
+      // The launch target must point at the same loopback listener the provider
+      // will call back, not a different port.
+      expect(started.pendingFlow.launchUrl).toBe(`http://localhost:${MCP_OAUTH_LOOPBACK_CALLBACK_PORT}/launch`);
+      await mcp.oauthExecute('linear', { action: 'cancel', ...owner, flowId: started.pendingFlow.flowId }, configuration);
+    });
+  });
+
+  test('a Host redirect completes through callbackInput without a loopback listener', async () => {
+    const hostRedirect = 'https://chamber.example.test/api/agent/v1/mcp/oauth/callback';
+    await withOAuthWorker('issue', async ({ mcp, configuration }) => {
+      const started = await mcp.oauthExecute('linear', {
+        action: 'start', ...owner, oauth: { redirectUri: hostRedirect },
+      }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      // The redirect the caller named reaches the Host, so the flow must not
+      // advertise a loopback launch target for it.
+      expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(hostRedirect);
+      expect(started.pendingFlow.launchUrl).toBeUndefined();
+
+      const state = authorizationUrl.searchParams.get('state');
+      if (!state) throw new Error('Missing state');
+      const completed = await mcp.oauthExecute('linear', {
+        action: 'complete', ...owner, flowId: started.pendingFlow.flowId,
+        callbackInput: `${hostRedirect}?code=stub-code&state=${state}`,
+      }, configuration);
+      expect(completed).toMatchObject({ serverId: 'linear', status: 'authenticated', authenticated: true });
+    });
+  });
+
+  test('a loopback-shaped redirect the flow does not bind advertises no launch URL', async () => {
+    // An SSH tunnel's Host is a loopback address on a port this worker does not
+    // own. OMP still offers a `/launch` URL for any loopback hostname, but that
+    // port belongs to the Host, so the browser would hit a dead route there.
+    const tunnelRedirect = 'http://127.0.0.1:62545/api/agent/v1/mcp/oauth/callback';
+    await withOAuthWorker('issue', async ({ mcp, configuration }) => {
+      const started = await mcp.oauthExecute('linear', {
+        action: 'start', ...owner, oauth: { redirectUri: tunnelRedirect },
+      }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      expect(started.pendingFlow.launchUrl).toBeUndefined();
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      const state = authorizationUrl.searchParams.get('state');
+      if (!state) throw new Error('Missing state');
+      const completed = await mcp.oauthExecute('linear', {
+        action: 'complete', ...owner, flowId: started.pendingFlow.flowId,
+        callbackInput: `${tunnelRedirect}?code=stub-code&state=${state}`,
+      }, configuration);
+      expect(completed).toMatchObject({ status: 'authenticated', authenticated: true });
+    });
+  });
+
+  test('a token exchange failure after the handoff is reported once on the next read', async () => {
+    await withOAuthWorker('issue', async ({ mcp, configuration, base }) => {
+      const started = await mcp.oauthExecute('linear', { action: 'start', ...owner }, configuration);
+      if (started.status !== 'pending') throw new Error(`expected a pending flow, received ${started.status}`);
+      const authorizationUrl = new URL(started.pendingFlow.authorizationUrl);
+      expect(base.startsWith('http://127.0.0.1:')).toBe(true);
+
+      const callbackUrl = new URL(authorizationUrl.searchParams.get('redirect_uri') ?? '');
+      callbackUrl.search = `?code=stub-code&state=${authorizationUrl.searchParams.get('state')}`;
+      expect((await fetch(callbackUrl)).status).toBe(200);
+
+      const failing = await outcome(settledRead(mcp, configuration));
+      if ('error' in failing) throw failing.error;
+      expect(failing.value.status).toBe('unauthenticated');
+      expect(failing.value.error?.code).toBe('MCP_OAUTH_FAILED');
+      expect(failing.value.error?.detail).toContain('Token exchange failed: 400');
+      expect(failing.value.error?.detail).toContain('invalid_grant');
+
+      const after = await mcp.oauthRead('linear', configuration);
+      expect(after).not.toHaveProperty('error');
+    }, 'fail');
+  });
+});
+
+describe('MCP OAuth policy refusal', () => {
+  test('an enterprise-mode refusal keeps its code instead of becoming a provider failure', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'mcp-oauth-policy-'));
+    try {
+      const agentDir = join(home, '.omp', 'agent');
+      const projectDir = join(home, 'project');
+      await mkdir(agentDir, { recursive: true });
+      await mkdir(projectDir, { recursive: true });
+      const userPath = join(agentDir, 'mcp.json');
+      const projectPath = join(projectDir, '.omp', 'mcp.json');
+      await writeFile(userPath, `${JSON.stringify({
+        mcpServers: { linear: { type: 'http', url: 'https://mcp.linear.app/mcp' } },
+      }, null, 2)}\n`, 'utf8');
+      const configuration = await readNativeMcpConfigurationIfPresent(projectPath, 'workspace-1', userPath);
+      if (!configuration) throw new Error('user-scope server must be readable');
+      const authStorage = await discoverAuthStorage(agentDir, { cwd: projectDir });
+      const mcp = new WorkerMcp({
+        cwd: projectDir,
+        configPath: projectPath,
+        userConfigPath: userPath,
+        worker: { rootSessionId: 'root-1', workspaceId: 'workspace-1', workerGeneration: 'generation-1' },
+        authStorage,
+        resolveCredentialRef: async reference => reference,
+        resolveCommand: async command => command.command,
+        authorizeServer: async () => { },
+        // The Host refuses the crossing the way its authorizer does.
+        authorizeOAuth: async () => {
+          throw new ProjectionError(403, 'enterprise_mode', 'MCP sign-in is not available in enterprise mode.');
+        },
+        sanitizeTool: tool => tool,
+        onCatalog: () => { },
+        onRuntimeFailure: () => { },
+        isCurrent: () => true,
+      });
+      await expect(mcp.oauthExecute('linear', {
+        action: 'start', persistedRevision: configuration.persistedRevision, workerGeneration: 'generation-1',
+      }, configuration)).rejects.toMatchObject({
+        code: 'enterprise_mode', status: 403, message: 'MCP sign-in is not available in enterprise mode.',
+      });
     } finally {
       await rm(home, { recursive: true, force: true });
     }

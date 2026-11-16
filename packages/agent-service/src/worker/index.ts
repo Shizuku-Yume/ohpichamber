@@ -1,4 +1,4 @@
-import { WorkerCommandSchema } from '../protocol.ts';
+import { operationErrorDetail, WorkerCommandSchema } from '../protocol.ts';
 import type { CompletionWorkerBootstrap, UsageWorkerBootstrap, WorkerBootstrapMessage, WorkerOperation, WorkerReply } from '../protocol.ts';
 import { ProblemCodeSchema } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
@@ -21,9 +21,10 @@ function operationCause(error: unknown): string {
 
 function nativeMcpStatus(error: NativeMcpError): number {
   switch (error.code) {
-    case 'CATALOG_CONFLICT': case 'WORKER_GENERATION_CONFLICT': case 'MCP_OAUTH_CANCELLED': return 409;
+    case 'CATALOG_CONFLICT': case 'WORKER_GENERATION_CONFLICT': case 'MCP_OAUTH_CANCELLED': case 'MCP_OAUTH_IN_PROGRESS': return 409;
     case 'MCP_OAUTH_NOT_FOUND': return 404;
     case 'MCP_CREDENTIAL_UNAVAILABLE': return 422;
+    case 'MCP_OAUTH_CLIENT_REGISTRATION_REJECTED': return 422;
     case 'MCP_OAUTH_FAILED': return error.retryable ? 502 : 422;
     default: return 503;
   }
@@ -129,11 +130,14 @@ process.on('message', raw => {
       send({ type: 'result', workerGeneration: command.workerGeneration, commandId: command.commandId, result });
     }).catch((error: unknown) => {
       const nativeCode = error instanceof NativeMcpError ? ProblemCodeSchema.safeParse(error.code) : undefined;
+      const code = error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE';
       send({
         type: 'operation.error', workerGeneration: command.workerGeneration, commandId: command.commandId,
         status: error instanceof ProjectionError ? error.status : error instanceof NativeMcpError ? nativeMcpStatus(error) : 503,
-        code: error instanceof ProjectionError ? error.code : nativeCode?.success ? nativeCode.data : 'SERVICE_UNAVAILABLE',
-        detail: operationCause(error).slice(0, 200)
+        code,
+        // An MCP OAuth failure carries the provider's own sentence, which the
+        // sign-in panel shows verbatim; other codes keep the short bound.
+        detail: operationErrorDetail(code, operationCause(error))
       });
     });
     return;

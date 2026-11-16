@@ -2,11 +2,12 @@ import React from 'react';
 import type { WebSearchMutationResult, WebSearchProviderEntry } from '@openchamber/agent-contract';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/icon/Icon';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
@@ -25,7 +26,6 @@ import {
   SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
-  SETTINGS_SELECT_TRIGGER_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SettingsChipGroup,
   SettingsFieldRow,
@@ -117,19 +117,22 @@ const ModeSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) =>
       divider={false}
       settingsItem="web-search.provider"
     >
-      <div className="space-y-2">
-        <SettingsChipGroup<'default' | 'off' | 'provider'>
-          aria-label={t('settings.webSearch.section.provider')}
-          value={mode}
-          options={[
-            { value: 'default', label: t('settings.webSearch.option.default') },
-            { value: 'off', label: t('settings.webSearch.option.off') },
-          ]}
-          onChange={(value) => {
-            if (value !== 'provider') chooseMode(value);
-          }}
-        />
-        <p className={SETTINGS_HELPER_CLASS}>{status}</p>
+      <div className={SETTINGS_SPACE_ROW_CLASS}>
+        <div className="space-y-2">
+          <SettingsChipGroup<'default' | 'off' | 'provider'>
+            aria-label={t('settings.webSearch.section.provider')}
+            value={mode}
+            options={[
+              { value: 'default', label: t('settings.webSearch.option.default') },
+              { value: 'off', label: t('settings.webSearch.option.off') },
+            ]}
+            onChange={(value) => {
+              if (value !== 'provider') chooseMode(value);
+            }}
+          />
+          <p className={SETTINGS_HELPER_CLASS}>{status}</p>
+        </div>
+        <TimeoutRow snapshot={snapshot} />
       </div>
     </SettingsSection>
   );
@@ -173,6 +176,43 @@ const ProviderCard: React.FC<{ provider: WebSearchProviderEntry; snapshot: WebSe
   );
 };
 
+const TimeoutRow: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
+  const { t } = useI18n();
+  const { busy, commit } = useChoose(snapshot);
+
+  return (
+    <SettingsFieldRow label={t('settings.webSearch.native.timeout')} settingsItem="web-search.timeout">
+      <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+        <NumberInput
+          value={snapshot.timeoutSeconds}
+          onValueChange={(value) => {
+            if (!Number.isFinite(value) || value < 1 || value > 300) return;
+            void commit({ timeoutSeconds: value });
+          }}
+          min={1}
+          max={300}
+          step={1}
+          disabled={busy}
+          className={SETTINGS_WIDTH_NUMBER_CLASS}
+          aria-label={t('settings.webSearch.native.timeout')}
+        />
+        <span className={SETTINGS_NUMBER_UNIT_CLASS} aria-hidden="true">{t('settings.webSearch.native.timeoutUnit')}</span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={SETTINGS_ICON_BUTTON_CLASS}
+          disabled={busy || snapshot.timeoutSeconds === DEFAULT_TIMEOUT_SECONDS}
+          onClick={() => void commit({ timeoutSeconds: DEFAULT_TIMEOUT_SECONDS })}
+          aria-label={t('settings.webSearch.native.resetTimeout')}
+          title={t('settings.common.actions.reset')}
+        >
+          <Icon name="restart" className="size-3.5" />
+        </Button>
+      </div>
+    </SettingsFieldRow>
+  );
+};
+
 const FallbackStatus: React.FC<{ provider: WebSearchProviderEntry | undefined }> = ({ provider }) => {
   const { t } = useI18n();
   if (provider?.requiresCredential && !provider.credentialConfigured) {
@@ -181,14 +221,14 @@ const FallbackStatus: React.FC<{ provider: WebSearchProviderEntry | undefined }>
   if (!provider?.configured) {
     return <SettingsCardPill tone="warning">{t('settings.webSearch.card.needsSetup')}</SettingsCardPill>;
   }
-  return <SettingsCardPill tone="success">{t('settings.webSearch.native.configured')}</SettingsCardPill>;
+  return null;
 };
 
 interface FallbackRow extends SettingsSortableListItem {
   provider: WebSearchProviderEntry | undefined;
 }
 
-const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
+const FallbacksSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
   const { t } = useI18n();
   const { busy, commit } = useChoose(snapshot);
   const rows: FallbackRow[] = snapshot.fallbackProviderIds.map((providerId) => {
@@ -204,13 +244,15 @@ const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapsh
   );
 
   return (
-    <>
-      <SettingsSection
-        title={t('settings.webSearch.native.fallbacks')}
-        info={t('settings.webSearch.native.fallbackInfo')}
-        settingsItem="web-search.fallbacks"
-      >
-        <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} space-y-2`}>
+    <SettingsSection
+      title={t('settings.webSearch.native.fallbacks')}
+      info={t('settings.webSearch.native.fallbackInfo')}
+      settingsItem="web-search.fallbacks"
+    >
+      <div className={SETTINGS_SPACE_ROW_CLASS}>
+        {rows.length === 0 ? (
+          <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.fallbacksEmpty')}</p>
+        ) : (
           <SettingsSortableList
             items={rows}
             disabled={busy}
@@ -218,77 +260,53 @@ const FallbacksAndTimeout: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapsh
             onReorder={(providerIds) => void commit({ fallbackProviderIds: providerIds })}
             renderRow={(row, index) => (
               <div className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="typography-meta w-4 shrink-0 text-right tabular-nums text-muted-foreground">{index + 1}</span>
+                <span className="typography-meta w-4 shrink-0 text-end tabular-nums text-muted-foreground">{index + 1}</span>
                 <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">{row.label}</span>
                 <FallbackStatus provider={row.provider} />
                 <Button
-                  variant="outline"
-                  size="xs"
+                  variant="ghost"
+                  size="icon"
                   disabled={busy}
+                  className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0')}
                   aria-label={t('settings.webSearch.native.removeFallback', { provider: row.label })}
+                  title={t('settings.webSearch.native.removeFallback', { provider: row.label })}
                   onClick={() => void commit({
                     fallbackProviderIds: snapshot.fallbackProviderIds.filter((value) => value !== row.id),
                   })}
                 >
-                  {t('settings.webSearch.keys.remove')}
+                  <Icon name="close" className="size-3.5" />
                 </Button>
               </div>
             )}
           />
-          <Select
-            value=""
-            disabled={busy || addable.length === 0}
-            onValueChange={(providerId) => void commit({ fallbackProviderIds: [...snapshot.fallbackProviderIds, providerId] })}
-          >
-            <SelectTrigger
-              className={SETTINGS_SELECT_TRIGGER_CLASS}
-              aria-label={t('settings.webSearch.native.addFallback')}
-            >
-              {/* The value is always empty: picking a provider commits it to the
-                  fallback list. So the trigger reads as this action's label, not
-                  as the id a `SelectValue` without children would print. */}
-              <SelectValue>{t('settings.webSearch.native.addFallback')}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
+        )}
+        <div className="flex flex-col items-start gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="xs" disabled={busy || addable.length === 0}>
+                <Icon name="add" className="size-3.5" />
+                {t('settings.webSearch.native.addFallback')}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
               {addable.map((provider) => (
-                <SelectItem key={provider.providerId} value={provider.providerId}>
+                <DropdownMenuItem
+                  key={provider.providerId}
+                  onClick={() => void commit({
+                    fallbackProviderIds: [...snapshot.fallbackProviderIds, provider.providerId],
+                  })}
+                >
                   {provider.name}
-                </SelectItem>
+                </DropdownMenuItem>
               ))}
-            </SelectContent>
-          </Select>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {addable.length === 0 && rows.length > 0 ? (
+            <p className={SETTINGS_HELPER_CLASS}>{t('settings.webSearch.native.addFallbackNone')}</p>
+          ) : null}
         </div>
-      </SettingsSection>
-      <SettingsSection title={t('settings.webSearch.native.timeout')} settingsItem="web-search.timeout">
-        <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
-          <NumberInput
-            value={snapshot.timeoutSeconds}
-            onValueChange={(value) => {
-              if (!Number.isFinite(value) || value < 1 || value > 300) return;
-              void commit({ timeoutSeconds: value });
-            }}
-            min={1}
-            max={300}
-            step={1}
-            disabled={busy}
-            className={SETTINGS_WIDTH_NUMBER_CLASS}
-            aria-label={t('settings.webSearch.native.timeout')}
-          />
-          <span className={SETTINGS_NUMBER_UNIT_CLASS} aria-hidden="true">{t('settings.webSearch.native.timeoutUnit')}</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={SETTINGS_ICON_BUTTON_CLASS}
-            disabled={busy || snapshot.timeoutSeconds === DEFAULT_TIMEOUT_SECONDS}
-            onClick={() => void commit({ timeoutSeconds: DEFAULT_TIMEOUT_SECONDS })}
-            aria-label={t('settings.webSearch.native.resetTimeout')}
-            title={t('settings.common.actions.reset')}
-          >
-            <Icon name="restart" className="size-3.5" />
-          </Button>
-        </div>
-      </SettingsSection>
-    </>
+      </div>
+    </SettingsSection>
   );
 };
 
@@ -500,7 +518,7 @@ export const WebSearchPage: React.FC = () => {
               </div>
             )}
           </SettingsSection>
-          <FallbacksAndTimeout snapshot={snapshot} />
+          <FallbacksSection snapshot={snapshot} />
         </>
       ) : failed || error !== null ? null : (
         <SettingsSection divider={false}>

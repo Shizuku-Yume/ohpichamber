@@ -77,6 +77,10 @@ One row pattern covers Settings, whatever the control:
   controls too wide for the row's control column. A `SettingsFieldRow`
   overflows a half-width cell.
 - `SettingsCheckboxRow` — booleans and independent on/off options.
+- `SettingsDisclosure` — a flat list item that expands into an editor. One ghost
+  toggle header (chevron, name, optional quiet summary) with an optional
+  `accessory` beside it, and the editor renders only while expanded. No card
+  or divide/border chrome; the rows' own padding sets their rhythm.
 - `OmpRowControl` — one OMP registry row per primitive: numbers, strings and
   enums render as field rows; booleans render as checkbox rows.
 

@@ -4,8 +4,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import {
   SETTINGS_CUSTOM_TRIGGER_CLASS,
@@ -15,6 +13,8 @@ import {
   SETTINGS_SPACE_CHECKBOX_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
   SettingsCheckboxRow,
+  SettingsControlGroup,
+  SettingsDisclosure,
   SettingsFieldRow,
   SettingsSection,
   SettingsStackedField,
@@ -33,6 +33,8 @@ import { JevAccessNote } from '@/components/sections/classification/JevAccessNot
 
 const DEFAULT_VARIANT_VALUE = '__default__';
 const SAVE_DEBOUNCE_MS = 500;
+/** The server's cap on categories; beyond it every save is a 400. */
+const MAX_CATEGORIES = 32;
 
 
 /**
@@ -47,6 +49,15 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
   });
   return trimmed(server) === trimmed(draft);
 };
+
+/**
+ * Ids of the categories the server would reject: it trims both fields and
+ * requires each to be non-empty. The save gate and the page's own signal use
+ * the same list, so what the page says and what it sends cannot drift apart.
+ */
+const invalidCategoryIds = (config: RoutingConfig): string[] => config.categories
+  .filter((category) => category.name.trim().length === 0 || category.description.trim().length === 0)
+  .map((category) => category.id);
 
 const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
 /** The thinking efforts OMP reports for one model; 'off' plus reasoningOptions. Empty when the model has none. */
@@ -102,96 +113,124 @@ const VariantSelect: React.FC<{
 };
 
 
-/** One category: a summary row that expands into its editor. */
+/** One category: a flat disclosure row that expands into its editor. */
 const CategoryRow: React.FC<{
   category: RoutingCategory;
   expanded: boolean;
+  autoFocusDescription: boolean;
+  onDescriptionFocused: () => void;
   onToggle: () => void;
   onChange: (patch: Partial<RoutingCategory>) => void;
   onReset: (() => void) | null;
   onRemove: () => void;
-}> = ({ category, expanded, onToggle, onChange, onReset, onRemove }) => {
+}> = ({ category, expanded, autoFocusDescription, onDescriptionFocused, onToggle, onChange, onReset, onRemove }) => {
   const { t } = useI18n();
+  const descriptionRef = React.useRef<HTMLTextAreaElement>(null);
   const efforts = useModelReasoningEfforts(category.model?.providerID, category.model?.modelID);
   const shownVariant = knownVariant(category.variant, efforts);
-  const modelLabel = category.model
+  const errorId = React.useId();
+  const nameErrorId = `${errorId}-name`;
+  const descriptionErrorId = `${errorId}-description`;
+  const summary = category.model
     ? `${category.model.modelID}${shownVariant ? ` / ${shownVariant}` : ''}`
-    : t('settings.routing.model.useFallback');
-  const summary = modelLabel;
+    : undefined;
+  const missingName = category.name.trim().length === 0;
+  const missingDescription = category.description.trim().length === 0;
+  const displayName = category.name.trim() || category.id;
+
+  // A freshly added category opens with its description empty, which is what
+  // the user must fill first; put the caret there instead of making them hunt.
+  React.useEffect(() => {
+    if (!expanded || !autoFocusDescription) return;
+    descriptionRef.current?.focus();
+    onDescriptionFocused();
+  }, [expanded, autoFocusDescription, onDescriptionFocused]);
+
   return (
-    <div className={cn('py-1', !category.enabled && 'opacity-60')}>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          onClick={onToggle}
-          aria-expanded={expanded}
-          className="flex h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1.5"
-        >
-          <Icon name={expanded ? 'arrow-down-s' : 'arrow-right-s'} className="size-4 shrink-0 text-muted-foreground" />
-          <span className="typography-ui-label font-medium text-foreground truncate">{category.name || category.id}</span>
-          <span className="typography-meta text-muted-foreground truncate">{summary}</span>
-        </Button>
-        <Switch
+    <SettingsDisclosure
+      title={displayName}
+      secondary={summary}
+      accessory={(
+        <SettingsCheckboxRow
           checked={category.enabled}
-          onCheckedChange={(checked) => onChange({ enabled: checked })}
-          aria-label={t('settings.routing.category.enabledAria', { name: category.name })}
+          onChange={(checked) => onChange({ enabled: checked })}
+          label={<span className="sr-only">{t('settings.routing.category.enabledAria', { name: displayName })}</span>}
+          ariaLabel={t('settings.routing.category.enabledAria', { name: displayName })}
         />
-      </div>
-      {expanded ? (
-        <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'px-1 pb-4 pt-2')}>
-          <SettingsTwoColumn>
-            <SettingsStackedField label={t('settings.routing.category.name')} controlClassName="max-w-none">
-              <Input
-                value={category.name}
-                onChange={(event) => onChange({ name: event.target.value })}
-                aria-label={t('settings.routing.category.name')}
-                inputSize="compact"
-                className="w-full"
-                maxLength={60}
-              />
-            </SettingsStackedField>
-            <SettingsStackedField label={t('settings.routing.category.model')} info={t('settings.routing.category.modelInfo')} controlClassName="max-w-none">
-              <ModelSelector
-                providerId={category.model?.providerID ?? ''}
-                modelId={category.model?.modelID ?? ''}
-                onChange={(providerID, modelID) => onChange({ model: { providerID, modelID }, variant: null })}
-                className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
-                placeholder={t('settings.routing.model.useFallback')}
-              />
-            </SettingsStackedField>
-          </SettingsTwoColumn>
-          <SettingsFieldRow label={t('settings.routing.category.thinking')} settingsItem="routing.category-thinking">
-            <VariantSelect
-              providerID={category.model?.providerID}
-              modelID={category.model?.modelID}
-              value={category.variant}
-              onChange={(variant) => onChange({ variant })}
-              ariaLabel={t('settings.routing.category.thinking')}
-            />
-          </SettingsFieldRow>
-          <SettingsStackedField
-            label={t('settings.routing.category.description')}
-            info={t('settings.routing.category.descriptionInfo')}
-            controlClassName="max-w-none"
-          >
-            <Textarea
-              value={category.description}
-              onChange={(event) => onChange({ description: event.target.value })}
-              aria-label={t('settings.routing.category.description')}
-              rows={5}
-              maxLength={2000}
+      )}
+      expanded={expanded}
+      onToggle={onToggle}
+      className={cn(!category.enabled && 'opacity-60')}
+    >
+      <SettingsTwoColumn>
+        <SettingsStackedField label={t('settings.routing.category.name')}>
+          <div className="w-full">
+            <Input
+              value={category.name}
+              onChange={(event) => onChange({ name: event.target.value })}
+              aria-label={t('settings.routing.category.name')}
+              aria-invalid={missingName || undefined}
+              aria-describedby={missingName ? nameErrorId : undefined}
+              inputSize="compact"
               className="w-full"
+              maxLength={60}
             />
-          </SettingsStackedField>
-          <div className="flex flex-wrap items-center gap-2">
-            {onReset ? (
-              <Button size="xs" variant="outline" onClick={onReset}>{t('settings.routing.category.reset')}</Button>
+            {missingName ? (
+              <p id={nameErrorId} className="mt-1 typography-meta text-[var(--status-error)]">
+                {t('settings.routing.category.nameRequired')}
+              </p>
             ) : null}
-            <Button size="xs" variant="ghost" onClick={onRemove}>{t('settings.routing.category.remove')}</Button>
           </div>
+        </SettingsStackedField>
+        <SettingsStackedField label={t('settings.routing.category.model')} info={t('settings.routing.category.modelInfo')}>
+          <ModelSelector
+            providerId={category.model?.providerID ?? ''}
+            modelId={category.model?.modelID ?? ''}
+            onChange={(providerID, modelID) => onChange({ model: { providerID, modelID }, variant: null })}
+            className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
+            placeholder={t('settings.routing.model.useFallback')}
+          />
+        </SettingsStackedField>
+      </SettingsTwoColumn>
+      <SettingsFieldRow label={t('settings.routing.category.thinking')} settingsItem="routing.category-thinking">
+        <VariantSelect
+          providerID={category.model?.providerID}
+          modelID={category.model?.modelID}
+          value={category.variant}
+          onChange={(variant) => onChange({ variant })}
+          ariaLabel={t('settings.routing.category.thinking')}
+        />
+      </SettingsFieldRow>
+      <SettingsStackedField
+        label={t('settings.routing.category.description')}
+        info={t('settings.routing.category.descriptionInfo')}
+      >
+        <div className="w-full">
+          <Textarea
+            ref={descriptionRef}
+            value={category.description}
+            onChange={(event) => onChange({ description: event.target.value })}
+            aria-label={t('settings.routing.category.description')}
+            aria-invalid={missingDescription || undefined}
+            aria-describedby={missingDescription ? descriptionErrorId : undefined}
+            rows={5}
+            maxLength={2000}
+            className="w-full"
+          />
+          {missingDescription ? (
+            <p id={descriptionErrorId} className="mt-1 typography-meta text-[var(--status-error)]">
+              {t('settings.routing.category.descriptionRequired')}
+            </p>
+          ) : null}
         </div>
-      ) : null}
-    </div>
+      </SettingsStackedField>
+      <div className="flex flex-wrap items-center gap-2">
+        {onReset ? (
+          <Button size="xs" variant="outline" onClick={onReset}>{t('settings.routing.category.reset')}</Button>
+        ) : null}
+        <Button size="xs" variant="ghost" onClick={onRemove}>{t('settings.routing.category.remove')}</Button>
+      </div>
+    </SettingsDisclosure>
   );
 };
 
@@ -208,7 +247,9 @@ export const RoutingPage: React.FC = () => {
 
   const [draft, setDraft] = React.useState<RoutingConfig | null>(serverConfig);
   const [newCategoryName, setNewCategoryName] = React.useState('');
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = React.useState<string[]>([]);
+  // The category just added: its editor opens and its description takes focus.
+  const [focusCategoryId, setFocusCategoryId] = React.useState<string | null>(null);
   // A pending edit remembers the server it was made against; a save that would
   // run after a runtime switch is dropped rather than sent to the new server.
   const pendingRef = React.useRef<{ config: RoutingConfig; runtimeKey: string } | null>(null);
@@ -233,6 +274,12 @@ export const RoutingPage: React.FC = () => {
   const flush = React.useCallback(() => {
     const pending = pendingRef.current;
     if (!pending) return saveChainRef.current;
+    // The server trims both fields and rejects an empty one with a 400. Sending
+    // the draft anyway would report a failure on every keystroke and leave the
+    // config unsaveable, so an invalid draft stays pending for the next edit.
+    if (invalidCategoryIds(pending.config).length > 0) {
+      return saveChainRef.current;
+    }
     pendingRef.current = null;
     if (pending.runtimeKey !== getRuntimeKey()) return saveChainRef.current;
     savesInFlightRef.current += 1;
@@ -295,17 +342,29 @@ export const RoutingPage: React.FC = () => {
 
   const addCategory = () => {
     const name = newCategoryName.trim();
-    if (!name || !draft) return;
+    if (!name || !draft || draft.categories.length >= MAX_CATEGORIES) return;
     const base = slugify(name) || `category-${Date.now()}`;
     let id = base;
     let counter = 2;
-    while (draft.categories.some((category) => category.id === id)) id = `${base}-${counter++}`;
+    // A built-in id is never stored as a user category, so a new category must
+    // not take the id of a built-in the user removed.
+    while (draft.categories.some((category) => category.id === id) || builtins.some((builtin) => builtin.id === id)) {
+      id = `${base}-${counter++}`;
+    }
     update((config) => ({
       ...config,
       categories: [...config.categories, { id, builtin: false, enabled: true, name, description: '', model: null, variant: null, agent: null }],
     }));
     setNewCategoryName('');
-    setExpandedId(id);
+    setExpandedIds((current) => (current.includes(id) ? current : [...current, id]));
+    setFocusCategoryId(id);
+  };
+
+  const toggleCategory = (id: string) => {
+    // A row held open by the invalid-draft gate stays open: collapsing it would
+    // hide the reason saves are blocked and drop its focused field.
+    if (draft && invalidCategoryIds(draft).includes(id)) return;
+    setExpandedIds((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
   };
 
   const resetCategory = (id: string) => {
@@ -326,6 +385,12 @@ export const RoutingPage: React.FC = () => {
   const removeCategory = (id: string) => {
     update((config) => ({ ...config, categories: config.categories.filter((category) => category.id !== id) }));
   };
+
+  // An invalid draft blocks the whole-config save, so the offending rows stay
+  // open and the section says why: collapsing the row must not hide the reason
+  // unrelated edits are not being sent.
+  const invalidIds = draft ? invalidCategoryIds(draft) : [];
+  const invalidDraft = invalidIds.length > 0;
 
   const enabledCount = draft?.categories.filter((category) => category.enabled).length ?? 0;
   const removedBuiltins = builtins.filter((builtin) => !draft?.categories.some((category) => category.id === builtin.id));
@@ -374,7 +439,6 @@ export const RoutingPage: React.FC = () => {
                   />
                 )}
               </div>
-              <p className={SETTINGS_HELPER_CLASS}>{readinessText}</p>
               <SettingsFieldRow
                 settingsItem="routing.fallback-model"
                 label={t('settings.routing.auto.fallbackModel')}
@@ -407,13 +471,21 @@ export const RoutingPage: React.FC = () => {
           <SettingsSection title={t('settings.routing.categories.title')}>
             <div className={SETTINGS_SPACE_ROW_CLASS}>
               <p className={SETTINGS_HELPER_CLASS}>{t('settings.routing.categories.description')}</p>
-              <div className="divide-y divide-border/40 border-y border-border/40">
+              <p className={SETTINGS_HELPER_CLASS}>{readinessText}</p>
+              {invalidDraft ? (
+                <p className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-warning)]')}>
+                  {t('settings.routing.categories.invalidDraft')}
+                </p>
+              ) : null}
+              <div>
                 {draft.categories.map((category) => (
                   <CategoryRow
                     key={category.id}
                     category={category}
-                    expanded={expandedId === category.id}
-                    onToggle={() => setExpandedId((current) => (current === category.id ? null : category.id))}
+                    expanded={expandedIds.includes(category.id) || invalidIds.includes(category.id)}
+                    autoFocusDescription={focusCategoryId === category.id}
+                    onDescriptionFocused={() => setFocusCategoryId(null)}
+                    onToggle={() => toggleCategory(category.id)}
                     onChange={(patch) => updateCategory(category.id, patch)}
                     onReset={category.builtin ? () => resetCategory(category.id) : null}
                     onRemove={() => removeCategory(category.id)}
@@ -421,30 +493,35 @@ export const RoutingPage: React.FC = () => {
                 ))}
               </div>
               {removedBuiltins.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  {removedBuiltins.map((builtin) => (
-                    <Button key={builtin.id} size="xs" variant="outline" onClick={() => restoreCategory(builtin.id)}>
-                      {t('settings.routing.category.restore', { name: builtin.name })}
-                    </Button>
-                  ))}
-                </div>
+                <SettingsControlGroup title={t('settings.routing.categories.removedTitle')}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {removedBuiltins.map((builtin) => (
+                      <Button key={builtin.id} size="xs" variant="ghost" onClick={() => restoreCategory(builtin.id)}>
+                        {t('settings.routing.category.restore', { name: builtin.name })}
+                      </Button>
+                    ))}
+                  </div>
+                </SettingsControlGroup>
               ) : null}
               <SettingsFieldRow label={t('settings.routing.categories.addLabel')} settingsItem="routing.add-category">
-                <div className="flex w-full min-w-0 items-center gap-2">
-                  <Input
-                    value={newCategoryName}
-                    onChange={(event) => setNewCategoryName(event.target.value)}
-                    onKeyDown={(event) => { if (event.key === 'Enter') addCategory(); }}
-                    placeholder={t('settings.routing.categories.addPlaceholder')}
-                    aria-label={t('settings.routing.categories.addLabel')}
-                    inputSize="compact"
-                    className="min-w-0 flex-1"
-                    maxLength={60}
-                  />
-                  <Button size="xs" variant="outline" onClick={addCategory} disabled={newCategoryName.trim().length === 0}>
-                    {t('settings.routing.categories.add')}
-                  </Button>
-                </div>
+                <Input
+                  value={newCategoryName}
+                  onChange={(event) => setNewCategoryName(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) addCategory(); }}
+                  placeholder={t('settings.routing.categories.addPlaceholder')}
+                  aria-label={t('settings.routing.categories.addLabel')}
+                  inputSize="compact"
+                  className="min-w-0 flex-1"
+                  maxLength={60}
+                />
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={addCategory}
+                  disabled={newCategoryName.trim().length === 0 || draft.categories.length >= MAX_CATEGORIES}
+                >
+                  {t('settings.routing.categories.add')}
+                </Button>
               </SettingsFieldRow>
             </div>
           </SettingsSection>

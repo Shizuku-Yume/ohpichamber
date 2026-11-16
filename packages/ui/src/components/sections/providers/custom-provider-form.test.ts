@@ -1,9 +1,27 @@
 import { expect, test } from 'bun:test';
-import type { Model, ProviderConfigurationRead } from '@openchamber/agent-contract';
+import type { Model, ModelCatalogInfo, ProviderConfigurationRead } from '@openchamber/agent-contract';
 import {
+  applyModelCatalogInfo,
+  autoFillFields,
+  autoFillIds,
+  autoFillNoticeFor,
+  autoFillNoticeIds,
+  catalogInputs,
+  formatAutoFillNoticeModels,
+  unresolvedAutoFillIds,
   buildCustomProviderRequest,
+  createDiscoveredModelRow,
   createEmptyCustomProviderForm,
   createModelRow,
+  discoveryFilterCounts,
+  discoveryFilterValues,
+  discoveryRows,
+  groupDiscoveryRows,
+  idsMissingCatalog,
+  idsToAdd,
+  markModelFieldTyped,
+  matchesDiscoveryFilter,
+  staleModelIds,
   isCustomProviderProtocol,
   isValidProviderID,
   modelModalitiesForKind,
@@ -105,7 +123,7 @@ test('validation points at duplicate model identities and invalid limits before 
 
   const validation = validateCustomProviderForm(form, new Set(), false, translate);
   expect(validation.valid).toBe(false);
-  expect(validation.models[0]?.maxOutputTokens).toBe('settings.providers.native.invalidConfiguration');
+  expect(validation.models[0]?.maxOutputTokens).toBe('settings.providers.page.custom.error.maxOutputExceedsContext');
   expect(validation.models[1]?.modelId).toBe('settings.providers.page.custom.error.duplicate');
 });
 
@@ -220,4 +238,258 @@ test('validation rejects a taken provider id only when creating', () => {
     .toBe('settings.providers.page.custom.error.providerID.exists');
   expect(validateCustomProviderForm(form, new Set(['campus']), true, translate).fields.providerId)
     .toBeUndefined();
+});
+
+// ── Model-info auto-fill and the discovery dialog ──────────────────────────
+
+const catalog = (overrides: Partial<ModelCatalogInfo> = {}): ModelCatalogInfo => ({
+  source: 'omp-catalog',
+  input: ['text'],
+  contextWindow: 200000,
+  maxTokens: 32000,
+  cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 0 },
+  reasoning: true,
+  toolsSupported: true,
+  family: 'claude',
+  ...overrides,
+});
+
+test('auto-fill writes only empty fields and never a value the user typed', () => {
+  const row = createModelRow({ modelId: 'claude-opus-4-6', name: 'Claude Opus 4.6' });
+  row.contextWindow = '4096';
+  const typed = markModelFieldTyped(row, 'contextWindow');
+
+  const fields = autoFillFields(typed, catalog({ input: ['text', 'image'] }));
+  expect(fields).not.toContain('contextWindow');
+  expect(fields).toEqual(expect.arrayContaining(['maxOutputTokens', 'modalities', 'toolsSupported', 'reasoning', 'pricing']));
+
+  const { models } = applyModelCatalogInfo([typed], new Map([['claude-opus-4-6', catalog()]]));
+  expect(models[0]!.contextWindow).toBe('4096');
+  expect(models[0]!.maxOutputTokens).toBe('32000');
+  expect(models[0]!.filledFrom.contextWindow).toBeUndefined();
+  expect(models[0]!.filledFrom.maxOutputTokens).toBe('omp-catalog');
+  expect(models[0]!.family).toBe('claude');
+});
+
+test('a filled value may be refilled, and the label follows the later source', () => {
+  const row = createModelRow({ modelId: 'mystery-model', name: 'Mystery' });
+  const first = applyModelCatalogInfo([row], new Map([['mystery-model', catalog({ source: 'omp-catalog' })]]));
+  const second = applyModelCatalogInfo(first.models, new Map([['mystery-model', catalog({ source: 'openrouter', maxTokens: 64000 })]]));
+  expect(second.models[0]!.maxOutputTokens).toBe('64000');
+  expect(second.models[0]!.filledFrom.maxOutputTokens).toBe('openrouter');
+});
+
+test('stale ids are the form rows the fresh discovery list no longer carries', () => {
+  const kept = createModelRow({ modelId: 'kept', name: 'Kept' });
+  const gone = createModelRow({ modelId: 'gone', name: 'Gone' });
+  const blank = createModelRow();
+  expect(staleModelIds([kept, gone, blank], [{ modelId: 'kept' }])).toEqual(['gone']);
+});
+
+test('add-all offers exactly the discovered ids the form does not hold', () => {
+  const existing = createModelRow({ modelId: 'b', name: 'B' });
+  expect(idsToAdd([existing], [
+    { modelId: 'a' },
+    { modelId: 'b' },
+    { modelId: 'a' },
+  ])).toEqual(['a']);
+});
+
+test('a discovered row is prefilled from its catalog without marking the values as typed', () => {
+  const row = createDiscoveredModelRow({ modelId: 'claude-opus-4-6', name: 'Claude Opus 4.6', catalog: catalog() });
+  expect(row.contextWindow).toBe('200000');
+  expect(row.filledFrom.contextWindow).toBe('omp-catalog');
+  // A later catalog read may still correct these values.
+  expect(autoFillFields(row, catalog({ maxTokens: 64000 }))).toContain('maxOutputTokens');
+});
+
+test('filter chips count every kind, and a chip whose count is zero still exists', () => {
+  const rows = discoveryRows(
+    [
+      { modelId: 'text-model', name: 'Text', catalog: catalog({ input: ['text'] }) },
+      { modelId: 'vision-model', name: 'Vision', catalog: catalog({ input: ['text', 'image'] }) },
+    ],
+    [createModelRow({ modelId: 'stale-model', name: 'Stale' })],
+  );
+  const counts = discoveryFilterCounts(rows);
+  expect(counts).toMatchObject({ all: 3, stale: 1, text: 3, image: 1, embedding: 0, audio: 0 });
+  expect(discoveryFilterValues).toEqual(['all', 'stale', 'text', 'image', 'embedding', 'audio']);
+  expect(matchesDiscoveryFilter(rows[0]!, 'image')).toBe(false);
+  expect(matchesDiscoveryFilter(rows[1]!, 'image')).toBe(true);
+  expect(matchesDiscoveryFilter(rows[2]!, 'stale')).toBe(true);
+});
+
+test('family grouping only happens when every visible row names a family', () => {
+  const familyRows = discoveryRows([
+    { modelId: 'a', name: 'A', catalog: catalog({ family: 'claude', input: ['text'] }) },
+    { modelId: 'b', name: 'B', catalog: catalog({ family: 'claude', input: ['text'] }) },
+  ], []);
+  expect(groupDiscoveryRows(familyRows).grouped).toBe(true);
+
+  const mixed = discoveryRows([
+    { modelId: 'a', name: 'A', catalog: catalog({ family: 'claude', input: ['text'] }) },
+    { modelId: 'b', name: 'B', catalog: catalog({ input: ['text'], family: undefined }) },
+  ], []);
+  expect(groupDiscoveryRows(mixed).grouped).toBe(false);
+});
+
+test('the OpenRouter step asks only for ids the OMP catalog did not answer', () => {
+  const known = createModelRow({ modelId: 'known', name: 'Known' });
+  const unknown = createModelRow({ modelId: 'unknown', name: 'Unknown' });
+  const answers = new Map([['known', catalog()]]);
+  expect(idsMissingCatalog([known, unknown], answers)).toEqual(['unknown']);
+});
+
+test('an enterprise refusal is reported even when no catalog answered any id', () => {
+  expect(autoFillNoticeFor({ lookup: 'enterprise', answered: 0, filled: 0, unresolved: ['a', 'b'] })).toBe('enterprise');
+  expect(autoFillNoticeFor({ lookup: 'failed', answered: 0, filled: 0, unresolved: [] })).toBe('failed');
+});
+
+test('the notice tells no-data, nothing-to-fill and partial apart', () => {
+  expect(autoFillNoticeFor({ lookup: null, answered: 0, filled: 0, unresolved: ['a'] })).toBe('none');
+  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 0, unresolved: [] })).toBe('nothing');
+  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 1, unresolved: ['b'] })).toBe('partial');
+  expect(autoFillNoticeFor({ lookup: null, answered: 2, filled: 1, unresolved: [] })).toBeNull();
+});
+
+test('catalog inputs are written text first regardless of the source order', () => {
+  expect(catalogInputs(['image', 'text'])).toEqual(['text', 'image']);
+  const row = createModelRow({ modelId: 'vision-model', name: 'Vision' });
+  const { models } = applyModelCatalogInfo([row], new Map([['vision-model', catalog({ input: ['image', 'text'] })]]));
+  expect(models[0]!.modalities).toEqual(['text', 'image']);
+});
+
+test('a family-only answer fills nothing', () => {
+  const row = createModelRow({ modelId: 'plain', name: 'Plain', contextWindow: 1, maxOutputTokens: 1, });
+  const typedAll = ['contextWindow', 'maxOutputTokens', 'modalities', 'toolsSupported', 'reasoning', 'pricing'] as const;
+  let current = row;
+  for (const field of typedAll) current = markModelFieldTyped(current, field);
+  const { filled, models } = applyModelCatalogInfo([current], new Map([['plain', catalog({ family: 'claude' })]]));
+  expect(filled).toBe(0);
+  expect(models[0]!.family).toBeUndefined();
+});
+
+test('a discovered row with no catalog and no form row still counts as text', () => {
+  const rows = discoveryRows([{ modelId: 'bare', name: 'Bare' }], []);
+  expect(matchesDiscoveryFilter(rows[0]!, 'text')).toBe(true);
+  expect(discoveryFilterCounts(rows).text).toBe(1);
+});
+
+test('auto-fill ids are distinct model ids in form order', () => {
+  const models = [createModelRow({ modelId: ' a ', name: 'A' }), createModelRow({ modelId: 'b', name: 'B' }), createModelRow({ modelId: 'a', name: 'A again' })];
+  expect(autoFillIds(models)).toEqual(['a', 'b']);
+});
+
+test('validation names the output limit and header problems specifically', () => {
+  const form = createEmptyCustomProviderForm();
+  form.providerId = 'campus';
+  form.name = 'Campus';
+  form.endpoint = 'https://models.example.edu/v1';
+  form.models[0]!.modelId = 'research';
+  form.models[0]!.name = 'Research';
+  form.models[0]!.contextWindow = '4096';
+  form.models[0]!.maxOutputTokens = '8192';
+  expect(validateCustomProviderForm(form, new Set(), false, translate).models[0]!.maxOutputTokens)
+    .toBe('settings.providers.page.custom.error.maxOutputExceedsContext');
+
+  form.models[0]!.maxOutputTokens = '512';
+  form.headers[0]!.name = 'bad header';
+  form.headers[0]!.value = 'x';
+  expect(validateCustomProviderForm(form, new Set(), false, translate).headers[0]!.name)
+    .toBe('settings.providers.page.custom.error.headerName.format');
+});
+
+test('discovered ids compare trimmed against form rows', () => {
+  const row = createModelRow({ modelId: 'kept', name: 'Kept' });
+  expect(staleModelIds([row], [{ modelId: ' kept ' }])).toEqual([]);
+  expect(idsToAdd([row], [{ modelId: ' kept ' }, { modelId: ' new ' }])).toEqual(['new']);
+  expect(discoveryRows([{ modelId: ' kept ', name: 'Kept' }], [row])[0]!.formRow).toBe(row);
+});
+
+test('a real-path fill reports exactly the ids no source answered', () => {
+  // Six models in the form: the OMP catalog knows three, OpenRouter one more,
+  // and two stay unknown — those two are what the notice must list.
+  const ids = ['known-a', 'known-b', 'known-c', 'openrouter-d', 'unknown-e', 'unknown-f'];
+  const answers = new Map<string, ModelCatalogInfo>([
+    ['known-a', catalog()],
+    ['known-b', catalog()],
+    ['known-c', catalog()],
+    ['openrouter-d', catalog({ source: 'openrouter' })],
+  ]);
+  // The first 200 of the catalog's misses go to the Host route, so with a
+  // short list every id reaches the unresolved set.
+  const candidates = unresolvedAutoFillIds(ids, answers);
+  expect(candidates).toEqual(['unknown-e', 'unknown-f']);
+  expect(autoFillNoticeFor({ lookup: null, answered: answers.size, filled: 3, unresolved: candidates })).toBe('partial');
+
+  // A deduped list: the same id twice in the form is reported once.
+  expect(unresolvedAutoFillIds(['ghost', 'ghost', 'known-a'], answers)).toEqual(['ghost']);
+});
+
+test('ids a source cap kept out of the request are reported as unresolved', () => {
+  const answers = new Map([['asked', catalog()]]);
+  const overCap = ['beyond-cap-1', 'beyond-cap-2'];
+  const unresolved = unresolvedAutoFillIds(['asked', ...overCap], answers);
+  expect(unresolved).toEqual(['beyond-cap-1', 'beyond-cap-2']);
+  expect(autoFillNoticeFor({ lookup: null, answered: 1, filled: 1, unresolved })).toBe('partial');
+});
+
+test('typing into a filled field retires its source label', () => {
+  const row = createModelRow({ modelId: 'claude-opus-4-6', name: 'Claude Opus 4.6' });
+  const filled = applyModelCatalogInfo([row], new Map([['claude-opus-4-6', catalog()]])).models[0]!;
+  expect(filled.filledFrom.contextWindow).toBe('omp-catalog');
+
+  const typed = markModelFieldTyped(filled, 'contextWindow');
+  expect(typed.typed.has('contextWindow')).toBe(true);
+  expect(typed.filledFrom.contextWindow).toBeUndefined();
+  // The other fields keep their provenance.
+  expect(typed.filledFrom.maxOutputTokens).toBe('omp-catalog');
+  // Clearing the limit keeps it typed, so auto-fill leaves it empty.
+  expect(autoFillFields({ ...typed, contextWindow: '' }, catalog())).not.toContain('contextWindow');
+});
+
+test('add-all takes a padded discovered id and adds it trimmed', () => {
+  const discovered = [
+    { modelId: ' model-a ', name: 'A' },
+    { modelId: 'model-b', name: 'B' },
+  ];
+  const addable = idsToAdd([], discovered);
+  expect(addable).toEqual(['model-a', 'model-b']);
+
+  // What the form's add path does with those ids.
+  const wanted = new Set(addable);
+  const added = discovered
+    .map((model) => ({ ...model, modelId: model.modelId.trim() }))
+    .filter((model) => wanted.has(model.modelId));
+  expect(added.map((model) => model.modelId)).toEqual(['model-a', 'model-b']);
+  expect(added.map((model) => createDiscoveredModelRow(model).modelId)).toEqual(['model-a', 'model-b']);
+});
+
+test('unknown ids outrank "nothing to fill" on a repeat or prefilled fill', () => {
+  // A discovery already prefilled the catalogued rows, so this fill writes
+  // nothing — while two models still have no limits from any source.
+  expect(autoFillNoticeFor({ lookup: null, answered: 4, filled: 0, unresolved: ['x'] })).toBe('partial');
+  // Nothing was written and nothing is unknown: that is the "nothing" case.
+  expect(autoFillNoticeFor({ lookup: null, answered: 4, filled: 0, unresolved: [] })).toBe('nothing');
+  // No source answered at all still says so, with or without ids left.
+  expect(autoFillNoticeFor({ lookup: null, answered: 0, filled: 0, unresolved: ['x'] })).toBe('none');
+});
+
+test('the partial notice names at most ten unknown ids and counts the rest', () => {
+  const ids = Array.from({ length: 13 }, (_, index) => `unknown-${index + 1}`);
+  const capped = autoFillNoticeIds(ids);
+  expect(capped.shown).toHaveLength(10);
+  expect(capped.shown[9]).toBe('unknown-10');
+  expect(capped.hidden).toBe(3);
+
+  expect(autoFillNoticeIds(['a', 'b'])).toEqual({ shown: ['a', 'b'], hidden: 0 });
+  expect(autoFillNoticeIds([])).toEqual({ shown: [], hidden: 0 });
+});
+
+test('the capped id list hands its remainder to a translated sentence', () => {
+  const more = (models: string, count: number) => `${models} and ${count} more`;
+  expect(formatAutoFillNoticeModels(['a', 'b'], more)).toBe('a, b');
+  expect(formatAutoFillNoticeModels([], more)).toBe('');
+  const ids = Array.from({ length: 13 }, (_, index) => `m${index + 1}`);
+  expect(formatAutoFillNoticeModels(ids, more)).toBe(`${ids.slice(0, 10).join(', ')} and 3 more`);
 });

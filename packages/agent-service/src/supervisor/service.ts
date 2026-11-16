@@ -15,7 +15,7 @@ import type {
   ProblemDetails, ProviderCatalog, ProviderCredentialMutationResult, ProviderMutationResult,
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, ShellStreamResponse, ShellStdinResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
-  ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
+  ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderModelEnrichResult, ProviderConfigurationRead,
   CacheWarmingState, CacheWarmingApplyResult, OmpSettingsState,
   UsageStats, UsageToolsResponse, ImageGenerateResult, ImageModelMutationResult,
   WebSearchConfigState, WebSearchMutationResult,
@@ -98,7 +98,8 @@ type ServiceResponse =
   | ExtensionInventoryState
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
-  | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
+  | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderModelEnrichResult
+  | ProviderConfigurationRead
   | CacheWarmingState | CacheWarmingApplyResult | OmpSettingsState
   | WebSearchConfigState | WebSearchMutationResult
   | { sessionId: string; permissionMode: PermissionMode }

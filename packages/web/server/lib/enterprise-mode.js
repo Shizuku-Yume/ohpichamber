@@ -36,6 +36,11 @@ import { z } from 'zod';
  *   fetches are refused (`host/canonical-routes.js`): package-manager commands
  *   can access external registries. Catalog reads, settings, enable/disable and
  *   confined workspace extension source authoring remain local and available.
+ * - Provider model-info auto-fill does not reach OpenRouter's public model list
+ *   (`host/openrouter-model-info.js`): the request carries model ids only, and
+ *   the Host still refuses it, so auto-fill answers from the bundled catalog.
+ *   Provider entry above is a different operation; this gate is only about the
+ *   lookup request.
  * - MCP sign-in is refused: starting an OAuth flow (`host/canonical-routes.js`
  *   and the worker `mcp-oauth` authorization branch), and the public browser
  *   callback that finishes it (`host/mcp-oauth-callback.js`). Servers that need

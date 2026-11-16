@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ProviderConfigurationRead, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
+import type { ModelCatalogInfo, ProviderConfigurationRead, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
 import {
   SettingsCheckboxRow,
   SettingsSection,
@@ -28,23 +28,36 @@ import { ProviderLogoImageControl } from './ProviderLogoImageControl';
 import { cn } from '@/lib/utils';
 import {
   CUSTOM_PROVIDER_PROTOCOLS,
+  AUTO_FILL_ENRICH_LIMIT,
+  AUTO_FILL_OPENROUTER_LIMIT,
+  applyModelCatalogInfo,
+  autoFillIds,
+  autoFillNoticeFor,
+  formatAutoFillNoticeModels,
+  unresolvedAutoFillIds,
   buildCustomProviderRequest,
   buildProviderDiscoveryRequest,
+  createDiscoveredModelRow,
   createEmptyCustomProviderForm,
   createHeaderRow,
   createModelRow,
+  idsMissingCatalog,
   isCustomProviderProtocol,
+  markModelFieldTyped,
   validateCustomProviderForm,
   type CustomProviderFormState,
   type CustomProviderPersistPlan,
   type CustomProviderFieldErrors,
   type CustomProviderProtocol,
   type CustomProviderTranslator,
+  type AutoFillNotice,
   type HeaderFieldErrors,
+  type ModelAutoFillField,
   type ModelFieldErrors,
 } from './custom-provider-form';
-import { CustomProviderModelDiscovery } from './CustomProviderModelDiscovery';
+import { CustomProviderModelsDialog } from './CustomProviderModelsDialog';
 import { CustomProviderModelRow } from './CustomProviderModelRow';
+import { CanonicalApiError } from '@/api/canonicalClient';
 import { problemMessage } from '@/lib/problemMessage';
 
 interface CustomProviderFormProps {
@@ -97,6 +110,13 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
   const [discovering, setDiscovering] = React.useState(false);
   const [discoveryError, setDiscoveryError] = React.useState<string | null>(null);
   const [discoveredModels, setDiscoveredModels] = React.useState<ProviderModelDiscoveryResult['models'] | null>(null);
+  const [modelsDialogOpen, setModelsDialogOpen] = React.useState(false);
+  const [autoFilling, setAutoFilling] = React.useState(false);
+  // A fill that had to stop at the OMP catalog says so instead of reading as
+  // a complete answer; a fill that wrote nothing says that too.
+  const [autoFillNotice, setAutoFillNotice] = React.useState<AutoFillNotice | null>(null);
+  // Ids no source could answer for, listed in the partial notice.
+  const [unresolvedModelIds, setUnresolvedModelIds] = React.useState<string[]>([]);
   // Rows open for editing. A provider can carry dozens of imported models, so
   // saved and imported rows start collapsed; a row added by hand opens.
   const [expandedRows, setExpandedRows] = React.useState<Set<string>>(() => (
@@ -120,7 +140,13 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     setPickedLogoUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [pickedLogoFile]);
-  const disabled = busy || discovering;
+  const disabled = busy || discovering || autoFilling;
+  // A long list of ids would bury the row; the count carries the rest through
+  // the translated "and N more" sentence.
+  const partialNoticeModels = formatAutoFillNoticeModels(
+    unresolvedModelIds,
+    (models, count) => t('settings.providers.page.custom.models.autofill.notice.moreModels', { models, count }),
+  );
 
   const setField = (key: 'providerId' | 'name' | 'endpoint' | 'apiKey', value: string) => {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -191,13 +217,24 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     return next;
   });
 
+  /** The fill summary described the previous row set; a changed set retires it. */
+  const clearAutoFillNotice = () => {
+    setAutoFillNotice(null);
+    setUnresolvedModelIds([]);
+  };
+
   const discoverModels = async () => {
     setDiscovering(true);
     setDiscoveryError(null);
     const runtime = getRuntimeKey();
     try {
       const result = await canonicalClient.discoverProviderModels(workspaceId, buildProviderDiscoveryRequest(form, isEdit));
-      if (lifetime.current && runtime === getRuntimeKey()) setDiscoveredModels(result.models);
+      if (lifetime.current && runtime === getRuntimeKey()) {
+        setDiscoveredModels(result.models);
+        setModelsDialogOpen(true);
+        // The reviewed list changed; an old fill summary no longer describes it.
+        clearAutoFillNotice();
+      }
     } catch (error) {
       if (lifetime.current && runtime === getRuntimeKey()) {
         setDiscoveryError(problemMessage(error, t('settings.providers.page.custom.discovery.failed')));
@@ -207,16 +244,105 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     }
   };
 
-  const addDiscoveredModels = (models: ProviderModelDiscoveryResult['models']) => {
+  const addDiscoveredModels = (modelIds: string[]) => {
+    const wanted = new Set(modelIds.map((modelId) => modelId.trim()));
     setForm((previous) => {
       const existing = new Set(previous.models.map((model) => model.modelId.trim()).filter(Boolean));
-      const added = models.filter((model) => !existing.has(model.modelId)).map((model) => createModelRow(model));
+      // Discovery may pad an id; the row and the dialog both carry it trimmed.
+      const added = (discoveredModels ?? [])
+        .map((model) => ({ ...model, modelId: model.modelId.trim() }))
+        .filter((model) => wanted.has(model.modelId) && !existing.has(model.modelId))
+        .map(createDiscoveredModelRow);
       // The blank starter row of a new form gives way to the imported models.
       const kept = previous.models.filter((model) => model.modelId.trim() || model.name.trim());
       return { ...previous, models: [...kept, ...added] };
     });
     setModelErrors([]);
-    setDiscoveredModels(null);
+    clearAutoFillNotice();
+  };
+
+  const removeModelRows = (modelIds: string[]) => {
+    const unwanted = new Set(modelIds);
+    setForm((previous) => {
+      const models = previous.models.filter((model) => !unwanted.has(model.modelId.trim()));
+      // A provider keeps at least one editable row to fill in.
+      return { ...previous, models: models.length > 0 ? models : [createModelRow()] };
+    });
+    setModelErrors([]);
+    clearAutoFillNotice();
+  };
+
+  const markTyped = (index: number, field: ModelAutoFillField) => {
+    setForm((previous) => ({
+      ...previous,
+      models: previous.models.map((row, rowIndex) => (rowIndex === index ? markModelFieldTyped(row, field) : row)),
+    }));
+  };
+
+  /**
+   * Fills the blanks from OMP's bundled catalog first, then asks the Host for
+   * OpenRouter's view of the ids the catalog did not know. Only ids travel.
+   * Enterprise policy or a failed request leaves the catalog-only result and
+   * says so; a value the user typed is never replaced.
+   */
+  const autoFillModels = async () => {
+    const ids = autoFillIds(form.models);
+    if (ids.length === 0) return;
+    setAutoFilling(true);
+    setAutoFillNotice(null);
+    setUnresolvedModelIds([]);
+    const runtime = getRuntimeKey();
+    const answers = new Map<string, ModelCatalogInfo>();
+    const isCurrent = () => lifetime.current && runtime === getRuntimeKey();
+    // A refusal or failure of the OpenRouter leg outlives the later summary:
+    // the catalog-only result must never read as a complete one.
+    let lookupNotice: 'enterprise' | 'failed' | null = null;
+    // Each source has its own cap; ids beyond a cap were never asked about.
+    const enrichIds = ids.slice(0, AUTO_FILL_ENRICH_LIMIT);
+    const overCap = ids.slice(AUTO_FILL_ENRICH_LIMIT);
+    try {
+      const enriched = await canonicalClient.enrichProviderModels(workspaceId, {
+        ...(form.providerId.trim() ? { providerId: form.providerId.trim() } : {}),
+        models: enrichIds.map((modelId) => ({ modelId })),
+      });
+      if (!isCurrent()) return;
+      for (const entry of enriched.models) {
+        if (entry.catalog) answers.set(entry.modelId, entry.catalog);
+      }
+      const candidates = idsMissingCatalog(form.models, answers);
+      const missing = candidates.slice(0, AUTO_FILL_OPENROUTER_LIMIT);
+      if (missing.length > 0) {
+        try {
+          const openRouter = await canonicalClient.openRouterModelInfo(missing);
+          if (!isCurrent()) return;
+          for (const entry of openRouter.models) answers.set(entry.modelId, entry.catalog);
+        } catch (error) {
+          if (!isCurrent()) return;
+          lookupNotice = error instanceof CanonicalApiError && error.problem.code === 'enterprise_mode' ? 'enterprise' : 'failed';
+        }
+      }
+      // Applied to the rows the form holds now, so a field typed while the
+      // requests ran is still skipped; the preview only feeds the notice.
+      const preview = applyModelCatalogInfo(form.models, answers);
+      setForm((previous) => ({ ...previous, models: applyModelCatalogInfo(previous.models, answers).models }));
+      if (!isCurrent()) return;
+      // Every id either source did not answer, including ids a cap kept out of
+      // a request: those are exactly the rows whose limits stay empty.
+      const unresolved = unresolvedAutoFillIds([...candidates, ...overCap], answers);
+      setUnresolvedModelIds(unresolved);
+      setAutoFillNotice(autoFillNoticeFor({
+        lookup: lookupNotice,
+        answered: answers.size,
+        filled: preview.filled,
+        unresolved,
+      }));
+    } catch (error) {
+      if (!isCurrent()) return;
+      const refused = error instanceof CanonicalApiError && error.problem.code === 'enterprise_mode';
+      setAutoFillNotice(refused ? 'enterprise' : 'failed');
+    } finally {
+      if (lifetime.current) setAutoFilling(false);
+    }
   };
 
   const submit = async (event: React.FormEvent) => {
@@ -426,7 +552,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         contentClassName={SETTINGS_SPACE_ROW_CLASS}
       >
         <div className={`${SETTINGS_WIDTH_LONG_TEXT_CLASS} flex flex-col gap-2`}>
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               type="button"
               variant="outline"
@@ -439,15 +565,40 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                 ? t('settings.providers.page.custom.discovery.fetching')
                 : t('settings.providers.page.custom.discovery.fetch')}
             </Button>
-            <SettingsInfoHint>{t('settings.providers.native.discoveryHint')}</SettingsInfoHint>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => void autoFillModels()}
+              disabled={disabled || !form.models.some((model) => model.modelId.trim())}
+            >
+              <Icon name="sparkling" className="size-3.5" />
+              {autoFilling
+                ? t('settings.providers.page.custom.models.autofill.running')
+                : t('settings.providers.page.custom.models.autofill.action')}
+            </Button>
+            <SettingsInfoHint>{t('settings.providers.page.custom.models.autofill.info')}</SettingsInfoHint>
           </div>
           {discoveryError ? <p className="typography-meta text-[var(--status-error)]" role="alert">{discoveryError}</p> : null}
+          {autoFillNotice ? (
+            <p className="typography-meta text-muted-foreground" role="status">
+              {autoFillNotice === 'partial'
+                ? t('settings.providers.page.custom.models.autofill.notice.partial', { models: partialNoticeModels })
+                : t(`settings.providers.page.custom.models.autofill.notice.${autoFillNotice}`)}
+            </p>
+          ) : null}
           {discoveredModels ? (
-            <CustomProviderModelDiscovery
-              models={discoveredModels}
-              existingIds={new Set(form.models.map((model) => model.modelId.trim()).filter(Boolean))}
+            <CustomProviderModelsDialog
+              open={modelsDialogOpen}
+              onOpenChange={(open) => {
+                setModelsDialogOpen(open);
+                if (!open) setDiscoveredModels(null);
+              }}
+              discovered={discoveredModels}
+              models={form.models}
+              busy={busy}
               onAdd={addDiscoveredModels}
-              onCancel={() => setDiscoveredModels(null)}
+              onRemove={removeModelRows}
             />
           ) : null}
         </div>
@@ -464,12 +615,14 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               onChange={(key, value) => setModel(index, key, value)}
               onToggleModality={(modality) => toggleModality(index, modality)}
               onToolsChange={(tools) => setTools(index, tools)}
+              onUserEdit={(field) => markTyped(index, field)}
               onRemove={form.models.length > 1 ? () => {
                 setForm((previous) => ({
                   ...previous,
                   models: previous.models.filter((_, rowIndex) => rowIndex !== index),
                 }));
                 setModelErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index));
+                clearAutoFillNotice();
               } : undefined}
             />
           ))}
@@ -484,6 +637,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             setForm((previous) => ({ ...previous, models: [...previous.models, row] }));
             setModelErrors((previous) => [...previous, {}]);
             setExpandedRows((previous) => new Set([...previous, row.row]));
+            clearAutoFillNotice();
           }}
         >
           {t('settings.providers.page.custom.models.add')}

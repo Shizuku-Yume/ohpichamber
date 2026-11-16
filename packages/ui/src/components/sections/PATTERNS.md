@@ -43,6 +43,7 @@ Consult only the branches affected by the change; these are ordinary module refe
 | Label above control (two-column cells, wide controls only) | `SettingsStackedField` |
 | Boolean | `SettingsCheckboxRow` |
 | OMP registry row (number, string, enum, boolean from one setting) | `OmpRowControl` |
+| OMP read-summary preset (one picker over five setting ids) | `OmpReadSummaryPresetRow` |
 | Mutually exclusive list | `SettingsRadioGroup` + `SettingsRadioOption` |
 | Short segmented options | `SettingsChipGroup` |
 | Sub-cluster with a quiet L3 title inside a section | `SettingsControlGroup` |

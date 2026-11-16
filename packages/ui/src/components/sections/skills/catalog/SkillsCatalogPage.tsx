@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SettingsSection } from '@/components/sections/shared/SettingsSection';
+import {
+  SettingsSection,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+} from '@/components/sections/shared/SettingsSection';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import {
   Dialog,
@@ -407,14 +410,14 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
         )}
 
         <div data-settings-item="skills.catalog.search" className="mb-5">
-          <div className="relative max-w-md">
+          <div className={cn('relative', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
             <Icon name="search" className="absolute inset-s-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('settings.skills.catalog.page.searchAllPlaceholder')}
-              className={cn('h-8 ps-8 w-full', search && 'pe-8')}
+              className={cn('ps-8', search && 'pe-8')}
             />
             {search && (
               <button
@@ -436,9 +439,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
           title={t('settings.skills.catalog.page.section.sources')}
           divider={false}
           settingsItem="skills.catalog.source"
-          contentClassName="space-y-0"
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1.5">
+          <div className="grid grid-cols-1 gap-3 py-1.5 @xl:grid-cols-2">
             {sources.map((src) => (
               <SourceCard
                 key={src.id}

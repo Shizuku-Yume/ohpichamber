@@ -10,10 +10,10 @@ import { cn } from '@/lib/utils';
 import {
   SETTINGS_CUSTOM_TRIGGER_CLASS,
   SETTINGS_DESCRIPTION_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
   SettingsCheckboxRow,
   SettingsFieldRow,
   SettingsSection,
@@ -88,7 +88,7 @@ const VariantSelect: React.FC<{
   };
   return (
     <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={efforts.length === 0}>
-      <SelectTrigger className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
+      <SelectTrigger className={cn(SETTINGS_WIDTH_SELECT_CLASS, className)} aria-label={ariaLabel}>
         <SelectValue>{label(selected)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -138,7 +138,7 @@ const CategoryRow: React.FC<{
         />
       </div>
       {expanded ? (
-        <div className="space-y-4 px-1 pb-4 pt-2">
+        <div className={cn(SETTINGS_SPACE_ROW_CLASS, 'px-1 pb-4 pt-2')}>
           <SettingsTwoColumn>
             <SettingsStackedField label={t('settings.routing.category.name')} controlClassName="max-w-none">
               <Input
@@ -274,8 +274,8 @@ export const RoutingPage: React.FC = () => {
       ...config,
       fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: null },
     }));
-  // `update` is stable; the effect keys on what decides whether to prefill.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // `update` is stable; the effect keys on what decides whether to prefill.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, serverConfig, settingsDefaultModel]);
 
   const update = React.useCallback((mutate: (config: RoutingConfig) => RoutingConfig) => {
@@ -331,14 +331,14 @@ export const RoutingPage: React.FC = () => {
   const removedBuiltins = builtins.filter((builtin) => !draft?.categories.some((category) => category.id === builtin.id));
 
   const readinessText = !draft?.enabled
-      ? t('settings.routing.status.disabled')
-      : !draft.fallback
-        ? t('settings.routing.status.noFallback')
-        : enabledCount < 2
-          ? t('settings.routing.status.tooFewCategories')
-          : autoReady
-            ? t('settings.routing.status.ready')
-            : t('settings.routing.status.notReady');
+    ? t('settings.routing.status.disabled')
+    : !draft.fallback
+      ? t('settings.routing.status.noFallback')
+      : enabledCount < 2
+        ? t('settings.routing.status.tooFewCategories')
+        : autoReady
+          ? t('settings.routing.status.ready')
+          : t('settings.routing.status.notReady');
 
   return (
     <SettingsPageLayout
@@ -352,9 +352,9 @@ export const RoutingPage: React.FC = () => {
       ) : (
         <>
           <SettingsSection title={t('settings.routing.auto.title')} divider={false}>
-            <div className={SETTINGS_FIELDS_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <JevAccessNote />
-              <div className={SETTINGS_OPTION_STACK_CLASS}>
+              <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
                 <SettingsCheckboxRow
                   settingsItem="routing.enabled"
                   checked={draft.enabled}
@@ -405,7 +405,7 @@ export const RoutingPage: React.FC = () => {
           </SettingsSection>
 
           <SettingsSection title={t('settings.routing.categories.title')}>
-            <div className={SETTINGS_FIELDS_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <p className={SETTINGS_HELPER_CLASS}>{t('settings.routing.categories.description')}</p>
               <div className="divide-y divide-border/40 border-y border-border/40">
                 {draft.categories.map((category) => (

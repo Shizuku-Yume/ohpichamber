@@ -4,7 +4,7 @@ import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import {
   SettingsFieldRow,
   SettingsStackedField,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/lib/i18n';
@@ -51,7 +51,7 @@ export const ModelEffortPicker: React.FC<ModelEffortPickerProps> = ({
   const currentLabel = options.find((entry) => entry.level === current)?.label ?? current;
   return (
     <Select value={current} onValueChange={onChange} disabled={disabled}>
-      <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={ariaLabel}>
+      <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={ariaLabel}>
         <SelectValue>{currentLabel}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -146,7 +146,7 @@ export const ModelRoleEditor: React.FC<ModelRoleEditorProps> = ({
         directory={directory}
         loading={loading}
         placeholder={t('settings.omp.modelRoles.inheritFallback')}
-        className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+        className={SETTINGS_WIDTH_SELECT_CLASS}
       />
       <ModelEffortPicker
         model={model}

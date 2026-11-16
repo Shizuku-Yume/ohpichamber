@@ -67,7 +67,7 @@ export const buildBuiltInExtensions = async ({ sourceRoot = path.join(repoRoot, 
           plugins: [{
             name: 'public-sdk-entrypoints',
             setup(build) {
-              build.onResolve({ filter: /^@openchamber\/sdk(?:\/ui|\/schemas)?$/ }, ({ path: specifier }) => ({
+              build.onResolve({ filter: /^ohpichamber-sdk(?:\/ui|\/schemas)?$/ }, ({ path: specifier }) => ({
                 path: path.join(repoRoot, 'packages/sdk/src', specifier.endsWith('/ui') ? 'ui/index.ts' : specifier.endsWith('/schemas') ? 'schemas.ts' : 'index.ts'),
               }));
             },

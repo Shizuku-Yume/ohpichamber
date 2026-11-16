@@ -1,5 +1,5 @@
 import React from 'react';
-import { GUEST_TOOL_TEMPLATE_VALUE_MAX, type GuestToolContribution, type JsonValue } from '@openchamber/sdk';
+import { GUEST_TOOL_TEMPLATE_VALUE_MAX, type GuestToolContribution, type JsonValue } from 'ohpichamber-sdk';
 
 import { isGuestActive } from './capabilities.ts';
 import { useGuestsStore } from './store.ts';

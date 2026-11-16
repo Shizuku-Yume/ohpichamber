@@ -55,7 +55,7 @@ export const requestControlAction = async (port, action, input, options = {}) =>
     ? ` ${partialSubject} ${partialSessionId} remains available${partialDirectory ? ` in ${partialDirectory}` : ''}.`
     : '';
   if (isPartial && body?.partialAction === 'worktree-created' && partialDirectory) {
-    const retry = ['openchamber session create', '--directory', shellQuote(partialDirectory), '--port', String(port)];
+    const retry = ['ohpichamber session create', '--directory', shellQuote(partialDirectory), '--port', String(port)];
     for (const key of ['prompt', 'title', 'model', 'agent', 'variant', 'timeout']) {
       if (input?.[key] != null) retry.push(`--${key}`, shellQuote(input[key]));
     }

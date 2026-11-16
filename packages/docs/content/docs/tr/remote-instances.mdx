@@ -33,7 +33,7 @@ Uzak makinede OpenChamber zaten çalışıyorsa, masaüstü uygulamasını bağl
 Bağlantıyı uzak makinedeki bir terminalden de oluşturabilirsiniz:
 
 ```bash
-openchamber connect-url --port 3000 --server http://your-host:3000 --qr
+ohpichamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
 `connect-url`, o portta hiçbir şey çalışmıyorsa önce sunucuyu başlatır. `--api-only` ile başsız bir sunucu, `--lan` ile başlatırken LAN'a bağlanma, `--ui-password` ile tarayıcı erişimini koruma ve `--name` ile kaydedilen bağlantıya ad verme ekleyebilirsiniz. Yerel ağın dışındayken de çalışan bir bağlantı için `--relay` ekleyin. Cihaz mümkün olduğunda doğrudan bağlantıyı kullanır, erişemezse [Private Relay](/private-relay/) ile devam eder. Örnek relay'i kendi başına ayağa kaldırır.

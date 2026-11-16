@@ -9,7 +9,7 @@
  * Personal or machine-specific options are intentionally kept out of git.
  * The only supported user config is:
  *
- *   ~/.config/openchamber/oc-dev.json
+ *   ~/.config/ohpichamber/oc-dev.json
  *
  * See `scripts/oc-dev.config.example.json` for the shape. The config can set
  * local device/app preferences such as `ios.deviceName`, `ios.useXcodeBeta`,
@@ -35,7 +35,7 @@ import { pointSdkAtArchive } from './lib/sdk-override.mjs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
-const configPath = path.join(os.homedir(), '.config', 'openchamber', 'oc-dev.json');
+const configPath = path.join(os.homedir(), '.config', 'ohpichamber', 'oc-dev.json');
 
 const GLOBAL_PORT = '2606';
 const TESTING_PORT = '1202';
@@ -263,7 +263,7 @@ function resetDirectory(directory) {
 }
 
 function installedWebCli(directory) {
-  const cliPath = path.join(directory, 'node_modules', '@openchamber', 'web', 'bin', 'cli.js');
+  const cliPath = path.join(directory, 'node_modules', 'ohpichamber', 'bin', 'cli.js');
   return existsSync(cliPath) ? cliPath : '';
 }
 
@@ -296,7 +296,7 @@ function startInstalledInstance(directory, port) {
 }
 
 function packWorkspace(label, workspaceDir) {
-  // bun rewrites the workspace link to @openchamber/sdk; npm pack would ship `workspace:*`.
+  // bun rewrites the workspace link to ohpichamber-sdk; npm pack would ship `workspace:*`.
   const packOutput = step(label, () => run('bun', ['pm', 'pack', '--destination', repoRoot], { cwd: path.join(repoRoot, workspaceDir), capture: true }));
   // bun prints the archive as an absolute path (npm printed a bare file name).
   const packageName = packOutput.split('\n').find((line) => line.trim().endsWith('.tgz'))?.trim();
@@ -305,7 +305,7 @@ function packWorkspace(label, workspaceDir) {
 }
 
 /**
- * The web package depends on @openchamber/sdk at the app's version. Until that
+ * The web package depends on ohpichamber-sdk at the app's version. Until that
  * version is on npm (it ships with the release), an install has to take the
  * SDK from a tarball built here, so both archives travel together and the
  * target's package.json gets an override pointing at the SDK tarball.
@@ -320,7 +320,7 @@ function packageWeb() {
 
 /** Node one-liner that points the SDK dependency at a tarball; runs over ssh. */
 function sdkOverrideScript(sdkPath) {
-  return `node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.overrides={...(p.overrides||{}),'@openchamber/sdk':'file:${sdkPath}'};fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')"`;
+  return `node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.overrides={...(p.overrides||{}),'ohpichamber-sdk':'file:${sdkPath}'};fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')"`;
 }
 
 async function selectRemoteDeployment(config, options) {
@@ -375,18 +375,18 @@ async function deployWeb(options, config) {
     return;
   }
 
-  // The installed CLI, not `openchamber` from PATH: bun's global bin is often missing from PATH (Windows
+  // The installed CLI, not `ohpichamber` from PATH: bun's global bin is often missing from PATH (Windows
   // by default), and a stop that silently misses leaves the old server holding the port.
   step(`Stopping global instance on ${GLOBAL_PORT}`, () => stopInstalledInstance(globalBunDir(), GLOBAL_PORT));
   step('Removing old global package', () => {
-    run('bun', ['remove', '-g', '@openchamber/web'], { allowFail: true, label: 'remove @openchamber/web' });
+    run('bun', ['remove', '-g', 'ohpichamber'], { allowFail: true, label: 'remove ohpichamber' });
     run('bun', ['remove', '-g', 'openchamber'], { allowFail: true, label: 'remove openchamber' });
   });
   step('Installing package globally', () => {
-    // Only for this install: `openchamber update` later runs `bun add -g` on the
+    // Only for this install: `ohpichamber update` later runs `bun add -g` on the
     // same manifest and must resolve the published SDK, not this checkout's tarball.
     // That update re-resolves the lockfile but keeps the SDK this deploy put on disk
-    // while the version number matches; `bun remove -g @openchamber/web` first clears it.
+    // while the version number matches; `bun remove -g ohpichamber` first clears it.
     const restoreManifest = pointSdkAtArchive(globalBunDir(), sdkFile);
     try {
       run('bun', ['add', '-g', packageFile]);
@@ -415,7 +415,7 @@ async function deployRemoteWeb(options, config) {
   if (!host || !dir || !port) throw new Error(`Remote deployment ${remote.id} must define host, dir, and port.`);
 
   step('Preparing remote directories', () => run('ssh', [host, `mkdir -p ~/${dir}/releases`]));
-  step(`Stopping remote instance on ${host}:${port}`, () => run('ssh', [host, `set -e; ${REMOTE_RUNTIME_ENV}; cd ~/${dir} 2>/dev/null || exit 0; PORT=${quote(port)}; TMPDIR=$(node -p "require('os').tmpdir()" 2>/dev/null || echo /tmp); PIDFILE="$TMPDIR/openchamber-${port}.pid"; INSTANCEFILE="$TMPDIR/openchamber-${port}.json"; if [ -f ./node_modules/@openchamber/web/bin/cli.js ]; then bun ./node_modules/@openchamber/web/bin/cli.js stop --port "$PORT" >/dev/null 2>&1 || node ./node_modules/@openchamber/web/bin/cli.js stop --port "$PORT" >/dev/null 2>&1 || true; fi; if command -v lsof >/dev/null 2>&1; then lsof -ti :"$PORT" | xargs -r kill >/dev/null 2>&1 || true; sleep 0.5; lsof -ti :"$PORT" | xargs -r kill -9 >/dev/null 2>&1 || true; fi; rm -f "$PIDFILE" "$INSTANCEFILE"`], { label: 'stop remote instance' }));
+  step(`Stopping remote instance on ${host}:${port}`, () => run('ssh', [host, `set -e; ${REMOTE_RUNTIME_ENV}; cd ~/${dir} 2>/dev/null || exit 0; PORT=${quote(port)}; TMPDIR=$(node -p "require('os').tmpdir()" 2>/dev/null || echo /tmp); PIDFILE="$TMPDIR/openchamber-${port}.pid"; INSTANCEFILE="$TMPDIR/openchamber-${port}.json"; if [ -f ./node_modules/ohpichamber/bin/cli.js ]; then bun ./node_modules/ohpichamber/bin/cli.js stop --port "$PORT" >/dev/null 2>&1 || node ./node_modules/ohpichamber/bin/cli.js stop --port "$PORT" >/dev/null 2>&1 || true; fi; if command -v lsof >/dev/null 2>&1; then lsof -ti :"$PORT" | xargs -r kill >/dev/null 2>&1 || true; sleep 0.5; lsof -ti :"$PORT" | xargs -r kill -9 >/dev/null 2>&1 || true; fi; rm -f "$PIDFILE" "$INSTANCEFILE"`], { label: 'stop remote instance' }));
   step('Copying package to remote', () => {
     run('ssh', [host, `mkdir -p ~/${dir}/releases && rm -f ~/${dir}/releases/*.tgz`]);
     run('scp', ['-q', packageFile, `${host}:~/${dir}/releases/${packageBase}`]);
@@ -424,7 +424,7 @@ async function deployRemoteWeb(options, config) {
   step('Resetting remote install state', () => run('ssh', [host, `cd ~/${dir} && rm -f package.json package-lock.json pnpm-lock.yaml bun.lockb && rm -rf node_modules`]));
   step('Preparing remote package manifest', () => run('ssh', [host, `set -e; cd ~/${dir}; ${REMOTE_RUNTIME_ENV}; if command -v bun >/dev/null 2>&1; then bun init -y; else npm init -y; fi; ${sdkOverrideScript(`./releases/${sdkBase}`)}`]));
   step('Installing remote package', () => run('ssh', [host, `set -e; cd ~/${dir}; ${REMOTE_RUNTIME_ENV}; if command -v bun >/dev/null 2>&1; then bun add ./releases/${packageBase}; else npm install ./releases/${packageBase}; fi`]));
-  step(`Starting remote instance on ${host}:${port}`, () => run('ssh', [host, `set -e; cd ~/${dir}; ${REMOTE_RUNTIME_ENV}; PASSWORD_VALUE=$(grep '^export OPENCHAMBER_UI_PASSWORD=' ~/.bashrc 2>/dev/null | sed -E 's/.*=["“]?([^"”]+)["”]?/\\1/' || true); if [ -n "$PASSWORD_VALUE" ]; then export OPENCHAMBER_UI_PASSWORD="$PASSWORD_VALUE"; fi; if [ ${quote(apiOnly)} = 'true' ]; then export OPENCHAMBER_API_ONLY=true; fi; if command -v bun >/dev/null 2>&1; then OPENCHAMBER_HOST=${quote(bindHost)} bun ./node_modules/@openchamber/web/bin/cli.js --port ${quote(port)} >/dev/null 2>&1; else OPENCHAMBER_HOST=${quote(bindHost)} node ./node_modules/@openchamber/web/bin/cli.js --port ${quote(port)} >/dev/null 2>&1; fi; sleep 0.5; if command -v lsof >/dev/null 2>&1; then lsof -ti :${quote(port)} >/dev/null 2>&1 || exit 1; fi`]));
+  step(`Starting remote instance on ${host}:${port}`, () => run('ssh', [host, `set -e; cd ~/${dir}; ${REMOTE_RUNTIME_ENV}; PASSWORD_VALUE=$(grep '^export OPENCHAMBER_UI_PASSWORD=' ~/.bashrc 2>/dev/null | sed -E 's/.*=["“]?([^"”]+)["”]?/\\1/' || true); if [ -n "$PASSWORD_VALUE" ]; then export OPENCHAMBER_UI_PASSWORD="$PASSWORD_VALUE"; fi; if [ ${quote(apiOnly)} = 'true' ]; then export OPENCHAMBER_API_ONLY=true; fi; if command -v bun >/dev/null 2>&1; then OPENCHAMBER_HOST=${quote(bindHost)} bun ./node_modules/ohpichamber/bin/cli.js --port ${quote(port)} >/dev/null 2>&1; else OPENCHAMBER_HOST=${quote(bindHost)} node ./node_modules/ohpichamber/bin/cli.js --port ${quote(port)} >/dev/null 2>&1; fi; sleep 0.5; if command -v lsof >/dev/null 2>&1; then lsof -ti :${quote(port)} >/dev/null 2>&1 || exit 1; fi`]));
   log.success(`Remote deployment ready: ${host}:${port}`);
 }
 

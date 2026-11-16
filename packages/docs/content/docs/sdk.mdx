@@ -1,11 +1,11 @@
 ---
 title: Build an extension
-description: Add your own panel to OpenChamber with @openchamber/sdk, install it from a folder or a git URL, and talk to the app through connectHost.
+description: Add your own panel to OpenChamber with ohpichamber-sdk, install it from a folder or a git URL, and talk to the app through connectHost.
 ---
 
 # Build an extension
 
-Use `@openchamber/sdk` to add your own panel to OpenChamber. An extension is a small web page that OpenChamber shows on the right-hand rail. It talks to the app through `connectHost()`: it can read the current project and session, show toasts, put text in the chat box, attach a task to a session, and, with the user's approval, start sessions and send prompts.
+Use `ohpichamber-sdk` to add your own panel to OpenChamber. An extension is a small web page that OpenChamber shows on the right-hand rail. It talks to the app through `connectHost()`: it can read the current project and session, show toasts, put text in the chat box, attach a task to a session, and, with the user's approval, start sessions and send prompts.
 
 Extensions run in OpenChamber web and desktop.
 
@@ -20,7 +20,7 @@ A folder with three files:
 OpenChamber never compiles your code. Ship the built `.js` file. The SDK includes a bundler command; any bundler that outputs an IIFE works too.
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -38,7 +38,7 @@ Point `index.html` at `main.js` with a normal `<script src="main.js"></script>`.
 
 OpenChamber reads the manifest and shows a dialog listing what the extension asks for (see [Capabilities](#capabilities)). Approve it, and your icon appears on the rail. Click it and your page loads.
 
-You can also add a local `.zip` or an https link to a git repository or a zip file. A git install is the one that can update: raise `version` in `package.json` and push, and OpenChamber checks soon after it opens and every few hours, tells the user once, and offers the update in Settings → Extensions. A link to `openchamber://extensions/install?url=<encoded repository URL>` on any page opens the desktop app with that repository in the add dialog, so you can offer an install button. A `#tag` or `#branch` on the URL pins which one it follows. Those are copied into OpenChamber's data folder and run from that copy, so ship the built files, not `node_modules` or TypeScript sources. Removing the extension deletes the copy. A folder install runs from your folder directly, so you can edit, rebuild, and reload.
+You can also add a local `.zip` or an https link to a git repository or a zip file. A git install is the one that can update: raise `version` in `package.json` and push, and OpenChamber checks soon after it opens and every few hours, tells the user once, and offers the update in Settings → Extensions. A link to `ohpichamber://extensions/install?url=<encoded repository URL>` on any page opens the desktop app with that repository in the add dialog, so you can offer an install button. A `#tag` or `#branch` on the URL pins which one it follows. Those are copied into OpenChamber's data folder and run from that copy, so ship the built files, not `node_modules` or TypeScript sources. Removing the extension deletes the copy. A folder install runs from your folder directly, so you can edit, rebuild, and reload.
 
 ## Manifest
 
@@ -48,7 +48,7 @@ You can also add a local `.zip` or an https link to a git repository or a zip fi
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -76,9 +76,9 @@ You can also add a local `.zip` or an https link to a git repository or a zip fi
 
 `apiVersion` is `1`. OpenChamber refuses any other value.
 
-SDK 3 replaces the parent-window transport used by SDK 2 with a private, versioned `MessagePort` bootstrap. A panel that still sends the pre-M3 v1 window `hello` cannot connect: OpenChamber shows a version-mismatch message in its pane and never grants it a port or host state. A v1 bootstrap announcement is dropped without granting anything. Rebuild the panel with `@openchamber/sdk` 3. `apiVersion` stays `1` because the manifest schema did not change.
+SDK 3 replaces the parent-window transport used by SDK 2 with a private, versioned `MessagePort` bootstrap. A panel that still sends the pre-M3 v1 window `hello` cannot connect: OpenChamber shows a version-mismatch message in its pane and never grants it a port or host state. A v1 bootstrap announcement is dropped without granting anything. Rebuild the panel with `ohpichamber-sdk` 3. `apiVersion` stays `1` because the manifest schema did not change.
 
-`engines.openchamber` is optional. Set the oldest OpenChamber version your extension works with, as `3.0.0` or `>=3.0.0`. Older builds refuse to install it instead of failing later.
+`engines.openchamber` is optional. Set the oldest OpenChamber version your extension works with, as `1.0.0` or `>=1.0.0`. Older builds refuse to install it instead of failing later.
 
 `id`, `name` and `icon` name the extension. `id` is kebab-case and must be unique among installed extensions. `icon` is a Remixicon name (`RiWindowLine` becomes `window`) or an SVG file inside your folder, like `icon.svg`. `contributes.panel` is the extension's panel on the rail: its `entry` is the HTML file inside your folder. An extension with no rail panel leaves `panel` out. Older packages keep `id`, `name` and `icon` inside `panel`, and that keeps working.
 
@@ -188,14 +188,14 @@ Your page cannot touch the disk itself. OpenChamber reads and writes for it, ins
 - A path starting with `/` or `~/` means anywhere else. It must match one of the patterns you declare in `contributes.filesystem`, and the user sees those exact patterns in the approval dialog:
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 Patterns use `*` for one path segment and `**` for any depth. Anything outside them is `BAD_PATH`, even after approval. `..` is never allowed.
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -234,7 +234,7 @@ Your page sees `ctx.surface` as `status`. OpenChamber loads it only while the Wo
 OpenChamber keeps the file. Your page never reads or writes it and needs no capability for it. OpenChamber hands you the text, asks for the edited text when it saves, and handles Cmd/Ctrl+S, autosave, the unsaved-changes prompt, line endings, and changes made on disk:
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -344,7 +344,7 @@ The key is the provider ID as OpenCode reports it. The value is a `.svg` or `.pn
 ## First lines in the panel
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -356,7 +356,7 @@ host.onReady((ctx) => {
 
 `connectHost` only works inside OpenChamber. Opened as a plain file, every call rejects with `HOST_UNAVAILABLE`.
 
-Build the panel from the blocks in `@openchamber/sdk/ui` first: buttons, fields, dropdowns, tabs, lists, and more, styled with the app's colours and fonts, so the panel feels like part of OpenChamber. Write your own HTML and CSS only for what the kit lacks. See [UI kit](/sdk/ui/).
+Build the panel from the blocks in `ohpichamber-sdk/ui` first: buttons, fields, dropdowns, tabs, lists, and more, styled with the app's colours and fonts, so the panel feels like part of OpenChamber. Write your own HTML and CSS only for what the kit lacks. See [UI kit](/sdk/ui/).
 
 ## Related
 

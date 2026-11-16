@@ -1,5 +1,5 @@
 import React from 'react';
-import { GUEST_ATTACH_URL_MAX, buildLinkUrl, type GuestLinkAction } from '@openchamber/sdk';
+import { GUEST_ATTACH_URL_MAX, buildLinkUrl, type GuestLinkAction } from 'ohpichamber-sdk';
 
 import { guestMay } from './capabilities.ts';
 import { useGuestsStore } from './store.ts';

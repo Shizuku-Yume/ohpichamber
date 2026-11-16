@@ -1,11 +1,11 @@
 ---
 title: 拡張機能を作る
-description: "@openchamber/sdk で OpenChamber に自分のパネルを追加し、フォルダや git URL からインストールして、connectHost でアプリと話す。"
+description: "ohpichamber-sdk で OpenChamber に自分のパネルを追加し、フォルダや git URL からインストールして、connectHost でアプリと話す。"
 ---
 
 # 拡張機能を作る
 
-`@openchamber/sdk` を使うと、OpenChamber に自分のパネルを追加できます。拡張機能とは、OpenChamber が右側のレールに表示する小さなウェブページです。アプリとは `connectHost()` で話します。現在のプロジェクトとセッションを読む、トーストを出す、チャット欄にテキストを入れる、タスクをセッションに添付する、そしてユーザーの承認があればセッションを開始してプロンプトを送る、といったことができます。
+`ohpichamber-sdk` を使うと、OpenChamber に自分のパネルを追加できます。拡張機能とは、OpenChamber が右側のレールに表示する小さなウェブページです。アプリとは `connectHost()` で話します。現在のプロジェクトとセッションを読む、トーストを出す、チャット欄にテキストを入れる、タスクをセッションに添付する、そしてユーザーの承認があればセッションを開始してプロンプトを送る、といったことができます。
 
 拡張機能は OpenChamber のウェブ版とデスクトップ版で動きます。
 
@@ -20,7 +20,7 @@ description: "@openchamber/sdk で OpenChamber に自分のパネルを追加し
 OpenChamber はあなたのコードをコンパイルしません。ビルド済みの `.js` ファイルを同梱してください。SDK にはバンドラーコマンドが含まれています。IIFE を出力できるバンドラーなら何でも使えます。
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -38,7 +38,7 @@ bunx openchamber-guest-bundle panel/main.ts panel/main.js
 
 OpenChamber がマニフェストを読み、拡張機能が求めているものの一覧をダイアログで表示します([権限](#権限) を参照)。承認すると、レールにアイコンが現れます。クリックするとページが読み込まれます。
 
-ローカルの `.zip` や、git リポジトリまたは zip ファイルへの https リンクも追加できます。更新できるのは git からのインストールだけです。`package.json` の `version` を上げてプッシュすると、OpenChamber は起動の直後と数時間ごとに確認し、ユーザーに一度だけ知らせて、設定 → 拡張機能 で更新を提案します。任意のページに `openchamber://extensions/install?url=<encoded repository URL>` へのリンクを置くと、そのリポジトリが追加ダイアログに入った状態でデスクトップアプリが開くので、インストールボタンを用意できます。URL の `#tag` や `#branch` で、どれを追従するかを固定できます。これらは OpenChamber のデータフォルダにコピーされ、そのコピーから実行されます。そのため `node_modules` や TypeScript のソースではなく、ビルド済みファイルを同梱してください。拡張機能を削除するとコピーも消えます。フォルダからのインストールはそのフォルダから直接動くので、編集、再ビルド、再読み込みができます。
+ローカルの `.zip` や、git リポジトリまたは zip ファイルへの https リンクも追加できます。更新できるのは git からのインストールだけです。`package.json` の `version` を上げてプッシュすると、OpenChamber は起動の直後と数時間ごとに確認し、ユーザーに一度だけ知らせて、設定 → 拡張機能 で更新を提案します。任意のページに `ohpichamber://extensions/install?url=<encoded repository URL>` へのリンクを置くと、そのリポジトリが追加ダイアログに入った状態でデスクトップアプリが開くので、インストールボタンを用意できます。URL の `#tag` や `#branch` で、どれを追従するかを固定できます。これらは OpenChamber のデータフォルダにコピーされ、そのコピーから実行されます。そのため `node_modules` や TypeScript のソースではなく、ビルド済みファイルを同梱してください。拡張機能を削除するとコピーも消えます。フォルダからのインストールはそのフォルダから直接動くので、編集、再ビルド、再読み込みができます。
 
 ## マニフェスト
 
@@ -48,7 +48,7 @@ OpenChamber がマニフェストを読み、拡張機能が求めているも�
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -76,9 +76,9 @@ OpenChamber がマニフェストを読み、拡張機能が求めているも�
 
 `apiVersion` は `1` です。OpenChamber は他の値を拒否します。
 
-SDK 3 は SDK 2 の親ウィンドウ経由のトランスポートを、非公開でバージョン管理された `MessagePort` ブートストラップに置き換えます。M3 以前の v1 `hello` をまだ送るパネルは接続できません。OpenChamber はパネルにバージョン不一致を表示し、ポートもホスト状態も渡しません。v1 のブートストラップ通知は何も渡さずに破棄されます。パネルを `@openchamber/sdk` 3 で再ビルドしてください。マニフェストスキーマは変わっていないため、`apiVersion` は `1` のままです。
+SDK 3 は SDK 2 の親ウィンドウ経由のトランスポートを、非公開でバージョン管理された `MessagePort` ブートストラップに置き換えます。M3 以前の v1 `hello` をまだ送るパネルは接続できません。OpenChamber はパネルにバージョン不一致を表示し、ポートもホスト状態も渡しません。v1 のブートストラップ通知は何も渡さずに破棄されます。パネルを `ohpichamber-sdk` 3 で再ビルドしてください。マニフェストスキーマは変わっていないため、`apiVersion` は `1` のままです。
 
-`engines.openchamber` は任意です。拡張機能が動作する最も古い OpenChamber のバージョンを、`3.0.0` または `>=3.0.0` の形で指定します。古いビルドは、後で失敗する代わりにインストール自体を拒否します。
+`engines.openchamber` は任意です。拡張機能が動作する最も古い OpenChamber のバージョンを、`1.0.0` または `>=1.0.0` の形で指定します。古いビルドは、後で失敗する代わりにインストール自体を拒否します。
 
 `id`、`name`、`icon` で拡張機能を識別します。`id` は kebab-case で、インストール済みの拡張機能の中で一意でなければなりません。`icon` は Remixicon の名前(`RiWindowLine` なら `window`)か、フォルダ内の SVG ファイル(`icon.svg` など)です。`contributes.panel` はレールに表示される拡張機能のパネルで、その `entry` はフォルダ内の HTML ファイルです。レールのパネルがない拡張機能では `panel` を省略します。古いパッケージでは `id`、`name`、`icon` が `panel` の中にありますが、引き続き動作します。
 
@@ -185,14 +185,14 @@ CDN のフォントや画像、公開 API など、ページが直接必要と�
 - `/` または `~/` で始まるパスはそれ以外の場所を指します。`contributes.filesystem` で宣言したパターンのいずれかに一致する必要があり、ユーザーは承認ダイアログでそのパターンをそのまま目にします:
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 パターンでは `*` がパスの 1 セグメント、`**` が任意の深さを表します。パターンの外にあるものは、承認後であっても `BAD_PATH` です。`..` は決して許可されません。
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -231,7 +231,7 @@ const { entries } = await host.listDir(".");
 ファイルを管理するのは OpenChamber です。あなたのページがファイルを読み書きすることはなく、そのための権限も要りません。OpenChamber がテキストを渡し、保存時に編集後のテキストを求め、Cmd/Ctrl+S、自動保存、未保存の変更の確認、改行コード、ディスク上での変更を処理します。
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -341,7 +341,7 @@ MCP サーバーや統合ツールがツールを追加すると、チャット�
 ## パネルの最初の数行
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -353,7 +353,7 @@ host.onReady((ctx) => {
 
 `connectHost` は OpenChamber の中でのみ動きます。ただのファイルとして開くと、すべての呼び出しが `HOST_UNAVAILABLE` で reject されます。
 
-パネルはまず `@openchamber/sdk/ui` の部品で組んでください。ボタン、入力欄、ドロップダウン、タブ、リストなどが、アプリの色とフォントでスタイルされているので、パネルが OpenChamber の一部のように感じられます。自分で HTML と CSS を書くのは、キットにないものだけにしてください。[UI キット](/sdk/ui/) を参照してください。
+パネルはまず `ohpichamber-sdk/ui` の部品で組んでください。ボタン、入力欄、ドロップダウン、タブ、リストなどが、アプリの色とフォントでスタイルされているので、パネルが OpenChamber の一部のように感じられます。自分で HTML と CSS を書くのは、キットにないものだけにしてください。[UI キット](/sdk/ui/) を参照してください。
 
 ## 関連
 

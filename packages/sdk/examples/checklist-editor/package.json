@@ -15,13 +15,15 @@
         {
           "id": "checklist",
           "title": "Checklist",
-          "match": ["*.checklist.md"],
+          "match": [
+            "*.checklist.md"
+          ],
           "entry": "editor/index.html"
         }
       ]
     }
   },
   "dependencies": {
-    "@openchamber/sdk": "workspace:*"
+    "ohpichamber-sdk": "workspace:*"
   }
 }

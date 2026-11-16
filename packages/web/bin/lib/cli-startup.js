@@ -10,7 +10,7 @@ import { requestServerShutdown } from './cli-http.js';
 import { isProcessRunning, stopInstanceProcess } from './cli-process.js';
 import { injectedEnvKeys } from '../../server/lib/injected-env.js';
 
-const STARTUP_SERVICE_ID = 'dev.openchamber.web';
+const STARTUP_SERVICE_ID = 'dev.ohpichamber.web';
 
 function getStartupServicePaths() {
   if (process.platform === 'darwin') {
@@ -22,7 +22,7 @@ function getStartupServicePaths() {
   if (process.platform === 'linux') {
     return {
       platform: 'linux',
-      servicePath: path.join(os.homedir(), '.config', 'systemd', 'user', 'openchamber.service'),
+      servicePath: path.join(os.homedir(), '.config', 'systemd', 'user', 'ohpichamber.service'),
     };
   }
   if (process.platform === 'win32') {
@@ -73,11 +73,11 @@ function getStartupEnvFilePath() {
 }
 
 function getMacosStartupWrapperPath() {
-  return path.join(getDataDir(), 'bin', 'OpenChamber');
+  return path.join(getDataDir(), 'bin', 'OhPiChamber');
 }
 
 function getWindowsStartupWrapperPath() {
-  return path.join(getDataDir(), 'bin', 'OpenChamber.ps1');
+  return path.join(getDataDir(), 'bin', 'OhPiChamber.ps1');
 }
 
 function collectStartupEnv(options = {}) {
@@ -160,7 +160,7 @@ function removeStartupEnvFile() {
 }
 
 const PNPM_STORE_SEGMENT = `${path.sep}.pnpm${path.sep}`;
-const PACKAGE_SEGMENT = `${path.sep}node_modules${path.sep}@openchamber${path.sep}web${path.sep}`;
+const PACKAGE_SEGMENT = `${path.sep}node_modules${path.sep}ohpichamber${path.sep}`;
 
 // pnpm keeps every installed version in its own store directory and links the
 // current one into node_modules. A startup service pointed at the store path
@@ -172,8 +172,7 @@ function stablePnpmEntrypoint(resolved, exists = fs.existsSync) {
   if (packageIndex < 0) return null;
   const stable = path.join(
     resolved.slice(0, storeIndex),
-    '@openchamber',
-    'web',
+    'ohpichamber',
     resolved.slice(packageIndex + PACKAGE_SEGMENT.length),
   );
   return exists(stable) ? stable : null;
@@ -260,7 +259,7 @@ function buildMacosLaunchAgent(options = {}) {
   const wrapperPath = writeMacosStartupWrapper(options);
   const args = [wrapperPath];
   const env = collectStartupEnv(options);
-  const logDir = path.join(os.homedir(), 'Library', 'Logs', 'OpenChamber');
+  const logDir = path.join(os.homedir(), 'Library', 'Logs', 'OhPiChamber');
   const argXml = args.map((arg) => `    <string>${escapeXml(arg)}</string>`).join('\n');
   const envXml = Object.entries(env).length > 0
     ? `  <key>EnvironmentVariables</key>\n  <dict>\n${Object.entries(env).map(([key, value]) => `    <key>${escapeXml(key)}</key>\n    <string>${escapeXml(value)}</string>`).join('\n')}\n  </dict>\n`
@@ -294,7 +293,7 @@ function buildSystemdUserService(options = {}) {
   const args = buildStartupArgs(options).map((arg) => `"${systemdEscapeArg(arg)}"`).join(' ');
   const envFilePath = getStartupEnvFilePath();
   return `[Unit]
-Description=OpenChamber web server
+Description=OhPiChamber web server
 After=network-online.target
 
 [Service]
@@ -385,8 +384,8 @@ function getStartupStatus() {
     return { supported: true, platform: paths.platform, enabled: result.status === 0, active: null, servicePath: paths.servicePath };
   }
   if (paths.platform === 'linux') {
-    const enabledResult = runStartupCommand('systemctl', ['--user', 'is-enabled', 'openchamber.service'], { allowFailure: true });
-    const activeResult = runStartupCommand('systemctl', ['--user', 'is-active', 'openchamber.service'], { allowFailure: true });
+    const enabledResult = runStartupCommand('systemctl', ['--user', 'is-enabled', 'ohpichamber.service'], { allowFailure: true });
+    const activeResult = runStartupCommand('systemctl', ['--user', 'is-active', 'ohpichamber.service'], { allowFailure: true });
     const activeState = (activeResult.stdout || '').trim() || 'inactive';
     const lingerUser = getCurrentUsername();
     return {
@@ -430,7 +429,7 @@ function getStartupServicePid() {
   if (process.platform === 'linux') {
     let result;
     try {
-      result = runStartupCommand('systemctl', ['--user', 'show', '--property=MainPID', '--value', 'openchamber.service'], { allowFailure: true });
+      result = runStartupCommand('systemctl', ['--user', 'show', '--property=MainPID', '--value', 'ohpichamber.service'], { allowFailure: true });
     } catch {
       return null;
     }
@@ -519,7 +518,7 @@ function findWindowsTaskInstance(instances, getTaskProcesses) {
 }
 
 function windowsTaskOwnershipError(detail) {
-  return new Error(`Could not tell which running server belongs to the startup task: ${detail}. Nothing was stopped or installed. Run \`openchamber startup disable\`, update, then run \`openchamber startup enable\`.`);
+  return new Error(`Could not tell which running server belongs to the startup task: ${detail}. Nothing was stopped or installed. Run \`ohpichamber startup disable\`, update, then run \`ohpichamber startup enable\`.`);
 }
 
 // The instance a process manager will start again on its own, or null when
@@ -539,7 +538,7 @@ function findStartupServiceInstance(instances, {
 }
 
 function restartSystemdService() {
-  runStartupCommand('systemctl', ['--user', 'restart', 'openchamber.service']);
+  runStartupCommand('systemctl', ['--user', 'restart', 'ohpichamber.service']);
 }
 
 // Starts the task once the old server is gone and the task has stopped, and
@@ -631,7 +630,7 @@ function enableStartupService(options = {}) {
   if (paths.platform === 'macos') {
     removeStartupEnvFile();
     fs.mkdirSync(path.dirname(paths.servicePath), { recursive: true, mode: 0o700 });
-    fs.mkdirSync(path.join(os.homedir(), 'Library', 'Logs', 'OpenChamber'), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(path.join(os.homedir(), 'Library', 'Logs', 'OhPiChamber'), { recursive: true, mode: 0o700 });
     fs.writeFileSync(paths.servicePath, buildMacosLaunchAgent(options), { mode: 0o600 });
     runStartupCommand('/bin/launchctl', ['bootout', `gui/${process.getuid()}`, paths.servicePath], { allowFailure: true });
     runStartupCommand('/bin/launchctl', ['bootstrap', `gui/${process.getuid()}`, paths.servicePath]);
@@ -644,7 +643,7 @@ function enableStartupService(options = {}) {
     fs.mkdirSync(path.dirname(paths.servicePath), { recursive: true, mode: 0o700 });
     fs.writeFileSync(paths.servicePath, buildSystemdUserService(options), { mode: 0o600 });
     runStartupCommand('systemctl', ['--user', 'daemon-reload']);
-    runStartupCommand('systemctl', ['--user', 'enable', 'openchamber.service']);
+    runStartupCommand('systemctl', ['--user', 'enable', 'ohpichamber.service']);
     // `enable --now` leaves a running service alone, so it would keep the old
     // unit and the old release.
     restartSystemdService();
@@ -679,7 +678,7 @@ function disableStartupService() {
   }
 
   if (paths.platform === 'linux') {
-    runStartupCommand('systemctl', ['--user', 'disable', '--now', 'openchamber.service'], { allowFailure: true });
+    runStartupCommand('systemctl', ['--user', 'disable', '--now', 'ohpichamber.service'], { allowFailure: true });
     try { fs.unlinkSync(paths.servicePath); } catch {}
     runStartupCommand('systemctl', ['--user', 'daemon-reload'], { allowFailure: true });
     return getStartupStatus();

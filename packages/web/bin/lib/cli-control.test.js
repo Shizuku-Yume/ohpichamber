@@ -17,7 +17,7 @@ describe('requestControlAction', () => {
       worktree: { name: 'task' }, prompt: 'Review this', agent: 'plan', model: 'example/model', variant: 'high',
     }).catch((error) => error);
     expect(error.message).toContain(`A worktree remains at ${directory}.`);
-    expect(error.message).toContain(`openchamber session create --directory '/fixture/someone'"'"'s worktree'`);
+    expect(error.message).toContain(`ohpichamber session create --directory '/fixture/someone'"'"'s worktree'`);
     expect(error.message).toContain(`--port 3000 --prompt 'Review this' --model example/model --agent plan --variant high`);
     expect(error.message).toContain('without --worktree');
     expect(error.message).not.toMatch(/(?:Created|Forked) session/);

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 
-import { GUEST_CAPABILITIES } from '@openchamber/sdk';
+import { GUEST_CAPABILITIES } from 'ohpichamber-sdk';
 
 const GUEST_SOURCES = ['path', 'zip', 'git'];
 

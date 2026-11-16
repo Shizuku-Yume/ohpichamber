@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const mobileRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APK_PATH = join(mobileRoot, 'android', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-const APP_ID = 'com.openchamber.app';
+const APP_ID = 'dev.ohpichamber.app';
 const LAUNCH_ACTIVITY = `${APP_ID}/.MainActivity`;
 
 const adb = (args, { capture = false, allowFail = false } = {}) => {
@@ -37,7 +37,7 @@ const requireDevice = () => {
   if (devices.length === 0) {
     console.error(
       'No authorized Android device found. Enable Developer options + USB debugging on the device, ' +
-        'connect it, and accept the "Allow USB debugging" prompt. Check with: bun run android:devices',
+      'connect it, and accept the "Allow USB debugging" prompt. Check with: bun run android:devices',
     );
     process.exit(1);
   }

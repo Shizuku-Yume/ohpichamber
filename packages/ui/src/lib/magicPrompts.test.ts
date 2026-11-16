@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Spy } from 'bun:test';
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from 'ohpichamber-sdk';
 
 import { getDefaultMagicPromptTemplate, loadMagicPrompts, resolveMagicPromptTemplate } from './magicPrompts';
 import { switchRuntimeEndpoint } from './runtime-switch';

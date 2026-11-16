@@ -8,8 +8,8 @@ import {
   SOURCE_CONTROL_PROVIDER_RESPONSE_MAX,
   SOURCE_CONTROL_PROVIDER_WIRE_VERSION,
   sourceControlProviderTimeoutMs,
-} from '@openchamber/sdk';
-import { sourceControlProviderSchemasV1 } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { sourceControlProviderSchemasV1 } from 'ohpichamber-sdk/schemas';
 
 import { GuestServiceError, proxyGuestServiceRequest } from '../guests/service.js';
 import { isString } from '../shared/guards.js';

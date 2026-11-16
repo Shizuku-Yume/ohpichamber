@@ -33,7 +33,7 @@ description: 一个可直接复制的完整三文件 OpenChamber 扩展。它连
       }
     }
   },
-  "dependencies": { "@openchamber/sdk": "^3.0.0" }
+  "dependencies": { "ohpichamber-sdk": "^1.0.0" }
 }
 ```
 
@@ -56,8 +56,8 @@ description: 一个可直接复制的完整三文件 OpenChamber 扩展。它连
 `panel/main.ts`：
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
-import { applyHostReady, mountBanner, mountEmpty, mountList, mountSpinner } from "@openchamber/sdk/ui";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
+import { applyHostReady, mountBanner, mountEmpty, mountList, mountSpinner } from "ohpichamber-sdk/ui";
 
 type Repo = { full_name: string; html_url: string; description: string | null };
 

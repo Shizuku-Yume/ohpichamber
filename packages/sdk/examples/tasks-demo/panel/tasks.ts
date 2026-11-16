@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { HostClient } from '@openchamber/sdk';
+import type { HostClient } from 'ohpichamber-sdk';
 
 export const PROVIDER = 'tasks-demo';
 

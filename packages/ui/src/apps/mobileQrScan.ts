@@ -59,8 +59,8 @@ export const parseConnectionPayload = (raw: string): MobileConnectionPayload | M
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  if (/^openchamber:\/\//i.test(trimmed)) {
-    // Old Android WebViews resolve openchamber://… with hostname "" / pathname "//connect",
+  if (/^ohpichamber:\/\//i.test(trimmed)) {
+    // Old Android WebViews resolve ohpichamber://… with hostname "" / pathname "//connect",
     // so the URL-based parse fails even though the string is intact. Retry with the
     // URL-API-free string parser before rejecting a scanned or pasted link.
     const pairing = parsePairingConnectionPayload(trimmed) ?? parsePairingConnectionPayloadString(trimmed);

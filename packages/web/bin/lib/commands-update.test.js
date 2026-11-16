@@ -115,7 +115,7 @@ describe('update command', () => {
     it('fails when the service does not come back on the new version', async () => {
       const { error } = await runUpdate({ serviceVersionReached: false });
 
-      expect(error?.message).toMatch(/not running 9\.9\.9.*openchamber startup enable/);
+      expect(error?.message).toMatch(/not running 9\.9\.9.*ohpichamber startup enable/);
     });
 
     it('fails when the service restart fails', async () => {
@@ -215,7 +215,7 @@ describe('update command', () => {
       const executeUpdate = vi.fn(() => ({
         success: false,
         exitCode: 0,
-        error: 'Installed @openchamber/web version 1.0.0 does not match target 9.9.9.',
+        error: 'Installed ohpichamber version 1.0.0 does not match target 9.9.9.',
       }));
       const updateCommand = createUpdateCommand({
         packageManagerPath: '/fake/package-manager.js',

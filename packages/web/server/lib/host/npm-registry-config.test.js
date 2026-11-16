@@ -53,8 +53,8 @@ describe('npm registry configuration', () => {
 
   test('encodes a metadata suffix independently of the scoped package name', () => {
     process.env.NPM_CONFIG_REGISTRY = 'https://mirror.example.com/custom/npm/';
-    expect(resolveNpmRegistryRequest('@openchamber/sdk', 'latest')).toEqual({
-      url: 'https://mirror.example.com/custom/npm/@openchamber%2Fsdk/latest', headers: {},
+    expect(resolveNpmRegistryRequest('@scope/pkg', 'latest')).toEqual({
+      url: 'https://mirror.example.com/custom/npm/@scope%2Fpkg/latest', headers: {},
     });
   });
 

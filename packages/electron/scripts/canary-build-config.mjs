@@ -4,7 +4,7 @@
  * with `--config` when `OPENCHAMBER_DESKTOP_CHANNEL=canary`.
  *
  * Canary is the same app as the release: same name, id, install location,
- * profile and `openchamber://` links, so an update replaces one with the
+ * profile and `ohpichamber://` links, so an update replaces one with the
  * other. Only the icons differ, from `resources/icons-canary`, laid out like
  * `resources/icons`.
  */

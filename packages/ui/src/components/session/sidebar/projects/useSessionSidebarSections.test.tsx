@@ -9,7 +9,7 @@ import { useSessionSidebarSections } from './useSessionSidebarSections';
 import type { SessionGroup } from '../types';
 import type { SessionFoldersMap } from '@/stores/useSessionFoldersStore';
 
-const CHATS_ROOT = '/home/user/.config/openchamber/chats';
+const CHATS_ROOT = '/home/user/.config/ohpichamber/chats';
 
 const chatSession = (sessionId: string, title: string, archivedAt?: number): Session => {
   const workspaceId = `ws_${sessionId}`;

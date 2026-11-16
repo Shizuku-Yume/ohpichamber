@@ -109,7 +109,7 @@ user is still speaking, so only the tail is left to transcribe on stop.
   expected to retain unacked segments for retry/replay.
 - Silence-only segments (peak < 300) are cleared, never committed, so
   Whisper-style providers do not hallucinate on silence.
-- Model files live under `~/.config/openchamber/speech-models`.
+- Model files live under `~/.config/ohpichamber/speech-models`.
 - Model installation verifies required files in a staging directory before promotion. Extraction failures remove the staging directory and cached archive.
 
 ## Decisions

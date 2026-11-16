@@ -37,7 +37,7 @@ import {
   type SessionSnapshot,
   type StartSessionResult,
   type ToastRequest,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 import type { GuestFileProxyResult, GuestFileRequest } from '@/lib/guests/files';
 import type { GuestGenerateProxyResult } from '@/lib/guests/generate';
@@ -82,7 +82,7 @@ type HostBridgeEffects = {
   request: (request: GuestRequest) => Promise<GuestRequestProxyResult>;
   serviceRequest: (request: GuestRequest) => Promise<GuestRequestProxyResult>;
   serviceStatus: () => Promise<
-    | { ok: true; result: { status: import('@openchamber/sdk').ServiceStatus } }
+    | { ok: true; result: { status: import('ohpichamber-sdk').ServiceStatus } }
     | { ok: false; code: HostRequestErrorCode; message: string }
   >;
   /** One handler for read, write, list, and stat; the pane checks scope and grant, the server does the rest. */

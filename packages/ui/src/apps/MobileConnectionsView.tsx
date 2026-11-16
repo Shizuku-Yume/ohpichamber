@@ -127,7 +127,7 @@ export const MobileConnectionsView: React.FC<Props> = (props) => {
   };
 
   const handleUrlChange = (value: string) => {
-    // The first screen takes a pasted pairing link (openchamber://connect?...) in
+    // The first screen takes a pasted pairing link (ohpichamber://connect?...) in
     // the URL field and splits it back into the server URL and token.
     if (mode === 'welcome' && /^openchamber:\/\//i.test(value.trim())) {
       const payload = parseConnectionPayload(value);

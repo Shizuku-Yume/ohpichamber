@@ -1,5 +1,5 @@
-import type { GuestRequest, GuestStatusActionEvent, GuestStatusView } from '@openchamber/sdk';
-import { guestStatusViewSchema } from '@openchamber/sdk/schemas';
+import type { GuestRequest, GuestStatusActionEvent, GuestStatusView } from 'ohpichamber-sdk';
+import { guestStatusViewSchema } from 'ohpichamber-sdk/schemas';
 import { z } from 'zod';
 
 import { proxyGuestServiceRequest } from './service';

@@ -46,12 +46,12 @@ import {
   SURFACE_WIDTH_HEADER,
   isGuestApproved,
   requestedGuestCapabilities,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 import {
   surfaceClipboardAnswerSchema,
   surfaceResizeAnswerSchema,
   surfaceViewerMessageSchema,
-} from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk/schemas';
 
 import { GuestServiceError, holdGuestService, openGuestServiceRequest } from './service.js';
 

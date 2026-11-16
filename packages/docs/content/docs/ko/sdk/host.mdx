@@ -8,7 +8,7 @@ description: 확장이 호출할 수 있는 모든 connectHost 메서드, OpenCh
 `connectHost`의 정확한 메서드, 제한, 오류 코드가 필요할 때 이 페이지를 사용하세요. 폴더 구조, 매니페스트, 설치는 [확장 만들기](/sdk/)에서 시작하세요.
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
 
 const host = connectHost();
 ```
@@ -200,7 +200,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 각 이벤트는 서비스 bearer 토큰과 함께 한 번의 `POST /session-events`로 도착합니다. `readSessionEventRequest`로 읽고 `{ "ok": true }`로 답하세요.
 
 ```ts
-import { SESSION_EVENTS_PATH, readSessionEventRequest } from "@openchamber/sdk";
+import { SESSION_EVENTS_PATH, readSessionEventRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === SESSION_EVENTS_PATH) {
@@ -221,7 +221,7 @@ if (url.pathname === SESSION_EVENTS_PATH) {
 서비스는 창이 열려 있지 않아도 동작할 수 있습니다. `createServiceHost`는 서비스가 OpenChamber로 돌아오는 경로입니다.
 
 ```ts
-import { createServiceHost } from '@openchamber/sdk';
+import { createServiceHost } from 'ohpichamber-sdk';
 
 const host = createServiceHost({ env: process.env });
 
@@ -303,7 +303,7 @@ OpenChamber는 그 기술을 바탕으로 설정 → 통합에 채널의 계정 
 OpenChamber는 세 가지 호출을 `POST /notifications`로 전달합니다. `auth.probe`는 이 서버가 전달 대상인지, `auth.verify`는 이 토큰이 누구의 것인지, `notify`는 알림 하나입니다. 각각을 `readNotificationsProviderRequest`로 읽고, 채널의 서버에는 아웃바운드 헬퍼를 통해서만 접근하세요. 헬퍼는 호출의 핸들을 붙여 요청을 OpenChamber에 보내고, OpenChamber가 토큰을 추가하고 요청을 계정의 서버로만 보냅니다.
 
 ```ts
-import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "@openchamber/sdk";
+import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createNotificationsOutbound({ env: process.env });
 
@@ -349,7 +349,7 @@ if (url.pathname === NOTIFICATIONS_PROVIDER_PATH) {
 OpenChamber는 아홉 가지 호출을 `POST /tracker`로 전달합니다. `auth.probe`와 `auth.verify`, 읽기인 `items.list`, `items.get`, `items.liveSummaries`, `states.list`, `containers.list`, 쓰기인 `items.updateState`와 `comments.create`입니다. 각각을 `readTrackerProviderRequest`로 읽고, 중립적인 항목 형태로 응답하고, 트래커의 서버에는 아웃바운드 헬퍼를 통해서만 접근하세요. 헬퍼는 호출의 핸들을 붙여 요청을 OpenChamber에 보내고, OpenChamber가 자격 증명을 추가하고 요청을 계정의 서버로만 보냅니다. 읽기의 핸들은 `GET`만 보냅니다.
 
 ```ts
-import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "@openchamber/sdk";
+import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createTrackerOutbound({ env: process.env });
 
@@ -382,7 +382,7 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 본문은 `readQuotaProviderRequest`로 읽고, 내장 제공자가 계산하는 결과를 `{ ok: true, data }`로 답하세요. `ok`, `configured`, `error`, `planLabel`, 그리고 창 이름을 키로 하는 `usage.windows`(각각 `usedPercent`, `windowSeconds`, `resetAt`(에포크 밀리초), 선택적인 `valueLabel` 또는 `value`), 모델별 창을 위한 `usage.models`입니다. 남은 비율, 초기화까지의 카운트다운, 서식이 적용된 문자열은 OpenChamber가 도출하므로 카드는 내장 제공자의 것과 일치합니다.
 
 ```ts
-import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "@openchamber/sdk";
+import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === QUOTA_PROVIDER_PATH) {
@@ -406,7 +406,7 @@ if (url.pathname === QUOTA_PROVIDER_PATH) {
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/openchamber/config.json");
+const info = await host.stat("~/.config/ohpichamber/config.json");
 ```
 
 제한: 경로는 최대 1024자, 내용은 최대 2,000,000자, 목록은 최대 2000개 항목. 내용 제한을 넘으면 `FILE_TOO_LARGE`입니다.

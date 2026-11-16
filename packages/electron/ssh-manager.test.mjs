@@ -81,12 +81,12 @@ describe('ElectronSshManager', () => {
         fs.writeFileSync(file, `#!/bin/sh\n${script}\n`, { mode: 0o755 });
       };
       executable(path.join(bin, 'bun'), 'printf "%s\\n" "$@" > "$HOME/install-args"');
-      executable(path.join(bin, 'openchamber'), `
+      executable(path.join(bin, 'ohpichamber'), `
 if [ "$1" = "--version" ]; then printf '1.2.3\\n'; exit 0; fi
 printf '%s' "$PATH" > "$HOME/launch-path"
 printf '4321\\n'`);
       // An earlier candidate with a different version must not win discovery.
-      executable(path.join(home, '.openchamber', 'npm-global', 'bin', 'openchamber'), 'printf "0.9.0\\n"');
+      executable(path.join(home, '.openchamber', 'npm-global', 'bin', 'ohpichamber'), 'printf "0.9.0\\n"');
       const tools = path.join(home, 'tools');
       executable(path.join(tools, 'npm'), 'exit 88');
       const env = { HOME: home, PATH: `${tools}:/usr/bin:/bin` };
@@ -102,11 +102,11 @@ printf '4321\\n'`);
       const parsed = { destination: 'user@example.test', args: [] };
 
       await manager.installOpenChamberManaged(parsed, '/unused.sock', '1.2.3', 'auto');
-      expect(fs.readFileSync(path.join(home, 'install-args'), 'utf8')).toBe('add\n-g\n@openchamber/web@1.2.3\n');
+      expect(fs.readFileSync(path.join(home, 'install-args'), 'utf8')).toBe('add\n-g\nohpichamber@1.2.3\n');
       const result = await manager.ensureRemoteServer({
         id: 'ssh-paths', auth: {}, remoteOpenchamber: { mode: 'managed', installMethod: 'auto' },
       }, parsed, '/unused.sock');
-      expect(result.remoteBinPath).toBe(path.join(bin, 'openchamber'));
+      expect(result.remoteBinPath).toBe(path.join(bin, 'ohpichamber'));
       expect(result.remotePort).toBe(4321);
       const launchPath = fs.readFileSync(path.join(home, 'launch-path'), 'utf8').split(':');
       expect(launchPath).toContain(path.join(cache, '.bun', 'bin'));
@@ -495,18 +495,18 @@ printf '4321\\n'`);
       emit: () => undefined,
     });
     manager.runRemoteCommand = async () => [
-      '/home/pi/.openchamber/npm-global/bin/openchamber\t1.2.3',
-      '/usr/bin/openchamber\t0.9.0',
-      '/opt/canary/bin/openchamber\t1.2.4-canary.20261030.7',
+      '/home/pi/.openchamber/npm-global/bin/ohpichamber\t1.2.3',
+      '/usr/bin/ohpichamber\t0.9.0',
+      '/opt/canary/bin/ohpichamber\t1.2.4-canary.20261030.7',
       '',
     ].join('\n');
 
     const candidates = await manager.remoteOpenChamberCandidates({ destination: 'user@example.test', args: [] }, '/tmp/control.sock');
 
     expect(candidates).toEqual([
-      { binPath: '/home/pi/.openchamber/npm-global/bin/openchamber', version: '1.2.3' },
-      { binPath: '/usr/bin/openchamber', version: '0.9.0' },
-      { binPath: '/opt/canary/bin/openchamber', version: '1.2.4-canary.20261030.7' },
+      { binPath: '/home/pi/.openchamber/npm-global/bin/ohpichamber', version: '1.2.3' },
+      { binPath: '/usr/bin/ohpichamber', version: '0.9.0' },
+      { binPath: '/opt/canary/bin/ohpichamber', version: '1.2.4-canary.20261030.7' },
     ]);
   });
 
@@ -528,11 +528,11 @@ printf '4321\\n'`);
       '/tmp/control.sock',
       instance,
       4321,
-      '/home/pi/.openchamber/npm-global/bin/openchamber',
+      '/home/pi/.openchamber/npm-global/bin/ohpichamber',
     );
 
     expect(port).toBe(4321);
-    expect(started).toContain("'/home/pi/.openchamber/npm-global/bin/openchamber' serve");
+    expect(started).toContain("'/home/pi/.openchamber/npm-global/bin/ohpichamber' serve");
   });
 
   test('prefers a bun that only exists in the home directory over npm', async () => {
@@ -552,7 +552,7 @@ printf '4321\\n'`);
 
     await manager.installOpenChamberManaged({ destination: 'user@example.test', args: [] }, '/tmp/control.sock', '1.2.3', 'auto');
 
-    expect(commands).toEqual(["'/home/pi/.bun/bin/bun' add -g @openchamber/web@1.2.3"]);
+    expect(commands).toEqual(["'/home/pi/.bun/bin/bun' add -g ohpichamber@1.2.3"]);
   });
   test('stops a remote server it started through the CLI, not the authenticated HTTP route', async () => {
     const scripts = [];
@@ -570,10 +570,10 @@ printf '4321\\n'`);
       { destination: 'user@example.test', args: [] },
       '/tmp/control.sock',
       41777,
-      '/home/pi/.bun/bin/openchamber',
+      '/home/pi/.bun/bin/ohpichamber',
     );
 
-    expect(scripts).toEqual(["'/home/pi/.bun/bin/openchamber' stop --port 41777"]);
+    expect(scripts).toEqual(["'/home/pi/.bun/bin/ohpichamber' stop --port 41777"]);
   });
   test('publishes the remote server to its network only with a UI password', async () => {
     const manager = new ElectronSshManager({
@@ -594,14 +594,14 @@ printf '4321\\n'`);
       remoteOpenchamber: { mode: 'managed', bindHost: '0.0.0.0' },
     };
 
-    await expect(manager.startRemoteServerManaged(parsed, '/tmp/control.sock', exposed, 4321, '/bin/openchamber'))
+    await expect(manager.startRemoteServerManaged(parsed, '/tmp/control.sock', exposed, 4321, '/bin/ohpichamber'))
       .rejects.toThrow(/requires a UI password/);
 
     const secured = {
       ...exposed,
       auth: { openchamberPassword: { enabled: true, value: 'remote-secret', store: 'settings' } },
     };
-    await manager.startRemoteServerManaged(parsed, '/tmp/control.sock', secured, 4321, '/bin/openchamber');
+    await manager.startRemoteServerManaged(parsed, '/tmp/control.sock', secured, 4321, '/bin/ohpichamber');
     expect(started).toContain('--hostname 0.0.0.0');
   });
 
@@ -620,7 +620,7 @@ printf '4321\\n'`);
         appVersion: '1.2.3',
         emit: () => undefined,
       });
-      manager.remoteOpenChamberCandidates = async () => [{ binPath: '/home/pi/.bun/bin/openchamber', version: '1.2.3' }];
+      manager.remoteOpenChamberCandidates = async () => [{ binPath: '/home/pi/.bun/bin/ohpichamber', version: '1.2.3' }];
       manager.runRemoteCommand = async (_parsed, _controlPath, script) => {
         const probedPort = script.match(/127\.0\.0\.1:(\d+)\/api\/system\/info/);
         if (probedPort) {
@@ -669,7 +669,7 @@ printf '4321\\n'`);
       const second = await manager.ensureRemoteServer(managed(), parsed, '/unused.sock');
 
       expect(first.startedByUs).toBe(true);
-      expect(second).toEqual({ remotePort: first.remotePort, startedByUs: false, ownsRemoteServer: true, remoteBinPath: '/home/pi/.bun/bin/openchamber' });
+      expect(second).toEqual({ remotePort: first.remotePort, startedByUs: false, ownsRemoteServer: true, remoteBinPath: '/home/pi/.bun/bin/ohpichamber' });
       expect(host.started).toEqual([first.remotePort]);
       expect(host.servers).toHaveLength(1);
     });

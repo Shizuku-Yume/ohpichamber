@@ -7,7 +7,7 @@ import { SettingsChipGroup, SettingsStackedField } from '@/components/sections/s
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useTrackerAuthEntry, useTrackerAuthStore } from '@/stores/useTrackerAuthStore';
 import type { TrackerAuthStatus, TrackerConnectResult, TrackerConnectTokenInput, TrackerDescriptor } from '@/lib/api/types';
-import type { PublicTracker } from '@openchamber/sdk';
+import type { PublicTracker } from 'ohpichamber-sdk';
 import type { InstalledGuest } from '@/lib/guests/types';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';

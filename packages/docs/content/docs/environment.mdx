@@ -5,7 +5,7 @@ description: Configure OpenChamber with environment variables.
 
 # Environment Variables
 
-OpenChamber reads these environment variables at startup. For startup services, `openchamber startup enable` snapshots the current environment by default, so rerun it after changing variables you want the service to use. Variables OpenChamber itself set in the shell you run it from, such as the desktop app's terminal or an agent's shell, stay out of the service; your own exports carry over from there too, unless you re-export a name OpenChamber already set in that shell, which a regular terminal avoids.
+OpenChamber reads these environment variables at startup. For startup services, `ohpichamber startup enable` snapshots the current environment by default, so rerun it after changing variables you want the service to use. Variables OpenChamber itself set in the shell you run it from, such as the desktop app's terminal or an agent's shell, stay out of the service; your own exports carry over from there too, unless you re-export a name OpenChamber already set in that shell, which a regular terminal avoids.
 
 ## Variables for agent sessions, Git and the terminal
 
@@ -54,13 +54,13 @@ Origins allowed to show OpenChamber inside a frame on their own page, separated 
 
 ### `OPENCHAMBER_DATA_DIR`
 
-Overrides the OpenChamber data directory. The default is `~/.config/openchamber`.
+Overrides the OpenChamber data directory. The default is `~/.config/ohpichamber`.
 
-Everything OpenChamber stores lives under this directory: settings, auth, project configs, themes, plans, and speech models. An instance that used a custom directory before version 1.23 gets its `projects`, `themes`, and `speech-models` folders copied from `~/.config/openchamber` on the first start; the originals stay in place and nothing is merged.
+Everything OpenChamber stores lives under this directory: settings, auth, project configs, themes, plans, and speech models. An instance that used a custom directory before version 1.23 gets its `projects`, `themes`, and `speech-models` folders copied from `~/.config/ohpichamber` on the first start; the originals stay in place and nothing is merged.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-Moves the managed chat directories that OpenChamber creates for chats without a project. The default is `~/.config/openchamber/chats`. Existing chats are not moved.
+Moves the managed chat directories that OpenChamber creates for chats without a project. The default is `~/.config/ohpichamber/chats`. Existing chats are not moved.
 
 ### `OPENCHAMBER_COMPRESS_API`
 

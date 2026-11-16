@@ -1,6 +1,6 @@
 import React from 'react';
 
-import type { SurfaceInputEvent, SurfaceModifiers } from '@openchamber/sdk';
+import type { SurfaceInputEvent, SurfaceModifiers } from 'ohpichamber-sdk';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';

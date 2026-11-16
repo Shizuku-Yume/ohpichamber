@@ -44,7 +44,7 @@ import { createOutboundHandles } from '../source-control/outbound-handles.js';
 import { createExtensionProviders } from '../source-control/extension-providers.js';
 import { createTrackerRegistry } from '../trackers/registry.js';
 import { registerTrackerRoutes } from '../trackers/routes.js';
-import { SOURCE_CONTROL_OUTBOUND_PATH, TRACKER_OUTBOUND_PATH } from '@openchamber/sdk';
+import { SOURCE_CONTROL_OUTBOUND_PATH, TRACKER_OUTBOUND_PATH } from 'ohpichamber-sdk';
 import { createExtensionTrackers } from '../trackers/extension-trackers.js';
 import { createTrackerAccounts, trackerAccountsPersistPath } from '../trackers/extension-accounts.js';
 import { createTrackerOAuth } from '../trackers/extension-oauth.js';

@@ -1,5 +1,5 @@
-import { connectHost } from '@openchamber/sdk';
-import { applyHostReady, mountBadge, mountBanner, mountButton, mountCheckbox, mountEmpty, mountList, mountMenu, mountProgress, mountSearchField, mountSelect, mountSeparator, mountSpinner, mountSwitch, mountTabs, mountTextField } from '@openchamber/sdk/ui';
+import { connectHost } from 'ohpichamber-sdk';
+import { applyHostReady, mountBadge, mountBanner, mountButton, mountCheckbox, mountEmpty, mountList, mountMenu, mountProgress, mountSearchField, mountSelect, mountSeparator, mountSpinner, mountSwitch, mountTabs, mountTextField } from 'ohpichamber-sdk/ui';
 import { card, codeSample, createExample, element, feedback, metrics, paragraph, row } from '../../shared.ts';
 
 const host = connectHost();
@@ -41,7 +41,7 @@ host.onReady((context) => {
   const badges = row(preview);
   for (const tone of ['neutral', 'primary', 'info', 'success', 'warning', 'error'] as const) mountBadge(badges, { label: tone, tone });
   mountMenu(preview, { label: 'More actions', variant: 'outline', items: [{ id: 'copy', label: 'Copy this idea' }, { id: 'disabled', label: 'Not available yet', disabled: true }, { separator: true }, { id: 'reset', label: 'Reset progress', destructive: true }], onSelect: (id) => {
-    if (id === 'reset') { done = 0; paint(); } else void notice.run(async () => { await host.writeClipboard('A progress card built with @openchamber/sdk/ui'); notice.show('Copied', 'Now make it your own.', 'success'); });
+    if (id === 'reset') { done = 0; paint(); } else void notice.run(async () => { await host.writeClipboard('A progress card built with ohpichamber-sdk/ui'); notice.show('Copied', 'Now make it your own.', 'success'); });
   } });
   paint();
   const library = card(panel('components'), 'Find your next idea', 'Searchable lists and empty states should feel just as considered as the happy path.');
@@ -74,7 +74,7 @@ host.onReady((context) => {
   mountButton(actionRow, { label: 'Copy text', variant: 'outline', onClick: () => { void notice.run(async () => { await host.writeClipboard(draft); notice.show('Copied', '', 'success'); }); } });
   mountButton(actionRow, { label: 'Toast', variant: 'ghost', onClick: () => { void notice.run(() => host.toast({ kind: 'success', message: 'Hello from your extension.' })); } });
   mountButton(actionRow, { label: 'Open Files', variant: 'ghost', onClick: () => { void notice.run(() => host.openSurface('file')); } });
-  mountButton(actionRow, { label: 'Open docs', variant: 'ghost', onClick: () => { void notice.run(() => host.openUrl('https://docs.openchamber.dev/sdk/')); } });
+  mountButton(actionRow, { label: 'Open docs', variant: 'ghost', onClick: () => { void notice.run(() => host.openUrl('https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk')); } });
   codeSample(actions, 'await host.compose({ text, mode: "append" });\nawait host.writeClipboard(text);\nawait host.toast({ kind: "success", message: "Done" });');
 
   const storage = card(panel('storage'), 'Leave a note for later', 'Saved on the connected instance, under this extension’s own namespace. Reopen the panel to find it again.');

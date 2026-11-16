@@ -31,7 +31,7 @@ Built-in themes cannot be deleted. Delete and reimport a theme to update it.
 
 ## Create your own theme
 
-Save the example below as `~/.config/openchamber/themes/my-theme-dark.json` on
+Save the example below as `~/.config/ohpichamber/themes/my-theme-dark.json` on
 the machine running your OpenChamber server. Create the `themes` directory if
 it does not exist. A custom OpenChamber data directory uses its own `themes`
 folder. When connected to a remote server, put the file on that server.

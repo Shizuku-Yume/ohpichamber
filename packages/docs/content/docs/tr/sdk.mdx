@@ -1,11 +1,11 @@
 ---
 title: Eklenti oluşturma
-description: "@openchamber/sdk ile OpenChamber'a kendi panelinizi ekleyin, bir klasörden veya git adresinden kurun ve connectHost üzerinden uygulamayla konuşun."
+description: "ohpichamber-sdk ile OpenChamber'a kendi panelinizi ekleyin, bir klasörden veya git adresinden kurun ve connectHost üzerinden uygulamayla konuşun."
 ---
 
 # Eklenti oluşturma
 
-OpenChamber'a kendi panelinizi eklemek için `@openchamber/sdk` kullanın. Eklenti, OpenChamber'ın sağ şeritte gösterdiği küçük bir web sayfasıdır. Uygulamayla `connectHost()` üzerinden konuşur: geçerli projeyi ve oturumu okuyabilir, bildirim gösterebilir, sohbet kutusuna metin koyabilir, bir oturuma görev iliştirebilir ve kullanıcının onayıyla oturum başlatıp istem gönderebilir.
+OpenChamber'a kendi panelinizi eklemek için `ohpichamber-sdk` kullanın. Eklenti, OpenChamber'ın sağ şeritte gösterdiği küçük bir web sayfasıdır. Uygulamayla `connectHost()` üzerinden konuşur: geçerli projeyi ve oturumu okuyabilir, bildirim gösterebilir, sohbet kutusuna metin koyabilir, bir oturuma görev iliştirebilir ve kullanıcının onayıyla oturum başlatıp istem gönderebilir.
 
 Eklentiler OpenChamber web ve masaüstünde çalışır.
 
@@ -20,7 +20,7 @@ Eklentiler OpenChamber web ve masaüstünde çalışır.
 OpenChamber kodunuzu asla derlemez. Derlenmiş `.js` dosyasını yayınlayın. SDK bir paketleme komutu içerir; IIFE üreten herhangi bir paketleyici de olur.
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -38,7 +38,7 @@ Paketleme komutu Bun üzerinde çalışır. Bun yoksa esbuild'i ya da başka bir
 
 OpenChamber manifesti okur ve eklentinin ne istediğini listeleyen bir pencere gösterir (bkz. [Yetenekler](#yetenekler)). Onaylayın, simgeniz şeritte belirir. Tıklayın, sayfanız yüklenir.
 
-Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https bağlantısı da ekleyebilirsiniz. Yalnızca git kurulumu güncellenebilir: `package.json` içindeki `version` değerini yükseltip push edin; OpenChamber açıldıktan kısa süre sonra ve birkaç saatte bir denetler, kullanıcıya bir kez haber verir ve güncellemeyi Ayarlar → Uzantılar sayfasında sunar. Herhangi bir sayfadaki `openchamber://extensions/install?url=<encoded repository URL>` bağlantısı, masaüstü uygulamasını bu depo ekleme iletişim kutusunda hazır olacak şekilde açar; böylece bir kurulum düğmesi sunabilirsiniz. URL'deki `#tag` ya da `#branch` neyi izleyeceğini sabitler. Bunlar OpenChamber'ın veri klasörüne kopyalanır ve o kopyadan çalışır; bu yüzden `node_modules` veya TypeScript kaynaklarını değil, derlenmiş dosyaları yayınlayın. Eklentiyi kaldırmak kopyayı siler. Klasörden kurulum doğrudan sizin klasörünüzden çalışır; düzenleyip yeniden derleyip yeniden yükleyebilirsiniz.
+Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https bağlantısı da ekleyebilirsiniz. Yalnızca git kurulumu güncellenebilir: `package.json` içindeki `version` değerini yükseltip push edin; OpenChamber açıldıktan kısa süre sonra ve birkaç saatte bir denetler, kullanıcıya bir kez haber verir ve güncellemeyi Ayarlar → Uzantılar sayfasında sunar. Herhangi bir sayfadaki `ohpichamber://extensions/install?url=<encoded repository URL>` bağlantısı, masaüstü uygulamasını bu depo ekleme iletişim kutusunda hazır olacak şekilde açar; böylece bir kurulum düğmesi sunabilirsiniz. URL'deki `#tag` ya da `#branch` neyi izleyeceğini sabitler. Bunlar OpenChamber'ın veri klasörüne kopyalanır ve o kopyadan çalışır; bu yüzden `node_modules` veya TypeScript kaynaklarını değil, derlenmiş dosyaları yayınlayın. Eklentiyi kaldırmak kopyayı siler. Klasörden kurulum doğrudan sizin klasörünüzden çalışır; düzenleyip yeniden derleyip yeniden yükleyebilirsiniz.
 
 ## Manifest
 
@@ -48,7 +48,7 @@ Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -76,9 +76,9 @@ Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https
 
 `apiVersion` değeri `1`'dir. OpenChamber başka değerleri reddeder.
 
-SDK 3, SDK 2'nin üst pencere taşımasını özel ve sürümlenmiş bir `MessagePort` önyüklemesiyle değiştirir. Hâlâ M3 öncesi v1 `hello` gönderen bir panel bağlanamaz: OpenChamber panelinde sürüm uyuşmazlığı gösterir ve ona ne port ne de ana makine durumu verir. Bir v1 önyükleme duyurusu hiçbir şey verilmeden atılır. Paneli `@openchamber/sdk` 3 ile yeniden derleyin. Şema değişmediği için `apiVersion` `1` olarak kalır.
+SDK 3, SDK 2'nin üst pencere taşımasını özel ve sürümlenmiş bir `MessagePort` önyüklemesiyle değiştirir. Hâlâ M3 öncesi v1 `hello` gönderen bir panel bağlanamaz: OpenChamber panelinde sürüm uyuşmazlığı gösterir ve ona ne port ne de ana makine durumu verir. Bir v1 önyükleme duyurusu hiçbir şey verilmeden atılır. Paneli `ohpichamber-sdk` 3 ile yeniden derleyin. Şema değişmediği için `apiVersion` `1` olarak kalır.
 
-`engines.openchamber` isteğe bağlıdır. Eklentinizin çalıştığı en eski OpenChamber sürümünü `3.0.0` veya `>=3.0.0` biçiminde yazın. Daha eski sürümler sonradan hata vermek yerine kurulumu reddeder.
+`engines.openchamber` isteğe bağlıdır. Eklentinizin çalıştığı en eski OpenChamber sürümünü `1.0.0` veya `>=1.0.0` biçiminde yazın. Daha eski sürümler sonradan hata vermek yerine kurulumu reddeder.
 
 `id`, `name` ve `icon` eklentiyi adlandırır. `id` kebab-case olmalı ve kurulu eklentiler arasında benzersiz olmalıdır. `icon` bir Remixicon adı (`RiWindowLine` için `window`) ya da klasörünüzdeki bir SVG dosyasıdır, örneğin `icon.svg`. `contributes.panel` eklentinin şeritteki panelidir: `entry` değeri klasörünüzdeki HTML dosyasıdır. Şeritte paneli olmayan bir eklenti `panel` alanını atlar. Eski paketler `id`, `name` ve `icon` alanlarını `panel` içinde tutar ve bu çalışmaya devam eder.
 
@@ -185,14 +185,14 @@ Sayfanız diske kendisi dokunamaz. OpenChamber onun yerine, kullanıcının onay
 - `/` veya `~/` ile başlayan bir yol başka herhangi bir yeri ifade eder. `contributes.filesystem` içinde tanımladığınız desenlerden biriyle eşleşmelidir ve kullanıcı onay penceresinde tam olarak bu desenleri görür:
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 Desenlerde `*` tek bir yol parçasını, `**` herhangi bir derinliği karşılar. Bunların dışındaki her şey, onaydan sonra bile `BAD_PATH` olur. `..` hiçbir zaman izinli değildir.
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -231,7 +231,7 @@ Sayfanız `ctx.surface` değerini `status` olarak görür. OpenChamber sayfayı 
 Dosyayı OpenChamber yönetir. Sayfanız dosyayı hiçbir zaman okumaz veya yazmaz ve bunun için bir izne ihtiyaç duymaz. OpenChamber size metni verir, kaydederken düzenlenmiş metni ister ve Cmd/Ctrl+S, otomatik kaydetme, kaydedilmemiş değişiklik uyarısı, satır sonları ve diskte yapılan değişikliklerle kendisi ilgilenir:
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -341,7 +341,7 @@ Anahtar, OpenCode'un bildirdiği sağlayıcı kimliğidir. Değer, paketinizdeki
 ## Paneldeki ilk satırlar
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -353,7 +353,7 @@ host.onReady((ctx) => {
 
 `connectHost` yalnızca OpenChamber içinde çalışır. Sayfa düz bir dosya olarak açıldığında her çağrı `HOST_UNAVAILABLE` ile reddedilir.
 
-Paneli önce `@openchamber/sdk/ui` yapı taşlarıyla kurun: düğmeler, alanlar, açılır listeler, sekmeler, listeler ve daha fazlası, uygulamanın renkleri ve yazı tipleriyle; böylece panel OpenChamber'ın bir parçası gibi hissedilir. Kendi HTML ve CSS'inizi yalnızca kitte olmayanlar için yazın. Bkz. [UI kiti](/sdk/ui/).
+Paneli önce `ohpichamber-sdk/ui` yapı taşlarıyla kurun: düğmeler, alanlar, açılır listeler, sekmeler, listeler ve daha fazlası, uygulamanın renkleri ve yazı tipleriyle; böylece panel OpenChamber'ın bir parçası gibi hissedilir. Kendi HTML ve CSS'inizi yalnızca kitte olmayanlar için yazın. Bkz. [UI kiti](/sdk/ui/).
 
 ## İlgili sayfalar
 

@@ -84,8 +84,8 @@ beforeEach(async () => {
   switchRuntimeEndpoint({ apiBaseUrl: 'https://ui-native.test', runtimeKey: `ui-native-${++runtimeNumber}` });
   stub(hostFilesystem, 'getFilesystemHomeInfo', async () => ({
     home: '/Users/tester',
-    chatsRoot: '/Users/tester/.config/openchamber/chats',
-    canonicalChatsRoot: '/Users/tester/.config/openchamber/chats',
+    chatsRoot: '/Users/tester/.config/ohpichamber/chats',
+    canonicalChatsRoot: '/Users/tester/.config/ohpichamber/chats',
     canonicalLegacyChatsRoot: '/Users/tester/.config/opencode/chats',
   }));
   await ensureChatsRootDirectory();
@@ -802,7 +802,7 @@ describe('openNewSessionDraft project binding', () => {
     // A chat session leaves its managed scratch directory current; the project
     // to reopen on can only come from the recorded target.
     useDirectoryStore.getState().setDirectory(
-      '/Users/tester/.config/openchamber/chats/ses_chat',
+      '/Users/tester/.config/ohpichamber/chats/ses_chat',
       { showOverlay: false },
     );
 
@@ -840,7 +840,7 @@ describe('openNewSessionDraft project binding', () => {
     // session's directory even when that session is a chat; its scratch
     // directory names no project.
     useSessionUIStore.getState().openNewSessionDraft({
-      directoryOverride: '/Users/tester/.config/openchamber/chats/ses_chat',
+      directoryOverride: '/Users/tester/.config/ohpichamber/chats/ses_chat',
     });
     const draft = useSessionUIStore.getState().newSessionDraft;
 
@@ -855,7 +855,7 @@ describe('openNewSessionDraft project binding', () => {
     );
 
     useSessionUIStore.getState().openNewSessionDraft({
-      directoryOverride: '/Users/tester/.config/openchamber/chats/ses_chat',
+      directoryOverride: '/Users/tester/.config/ohpichamber/chats/ses_chat',
     });
 
     expect(useSessionUIStore.getState().newSessionDraft.target).toBe('chat');
@@ -1229,7 +1229,7 @@ describe('native prompt routing', () => {
     const mention = { kind: 'session', sessionId: 'target', title: 'Target', contextText: 'Read target' };
     const input = { inlineComments: [], syntheticTexts: [], references: [mention] };
     const deps = { parseAgentMention: (text) => ({ text }), extractFileMentions: (text) => ({ text, attachments: [] }), sanitizeAttachments: (files) => files ?? [], collectSkillNames: () => [] };
-    const direct = buildOutgoingMessage({ ...input, queued: [], composerText: 'openchamber://session/target', composerAttachments: [] }, deps);
+    const direct = buildOutgoingMessage({ ...input, queued: [], composerText: 'ohpichamber://session/target', composerAttachments: [] }, deps);
     const queued = queuedContextToParts(buildComposerContext(input, null));
     for (const additionalParts of [direct.additionalParts, queued]) {
       await route({ additionalParts });

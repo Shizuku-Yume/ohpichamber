@@ -111,7 +111,7 @@ describe('Host and Agent backup and restore verification', () => {
   it('restores Host metadata, prompt queue, approval policies, and OMP transcripts on disposable HOME', async () => {
     // 1. Setup disposable source home
     const sourceHome = makeDir('backup-source-home-');
-    const sourceDataDir = path.join(sourceHome, '.config', 'openchamber');
+    const sourceDataDir = path.join(sourceHome, '.config', 'ohpichamber');
     const sourceOmpDir = path.join(sourceHome, '.omp', 'agent');
     fs.mkdirSync(sourceDataDir, { recursive: true, mode: 0o700 });
     fs.mkdirSync(sourceOmpDir, { recursive: true, mode: 0o700 });
@@ -264,7 +264,7 @@ describe('Host and Agent backup and restore verification', () => {
 
     // 6. Execute documented restore procedure into fresh disposable target home
     const restoreHome = makeDir('restore-dest-home-');
-    const restoreDataDir = path.join(restoreHome, '.config', 'openchamber');
+    const restoreDataDir = path.join(restoreHome, '.config', 'ohpichamber');
     const restoreOmpDir = path.join(restoreHome, '.omp', 'agent');
     fs.mkdirSync(restoreDataDir, { recursive: true, mode: 0o700 });
     fs.mkdirSync(restoreOmpDir, { recursive: true, mode: 0o700 });

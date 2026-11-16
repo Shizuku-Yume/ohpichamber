@@ -119,7 +119,7 @@ context text. This optional field needs no queue-file migration.
 ## Persistence
 
 `<data-dir>/message-queue.json` (`OPENCHAMBER_DATA_DIR` or
-`~/.config/openchamber`): `{ version, revision, sessions: { [sessionId]:
+`~/.config/ohpichamber`): `{ version, revision, sessions: { [sessionId]:
 { directory, items } } }`, written atomically (temp file + rename) through a
 serialized write chain. A missing file is an empty queue. A malformed file is
 a failure, not an empty queue: it is moved aside as

@@ -16,7 +16,7 @@ Full-screen extension pages are separate from this rail registry. `contributes.p
   Built-in modes stay a closed list. Installed guests add `plugin:${id}`
   surfaces through `extras` on `sortContextSurfaces` /
   `getVisibleContextRailSurfaces`. Do not copy guest types out of
-  `@openchamber/sdk`.
+  `ohpichamber-sdk`.
 - `availability: 'always'` surfaces are always present on the rail.
   `availability: 'has-content'` surfaces (chat) are hidden from the
   rail until a tab of their mode exists, and stay visible for as long as one

@@ -5,7 +5,7 @@ description: OpenChamber を環境変数で設定します。
 
 # 環境変数
 
-OpenChamber は起動時にこれらの環境変数を読み取ります。スタートアップサービスでは、`openchamber startup enable` がデフォルトで現在の環境をスナップショットするため、サービスに使わせたい変数を変更した後は再実行してください。
+OpenChamber は起動時にこれらの環境変数を読み取ります。スタートアップサービスでは、`ohpichamber startup enable` がデフォルトで現在の環境をスナップショットするため、サービスに使わせたい変数を変更した後は再実行してください。
 
 ## エージェントセッション、Git、ターミナル用の変数
 
@@ -50,13 +50,13 @@ OpenChamber Web サーバーのバインドアドレスです。他のマシン�
 
 ### `OPENCHAMBER_DATA_DIR`
 
-OpenChamber のデータディレクトリを上書きします。デフォルトは `~/.config/openchamber` です。
+OpenChamber のデータディレクトリを上書きします。デフォルトは `~/.config/ohpichamber` です。
 
-OpenChamber が保存するものはすべてこのディレクトリ配下にあります: 設定、認証、プロジェクト設定、テーマ、プラン、音声モデル。バージョン 1.23 より前にカスタムディレクトリを使っていたインスタンスでは、初回起動時に `projects`、`themes`、`speech-models` フォルダーが `~/.config/openchamber` からここへコピーされます。元のフォルダーはそのまま残り、マージはされません。
+OpenChamber が保存するものはすべてこのディレクトリ配下にあります: 設定、認証、プロジェクト設定、テーマ、プラン、音声モデル。バージョン 1.23 より前にカスタムディレクトリを使っていたインスタンスでは、初回起動時に `projects`、`themes`、`speech-models` フォルダーが `~/.config/ohpichamber` からここへコピーされます。元のフォルダーはそのまま残り、マージはされません。
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-プロジェクトのないチャット用に OpenChamber が作成する管理チャットディレクトリの場所を変更します。デフォルトは `~/.config/openchamber/chats` です。既存のチャットは移動されません。
+プロジェクトのないチャット用に OpenChamber が作成する管理チャットディレクトリの場所を変更します。デフォルトは `~/.config/ohpichamber/chats` です。既存のチャットは移動されません。
 
 ### `OPENCHAMBER_COMPRESS_API`
 

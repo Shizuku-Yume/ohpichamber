@@ -548,10 +548,10 @@ function parseArgs(argv = process.argv.slice(2)) {
         // may still pass this when starting a remote server.
         break;
       case 'try-cf-tunnel':
-        removedFlagErrors.push('`--try-cf-tunnel` was removed. Use: openchamber tunnel start --provider cloudflare --mode quick');
+        removedFlagErrors.push('`--try-cf-tunnel` was removed. Use: ohpichamber tunnel start --provider cloudflare --mode quick');
         break;
       case 'tunnel-qr':
-        removedFlagErrors.push('`--tunnel-qr` was removed. Use: openchamber tunnel start ... --qr');
+        removedFlagErrors.push('`--tunnel-qr` was removed. Use: ohpichamber tunnel start ... --qr');
         break;
       case 'tunnel-password-url':
         removedFlagErrors.push('`--tunnel-password-url` was removed. Use UI password auth directly after tunnel start.');
@@ -562,7 +562,7 @@ function parseArgs(argv = process.argv.slice(2)) {
       case 'tunnel-token':
       case 'tunnel-hostname':
       case 'tunnel':
-        removedFlagErrors.push(`\`--${name}\` was removed from top-level serve flow. Use: openchamber tunnel start ...`);
+        removedFlagErrors.push(`\`--${name}\` was removed from top-level serve flow. Use: ohpichamber tunnel start ...`);
         break;
       default:
         if (!long && name.length === 1) {
@@ -616,7 +616,7 @@ function showHelp() {
  OpenChamber - Host Gateway and web interface for the OMP Agent Service
 
 USAGE:
-  openchamber [COMMAND] [OPTIONS]
+  ohpichamber [COMMAND] [OPTIONS]
 
 COMMANDS:
   serve          Start the web server (daemon default)
@@ -658,16 +658,16 @@ ENVIRONMENT:
   OPENCHAMBER_DATA_DIR         Override OpenChamber data directory
 
 EXAMPLES:
-  openchamber                    # Start in daemon mode on default port 3000 (or free port)
-  openchamber --port 8080        # Start on port 8080 (daemon)
-  openchamber --lan --port 3002  # Start on LAN at 0.0.0.0:3002
-  openchamber serve --foreground # Start in foreground (for systemd Type=simple)
-  openchamber connect-url --port 3000 --qr
-  openchamber connect-url --server https://openchamber.example.com
-  openchamber control           # Show control-plane commands for agents/scripts
-  openchamber startup enable     # Start OpenChamber at user login
-  openchamber tunnel help        # Show tunnel lifecycle help
-  openchamber logs               # Follow logs for latest running instance
+  ohpichamber                    # Start in daemon mode on default port 3000 (or free port)
+  ohpichamber --port 8080        # Start on port 8080 (daemon)
+  ohpichamber --lan --port 3002  # Start on LAN at 0.0.0.0:3002
+  ohpichamber serve --foreground # Start in foreground (for systemd Type=simple)
+  ohpichamber connect-url --port 3000 --qr
+  ohpichamber connect-url --server https://openchamber.example.com
+  ohpichamber control           # Show control-plane commands for agents/scripts
+  ohpichamber startup enable     # Start OpenChamber at user login
+  ohpichamber tunnel help        # Show tunnel lifecycle help
+  ohpichamber logs               # Follow logs for latest running instance
 `);
 }
 
@@ -676,7 +676,7 @@ function showControlHelp() {
  OpenChamber Control Commands
 
 USAGE:
-  openchamber <COMMAND> [OPTIONS]
+  ohpichamber <COMMAND> [OPTIONS]
 
 COMMANDS:
   status                         Show running OpenChamber runtimes
@@ -688,12 +688,12 @@ COMMANDS:
   logs                           Tail logs for CLI-managed runtimes
 
 DETAILED HELP:
-  openchamber session --help     Show session creation, status, and message options
-  openchamber models --help      Show model defaults and favorites help
-  openchamber projects --help    Show project list help
-  openchamber schedule --help    Show scheduled task actions and schedule options
-  openchamber tunnel help        Show tunnel lifecycle/status commands
-  openchamber status --help      Show runtime status options
+  ohpichamber session --help     Show session creation, status, and message options
+  ohpichamber models --help      Show model defaults and favorites help
+  ohpichamber projects --help    Show project list help
+  ohpichamber schedule --help    Show scheduled task actions and schedule options
+  ohpichamber tunnel help        Show tunnel lifecycle/status commands
+  ohpichamber status --help      Show runtime status options
 
 COMMON OPTIONS:
   --json                         Output machine-readable JSON
@@ -702,11 +702,11 @@ COMMON OPTIONS:
   --ui-password <password>       Authenticate to a password-protected runtime
 
 EXAMPLES:
-  openchamber status
-  openchamber models
-  openchamber projects
-  openchamber session --help
-  openchamber schedule --help
+  ohpichamber status
+  ohpichamber models
+  ohpichamber projects
+  ohpichamber session --help
+  ohpichamber schedule --help
 `);
 }
 
@@ -715,7 +715,7 @@ function showStartupHelp() {
  OpenChamber Startup Commands
 
 USAGE:
-  openchamber startup <SUBCOMMAND> [OPTIONS]
+  ohpichamber startup <SUBCOMMAND> [OPTIONS]
 
 SUBCOMMANDS:
   status      Show startup integration status
@@ -732,10 +732,10 @@ OPTIONS:
   -q, --quiet             Suppress non-essential output
 
 EXAMPLES:
-  openchamber startup enable
-  openchamber startup enable --port 3000
-  openchamber startup enable --port 3000 --api-only --host 0.0.0.0
-  openchamber startup status --json
+  ohpichamber startup enable
+  ohpichamber startup enable --port 3000
+  ohpichamber startup enable --port 3000 --api-only --host 0.0.0.0
+  ohpichamber startup status --json
 `);
 }
 
@@ -744,10 +744,10 @@ function showConnectUrlHelp() {
  OpenChamber Connect URL
 
 USAGE:
-  openchamber connect-url [OPTIONS]
+  ohpichamber connect-url [OPTIONS]
 
 DESCRIPTION:
-  Generate an openchamber:// connection link for adding this server to another
+  Generate an ohpichamber:// connection link for adding this server to another
   OpenChamber app. If no server is running on the selected port, it starts one.
 
 OPTIONS:
@@ -771,10 +771,10 @@ OPTIONS:
   -h, --help              Show this help
 
 EXAMPLES:
-  openchamber connect-url --port 3000 --qr
-  openchamber connect-url --port 3000 --api-only --lan --server http://workstation.local:3000 --qr
-  openchamber connect-url --server https://openchamber.example.com --name Workstation
-  openchamber connect-url --relay --name "My laptop"
+  ohpichamber connect-url --port 3000 --qr
+  ohpichamber connect-url --port 3000 --api-only --lan --server http://workstation.local:3000 --qr
+  ohpichamber connect-url --server https://openchamber.example.com --name Workstation
+  ohpichamber connect-url --relay --name "My laptop"
 `);
 }
 
@@ -783,7 +783,7 @@ function showTunnelHelp() {
  Tunnel Lifecycle Commands
 
 USAGE:
-  openchamber tunnel <SUBCOMMAND> [OPTIONS]
+  ohpichamber tunnel <SUBCOMMAND> [OPTIONS]
 
 SUBCOMMANDS:
   help        Show this tunnel help
@@ -832,31 +832,31 @@ BEHAVIOR NOTES:
   - Connect links are one-time; generating a new link revokes the previous unused link.
 
 PROFILE USAGE:
-  openchamber tunnel profile list [--provider <id>] [--json]
-  openchamber tunnel profile show --name <name> [--provider <id>] [--json]
-  openchamber tunnel profile add --provider <id> --mode managed-remote --name <name> --hostname <host> --token <token> [--force] [--json]
-  openchamber tunnel profile add --provider <id> --mode managed-remote --name <name> --hostname <host> --token-file <path> [--force] [--json]
-  openchamber tunnel profile remove --name <name> [--provider <id>] [--json]
+  ohpichamber tunnel profile list [--provider <id>] [--json]
+  ohpichamber tunnel profile show --name <name> [--provider <id>] [--json]
+  ohpichamber tunnel profile add --provider <id> --mode managed-remote --name <name> --hostname <host> --token <token> [--force] [--json]
+  ohpichamber tunnel profile add --provider <id> --mode managed-remote --name <name> --hostname <host> --token-file <path> [--force] [--json]
+  ohpichamber tunnel profile remove --name <name> [--provider <id>] [--json]
 
 SHELL COMPLETION:
-  openchamber tunnel completion bash   Generate Bash completion script
-  openchamber tunnel completion zsh    Generate Zsh completion script
-  openchamber tunnel completion fish   Generate Fish completion script
+  ohpichamber tunnel completion bash   Generate Bash completion script
+  ohpichamber tunnel completion zsh    Generate Zsh completion script
+  ohpichamber tunnel completion fish   Generate Fish completion script
 
 EXAMPLES:
-  openchamber tunnel providers
-  openchamber tunnel ready --provider cloudflare
-  openchamber tunnel doctor --provider cloudflare
-  openchamber tunnel status
-  openchamber tunnel start --qr
-  openchamber tunnel start --profile prod-main
-  openchamber tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
-  openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
-  openchamber tunnel start --dry-run --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
-  echo "$TOKEN" | openchamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-stdin
-  openchamber tunnel profile list --provider cloudflare
-  openchamber tunnel profile list --json --show-secrets
-  openchamber tunnel stop --port 3000
+  ohpichamber tunnel providers
+  ohpichamber tunnel ready --provider cloudflare
+  ohpichamber tunnel doctor --provider cloudflare
+  ohpichamber tunnel status
+  ohpichamber tunnel start --qr
+  ohpichamber tunnel start --profile prod-main
+  ohpichamber tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
+  ohpichamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
+  ohpichamber tunnel start --dry-run --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
+  echo "$TOKEN" | ohpichamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-stdin
+  ohpichamber tunnel profile list --provider cloudflare
+  ohpichamber tunnel profile list --json --show-secrets
+  ohpichamber tunnel stop --port 3000
 `);
 }
 
@@ -864,9 +864,9 @@ function generateCompletionScript(shell) {
   const normalized = typeof shell === 'string' ? shell.trim().toLowerCase() : '';
 
   if (normalized === 'bash') {
-    return `# Bash completion for openchamber tunnel
-# Add to ~/.bashrc: eval "$(openchamber tunnel completion bash)"
-_openchamber_tunnel() {
+    return `# Bash completion for ohpichamber tunnel
+# Add to ~/.bashrc: eval "$(ohpichamber tunnel completion bash)"
+_ohpichamber_tunnel() {
   local cur prev commands tunnel_commands profile_commands common_flags start_flags
   COMPREPLY=()
   cur="\${COMP_WORDS[COMP_CWORD]}"
@@ -907,16 +907,16 @@ _openchamber_tunnel() {
   COMPREPLY=( $(compgen -W "\${common_flags}" -- "\${cur}") )
   return 0
 }
-complete -F _openchamber_tunnel openchamber
+complete -F _ohpichamber_tunnel ohpichamber
 `;
   }
 
   if (normalized === 'zsh') {
-    return `#compdef openchamber
-# Zsh completion for openchamber tunnel
-# Add to ~/.zshrc: eval "$(openchamber tunnel completion zsh)"
+    return `#compdef ohpichamber
+# Zsh completion for ohpichamber tunnel
+# Add to ~/.zshrc: eval "$(ohpichamber tunnel completion zsh)"
 
-_openchamber() {
+_ohpichamber() {
   local -a commands tunnel_commands profile_commands
 
   commands=(
@@ -976,45 +976,45 @@ _openchamber() {
   esac
 }
 
-compdef _openchamber openchamber
+compdef _ohpichamber openchamber
 `;
   }
 
   if (normalized === 'fish') {
-    return `# Fish completion for openchamber tunnel
-# Save to ~/.config/fish/completions/openchamber.fish
+    return `# Fish completion for ohpichamber tunnel
+# Save to ~/.config/fish/completions/ohpichamber.fish
 
-complete -c openchamber -n '__fish_use_subcommand' -a 'serve' -d 'Start the web server'
-complete -c openchamber -n '__fish_seen_subcommand_from serve' -l foreground -d 'Run in foreground (for systemd/process managers)'
-complete -c openchamber -n '__fish_seen_subcommand_from serve' -l no-daemon -d 'Run in foreground (alias for --foreground)'
-complete -c openchamber -n '__fish_use_subcommand' -a 'stop' -d 'Stop running instance(s)'
-complete -c openchamber -n '__fish_use_subcommand' -a 'restart' -d 'Stop and start the server'
-complete -c openchamber -n '__fish_use_subcommand' -a 'status' -d 'Show server status'
-complete -c openchamber -n '__fish_use_subcommand' -a 'tunnel' -d 'Tunnel lifecycle commands'
-complete -c openchamber -n '__fish_use_subcommand' -a 'logs' -d 'Tail logs'
-complete -c openchamber -n '__fish_use_subcommand' -a 'update' -d 'Check for updates'
+complete -c ohpichamber -n '__fish_use_subcommand' -a 'serve' -d 'Start the web server'
+complete -c ohpichamber -n '__fish_seen_subcommand_from serve' -l foreground -d 'Run in foreground (for systemd/process managers)'
+complete -c ohpichamber -n '__fish_seen_subcommand_from serve' -l no-daemon -d 'Run in foreground (alias for --foreground)'
+complete -c ohpichamber -n '__fish_use_subcommand' -a 'stop' -d 'Stop running instance(s)'
+complete -c ohpichamber -n '__fish_use_subcommand' -a 'restart' -d 'Stop and start the server'
+complete -c ohpichamber -n '__fish_use_subcommand' -a 'status' -d 'Show server status'
+complete -c ohpichamber -n '__fish_use_subcommand' -a 'tunnel' -d 'Tunnel lifecycle commands'
+complete -c ohpichamber -n '__fish_use_subcommand' -a 'logs' -d 'Tail logs'
+complete -c ohpichamber -n '__fish_use_subcommand' -a 'update' -d 'Check for updates'
 
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'help' -d 'Show tunnel help'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'providers' -d 'Show providers'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'ready' -d 'Check readiness'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'doctor' -d 'Run diagnostics'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'status' -d 'Show tunnel status'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'start' -d 'Start a tunnel'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'stop' -d 'Stop tunnel'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'profile' -d 'Manage profiles'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'completion' -d 'Generate completions'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'help' -d 'Show tunnel help'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'providers' -d 'Show providers'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'ready' -d 'Check readiness'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'doctor' -d 'Run diagnostics'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'status' -d 'Show tunnel status'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'start' -d 'Start a tunnel'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'stop' -d 'Stop tunnel'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'profile' -d 'Manage profiles'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and not __fish_seen_subcommand_from help providers ready doctor status start stop profile completion' -a 'completion' -d 'Generate completions'
 
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l provider -d 'Provider id'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l mode -d 'Tunnel mode'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l profile -d 'Profile name'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l config -d 'Config path'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l token -d 'Token'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l token-file -d 'Token file path'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l token-stdin -d 'Read token from stdin'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l hostname -d 'Hostname'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l https-port -d 'Tailscale HTTPS port'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l dry-run -d 'Validate without applying'
-complete -c openchamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l qr -d 'Show QR code'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l provider -d 'Provider id'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l mode -d 'Tunnel mode'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l profile -d 'Profile name'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l config -d 'Config path'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l token -d 'Token'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l token-file -d 'Token file path'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l token-stdin -d 'Read token from stdin'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l hostname -d 'Hostname'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l https-port -d 'Tailscale HTTPS port'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l dry-run -d 'Validate without applying'
+complete -c ohpichamber -n '__fish_seen_subcommand_from tunnel; and __fish_seen_subcommand_from start' -l qr -d 'Show QR code'
 `;
   }
 

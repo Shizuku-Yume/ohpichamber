@@ -33,7 +33,7 @@ description: 복사해서 쓸 수 있는, 파일 세 개로 된 완전한 OpenCh
       }
     }
   },
-  "dependencies": { "@openchamber/sdk": "^3.0.0" }
+  "dependencies": { "ohpichamber-sdk": "^1.0.0" }
 }
 ```
 
@@ -56,8 +56,8 @@ description: 복사해서 쓸 수 있는, 파일 세 개로 된 완전한 OpenCh
 `panel/main.ts`:
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
-import { applyHostReady, mountBanner, mountEmpty, mountList, mountSpinner } from "@openchamber/sdk/ui";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
+import { applyHostReady, mountBanner, mountEmpty, mountList, mountSpinner } from "ohpichamber-sdk/ui";
 
 type Repo = { full_name: string; html_url: string; description: string | null };
 

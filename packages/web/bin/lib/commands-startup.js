@@ -16,7 +16,7 @@ async function startupCommand(options, action = 'status', dependencies = {}) {
   const normalized = typeof action === 'string' ? action.trim().toLowerCase() : 'status';
   if (!['status', 'enable', 'disable'].includes(normalized)) {
     throw new TunnelCliError(
-      `Unknown startup subcommand '${action}'. Use 'openchamber startup --help'.`,
+      `Unknown startup subcommand '${action}'. Use 'ohpichamber startup --help'.`,
       EXIT_CODE.USAGE_ERROR
     );
   }
@@ -39,7 +39,7 @@ async function startupCommand(options, action = 'status', dependencies = {}) {
   }
   if (normalized === 'enable' && result.activeState === 'failed') {
     throw new TunnelCliError(
-      'Startup service was installed but failed to start. Run `journalctl --user -u openchamber.service -n 80 --no-pager` for details.',
+      'Startup service was installed but failed to start. Run `journalctl --user -u ohpichamber.service -n 80 --no-pager` for details.',
       EXIT_CODE.GENERAL_ERROR
     );
   }
@@ -76,7 +76,7 @@ async function startupCommand(options, action = 'status', dependencies = {}) {
     logStatus(result.active ? 'success' : result.activeState === 'failed' ? 'error' : 'warning', `service ${result.activeState}`);
   }
   if (normalized === 'enable') {
-    logStatus('info', 'service command', 'openchamber serve --foreground');
+    logStatus('info', 'service command', 'ohpichamber serve --foreground');
   }
   if (result.platform === 'linux') {
     if (result.lingerEnabled === true) {

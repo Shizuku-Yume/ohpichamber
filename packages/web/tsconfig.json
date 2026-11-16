@@ -22,10 +22,10 @@
       "node"
     ],
     "paths": {
-      "@openchamber/sdk": [
+      "ohpichamber-sdk": [
         "../sdk/src/index.ts"
       ],
-      "@openchamber/sdk/schemas": [
+      "ohpichamber-sdk/schemas": [
         "../sdk/src/schemas.ts"
       ],
       "@/*": [
@@ -38,7 +38,7 @@
       "@openchamber/ui/*": [
         "../ui/src/*"
       ],
-      "@openchamber/web/*": [
+      "ohpichamber/*": [
         "./src/*"
       ]
     }

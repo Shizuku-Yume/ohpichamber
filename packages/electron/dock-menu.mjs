@@ -28,7 +28,7 @@ export const buildUnreadJumpList = (snapshot, { execPath, locale = 'en', removed
   const removedArgs = new Set(removedItems.map((item) => item.args));
   const items = rows.map((session) => task(
     (session.title.trim() || menuLabel(locale, 'dock.untitledSession')).slice(0, 100),
-    `"openchamber://session/${session.id}?source=jump-list"`,
+    `"ohpichamber://session/${session.id}?source=jump-list"`,
   )).filter((item) => !removedArgs.has(item.args));
   return [
     ...(items.length > 0 ? [{

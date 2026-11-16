@@ -1,5 +1,5 @@
-import type { GuestShellOutputResult, GuestShellStopResult, HostMessage } from '@openchamber/sdk';
-import { HostRequestError } from '@openchamber/sdk';
+import type { GuestShellOutputResult, GuestShellStopResult, HostMessage } from 'ohpichamber-sdk';
+import { HostRequestError } from 'ohpichamber-sdk';
 import { canonicalClient } from '@/api/canonicalClient';
 import { useBackgroundShellsStore } from '@/sync/background-shells';
 import { readGuestShellOutput } from './shells';

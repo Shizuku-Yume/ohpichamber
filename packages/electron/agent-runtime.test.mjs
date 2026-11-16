@@ -11,7 +11,7 @@ import {
   findSystemBunCandidates,
   probeSystemBun,
   probeSystemOmp,
-} from '@openchamber/web/server/lib/host/system-omp-runtime.js';
+} from 'ohpichamber/server/lib/host/system-omp-runtime.js';
 
 function createMockRuntimeFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'electron-agent-runtime-'));

@@ -1,4 +1,4 @@
-import { mountBadge, mountBanner } from '@openchamber/sdk/ui';
+import { mountBadge, mountBanner } from 'ohpichamber-sdk/ui';
 
 // Example presentation, bundled into each extension. It is not an SDK dependency.
 const css = `

@@ -2327,7 +2327,7 @@ describe('fs managed chats root', () => {
       resolveProjectDirectory: async () => ({ directory: '/repo' }),
       buildAugmentedPath: () => '/usr/bin',
       resolveGitBinaryForSpawn: () => 'git',
-      openchamberUserConfigRoot: '/home/user/.config/openchamber',
+      openchamberUserConfigRoot: '/home/user/.config/ohpichamber',
       managedChatsRoot,
     });
     return {
@@ -2344,7 +2344,7 @@ describe('fs managed chats root', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.home).toBe('/home/user');
-    expect(res.body.chatsRoot).toBe('/home/user/.config/openchamber/chats');
+    expect(res.body.chatsRoot).toBe('/home/user/.config/ohpichamber/chats');
   });
 
   it('exposes a relocated chats root when OPENCHAMBER_CHATS_DIR is configured upstream', async () => {
@@ -2373,7 +2373,7 @@ describe('fs managed chats root', () => {
     const recovered = createMockResponse();
     await home(undefined, recovered);
     expect(recovered.statusCode).toBe(200);
-    expect(recovered.body.chatsRoot).toBe('/home/user/.config/openchamber/chats');
+    expect(recovered.body.chatsRoot).toBe('/home/user/.config/ohpichamber/chats');
   });
 
   it('keeps an accessible relocated root available when legacy alias lookup fails', async () => {
@@ -2448,13 +2448,13 @@ describe('canonical managed roots with real filesystem aliases', () => {
     await nativeFs.mkdir(home);
     const reportedHome = path.join(root, caseAlias ? 'home' : 'home-alias');
     if (!caseAlias) await nativeFs.symlink(home, reportedHome, 'junction');
-    const config = path.join(reportedHome, '.config/openchamber');
+    const config = path.join(reportedHome, '.config/ohpichamber');
     const rawChats = relocated ? path.join(reportedHome, 'scratch/chats') : path.join(config, 'chats');
     const canonicalHome = await nativeFs.realpath(home);
     if (caseAlias && await nativeFs.realpath(reportedHome).catch(() => null) !== canonicalHome) {
       context.skip('This volume distinguishes Home from home');
     }
-    const canonicalChats = path.join(canonicalHome, relocated ? 'scratch/chats' : '.config/openchamber/chats');
+    const canonicalChats = path.join(canonicalHome, relocated ? 'scratch/chats' : '.config/ohpichamber/chats');
     const { app, getRoute } = createRouteRegistry();
     registerFsRoutes(app, {
       os: { homedir: () => reportedHome }, path, fsPromises: nativeFs,
@@ -2475,7 +2475,7 @@ describe('canonical managed roots with real filesystem aliases', () => {
       expect(home.body).toEqual({
         home: reportedHome, chatsRoot: rawChats,
         canonicalChatsRoot: canonicalChats,
-        canonicalLegacyChatsRoot: path.join(canonicalHome, '.config/openchamber/chats'),
+        canonicalLegacyChatsRoot: path.join(canonicalHome, '.config/ohpichamber/chats'),
       });
       await expect(nativeFs.stat(canonicalChats)).rejects.toMatchObject({ code: 'ENOENT' });
 
@@ -2573,9 +2573,9 @@ describe('fs html preview grants', () => {
     ['/workspace/site/index.html', '<img src="logo.png">'],
     ['/workspace/site/logo.png', 'png'],
     ['/workspace/data.json', '{}'],
-    ['/home/user/.config/openchamber/projects/p1/canvases/c1/index.html', '<h1>canvas</h1>'],
-    ['/home/user/.config/openchamber/projects/p1/canvases/c1/data.json', '[]'],
-    ['/home/user/.config/openchamber/guest-auth.json', '{"token":"secret"}'],
+    ['/home/user/.config/ohpichamber/projects/p1/canvases/c1/index.html', '<h1>canvas</h1>'],
+    ['/home/user/.config/ohpichamber/projects/p1/canvases/c1/data.json', '[]'],
+    ['/home/user/.config/ohpichamber/guest-auth.json', '{"token":"secret"}'],
   ]);
 
   const register = () => {
@@ -2602,7 +2602,7 @@ describe('fs html preview grants', () => {
       resolveProjectDirectory: async () => ({ directory: '/workspace' }),
       buildAugmentedPath: () => '/usr/bin',
       resolveGitBinaryForSpawn: () => 'git',
-      openchamberUserConfigRoot: '/home/user/.config/openchamber',
+      openchamberUserConfigRoot: '/home/user/.config/ohpichamber',
     });
     const mintHandler = routes.find((route) => route.method === 'POST' && route.routePath === '/api/fs/preview').handler;
     const serveRoute = routes.find((route) => route.method === 'GET' && route.routePath instanceof RegExp && route.routePath.test('/api/fs/preview/g/x'));
@@ -2637,20 +2637,20 @@ describe('fs html preview grants', () => {
     expect(sibling.getHeader('access-control-allow-origin')).toBe('null');
 
     // OpenChamber's own folder can be embedded but never read from script.
-    const managed = await serve(`/api/fs/preview/${grant}/home/user/.config/openchamber/guest-auth.json`);
+    const managed = await serve(`/api/fs/preview/${grant}/home/user/.config/ohpichamber/guest-auth.json`);
     expect(managed.statusCode).toBe(200);
     expect(managed.getHeader('access-control-allow-origin')).toBeUndefined();
   });
 
   it('limits a page inside the OpenChamber folder to reading its own folder', async () => {
     const { mint, serve } = register();
-    const { grant } = (await mint('/home/user/.config/openchamber/projects/p1/canvases/c1/index.html')).body;
+    const { grant } = (await mint('/home/user/.config/ohpichamber/projects/p1/canvases/c1/index.html')).body;
 
-    const data = await serve(`/api/fs/preview/${grant}/home/user/.config/openchamber/projects/p1/canvases/c1/data.json`);
+    const data = await serve(`/api/fs/preview/${grant}/home/user/.config/ohpichamber/projects/p1/canvases/c1/data.json`);
     expect(data.statusCode).toBe(200);
     expect(data.getHeader('access-control-allow-origin')).toBe('null');
 
-    const secret = await serve(`/api/fs/preview/${grant}/home/user/.config/openchamber/guest-auth.json`);
+    const secret = await serve(`/api/fs/preview/${grant}/home/user/.config/ohpichamber/guest-auth.json`);
     expect(secret.getHeader('access-control-allow-origin')).toBeUndefined();
   });
 

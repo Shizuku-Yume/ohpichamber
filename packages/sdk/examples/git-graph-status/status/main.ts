@@ -1,5 +1,5 @@
-import { connectHost, HostRequestError, type SessionLifecyclePhase } from '@openchamber/sdk';
-import { applyHostReady, mountButton, mountCheckbox, mountPopoverAnchor, mountTabs } from '@openchamber/sdk/ui';
+import { connectHost, HostRequestError, type SessionLifecyclePhase } from 'ohpichamber-sdk';
+import { applyHostReady, mountButton, mountCheckbox, mountPopoverAnchor, mountTabs } from 'ohpichamber-sdk/ui';
 import { z } from 'zod';
 
 import { layoutGraph } from './graph.ts';

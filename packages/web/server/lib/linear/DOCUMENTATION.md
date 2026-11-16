@@ -46,9 +46,9 @@ Disconnected list/get/states/update/mapping/session-status return `{ connected: 
 
 ## Auth storage and config
 
-- Auth storage: `~/.config/openchamber/linear-auth.json` (or `$OPENCHAMBER_DATA_DIR/linear-auth.json`). Shape is `{ workspaces: [ { accessToken, refreshToken, user, organization, workspaceId, current, authorizedAt, ... } ] }`. `workspaceId` is the Linear organization id, or `user:<id>` when there is no org, or `legacy` for a migrated token with neither. A legacy single-object file is rewritten to this list on read. Reconnecting the same org replaces that slot.
-- Mapping storage: `~/.config/openchamber/linear-mapping.json` (same data dir). Shape is `{ workspaces: { [workspaceId]: { defaultProjectPath, teamProjectPaths } } }`. Reads and writes use the current workspace slice. A legacy flat file is wrapped under the current workspace id on read. Disconnect does not wipe maps. Writes are atomic and file mode is `0o600`.
-- Session status storage: `~/.config/openchamber/linear-session-status.json` (same data dir). Writes are atomic and file mode is `0o600`. Dedupes started/completed/failure per OpenChamber session id.
+- Auth storage: `~/.config/ohpichamber/linear-auth.json` (or `$OPENCHAMBER_DATA_DIR/linear-auth.json`). Shape is `{ workspaces: [ { accessToken, refreshToken, user, organization, workspaceId, current, authorizedAt, ... } ] }`. `workspaceId` is the Linear organization id, or `user:<id>` when there is no org, or `legacy` for a migrated token with neither. A legacy single-object file is rewritten to this list on read. Reconnecting the same org replaces that slot.
+- Mapping storage: `~/.config/ohpichamber/linear-mapping.json` (same data dir). Shape is `{ workspaces: { [workspaceId]: { defaultProjectPath, teamProjectPaths } } }`. Reads and writes use the current workspace slice. A legacy flat file is wrapped under the current workspace id on read. Disconnect does not wipe maps. Writes are atomic and file mode is `0o600`.
+- Session status storage: `~/.config/ohpichamber/linear-session-status.json` (same data dir). Writes are atomic and file mode is `0o600`. Dedupes started/completed/failure per OpenChamber session id.
 - Writes are atomic and file mode is `0o600`.
 - Client ID: `OPENCHAMBER_LINEAR_CLIENT_ID` -> `settings.json` `linearClientId` -> baked-in public default.
 - Client secret: `OPENCHAMBER_LINEAR_CLIENT_SECRET` -> `settings.json` `linearClientSecret`. Optional with PKCE. Do not commit a secret.

@@ -5,7 +5,7 @@ description: Stel OpenChamber in via omgevingsvariabelen.
 
 # Omgevingsvariabelen
 
-OpenChamber leest deze omgevingsvariabelen bij het starten. Voor opstartservices neemt `openchamber startup enable` standaard de huidige omgeving over. Voer die opdracht opnieuw uit nadat u variabelen wijzigt die de service moet gebruiken.
+OpenChamber leest deze omgevingsvariabelen bij het starten. Voor opstartservices neemt `ohpichamber startup enable` standaard de huidige omgeving over. Voer die opdracht opnieuw uit nadat u variabelen wijzigt die de service moet gebruiken.
 
 ## Variabelen voor agentsessies, Git en de terminal
 
@@ -55,13 +55,13 @@ Origins die OpenChamber in een frame op hun eigen pagina mogen tonen, gescheiden
 
 ### `OPENCHAMBER_DATA_DIR`
 
-Stelt een andere gegevensmap in. De standaard is `~/.config/openchamber`.
+Stelt een andere gegevensmap in. De standaard is `~/.config/ohpichamber`.
 
-Alles wat OpenChamber bewaart, staat hieronder: instellingen, authenticatiegegevens, projectconfiguraties, thema's, plannen en spraakmodellen. Bij een instantie die vóór versie 1.23 al een eigen map gebruikte, worden bij de eerste start de mappen `projects`, `themes` en `speech-models` uit `~/.config/openchamber` gekopieerd. De originelen blijven staan en niets wordt samengevoegd.
+Alles wat OpenChamber bewaart, staat hieronder: instellingen, authenticatiegegevens, projectconfiguraties, thema's, plannen en spraakmodellen. Bij een instantie die vóór versie 1.23 al een eigen map gebruikte, worden bij de eerste start de mappen `projects`, `themes` en `speech-models` uit `~/.config/ohpichamber` gekopieerd. De originelen blijven staan en niets wordt samengevoegd.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-Verplaatst de beheerde chatmappen die OpenChamber aanmaakt voor chats zonder project. Standaard is `~/.config/openchamber/chats`. Bestaande chats worden niet verplaatst.
+Verplaatst de beheerde chatmappen die OpenChamber aanmaakt voor chats zonder project. Standaard is `~/.config/ohpichamber/chats`. Bestaande chats worden niet verplaatst.
 
 ### `OPENCHAMBER_COMPRESS_API`
 

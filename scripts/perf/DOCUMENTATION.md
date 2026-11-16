@@ -74,7 +74,7 @@ maintainer's own app and dev shell, on the same machine.
 
 - **Own data dir, own env.** Use a scratch `OPENCHAMBER_DATA_DIR` (and `HOME`
   where the run needs one); a headless client on the real
-  `~/.config/openchamber` writes its default theme into the user's settings and
+  `~/.config/ohpichamber` writes its default theme into the user's settings and
   the desktop app flips themes. Copy `settings.json` in, minus
   `desktopUiPassword`, when the run needs the saved projects or hosts. A shell
   inside the desktop app inherits its `OPENCHAMBER_*` variables (UI password,
@@ -92,7 +92,7 @@ maintainer's own app and dev shell, on the same machine.
   `env -i … OPENCHAMBER_ELECTRON_DEV=1 OPENCHAMBER_ELECTRON_USE_BUNDLED_UI=1 OPENCHAMBER_DISABLE_PWA_DEV=1 OPENCHAMBER_DATA_DIR=<scratch>/oc-data OPENCHAMBER_DESKTOP_USER_DATA_DIR=<scratch>/electron-userdata bun x electron ./entry.mjs --remote-debugging-port=9339`.
   The userData override avoids the installed app's single-instance lock; the
   window does appear on screen, and its logs mix into
-  `~/Library/Logs/OpenChamber/main.log`.
+  `~/Library/Logs/OhPiChamber/main.log`.
 - **Probes:** drive pages through `cdp.mjs` (`http://127.0.0.1:<port>/json/list`).
   Wait about 10 s after load before clicking, or navigation is ignored. Keep
   probe scripts in the gitignored `tmp/`. For chat scrolling, sample

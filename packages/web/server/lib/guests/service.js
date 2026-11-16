@@ -10,7 +10,7 @@ import {
   isGuestRequestPath,
   OPENCHAMBER_HOST_CALLBACK_URL,
   OPENCHAMBER_SERVICE_DATA_DIR,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 import { isGuestPackageUnloaded } from './catalog.js';
 import { hostCallbackUrl } from './host-callback.js';

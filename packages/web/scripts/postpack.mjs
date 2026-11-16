@@ -8,7 +8,7 @@ import { verifyAgentPayload } from '../../electron/scripts/verify-agent-runtime.
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = path.resolve(webRoot, '../..');
-const backupPath = path.join(os.tmpdir(), 'openchamber-web-package-json-backup.json');
+const backupPath = path.join(os.tmpdir(), 'ohpichamber-package-json-backup.json');
 
 export function runPostpack() {
   // 1. Always restore original package.json first to leave the worktree clean
@@ -20,18 +20,20 @@ export function runPostpack() {
   }
 
   // 2. Locate generated tarball
+  const { name, version } = JSON.parse(fs.readFileSync(path.join(webRoot, 'package.json'), 'utf8'));
+  const tarballName = `${name}-${version}.tgz`;
   const candidates = [
-    path.join(webRoot, 'openchamber-web-3.0.0.tgz'),
-    path.join(workspaceRoot, 'openchamber-web-3.0.0.tgz'),
+    path.join(webRoot, tarballName),
+    path.join(workspaceRoot, tarballName),
   ];
   const tarballPath = candidates.find((file) => fs.existsSync(file));
   if (!tarballPath) {
-    console.warn('[web] no openchamber-web-3.0.0.tgz found to postpack; skipping tarball verification');
+    console.warn(`[web] no ${tarballName} found to postpack; skipping tarball verification`);
     return null;
   }
 
   // 3. Ensure tarball contains the full symlink closure for agent-runtime
-  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-web-postpack-'));
+  const stagingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ohpichamber-postpack-'));
   try {
     execSync(`tar -xzf "${tarballPath}" -C "${stagingDir}"`);
     const unpackedPackage = path.join(stagingDir, 'package');

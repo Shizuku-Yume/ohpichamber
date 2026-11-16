@@ -181,7 +181,7 @@ function createUpdateCommand({
         if (showOutput) {
           clackOutro('update failed');
         }
-        throw new Error(`The startup service is not running ${updateInfo.version || 'the new version'}. Run \`openchamber startup enable\` to point it at the new install.`);
+        throw new Error(`The startup service is not running ${updateInfo.version || 'the new version'}. Run \`ohpichamber startup enable\` to point it at the new install.`);
       }
     }
 

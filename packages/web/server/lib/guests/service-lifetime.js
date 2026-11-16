@@ -9,7 +9,7 @@ import {
   SERVICE_SCHEDULE_WIRE_VERSION,
   isGuestApproved,
   requestedGuestCapabilities,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 /**
  * Services that run with nobody asking: `service.keepRunning` and

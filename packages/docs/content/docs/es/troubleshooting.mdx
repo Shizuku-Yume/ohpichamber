@@ -15,13 +15,13 @@ description: Problemas comunes de configuración y ejecución con soluciones rá
 
 ## No se puede acceder a la UI web
 
-- revisa los logs del servidor con `openchamber logs`
+- revisa los logs del servidor con `ohpichamber logs`
 - verifica el puerto activo (por defecto `3000`)
 - abre primero `http://localhost:3000` directamente antes de probar enlaces de túnel
 
 ## El enlace remoto/de túnel no funciona
 
-- ejecuta `openchamber tunnel status --all`
+- ejecuta `ohpichamber tunnel status --all`
 - reinicia el túnel desde la misma instancia/puerto
 - regenera el enlace de conexión si el token anterior ya se usó
 

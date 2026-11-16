@@ -60,7 +60,7 @@ Usually one build is enough. The compile-time marker is only needed in the app t
    ```bash
    npm pkg set version=<version> \
      --workspace @openchamber/electron \
-     --workspace @openchamber/web \
+     --workspace ohpichamber \
      --workspace @openchamber/ui \
      --include-workspace-root
    ```

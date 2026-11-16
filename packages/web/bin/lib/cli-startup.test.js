@@ -21,8 +21,8 @@ const join = (...parts) => path.join(...parts);
 
 describe('stablePnpmEntrypoint', () => {
   const globalModules = join('/home/me', '.local', 'share', 'pnpm', 'global', '5', 'node_modules');
-  const storeEntry = join(globalModules, '.pnpm', '@openchamber+web@2.1.0', 'node_modules', '@openchamber', 'web', 'bin', 'cli.js');
-  const stableEntry = join(globalModules, '@openchamber', 'web', 'bin', 'cli.js');
+  const storeEntry = join(globalModules, '.pnpm', 'ohpichamber@2.1.0', 'node_modules', 'ohpichamber', 'bin', 'cli.js');
+  const stableEntry = join(globalModules, 'ohpichamber', 'bin', 'cli.js');
 
   it('maps a pnpm store path to the version-independent link', () => {
     expect(stablePnpmEntrypoint(storeEntry, (candidate) => candidate === stableEntry)).toBe(stableEntry);
@@ -33,7 +33,7 @@ describe('stablePnpmEntrypoint', () => {
   });
 
   it('leaves npm installs alone', () => {
-    const npmEntry = join('/usr/local/lib', 'node_modules', '@openchamber', 'web', 'bin', 'cli.js');
+    const npmEntry = join('/usr/local/lib', 'node_modules', 'ohpichamber', 'bin', 'cli.js');
     expect(stablePnpmEntrypoint(npmEntry, () => true)).toBeNull();
   });
 });
@@ -48,7 +48,7 @@ describe('buildSystemdUserService', () => {
   it('starts a pnpm 11+ global install through the link that survives updates', () => {
     const pnpmHome = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-pnpm-'));
     const globalDir = join(pnpmHome, 'global', 'v11');
-    const packageEntry = join('node_modules', '@openchamber', 'web', 'bin', 'cli.js');
+    const packageEntry = join('node_modules', 'ohpichamber', 'bin', 'cli.js');
     const previousEntry = process.argv[1];
     try {
       fs.mkdirSync(path.dirname(join(globalDir, '3e0-install', packageEntry)), { recursive: true });
@@ -85,7 +85,7 @@ describe('parseLaunchdJobPid', () => {
     const output = [
       '{',
       '\t"LimitLoadToSessionType" = "Aqua";',
-      '\t"Label" = "dev.openchamber.web";',
+      '\t"Label" = "dev.ohpichamber.web";',
       '\t"PID" = 4242;',
       '}',
     ].join('\n');
@@ -95,7 +95,7 @@ describe('parseLaunchdJobPid', () => {
   it('reports no pid while launchd is not running the job', () => {
     const output = [
       '{',
-      '\t"Label" = "dev.openchamber.web";',
+      '\t"Label" = "dev.ohpichamber.web";',
       '\t"LastExitStatus" = 0;',
       '}',
     ].join('\n');
@@ -163,7 +163,7 @@ describe('findStartupServiceInstance', () => {
     it('fails when the task cannot be read', () => {
       expect(() => find([foreground], () => {
         throw new Error('Access is denied');
-      })).toThrow(/Access is denied.*openchamber startup disable/);
+      })).toThrow(/Access is denied.*ohpichamber startup disable/);
     });
 
     it('finds no instance when discovery is empty and the task is stopped', () => {
@@ -303,13 +303,13 @@ describe('macOS startup service', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-startup-'));
     const platform = Object.getOwnPropertyDescriptor(process, 'platform');
     const previousDataDir = process.env.OPENCHAMBER_DATA_DIR;
-    const plistPath = path.join(home, 'Library', 'LaunchAgents', 'dev.openchamber.web.plist');
+    const plistPath = path.join(home, 'Library', 'LaunchAgents', 'dev.ohpichamber.web.plist');
     const writeFileSync = fs.writeFileSync;
     const stopBeforeLaunchctl = new Error('Stop before activating launchd');
 
     try {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' });
-      process.env.OPENCHAMBER_DATA_DIR = path.join(home, '.config', 'openchamber');
+      process.env.OPENCHAMBER_DATA_DIR = path.join(home, '.config', 'ohpichamber');
       vi.spyOn(os, 'homedir').mockReturnValue(home);
       vi.spyOn(fs, 'writeFileSync').mockImplementation((file, ...args) => {
         writeFileSync(file, ...args);
@@ -333,7 +333,7 @@ describe('macOS startup service', () => {
   it('leaves what OpenChamber put into the enabling shell out of the service environment', () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-startup-'));
     const platform = Object.getOwnPropertyDescriptor(process, 'platform');
-    const plistPath = path.join(home, 'Library', 'LaunchAgents', 'dev.openchamber.web.plist');
+    const plistPath = path.join(home, 'Library', 'LaunchAgents', 'dev.ohpichamber.web.plist');
     const writeFileSync = fs.writeFileSync;
     const stopBeforeLaunchctl = new Error('Stop before activating launchd');
     // The shell of a desktop app's terminal, or an agent's: the user's own
@@ -348,7 +348,7 @@ describe('macOS startup service', () => {
     const theirs = {
       OPENCODE_HOST: 'http://opencode.lan:4096',
       MY_PROVIDER_TOKEN: 'token',
-      OPENCHAMBER_DATA_DIR: path.join(home, '.config', 'openchamber'),
+      OPENCHAMBER_DATA_DIR: path.join(home, '.config', 'ohpichamber'),
     };
     const touched = [...Object.keys(ours), ...Object.keys(theirs), INJECTED_ENV_KEY];
     const previous = Object.fromEntries(touched.map((key) => [key, process.env[key]]));

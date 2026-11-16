@@ -50,7 +50,7 @@ const PROGRAM_LINES = [
   '  }',
   "  if (offset !== input.length) fail('the input is longer than the header says');",
   "  run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', path.join(stagingDirectory, 'npm-cache')], toolsDirectory);",
-  "  for (const needed of ['node_modules/.bin/openchamber', 'node_modules/@openchamber/web/package.json']) {",
+  "  for (const needed of ['node_modules/.bin/ohpichamber', 'node_modules/ohpichamber/package.json']) {",
   "    if (!fs.existsSync(path.join(toolsDirectory, needed))) fail(needed + ' is missing after the install');",
   '  }',
   "  run('/bin/sync', [], toolsDirectory);",

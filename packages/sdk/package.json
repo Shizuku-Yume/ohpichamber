@@ -1,14 +1,15 @@
 {
-  "name": "@openchamber/sdk",
-  "version": "3.0.0",
+  "name": "ohpichamber-sdk",
+  "version": "1.0.0",
   "description": "Contract for OpenChamber guests: manifest parse and iframe host bridge.",
   "private": false,
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/openchamber/openchamber.git",
+    "url": "git+https://github.com/Shizuku-Yume/ohpichamber.git",
     "directory": "packages/sdk"
   },
+  "homepage": "https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

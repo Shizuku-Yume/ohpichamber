@@ -74,7 +74,7 @@ describe('checked-in SDK examples', () => {
       const exampleJson = /```json\n([\s\S]*?)```/.exec(example);
       if (!exampleJson?.[1]) throw new Error(`${locale || 'en'} SDK example has no JSON manifest block`);
       const exampleManifest = JSON.parse(exampleJson[1]) as { dependencies?: Record<string, string> };
-      expect(exampleManifest.dependencies?.['@openchamber/sdk']).toBe(`^${sdk.version}`);
+      expect(exampleManifest.dependencies?.['ohpichamber-sdk']).toBe(`^${sdk.version}`);
       const guide = await readFile(new URL(`${prefix}sdk.mdx`, docs), 'utf8');
       const guideJson = /```json\n([\s\S]*?)```/.exec(guide);
       if (!guideJson?.[1]) throw new Error(`${locale || 'en'} SDK guide has no JSON manifest block`);

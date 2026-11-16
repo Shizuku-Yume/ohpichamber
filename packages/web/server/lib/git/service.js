@@ -877,7 +877,7 @@ const OPENCODE_WORKTREE_ATTEMPTS = 26;
 const getOpenChamberDataPath = () => (
  process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-  : path.join(os.homedir(), '.config', 'openchamber')
+  : path.join(os.homedir(), '.config', 'ohpichamber')
 );
 
 const pickRandom = (values) => values[Math.floor(Math.random() * values.length)];

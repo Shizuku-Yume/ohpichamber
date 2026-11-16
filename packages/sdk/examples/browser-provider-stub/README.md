@@ -30,4 +30,4 @@ Use it to see the host side work before writing a real provider:
 
 A real provider keeps this shape and replaces `page` with a browser it drives
 (Chrome over CDP, for example). The request and result types are exported from
-`@openchamber/sdk`; the contract is in `GUEST_SERVICES.md`.
+`ohpichamber-sdk`; the contract is in `GUEST_SERVICES.md`.

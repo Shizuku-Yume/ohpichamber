@@ -1,11 +1,11 @@
 ---
 title: Tworzenie rozszerzenia
-description: Dodaj własny panel do OpenChamber za pomocą @openchamber/sdk, zainstaluj go z folderu lub adresu git i komunikuj się z aplikacją przez connectHost.
+description: Dodaj własny panel do OpenChamber za pomocą ohpichamber-sdk, zainstaluj go z folderu lub adresu git i komunikuj się z aplikacją przez connectHost.
 ---
 
 # Tworzenie rozszerzenia
 
-Użyj `@openchamber/sdk`, aby dodać własny panel do OpenChamber. Rozszerzenie to mała strona internetowa, którą OpenChamber pokazuje na prawym pasku bocznym. Komunikuje się z aplikacją przez `connectHost()`: może odczytać bieżący projekt i sesję, pokazywać toasty, wstawiać tekst do pola czatu, dołączać zadanie do sesji, a za zgodą użytkownika także uruchamiać sesje i wysyłać prompty.
+Użyj `ohpichamber-sdk`, aby dodać własny panel do OpenChamber. Rozszerzenie to mała strona internetowa, którą OpenChamber pokazuje na prawym pasku bocznym. Komunikuje się z aplikacją przez `connectHost()`: może odczytać bieżący projekt i sesję, pokazywać toasty, wstawiać tekst do pola czatu, dołączać zadanie do sesji, a za zgodą użytkownika także uruchamiać sesje i wysyłać prompty.
 
 Rozszerzenia działają w OpenChamber web i desktop.
 
@@ -20,7 +20,7 @@ Folder z trzema plikami:
 OpenChamber nigdy nie kompiluje Twojego kodu. Dostarczaj gotowy, zbudowany plik `.js`. SDK zawiera polecenie do bundlowania; zadziała też każdy inny bundler, który wypuszcza IIFE.
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -38,7 +38,7 @@ Wskaż `main.js` w `index.html` zwykłym `<script src="main.js"></script>`.
 
 OpenChamber odczytuje manifest i pokazuje okno z listą tego, o co rozszerzenie prosi (zobacz [Uprawnienia](#uprawnienia)). Zatwierdź, a Twoja ikona pojawi się na pasku bocznym. Kliknij ją i Twoja strona się załaduje.
 
-Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub pliku zip. Tylko instalacja z git może się aktualizować: podnieś `version` w `package.json`, wypchnij zmiany, a OpenChamber sprawdzi to wkrótce po otwarciu i co kilka godzin, powiadomi użytkownika raz i zaproponuje aktualizację w Ustawienia → Rozszerzenia. Link do `openchamber://extensions/install?url=<encoded repository URL>` na dowolnej stronie otwiera aplikację desktopową z tym repozytorium w oknie dodawania, więc możesz zaoferować przycisk instalacji. `#tag` albo `#branch` w adresie URL przypina, co jest śledzone. Te są kopiowane do folderu danych OpenChamber i uruchamiane z tej kopii, więc dostarczaj zbudowane pliki, a nie `node_modules` ani źródła TypeScript. Usunięcie rozszerzenia usuwa kopię. Instalacja z folderu działa bezpośrednio z Twojego folderu, więc możesz edytować, przebudowywać i przeładowywać.
+Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub pliku zip. Tylko instalacja z git może się aktualizować: podnieś `version` w `package.json`, wypchnij zmiany, a OpenChamber sprawdzi to wkrótce po otwarciu i co kilka godzin, powiadomi użytkownika raz i zaproponuje aktualizację w Ustawienia → Rozszerzenia. Link do `ohpichamber://extensions/install?url=<encoded repository URL>` na dowolnej stronie otwiera aplikację desktopową z tym repozytorium w oknie dodawania, więc możesz zaoferować przycisk instalacji. `#tag` albo `#branch` w adresie URL przypina, co jest śledzone. Te są kopiowane do folderu danych OpenChamber i uruchamiane z tej kopii, więc dostarczaj zbudowane pliki, a nie `node_modules` ani źródła TypeScript. Usunięcie rozszerzenia usuwa kopię. Instalacja z folderu działa bezpośrednio z Twojego folderu, więc możesz edytować, przebudowywać i przeładowywać.
 
 ## Manifest
 
@@ -48,7 +48,7 @@ Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub 
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -76,9 +76,9 @@ Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub 
 
 `apiVersion` to `1`. OpenChamber odrzuca każdą inną wartość.
 
-SDK 3 zastępuje transport przez okno nadrzędne z SDK 2 prywatnym, wersjonowanym bootstrapem `MessagePort`. Panel, który nadal wysyła przedM3-owe `hello` v1, nie może się połączyć: OpenChamber pokazuje w panelu niezgodność wersji i nie przyznaje mu portu ani stanu hosta. Ogłoszenie bootstrapu v1 jest odrzucane bez przyznawania czegokolwiek. Zbuduj panel ponownie z `@openchamber/sdk` 3. `apiVersion` pozostaje `1`, ponieważ schemat manifestu się nie zmienił.
+SDK 3 zastępuje transport przez okno nadrzędne z SDK 2 prywatnym, wersjonowanym bootstrapem `MessagePort`. Panel, który nadal wysyła przedM3-owe `hello` v1, nie może się połączyć: OpenChamber pokazuje w panelu niezgodność wersji i nie przyznaje mu portu ani stanu hosta. Ogłoszenie bootstrapu v1 jest odrzucane bez przyznawania czegokolwiek. Zbuduj panel ponownie z `ohpichamber-sdk` 3. `apiVersion` pozostaje `1`, ponieważ schemat manifestu się nie zmienił.
 
-`engines.openchamber` jest opcjonalne. Podaj najstarszą wersję OpenChamber, z którą działa Twoje rozszerzenie, jako `3.0.0` lub `>=3.0.0`. Starsze wersje odmówią instalacji zamiast zawieść później.
+`engines.openchamber` jest opcjonalne. Podaj najstarszą wersję OpenChamber, z którą działa Twoje rozszerzenie, jako `1.0.0` lub `>=1.0.0`. Starsze wersje odmówią instalacji zamiast zawieść później.
 
 `id`, `name` i `icon` identyfikują rozszerzenie. `id` jest w kebab-case i musi być unikalne wśród zainstalowanych rozszerzeń. `icon` to nazwa ikony Remixicon (`RiWindowLine` staje się `window`) albo plik SVG w Twoim folderze, na przykład `icon.svg`. `contributes.panel` to panel rozszerzenia na pasku bocznym: jego `entry` to plik HTML w Twoim folderze. Rozszerzenie bez panelu na pasku bocznym pomija `panel`. Starsze pakiety trzymają `id`, `name` i `icon` w `panel` i to nadal działa.
 
@@ -185,14 +185,14 @@ Twoja strona nie może sama dotykać dysku. OpenChamber czyta i zapisuje za nią
 - Ścieżka zaczynająca się od `/` lub `~/` oznacza dowolne inne miejsce. Musi pasować do jednego ze wzorców zadeklarowanych w `contributes.filesystem`, a użytkownik widzi dokładnie te wzorce w oknie zatwierdzania:
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 Wzorce używają `*` dla jednego segmentu ścieżki i `**` dla dowolnej głębokości. Wszystko poza nimi to `BAD_PATH`, nawet po zatwierdzeniu. `..` nigdy nie jest dozwolone.
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -231,7 +231,7 @@ Twoja strona widzi `ctx.surface` jako `status`. OpenChamber ładuje ją tylko wt
 Plikiem zarządza OpenChamber. Twoja strona nigdy go nie czyta ani nie zapisuje i nie potrzebuje do tego żadnego uprawnienia. OpenChamber przekazuje ci tekst, prosi o zmieniony tekst przy zapisie i obsługuje Cmd/Ctrl+S, automatyczny zapis, pytanie o niezapisane zmiany, końce linii oraz zmiany wprowadzone na dysku:
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -341,7 +341,7 @@ Klucz to ID dostawcy w postaci, w jakiej podaje je OpenCode. Wartość to plik `
 ## Pierwsze linie w panelu
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -353,7 +353,7 @@ host.onReady((ctx) => {
 
 `connectHost` działa tylko wewnątrz OpenChamber. Po otwarciu jako zwykły plik każde wywołanie jest odrzucane z `HOST_UNAVAILABLE`.
 
-Najpierw zbuduj panel z gotowych elementów `@openchamber/sdk/ui`: przycisków, pól, list rozwijanych, zakładek, list i innych, ostylowanych kolorami i czcionkami aplikacji, żeby panel wyglądał jak część OpenChamber. Własny HTML i CSS pisz tylko dla tego, czego w zestawie brakuje. Zobacz [Zestaw UI](/sdk/ui/).
+Najpierw zbuduj panel z gotowych elementów `ohpichamber-sdk/ui`: przycisków, pól, list rozwijanych, zakładek, list i innych, ostylowanych kolorami i czcionkami aplikacji, żeby panel wyglądał jak część OpenChamber. Własny HTML i CSS pisz tylko dla tego, czego w zestawie brakuje. Zobacz [Zestaw UI](/sdk/ui/).
 
 ## Zobacz też
 

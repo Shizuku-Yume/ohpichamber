@@ -92,6 +92,35 @@ describe('agent-runtime resolution and supervisor creation', () => {
     }
   });
 
+  it('links the standalone SDK under its published name for the bundled Bun', () => {
+    const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-rt-sdk-link-'));
+    const runtimeDir = path.join(fixtureDir, 'resources', 'agent-runtime');
+    const sdkDir = path.join(fixtureDir, 'resources', 'standalone-sdk');
+    fs.mkdirSync(path.join(runtimeDir, 'service', 'dist', 'worker'), { recursive: true });
+    fs.mkdirSync(path.join(sdkDir, 'dist'), { recursive: true });
+    fs.writeFileSync(path.join(runtimeDir, process.platform === 'win32' ? 'bun.exe' : 'bun'), 'dummy-bun');
+    fs.writeFileSync(path.join(runtimeDir, 'service', 'dist', 'index.js'), 'dummy-entry');
+    fs.writeFileSync(path.join(runtimeDir, 'service', 'dist', 'worker', 'index.js'), 'dummy-worker');
+    fs.writeFileSync(path.join(sdkDir, 'dist', 'index.js'), 'export {};');
+    fs.writeFileSync(
+      path.join(runtimeDir, 'manifest.json'),
+      JSON.stringify({ platform: process.platform, architecture: process.arch, files: [] }),
+    );
+
+    try {
+      resolveWebAgentRuntime(fixtureDir);
+      // The daemon runs under the bundled Bun, which ignores the resolve hook,
+      // so the bare specifier `ohpichamber-sdk` needs this on-disk link.
+      const sdkLink = path.join(fixtureDir, 'node_modules', 'ohpichamber-sdk');
+      expect(fs.lstatSync(sdkLink).isSymbolicLink()).toBe(true);
+      expect(fs.readlinkSync(sdkLink)).toBe(path.relative(path.join(fixtureDir, 'node_modules'), sdkDir));
+      expect(fs.existsSync(path.join(sdkLink, 'dist', 'index.js'))).toBe(true);
+      expect(fs.existsSync(path.join(fixtureDir, 'node_modules', '@openchamber', 'sdk'))).toBe(false);
+    } finally {
+      fs.rmSync(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
   it('createHostAgentRuntime respects explicit bunPath and entrypoint', () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'host-rt-data-'));
     try {

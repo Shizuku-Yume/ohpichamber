@@ -15,8 +15,8 @@ import {
 const originalHomeInfo = hostFilesystem.getFilesystemHomeInfo;
 hostFilesystem.getFilesystemHomeInfo = async () => ({
   home: '/home',
-  canonicalChatsRoot: '/HOME/.config/openchamber/chats',
-  canonicalLegacyChatsRoot: '/HOME/.config/openchamber/chats',
+  canonicalChatsRoot: '/HOME/.config/ohpichamber/chats',
+  canonicalLegacyChatsRoot: '/HOME/.config/ohpichamber/chats',
 });
 await ensureChatsRootDirectory();
 hostFilesystem.getFilesystemHomeInfo = originalHomeInfo;
@@ -204,7 +204,7 @@ describe('projectSidebarCollection', () => {
   });
 
   test('keeps managed Chats in a dedicated projection and out of project ownership', () => {
-    const managed = session('managed', '/home/.config/openchamber/chats/2026-08-24/session-managed');
+    const managed = session('managed', '/home/.config/ohpichamber/chats/2026-08-24/session-managed');
     const project = session('project', '/workspace/a');
     const projects = projectSidebarCollection({
       globalActiveSessions: [managed, project],
@@ -218,7 +218,7 @@ describe('projectSidebarCollection', () => {
   });
 
   test('keeps managed Chats out of the VS Code sidebar', () => {
-    const managed = session('managed', '/home/.config/openchamber/chats/2026-08-24/session-managed');
+    const managed = session('managed', '/home/.config/ohpichamber/chats/2026-08-24/session-managed');
 
     expect(partitionSidebarSessions([managed], true)).toEqual({ projectSessions: [], chatSessions: [] });
     expect(projectSidebarCollection({
@@ -230,7 +230,7 @@ describe('projectSidebarCollection', () => {
   });
 
   test('keeps a canonical managed chat visible when the server root uses different home casing', () => {
-    const managed = session('canonical-chat', '/HOME/.config/openchamber/chats/day/session-a');
+    const managed = session('canonical-chat', '/HOME/.config/ohpichamber/chats/day/session-a');
     const project = session('project', '/workspace/a');
     const projection = buildSidebarSessionProjection({
       globalActiveSessions: [managed, project], liveSessions: [],
@@ -261,8 +261,8 @@ describe('projectSidebarCollection', () => {
   });
 
   test('keeps a ranked managed root and its active child in the Chats hierarchy', () => {
-    const managedRoot = session('managed-root', '/home/.config/openchamber/chats/2026-08-24/session-root');
-    const managedChild = childSession('managed-child', '/home/.config/openchamber/chats/2026-08-24/session-root', 'managed-root');
+    const managedRoot = session('managed-root', '/home/.config/ohpichamber/chats/2026-08-24/session-root');
+    const managedChild = childSession('managed-child', '/home/.config/ohpichamber/chats/2026-08-24/session-root', 'managed-root');
     const projectRoot = session('project-root', '/workspace/a');
 
     const projection = buildSidebarSessionProjection({

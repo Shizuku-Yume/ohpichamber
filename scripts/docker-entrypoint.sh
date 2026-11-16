@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-HOME="/home/openchamber"
+HOME="/home/ohpichamber"
 
 OMP_DIR="${HOME}/.omp"
 mkdir -p "${OMP_DIR}"

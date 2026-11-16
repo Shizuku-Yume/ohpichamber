@@ -4,8 +4,8 @@
 
 set -euo pipefail
 
-PACKAGE_NAME="@openchamber/web"
-BIN_NAME="openchamber"
+PACKAGE_NAME="ohpichamber"
+BIN_NAME="ohpichamber"
 MIN_NODE_MAJOR=24
 MIN_NODE_MINOR=14
 MIN_NODE_VERSION="$MIN_NODE_MAJOR.$MIN_NODE_MINOR"
@@ -200,23 +200,23 @@ main() {
   fi
   success "Node.js v$NODE_VERSION found"
 
-  # If OpenChamber is already installed, hand off to its own updater instead
-  # of guessing a package manager. `openchamber update` detects which manager
+  # If OhPiChamber is already installed, hand off to its own updater instead
+  # of guessing a package manager. `$BIN_NAME update` detects which manager
   # actually owns the existing global install and reinstalls with that one —
   # reinstalling with a different manager here would orphan files and break PATH.
   if command_exists "$BIN_NAME"; then
-    info "OpenChamber is already installed — updating via 'openchamber update'..."
+    info "OhPiChamber is already installed — updating via '$BIN_NAME update'..."
     echo ""
-    if openchamber update; then
+    if "$BIN_NAME" update; then
       echo ""
-      success "OpenChamber is up to date!"
+      success "OhPiChamber is up to date!"
       exit 0
     fi
     echo ""
     error "Update failed."
     echo ""
     echo "  Try running it manually:"
-    echo "    openchamber update"
+    echo "    $BIN_NAME update"
     echo ""
     exit 1
   fi
@@ -266,8 +266,8 @@ EOF
     # letting the user hit a confusing "command not found".
     if command_exists "$BIN_NAME"; then
       echo "  Get started:"
-      echo "    openchamber              # Start server on port 3000"
-      echo "    openchamber --help       # Show all options"
+      echo "    $BIN_NAME              # Start server on port 3000"
+      echo "    $BIN_NAME --help       # Show all options"
     else
       warn "'$BIN_NAME' was installed but isn't on your PATH yet."
       echo ""
@@ -283,7 +283,7 @@ EOF
         echo "    export PATH=\"$bin_dir:\$PATH\""
       else
         echo "  Add your package manager's global bin directory to PATH,"
-        echo "  then restart your terminal and run: openchamber"
+        echo "  then restart your terminal and run: $BIN_NAME"
       fi
     fi
     echo ""

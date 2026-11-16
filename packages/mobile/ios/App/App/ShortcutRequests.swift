@@ -3,7 +3,7 @@ import Capacitor
 import Foundation
 
 // A new-session request from the Shortcuts app or Siri travels to the page through this
-// app-local plugin, never through an `openchamber://` link: any app or web page can open a
+// app-local plugin, never through an `ohpichamber://` link: any app or web page can open a
 // link, and a link must not be able to send a prompt to an agent. The request waits in the
 // inbox until the page takes it (packages/ui/src/lib/nativeShortcutRequests.ts), so a cold
 // launch, where the intent runs before the page has loaded, does not lose it.
@@ -77,7 +77,7 @@ private struct SnapshotProjects: Decodable {
 
 private enum ShortcutProjectStore {
     static func load() -> [SnapshotProject] {
-        guard let defaults = UserDefaults(suiteName: "group.com.openchamber.app"),
+        guard let defaults = UserDefaults(suiteName: "group.dev.ohpichamber.app"),
               let json = defaults.string(forKey: "widgetSnapshot"),
               let data = json.data(using: .utf8),
               let snapshot = try? JSONDecoder().decode(SnapshotProjects.self, from: data) else {

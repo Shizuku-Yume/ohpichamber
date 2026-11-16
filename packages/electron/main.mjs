@@ -142,12 +142,12 @@ import { createRelayDevTunnelBridge } from './relay-dev-tunnel.mjs';
 import { parsePairingDeepLink } from './pairing-deep-link.mjs';
 import { attachRendererRecovery, takeSafeStart } from './renderer-recovery.mjs';
 import { createLoadFailureWarningFilter } from './load-failure-warnings.mjs';
-import { mintOutsideFileGrant } from '@openchamber/web/server/lib/fs/routes.js';
-import { fetchUpdateNotes } from '@openchamber/web/server/lib/changelog/update-notes.js';
-import { compareVersions } from '@openchamber/web/server/lib/version-order.js';
-import { applyConnectAttemptTimeout } from '@openchamber/web/server/lib/network-defaults.js';
-import { isNetworkAccessBlocked } from '@openchamber/web/server/lib/enterprise-mode.js';
-import { assignInjectedEnv } from '@openchamber/web/server/lib/injected-env.js';
+import { mintOutsideFileGrant } from 'ohpichamber/server/lib/fs/routes.js';
+import { fetchUpdateNotes } from 'ohpichamber/server/lib/changelog/update-notes.js';
+import { compareVersions } from 'ohpichamber/server/lib/version-order.js';
+import { applyConnectAttemptTimeout } from 'ohpichamber/server/lib/network-defaults.js';
+import { isNetworkAccessBlocked } from 'ohpichamber/server/lib/enterprise-mode.js';
+import { assignInjectedEnv } from 'ohpichamber/server/lib/injected-env.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -171,7 +171,7 @@ log.transports.console.level = isDev ? 'debug' : 'warn';
 
 // The in-process web server runs in this same Node process and uses plain
 // `console.log/warn/error`. Without piping console through electron-log,
-// that output never lands in ~/Library/Logs/OpenChamber/main.log and we
+// that output never lands in ~/Library/Logs/OhPiChamber/main.log and we
 // can't diagnose issues (e.g. server and Agent Service lifecycle, SSE disconnects) after
 // the fact. Route all console calls through electron-log so server-side
 // diagnostics are persisted.
@@ -440,7 +440,7 @@ const shutdownBackgroundServices = () => {
     setDesktopKeepAwakeActive(false);
     shellEnvironmentAbort.abort();
     state.backgroundShutdownPromise = Promise.all([
-      startShellEnvironmentProbe().catch(() => {}),
+      startShellEnvironmentProbe().catch(() => { }),
       killSidecar(),
       shutdownSshSessions(),
     ]).finally(() => {
@@ -705,7 +705,7 @@ const writeJsonFile = async (filePath, data) => {
     await replaceFileWithRetry(tmp, filePath);
     if (process.platform !== 'win32') await fsp.chmod(filePath, 0o600);
   } catch (error) {
-    await fsp.rm(tmp, { force: true }).catch(() => {});
+    await fsp.rm(tmp, { force: true }).catch(() => { });
     throw error;
   }
 };
@@ -724,7 +724,7 @@ const mutateSettingsRoot = (mutator) => {
     await writeJsonFile(settingsFilePath(), nextRoot);
   });
   // Keep the chain alive even if one mutator throws.
-  settingsMutationChain = next.catch(() => {});
+  settingsMutationChain = next.catch(() => { });
   return next;
 };
 
@@ -853,8 +853,8 @@ const writeDesktopHostsConfig = async (config) => {
   await mutateSettingsRoot((root) => {
     root.desktopHosts = Array.isArray(config?.hosts)
       ? config.hosts
-          .map(buildStoredHostEntry)
-          .filter(Boolean)
+        .map(buildStoredHostEntry)
+        .filter(Boolean)
       : [];
     root.desktopDefaultHostId = typeof config?.defaultHostId === 'string' && config.defaultHostId.trim()
       ? config.defaultHostId.trim()
@@ -989,7 +989,7 @@ const isPortFree = async (port, host = '127.0.0.1') => {
   return await new Promise((resolve) => {
     const test = net.createServer();
     const done = (value) => {
-      try { test.close(); } catch {}
+      try { test.close(); } catch { }
       resolve(value);
     };
     test.once('error', () => done(false));
@@ -1006,7 +1006,7 @@ const detectLanIPv4Address = async () => {
   const ip = await new Promise((resolve) => {
     const socket = dgram.createSocket('udp4');
     const finish = (value) => {
-      try { socket.close(); } catch {}
+      try { socket.close(); } catch { }
       resolve(value);
     };
     socket.once('error', () => finish(null));
@@ -1216,7 +1216,7 @@ const spacePreviewOf = (spaceId) => {
 /** Writes the space's current port set into its session, one write after another. */
 const applySpacePreviewProxy = (spaceId) => {
   const entry = spacePreviewOf(spaceId);
-  entry.chain = entry.chain.catch(() => {}).then(async () => {
+  entry.chain = entry.chain.catch(() => { }).then(async () => {
     const panelSession = session.fromPartition(spacePreviewPartition(spaceId));
     hardenPanelSession(panelSession);
     const deadProxyPort = await getDeadProxyPort();
@@ -1484,8 +1484,8 @@ const mapUpdaterProgressEvent = (payload) => ({
   data: payload.data,
 });
 
-import { pathLooksUserConfigured, mergePathValues } from '@openchamber/web/server/lib/host/path-utils.js';
-import { provideLoginShellEnvSnapshot } from '@openchamber/web/server/lib/host/login-shell-env.js';
+import { pathLooksUserConfigured, mergePathValues } from 'ohpichamber/server/lib/host/path-utils.js';
+import { provideLoginShellEnvSnapshot } from 'ohpichamber/server/lib/host/login-shell-env.js';
 
 // Merge the user's login-shell env (PATH, etc.) into this process before we
 // import/start the server in-process. The server and its children (Agent Service,
@@ -1597,7 +1597,7 @@ const spawnLocalServer = async () => {
     ...(agentRuntime.env || {}),
   });
 
-  const { startWebUiServer } = await import('@openchamber/web/server/index.js');
+  const { startWebUiServer } = await import('ohpichamber/server/index.js');
 
   const handle = await startWebUiServer({
     port: chosenPort,
@@ -1607,7 +1607,7 @@ const spawnLocalServer = async () => {
     exitOnShutdown: false,
     apiOnly: false,
     builtInExtensionsDir: app.isPackaged
-      ? path.join(app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath(), 'node_modules/@openchamber/web/server/built-in-extensions')
+      ? path.join(app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath(), 'node_modules/ohpichamber/server/built-in-extensions')
       : undefined,
     // The in-process server's notifications belong to the local instance.
     onDesktopNotification: (payload) => maybeShowNativeNotification({ ...payload, runtimeKey: 'local' }),
@@ -1897,7 +1897,7 @@ let mainWindowTrayActionsReady = false;
 let lastJumpListKey = '';
 const PENDING_SESSION_LINK_FALLBACK_MS = 10_000;
 
-// A session link (`openchamber://session/<id>`) can also name the message to
+// A session link (`ohpichamber://session/<id>`) can also name the message to
 // show (`?message=<id>`) and the saved host that owns the session
 // (`?host=<id>`). The renderer validates the IDs and opens a session of
 // another host in that host's window, as for a notification click.
@@ -1924,7 +1924,7 @@ const takePendingSessionDeepLinks = () => {
   return taken;
 };
 
-// `openchamber://extensions/install?url=…`: any web page can raise this link, so
+// `ohpichamber://extensions/install?url=…`: any web page can raise this link, so
 // only an https repository passes, and the app asks before it fetches anything.
 const extensionInstallUrl = (link) => {
   if (link.value !== 'install') return null;
@@ -2181,7 +2181,7 @@ const dispatchDomEventToWindow = (browserWindow, event, detail) => {
     ? `window.dispatchEvent(new Event(${eventLiteral}));`
     : `window.dispatchEvent(new CustomEvent(${eventLiteral}, { detail: ${JSON.stringify(detail)} }));`;
 
-  void browserWindow.webContents.executeJavaScript(script, true).catch(() => {});
+  void browserWindow.webContents.executeJavaScript(script, true).catch(() => { });
 };
 
 const closeTabTargets = new WeakSet();
@@ -2632,7 +2632,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
       try {
         browserWindow.setWindowButtonVisibility(true);
         browserWindow.setTrafficLightPosition(macTrafficLightPosition());
-      } catch {}
+      } catch { }
     };
     browserWindow.on('minimize', () => {
       refreshTrafficLights();
@@ -2767,14 +2767,14 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
       if (route) emitToWindow(browserWindow, 'openchamber:open-session', route);
       return { action: 'deny' };
     }
-    void shell.openExternal(url).catch(() => {});
+    void shell.openExternal(url).catch(() => { });
     return { action: 'deny' };
   });
 
   browserWindow.webContents.on('will-navigate', (event, url) => {
     if (isAllowedNavigationUrl(url)) return;
     event.preventDefault();
-    void shell.openExternal(url).catch(() => {});
+    void shell.openExternal(url).catch(() => { });
   });
 
   // The runtime key says which instance this window shows, and only a page of
@@ -2812,7 +2812,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
     }
     const initScript = browserWindow.__ocInitScript;
     if (initScript) {
-      void browserWindow.webContents.executeJavaScript(initScript).catch(() => {});
+      void browserWindow.webContents.executeJavaScript(initScript).catch(() => { });
     }
   });
 
@@ -2861,7 +2861,7 @@ const startEarlyMainNavigation = (url) => {
   runtimeConfigGate.hold();
   const loaded = navigateWindow(mainWindow, url, { allowAbort: true });
   // Awaited by activateMainWindow; a startup that fails first exits the app.
-  loaded.catch(() => {});
+  loaded.catch(() => { });
   state.earlyNavigation = { window: mainWindow, url, loaded };
 };
 
@@ -3309,7 +3309,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
       try {
         browserWindow.setWindowButtonVisibility(true);
         browserWindow.setTrafficLightPosition(macTrafficLightPosition());
-      } catch {}
+      } catch { }
     };
     browserWindow.on('show', refreshTrafficLights);
     browserWindow.on('focus', refreshTrafficLights);
@@ -3321,7 +3321,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
   });
 
   browserWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url).catch(() => {});
+    void shell.openExternal(url).catch(() => { });
     return { action: 'deny' };
   });
   browserWindow.webContents.on('will-navigate', (event, url) => {
@@ -3332,12 +3332,12 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
     } catch {
     }
     event.preventDefault();
-    void shell.openExternal(url).catch(() => {});
+    void shell.openExternal(url).catch(() => { });
   });
   browserWindow.webContents.on('dom-ready', () => {
     const initScript = browserWindow.__ocInitScript;
     if (initScript) {
-      void browserWindow.webContents.executeJavaScript(initScript).catch(() => {});
+      void browserWindow.webContents.executeJavaScript(initScript).catch(() => { });
     }
   });
 
@@ -3439,7 +3439,7 @@ const showSplashStatus = (text) => {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show, { once: true });
     else show();
   })();`;
-  mainWindow.webContents.executeJavaScript(script).catch(() => {});
+  mainWindow.webContents.executeJavaScript(script).catch(() => { });
 };
 
 const showSplashConnecting = (hostLabel) => {
@@ -3485,8 +3485,8 @@ const resolveInitialUrl = async ({ onPlainLocalBoot = null } = {}) => {
   const localUiUrl = usePackagedUi
     ? buildPackagedUiUrl('/index.html')
     : startupProbePlan.probeHmrUi && await waitForHealth(hmrUiUrl, 8_000, 100)
-    ? hmrUiUrl
-    : localUrl;
+      ? hmrUiUrl
+      : localUrl;
 
   if (localUiUrl === hmrUiUrl) {
     // The HMR dev script wipes Vite's dependency cache on every start, so the
@@ -3853,7 +3853,7 @@ const iconToDataUrl = async (iconPath, appName) => {
     const bytes = await fsp.readFile(tempPath);
     return `data:image/png;base64,${bytes.toString('base64')}`;
   } finally {
-    await fsp.rm(tempPath, { force: true }).catch(() => {});
+    await fsp.rm(tempPath, { force: true }).catch(() => { });
   }
 };
 
@@ -4123,7 +4123,7 @@ const relayDevTunnelBridge = createRelayDevTunnelBridge({
 });
 const getDevTunnelClient = async () => {
   if (!devTunnelClientPromise) {
-    devTunnelClientPromise = import('@openchamber/web/server/lib/dev-tunnel/client.js')
+    devTunnelClientPromise = import('ohpichamber/server/lib/dev-tunnel/client.js')
       .then(({ createDevTunnelClient }) => createDevTunnelClient({ logger: log }))
       .catch((error) => {
         devTunnelClientPromise = null;
@@ -4139,7 +4139,7 @@ const closeAllDevTunnels = () => {
   if (!devTunnelClientPromise) return;
   const pending = devTunnelClientPromise;
   devTunnelClientPromise = null;
-  pending.then((client) => client.closeAll()).catch(() => {});
+  pending.then((client) => client.closeAll()).catch(() => { });
 };
 
 const handleInvoke = async (browserWindow, command, args = {}) => {
@@ -4606,7 +4606,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       if (!underHome && !underTmp) {
         throw new Error('File is outside the allowed workspace');
       }
-      const DENIED_SEGMENTS = ['.ssh', '.aws', '.gnupg', '.gpg', '.config/gh', '.config/openchamber/credentials'];
+      const DENIED_SEGMENTS = ['.ssh', '.aws', '.gnupg', '.gpg', '.config/gh', '.config/ohpichamber/credentials'];
       const relFromHome = underHome ? filePath.slice(home.length + 1) : '';
       const relNormalized = relFromHome.split(path.sep).join('/');
       if (DENIED_SEGMENTS.some((segment) => relNormalized === segment || relNormalized.startsWith(`${segment}/`))) {
@@ -4971,7 +4971,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     // A page that another instance served cannot switch to Local in place. The
     // local server answers only this app's own origins, and the local token
     // stays with local pages. For such a page the main window loads the Local
-    // UI, the same way openchamber://host/local does. The app's own pages get
+    // UI, the same way ohpichamber://host/local does. The app's own pages get
     // false and switch in place.
     case 'desktop_switch_to_local': {
       if (!browserWindow || browserWindow.id !== state.mainWindow?.id) return false;
@@ -5926,13 +5926,13 @@ ipcMain.handle('openchamber:dialog:open', async (event, options) => {
       : undefined,
     filters: Array.isArray(options?.filters)
       ? options.filters
-          .filter((filter) => filter && typeof filter === 'object')
-          .map((filter) => ({
-            name: typeof filter.name === 'string' && filter.name.trim().length > 0 ? filter.name : 'Files',
-            extensions: Array.isArray(filter.extensions)
-              ? filter.extensions.filter((extension) => typeof extension === 'string' && extension.trim().length > 0)
-              : [],
-          }))
+        .filter((filter) => filter && typeof filter === 'object')
+        .map((filter) => ({
+          name: typeof filter.name === 'string' && filter.name.trim().length > 0 ? filter.name : 'Files',
+          extensions: Array.isArray(filter.extensions)
+            ? filter.extensions.filter((extension) => typeof extension === 'string' && extension.trim().length > 0)
+            : [],
+        }))
       : undefined,
     properties: [
       options?.directory ? 'openDirectory' : 'openFile',

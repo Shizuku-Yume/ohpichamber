@@ -9,8 +9,8 @@ import type {
   StartSessionRequest,
   StartSessionResult,
   GuestWorktree,
-} from '@openchamber/sdk';
-import { HostRequestError, clampPromptRequest, clampStartSessionRequest } from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
+import { HostRequestError, clampPromptRequest, clampStartSessionRequest } from 'ohpichamber-sdk';
 
 import type { I18nKey, I18nParams } from '@/lib/i18n';
 import { generateBranchSlug } from '@/lib/git/branchNameGenerator';

@@ -1,4 +1,4 @@
-import { hasGuestCapability, isGuestApproved, type GuestCapability } from '@openchamber/sdk';
+import { hasGuestCapability, isGuestApproved, type GuestCapability } from 'ohpichamber-sdk';
 
 import type { InstalledGuest } from './types.ts';
 

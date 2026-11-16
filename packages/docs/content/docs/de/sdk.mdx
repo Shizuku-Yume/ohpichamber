@@ -1,11 +1,11 @@
 ---
 title: Eine Erweiterung bauen
-description: Füge OpenChamber mit @openchamber/sdk ein eigenes Panel hinzu, installiere es aus einem Ordner oder einer Git-URL und sprich über connectHost mit der App.
+description: Füge OpenChamber mit ohpichamber-sdk ein eigenes Panel hinzu, installiere es aus einem Ordner oder einer Git-URL und sprich über connectHost mit der App.
 ---
 
 # Eine Erweiterung bauen
 
-Mit `@openchamber/sdk` fügst du OpenChamber ein eigenes Panel hinzu. Eine Erweiterung ist eine kleine Webseite, die OpenChamber in der rechten Leiste anzeigt. Mit der App spricht sie über `connectHost()`: Sie kann das aktuelle Projekt und die Session lesen, Toasts anzeigen, Text ins Chatfeld setzen, eine Aufgabe an eine Session anhängen und, mit Zustimmung des Nutzers, Sessions starten und Prompts senden.
+Mit `ohpichamber-sdk` fügst du OpenChamber ein eigenes Panel hinzu. Eine Erweiterung ist eine kleine Webseite, die OpenChamber in der rechten Leiste anzeigt. Mit der App spricht sie über `connectHost()`: Sie kann das aktuelle Projekt und die Session lesen, Toasts anzeigen, Text ins Chatfeld setzen, eine Aufgabe an eine Session anhängen und, mit Zustimmung des Nutzers, Sessions starten und Prompts senden.
 
 Erweiterungen laufen in OpenChamber im Web und auf dem Desktop.
 
@@ -20,7 +20,7 @@ Ein Ordner mit drei Dateien:
 OpenChamber kompiliert deinen Code nie. Liefere die gebaute `.js`-Datei aus. Das SDK bringt einen Bundler-Befehl mit; jeder andere Bundler, der ein IIFE ausgibt, funktioniert genauso.
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -38,7 +38,7 @@ Binde `main.js` in `index.html` mit einem normalen `<script src="main.js"></scri
 
 OpenChamber liest das Manifest und zeigt einen Dialog mit allem, was die Erweiterung anfordert (siehe [Berechtigungen](#berechtigungen)). Bestätige ihn, und dein Icon erscheint in der Leiste. Klick darauf, und deine Seite lädt.
 
-Du kannst auch eine lokale `.zip`-Datei oder einen https-Link zu einem Git-Repository oder einer Zip-Datei hinzufügen. Nur eine Git-Installation kann sich aktualisieren: erhöhe `version` in `package.json` und pushe, dann prüft OpenChamber kurz nach dem Start und alle paar Stunden, sagt dem Nutzer einmal Bescheid und bietet das Update in Einstellungen → Erweiterungen an. Ein Link auf `openchamber://extensions/install?url=<encoded repository URL>` auf einer beliebigen Seite öffnet die Desktop-App mit diesem Repository im Hinzufügen-Dialog, du kannst also einen Installations-Button anbieten. Ein `#tag` oder `#branch` in der URL legt fest, welchem es folgt. Die werden in den Datenordner von OpenChamber kopiert und aus dieser Kopie ausgeführt. Liefere also die gebauten Dateien aus, nicht `node_modules` oder TypeScript-Quellen. Beim Entfernen der Erweiterung wird die Kopie gelöscht. Eine Installation aus einem Ordner läuft direkt aus deinem Ordner, du kannst also bearbeiten, neu bauen und neu laden.
+Du kannst auch eine lokale `.zip`-Datei oder einen https-Link zu einem Git-Repository oder einer Zip-Datei hinzufügen. Nur eine Git-Installation kann sich aktualisieren: erhöhe `version` in `package.json` und pushe, dann prüft OpenChamber kurz nach dem Start und alle paar Stunden, sagt dem Nutzer einmal Bescheid und bietet das Update in Einstellungen → Erweiterungen an. Ein Link auf `ohpichamber://extensions/install?url=<encoded repository URL>` auf einer beliebigen Seite öffnet die Desktop-App mit diesem Repository im Hinzufügen-Dialog, du kannst also einen Installations-Button anbieten. Ein `#tag` oder `#branch` in der URL legt fest, welchem es folgt. Die werden in den Datenordner von OpenChamber kopiert und aus dieser Kopie ausgeführt. Liefere also die gebauten Dateien aus, nicht `node_modules` oder TypeScript-Quellen. Beim Entfernen der Erweiterung wird die Kopie gelöscht. Eine Installation aus einem Ordner läuft direkt aus deinem Ordner, du kannst also bearbeiten, neu bauen und neu laden.
 
 ## Manifest
 
@@ -48,7 +48,7 @@ Du kannst auch eine lokale `.zip`-Datei oder einen https-Link zu einem Git-Repos
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -76,9 +76,9 @@ Du kannst auch eine lokale `.zip`-Datei oder einen https-Link zu einem Git-Repos
 
 `apiVersion` ist `1`. Jeden anderen Wert lehnt OpenChamber ab.
 
-SDK 3 ersetzt den Transport über das Elternfenster von SDK 2 durch einen privaten, versionierten `MessagePort`-Bootstrap. Ein Panel, das noch das v1-`hello` von vor M3 sendet, kann keine Verbindung herstellen: OpenChamber zeigt in seinem Panel eine Versionsabweichung und gewährt ihm weder Port noch Host-Zustand. Eine v1-Bootstrap-Ankündigung wird ohne jede Gewährung verworfen. Baue das Panel mit `@openchamber/sdk` 3 neu. `apiVersion` bleibt `1`, weil sich das Manifestschema nicht geändert hat.
+SDK 3 ersetzt den Transport über das Elternfenster von SDK 2 durch einen privaten, versionierten `MessagePort`-Bootstrap. Ein Panel, das noch das v1-`hello` von vor M3 sendet, kann keine Verbindung herstellen: OpenChamber zeigt in seinem Panel eine Versionsabweichung und gewährt ihm weder Port noch Host-Zustand. Eine v1-Bootstrap-Ankündigung wird ohne jede Gewährung verworfen. Baue das Panel mit `ohpichamber-sdk` 3 neu. `apiVersion` bleibt `1`, weil sich das Manifestschema nicht geändert hat.
 
-`engines.openchamber` ist optional. Trag die älteste OpenChamber-Version ein, mit der deine Erweiterung funktioniert, als `3.0.0` oder `>=3.0.0`. Ältere Builds verweigern dann die Installation, statt später zu scheitern.
+`engines.openchamber` ist optional. Trag die älteste OpenChamber-Version ein, mit der deine Erweiterung funktioniert, als `1.0.0` oder `>=1.0.0`. Ältere Builds verweigern dann die Installation, statt später zu scheitern.
 
 `id`, `name` und `icon` benennen die Erweiterung. `id` ist kebab-case und muss unter den installierten Erweiterungen eindeutig sein. `icon` ist ein Remixicon-Name (aus `RiWindowLine` wird `window`) oder eine SVG-Datei in deinem Ordner, etwa `icon.svg`. `contributes.panel` ist das Panel der Erweiterung in der Leiste: Sein `entry` ist die HTML-Datei in deinem Ordner. Eine Erweiterung ohne Panel in der Leiste lässt `panel` weg. Ältere Pakete behalten `id`, `name` und `icon` in `panel`, und das funktioniert weiterhin.
 
@@ -185,14 +185,14 @@ Deine Seite kann die Festplatte nicht selbst anfassen. OpenChamber liest und sch
 - Ein Pfad, der mit `/` oder `~/` beginnt, meint irgendwo sonst. Er muss zu einem der Muster passen, die du in `contributes.filesystem` deklarierst, und der Nutzer sieht genau diese Muster im Bestätigungsdialog:
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 In Mustern steht `*` für ein Pfadsegment und `**` für beliebige Tiefe. Alles außerhalb davon ist `BAD_PATH`, auch nach der Bestätigung. `..` ist nie erlaubt.
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -231,7 +231,7 @@ Deine Seite sieht `ctx.surface` als `status`. OpenChamber lädt sie nur, solange
 OpenChamber verwaltet die Datei. Deine Seite liest oder schreibt sie nie und braucht dafür keine Berechtigung. OpenChamber gibt dir den Text, fragt beim Speichern nach dem bearbeiteten Text und kümmert sich um Cmd/Ctrl+S, automatisches Speichern, die Nachfrage bei ungespeicherten Änderungen, Zeilenenden und Änderungen auf der Festplatte:
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -341,7 +341,7 @@ Der Schlüssel ist die Anbieter-ID, wie OpenCode sie meldet. Der Wert ist eine `
 ## Die ersten Zeilen im Panel
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -353,7 +353,7 @@ host.onReady((ctx) => {
 
 `connectHost` funktioniert nur innerhalb von OpenChamber. Als einfache Datei geöffnet, wird jeder Aufruf mit `HOST_UNAVAILABLE` abgewiesen.
 
-Bau das Panel zuerst aus den Bausteinen von `@openchamber/sdk/ui`: Buttons, Felder, Dropdowns, Tabs, Listen und mehr, gestaltet mit den Farben und Schriften der App, damit das Panel wie ein Teil von OpenChamber wirkt. Eigenes HTML und CSS schreibst du nur für das, was das Kit nicht bietet. Siehe [UI-Kit](/sdk/ui/).
+Bau das Panel zuerst aus den Bausteinen von `ohpichamber-sdk/ui`: Buttons, Felder, Dropdowns, Tabs, Listen und mehr, gestaltet mit den Farben und Schriften der App, damit das Panel wie ein Teil von OpenChamber wirkt. Eigenes HTML und CSS schreibst du nur für das, was das Kit nicht bietet. Siehe [UI-Kit](/sdk/ui/).
 
 ## Verwandt
 

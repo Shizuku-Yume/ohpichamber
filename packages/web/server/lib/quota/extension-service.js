@@ -3,8 +3,8 @@ import {
  QUOTA_PROVIDER_RESPONSE_MAX,
  QUOTA_PROVIDER_TIMEOUT_MS,
  QUOTA_PROVIDER_WIRE_VERSION,
-} from '@openchamber/sdk';
-import { quotaProviderSchemasV1 as schemas } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { quotaProviderSchemasV1 as schemas } from 'ohpichamber-sdk/schemas';
 
 import { extensionProviderId } from '../source-control/provider-id.js';
 import { buildResult, toUsageWindow } from './utils/formatters.js';

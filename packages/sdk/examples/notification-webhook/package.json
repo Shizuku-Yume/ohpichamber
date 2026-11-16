@@ -36,6 +36,6 @@
     }
   },
   "dependencies": {
-    "@openchamber/sdk": "workspace:*"
+    "ohpichamber-sdk": "workspace:*"
   }
 }

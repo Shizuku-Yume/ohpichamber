@@ -29,7 +29,7 @@ import {
     useMobileCommentDraft,
 } from '../composer/comment/MobileCommentComposerContext';
 import { SelectionApprovalButton } from './SelectionApprovalButton';
-import { GUEST_ITEM_MESSAGE_TEXT_MAX } from '@openchamber/sdk';
+import { GUEST_ITEM_MESSAGE_TEXT_MAX } from 'ohpichamber-sdk';
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
 import { useGuestActions } from '@/hooks/useGuestSurfaces';
 import { guestActionsWhere, type GuestActionEntry } from '@/lib/guests/actions';

@@ -8,7 +8,7 @@ description: Alle connectHost-methoden voor extensies, de gegevens die OpenChamb
 Gebruik deze pagina voor de precieze `connectHost`-methoden, limieten en foutcodes. Begin voor de mapindeling, het manifest en installatie bij [Een extensie bouwen](/nl/sdk/).
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
 
 const host = connectHost();
 ```
@@ -224,7 +224,7 @@ De gebeurtenissen zijn `turn-started`, `session-created`, `session-archived`, `s
 Elke gebeurtenis komt aan als één `POST /session-events` met de bearer van de service. Lees hem met `readSessionEventRequest` en antwoord met `{ "ok": true }`:
 
 ```ts
-import { SESSION_EVENTS_PATH, readSessionEventRequest } from "@openchamber/sdk";
+import { SESSION_EVENTS_PATH, readSessionEventRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === SESSION_EVENTS_PATH) {
@@ -245,7 +245,7 @@ De gebeurtenissen van elk project worden verstuurd. Vergelijk `event.project.dir
 Een service kan handelen zonder dat er een venster open is. `createServiceHost` is de weg terug naar OpenChamber:
 
 ```ts
-import { createServiceHost } from '@openchamber/sdk';
+import { createServiceHost } from 'ohpichamber-sdk';
 
 const host = createServiceHost({ env: process.env });
 
@@ -327,7 +327,7 @@ OpenChamber maakt uit die beschrijving een accountkaart voor het kanaal bij Inst
 OpenChamber stuurt drie aanroepen door naar `POST /notifications`: `auth.probe` (is dit een server waaraan u bezorgt), `auth.verify` (van wie is dit token) en `notify` (één melding). Lees elke aanroep met `readNotificationsProviderRequest` en bereik de server van het kanaal alleen via de outbound-helper, die uw verzoek met de handle van de aanroep naar OpenChamber stuurt. OpenChamber voegt het token toe en houdt het verzoek op de server van het account.
 
 ```ts
-import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "@openchamber/sdk";
+import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createNotificationsOutbound({ env: process.env });
 
@@ -373,7 +373,7 @@ De gebruiker verbindt accounts op de kaart van de tracker onder Extensieaccounts
 OpenChamber stuurt negen aanroepen door naar `POST /tracker`: `auth.probe` en `auth.verify`, de leesaanroepen `items.list`, `items.get`, `items.liveSummaries`, `states.list` en `containers.list`, en de schrijfaanroepen `items.updateState` en `comments.create`. Lees elke aanroep met `readTrackerProviderRequest`, antwoord in de neutrale itemvormen en bereik de server van de tracker alleen via de outbound-helper, die uw verzoek met de handle van de aanroep naar OpenChamber stuurt; OpenChamber voegt de inloggegevens toe en houdt het verzoek op de server van het account. De handle van een leesaanroep verstuurt alleen `GET`.
 
 ```ts
-import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "@openchamber/sdk";
+import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createTrackerOutbound({ env: process.env });
 
@@ -406,7 +406,7 @@ De goedkeuringsdialoog noemt die providers, en een versie die de lijst wijzigt, 
 Lees de body met `readQuotaProviderRequest` en antwoord `{ ok: true, data }` met het resultaat dat een ingebouwde provider berekent: `ok`, `configured`, `error`, `planLabel` en `usage.windows` per vensternaam, elk met `usedPercent`, `windowSeconds`, `resetAt` (epoch in milliseconden) en een optionele `valueLabel` of `value`, plus `usage.models` voor vensters per model. OpenChamber leidt het resterende deel, de aftelling tot de reset en de opgemaakte tekst af, zodat de kaart overeenkomt met die van een ingebouwde provider.
 
 ```ts
-import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "@openchamber/sdk";
+import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === QUOTA_PROVIDER_PATH) {
@@ -430,7 +430,7 @@ Een relatief pad ligt binnen het geopende project en vereist `files`. Een pad me
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/openchamber/config.json");
+const info = await host.stat("~/.config/ohpichamber/config.json");
 ```
 
 Limieten: paden tot 1024 tekens, inhoud tot 2.000.000 tekens en mappenlijsten tot 2000 vermeldingen. Te grote inhoud geeft `FILE_TOO_LARGE`.

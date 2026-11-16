@@ -2,8 +2,8 @@ import { z } from 'zod';
 import {
   type GuestStorageRequest,
   type GuestStorageResult,
-} from '@openchamber/sdk';
-import { guestStorageRequestSchema } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { guestStorageRequestSchema } from 'ohpichamber-sdk/schemas';
 import {
   decodeDeviceStorageNamespace,
   deviceStorageNamespaceKey,

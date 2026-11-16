@@ -31,7 +31,7 @@ export function prepareWebAgentRuntime({
   const sdkDir = path.join(workspaceRoot, 'packages', 'sdk');
   const sdkBuild = spawnSync(resolvedBun, ['run', 'build'], { cwd: sdkDir, stdio: 'inherit', windowsHide: true });
   if (sdkBuild.status !== 0) {
-    throw sdkBuild.error ?? new Error('Building @openchamber/sdk failed');
+    throw sdkBuild.error ?? new Error('Building ohpichamber-sdk failed');
   }
 
   const staged = prepareAgentRuntime({ bunPath: resolvedBun, output });

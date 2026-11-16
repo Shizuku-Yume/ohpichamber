@@ -21,9 +21,9 @@ const REMOTE_BUN_CANDIDATE = '"${BUN_INSTALL:-$HOME/.bun}/bin/bun"';
 const REMOTE_NVM_BIN = '${NVM_DIR:-$HOME/.nvm}/versions/node/v$(ls -1 "${NVM_DIR:-$HOME/.nvm}/versions/node" 2>/dev/null | sed "s/^v//" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)/bin';
 const REMOTE_PATH_PREFIX = `\${BUN_INSTALL:-$HOME/.bun}/bin:\${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin:$HOME/.local/bin:$HOME/.openchamber/npm-global/bin:${REMOTE_NVM_BIN}`;
 const REMOTE_BIN_CANDIDATES = [
-  '"$HOME/.openchamber/npm-global/bin/openchamber"',
-  '"${BUN_INSTALL:-$HOME/.bun}/bin/openchamber"',
-  '"${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin/openchamber"',
+  '"$HOME/.openchamber/npm-global/bin/ohpichamber"',
+  '"${BUN_INSTALL:-$HOME/.bun}/bin/ohpichamber"',
+  '"${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin/ohpichamber"',
 ];
 const DEFAULT_CONTROL_PERSIST_SEC = 300;
 const DEFAULT_READY_TIMEOUT_SEC = 30;
@@ -1066,7 +1066,7 @@ export class ElectronSshManager {
   // sit on PATH, so the caller picks by version instead of trusting PATH order.
   async remoteOpenChamberCandidates(parsed, controlPath) {
     const script = [
-      `for candidate in ${REMOTE_BIN_CANDIDATES.join(' ')} "$(command -v openchamber 2>/dev/null)"; do`,
+      `for candidate in ${REMOTE_BIN_CANDIDATES.join(' ')} "$(command -v ohpichamber 2>/dev/null)"; do`,
       '  [ -n "$candidate" ] || continue;',
       '  [ -x "$candidate" ] || continue;',
       `  printf '%s\t%s\n' "$candidate" "$("$candidate" --version 2>/dev/null | head -n 1)";`,
@@ -1101,10 +1101,10 @@ export class ElectronSshManager {
 
     // bun's global install targets `~/.bun` or `${XDG_CACHE_HOME:-~/.cache}/.bun` (bun 1.3.x XDG-aware);
     // npm is pinned to a prefix in the user's home so it never touches the root-owned global directory.
-    const bunCommand = bunPath ? `${shellQuote(bunPath)} add -g @openchamber/web@${version}` : null;
+    const bunCommand = bunPath ? `${shellQuote(bunPath)} add -g ohpichamber@${version}` : null;
     const npmCommand = npmPath
       // npm is a node script: an nvm npm finds its node only next to itself.
-      ? `mkdir -p "${REMOTE_USER_PREFIX}" && PATH="$(dirname ${shellQuote(npmPath)}):$PATH" ${shellQuote(npmPath)} install -g --prefix "${REMOTE_USER_PREFIX}" @openchamber/web@${version}`
+      ? `mkdir -p "${REMOTE_USER_PREFIX}" && PATH="$(dirname ${shellQuote(npmPath)}):$PATH" ${shellQuote(npmPath)} install -g --prefix "${REMOTE_USER_PREFIX}" ohpichamber@${version}`
       : null;
 
     const commands = [];
@@ -1207,7 +1207,7 @@ export class ElectronSshManager {
     return port || desiredPort;
   }
 
-  // `openchamber stop` owns the daemon lifecycle. The HTTP shutdown route sits
+  // `ohpichamber stop` owns the daemon lifecycle. The HTTP shutdown route sits
   // behind UI authentication, so it cannot stop a password-protected server.
   async stopRemoteServerBestEffort(parsed, controlPath, remotePort, remoteBinPath) {
     if (!remoteBinPath) return;

@@ -1,5 +1,5 @@
-import type { HostClient, GuestSessionWorktree } from '@openchamber/sdk';
-import { mountButton, mountList, mountSelect, mountTextField } from '@openchamber/sdk/ui';
+import type { HostClient, GuestSessionWorktree } from 'ohpichamber-sdk';
+import { mountButton, mountList, mountSelect, mountTextField } from 'ohpichamber-sdk/ui';
 import { card, codeSample, element, feedback, paragraph, stack } from '../../shared.ts';
 import { attachPayload, type Task } from './tasks.ts';
 

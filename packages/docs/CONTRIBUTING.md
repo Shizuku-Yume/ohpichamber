@@ -20,7 +20,7 @@ stays the same no matter who is writing.
 ### Keep it short
 
 - Lead with the task, not background. The first line should say what the page is
-  for ("Use `openchamber tunnel` to expose a running OpenChamber instance.").
+  for ("Use `ohpichamber tunnel` to expose a running OpenChamber instance.").
 - Cut anything that doesn't change what the reader does next.
 - A basic page should fit in a screen or two. Long, dense reference pages (like
   Reverse Proxy) are the exception — and they say so in their first line ("Use

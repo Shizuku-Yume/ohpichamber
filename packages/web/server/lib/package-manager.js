@@ -13,7 +13,7 @@ import { resolveNpmRegistryRequest } from './host/npm-registry-config.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PACKAGE_NAME = '@openchamber/web';
+const PACKAGE_NAME = 'ohpichamber';
 const PACKAGE_PATH_SEGMENTS = PACKAGE_NAME.split('/');
 const GITHUB_RELEASES_URL = 'https://github.com/openchamber/openchamber/releases';
 const GITHUB_RELEASES_API_URL = 'https://api.github.com/repos/openchamber/openchamber/releases';
@@ -31,10 +31,10 @@ function getOpenChamberConfigDir() {
   if (dataDir) return path.resolve(dataDir);
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA;
-    if (appData) return path.join(appData, 'openchamber');
+    if (appData) return path.join(appData, 'ohpichamber');
   }
 
-  return path.join(os.homedir(), '.config', 'openchamber');
+  return path.join(os.homedir(), '.config', 'ohpichamber');
 }
 
 function sanitizeInstallScope(scope) {
@@ -354,7 +354,7 @@ function getGlobalNodeModulesRoots(pm) {
 function getOwnedPackagePathsFromGlobalBins(pm) {
   const packagePaths = [];
   for (const binDir of getGlobalBinDirs(pm)) {
-    const binaryName = process.platform === 'win32' ? 'openchamber.cmd' : 'openchamber';
+    const binaryName = process.platform === 'win32' ? 'ohpichamber.cmd' : 'ohpichamber';
     const binaryPath = path.join(binDir, binaryName);
     if (!fs.existsSync(binaryPath)) continue;
 
@@ -622,7 +622,7 @@ function isPackageInstalledWith(pm) {
     });
 
     if (result.status !== 0) return false;
-    return result.stdout.includes(PACKAGE_NAME) || result.stdout.includes('openchamber');
+    return result.stdout.includes(PACKAGE_NAME) || result.stdout.includes('ohpichamber');
   } catch {
     return false;
   }
@@ -630,7 +630,7 @@ function isPackageInstalledWith(pm) {
 
 // npm, bun and yarn print `name@version`; pnpm separates the name and the
 // version with whitespace. An optional `v` covers yarn listing formats.
-const GLOBAL_VERSION_PATTERN = /@openchamber\/web[@\s]+v?(\d[\w.+-]*)/;
+const GLOBAL_VERSION_PATTERN = /ohpichamber[@\s]+v?(\d[\w.+-]*)/;
 
 /**
  * Read the globally installed version of the package as reported by the
@@ -665,7 +665,7 @@ function normalizeTargetVersion(value) {
 // Dependencies whose install scripts pnpm 10+ blocks until approved. pnpm 11+
 // stops a global install in a terminal to ask about them. Keep in sync with
 // scripts/install.sh and with the "Ignored build scripts" list a fresh
-// `pnpm add -g @openchamber/web` prints.
+// `pnpm add -g ohpichamber` prints.
 const PNPM_BUILD_DEPENDENCIES = ['msgpackr-extract', 'node-pty'];
 // First pnpm release that accepts `--allow-build`; older ones reject it as an
 // unknown option, and pnpm 9 and older run build scripts without approval.
@@ -724,13 +724,13 @@ const isCanaryVersion = (version) => /-canary\./.test(String(version || ''));
 
 function getSettingsFilePath() {
   const dataDir = process.env.OPENCHAMBER_DATA_DIR?.trim();
-  return path.join(dataDir ? path.resolve(dataDir) : path.join(os.homedir(), '.config', 'openchamber'), 'settings.json');
+  return path.join(dataDir ? path.resolve(dataDir) : path.join(os.homedir(), '.config', 'ohpichamber'), 'settings.json');
 }
 
 /**
  * The channel this install takes its updates from: the one picked in
  * Settings → About (`serverUpdateChannel`). Without a pick, a Canary build
- * (installed with `npm i -g @openchamber/web@canary`) follows Canary, so its
+ * (installed with `npm i -g ohpichamber@canary`) follows Canary, so its
  * first check does not offer the release as a way back nobody asked for.
  */
 export function readUpdateChannel(currentVersion = getCurrentVersion()) {
@@ -820,7 +820,7 @@ export async function checkForUpdates(options = {}) {
       return {
         ...await checkChannelForUpdates(channel, currentVersion, options),
         packageManager: pm,
-        updateCommand: 'openchamber update',
+        updateCommand: 'ohpichamber update',
       };
     }
   }
@@ -860,7 +860,7 @@ export async function checkForUpdates(options = {}) {
       return {
         ...remote,
         packageManager: pm,
-        updateCommand: 'openchamber update',
+        updateCommand: 'ohpichamber update',
       };
     }
   }
@@ -886,7 +886,7 @@ export async function checkForUpdates(options = {}) {
     releaseUrl: `${GITHUB_RELEASES_URL}/tag/v${latestVersion}`,
     packageManager: pm,
     // Show our CLI command, not raw package manager command
-    updateCommand: 'openchamber update',
+    updateCommand: 'ohpichamber update',
   };
 }
 

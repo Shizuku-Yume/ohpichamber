@@ -392,7 +392,7 @@ export const linearTracker = Object.freeze({
   load: async () => {
     const [{ linearLibraries }, { HOST_LINEAR_API_ORIGIN }] = await Promise.all([
       import('./index.js'),
-      import('@openchamber/sdk'),
+      import('ohpichamber-sdk'),
     ]);
     return createLinearTracker({ ...linearLibraries, HOST_LINEAR_API_ORIGIN });
   },

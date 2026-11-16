@@ -1,4 +1,4 @@
-import type { AttachIssueRequest, MentionsItem } from '@openchamber/sdk';
+import type { AttachIssueRequest, MentionsItem } from 'ohpichamber-sdk';
 import { z } from 'zod';
 
 import { runtimeFetch } from '@/lib/runtime-fetch';

@@ -16,7 +16,7 @@ import type {
   PublicTracker,
   PublicSessionEvents,
   PublicSourceControl,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 export type GuestSource = 'bundled' | 'path' | 'zip' | 'git';
 

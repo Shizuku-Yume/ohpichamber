@@ -34,7 +34,7 @@ test('jump list shares the cap and order and launches the existing session deep-
   assert.equal(list[0].name, 'Непрочитані');
   assert.equal(list[0].items.length, 10);
   assert.equal(list[0].items[0].program, 'C:\\Program Files\\OpenChamber.exe');
-  assert.equal(list[0].items[0].args, '"openchamber://session/ses_0?source=jump-list"');
+  assert.equal(list[0].items[0].args, '"ohpichamber://session/ses_0?source=jump-list"');
   assert.equal(list[0].items[9].title, 'Session 9');
   assert.equal(list[1].items[0].args, '--mark-all-read');
   assert.equal(list[1].items[0].title, 'Позначити все прочитаним');

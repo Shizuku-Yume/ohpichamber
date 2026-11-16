@@ -15,7 +15,7 @@ import { mixColor, onColor, readableText } from '../packages/ui/src/lib/theme/co
 // The source checkout must be installed beside OpenChamber. It is read-only.
 const sourceRoot = resolve(import.meta.dirname, '../../opencode/packages/ui/src');
 const sourceDirectory = join(sourceRoot, 'theme/themes');
-const defaultOutput = join(homedir(), '.config/openchamber/themes');
+const defaultOutput = join(homedir(), '.config/ohpichamber/themes');
 const primitiveCss = readFileSync(join(sourceRoot, 'styles/tokens/colors.css'), 'utf8');
 const primitiveTokens = Object.fromEntries([...primitiveCss.matchAll(/--(v2-[a-z0-9-]+):\s*(#[\da-f]+)\s*;/gi)].map((match) => [match[1], match[2]]));
 const hex = z.templateLiteral(['#', z.string()]).refine((value) => /^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i.test(value));
@@ -192,7 +192,7 @@ bun run themes:port:opencode [options]
 
   --theme ID       Convert one theme; repeat to select several
   --mode MODE      light, dark, or both (default)
-  --output PATH    Output directory; defaults to ~/.config/openchamber/themes
+  --output PATH    Output directory; defaults to ~/.config/ohpichamber/themes
   --dry-run        Validate conversion without writing files
   --list           List available theme IDs
   --help           Show this help

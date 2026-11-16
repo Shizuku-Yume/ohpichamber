@@ -777,7 +777,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const promptInstall = (entry: CatalogEntry, component?: CatalogComponent) => {
     const hasMcp = entry.components.some((c) => c.kind === 'mcp');
     if (hasMcp && !isMcpInstalled(entry)) {
-      setSelectedScope(hasSelectedProject && !hasFilledEnvInputs(entry) ? 'user' : 'project');
+      setSelectedScope(hasSelectedProject ? 'project' : 'user');
       setScopeDialogState({ entry, component });
       return;
     }

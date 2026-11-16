@@ -763,3 +763,55 @@ test('a filled env value without a selected project blocks Install and says why'
   expect(install.disabled).toBe(true);
   expect(browser.document.body.textContent?.includes('Environment values are stored per project, so this server installs at project scope only.')).toBe(true);
 });
+
+const projectRadio = () => scopeRadios().find((radio) => radio.getAttribute('value') === 'project');
+
+test('an entry without env inputs opens the scope dialog on Project by default when a project is selected', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
+  await clickButton('Install');
+  // Grafana does carry env inputs; its default is still the ordinary one.
+  expect(projectRadio()?.hasAttribute('checked')).toBe(true);
+
+  const back = findClickable([...body.querySelectorAll('nav button')], 'Integrations');
+  if (!back) throw new Error('Back button missing');
+  await act(async () => back.click());
+  await settle();
+  // A token entry declares no env inputs at all.
+  const linearCard = findClickable([...body.querySelectorAll('main [role="button"], main button')], 'Linear');
+  if (!linearCard) throw new Error('Linear card missing');
+  await act(async () => linearCard.click());
+  await settle();
+  await clickButton('Install');
+  expect(projectRadio()?.hasAttribute('checked')).toBe(true);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
+});
+
+test('an entry with empty optional env inputs defaults to Project and keeps User enabled', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'MCP Toolbox');
+  if (!card) throw new Error('MCP Toolbox card missing');
+  await act(async () => card.click());
+  await settle();
+  await clickButton('Install');
+
+  expect(projectRadio()?.hasAttribute('checked')).toBe(true);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
+});
+
+test('the scope dialog defaults to User when no project is selected', async () => {
+  useProjectsStore.setState({ projects: [], activeProjectId: null });
+  useUIStore.setState({ settingsProjectPath: null });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'MCP Toolbox');
+  if (!card) throw new Error('MCP Toolbox card missing');
+  await act(async () => card.click());
+  await settle();
+  await clickButton('Install');
+
+  expect(userScopeRadio()?.hasAttribute('checked')).toBe(true);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
+});

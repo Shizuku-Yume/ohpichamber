@@ -1357,4 +1357,20 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Because:** the ceiling only scales the automatic thinking level, so a user who never sets `auto` never acts on it — 高级 would advertise a knob that does nothing for them. A separate enable switch next to a preset that already sets it produced two controls for one value and a state where the switch contradicts the preset.
 - **Mine:** yes
 - **Revisit when:** OMP makes the auto ceiling apply outside the `auto` preset, or the preset stops writing `enabled`.
+## 2026-11-16 - Catalog installs that collect environment values are project-scope only
+
+- **Decided:** when any `envInputs` value is filled, a catalog MCP install writes workspace credentials and therefore installs at project scope only. The scope dialog disables the user option and says why, and with no project selected the Install button stays disabled. An entry whose env values are all empty keeps both scopes.
+- **Instead of:** allowing user scope with credential references in the shared user MCP file.
+- **Because:** `NativeMcpCredentials` prefixes every reference with a hash of the writing workspace (`packages/agent-service/src/worker/mcp-credentials.ts:12`), and the user MCP file is shared by every workspace (`packages/agent-service/src/worker/mcp.ts:391-393`); a reference written in one workspace makes another workspace's config save fail when the worker resolves it (`stateless.ts:220-223`). The same hazard already exists for catalog token entries saved at user scope and was not changed here.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** credential references become workspace-independent, or the user MCP file can carry per-workspace server entries.
+## 2026-11-16 - MCP OAuth callback state is bound to the flow, not the initiating browser session
+
+- **Decided:** the public `GET /api/agent/v1/mcp/oauth/callback` route accepts a `state` that the Host recorded from the proxied `start` response's authorization URL. It does not bind that state to the browser session, cookie or IP that started the flow, matching the existing guest and extension-tracker public callbacks (`guests/routes.js`, `trackers/routes.js`).
+- **Instead of:** adding a second, session-bound nonce to the redirect and rejecting a callback from a different browser.
+- **Because:** the workspace MCP credential store is shared by every surface and user of that workspace, so a completed sign-in is not scoped to the browser that began it. Binding to a session cookie would break the intended remote and mobile case (the consent browser is often a different browser profile, or the system browser rather than the Capacitor webview), and it would not add authority the credential store does not already carry. The accepted risk is a login-CSRF-class one: an attacker who obtains a live `state` can finish a sign-in the victim started, which yields the same credential the victim was already granting.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** MCP credentials become per-user or per-device, or the Host gains a session-bound consent surface.
 - **Effort:** ux-feedback-2026-11-15

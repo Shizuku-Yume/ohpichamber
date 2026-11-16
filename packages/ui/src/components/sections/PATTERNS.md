@@ -41,6 +41,7 @@ Consult only the branches affected by the change; these are ordinary module refe
 | Titled block with divider | `SettingsSection` (`divider={false}` for the first one) |
 | Label left / control right | `SettingsFieldRow` (the default row) |
 | Label above control (two-column cells, wide controls only) | `SettingsStackedField` |
+| Flat list of items that each expand into an editor | `SettingsDisclosure` |
 | Boolean | `SettingsCheckboxRow` |
 | OMP registry row (number, string, enum, boolean from one setting) | `OmpRowControl` |
 | OMP read-summary preset (one picker over five setting ids) | `OmpReadSummaryPresetRow` |
@@ -65,6 +66,19 @@ primitive. [Layout guard](references/layout.md#layout-guard) lists every rule
 and its sanctioned exceptions.
 
 Do not introduce raw `<Tooltip>`-based info icons.
+
+## Expandable rows
+
+`SettingsDisclosure` is for a flat list of items that each expand into an
+editor (a routing category). Its header is one ghost toggle
+with a chevron, the item name and an optional quiet summary; an `accessory`
+such as `SettingsCheckboxRow` sits beside the toggle so it stays a separate
+hit target, and it adds its own focus stop, so a header with an accessory is
+two tab stops rather than one. The editor renders only while expanded. Do not
+wrap a list of disclosures in cards or give the rows `divide-*`/border chrome:
+the list stays flat, like every other settings stack, and each row's own
+padding sets the rhythm between them. For a single always-visible control use
+`SettingsFieldRow`; for a one-time reveal of helper copy use the `info` prop.
 
 ## Description Policy (info hints)
 

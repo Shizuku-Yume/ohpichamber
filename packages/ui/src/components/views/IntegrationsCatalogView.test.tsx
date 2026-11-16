@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test';
-import type { MCPOAuthResult } from '@openchamber/agent-contract';
+import type { MCPOAuthResult, MCPServerConfig } from '@openchamber/agent-contract';
 import React, { act } from 'react';
 import type { Root } from 'react-dom/client';
 import { Element as HappyElement, HTMLElement, Window } from 'happy-dom';
@@ -37,12 +37,23 @@ const infos: string[] = [];
 const successes: string[] = [];
 const errors: string[] = [];
 const oauthReads: string[] = [];
+const credentialWrites: Array<{ serverId: string; value: string; persistedRevision: string }> = [];
 const actualClient = await import('@/api/canonicalClient');
 mock.module('@/api/canonicalClient', () => ({
   ...actualClient,
   canonicalClient: {
     ...actualClient.canonicalClient,
     resolveWorkspace: async () => ({ workspaceId: 'workspace', projectId: 'project', name: 'Workspace' }),
+    getWorkspaceMcpConfig: async () => ({ workspaceId: 'workspace', persistedRevision: '1', config: { servers: [] } }),
+    writeWorkspaceMcpCredential: async (workspaceId: string, serverId: string, input: { persistedRevision: string; value: string }) => {
+      credentialWrites.push({ serverId, value: input.value, persistedRevision: input.persistedRevision });
+      return {
+        workspaceId,
+        serverId,
+        persistedRevision: String(Number(input.persistedRevision) + 1),
+        credentialRef: `credential-${serverId}-${credentialWrites.length}`,
+      };
+    },
     getWorkspaceMcpOAuth: async (): Promise<MCPOAuthResult> => {
       oauthReads.push('read');
       return { serverId: 'linear', persistedRevision: '1', worker: { rootSessionId: 'root', workspaceId: 'workspace', workerGeneration: 'generation' }, status: 'unauthenticated', authenticated: false };
@@ -140,6 +151,7 @@ beforeEach(() => {
   });
   oauthStarts.length = 0;
   oauthReads.length = 0;
+  credentialWrites.length = 0;
   connects.length = 0;
   infos.length = 0;
   successes.length = 0;
@@ -481,4 +493,325 @@ test('reinstalling a saved unauthenticated server never toasts success', async (
   expect(successes).toEqual([]);
   expect(errors).toEqual([]);
   expect(infos).toEqual(['Linear saved. Sign in to finish.']);
+});
+
+/** The local server the catalog creates for Grafana, before credentials are referenced. */
+const grafanaServer = {
+  serverId: 'grafana',
+  label: 'Grafana',
+  enabled: true as const,
+  scope: 'project' as const,
+  transport: { type: 'stdio' as const, command: 'uvx', args: ['mcp-grafana'] },
+};
+
+const openGrafana = async () => {
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'Grafana');
+  if (!card) throw new Error('Grafana card missing');
+  await act(async () => card.click());
+  await settle();
+};
+
+const setInputValue = async (input: HappyElement, value: string) => {
+  const setValue = Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, 'value')?.set;
+  await act(async () => {
+    setValue?.call(input, value);
+    input.dispatchEvent(new browser.Event('input', { bubbles: true }));
+  });
+};
+
+test('a local entry with a required env input keeps Install disabled until it is filled', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  await openGrafana();
+
+  const body = browser.document.body;
+  expect(body.textContent?.includes('Environment values')).toBe(true);
+  const urlField = body.querySelector('#catalog-env-grafana-url');
+  if (!urlField) throw new Error('GRAFANA_URL field missing');
+  expect(urlField.hasAttribute('required')).toBe(true);
+  expect(urlField.getAttribute('type')).toBe('password');
+  expect(urlField.getAttribute('placeholder')).toBe('GRAFANA_URL');
+  const optionalField = body.querySelector('#catalog-env-grafana-apiKey');
+  expect(optionalField?.hasAttribute('required')).toBe(false);
+
+  const install = [...body.querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === 'Install');
+  if (!install) throw new Error('Install button missing');
+  expect(install.disabled).toBe(true);
+});
+
+/** The Grafana install with a scope the workspace resolves, as the user runs it. */
+const fillGrafana = async (values: { url: string; apiKey?: string }) => {
+  await openGrafana();
+  const body = browser.document.body;
+  const urlField = body.querySelector('#catalog-env-grafana-url');
+  if (!urlField) throw new Error('Grafana env fields missing');
+  await setInputValue(urlField, values.url);
+  if (values.apiKey !== undefined) {
+    const keyField = body.querySelector('#catalog-env-grafana-apiKey');
+    if (!keyField) throw new Error('Grafana api key field missing');
+    await setInputValue(keyField, values.apiKey);
+  }
+  return body;
+};
+
+const confirmScopeInstall = async (body: HappyElement) => {
+  await clickButton('Install');
+  const confirm = [...body.querySelectorAll('button')].filter((candidate) => candidate.textContent?.trim() === 'Install').at(-1);
+  if (!confirm) throw new Error('Scope dialog confirm missing');
+  await act(async () => confirm.click());
+  await settle();
+};
+
+const notConnectedMcpMutation = (server: MCPServerConfig): McpMutationResult => ({
+  ok: false as const,
+  outcome: 'saved-not-connected' as const,
+  error: 'The MCP server could not connect.',
+  result: {
+    kind: 'mcp' as const,
+    status: 'no-active-workers' as const,
+    outcome: 'saved-not-connected' as const,
+    configuration: { workspaceId: 'workspace', persistedRevision: '1', config: { servers: [server] } },
+    workers: [],
+  },
+});
+
+test('installing a local entry saves it enabled, then writes env credentials and references them', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const savedServers: MCPServerConfig[] = [];
+  const saves: string[] = [];
+  useMcpConfigStore.setState({
+    createMcp: async (config) => {
+      saves.push('create');
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+    updateMcp: async (_serverId, config) => {
+      saves.push('update');
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+  });
+
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid', apiKey: 'fake-key-0000' });
+  await confirmScopeInstall(body);
+
+  expect(saves).toEqual(['create', 'update']);
+  expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid', 'fake-key-0000']);
+  // The first save is an ordinary enabled server without references; the save
+  // after the credential writes carries only references.
+  const first = savedServers[0];
+  expect(first.enabled).toBe(true);
+  expect(first.transport.type === 'stdio' ? first.transport.envCredentialRefs : undefined).toBeUndefined();
+  const last = savedServers.at(-1);
+  const transport = last?.transport;
+  expect(transport?.type).toBe('stdio');
+  expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({
+    GRAFANA_URL: 'credential-grafana-1',
+    GRAFANA_SERVICE_ACCOUNT_TOKEN: 'credential-grafana-2',
+  });
+  for (const server of savedServers) {
+    const serialized = JSON.stringify(server);
+    expect(serialized.includes('https://grafana.example.invalid')).toBe(false);
+    expect(serialized.includes('fake-key-0000')).toBe(false);
+  }
+  expect(errors).toEqual([]);
+  expect(successes).toEqual(['Grafana installed for all your projects']);
+});
+
+test('a first save that only persisted still gets its env credentials and the second result decides the toast', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const savedServers: MCPServerConfig[] = [];
+  useMcpConfigStore.setState({
+    // The server is saved but cannot connect before its environment exists:
+    // the store re-publishes the persisted configuration and returns ok:false
+    // with that result, which is not this install's outcome.
+    createMcp: async (config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return notConnectedMcpMutation(merged);
+    },
+    updateMcp: async (_serverId, config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+  });
+
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid', apiKey: 'fake-key-0000' });
+  await confirmScopeInstall(body);
+
+  expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid', 'fake-key-0000']);
+  const last = savedServers.at(-1);
+  const transport = last?.transport;
+  expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({
+    GRAFANA_URL: 'credential-grafana-1',
+    GRAFANA_SERVICE_ACCOUNT_TOKEN: 'credential-grafana-2',
+  });
+  // The first save's connection failure is not reported: the save after the
+  // references succeeded.
+  expect(errors).toEqual([]);
+  expect(successes).toEqual(['Grafana installed for all your projects']);
+});
+
+test('a refused first save writes no credentials and reports that refusal', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const saves: string[] = [];
+  useMcpConfigStore.setState({
+    // No persisted result: the save itself was refused, so there is no server
+    // for a credential to belong to.
+    createMcp: async () => {
+      saves.push('create');
+      return { ok: false as const, error: 'The proposed MCP server is disabled or is not managed by OpenChamber' };
+    },
+    updateMcp: async () => {
+      saves.push('update');
+      return appliedMcpMutation();
+    },
+  });
+
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
+  await confirmScopeInstall(body);
+
+  expect(saves).toEqual(['create']);
+  expect(credentialWrites).toEqual([]);
+  expect(errors).toEqual(['Could not install Grafana']);
+});
+
+test('the save after the env references reports its own handshake failure', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const savedServers: MCPServerConfig[] = [];
+  useMcpConfigStore.setState({
+    createMcp: async (config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return appliedMcpMutation();
+    },
+    // Saved with the references, but Grafana itself refused the handshake.
+    updateMcp: async (_serverId, config) => {
+      const merged = { ...grafanaServer, ...config };
+      savedServers.push(merged);
+      useMcpConfigStore.setState({ serversByDirectory: { '/repo': [merged] } });
+      return { ok: false as const, outcome: 'saved-not-connected' as const, error: 'HTTP 502 from Grafana' };
+    },
+  });
+
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
+  await confirmScopeInstall(body);
+
+  expect(credentialWrites.map((write) => write.value)).toEqual(['https://grafana.example.invalid']);
+  const last = savedServers.at(-1);
+  const transport = last?.transport;
+  expect(transport?.type === 'stdio' ? transport.envCredentialRefs : undefined).toEqual({ GRAFANA_URL: 'credential-grafana-1' });
+  expect(errors).toEqual(['Could not install Grafana']);
+});
+
+/** The user-scope radio in the scope dialog, which env credentials forbid. */
+const scopeRadios = () => [...browser.document.body.querySelectorAll('input[name="mcp-install-scope"]')];
+const userScopeRadio = () => scopeRadios().find((radio) => radio.getAttribute('value') === 'user');
+
+test('a filled env value makes the install project-scope only', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
+  await clickButton('Install');
+
+  expect(scopeRadios().map((radio) => radio.getAttribute('value'))).toEqual(['project', 'user']);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(true);
+  expect(scopeRadios()[0]?.hasAttribute('checked')).toBe(true);
+  expect(body.textContent?.includes('Environment values are stored per project, so this server installs at project scope only.')).toBe(true);
+});
+
+test('an entry with every env value empty keeps both scopes', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'MCP Toolbox');
+  if (!card) throw new Error('MCP Toolbox card missing');
+  await act(async () => card.click());
+  await settle();
+  await clickButton('Install');
+
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
+});
+
+test('a filled env value without a selected project blocks Install and says why', async () => {
+  useProjectsStore.setState({ projects: [], activeProjectId: null });
+  useUIStore.setState({ settingsProjectPath: null });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'Grafana');
+  if (!card) throw new Error('Grafana card missing');
+  await act(async () => card.click());
+  await settle();
+  const urlField = browser.document.body.querySelector('#catalog-env-grafana-url');
+  if (!urlField) throw new Error('GRAFANA_URL field missing');
+  await setInputValue(urlField, 'https://grafana.example.invalid');
+
+  const install = [...browser.document.body.querySelectorAll('button')].find((candidate) => candidate.textContent?.trim() === 'Install');
+  if (!install) throw new Error('Install button missing');
+  expect(install.disabled).toBe(true);
+  expect(browser.document.body.textContent?.includes('Environment values are stored per project, so this server installs at project scope only.')).toBe(true);
+});
+
+const projectRadio = () => scopeRadios().find((radio) => radio.getAttribute('value') === 'project');
+
+test('an entry without env inputs opens the scope dialog on Project by default when a project is selected', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  const body = await fillGrafana({ url: 'https://grafana.example.invalid' });
+  await clickButton('Install');
+  // Grafana does carry env inputs; its default is still the ordinary one.
+  expect(projectRadio()?.hasAttribute('checked')).toBe(true);
+
+  const back = findClickable([...body.querySelectorAll('nav button')], 'Integrations');
+  if (!back) throw new Error('Back button missing');
+  await act(async () => back.click());
+  await settle();
+  // A token entry declares no env inputs at all.
+  const linearCard = findClickable([...body.querySelectorAll('main [role="button"], main button')], 'Linear');
+  if (!linearCard) throw new Error('Linear card missing');
+  await act(async () => linearCard.click());
+  await settle();
+  await clickButton('Install');
+  expect(projectRadio()?.hasAttribute('checked')).toBe(true);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
+});
+
+test('an entry with empty optional env inputs defaults to Project and keeps User enabled', async () => {
+  useProjectsStore.setState({ projects: [{ id: 'repo', path: '/repo' }], activeProjectId: 'repo' });
+  useUIStore.setState({ settingsProjectPath: '/repo' });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'MCP Toolbox');
+  if (!card) throw new Error('MCP Toolbox card missing');
+  await act(async () => card.click());
+  await settle();
+  await clickButton('Install');
+
+  expect(projectRadio()?.hasAttribute('checked')).toBe(true);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
+});
+
+test('the scope dialog defaults to User when no project is selected', async () => {
+  useProjectsStore.setState({ projects: [], activeProjectId: null });
+  useUIStore.setState({ settingsProjectPath: null });
+  await act(async () => root.render(<I18nProvider><IntegrationsCatalogView /></I18nProvider>));
+  const card = findClickable([...browser.document.body.querySelectorAll('main [role="button"], main button')], 'MCP Toolbox');
+  if (!card) throw new Error('MCP Toolbox card missing');
+  await act(async () => card.click());
+  await settle();
+  await clickButton('Install');
+
+  expect(userScopeRadio()?.hasAttribute('checked')).toBe(true);
+  expect(userScopeRadio()?.hasAttribute('disabled')).toBe(false);
 });

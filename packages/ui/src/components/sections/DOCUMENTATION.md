@@ -170,8 +170,11 @@ with model ids only (never keys or the endpoint). That route refuses with
 the upstream lookup fails; either way the fill keeps the catalog-only result
 and says so, so a partial lookup never reads as a complete one. Ids beyond
 each source's cap (500 for enrich, 200 for the Host route) are reported with
-the unknown ids instead of being silently skipped. Every filled value carries
-its source under the control ("From the OMP model catalog" / "From OpenRouter").
+the unknown ids instead of being silently skipped; the partial notice names at
+most ten of them and counts the rest through a translated "and N more" phrase,
+and unknown ids outrank "nothing left to fill" so a repeat fill still lists the
+models whose limits stayed empty. Every filled value carries its source under
+the control ("From the OMP model catalog" / "From OpenRouter").
 Provenance is per field: a value the user typed is never overwritten, while a
 previously filled value may be corrected by a later read — including a limit
 the user cleared, which stays typed and therefore stays empty.

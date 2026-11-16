@@ -7,6 +7,7 @@ import {
   autoFillNoticeFor,
   autoFillNoticeIds,
   catalogInputs,
+  formatAutoFillNoticeModels,
   unresolvedAutoFillIds,
   buildCustomProviderRequest,
   createDiscoveredModelRow,
@@ -483,4 +484,12 @@ test('the partial notice names at most ten unknown ids and counts the rest', () 
 
   expect(autoFillNoticeIds(['a', 'b'])).toEqual({ shown: ['a', 'b'], hidden: 0 });
   expect(autoFillNoticeIds([])).toEqual({ shown: [], hidden: 0 });
+});
+
+test('the capped id list hands its remainder to a translated sentence', () => {
+  const more = (models: string, count: number) => `${models} and ${count} more`;
+  expect(formatAutoFillNoticeModels(['a', 'b'], more)).toBe('a, b');
+  expect(formatAutoFillNoticeModels([], more)).toBe('');
+  const ids = Array.from({ length: 13 }, (_, index) => `m${index + 1}`);
+  expect(formatAutoFillNoticeModels(ids, more)).toBe(`${ids.slice(0, 10).join(', ')} and 3 more`);
 });

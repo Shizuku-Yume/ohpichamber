@@ -577,6 +577,20 @@ export function autoFillNoticeIds(ids: readonly string[]): { shown: string[]; hi
   return { shown, hidden: Math.max(0, ids.length - shown.length) };
 }
 
+/**
+ * The id list a partial notice prints. The count past the cap goes through the
+ * caller's translated template, so every locale keeps its own way of saying
+ * "and N more" (and its own bidi order) instead of a bare `(+N)`.
+ */
+export function formatAutoFillNoticeModels(
+  ids: readonly string[],
+  more: (models: string, count: number) => string,
+): string {
+  const { shown, hidden } = autoFillNoticeIds(ids);
+  const list = shown.join(', ');
+  return hidden > 0 ? more(list, hidden) : list;
+}
+
 /** A row imported from a discovery result, prefilled from what the catalog already knows. */
 export function createDiscoveredModelRow(model: ProviderModelDiscoveryResult['models'][number]): ModelRow {
   const row = createModelRow(model);

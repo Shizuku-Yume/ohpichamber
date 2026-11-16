@@ -33,7 +33,7 @@ import {
   applyModelCatalogInfo,
   autoFillIds,
   autoFillNoticeFor,
-  autoFillNoticeIds,
+  formatAutoFillNoticeModels,
   unresolvedAutoFillIds,
   buildCustomProviderRequest,
   buildProviderDiscoveryRequest,
@@ -141,12 +141,12 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     return () => URL.revokeObjectURL(url);
   }, [pickedLogoFile]);
   const disabled = busy || discovering || autoFilling;
-  // A long list of ids would bury the row; the count carries the rest, and a
-  // bare `(+N)` reads in every language without another key.
-  const partialNoticeIds = autoFillNoticeIds(unresolvedModelIds);
-  const partialNoticeModels = partialNoticeIds.hidden > 0
-    ? `${partialNoticeIds.shown.join(', ')} (+${partialNoticeIds.hidden})`
-    : partialNoticeIds.shown.join(', ');
+  // A long list of ids would bury the row; the count carries the rest through
+  // the translated "and N more" sentence.
+  const partialNoticeModels = formatAutoFillNoticeModels(
+    unresolvedModelIds,
+    (models, count) => t('settings.providers.page.custom.models.autofill.notice.moreModels', { models, count }),
+  );
 
   const setField = (key: 'providerId' | 'name' | 'endpoint' | 'apiKey', value: string) => {
     setForm((previous) => ({ ...previous, [key]: value }));
@@ -217,6 +217,12 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
     return next;
   });
 
+  /** The fill summary described the previous row set; a changed set retires it. */
+  const clearAutoFillNotice = () => {
+    setAutoFillNotice(null);
+    setUnresolvedModelIds([]);
+  };
+
   const discoverModels = async () => {
     setDiscovering(true);
     setDiscoveryError(null);
@@ -227,8 +233,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         setDiscoveredModels(result.models);
         setModelsDialogOpen(true);
         // The reviewed list changed; an old fill summary no longer describes it.
-        setAutoFillNotice(null);
-        setUnresolvedModelIds([]);
+        clearAutoFillNotice();
       }
     } catch (error) {
       if (lifetime.current && runtime === getRuntimeKey()) {
@@ -253,7 +258,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       return { ...previous, models: [...kept, ...added] };
     });
     setModelErrors([]);
-    setAutoFillNotice(null);
+    clearAutoFillNotice();
   };
 
   const removeModelRows = (modelIds: string[]) => {
@@ -264,7 +269,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
       return { ...previous, models: models.length > 0 ? models : [createModelRow()] };
     });
     setModelErrors([]);
-    setAutoFillNotice(null);
+    clearAutoFillNotice();
   };
 
   const markTyped = (index: number, field: ModelAutoFillField) => {
@@ -617,6 +622,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
                   models: previous.models.filter((_, rowIndex) => rowIndex !== index),
                 }));
                 setModelErrors((previous) => previous.filter((_, rowIndex) => rowIndex !== index));
+                clearAutoFillNotice();
               } : undefined}
             />
           ))}
@@ -631,6 +637,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             setForm((previous) => ({ ...previous, models: [...previous.models, row] }));
             setModelErrors((previous) => [...previous, {}]);
             setExpandedRows((previous) => new Set([...previous, row.row]));
+            clearAutoFillNotice();
           }}
         >
           {t('settings.providers.page.custom.models.add')}

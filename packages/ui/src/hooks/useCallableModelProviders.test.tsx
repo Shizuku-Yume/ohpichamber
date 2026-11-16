@@ -47,6 +47,7 @@ test('resolves callable providers from configured catalog and OMP modelRoles', a
           workspaceId: 'ws_1',
           revision: '1',
           totalCount: 1,
+          placementCounts: { tuiOnly: 0, boundary: 0, elsewhere: 0 },
           settings: [
             { id: 'modelRoles', type: 'record', value: { smol: 'openai/o3-mini:high' }, default: null, configured: true, placement: { type: 'engine' } },
           ],

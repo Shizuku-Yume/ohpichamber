@@ -6,6 +6,7 @@ import {
   CatalogWorkerIdentitySchema, CounterSchema, EntityIdSchema, JsonObjectSchema,
   MCPApplyRequestSchema, MCPAppliedRevisionsSchema, MCPCatalogReadSchema,
   MCPCatalogStateSchema, MCPConfigurationStateSchema, MCPConfigureRequestSchema,
+  MCP_OAUTH_LOOPBACK_CALLBACK_PATH, MCP_OAUTH_LOOPBACK_CALLBACK_PORT,
   MCPOAuthConfigInputSchema, MCPOAuthPendingFlowSchema, MCPOAuthPublicConfigurationSchema,
   MCPOAuthRequestSchema, MCPOAuthResultSchema, MCPReconnectRequestSchema,
   MCPToolSchema, MCPWorkerApplyOutcomeSchema,
@@ -53,7 +54,9 @@ interface OAuthFlowEntry {
   requiresCallbackInput: boolean;
   settled: boolean;
   pendingFlow: MCPOAuthPendingFlow | undefined;
-  error: NativeMcpError | undefined;
+  /** A Host policy refusal (`ProjectionError`) keeps its own code, so the panel
+   * can answer it as policy instead of as a broken provider connection. */
+  error: NativeMcpError | ProjectionError | undefined;
   cancelReason: NativeMcpError | undefined;
   submitInput: ((input: string) => void) | undefined;
   done: Promise<void>;
@@ -91,6 +94,26 @@ function managedFile(configuration: MCPConfigurationState): ManagedFile {
  * only on whether a session is open. */
 function isAuthError(detail: string, config?: SDKMCPServerConfig): boolean {
   return mcpAuthRequired({ detail, config });
+}
+
+/**
+ * The child's own error text can quote what it was given, including an injected
+ * credential (a provider that prints its DSN). The worker holds the resolved
+ * values it handed this transport, so remove them from the detail here — the one
+ * place a failure detail is formed — before it reaches the catalog, the problem
+ * body or a toast. Values under four characters are skipped: blanking a token
+ * that short would mangle ordinary prose without hiding anything.
+ */
+function scrubCredentialValues(detail: string, config: SDKMCPServerConfig): string {
+  const remote = config.type === 'http' || config.type === 'sse';
+  const values = remote
+    ? Object.values(config.headers ?? {}).flatMap(value => value.startsWith('Bearer ') ? [value, value.slice('Bearer '.length)] : [value])
+    : Object.values(config.env ?? {});
+  let scrubbed = detail;
+  for (const value of values.filter(value => value.trim().length >= 4).sort((left, right) => right.length - left.length)) {
+    scrubbed = scrubbed.split(value).join('[redacted]');
+  }
+  return scrubbed;
 }
 
 /** Credential references OpenChamber keeps beside a server's native entry (references only, never values). */
@@ -752,7 +775,9 @@ export class WorkerMcp extends MCPManager {
         persistedRevision: configuration.persistedRevision,
         status: 'unauthenticated',
         authenticated: false,
-        error: { code: failure.code, detail: operationErrorDetail(failure.code, failure.message), retryable: failure.retryable },
+        error: failure instanceof ProjectionError
+          ? { code: failure.code, detail: operationErrorDetail(failure.code, failure.message), retryable: failure.status >= 500 }
+          : { code: failure.code, detail: operationErrorDetail(failure.code, failure.message), retryable: failure.retryable },
       });
     }
     return MCPOAuthResultSchema.parse(
@@ -918,7 +943,12 @@ export class WorkerMcp extends MCPManager {
             flowId: entry.flowId,
             authorizationUrl: info.url,
           };
-          if (info.launchUrl !== undefined) pendingCandidate.launchUrl = info.launchUrl;
+          // OMP advertises a `/launch` URL on its loopback listener whenever the
+          // redirect has a loopback hostname, even when that listener is only a
+          // random-port placeholder or another program's port (an SSH tunnel's
+          // route, say). When the code comes back through `complete`, no such
+          // listener is serving `/launch`, so the browser would hit a dead port.
+          if (info.launchUrl !== undefined && !entry.requiresCallbackInput) pendingCandidate.launchUrl = info.launchUrl;
           if (info.instructions !== undefined) pendingCandidate.instructions = info.instructions;
           const pendingFlow = MCPOAuthPendingFlowSchema.parse(pendingCandidate);
           entry.pendingFlow = pendingFlow;
@@ -950,7 +980,12 @@ export class WorkerMcp extends MCPManager {
         throw new NativeMcpError('MCP_OAUTH_FAILED', 'MCP OAuth credential persistence failed.', true);
       }
     } catch (error) {
-      const nativeError = this.#toOAuthError(error instanceof Error ? error : undefined, entry.abort.signal.aborted, entry.cancelReason);
+      // A Host policy refusal is not a provider failure: keeping its code and
+      // status lets the panel answer it as policy (enterprise mode) while the
+      // provider's own sentence still travels for a genuine sign-in failure.
+      const nativeError = error instanceof ProjectionError
+        ? error
+        : this.#toOAuthError(error instanceof Error ? error : undefined, entry.abort.signal.aborted, entry.cancelReason);
       entry.error = nativeError;
       if (!entry.pendingFlow) {
         if (this.#oauth.get(entry.serverId) === entry) this.#oauth.delete(entry.serverId);
@@ -1119,7 +1154,7 @@ export class WorkerMcp extends MCPManager {
       const failedEntry = status.failed.find(f => f.name === server.serverId);
       const errorMsg = failedEntry?.error || result.errors.get(server.serverId);
       if (errorMsg || status.pending.length || !status.connected.includes(server.serverId) || !manager.getConnection(server.serverId)?.tools) {
-        const detail = errorMsg || (status.pending.length ? 'MCP handshake timed out' : 'MCP handshake or tools failed');
+        const detail = scrubCredentialValues(errorMsg || (status.pending.length ? 'MCP handshake timed out' : 'MCP handshake or tools failed'), config);
         const isAuth = isAuthError(detail, config);
         throw new NativeMcpError(isAuth ? 'MCP_AUTH_REQUIRED' : 'MCP_APPLY_FAILED', detail, true);
       }
@@ -1128,7 +1163,7 @@ export class WorkerMcp extends MCPManager {
     } catch (err) {
       await this.#release([manager]);
       if (err instanceof NativeMcpError) throw err;
-      const detail = err instanceof Error ? err.message : String(err);
+      const detail = scrubCredentialValues(err instanceof Error ? err.message : String(err), config);
       const isAuth = isAuthError(detail, config);
       throw new NativeMcpError(isAuth ? 'MCP_AUTH_REQUIRED' : 'MCP_APPLY_FAILED', detail, true);
     }
@@ -1350,7 +1385,14 @@ export class WorkerMcp extends MCPManager {
     const clientId = input?.clientId ?? discoveredClientId;
     const scopes = input?.scopes ?? discovered?.scopes;
     const prompt = input?.prompt;
-    const redirectUri = input?.redirectUri;
+    // A runtime whose browser can reach this machine signs in on the Agent
+    // Service's own loopback listener. Pinning it (rather than OMP's port 3000
+    // with a random fallback) keeps the redirect stable across attempts, which
+    // is what a provider's registered client expects. A caller that names a
+    // Host callback (remote web, mobile) keeps that URI, and the flow then
+    // completes through the `complete` action instead of the loopback listener.
+    const redirectUri = input?.redirectUri
+      ?? `http://localhost:${input?.callbackPort ?? MCP_OAUTH_LOOPBACK_CALLBACK_PORT}${input?.callbackPath ?? MCP_OAUTH_LOOPBACK_CALLBACK_PATH}`;
     const callbackPort = input?.callbackPort;
     const callbackPath = input?.callbackPath;
     const advertisedResource = input?.resource ?? discovered?.resource;
@@ -1391,9 +1433,26 @@ export class WorkerMcp extends MCPManager {
     if (publicConfig.redirectUri !== undefined) flowConfig.redirectUri = publicConfig.redirectUri;
     if (publicConfig.callbackPort !== undefined) flowConfig.callbackPort = publicConfig.callbackPort;
     if (publicConfig.callbackPath !== undefined) flowConfig.callbackPath = publicConfig.callbackPath;
+    const listenerPort = publicConfig.callbackPort ?? MCP_OAUTH_LOOPBACK_CALLBACK_PORT;
+    const listenerPath = publicConfig.callbackPath ?? MCP_OAUTH_LOOPBACK_CALLBACK_PATH;
     const redirect = publicConfig.redirectUri ? new URL(publicConfig.redirectUri) : undefined;
-    const requiresCallbackInput = redirect !== undefined
-      && !(redirect.protocol === 'http:' && (redirect.hostname === 'localhost' || redirect.hostname === '127.0.0.1' || redirect.hostname === '[::1]'));
+    // A redirect completes locally only when it is exactly the listener this
+    // flow binds. Any other URI — a Host route, a custom scheme, or a loopback
+    // port that belongs to something else (an SSH tunnel, say) — reaches a
+    // different listener, so the code has to arrive through the `complete`
+    // action instead of this one.
+    const localLoopback = redirect !== undefined
+      && redirect.protocol === 'http:'
+      && (redirect.hostname === 'localhost' || redirect.hostname === '127.0.0.1' || redirect.hostname === '[::1]')
+      && Number(redirect.port || '80') === listenerPort
+      && redirect.pathname === listenerPath;
+    const requiresCallbackInput = redirect !== undefined && !localLoopback;
+    // A non-local redirect never returns here, and OMP would otherwise bind its
+    // default port 3000 (and refuse to sign in at all when a dev server holds
+    // it) or a loopback port that is already someone else's. A random port keeps
+    // the unused listener out of everyone's way; the code arrives through the
+    // `complete` action instead.
+    if (requiresCallbackInput && flowConfig.callbackPort === undefined) flowConfig.callbackPort = 0;
     return { publicConfig, flowConfig, requiresCallbackInput };
   }
   #createManualInputController(flowSignal: AbortSignal) {
@@ -1442,10 +1501,12 @@ export class WorkerMcp extends MCPManager {
   /** The provider's own sentence is the diagnostic: OMP writes DCR rejection,
    * issuer mismatch, token exchange, port-in-use and state-mismatch causes for a
    * reader, and replacing them with one opaque line hides the only actionable
-   * detail the user has. A native code wins because it carries the status map. */
-  #toOAuthError(error: Error | undefined, aborted: boolean, cancelReason?: NativeMcpError): NativeMcpError {
+   * detail the user has. A native code wins because it carries the status map;
+   * a Host policy refusal keeps its own code so the panel can answer it as
+   * policy rather than as a provider failure. */
+  #toOAuthError(error: Error | undefined, aborted: boolean, cancelReason?: NativeMcpError): NativeMcpError | ProjectionError {
     if (cancelReason) return cancelReason;
-    if (error instanceof NativeMcpError) return error;
+    if (error instanceof NativeMcpError || error instanceof ProjectionError) return error;
     if (aborted) return new NativeMcpError('MCP_OAUTH_CANCELLED', 'MCP OAuth was cancelled.', false);
     if (error?.message.trim()) {
       // OMP folds a rejected dynamic client registration into one sentence

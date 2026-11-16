@@ -44,6 +44,7 @@ Consult only the branches affected by the change; these are ordinary module refe
 | Flat list of items that each expand into an editor | `SettingsDisclosure` |
 | Boolean | `SettingsCheckboxRow` |
 | OMP registry row (number, string, enum, boolean from one setting) | `OmpRowControl` |
+| OMP read-summary preset (one picker over five setting ids) | `OmpReadSummaryPresetRow` |
 | Mutually exclusive list | `SettingsRadioGroup` + `SettingsRadioOption` |
 | Short segmented options | `SettingsChipGroup` |
 | Sub-cluster with a quiet L3 title inside a section | `SettingsControlGroup` |

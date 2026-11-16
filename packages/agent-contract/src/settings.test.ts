@@ -19,7 +19,11 @@ const descriptor = {
   tab: 'context',
   placement: { type: 'engine' } as const,
 };
-const state = { workspaceId: 'workspace_1', revision: '2', totalCount: 1, settings: [descriptor] };
+const state = {
+  workspaceId: 'workspace_1', revision: '2', totalCount: 1,
+  placementCounts: { tuiOnly: 0, boundary: 0, elsewhere: 0 },
+  settings: [descriptor],
+};
 
 test('OMP_SETTING_IDS is deleted and not exported', () => {
   expect((settingsModule as Record<string, unknown>).OMP_SETTING_IDS).toBeUndefined();

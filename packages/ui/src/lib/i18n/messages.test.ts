@@ -165,8 +165,8 @@ describe('i18n dictionaries', () => {
       // differ; every key must at least be present.
       for (const key of [
         'settings.page.omp.description',
-        'settings.omp.advanced',
-        'settings.omp.advancedDescription',
+        'settings.omp.configFile.title',
+        'settings.omp.configFile.terminal',
         'settings.omp.modelRoles.description',
         'settings.omp.section.retry.description',
       ] as const) {

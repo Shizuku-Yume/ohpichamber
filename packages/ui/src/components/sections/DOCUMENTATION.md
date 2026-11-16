@@ -4,6 +4,34 @@ One directory per Settings page. `shared/` holds the page chrome and controls
 every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
 which primitive to reach for.
 
+## The OMP page
+
+`openchamber/OmpSettingsPage.tsx` draws the agent settings whose placement is
+`engine`, one tab at a time. `openchamber/ompSettingsLayout.ts` owns the table:
+four tabs (`common`, `editing`, `execution`, `advanced`) of named groups of
+setting ids, ordered impact-first — a switch that turns a capability on comes
+before the knobs that tune it. The page renders that order instead of OMP's own
+`group`, whose declaration order interleaved unrelated areas.
+
+Rules the module holds:
+
+- A row appears only when the snapshot carries it with placement `engine` and
+  `conditionActive !== false`; a layout id missing from the snapshot is skipped,
+  and a group whose rows all disappear leaves no heading. Rows are keyed by id,
+  so a condition flip does not move scroll.
+- The layout table is total and injective over the engine ids the agent service
+  exposes (`ompSettingsLayout.test.ts` compares it with the placement table), so
+  a row cannot reach the page without a place, and none can appear twice.
+- `read.summarize.enabled` is owned by the read-summary preset entry, which
+  writes that switch and its four thresholds in one PATCH; the thresholds stay
+  editable under `advanced`.
+- The closing section of `advanced` names the config file and splits what the
+  page leaves out by reason — terminal-only, already on another page, egress
+  only. It is not a single misleading count.
+- Settings search derives one entry per layout id (`lib/settings/search.ts`),
+  and `ompSettingsTabForSearchTarget` maps an anchor to the tab that draws it;
+  `SettingsView` sets that tab before it highlights the row.
+
 ## Autosave on the OpenCode configuration pages
 
 `agents/`, `commands/`, `skills/`, `mcp/`, `plugins/` and `behavior/` edit files
@@ -233,6 +261,29 @@ the panel only shows them.
 Props: `serverId`, `directory`, `onConnected` (runs the server's connect) and
 two install hooks, `autoStart` and `onAutoStartConsumed`.
 
+Every start names the redirect the runtime can actually complete
+(`mcpOAuthRedirect.ts`): the Agent Service's pinned loopback callback
+(`MCP_OAUTH_LOOPBACK_REDIRECT_URI`, `http://localhost:38471/callback`) when the
+UI runs on the Host machine, and `<Host base>/api/agent/v1/mcp/oauth/callback`
+(the Host serves that path and validates the `state` it issued) otherwise —
+remote web, same-origin web on a LAN address, Capacitor mobile, and a desktop
+window connected to another Host (including over its SSH tunnel). A redirect
+URI the user types keeps its meaning.
+
+Relay mode is the one exception on both ends: the E2EE tunnel carries only the
+app's own requests, so neither the loopback listener nor the Host callback is
+reachable by the browser that consents. The panel keeps the loopback redirect
+and does **not** open the authorization page on its own there
+(`currentMcpOAuthAutoOpen`); the pending panel offers Open in browser and the
+pasted-callback field, and the user finishes the flow by pasting the callback
+URL or code. This is a known limitation of relay sign-in, not a fallback path
+with a listener behind it.
+
+A non-local redirect also makes the worker drop OMP's `launchUrl` from the
+pending flow: OMP advertises a `/launch` page for any loopback hostname even
+when the flow only holds a random-port placeholder or the Host's own port, and
+that page would be a dead route.
+
 Without `autoStart` the panel shows the form: client ID, client secret,
 scopes and redirect URI, then Authorize. The client secret is written through
 the dedicated credential endpoint and only its reference travels in the start
@@ -282,6 +333,11 @@ Failures are read by their stable code:
   beside the client-ID field, which is revealed and focused, so a client id
   the provider already approved can be typed and retried. Figma is the known
   case: its registration endpoint answers 403 to unlisted clients.
+- `enterprise_mode` — the Host refused MCP sign-in because the administrator's
+  policy does not allow it. The panel shows
+  `integrationsCatalog.oauth.enterpriseMode` as an info line (in every locale)
+  rather than the Host's fixed English sentence: the user can act on it by
+  asking their administrator.
 - Anything else — the provider's message in red with the form still available.
 
 A flow that fails after the browser handoff (consent denied, state mismatch,

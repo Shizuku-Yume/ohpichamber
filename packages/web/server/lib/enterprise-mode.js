@@ -36,6 +36,10 @@ import { z } from 'zod';
  *   fetches are refused (`host/canonical-routes.js`): package-manager commands
  *   can access external registries. Catalog reads, settings, enable/disable and
  *   confined workspace extension source authoring remain local and available.
+ * - MCP sign-in is refused: starting an OAuth flow (`host/canonical-routes.js`
+ *   and the worker `mcp-oauth` authorization branch), and the public browser
+ *   callback that finishes it (`host/mcp-oauth-callback.js`). Servers that need
+ *   no sign-in still connect.
  * - Jev classification is off, unless the administrator pinned their own
  *   endpoint (`routing/runtime.js`).
  * - External tunnels are refused: Cloudflare and ngrok see plain text

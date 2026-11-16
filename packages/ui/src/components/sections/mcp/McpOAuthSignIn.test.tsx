@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, expect, jest, mock, spyOn, test } from 'bun:test';
+import { MCP_OAUTH_LOOPBACK_REDIRECT_URI } from '@openchamber/agent-contract';
 import type { MCPOAuthRequest, MCPOAuthResult } from '@openchamber/agent-contract';
 import { Window } from 'happy-dom';
 import type { Root } from 'react-dom/client';
@@ -38,6 +39,10 @@ let reads: MCPOAuthResult[] = [];
 let startFailure: Error | null = null;
 /** Failures the poll's own read takes before it answers, as a dropped connection would. */
 let pollFailures = 0;
+/** Whether the UI is connected through an E2EE relay instead of a Host address. */
+let relayActive = false;
+const actualRelay = await import('@/lib/relay/runtime-tunnel');
+mock.module('@/lib/relay/runtime-tunnel', () => ({ ...actualRelay, isRelayModeActive: () => relayActive }));
 const actual = await import('@/api/canonicalClient');
 const { CanonicalApiError } = actual;
 mock.module('@/api/canonicalClient', () => ({
@@ -71,7 +76,7 @@ let root: Root;
 
 beforeEach(() => {
   root = createRoot(container);
-  requests = []; credentials = []; reconnects = 0; reads = [unauthenticated]; startFailure = null; pollFailures = 0;
+  requests = []; credentials = []; reconnects = 0; reads = [unauthenticated]; startFailure = null; pollFailures = 0; relayActive = false;
   openSpy.mockClear();
 });
 afterEach(async () => {
@@ -119,7 +124,10 @@ test('OAuth client secret stays in the dedicated private write and completion ca
   await enter(secret, 'private-client-secret');
   await click('Authorize');
   expect(credentials).toEqual([{ persistedRevision: '3', value: 'private-client-secret' }]);
-  expect(requests[0]).toEqual({ action: 'start', persistedRevision: '3', workerGeneration: 'generation', oauth: { clientSecretRef: 'private_ref' } });
+  // The panel names the runtime's redirect on every start: here the UI is
+  // opened on the Host machine, so the Agent Service's loopback listener is the
+  // one that can receive the code.
+  expect(requests[0]).toEqual({ action: 'start', persistedRevision: '3', workerGeneration: 'generation', oauth: { clientSecretRef: 'private_ref', redirectUri: MCP_OAUTH_LOOPBACK_REDIRECT_URI } });
   expect(JSON.stringify(requests)).not.toContain('private-client-secret');
   const callback = container.querySelector<HTMLInputElement>('input');
   if (!callback) throw new Error('Missing callback field');
@@ -328,6 +336,50 @@ test('a rejected client registration shows the provider message and focuses the 
   await enter(clientId, 'figma-client-id');
   await click('Authorize');
   expect(starts()[starts().length - 1]).toEqual({
-    action: 'start', persistedRevision: '3', workerGeneration: 'generation', oauth: { clientId: 'figma-client-id' },
+    action: 'start', persistedRevision: '3', workerGeneration: 'generation',
+    oauth: { clientId: 'figma-client-id', redirectUri: MCP_OAUTH_LOOPBACK_REDIRECT_URI },
   });
+});
+
+test('an enterprise-mode refusal reads as policy, in the user’s language', async () => {
+  startFailure = new CanonicalApiError({
+    type: 'urn:ohpichamber:problem:enterprise_mode', title: 'Enterprise mode', status: 403,
+    detail: 'MCP OAuth is not available in enterprise mode.', code: 'enterprise_mode', retryable: false,
+  });
+  await render({ autoStart: true });
+  await settle();
+  // The Host's refusal is a policy decision, not a broken connection: it reads
+  // as a status line with the reason and who decided, never as a red failure.
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  const status = container.querySelector('[role="status"]')?.textContent ?? '';
+  expect(status).toContain('enterprise mode');
+  expect(status).toContain('administrator');
+  expect(status).not.toContain('MCP OAuth is not available');
+});
+
+test('a remote runtime hands the Host its own callback instead of a loopback URI', async () => {
+  const windowWithRuntime = window as typeof window & { __OPENCHAMBER_API_BASE_URL__?: string };
+  windowWithRuntime.__OPENCHAMBER_API_BASE_URL__ = 'https://chamber.example.test';
+  try {
+    await render();
+    await click('Authorize');
+    expect(starts()[0]).toEqual({
+      action: 'start', persistedRevision: '3', workerGeneration: 'generation',
+      oauth: { redirectUri: 'https://chamber.example.test/api/agent/v1/mcp/oauth/callback' },
+    });
+  } finally {
+    delete windowWithRuntime.__OPENCHAMBER_API_BASE_URL__;
+  }
+});
+
+test('a relay sign-in starts without opening a browser it cannot finish', async () => {
+  relayActive = true;
+  await render({ autoStart: true });
+  await settle();
+  // The start still happens (the provider page is one click away), but no
+  // browser opens: the relay carries only the app's requests, so the code can
+  // never come back on its own and the panel offers the pasted callback.
+  expect(starts()).toHaveLength(1);
+  expect(openSpy).not.toHaveBeenCalled();
+  expect([...container.querySelectorAll('button')].some(button => button.textContent === 'Open in browser')).toBe(true);
 });

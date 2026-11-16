@@ -136,8 +136,10 @@ Sections own vertical rhythm; pages only list them.
 ## Layout Guard
 
 `packages/ui/src/components/sections/settingsLayoutGuard.test.ts` scans the
-TSX under `components/sections` and reports the offending `file:line` for:
-
+TSX under `components/sections` and the settings-pane views rendered outside it
+(`views/usage/UsageStatsView.tsx`, `views/PreviewToggleButton.tsx`,
+`views/git/GitOperationStatus.tsx`, `update/ReleaseNotesBody.tsx`) and reports
+the offending `file:line` for:
 - W — a raw width utility (`w-48`, `w-[…]`, `w-fit`, `max-w-md`,
   `min-w-[1rem]`, with or without a variant prefix) on a settings control
   (`Input`, `Textarea`, `NumberInput`, `Select`/`SelectTrigger`, the

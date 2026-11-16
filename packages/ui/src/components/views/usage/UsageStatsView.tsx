@@ -3,7 +3,7 @@ import React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
 import { Button } from '@/components/ui/button';
-import { SettingsChipGroup } from '@/components/sections/shared/SettingsSection';
+import { SettingsChipGroup, SETTINGS_WIDTH_SELECT_CLASS } from '@/components/sections/shared/SettingsSection';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -141,85 +141,87 @@ export function UsageStatsReport(): React.ReactNode {
   }, [intlLocale]);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-4 sm:px-6">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <SettingsChipGroup
-          value={range}
-          onChange={setRange}
-          aria-label={t('usageStats.range.label')}
-          options={USAGE_RANGES.map((option) => ({ value: option, label: t(RANGE_LABEL_KEYS[option]) }))}
-        />
-        <Select value={selectedProject ? selectedProject.id : ALL_PROJECTS} onValueChange={setProjectChoice}>
-          <SelectTrigger className="w-fit min-w-[140px] max-w-64" aria-label={t('usageStats.scope.label')}>
-            <SelectValue>
-              {() => (selectedProject ? projectDisplayName(selectedProject) : t('usageStats.scope.all'))}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent align="start">
-            <SelectItem value={ALL_PROJECTS}>{t('usageStats.scope.all')}</SelectItem>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                <span className="truncate" title={project.path}>{projectDisplayName(project)}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="ms-auto flex min-w-0 items-center gap-1.5">
-          {stats && entry?.fetchedAt ? (
-            <span
-              className="truncate typography-micro text-muted-foreground"
-              title={entry.error ?? undefined}
-              role={entry.error ? 'status' : undefined}
-            >
-              {t(entry.error ? 'usageStats.refresh.failed' : 'usageStats.refresh.updated', {
-                time: formatUpdatedAt(entry.fetchedAt, timeFormatPreference),
-              })}
-            </span>
-          ) : null}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground"
-                onClick={refresh}
-                disabled={loading}
-                aria-label={t('usageStats.refresh.action')}
+    <div className="@container">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-4 @xl:px-6">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <SettingsChipGroup
+            value={range}
+            onChange={setRange}
+            aria-label={t('usageStats.range.label')}
+            options={USAGE_RANGES.map((option) => ({ value: option, label: t(RANGE_LABEL_KEYS[option]) }))}
+          />
+          <Select value={selectedProject ? selectedProject.id : ALL_PROJECTS} onValueChange={setProjectChoice}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={t('usageStats.scope.label')}>
+              <SelectValue>
+                {() => (selectedProject ? projectDisplayName(selectedProject) : t('usageStats.scope.all'))}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectItem value={ALL_PROJECTS}>{t('usageStats.scope.all')}</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  <span className="truncate" title={project.path}>{projectDisplayName(project)}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="ms-auto flex min-w-0 items-center gap-1.5">
+            {stats && entry?.fetchedAt ? (
+              <span
+                className="truncate typography-micro text-muted-foreground"
+                title={entry.error ?? undefined}
+                role={entry.error ? 'status' : undefined}
               >
-                <Icon name="refresh" className={cn('size-4', loading && 'animate-spin')} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>{t('usageStats.refresh.action')}</TooltipContent>
-          </Tooltip>
+                {t(entry.error ? 'usageStats.refresh.failed' : 'usageStats.refresh.updated', {
+                  time: formatUpdatedAt(entry.fetchedAt, timeFormatPreference),
+                })}
+              </span>
+            ) : null}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground"
+                  onClick={refresh}
+                  disabled={loading}
+                  aria-label={t('usageStats.refresh.action')}
+                >
+                  <Icon name="refresh" className={cn('size-4', loading && 'animate-spin')} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>{t('usageStats.refresh.action')}</TooltipContent>
+            </Tooltip>
+          </div>
         </div>
-      </div>
 
-      {stats?.partial ? <PartialUsageNotice errors={stats.errors} /> : null}
+        {stats?.partial ? <PartialUsageNotice errors={stats.errors} /> : null}
 
-      {stats ? (
-        isEmptyReport(stats) ? (
-          <div className="flex flex-col items-center gap-1 py-16 text-center">
-            <p className="typography-ui-label font-semibold text-foreground">{t('usageStats.empty.title')}</p>
-            <p className="typography-micro text-muted-foreground">{t('usageStats.empty.description')}</p>
+        {stats ? (
+          isEmptyReport(stats) ? (
+            <div className="flex flex-col items-center gap-1 py-16 text-center">
+              <p className="typography-ui-label font-semibold text-foreground">{t('usageStats.empty.title')}</p>
+              <p className="typography-micro text-muted-foreground">{t('usageStats.empty.description')}</p>
+            </div>
+          ) : (
+            <UsageReport stats={stats} range={range} formats={formats} tools={tools} />
+          )
+        ) : loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground" role="status">
+            <Icon name="loader-4" className="size-4 animate-spin" />
+            <span className="typography-ui-label">{t('usageStats.loading')}</span>
           </div>
         ) : (
-          <UsageReport stats={stats} range={range} formats={formats} tools={tools} />
-        )
-      ) : loading ? (
-        <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground" role="status">
-          <Icon name="loader-4" className="size-4 animate-spin" />
-          <span className="typography-ui-label">{t('usageStats.loading')}</span>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-3 py-16 text-center" role="alert">
-          <p className="typography-ui-label font-semibold text-foreground">{t('usageStats.error.title')}</p>
-          <p className="max-w-md break-words typography-micro text-muted-foreground">{entry?.error}</p>
-          <Button type="button" variant="outline" size="sm" onClick={refresh}>
-            {t('usageStats.error.retry')}
-          </Button>
-        </div>
-      )}
+          <div className="flex flex-col items-center gap-3 py-16 text-center" role="alert">
+            <p className="typography-ui-label font-semibold text-foreground">{t('usageStats.error.title')}</p>
+            <p className="max-w-md break-words typography-micro text-muted-foreground">{entry?.error}</p>
+            <Button type="button" variant="outline" size="sm" onClick={refresh}>
+              {t('usageStats.error.retry')}
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -294,7 +296,7 @@ function UsageReport({ stats, range, formats, tools }: { stats: UsageStats; rang
       {stats.providers && stats.providers.length > 1 ? (
         <ProviderComparison providers={stats.providers} formats={formats} />
       ) : null}
-      <div className={cn('grid grid-cols-2 gap-2', today ? 'sm:grid-cols-2' : 'sm:grid-cols-3')}>
+      <div className={cn('grid grid-cols-2 gap-2', !today && '@xl:grid-cols-3')}>
         <StatTile
           label={t('usageStats.metric.sessions')}
           value={formats.integer.format(stats.sessions)}
@@ -505,7 +507,7 @@ function EfficiencyTiles({ stats, formats, isFullyUnpriced }: { stats: UsageStat
   const errorRate = stats.errorRate ?? null;
   return (
     <Section title={t('usageStats.efficiency.title')}>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3">
         <StatTile label={t('usageStats.efficiency.cacheHitRate')} value={hitRate === null ? '—' : formats.percent.format(hitRate)} />
         <StatTile
           label={t('usageStats.efficiency.costPerSession')}
@@ -589,7 +591,7 @@ function ToolsSection({ state, formats }: { state: ToolsState; formats: Formats 
           <Button type="button" variant="outline" size="sm" onClick={state.load} disabled={state.entry.loading}>{t('usageStats.error.retry')}</Button>
         </div>
       ) : null}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 @xl:grid-cols-4">
         <StatTile label={t('usageStats.tools.calls')} value={formats.integer.format(tools.totals.calls)} />
         <StatTile label={t('usageStats.tools.successRate')} value={successRate === null ? '—' : formats.percent.format(successRate)} />
         <StatTile label={t('usageStats.tools.failed')} value={formats.integer.format(tools.totals.failed)} />
@@ -685,7 +687,7 @@ function ModelUsage({ models, formats }: { models: UsageModel[]; formats: Format
                     <span className="truncate typography-ui-label text-foreground">{name}</span>
                     {model.variant ? <span className="shrink-0 typography-micro text-muted-foreground">{model.variant}</span> : null}
                     {/* Phones keep the row for the model name; the logo names the provider there. */}
-                    <span className="hidden shrink-0 typography-micro text-muted-foreground sm:inline">{providerName}</span>
+                    <span className="hidden shrink-0 typography-micro text-muted-foreground @xl:inline">{providerName}</span>
                   </span>
                   <span className="shrink-0 typography-micro tabular-nums text-muted-foreground">
                     {dimension === 'steps'

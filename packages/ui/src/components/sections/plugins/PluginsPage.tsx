@@ -19,7 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Icon } from '@/components/icon/Icon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SETTINGS_CARD_GRID_CLASS, SettingsAddCard, SettingsBackButton, SettingsCard, type SettingsCardAction, SettingsCardChip, SettingsCardIcon, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
+import { SETTINGS_CARD_GRID_CLASS, SettingsAddCard, SettingsBackButton, SettingsCard, type SettingsCardAction, SettingsCardChip, SettingsCardIcon, SettingsCardPill, SettingsCardToolbar } from '@/components/sections/shared/SettingsCards';
 import {
   SETTINGS_SELECT_TRIGGER_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
@@ -953,37 +953,32 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           ) : (
             <p className={SETTINGS_HELPER_CLASS}>{t('settings.plugins.marketplace.sources.empty')}</p>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1">
-              <Icon name="search" className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Input
-                value={marketplaceQuery}
-                onChange={event => setMarketplaceQuery(event.target.value)}
-                placeholder={t('settings.plugins.grid.searchPlaceholder')}
-                aria-label={t('settings.plugins.grid.searchPlaceholder')}
-                className="ps-8"
-              />
-            </div>
-            <Select
-              value={marketplaceScope}
-              onValueChange={value => {
-                if (value === 'user' || value === 'project') setMarketplaceScope(value);
-              }}
-            >
-              <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('settings.plugins.page.field.scope')}>
-                <SelectValue>
-                  {marketplaceScope === 'user' ? t('settings.plugins.scope.user') : t('settings.plugins.scope.project')}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="project">{t('settings.plugins.scope.project')}</SelectItem>
-                <SelectItem value="user">{t('settings.plugins.scope.user')}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setSourcesOpen(true)}>
-              {t('settings.plugins.marketplace.sourcesButton')}
-            </Button>
-          </div>
+          <SettingsCardToolbar
+            className="mb-0"
+            search={{
+              value: marketplaceQuery,
+              onChange: setMarketplaceQuery,
+              placeholder: t('settings.plugins.grid.searchPlaceholder'),
+            }}
+            actions={(
+              <Select
+                value={marketplaceScope}
+                onValueChange={value => {
+                  if (value === 'user' || value === 'project') setMarketplaceScope(value);
+                }}
+              >
+                <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('settings.plugins.page.field.scope')}>
+                  <SelectValue>
+                    {marketplaceScope === 'user' ? t('settings.plugins.scope.user') : t('settings.plugins.scope.project')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="project">{t('settings.plugins.scope.project')}</SelectItem>
+                  <SelectItem value="user">{t('settings.plugins.scope.user')}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
 
           {marketplaceCategories.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5">

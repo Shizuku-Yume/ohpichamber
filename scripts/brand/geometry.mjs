@@ -1,8 +1,11 @@
-// The OpenChamber mark as code: every drawing of the logo is built here.
+// The OhPiChamber mark as code: every drawing of the logo is built here. It is
+// upstream's open cube with OMP's π on the left face, folded over the front
+// edge onto the right face.
 //
 // Units are the cube's own: half-width 41.568, half-height 48, centred on the
 // origin. The roof is the rhombus around (0, -24); the tiers are smaller
-// rhombi with the same centre.
+// rhombi with the same centre. The π is the only part in another unit system:
+// OMP's 200 x 190 glyph box, mapped onto the cube by `PI_GLYPH`.
 
 const HX = 41.568;
 const ROOF_HY = 24;
@@ -46,6 +49,9 @@ const OUTER_HEXAGON = 'M0 -51.12 L44.27 -25.56 L44.27 25.56 L0 51.12 L-44.27 25.
 /** Tier scales, outer to core. */
 export const TIER_SCALES = [0.8, 0.58, 0.36];
 
+/** The white centre the tiers frame, drawn whole in every colour drawing. */
+export const ROOF_CENTRE_SCALE = 0.16;
+
 const shellStrokes = (color, width) => (
   `<g fill="none" stroke="${color}" stroke-width="${width}" stroke-linejoin="round" stroke-linecap="round">`
   + SHELL_PATHS.map((d) => `<path d="${d}"/>`).join('')
@@ -64,6 +70,141 @@ const wallGradients = (idPrefix, color, strength) => {
 const floorGradient = (id, color, strength) => {
   const stop = (offset, opacity) => `<stop offset="${offset}" stop-color="${color}" stop-opacity="${fmt(opacity * strength)}"/>`;
   return `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="-13" cy="34" r="54" gradientTransform="translate(-13 34) rotate(-24) scale(1 0.7) translate(13 -34)">${stop(0, 0.015)}${stop(0.76, 0.19)}${stop(1, 0.35)}</radialGradient>`;
+};
+
+// ---------------------------------------------------------------------------
+// The OMP π on the cube's left face. The glyph is OMP's own mark in its
+// 200 x 190 box: a bar across the top, a short left leg and a long right leg.
+// The box's left 40 units are the face's margin, so the bar starts 40 units in
+// from the back corner and its overhang folds onto the right face: columns
+// 0..150 are the left face and 150..200 the folded strip.
+//
+// The face carries the glyph as ONE polygon and the fold as ONE polygon: with
+// separate rectangles the sheared edges would leave anti-aliased seams. The
+// bar's top edge sits `edge` above the cube's top-left edge and the fold's top
+// edge the same amount above the top-right edge, so the bar covers the shell's
+// white edge instead of the edge crossing the glyph. The fold is the bar's
+// overhang mirrored across the front edge, plus the long leg's wrap: the
+// 1.5-unit sliver that continues the leg's thickness onto the right face.
+
+/** OMP's π in its own 200 x 190 box: bar, short left leg, long right leg. */
+export const PI_GLYPH = {
+  width: 200,
+  height: 190,
+  bar: { x: 0, y: 0, width: 200, height: 42 },
+  leftLeg: { x: 28, y: 42, width: 40, height: 99 },
+  // Rows 42..190: the long leg runs into the box's bottom edge.
+  rightLeg: { x: 109, y: 42, width: 41, height: 148 },
+  /** Glyph columns 0..150 lie on the left face, 150..200 fold onto the right. */
+  frontEdge: 150,
+  /** The face's margin in glyph units, from the cube's back corner to the bar. */
+  leftInset: 40,
+};
+
+// Half the shell's white edge (1.3) plus a hair, in cube units: the bar has to
+// cover the shell's edge, or that edge cuts across the glyph.
+const PI_EDGE = 1.5;
+
+/**
+ * The π's two closed polygons in `frame` units. The fold clears the front edge
+ * by the shell's half-stroke; `gap` shifts it further right, which is what
+ * separates the two faces where they share one paint.
+ */
+const piPolygons = ({ cx = 0, cy = ROOF_CY, hx = HX, hy = ROOF_HY } = {}, { gap = 0 } = {}) => {
+  // Points are built relative to the roof's centre, then moved into the frame.
+  // The bar's 190 face columns (margin plus front edge) span the face exactly,
+  // and the glyph's 190 rows span twice the roof's half-height.
+  const u = hx / (PI_GLYPH.leftInset + PI_GLYPH.frontEdge);
+  const v = (hy * 2) / PI_GLYPH.height;
+  // Half the shell's edge, plus a hair, scaled into this drawing's grid.
+  const edge = PI_EDGE * (hy / ROOF_HY);
+  const slope = hy / hx;
+  const col = (glyphColumn) => -hx + (PI_GLYPH.leftInset + glyphColumn) * u;
+  // The left face's top-left edge: y at a column, from the back corner.
+  const topY = (x) => slope * (x + hx);
+  const at = (glyphColumn, row) => [col(glyphColumn), topY(col(glyphColumn)) + row * v];
+  const barRows = PI_GLYPH.bar.y + PI_GLYPH.bar.height;
+  const barBottom = barRows * v;
+  const legBottom = PI_GLYPH.leftLeg.y + PI_GLYPH.leftLeg.height;
+  const rightLegBottom = PI_GLYPH.rightLeg.y + PI_GLYPH.rightLeg.height;
+  const legLeft = PI_GLYPH.leftLeg.x;
+  const legRight = legLeft + PI_GLYPH.leftLeg.width;
+  const inner = PI_GLYPH.rightLeg.x;
+  const foldWidth = (PI_GLYPH.width - PI_GLYPH.frontEdge) * u;
+  const foldInner = gap + edge;
+  const foldOuter = gap + foldWidth;
+  // The right face's top-right edge, mirrored across the front edge, and the
+  // bar's bottom edge mirrored the same way; the bottom-right cube edge runs
+  // from the front edge's foot.
+  const foldTop = (x) => hy - slope * x - edge;
+  const foldBottom = (x) => hy + barBottom - slope * x;
+  const footY = (x) => hy * 3 - slope * x;
+  const move = ([x, y]) => [cx + x, cy + y];
+
+  return {
+    // Down the front edge, up the long leg, round the short leg, then back
+    // along the bar's underside: one polygon, no seams.
+    face: [
+      [col(PI_GLYPH.bar.x), topY(col(PI_GLYPH.bar.x)) - edge],
+      [0, hy - edge],
+      [0, hy * 3],
+      at(inner, rightLegBottom),
+      at(inner, barRows),
+      at(legRight, barRows),
+      at(legRight, legBottom),
+      at(legLeft, legBottom),
+      at(legLeft, barRows),
+      [col(PI_GLYPH.bar.x), topY(col(PI_GLYPH.bar.x)) + barBottom],
+    ].map(move),
+    fold: [
+      [gap, foldTop(gap)],
+      [foldOuter, foldTop(foldOuter)],
+      [foldOuter, foldBottom(foldOuter)],
+      [foldInner, foldBottom(foldInner)],
+      [foldInner, footY(foldInner)],
+      [gap, footY(gap)],
+    ].map(move),
+  };
+};
+
+/** The glyph on the left face, one closed polygon (icon frame unless given one). */
+export const piFacePath = (frame) => polygon(piPolygons(frame).face);
+/** The fold on the right face, one closed polygon, `gap` units right of the
+ * front edge on top of the shell's half-stroke. */
+export const piFoldPath = (gap = 0, frame) => polygon(piPolygons(frame, { gap }).fold);
+/** The icon's own two paths: the colour icon and the macOS layer. */
+export const PI_FACE_PATH = piFacePath();
+export const PI_FOLD_PATH = piFoldPath();
+
+/** The π's two gradients: white to grey on the face, one step darker on the fold. */
+const piGradients = (idPrefix, { face, fold }) => (
+  `<linearGradient id="${idPrefix}pi-face" gradientUnits="userSpaceOnUse" x1="0" y1="-26" x2="0" y2="48">`
+  + `<stop offset="0" stop-color="${face[0]}"/><stop offset="1" stop-color="${face[1]}"/></linearGradient>`
+  + `<linearGradient id="${idPrefix}pi-fold" gradientUnits="userSpaceOnUse" x1="0" y1="-26" x2="0" y2="48">`
+  + `<stop offset="0" stop-color="${fold[0]}"/><stop offset="1" stop-color="${fold[1]}"/></linearGradient>`
+);
+
+/** The π in colour; the gradients come from the same `idPrefix`. */
+const piColourInner = (idPrefix) => (
+  `<path d="${PI_FACE_PATH}" fill="url(#${idPrefix}pi-face)"/>`
+  + `<path d="${PI_FOLD_PATH}" fill="url(#${idPrefix}pi-fold)"/>`
+);
+
+/** The extra shift that cuts the fold from the face where both are the same
+ * paint, in the drawing's own units. */
+export const PI_ONE_COLOUR_GAP = 1;
+
+/**
+ * The π in one colour, for a one-colour drawing in `frame`, with `gap` in that
+ * frame's units. The fold stands off the face so a transparent line separates
+ * them and the π still reads where both are the same paint (in-app logo, menu
+ * bar, favicon, symbol). Both polygons are the icon's shapes scaled into the
+ * frame, so every one-colour drawing shows the same π.
+ */
+export const piOneColourInner = ({ color = 'currentColor', gap = PI_ONE_COLOUR_GAP, opacity = 1, frame } = {}) => {
+  const { face, fold } = piPolygons(frame, { gap });
+  const paint = `fill="${color}"${opacity === 1 ? '' : ` fill-opacity="${fmt(opacity)}"`}`;
+  return `<path d="${polygon(face)}" ${paint}/><path d="${polygon(fold)}" ${paint}/>`;
 };
 
 // ---------------------------------------------------------------------------
@@ -88,6 +229,9 @@ export const FLAT_LOGO = {
   tiers: TIER_SCALES.map((scale) => rhombus(scale)),
   shell: SHELL_PATHS,
   stroke: FLAT_STROKE,
+  // The static π, fold offset so it reads in one colour: `generate.mjs` copies
+  // these into the generated art, and the React logo draws them unchanged.
+  pi: { face: PI_FACE_PATH, fold: piFoldPath(PI_ONE_COLOUR_GAP) },
   wallStrength: FLAT_WALL_STRENGTH,
   wallStops: {
     left: { x1: -42, y1: -20, x2: -2, y2: 12, stops: [[0, 0.08], [0.72, 0.46], [1, 0.64]] },
@@ -107,6 +251,7 @@ export const flatLogoInner = ({ color = 'currentColor', idPrefix = 'oc-logo-' } 
   + `<path d="${rhombus(1)}" fill="${color}" fill-opacity="${FLAT_ROOF_OPACITY}"/>`
   + TIER_SCALES.map((scale, i) => `<path data-tier="${i}" d="${rhombus(scale)}" fill="${color}" fill-opacity="${FLAT_TIER_OPACITY[i]}"/>`).join('')
   + shellStrokes(color, FLAT_STROKE)
+  + piOneColourInner({ color })
 );
 
 export const flatLogoSvg = ({ color, size = 512 }) => (
@@ -116,7 +261,7 @@ export const flatLogoSvg = ({ color, size = 512 }) => (
 );
 
 // ---------------------------------------------------------------------------
-// Icon without a tile: Windows, Linux, the VS Code Marketplace, and on a black
+// Icon without a tile: Windows, Linux, the web app icons, and on a black
 // square for phone home screens. The open shell of the dark app icon: the
 // cube's inside is dark grey, the back walls and floor show through the open
 // front with the same shading, opaque grey tiers, white edges, and a thin
@@ -127,17 +272,23 @@ const NO_TILE = {
   inside: '#2a2b2f',
   tiers: ['#787a80', '#9fa1a6', '#d4d5d8'],
   tierOpacity: 0.85,
+  centre: '#ffffff',
   edge: '#f5f5f7',
+  pi: { face: ['#ffffff', '#9fa1a6'], fold: ['#d6d7da', '#85878d'] },
 };
 const CUBE_SILHOUETTE = 'M0 -48 L41.568 -24 L41.568 24 L0 48 L-41.568 24 L-41.568 -24 Z';
 
 const noTileInner = (colors) => (
-  `<defs>${wallGradients('nt-', 'white', 0.55)}${floorGradient('nt-f', 'white', 0.55)}</defs>`
+  `<defs>${wallGradients('nt-', 'white', 0.55)}${floorGradient('nt-f', 'white', 0.55)}${piGradients('nt-', colors.pi)}</defs>`
   + `<path d="${OUTER_HEXAGON}" fill="none" stroke="${colors.outline}" stroke-width="3.1" stroke-linejoin="round"/>`
   + `<path d="${CUBE_SILHOUETTE}" fill="${colors.inside}"/>`
   + `<path d="${LEFT_SHADE}" fill="url(#nt-l)"/><path d="${RIGHT_SHADE}" fill="url(#nt-r)"/><path d="${FLOOR_SHADE}" fill="url(#nt-f)"/>`
   + TIER_SCALES.map((scale, i) => `<path d="${rhombus(scale)}" fill="${colors.tiers[i]}" fill-opacity="${colors.tierOpacity}"/>`).join('')
+  + `<path d="${rhombus(ROOF_CENTRE_SCALE)}" fill="${colors.centre}"/>`
+  // The π goes over the shell's white edges and under the silhouette stroke.
   + shellStrokes(colors.edge, 2.6)
+  + piColourInner('nt-')
+  + `<path d="${CUBE_SILHOUETTE}" fill="none" stroke="${colors.edge}" stroke-width="2.6" stroke-linejoin="round"/>`
 );
 
 // Construction tape across the lower cube, the full width of a picture `view`
@@ -159,7 +310,8 @@ export const devTapeSvg = ({ size = 1024 } = {}) => (
 /**
  * `cubeShare` is the cube's height as a share of the square (1 = touches the
  * edges). `background` fills the square; `tape` adds the development-copy tape;
- * `colors` repaints the cube (Canary's blue).
+ * `colors` repaints the cube: `inside`, `tiers`, `tierOpacity`, `centre`,
+ * `edge`, `outline` and `pi` (its `face` and `fold` gradient ends).
  */
 export const noTileIconSvg = ({ size = 1024, background = null, cubeShare = 1, tape = false, colors = NO_TILE } = {}) => {
   const view = 106 / cubeShare;
@@ -173,11 +325,12 @@ export const noTileIconSvg = ({ size = 1024, background = null, cubeShare = 1, t
 };
 
 // ---------------------------------------------------------------------------
-// Small glyph, one colour: menu bar, favicon, VS Code, model picker, Android
+// Small glyph, one colour: menu bar, favicon, model picker, Android
 // notification and themed icon. Drawn on a 32 grid: the cube outline and two
 // roof rings (outer faint, inner strong) around an empty centre.
 
-const GLYPH_FRAME = { cx: 16, cy: 9.375, hx: 12.5, hy: 6.875 };
+/** The 32-grid frame the small glyph draws the π in. */
+export const GLYPH_FRAME = { cx: 16, cy: 9.375, hx: 12.5, hy: 6.875 };
 export const GLYPH_STROKE = 1.4;
 const GLYPH_SHELL = [
   'M16 2.5 L28.5 9.375 L28.5 23 L16 30 L3.5 23 L3.5 9.375 Z',
@@ -207,6 +360,7 @@ export const glyphInner = ({ color = 'currentColor', stroke = GLYPH_STROKE, wall
   + '</g>'
   + `<path d="${GLYPH_BAND}" fill="${color}" fill-opacity="${fmt(rings[0])}"/>`
   + `<path d="${GLYPH_INNER_RING}" fill="${color}" fill-opacity="${fmt(overlayOpacity(rings[0], rings[1]))}"/>`
+  + piOneColourInner({ color, frame: GLYPH_FRAME })
 );
 
 /** `zoom` enlarges the glyph inside its square, around the cube's centre. */
@@ -235,6 +389,7 @@ export const glyphSymbolSvg = () => (
   + '</g>'
   // The ring reaches under the roof edge, so no seam shows between them.
   + `<path d="${rhombusRing(0.9, 0.36, GLYPH_FRAME)}" fill="#000000"/>`
+  + piOneColourInner({ color: '#000000', frame: GLYPH_FRAME })
   + '</svg>\n'
 );
 
@@ -256,6 +411,14 @@ const layerSvg = (inner, defs = '') => (
   + `<g transform="translate(512 512) scale(${LAYER_SCALE})">${inner}</g></svg>`
 );
 
+/**
+ * The π as its own Icon Composer layer: white on transparent, face and fold one
+ * layer so the system draws the whole glyph once, with the fold's gap kept so
+ * the two faces stay apart in every appearance. It sits in the shell group, so
+ * it takes the shell's fill and glass in every appearance.
+ */
+export const piLayerSvg = () => layerSvg(piOneColourInner({ color: 'white' }));
+
 export const appIconLayerSvgs = () => {
   const tier = (scale, opacity) => layerSvg(`<path d="${rhombus(scale)}" fill="white" fill-opacity="${opacity}"/>`);
   const restingTiers = [0.3, 0.55, 0.95];
@@ -265,6 +428,7 @@ export const appIconLayerSvgs = () => {
       wallGradients('', 'white', 0.55) + floorGradient('f', 'white', 0.55),
     ),
     'roof.png': layerSvg(`<path d="${rhombus(1)}" fill="white" fill-opacity="0"/>`),
+    'pi.png': piLayerSvg(),
     ...Object.fromEntries(TIER_SCALES.map((scale, i) => [`tier${i}.png`, tier(scale, restingTiers[i])])),
     ...Object.fromEntries(TIER_SCALES.map((scale, i) => [`ttier${i}.png`, tier(scale, 1)])),
   };
@@ -326,6 +490,7 @@ export const appIconDocument = () => {
       {
         layers: [
           layer('shell', { glass: shellGlass, fill: shellFill }),
+          layer('pi', { glass: shellGlass, fill: shellFill }),
           layer('roof', { glass: shellGlass, fill: shellFill }),
         ],
         shadow: { kind: 'neutral', opacity: 0.5 },

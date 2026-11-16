@@ -310,6 +310,86 @@ const addTypedIconNameRecords = (content) => {
   }
 }
 
+// A helper that takes an icon as a parameter (`icon: IconName`,
+// `icon: ToolPresentation['icon']`) hides the literal from every scan above:
+// the call site passes `plainTool('Grep', 'menu-search', ...)`. Find those
+// parameters, then read the matching argument at each call in this file.
+const addIconParameterCallSites = (content) => {
+  const splitTopLevel = (source) => {
+    const parts = []
+    let depth = 0
+    let quote = null
+    let current = ""
+    for (let i = 0; i < source.length; i += 1) {
+      const char = source[i]
+      if (quote) {
+        current += char
+        if (char === "\\") {
+          current += source[i + 1] ?? ""
+          i += 1
+        } else if (char === quote) {
+          quote = null
+        }
+        continue
+      }
+      if (char === "\"" || char === "'" || char === "`") {
+        quote = char
+        current += char
+      } else if ("([{".includes(char)) {
+        depth += 1
+        current += char
+      } else if (")]}".includes(char)) {
+        depth -= 1
+        current += char
+      } else if (char === "," && depth === 0) {
+        parts.push(current)
+        current = ""
+      } else {
+        current += char
+      }
+    }
+    if (current.trim()) parts.push(current)
+    return parts
+  }
+
+  const callArguments = (openParenIndex) => {
+    let depth = 0
+    let quote = null
+    for (let i = openParenIndex; i < content.length; i += 1) {
+      const char = content[i]
+      if (quote) {
+        if (char === "\\") i += 1
+        else if (char === quote) quote = null
+        continue
+      }
+      if (char === "\"" || char === "'" || char === "`") quote = char
+      else if (char === "(") depth += 1
+      else if (char === ")") {
+        depth -= 1
+        if (depth === 0) return splitTopLevel(content.slice(openParenIndex + 1, i))
+      }
+    }
+    return []
+  }
+
+  const signatureRegex = /(?:const|let|var)\s+([A-Za-z0-9_$]+)\s*=\s*\(([^()]*)\)\s*(?::[^=]*)?=>|function\s+([A-Za-z0-9_$]+)\s*\(([^()]*)\)/g
+  let match
+  while ((match = signatureRegex.exec(content)) !== null) {
+    const helper = match[1] ?? match[3]
+    const params = splitTopLevel(match[2] ?? match[4] ?? "")
+    const iconParam = params.findIndex((param) => /^\s*\w+\s*:\s*(?:IconName|ToolPresentation\[\s*['"]icon['"]\s*\])\s*$/.test(param))
+    if (iconParam < 0) continue
+
+    const callRegex = new RegExp(`\\b${helper}\\s*\\(`, "g")
+    let call
+    while ((call = callRegex.exec(content)) !== null) {
+      const argument = callArguments(call.index + call[0].length - 1)[iconParam]
+      const literal = argument && /^\s*["']([a-z][a-z0-9-]*)["']\s*$/.exec(argument)
+      if (literal) addKebabIcon(literal[1])
+    }
+  }
+}
+
 const addIconNameVariableAssignments = (content) => {
   if (!/<Icon\b/.test(content)) return
 
@@ -367,6 +447,7 @@ for (const file of allSrcFiles) {
   }
 
   addIconNameFunctionReturns(content)
+  addIconParameterCallSites(content)
   addTypedIconNameRecords(content)
   addIconNameVariableAssignments(content)
   // Shared constants can live outside JSX files and need no naming suffix.

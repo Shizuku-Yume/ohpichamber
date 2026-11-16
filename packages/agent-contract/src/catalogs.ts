@@ -604,6 +604,17 @@ const MCPOAuthUrlSchema = z.url({ protocol: /^https?$/ }).refine(endpoint => {
   return url.username === '' && url.password === '' && url.hash === '';
 }, 'OAuth URLs contain no embedded credentials or fragments');
 
+/**
+ * The Agent Service's own loopback callback for MCP sign-in. A local runtime
+ * (packaged desktop, a web UI opened on the Host machine) reaches it directly,
+ * so a browser there can finish the flow. Pinned port and URI on purpose: the
+ * provider stores whichever redirect URI it saw during client registration or
+ * consent, so a random fallback would be rejected on every later attempt.
+ */
+export const MCP_OAUTH_LOOPBACK_CALLBACK_PORT = 38_471;
+export const MCP_OAUTH_LOOPBACK_CALLBACK_PATH = '/callback';
+export const MCP_OAUTH_LOOPBACK_REDIRECT_URI = `http://localhost:${MCP_OAUTH_LOOPBACK_CALLBACK_PORT}${MCP_OAUTH_LOOPBACK_CALLBACK_PATH}`;
+
 /** Public configuration used by Host authorization; token material never crosses this boundary. */
 export const MCPOAuthPublicConfigurationSchema = z.strictObject({
   authorizationUrl: MCPOAuthUrlSchema.optional(),

@@ -82,7 +82,7 @@ export const createMcpOAuthPendingFlows = ({
  };
  /** Record one pending flow; the returned entry is what `complete` addresses. */
  const record = ({ authorizationUrl, completionPath, workspaceId, serverId, flowId, persistedRevision, workerGeneration }) => {
-  if (typeof authorizationUrl !== 'string') return null;
+  if (typeof authorizationUrl !== 'string' || typeof completionPath !== 'string' || !completionPath.startsWith('/')) return null;
   let state;
   try { state = new URL(authorizationUrl).searchParams.get('state'); } catch { return null; }
   if (!state || state.length > 512 || entries.has(state)) return null;
@@ -102,7 +102,6 @@ export const createMcpOAuthPendingFlows = ({
   }
  };
  return { record, take, dropServer, size: () => entries.size };
-
 };
 
 /**

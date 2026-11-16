@@ -166,13 +166,13 @@ describe('MCP OAuth Host callback route', () => {
     let clock = 0;
     const pendingFlows = createMcpOAuthPendingFlows({ currently: () => clock, ttlMs: 1_000 });
     const entry = pendingFlows.record({
-      authorizationUrl: 'https://provider.example/authorize?state=fresh',
+      authorizationUrl: 'https://provider.example/authorize?state=fresh', completionPath: startEndpoint,
       workspaceId, serverId, flowId: FLOW_ID, persistedRevision: '3', workerGeneration: 'generation_1',
     });
     expect(entry).not.toBeNull();
     expect(pendingFlows.take('fresh')).not.toBeNull();
     pendingFlows.record({
-      authorizationUrl: 'https://provider.example/authorize?state=fresh',
+      authorizationUrl: 'https://provider.example/authorize?state=fresh', completionPath: startEndpoint,
       workspaceId, serverId, flowId: FLOW_ID, persistedRevision: '3', workerGeneration: 'generation_1',
     });
     clock = 1_001;
@@ -184,7 +184,7 @@ describe('MCP OAuth Host callback route', () => {
     const pendingFlows = createMcpOAuthPendingFlows({ maxEntries: 2 });
     for (const state of ['one', 'two', 'three']) {
       pendingFlows.record({
-        authorizationUrl: `https://provider.example/authorize?state=${state}`,
+        authorizationUrl: `https://provider.example/authorize?state=${state}`, completionPath: startEndpoint,
         workspaceId, serverId, flowId: `flow-${state}`, persistedRevision: '3', workerGeneration: 'generation_1',
       });
     }
@@ -193,7 +193,7 @@ describe('MCP OAuth Host callback route', () => {
     expect(pendingFlows.take('three')).not.toBeNull();
 
     pendingFlows.record({
-      authorizationUrl: 'https://provider.example/authorize?state=four',
+      authorizationUrl: 'https://provider.example/authorize?state=four', completionPath: startEndpoint,
       workspaceId, serverId, flowId: 'flow-four', persistedRevision: '3', workerGeneration: 'generation_1',
     });
     pendingFlows.dropServer(workspaceId, serverId);
@@ -203,7 +203,7 @@ describe('MCP OAuth Host callback route', () => {
   it('ignores a duplicate state so a second start cannot retarget the first flow', () => {
     const pendingFlows = createMcpOAuthPendingFlows();
     const record = () => ({
-      authorizationUrl: `https://provider.example/authorize?state=${STATE}`,
+      authorizationUrl: `https://provider.example/authorize?state=${STATE}`, completionPath: startEndpoint,
       workspaceId, serverId, flowId: FLOW_ID, persistedRevision: '3', workerGeneration: 'generation_1',
     });
     expect(pendingFlows.record(record())).not.toBeNull();

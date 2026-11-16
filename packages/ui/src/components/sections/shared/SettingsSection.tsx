@@ -63,9 +63,9 @@ export const SETTINGS_WIDTH_LONG_TEXT_CLASS = 'w-full max-w-[24rem]';
  */
 export const SETTINGS_WIDTH_NUMBER_CLASS = 'typography-ui-label w-[calc(5.75rem+5ch)]';
 
-/** Compact reset / icon action next to a settings control (matches h-8 controls). */
+/** Compact reset / icon action next to a settings control (matches h-7 controls). */
 export const SETTINGS_ICON_BUTTON_CLASS =
-  'h-8 w-8 px-0 text-muted-foreground hover:text-foreground';
+  'h-7 w-7 px-0 text-muted-foreground hover:text-foreground';
 
 /** Custom dropdown triggers (ModelSelector / AgentSelector) in settings field rows. */
 // oxlint-disable-next-line react/only-export-components

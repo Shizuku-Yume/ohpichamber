@@ -74,6 +74,7 @@ export const SettingsPageLayout: React.FC<SettingsPageLayoutProps> = ({
       verticalTrackStart={scrollbarTopClearance}
     >
       <div
+        data-settings-page=""
         className={cn(
           'mx-auto max-w-[840px] space-y-0 px-6 py-6 @3xl:px-12 @3xl:py-8',
           fillHeight && 'flex w-full flex-1 flex-col',

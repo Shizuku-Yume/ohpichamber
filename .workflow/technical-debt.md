@@ -168,3 +168,14 @@ An entry leaves this file in one of two ways:
 - **Impact:** paths that create a session without a draft (API callers, some automation) see roughly 200 ms more latency than the prepared path.
 - **Solution:** ask OMP for an SDK seam that builds a session graph in a spare process; guard `reapplyModelPolicies()` with a settings/credential revision so unchanged policy skips the rebuild (the staleness tests at `catalog-models.test.ts:133` and `:215` must keep passing).
 - **Cost:** the SDK seam needs an upstream change; the revision guard is small but touches catalog staleness.
+
+## A failed session admission stays reserved and blocks every later create
+
+- **Where:** `packages/web/server/lib/host/agent-scope-store.js:395-409`
+- **Added:** 2026-11-16
+- **Effort:** ux-feedback-2026-11-15
+- **Priority:** fix-now
+- **Problem:** `reserveSessionAdmission` inserts a `create` row and refuses any later admission while an overlapping row exists and `liveAdmissions` does not hold it; `releaseSessionAdmission` only removes it on the normal path, and `markSessionAdmissionUncertain` deletes the live entry without the row. The task 06 real-path run (`/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-16/task06/receipt.md`) reproduced this twice, once after a `/tmp` wipe and restart: `host_session_admissions` held an abandoned `create` row in a fresh data dir, so every `POST /api/agent/v1/sessions` answered 409 `COMMAND_IN_FLIGHT` with "A prior native session admission requires recovery". That is also why no session worker existed to take the MCP apply fan-out.
+- **Impact:** one abandoned create row permanently blocks session creation for every workspace whose root overlaps it, surviving host restarts, with no user-facing recovery path.
+- **Solution:** give the admission row an owner generation or start timestamp so a row whose process is gone is recoverable instead of authoritative, and remove the row on abort/failed-create like the normal release. Preserve the overlap guard for a genuinely live admission.
+- **Cost:** touches admission lifecycle in the metadata store and its tests; get the "live but slow" versus "abandoned" distinction right, since weakening the guard allows overlapping native session creates.

@@ -117,6 +117,26 @@ export const OmpSettingSchema = z.strictObject({
 );
 export type OmpSetting = z.infer<typeof OmpSettingSchema>;
 
+/**
+ * How many settings the OMP page does not draw, split by the reason.
+ *
+ * The page cannot derive this from `settings`: those rows are omitted from state
+ * precisely because no control draws them. So the worker counts its own placement
+ * table and reports the totals beside `totalCount`, and the page's config.yml
+ * footer renders one sentence per non-zero reason instead of one misleading sum.
+ *
+ * - `tuiOnly`: registry rows placed `tui-only` (terminal rendering only).
+ * - `boundary`: registry rows placed `boundary` (egress, config.yml only).
+ * - `elsewhere`: rows this state carries for another Settings page
+ *   (`page` and `owned-by` placements).
+ */
+export const OmpSettingsPlacementCountsSchema = z.strictObject({
+  tuiOnly: z.number().int().nonnegative(),
+  boundary: z.number().int().nonnegative(),
+  elsewhere: z.number().int().nonnegative(),
+});
+export type OmpSettingsPlacementCounts = z.infer<typeof OmpSettingsPlacementCountsSchema>;
+
 export const OmpSettingsStateSchema = z.strictObject({
   workspaceId: EntityIdSchema,
   revision: CounterSchema,
@@ -127,6 +147,7 @@ export const OmpSettingsStateSchema = z.strictObject({
    */
   configPath: z.string().min(1).optional(),
   totalCount: z.number().int().nonnegative(),
+  placementCounts: OmpSettingsPlacementCountsSchema,
   settings: z.array(OmpSettingSchema),
 }).refine((state) => new Set(state.settings.map((setting) => setting.id)).size === state.settings.length,
   'OMP setting ids are unique');

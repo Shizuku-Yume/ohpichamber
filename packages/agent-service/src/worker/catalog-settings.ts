@@ -11,7 +11,7 @@ import { orderedSettings } from '@oh-my-pi/pi-coding-agent/config/all-settings';
 import { lookup, type AnySetting } from '@oh-my-pi/pi-coding-agent/config/registry';
 import './suggestion.ts';
 import { ProjectionError } from '../projection/journal.ts';
-import { OMP_SETTING_EXPOSED_IDS, presentOmpSetting } from './settings-ui.ts';
+import { OMP_SETTING_EXPOSED_IDS, OMP_SETTING_PLACEMENTS, presentOmpSetting } from './settings-ui.ts';
 import { join } from 'node:path';
 import type { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 
@@ -67,6 +67,32 @@ function descriptor(setting: AnySetting, settings: Settings): OmpSetting {
 /** The config file the settings write, shown so the page can offer it. OMP reads it inside the agent directory. */
 const OMP_CONFIG_FILENAME = 'config.yml';
 
+/**
+ * What the OMP page leaves out, split by reason.
+ *
+ * The page cannot count these itself: `tui-only` and `boundary` rows are absent
+ * from {@link OmpSettingsState} because no control draws them. The placement
+ * table is the only authority on where a row went, so `tuiOnly` and `boundary`
+ * count every registry row; `elsewhere` counts the rows state actually carries
+ * for another Settings page, which is a subset of the `page`/`owned-by` rows
+ * (a page with no GUI control stays in config.yml).
+ */
+function countPlacement(all: readonly AnySetting[], exposed: readonly AnySetting[]): OmpSettingsState['placementCounts'] {
+  let tuiOnly = 0;
+  let boundary = 0;
+  let elsewhere = 0;
+  for (const row of all) {
+    const placement = OMP_SETTING_PLACEMENTS[row.id];
+    if (placement?.type === 'tui-only') tuiOnly += 1;
+    else if (placement?.type === 'boundary') boundary += 1;
+  }
+  for (const row of exposed) {
+    const placement = OMP_SETTING_PLACEMENTS[row.id];
+    if (placement?.type === 'page' || placement?.type === 'owned-by') elsewhere += 1;
+  }
+  return { tuiOnly, boundary, elsewhere };
+}
+
 export class NativeSettings {
   private readonly configFilePath: string | undefined;
 
@@ -82,6 +108,7 @@ export class NativeSettings {
       revision,
       ...(this.configFilePath === undefined ? {} : { configPath: this.configFilePath }),
       totalCount: all.length,
+      placementCounts: countPlacement(all, exposed),
       settings: exposed.map(s => descriptor(s, this.settings)),
     });
   }

@@ -46,15 +46,55 @@ const perMillion = (value) => {
 };
 
 /**
+ * An id with its variant suffix folded: `xiaomi/mimo-v2-flash:free` and
+ * `xiaomi/mimo-v2-flash` share an identity, while `other/jamba` does not
+ * become `acme/jamba`. Variant folding never joins two publishers.
+ */
+const foldVariant = (id) => String(id).trim().toLowerCase().replace(/:/g, '-').replace(/-(free|cloud)$/, '');
+
+/**
  * The key an id is matched by: the segment after the last `/`, lowercased,
  * with `:` written as `-` and a `free`/`cloud` variant suffix dropped.
  * OpenRouter publishes variants such as `xiaomi/mimo-v2-flash:free`; a
  * models.yml entry usually names the base id.
  */
-const matchKey = (id) => {
-  const segment = String(id).trim().toLowerCase().split('/').pop() ?? '';
-  return segment.replace(/:/g, '-').replace(/-(free|cloud)$/, '');
+const matchKey = (id) => foldVariant(id).split('/').pop() ?? '';
+
+// One index per fetched list, so repeat lookups walk nothing.
+const indexes = new WeakMap();
+
+const buildIndex = (models) => {
+  const cached = indexes.get(models);
+  if (cached) return cached;
+  const exact = new Map();
+  const byKey = new Map();
+  for (const model of models) {
+    const id = typeof model?.id === 'string' ? model.id : null;
+    if (!id) continue;
+    const lowered = id.toLowerCase();
+    if (!exact.has(lowered)) exact.set(lowered, model);
+    const key = matchKey(id);
+    if (!key) continue;
+    const entry = byKey.get(key) ?? { identities: new Set(), candidates: [] };
+    entry.identities.add(foldVariant(id));
+    entry.candidates.push(model);
+    byKey.set(key, entry);
+  }
+  const unique = new Map();
+  for (const [key, entry] of byKey) {
+    // A bare basename answers only when one publisher owns it; two publishers
+    // with the same basename stay distinguishable by their exact ids.
+    if (entry.identities.size !== 1) continue;
+    const [preferred] = [...entry.candidates].sort((left, right) => (left.id.includes(':') ? 1 : 0) - (right.id.includes(':') ? 1 : 0) || left.id.length - right.id.length);
+    unique.set(key, preferred);
+  }
+  const index = { exact, byKey: unique };
+  indexes.set(models, index);
+  return index;
 };
+
+/** The public model list this id would match, by exact id first and then by a unique base id. */
+const findModel = (index, modelId) => index.exact.get(modelId.toLowerCase()) ?? index.byKey.get(matchKey(modelId)) ?? null;
 
 const inputModalities = (model) => {
   const declared = Array.isArray(model?.architecture?.input_modalities)
@@ -108,67 +148,52 @@ const toCatalogInfo = (model) => {
   };
 };
 
-// One index per fetched list, so repeat lookups walk nothing.
-const indexes = new WeakMap();
-
-const buildIndex = (models) => {
-  const cached = indexes.get(models);
-  if (cached) return cached;
-  const exact = new Map();
-  const byKey = new Map();
-  for (const model of models) {
-    const id = typeof model?.id === 'string' ? model.id : null;
-    if (!id) continue;
-    const lowered = id.toLowerCase();
-    if (!exact.has(lowered)) exact.set(lowered, model);
-    const key = matchKey(id);
-    if (!key) continue;
-    const candidates = byKey.get(key) ?? [];
-    candidates.push(model);
-    byKey.set(key, candidates);
-  }
-  // A plain id beats a `:free`/`:cloud` variant of the same model.
-  for (const candidates of byKey.values()) {
-    candidates.sort((left, right) => (left.id.includes(':') ? 1 : 0) - (right.id.includes(':') ? 1 : 0) || left.id.length - right.id.length);
-  }
-  const index = { exact, byKey };
-  indexes.set(models, index);
-  return index;
-};
-
-/** The public model list this id would match, by exact id first and then by base id. */
-const findModel = (index, modelId) => index.exact.get(modelId.toLowerCase()) ?? index.byKey.get(matchKey(modelId))?.[0] ?? null;
-
 const fetchModels = async ({ url, fetchImpl, timeoutMs }) => {
   if (!isHttpsUrl(url)) {
     throw new Error('OpenRouter model info requires an https URL');
   }
-  const response = await fetchImpl(url, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(timeoutMs),
+  // The signal asks a real fetch to stop; the race keeps a fetch that ignores
+  // its signal from holding the route open.
+  const request = (async () => {
+    const response = await fetchImpl(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) {
+      throw new Error(`OpenRouter responded with status ${response.status}`);
+    }
+    const declaredLength = Number(response.headers?.get?.('content-length'));
+    if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+      throw new Error('OpenRouter returned an oversized payload');
+    }
+    const text = await response.text();
+    if (text.length > MAX_RESPONSE_BYTES) {
+      throw new Error('OpenRouter returned an oversized payload');
+    }
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      throw new Error('OpenRouter returned invalid JSON');
+    }
+    if (!Array.isArray(payload?.data)) {
+      throw new Error('OpenRouter returned an unexpected payload');
+    }
+    return payload.data;
+  })();
+
+  let timer;
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('OpenRouter did not answer in time')), timeoutMs);
   });
-  if (!response.ok) {
-    throw new Error(`OpenRouter responded with status ${response.status}`);
-  }
-  const declaredLength = Number(response.headers?.get?.('content-length'));
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
-    throw new Error('OpenRouter returned an oversized payload');
-  }
-  const text = await response.text();
-  if (text.length > MAX_RESPONSE_BYTES) {
-    throw new Error('OpenRouter returned an oversized payload');
-  }
-  let payload;
   try {
-    payload = JSON.parse(text);
-  } catch {
-    throw new Error('OpenRouter returned invalid JSON');
+    return await Promise.race([request, timeout]);
+  } finally {
+    clearTimeout(timer);
+    // A late answer has nowhere to go; keep its rejection from becoming fatal.
+    request.catch(() => { });
   }
-  if (!Array.isArray(payload?.data)) {
-    throw new Error('OpenRouter returned an unexpected payload');
-  }
-  return payload.data;
 };
 
 /**
@@ -226,16 +251,16 @@ export const createOpenRouterModelCatalog = ({
   };
 };
 
-const problem = (res, status, code, detail) => {
+const problem = (res, status, code, detail, title = 'Model info unavailable') => {
   res.setHeader('Cache-Control', 'no-store');
   res.type('application/problem+json');
   return res.status(status).json(ProblemDetailsSchema.parse({
     type: `urn:ohpichamber:problem:${code}`,
-    title: 'Model info unavailable',
+    title,
     status,
     detail,
     code,
-    retryable: false,
+    retryable: status >= 500,
   }));
 };
 
@@ -254,18 +279,29 @@ export const registerOpenRouterModelInfoRoute = (app, {
   now,
 } = {}) => {
   const catalog = createOpenRouterModelCatalog({ fetchImpl, url, ttlMs, timeoutMs, now });
+  const refusals = {
+    enterprise: (res) => problem(res, 403, 'enterprise_mode', 'Model info from OpenRouter is not available in enterprise mode.'),
+    invalid: (res) => problem(res, 400, 'INVALID_REQUEST', 'Send 1 to 200 modelIds, each a non-empty string of at most 256 characters.', 'Model info request invalid'),
+  };
   const refuseInEnterpriseMode = (req, res, next) => (isEnterpriseMode(enterprisePolicyOptions)
-    ? problem(res, 403, 'enterprise_mode', 'Model info from OpenRouter is not available in enterprise mode.')
+    ? refusals.enterprise(res)
     : next());
+  // A body the parser rejects (malformed JSON, wrong content type, too large)
+  // is answered like the route's own validation failures.
+  const jsonBody = (req, res, next) => express.json({ limit: '64kb', strict: true })(req, res, (error) => {
+    if (!error) return next();
+    if (error.status === 413) return problem(res, 413, 'PAYLOAD_TOO_LARGE', 'The model info request body exceeds 64 KiB.', 'Model info request invalid');
+    return refusals.invalid(res);
+  });
 
   app.post(
     '/api/openchamber/openrouter/model-info',
     refuseInEnterpriseMode,
-    express.json({ limit: '64kb', strict: true }),
+    jsonBody,
     async (req, res) => {
       const parsed = ModelInfoRequestSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ error: 'Send 1 to 200 modelIds, each a non-empty string of at most 256 characters.' });
+        return refusals.invalid(res);
       }
       try {
         const models = await catalog.lookup(parsed.data.modelIds);
@@ -273,7 +309,7 @@ export const registerOpenRouterModelInfoRoute = (app, {
         return res.json({ models });
       } catch (error) {
         console.warn('Failed to fetch OpenRouter model info:', error?.message || error);
-        return res.status(502).json({ error: 'OpenRouter model info is unavailable' });
+        return problem(res, 502, 'PROVIDER_UNAVAILABLE', 'OpenRouter model info is unavailable');
       }
     },
   );

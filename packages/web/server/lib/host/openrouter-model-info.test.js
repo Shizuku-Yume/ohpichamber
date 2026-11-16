@@ -49,13 +49,20 @@ const listPayload = {
   ],
 };
 
-const jsonResponse = (body, { ok = true, status = 200 } = {}) => ({
+const jsonResponse = (body, { ok = true, status = 200, contentLength } = {}) => ({
   ok,
   status,
+  headers: { get: (name) => (name.toLowerCase() === 'content-length' ? (contentLength ?? null) : null) },
   text: async () => (typeof body === 'string' ? body : JSON.stringify(body)),
 });
 
-const createApp = ({ fetchImpl, enterprise = false, now, ttlMs } = {}) => {
+const assertProblem = (response, status, code) => {
+  expect(response.status).toBe(status);
+  expect(response.headers['content-type']).toContain('application/problem+json');
+  expect(response.body).toMatchObject({ status, code, type: `urn:ohpichamber:problem:${code}` });
+};
+
+const createApp = ({ fetchImpl, enterprise = false, now, ttlMs, timeoutMs } = {}) => {
   const app = express();
   // The Host's shared middleware leaves this path unparsed for the route's own
   // bounded parser; include it so the test exercises production order.
@@ -64,6 +71,7 @@ const createApp = ({ fetchImpl, enterprise = false, now, ttlMs } = {}) => {
     fetchImpl,
     now,
     ttlMs,
+    timeoutMs,
     enterprisePolicyOptions: {
       platform: 'linux',
       env: enterprise ? { OPENCHAMBER_ENTERPRISE_MODE: '1' } : {},
@@ -192,14 +200,66 @@ describe('OpenRouter model info route', () => {
     const app = createApp({ fetchImpl: vi.fn(async () => jsonResponse({}, { ok: false, status: 503 })) });
 
     const res = await request(app).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }).expect(502);
-    expect(res.body).toEqual({ error: 'OpenRouter model info is unavailable' });
+    assertProblem(res, 502, 'PROVIDER_UNAVAILABLE');
   });
 
   it('answers 502 when the connection itself fails', async () => {
     warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
     const app = createApp({ fetchImpl: vi.fn(async () => { throw new Error('socket closed'); }) });
 
-    await request(app).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }).expect(502);
+    assertProblem(await request(app).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }), 502, 'PROVIDER_UNAVAILABLE');
+  });
+
+  it('answers 502 for a payload over the size cap, declared or streamed', async () => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
+    const oversized = 'x'.repeat(8 * 1024 * 1024 + 1);
+
+    const declaredApp = createApp({ fetchImpl: vi.fn(async () => jsonResponse('{}', { contentLength: String(oversized.length) })) });
+    assertProblem(await request(declaredApp).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }), 502, 'PROVIDER_UNAVAILABLE');
+
+    const streamedApp = createApp({ fetchImpl: vi.fn(async () => jsonResponse(oversized)) });
+    assertProblem(await request(streamedApp).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }), 502, 'PROVIDER_UNAVAILABLE');
+  });
+
+  it('answers 502 when OpenRouter never answers', async () => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
+    const app = createApp({
+      timeoutMs: 20,
+      fetchImpl: vi.fn(() => new Promise(() => { })),
+    });
+
+    assertProblem(await request(app).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }), 502, 'PROVIDER_UNAVAILABLE');
+  });
+
+  it('omits a listed model whose output limit is null', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(listPayload));
+    const app = createApp({ fetchImpl });
+
+    const res = await request(app).post(ENDPOINT).send({ modelIds: ['no-output-limit/model'] }).expect(200);
+    expect(res.body.models).toEqual([]);
+  });
+
+  it('does not answer a bare basename two publishers share', async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({
+      data: [
+        {
+          id: 'acme/jamba', top_provider: { context_length: 128000, max_completion_tokens: 4096 },
+          architecture: { input_modalities: ['text'] }, pricing: { prompt: '0.000001', completion: '0.000002' },
+        },
+        {
+          id: 'other/jamba', top_provider: { context_length: 64000, max_completion_tokens: 2048 },
+          architecture: { input_modalities: ['text'] }, pricing: { prompt: '0.000001', completion: '0.000002' },
+        },
+      ],
+    }));
+    const app = createApp({ fetchImpl });
+
+    const bare = await request(app).post(ENDPOINT).send({ modelIds: ['jamba'] }).expect(200);
+    expect(bare.body.models).toEqual([]);
+
+    const exact = await request(app).post(ENDPOINT).send({ modelIds: ['other/jamba'] }).expect(200);
+    expect(exact.body.models).toHaveLength(1);
+    expect(exact.body.models[0].catalog.contextWindow).toBe(64000);
   });
 
   it('answers 400 for an invalid body without calling OpenRouter', async () => {
@@ -216,7 +276,7 @@ describe('OpenRouter model info route', () => {
       { modelIds: ['a'], extra: true },
       { modelIds: [3] },
     ]) {
-      await request(app).post(ENDPOINT).send(body).expect(400);
+      assertProblem(await request(app).post(ENDPOINT).send(body), 400, 'INVALID_REQUEST');
     }
     expect(fetchImpl).not.toHaveBeenCalled();
   });
@@ -225,7 +285,7 @@ describe('OpenRouter model info route', () => {
     const fetchImpl = vi.fn(async () => jsonResponse(listPayload));
     const app = createApp({ fetchImpl });
 
-    await request(app).post(ENDPOINT).set('Content-Type', 'application/json').send('{"modelIds":').expect(400);
+    assertProblem(await request(app).post(ENDPOINT).set('Content-Type', 'application/json').send('{"modelIds":'), 400, 'INVALID_REQUEST');
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 

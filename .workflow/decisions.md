@@ -1374,3 +1374,21 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** MCP credentials become per-user or per-device, or the Host gains a session-bound consent surface.
 - **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - The settings layout refactor owns the fork-differs paths it touched
+
+- **Decided:** the 16 `fork-differs` settings/UI paths the drift report listed after the 2026-11-15 feedback work keep the fork blob and are recorded as `decision` rows: `CustomEndpointFields`, `CatalogExtensionsSection`, `TrackerProjectMapping`, `TrackerSessionComments`, `AboutReleaseNotes`, `DesktopAppSettings`, `DesktopNetworkSettings`, `DesktopQuakeModeSettings`, `OpenChamberVisualSettings`, `PasskeySettings`, `ProviderInstanceAccounts`, `SessionRetentionSettings` and its test, `ProjectWorktreesTab`, `SettingsSection` and `PublishDialog`.
+- **Instead of:** reverting them to upstream's inline `space-y-*` utilities and per-page control widths, or leaving them `unexplained`.
+- **Because:** each file is a call site or the definition of the 2026-11-15 decision that every settings row is label-left/control-right on one shared width and spacing scale, with a guard test that rejects raw width or spacing utilities in `components/sections`. Those commits renamed the shared classes (`SETTINGS_SPACE_ROW_CLASS`, `SETTINGS_WIDTH_*_CLASS`) and re-pointed the call sites, so upstream's blob would reintroduce exactly the ad-hoc utilities the refactor removed.
+- **Mine:** yes
+- **Revisit when:** upstream adopts a shared settings width/spacing scale, so the fork blob no longer carries behavior upstream lacks.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - The integrations catalog declares environment inputs for local MCP entries
+
+- **Decided:** local catalog MCP entries carry `local.envInputs` (`{ id, envName, labelKey, required? }`) and the install form collects them; `registry.test.ts` asserts the declared inputs are unique, upper-snake env names and labelled under the entry id. The entry keeps the fork blob against upstream's catalog, which has no `envInputs` field.
+- **Instead of:** leaving the values as `{token}` placeholders inside `command`, or dropping the declaration to match upstream.
+- **Because:** a value written into `command` lands in the MCP config in plain text, while `envInputs` becomes a workspace credential behind `envCredentialRefs`; the catalog is the fork's own surface bound to the canonical agent service, so upstream's registry has nothing to adopt here.
+- **Mine:** yes
+- **Revisit when:** upstream's catalog gains an environment-input model the fork can adopt.
+- **Effort:** ux-feedback-2026-11-15

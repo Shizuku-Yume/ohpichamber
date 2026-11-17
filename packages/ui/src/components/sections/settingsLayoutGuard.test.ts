@@ -95,8 +95,8 @@ const CONTROL_TAGS: Record<string, true> = {
   AgentSelector: true,
   SettingsProjectSelector: true,
   SettingsColorField: true,
+  SortableTabsStrip: true,
 };
-
 /** Row primitives: their own padding/stack is the row contract, not the page's. */
 const ROW_TAGS: Record<string, true> = {
   SettingsFieldRow: true,
@@ -1117,6 +1117,18 @@ describe('settings layout guard', () => {
       '<SelectTrigger className="w-fit min-w-[140px] max-w-64" />',
     );
     expect(rawSelect.map((violation) => violation.rule)).toEqual(['W', 'W', 'W']);
+
+    const cappedTabs = scanSource(
+      'openchamber/OmpSettingsPage.tsx',
+      '<SortableTabsStrip className="h-8 max-w-[28rem]" />',
+    );
+    expect(cappedTabs.map((violation) => violation.rule)).toEqual(['W']);
+
+    const intrinsicTabs = scanSource(
+      'openchamber/OmpSettingsPage.tsx',
+      '<SortableTabsStrip className="flex-none max-w-full" />',
+    );
+    expect(intrinsicTabs).toEqual([]);
   });
 
   test('the lexer reaches the end of every settings source file', () => {

@@ -303,7 +303,7 @@ export const OmpSettingsPage: React.FC = () => {
       description={t('settings.page.omp.description')}
       onBlurCapture={autosave.onBlurCapture}
     >
-      <div className="mb-8">
+      <div className="mb-8 flex min-w-0">
         <SortableTabsStrip
           items={tabs}
           activeId={activeTab.id}
@@ -311,10 +311,11 @@ export const OmpSettingsPage: React.FC = () => {
             const next = tabs.find((item) => item.id === id);
             if (next) setTab(next.id);
           }}
-          layoutMode="fit"
+          layoutMode="scrollable"
+          intrinsicWidth
           variant="active-pill"
-          pillSize="form"
-          className="h-8 max-w-[28rem]"
+          pillSize="toolbar"
+          className="flex-none max-w-full"
         />
       </div>
       {activeGroups.map((group, index) => (

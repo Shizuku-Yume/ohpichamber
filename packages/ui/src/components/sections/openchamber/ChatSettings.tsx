@@ -881,7 +881,7 @@ export const ChatSettings: React.FC = () => {
 
   return (
     <>
-      <div className="mb-8">
+      <div className="mb-8 flex min-w-0">
         <SortableTabsStrip
           items={tabs}
           activeId={tab}
@@ -889,10 +889,11 @@ export const ChatSettings: React.FC = () => {
             const next = tabs.find((item) => item.id === id);
             if (next) setTab(next.id);
           }}
-          layoutMode="fit"
+          layoutMode="scrollable"
+          intrinsicWidth
           variant="active-pill"
-          pillSize="form"
-          className="h-8 max-w-[28rem]"
+          pillSize="toolbar"
+          className="flex-none max-w-full"
         />
       </div>
       {tab === 'messages' ? <MessagesTab /> : null}

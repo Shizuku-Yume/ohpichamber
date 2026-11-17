@@ -3,7 +3,6 @@
 **Effort:** post-m3-hardening
 **Task type:** feature
 **Base commit:** 243b0efc0c16adbac63601715d8954e1362049fb
-**Base branch:** post-m3-hardening/11-release-workflows-agent-runtime
 **Started:** 2026-10-24T12:02:00+08:00
 **Finished:** 2026-10-24T12:10:00+08:00
 

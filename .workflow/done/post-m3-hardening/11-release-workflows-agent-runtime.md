@@ -3,7 +3,6 @@
 **Effort:** post-m3-hardening
 **Task type:** bugfix
 **Base commit:** 17df7d06b285cd3cfd607836e857be17385a91d5
-**Base branch:** post-m3-hardening/12-native-packages-all-targets
 **Started:** 2026-10-23T20:14:18+08:00
 **Finished:** 2026-10-24T11:56:00+08:00
 

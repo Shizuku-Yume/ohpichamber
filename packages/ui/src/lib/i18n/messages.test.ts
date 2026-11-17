@@ -158,6 +158,12 @@ describe('i18n dictionaries', () => {
     for (const [locale, dictionary] of Object.entries(localeDictionaries)) {
       const missing = ompKeys.filter((key) => !(key in dictionary));
       expect(missing, `${locale} missing OMP keys`).toEqual([]);
+      const removed = [
+        'settings.omp.configFile.terminal',
+        'settings.omp.configFile.elsewhere',
+        'settings.omp.configFile.egress',
+      ].filter((key) => key in dictionary);
+      expect(removed, `${locale} unexpected removed OMP footer keys`).toEqual([]);
       if (locale === 'en') continue;
       // Some vocabulary is genuinely shared (`OMP`, a `Skills` heading, `%`),
       // so equality alone is not proof of an untranslated string: the product
@@ -166,7 +172,7 @@ describe('i18n dictionaries', () => {
       for (const key of [
         'settings.page.omp.description',
         'settings.omp.configFile.title',
-        'settings.omp.configFile.terminal',
+        'settings.omp.openConfig',
         'settings.omp.modelRoles.description',
         'settings.omp.section.retry.description',
       ] as const) {

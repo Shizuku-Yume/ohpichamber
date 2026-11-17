@@ -13,7 +13,6 @@ import { Button } from '@/components/ui/button';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 import {
   SettingsSection,
-  SETTINGS_DESCRIPTION_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
@@ -254,10 +253,7 @@ export const OmpSettingsPage: React.FC = () => {
   const revealConfig = React.useCallback(() => {
     const path = state?.configPath;
     if (!path || !files.revealPath) return;
-    void files.revealPath(path).catch(() => {
-      // The path stays on screen, so a refused reveal still tells the user
-      // where the file is.
-    });
+    void files.revealPath(path).catch(() => { });
   }, [files, state?.configPath]);
 
   const tabs = React.useMemo<Array<SortableTabsStripItem & { id: OmpSettingsTab }>>(() => (
@@ -287,7 +283,6 @@ export const OmpSettingsPage: React.FC = () => {
   }
 
   const activeTab = OMP_SETTINGS_LAYOUT.find((layoutTab) => layoutTab.id === tab) ?? OMP_SETTINGS_LAYOUT[0];
-  const counts = state.placementCounts;
   // Tab content is resolved per group, so a group whose rows are all missing
   // from the snapshot (or gated off by a condition) does not leave a heading.
   const activeGroups = activeTab.groups
@@ -332,33 +327,18 @@ export const OmpSettingsPage: React.FC = () => {
           title={t('settings.omp.configFile.title')}
           settingsItem="omp.configFile"
           divider={activeGroups.length > 0}
+          className="space-y-0"
+          contentClassName="hidden"
           headerAction={
             state.configPath && files.revealPath ? (
               <Button variant="outline" size="sm" onClick={revealConfig}>
-                <Icon name="file-text" className="size-3.5 mr-1" />
+                <Icon name="file-text" className="size-3.5 me-1" />
                 {t('settings.omp.openConfig')}
               </Button>
             ) : undefined
           }
         >
-          {counts.tuiOnly > 0 ? (
-            <p className={SETTINGS_DESCRIPTION_CLASS}>
-              {t('settings.omp.configFile.terminal', { count: counts.tuiOnly })}
-            </p>
-          ) : null}
-          {counts.elsewhere > 0 ? (
-            <p className={SETTINGS_DESCRIPTION_CLASS}>
-              {t('settings.omp.configFile.elsewhere', { count: counts.elsewhere })}
-            </p>
-          ) : null}
-          {counts.boundary > 0 ? (
-            <p className={SETTINGS_DESCRIPTION_CLASS}>
-              {t('settings.omp.configFile.egress', { count: counts.boundary })}
-            </p>
-          ) : null}
-          {state.configPath ? (
-            <p className={`${SETTINGS_HELPER_CLASS} font-mono break-all`}>{state.configPath}</p>
-          ) : null}
+          {null}
         </SettingsSection>
       ) : null}
     </SettingsPageLayout>

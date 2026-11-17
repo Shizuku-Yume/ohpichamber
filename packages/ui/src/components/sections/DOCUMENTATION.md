@@ -25,9 +25,7 @@ Rules the module holds:
 - `read.summarize.enabled` is owned by the read-summary preset entry, which
   writes that switch and its four thresholds in one PATCH; the thresholds stay
   editable under `advanced`.
-- The closing section of `advanced` names the config file and splits what the
-  page leaves out by reason — terminal-only, already on another page, egress
-  only. It is not a single misleading count.
+- The closing section of `advanced` offers the action to open `config.yml` for settings that stay in the file.
 - Settings search derives one entry per layout id (`lib/settings/search.ts`),
   and `ompSettingsTabForSearchTarget` maps an anchor to the tab that draws it;
   `SettingsView` sets that tab before it highlights the row.

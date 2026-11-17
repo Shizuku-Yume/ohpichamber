@@ -7,7 +7,6 @@ import {
   getAgentService,
   getModelRoles,
   listModelInfos,
-  listProviderInfos,
 } from './client.js';
 
 const nonEmptyTextSchema = z.string().refine((value) => value.trim().length > 0);
@@ -197,18 +196,6 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
   const output = { text: text.trim(), providerID: resolved.providerID, modelID: resolved.modelID, source: resolved.source };
   if (clamped.truncated) output.inputTruncated = true;
   return output;
-}
-
-/**
- * Providers with enabled workspace models. Canonical provider records supply
- * identity and auth state; this helper never reads legacy engine config.
- */
-export async function listAuthenticatedProviders(workspaceId) {
-  const client = getAgentService();
-  if (!client) throw Object.assign(new Error('Agent service is unavailable'), { statusCode: 503, code: 'SERVICE_UNAVAILABLE' });
-  const [providers, models] = await Promise.all([listProviderInfos(client, workspaceId), listModelInfos(client, workspaceId)]);
-  const enabled = new Set(models.filter((model) => model?.enabled !== false).map((model) => model.provider));
-  return providers.filter((provider) => enabled.has(provider.providerId)).map((provider) => provider.providerId);
 }
 
 /**

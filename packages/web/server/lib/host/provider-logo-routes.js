@@ -9,8 +9,6 @@ const PROVIDER_LOGO_EXTENSIONS = new Map([
   ['image/svg+xml', 'svg'],
 ]);
 
-/** What a provider logo may be; mirrors CUSTOM_PROVIDER_LOGO_MIMES in packages/ui/src/lib/customProviderLogos.ts. */
-export const PROVIDER_LOGO_MIMES = Object.freeze([...PROVIDER_LOGO_EXTENSIONS.keys()]);
 // A logo is drawn at 13 to 20 px; 1 MB leaves room for a detailed SVG.
 export const PROVIDER_LOGO_MAX_BYTES = 1024 * 1024;
 const SVG_THEME_COLORS = new Map([['light', '#111111'], ['dark', '#f5f5f5']]);
@@ -19,7 +17,7 @@ const SVG_THEME_COLORS = new Map([['light', '#111111'], ['dark', '#f5f5f5']]);
  * An SVG logo's markup with its CSS colour set for `theme`, so `currentColor`
  * reads on either background. Null for anything but `light` or `dark`.
  */
-export const themedLogoSvg = (data, theme) => {
+const themedLogoSvg = (data, theme) => {
   const color = SVG_THEME_COLORS.get(theme);
   return color ? injectSvgRootColor(data.toString('utf8'), color) : null;
 };
@@ -94,7 +92,7 @@ export const registerProviderLogoRoutes = (app, dependencies) => {
   const queues = new Map();
   const serialize = (providerId, task) => {
     const run = (queues.get(providerId) ?? Promise.resolve()).then(task);
-    const tail = run.catch(() => {});
+    const tail = run.catch(() => { });
     queues.set(providerId, tail);
     void tail.then(() => {
       if (queues.get(providerId) === tail) queues.delete(providerId);
@@ -178,7 +176,7 @@ export const registerProviderLogoRoutes = (app, dependencies) => {
           await writeLogoSetting(providerId, next);
         } catch (error) {
           // The setting still names the previous file, which stays served.
-          await fsPromises.unlink(filePath).catch(() => {});
+          await fsPromises.unlink(filePath).catch(() => { });
           throw error;
         }
         await removeLogoFiles(providerId, filePath);

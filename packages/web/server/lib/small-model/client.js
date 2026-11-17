@@ -1,4 +1,4 @@
-import { ModelCatalogSchema, ProviderCatalogSchema, CompletionRequestSchema, CompletionResultSchema, CompletionCancelResultSchema } from '@openchamber/agent-contract';
+import { ModelCatalogSchema, CompletionRequestSchema, CompletionResultSchema, CompletionCancelResultSchema } from '@openchamber/agent-contract';
 import { z } from 'zod';
 
 let service = null;
@@ -10,20 +10,17 @@ export function configureAgentService(next, options = {}) {
   service = next;
   resolveWorkspaceScope = options.resolveWorkspaceScope;
   modelCache.clear();
-  providerCache.clear();
 }
 
 export function resetAgentService() {
   service = null;
   resolveWorkspaceScope = null;
   modelCache.clear();
-  providerCache.clear();
 }
 
 export const getAgentService = () => service;
 
 const modelCache = new Map();
-const providerCache = new Map();
 const MODEL_CACHE_TTL_MS = 30_000;
 const workspaceIdSchema = z.string().refine(value => value.trim().length > 0);
 
@@ -57,15 +54,6 @@ export async function listModelInfos(_service, workspaceId) {
   return body.models;
 }
 
-export async function listProviderInfos(_service, workspaceId) {
-  await workspace(workspaceId);
-  const cached = providerCache.get(workspaceId);
-  if (cached && Date.now() - cached.at < MODEL_CACHE_TTL_MS) return cached.providers;
-  const body = ProviderCatalogSchema.parse(await request(`/api/agent/v1/workspaces/${encodeURIComponent(workspaceId)}/providers`));
-  providerCache.set(workspaceId, { providers: body.providers, at: Date.now() });
-  return body.providers;
-}
-
 export async function getModelRoles(_service, workspaceId) {
   await workspace(workspaceId);
   try {
@@ -95,7 +83,7 @@ export async function completeSmallModel(input, { signal } = {}) {
       const result = CompletionCancelResultSchema.parse(body);
       if (result.completionId !== parsed.completionId) throw new Error('Completion cancellation identity mismatch');
     });
-    void cancellation.catch(() => {});
+    void cancellation.catch(() => { });
   };
   signal?.addEventListener('abort', cancel, { once: true });
   try {

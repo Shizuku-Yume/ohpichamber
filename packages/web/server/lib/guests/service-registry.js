@@ -57,9 +57,6 @@ const windowsProcessSchema = z.object({
   executablePath: z.string().nullable(),
 });
 
-/** `{openchamberDataDir}/guest-services`. */
-export const guestServiceRegistryDir = (dataDir) => path.join(dataDir, 'guest-services');
-
 const digestToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 const sleep = (ms) => new Promise((resolve) => {
@@ -109,7 +106,7 @@ export const createGuestServiceRegistry = ({
       await fs.writeFile(tmp, JSON.stringify(record), { mode: 0o600 });
       await fs.rename(tmp, filePath);
     } catch (error) {
-      await fs.rm(tmp, { force: true }).catch(() => {});
+      await fs.rm(tmp, { force: true }).catch(() => { });
       console.warn(`[guests] could not record guest service pid ${pid} for crash recovery: ${error?.code ?? error?.message ?? error}`);
     }
   };
@@ -120,7 +117,7 @@ export const createGuestServiceRegistry = ({
    * @param {number} pid
    */
   const releaseGuestService = async (dir, pid) => {
-    await fs.rm(path.join(dir, `${pid}.json`), { force: true }).catch(() => {});
+    await fs.rm(path.join(dir, `${pid}.json`), { force: true }).catch(() => { });
   };
 
   const readLinuxProcess = async (pid) => {
@@ -227,7 +224,7 @@ export const createGuestServiceRegistry = ({
     await Promise.all(entries.map(async (name) => {
       const writer = name.match(/\.json\.tmp-(\d+)-[0-9a-f]+$/);
       if (writer && !isPidAlive(Number.parseInt(writer[1], 10))) {
-        await fs.rm(path.join(dir, name), { force: true }).catch(() => {});
+        await fs.rm(path.join(dir, name), { force: true }).catch(() => { });
       }
     }));
     const names = entries.filter((name) => name.endsWith('.json'));
@@ -251,7 +248,7 @@ export const createGuestServiceRegistry = ({
         return state === 'orphaned';
       } catch (error) {
         // A corrupt record, or one that vanished: drop it and move on.
-        if (error instanceof SyntaxError) await fs.rm(filePath, { force: true }).catch(() => {});
+        if (error instanceof SyntaxError) await fs.rm(filePath, { force: true }).catch(() => { });
         return false;
       }
     }));
@@ -264,5 +261,4 @@ export const createGuestServiceRegistry = ({
 const defaultRegistry = createGuestServiceRegistry();
 
 export const recordGuestService = defaultRegistry.recordGuestService;
-export const releaseGuestService = defaultRegistry.releaseGuestService;
 export const reapOrphanedGuestServices = defaultRegistry.reapOrphanedGuestServices;

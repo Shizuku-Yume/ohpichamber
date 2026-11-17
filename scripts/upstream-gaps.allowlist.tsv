@@ -19,9 +19,7 @@ unused-route-fn	createSecretRequests	## 2026-11-10 - Merge upstream OpenChamber 
 unused-route-fn	createServerDiagnosticJournal	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	HTTP diagnostic journal ring buffer never attached to middleware
 unused-route-fn	createUnreadBaseline	## 2026-11-11 - Finish the v2.7.0 merge on the fork's runtime and unread authorities	Replaced by Host-persisted session unread watermarks in metadata (openchamber.workbench.lastIdleAt/viewedAt)
 unused-route-fn	createWorkNamer	## 2026-10-26 - OMP owns session titles	Replaced by OMP native session and worktree title generation
-unused-route-fn	createWorkMembership	## 2026-11-11 - Repair the merged session sidebar on the fork's session model	OpenCode-dependent session schema; replaced by canonical Session model in sidebar
 unused-route-fn	createMergeFollowRuntime	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	GitHub merge follow listener for PR watch; disposition depends on PR watch adoption
-ui-call-no-route	/api/openchamber/secret/fields	## 2026-11-10 - Merge upstream OpenChamber with a real git merge	see: controlService.answerSecret; route missing on server, but agent secret tool is retired and never reaches UI in live turns
 settings-item	agents.color	## 2026-10-18 - Native agent controls and ConfigStore catalog retirement	OpenCode agent JSON model 'agents.color' replaced by OMP canonical agent profiles and subagents.
 settings-item	agents.mode	## 2026-10-18 - Native agent controls and ConfigStore catalog retirement	OpenCode agent JSON model 'agents.mode' replaced by OMP canonical agent profiles and subagents.
 settings-item	agents.steps	## 2026-10-18 - Native agent controls and ConfigStore catalog retirement	OpenCode agent JSON model 'agents.steps' replaced by OMP canonical agent profiles and subagents.
@@ -638,7 +636,6 @@ runtime-constructor	createServiceHostApi	OMP packages/web/server/lib/guests/serv
 runtime-constructor	createManagedConfigRuntime	OMP packages/web/server/lib/tunnels/managed-config.js	Renamed in fork to createManagedTunnelConfigRuntime and called in index.js:386.
 runtime-constructor	gitWorktreeCreation.createWorktree	OMP packages/web/server/lib/git/worktree-creation.js	Worktree creation constructor; fork instantiates createWorktreeCreation.
 runtime-constructor	createExtensionQuotaProviders	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode extension quota provider constructor retired with OpenCode runtime.
-unused-route-fn	createSessionActivityProbe	## 2026-11-11 - Product docs describe the OMP runtime and drop the retired VS Code and OpenCode surfaces	OpenCode session activity probe in opencode/session-activity.js retired.
 unused-route-fn	createProviderDescriptors	OMP packages/web/server/lib/source-control/provider-descriptors.js	Factory function; module exports singleton sourceControlProviderDescriptors = createProviderDescriptors().
 unused-route-fn	createPackedToolsSource	## 2026-10-24 - Keep isolated spaces unreleased without the OpenCode runtime	Development build packaging helper in unreleased isolated spaces.
 route-deps	createAutoReviewRuntime.buildOpenCodeUrl	## 2026-11-14 - Auto-review and PR watch retire OpenCode staged reverts, queue holds, and client-side routing	Retired OpenCode URL builder; runtime cut over to canonical sessionService and global hub.

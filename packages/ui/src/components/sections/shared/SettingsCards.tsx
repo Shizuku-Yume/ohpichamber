@@ -257,7 +257,7 @@ export const SettingsCardToolbar: React.FC<{
   className?: string;
 }> = ({ search, actions, className }) => (
   <div className={cn('mb-4 flex flex-wrap items-center gap-2', className)}>
-    {search ? <SettingsCardSearch {...search} compact className="mb-0 min-w-0 flex-1 basis-56" /> : null}
+    {search ? <SettingsCardSearch {...search} compact className="mb-0 min-w-0 flex-1 basis-56 max-w-none" /> : null}
     <div className="ms-auto flex shrink-0 items-center gap-2">{actions}</div>
   </div>
 );

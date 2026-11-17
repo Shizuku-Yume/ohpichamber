@@ -5,7 +5,7 @@ import {
   SettingsGroupTitle,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_DIALOG_ICON_BUTTON_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { Button } from '@/components/ui/button';
@@ -123,7 +123,7 @@ const ModelLine: React.FC<{
           type="button"
           variant="ghost"
           size="icon"
-          className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0 text-muted-foreground hover:text-[var(--status-error)]')}
+          className={cn(SETTINGS_DIALOG_ICON_BUTTON_CLASS, 'shrink-0 text-muted-foreground hover:text-[var(--status-error)]')}
           disabled={busy}
           onClick={() => onRemove(row.modelId)}
           aria-label={t('settings.providers.page.custom.models.dialog.removeModelAria', { model: row.modelId })}
@@ -136,7 +136,7 @@ const ModelLine: React.FC<{
           type="button"
           variant="ghost"
           size="icon"
-          className={cn(SETTINGS_ICON_BUTTON_CLASS, 'shrink-0 text-muted-foreground hover:text-foreground')}
+          className={cn(SETTINGS_DIALOG_ICON_BUTTON_CLASS, 'shrink-0 text-muted-foreground hover:text-foreground')}
           disabled={busy}
           onClick={() => onAdd(row.modelId)}
           aria-label={t('settings.providers.page.custom.models.dialog.addModelAria', { model: row.modelId })}

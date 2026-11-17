@@ -843,11 +843,6 @@ function walkSources(directory: string, files: string[] = []): string[] {
 
 interface FileScan {
   readonly file: string;
-  readonly detail: ScanDetail;
-}
-
-interface FileScan {
-  readonly file: string;
   readonly fullPath: string;
   readonly detail: ScanDetail;
 }

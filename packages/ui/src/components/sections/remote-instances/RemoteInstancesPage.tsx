@@ -33,7 +33,7 @@ import {
   SETTINGS_WIDTH_SHORT_TEXT_CLASS,
   SETTINGS_WIDTH_LONG_TEXT_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
-  SETTINGS_ICON_BUTTON_CLASS,
+  SETTINGS_DIALOG_ICON_BUTTON_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
@@ -2578,7 +2578,7 @@ export const RemoteInstancesPage: React.FC = () => {
                     type="button"
                     variant="outline"
                     size="icon"
-                    className={SETTINGS_ICON_BUTTON_CLASS}
+                    className={SETTINGS_DIALOG_ICON_BUTTON_CLASS}
                     title={t('settings.remoteInstances.page.actions.pickRandomPort')}
                     onClick={() =>
                       updateDraft((current) => ({

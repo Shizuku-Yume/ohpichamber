@@ -249,7 +249,7 @@ export function NewWorktreeDialog({
   const changeRequestTerm = useChangeRequestTerm(itemProvider);
   const tItem = React.useCallback(
     (key: I18nKey) => t(changeRequestCopy(key, changeRequestTerm)),
-    [itemProvider, t],
+    [changeRequestTerm, t],
   );
   // The fields the visible tab edits.
   const draft = mode === 'from-item' ? itemBranch : newBranch;

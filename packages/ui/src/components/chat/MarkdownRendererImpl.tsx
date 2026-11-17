@@ -438,6 +438,7 @@ export function MarkdownContent({
     uiBlocks: uiBlocks && !purpose,
     settledReply: uiBlocks && !purpose && settled && sessionId && messageId ? { sessionId, messageId } : null,
     disableLinkSafety,
+    tableWidthScope,
     theme,
     mermaidControls,
     allowMermaidWheelEvents,

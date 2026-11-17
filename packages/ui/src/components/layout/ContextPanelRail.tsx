@@ -372,7 +372,7 @@ export const ContextPanelRail: React.FC = () => {
     }
 
     setContextRailOrder(arrayMove(orderedIds, fromIndex, toIndex));
-  }, [guestSurfaces, setContextRailOrder]);
+  }, [directoryKey, guestSurfaces, setContextRailOrder]);
 
   // Runs of the visible surfaces that share a group, in rail order.
   const groups = React.useMemo(() => {

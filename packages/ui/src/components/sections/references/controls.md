@@ -12,9 +12,8 @@ Use the shared control class constants; every desktop dropdown footprint is
 
 - `SelectTrigger`: no size prop — its chrome comes from `dropdownTriggerVariants()`.
 - Custom dropdown triggers (ModelSelector / AgentSelector): `SETTINGS_CUSTOM_TRIGGER_CLASS`.
-- Text `Input` next to dropdowns: `inputSize="compact"` (h-7), matching the trigger footprint.
-- Icon action next to a control: `SETTINGS_ICON_BUTTON_CLASS`.
-
+- Text `Input` and `NumberInput`: inside settings pages (`SettingsPageLayout` `[data-settings-page]`), desktop inputs and stepper clusters share the `h-7` (`28 px`) dropdown-trigger footprint automatically; elsewhere (toolbars, dialogs), pass `inputSize="compact"` when an `Input` sits next to dropdowns.
+- Icon action next to a control: `SETTINGS_ICON_BUTTON_CLASS` (`h-7 w-7`) in a settings page; `SETTINGS_DIALOG_ICON_BUTTON_CLASS` (`h-8 w-8`) in a dialog, matching its `Input` default.
 Widths come from the named classes — never let controls span the pane, and
 give an individual control no raw width utility of its own. `w-full`,
 `min-w-0`, `max-w-none` and `max-w-full` are the allowed fill/shrink tokens,

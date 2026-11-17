@@ -2,14 +2,16 @@ import React from 'react';
 import type { ModelCatalogInfo, ProviderConfigurationRead, ProviderModelDiscoveryResult } from '@openchamber/agent-contract';
 import {
   SettingsCheckboxRow,
+  SettingsFieldRow,
   SettingsSection,
   SettingsStackedField,
   SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_ICON_BUTTON_CLASS,
-  SETTINGS_SELECT_TRIGGER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -393,24 +395,27 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
           </p>
         ) : null}
 
-        <SettingsStackedField
+        <SettingsFieldRow
           label={t('settings.providers.page.custom.field.providerID.label')}
           info={t('settings.providers.page.custom.field.providerID.info')}
         >
-          <Input
-            value={form.providerId}
-            onChange={(event) => setField('providerId', event.target.value)}
-            placeholder={t('settings.providers.page.custom.field.providerID.placeholder')}
-            className="h-7 rounded-md px-3 font-mono text-xs"
-            autoFocus={!isEdit}
-            disabled={isEdit || busy}
-            aria-invalid={Boolean(fieldErrors.providerId)}
-            aria-label={t('settings.providers.page.custom.field.providerID.label')}
-          />
-          {fieldErrors.providerId ? <p className="mt-1 typography-meta text-[var(--status-error)]">{fieldErrors.providerId}</p> : null}
-        </SettingsStackedField>
+          <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
+            <Input
+              value={form.providerId}
+              onChange={(event) => setField('providerId', event.target.value)}
+              placeholder={t('settings.providers.page.custom.field.providerID.placeholder')}
+              inputSize="compact"
+              className="w-full rounded-md px-3 font-mono text-xs"
+              autoFocus={!isEdit}
+              disabled={isEdit || busy}
+              aria-invalid={Boolean(fieldErrors.providerId)}
+              aria-label={t('settings.providers.page.custom.field.providerID.label')}
+            />
+            {fieldErrors.providerId ? <p className="typography-meta text-[var(--status-error)]">{fieldErrors.providerId}</p> : null}
+          </div>
+        </SettingsFieldRow>
 
-        <SettingsStackedField
+        <SettingsFieldRow
           label={t('settings.providers.page.custom.field.protocol.label')}
           info={t('settings.providers.page.custom.field.protocol.info')}
         >
@@ -423,7 +428,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
             }}
             disabled={busy}
           >
-            <SelectTrigger aria-label={t('settings.providers.page.custom.field.protocol.label')} className={SETTINGS_SELECT_TRIGGER_CLASS}>
+            <SelectTrigger aria-label={t('settings.providers.page.custom.field.protocol.label')} className={SETTINGS_WIDTH_SELECT_CLASS}>
               <SelectValue>{protocolLabel(form.protocol, t)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -434,23 +439,26 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               ))}
             </SelectContent>
           </Select>
-        </SettingsStackedField>
+        </SettingsFieldRow>
 
-        <SettingsStackedField
+        <SettingsFieldRow
           label={t('settings.providers.page.custom.field.name.label')}
           info={t('settings.providers.page.custom.field.name.info')}
         >
-          <Input
-            value={form.name}
-            onChange={(event) => setField('name', event.target.value)}
-            disabled={busy}
-            placeholder={t('settings.providers.page.custom.field.name.placeholder')}
-            className="h-7 rounded-md px-3"
-            aria-invalid={Boolean(fieldErrors.name)}
-            aria-label={t('settings.providers.page.custom.field.name.label')}
-          />
-          {fieldErrors.name ? <p className="mt-1 typography-meta text-[var(--status-error)]">{fieldErrors.name}</p> : null}
-        </SettingsStackedField>
+          <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_SHORT_TEXT_CLASS)}>
+            <Input
+              value={form.name}
+              onChange={(event) => setField('name', event.target.value)}
+              disabled={busy}
+              placeholder={t('settings.providers.page.custom.field.name.placeholder')}
+              inputSize="compact"
+              className="w-full rounded-md px-3"
+              aria-invalid={Boolean(fieldErrors.name)}
+              aria-label={t('settings.providers.page.custom.field.name.label')}
+            />
+            {fieldErrors.name ? <p className="typography-meta text-[var(--status-error)]">{fieldErrors.name}</p> : null}
+          </div>
+        </SettingsFieldRow>
 
         <SettingsStackedField
           label={t('settings.providers.page.custom.field.icon.label')}
@@ -493,7 +501,7 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
         </SettingsStackedField>
 
         {providerLogoUploadSupported() ? (
-          <SettingsStackedField
+          <SettingsFieldRow
             label={t('settings.providers.page.logo.title')}
             info={t('settings.providers.page.logo.info')}
             settingsItem="providers.logo"
@@ -506,31 +514,40 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               onPick={(file) => setForm((previous) => ({ ...previous, logo: file }))}
               onRemove={() => setForm((previous) => ({ ...previous, logo: 'removed' }))}
             />
-          </SettingsStackedField>
+          </SettingsFieldRow>
         ) : null}
 
-        <SettingsStackedField
+        <SettingsFieldRow
           label={t('settings.providers.page.custom.field.baseURL.label')}
           info={t('settings.providers.page.custom.field.baseURL.info')}
         >
-          <Input
-            value={form.endpoint}
-            onChange={(event) => setField('endpoint', event.target.value)}
-            disabled={busy}
-            placeholder={t('settings.providers.page.custom.field.baseURL.placeholder')}
-            className="h-7 rounded-md px-3 font-mono text-xs"
-            aria-invalid={Boolean(fieldErrors.endpoint)}
-            aria-label={t('settings.providers.page.custom.field.baseURL.label')}
-          />
-          {fieldErrors.endpoint ? <p className="mt-1 typography-meta text-[var(--status-error)]">{fieldErrors.endpoint}</p> : null}
-        </SettingsStackedField>
+          <div className={cn('flex min-w-0 flex-col gap-1', SETTINGS_WIDTH_LONG_TEXT_CLASS)}>
+            <Input
+              value={form.endpoint}
+              onChange={(event) => setField('endpoint', event.target.value)}
+              disabled={busy}
+              placeholder={t('settings.providers.page.custom.field.baseURL.placeholder')}
+              inputSize="compact"
+              className="w-full rounded-md px-3 font-mono text-xs"
+              aria-invalid={Boolean(fieldErrors.endpoint)}
+              aria-label={t('settings.providers.page.custom.field.baseURL.label')}
+            />
+            {fieldErrors.endpoint ? <p className="typography-meta text-[var(--status-error)]">{fieldErrors.endpoint}</p> : null}
+          </div>
+        </SettingsFieldRow>
 
-        <SettingsStackedField
+        <SettingsFieldRow
           label={t('settings.providers.page.custom.field.apiKey.label')}
-          info={isEdit
-            ? t('settings.providers.page.custom.field.apiKey.editInfo')
-            : t('settings.providers.page.custom.field.apiKey.info')}
-          description={t('settings.providers.native.secretHint')}
+          info={(
+            <div className="space-y-1">
+              <p>
+                {isEdit
+                  ? t('settings.providers.page.custom.field.apiKey.editInfo')
+                  : t('settings.providers.page.custom.field.apiKey.info')}
+              </p>
+              <p>{t('settings.providers.native.secretHint')}</p>
+            </div>
+          )}
         >
           <Input
             type="password"
@@ -541,10 +558,11 @@ export const CustomProviderForm: React.FC<CustomProviderFormProps> = ({
               ? t('settings.providers.page.custom.field.apiKey.editPlaceholder')
               : t('settings.providers.page.custom.field.apiKey.placeholder')}
             autoComplete="new-password"
-            className="h-7 rounded-md px-3 font-mono text-xs"
+            inputSize="compact"
+            className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'rounded-md px-3 font-mono text-xs')}
             aria-label={t('settings.providers.page.custom.field.apiKey.label')}
           />
-        </SettingsStackedField>
+        </SettingsFieldRow>
       </SettingsSection>
 
       <SettingsSection

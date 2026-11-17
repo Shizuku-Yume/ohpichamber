@@ -58,6 +58,19 @@ import { fileURLToPath } from 'node:url';
  */
 
 const SECTIONS_ROOT = dirname(fileURLToPath(import.meta.url));
+const COMPONENTS_ROOT = dirname(SECTIONS_ROOT);
+
+/**
+ * Settings-pane views rendered by settings pages outside `components/sections`
+ * (Usage page embeds `UsageStatsReport`; Skills page embeds `PreviewToggleButton`;
+ * Repository bindings embed `GitOperationStatus`; About page embeds `ReleaseNotesBody`).
+ */
+const PANE_VIEW_SOURCES: readonly string[] = [
+  'views/usage/UsageStatsView.tsx',
+  'views/PreviewToggleButton.tsx',
+  'views/git/GitOperationStatus.tsx',
+  'update/ReleaseNotesBody.tsx',
+];
 
 const RULES = ['W', 'S', 'P', 'B', 'N', 'G'] as const;
 type Rule = (typeof RULES)[number];
@@ -82,8 +95,8 @@ const CONTROL_TAGS: Record<string, true> = {
   AgentSelector: true,
   SettingsProjectSelector: true,
   SettingsColorField: true,
+  SortableTabsStrip: true,
 };
-
 /** Row primitives: their own padding/stack is the row contract, not the page's. */
 const ROW_TAGS: Record<string, true> = {
   SettingsFieldRow: true,
@@ -830,14 +843,28 @@ function walkSources(directory: string, files: string[] = []): string[] {
 
 interface FileScan {
   readonly file: string;
+  readonly fullPath: string;
   readonly detail: ScanDetail;
 }
 
 function scanSections(): FileScan[] {
-  return walkSources(SECTIONS_ROOT).map((file) => ({
-    file: relative(SECTIONS_ROOT, file),
-    detail: scanSourceDetailed(relative(SECTIONS_ROOT, file), readFileSync(file, 'utf8')),
-  }));
+  const sectionFiles = walkSources(SECTIONS_ROOT).map((fullPath) => {
+    const file = relative(SECTIONS_ROOT, fullPath);
+    return {
+      file,
+      fullPath,
+      detail: scanSourceDetailed(file, readFileSync(fullPath, 'utf8')),
+    };
+  });
+  const viewFiles = PANE_VIEW_SOURCES.map((file) => {
+    const fullPath = join(COMPONENTS_ROOT, file);
+    return {
+      file,
+      fullPath,
+      detail: scanSourceDetailed(file, readFileSync(fullPath, 'utf8')),
+    };
+  });
+  return [...sectionFiles, ...viewFiles];
 }
 
 function formatViolations(violations: readonly Violation[]): string {
@@ -1024,10 +1051,10 @@ describe('settings layout guard', () => {
     const failures: string[] = [];
     let probed = 0;
 
-    for (const { file } of scanSections()) {
+    for (const { file, fullPath } of scanSections()) {
       // A file-level exception (navigation chrome) legitimately hides the hit.
       if (exceptionReason(file, 'W') !== null) continue;
-      const source = readFileSync(join(SECTIONS_ROOT, file), 'utf8');
+      const source = readFileSync(fullPath, 'utf8');
       const { elements } = parseJsx(source);
       const controls = elements.filter((element) => CONTROL_TAGS[element.tag] === true);
       if (controls.length === 0) continue;
@@ -1080,6 +1107,30 @@ describe('settings layout guard', () => {
     expect(detail.violations[0].detail).toContain('"w-96"');
   });
 
+  test('scans settings-pane views outside components/sections', () => {
+    const scanned = new Set(scanSections().map((entry) => entry.file));
+    for (const view of PANE_VIEW_SOURCES) {
+      expect(scanned.has(view)).toBe(true);
+    }
+    const rawSelect = scanSource(
+      'views/usage/UsageStatsView.tsx',
+      '<SelectTrigger className="w-fit min-w-[140px] max-w-64" />',
+    );
+    expect(rawSelect.map((violation) => violation.rule)).toEqual(['W', 'W', 'W']);
+
+    const cappedTabs = scanSource(
+      'openchamber/OmpSettingsPage.tsx',
+      '<SortableTabsStrip className="h-8 max-w-[28rem]" />',
+    );
+    expect(cappedTabs.map((violation) => violation.rule)).toEqual(['W']);
+
+    const intrinsicTabs = scanSource(
+      'openchamber/OmpSettingsPage.tsx',
+      '<SortableTabsStrip className="flex-none max-w-full" />',
+    );
+    expect(intrinsicTabs).toEqual([]);
+  });
+
   test('the lexer reaches the end of every settings source file', () => {
     const truncated = scanSections()
       .filter(({ detail }) => !detail.parse.complete)
@@ -1087,7 +1138,7 @@ describe('settings layout guard', () => {
     expect(truncated.sort()).toEqual([]);
   });
 
-  test('finds no ad-hoc layout override under components/sections', () => {
+  test('finds no ad-hoc layout override under components/sections or settings-pane views', () => {
     const violations = scanSections().flatMap((entry) => entry.detail.violations);
     expect(formatViolations(violations)).toBe('');
   });

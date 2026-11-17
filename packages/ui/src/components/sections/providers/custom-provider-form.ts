@@ -548,7 +548,7 @@ export function unresolvedAutoFillIds(ids: readonly string[], answers: ModelCata
 }
 
 /** How many unknown ids the partial notice names before counting the rest. */
-export const AUTO_FILL_NOTICE_ID_LIMIT = 10;
+const AUTO_FILL_NOTICE_ID_LIMIT = 10;
 
 /**
  * What the fill reports, in order of what the reader must know: a refused or

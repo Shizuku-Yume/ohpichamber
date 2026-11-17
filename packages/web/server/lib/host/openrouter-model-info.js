@@ -201,7 +201,7 @@ const fetchModels = async ({ url, fetchImpl, timeoutMs }) => {
  * auto-fill clicks do not refetch it. A failed fetch is never cached as an
  * empty list: the caller gets the error and answers 502.
  */
-export const createOpenRouterModelCatalog = ({
+const createOpenRouterModelCatalog = ({
   fetchImpl = globalThis.fetch,
   url = OPENROUTER_MODELS_URL,
   ttlMs = DEFAULT_TTL_MS,

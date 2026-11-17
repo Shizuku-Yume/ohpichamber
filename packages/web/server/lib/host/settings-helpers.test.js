@@ -600,6 +600,21 @@ describe('settings helpers', () => {
     expect(response.collapsibleThinkingBlocks).toBe(true);
   });
 
+  it('leaves an unchosen showReasoningTraces to the client default instead of answering false', () => {
+    const helpers = createTestHelpers();
+
+    // An absent key means the profile never chose. The client's own default
+    // (`packages/ui/src/stores/useUIStore.ts`) shows thinking blocks, and a
+    // server answer of `false` used to override it on the first sync, which
+    // hid reasoning entirely on a fresh data directory.
+    const response = helpers.formatSettingsResponse({});
+    expect(response).not.toHaveProperty('showReasoningTraces');
+
+    // A stored choice still round-trips, both ways.
+    expect(helpers.formatSettingsResponse({ showReasoningTraces: false }).showReasoningTraces).toBe(false);
+    expect(helpers.formatSettingsResponse({ showReasoningTraces: true }).showReasoningTraces).toBe(true);
+  });
+
   it('includes transient desktop LAN access runtime status in desktop settings response', () => {
     const helpers = createTestHelpers();
     const previousRuntime = process.env.OPENCHAMBER_RUNTIME;

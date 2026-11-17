@@ -14,8 +14,9 @@ import { getRuntimeApiBaseUrl } from '@/lib/runtime-switch';
 import {
   SettingsSection,
   SettingsCheckboxRow,
-  SettingsStackedField,
+  SettingsFieldRow,
   SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { useEnterprisePolicyStore } from '@/stores/useEnterprisePolicyStore';
 
@@ -196,7 +197,7 @@ export const DesktopNetworkSettings: React.FC = () => {
 
   return (
     <SettingsSection title={t('settings.layout.general.network.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
-      <SettingsStackedField
+      <SettingsFieldRow
         settingsItem="sessions.desktop-ui-password"
         label={(
           <label htmlFor="desktop-ui-password">
@@ -208,7 +209,8 @@ export const DesktopNetworkSettings: React.FC = () => {
         <Input
           id="desktop-ui-password"
           type="password"
-          className="h-8 min-w-0 flex-1"
+          inputSize="compact"
+          className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
           value={draftPassword}
           onChange={(event) => handlePasswordChange(event.target.value)}
           placeholder={t(hasSavedPassword && !removePassword
@@ -222,7 +224,7 @@ export const DesktopNetworkSettings: React.FC = () => {
           <Button
             type="button"
             variant="ghost"
-            size="xs"
+            size="sm"
             onClick={handleRemovePassword}
             disabled={isLoading || isSaving}
             className="shrink-0 !font-normal"
@@ -230,7 +232,7 @@ export const DesktopNetworkSettings: React.FC = () => {
             {t('settings.openchamber.desktopPassword.actions.removePassword')}
           </Button>
         ) : null}
-      </SettingsStackedField>
+      </SettingsFieldRow>
 
       <SettingsCheckboxRow
         settingsItem="sessions.desktop-lan-access"

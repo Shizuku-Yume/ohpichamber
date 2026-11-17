@@ -20,7 +20,7 @@ describe('inferUnit', () => {
     // letters; only a camelCase word boundary counts.
     expect(inferUnit('some.SecsThing')).toBeUndefined();
     expect(inferUnit('some.PctsThing')).toBeUndefined();
-    expect(inferUnit('model.toolCallLoopGuard.threshold')).toBeUndefined();
+    expect(inferUnit('model.toolCallLoopGuard.threshold')).toBe('calls');
   });
 
   test('milliseconds, kilobytes and columns cover the rows a bare stepper lost', () => {

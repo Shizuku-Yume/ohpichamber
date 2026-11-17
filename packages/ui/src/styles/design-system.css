@@ -1186,3 +1186,27 @@ html[data-glass-redraw-guard] body::before {
     display: none;
   }
 }
+/* Settings pages share one control height: 28px (h-7), matching dropdown
+   triggers (`dropdownTriggerVariants` default). Scoped to `[data-settings-page]`
+   on desktop so chat, dialogs (portalled outside the page) and mobile touch
+   targets keep their own sizes. The stepper cluster draws its 1px border via
+   `::after` so its inner `<input>` (`h-full`) is 28px tall too, matching the
+   selects beside it. */
+:root:where(:not(.device-mobile), .desktop-runtime) [data-settings-page] [data-slot="input"]:not([type="file"]):not([type="color"]):not([type="range"]),
+:root:where(:not(.device-mobile), .desktop-runtime) [data-settings-page] [data-slot="number-input"] {
+  height: 1.75rem;
+}
+
+:root:where(:not(.device-mobile), .desktop-runtime) [data-settings-page] [data-slot="number-input"] {
+  position: relative;
+  border-width: 0;
+}
+
+:root:where(:not(.device-mobile), .desktop-runtime) [data-settings-page] [data-slot="number-input"]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border);
+  border-radius: inherit;
+  pointer-events: none;
+}

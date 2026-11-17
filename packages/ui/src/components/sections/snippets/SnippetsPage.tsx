@@ -12,7 +12,6 @@ import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLay
 import {
   SettingsSection,
   SettingsFieldRow,
-  SettingsStackedField,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_WIDTH_LONG_TEXT_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
@@ -153,7 +152,7 @@ export const SnippetsPage: React.FC = () => {
             </Select>
           </SettingsFieldRow>
         ) : null}
-        <SettingsStackedField label={t('settings.common.field.description')}>
+        <SettingsFieldRow label={t('settings.common.field.description')}>
           <Input
             value={description}
             readOnly={!isNew && !selectedSnippet?.editable}
@@ -162,7 +161,7 @@ export const SnippetsPage: React.FC = () => {
             inputSize="compact"
             className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
           />
-        </SettingsStackedField>
+        </SettingsFieldRow>
       </SettingsSection>
 
       <SettingsSection settingsItem="snippets.content">

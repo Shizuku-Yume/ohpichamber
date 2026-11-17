@@ -63,8 +63,16 @@ export const SETTINGS_WIDTH_LONG_TEXT_CLASS = 'w-full max-w-[24rem]';
  */
 export const SETTINGS_WIDTH_NUMBER_CLASS = 'typography-ui-label w-[calc(5.75rem+5ch)]';
 
-/** Compact reset / icon action next to a settings control (matches h-8 controls). */
+/** Compact reset / icon action next to a settings-pane control (matches h-7 controls). */
 export const SETTINGS_ICON_BUTTON_CLASS =
+  'h-7 w-7 px-0 text-muted-foreground hover:text-foreground';
+
+/**
+ * The same icon action in a dialog: dialogs size to the window and keep the
+ * `Input` default footprint (h-8), so their action matches that instead of the
+ * settings pane's h-7 row.
+ */
+export const SETTINGS_DIALOG_ICON_BUTTON_CLASS =
   'h-8 w-8 px-0 text-muted-foreground hover:text-foreground';
 
 /** Custom dropdown triggers (ModelSelector / AgentSelector) in settings field rows. */

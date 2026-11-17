@@ -36,6 +36,7 @@ const nextRuntime = () => switchRuntimeEndpoint({ apiBaseUrl: 'https://native-st
 const originalStorage = globalThis.localStorage;
 let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
 let resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace');
+let listWorkspaces = spyOn(canonicalClient, 'listWorkspaces');
 let subagents = spyOn(canonicalClient, 'listSubagents');
 
 const startFromSnapshot = (sessions: Session[]) => {
@@ -51,6 +52,7 @@ beforeEach(() => {
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
   home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockResolvedValue({ workspaceId: 'wsp_hint', projectId: 'pro_hint', name: 'Hint' });
+  listWorkspaces = spyOn(canonicalClient, 'listWorkspaces').mockResolvedValue({ items: [], errors: {} });
   subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
 });
 
@@ -58,6 +60,7 @@ afterEach(() => {
   flushPendingSessionWrites();
   home.mockRestore();
   resolveWorkspace.mockRestore();
+  listWorkspaces.mockRestore();
   subagents.mockRestore();
   clearLastActiveSession(getRuntimeKey());
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: originalStorage });

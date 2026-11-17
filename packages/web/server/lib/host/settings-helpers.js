@@ -1042,12 +1042,12 @@ export const createSettingsHelpers = (dependencies) => {
               : null,
         }
         : {}),
-      showReasoningTraces:
-        typeof settings.showReasoningTraces === 'boolean'
-          ? settings.showReasoningTraces
-          : typeof sanitized.showReasoningTraces === 'boolean'
-            ? sanitized.showReasoningTraces
-            : false,
+      // `showReasoningTraces` is deliberately not defaulted here. An absent
+      // key means "this profile never chose"; the client's own default
+      // (`packages/ui/src/stores/useUIStore.ts`) shows thinking blocks.
+      // Answering `false` for an absent key overrode that default on the first
+      // settings sync, so a fresh data directory rendered no reasoning at all.
+      // The key travels back only when it is stored.
       collapsibleThinkingBlocks:
         typeof settings.collapsibleThinkingBlocks === 'boolean'
           ? settings.collapsibleThinkingBlocks

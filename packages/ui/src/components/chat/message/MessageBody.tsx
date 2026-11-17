@@ -33,7 +33,7 @@ import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { getMultiRunIdentity } from '@/lib/multirun/identity';
 import { openParallelComposer } from '@/lib/multirun/openParallelComposer';
 import { AskOtherModelsDialog } from '@/components/multirun/AskOtherModelsDialog';
-import { suggestPlanTitleFromText } from '@/lib/messages/messageText';
+import { assistantTextSegments, suggestPlanTitleFromText } from '@/lib/messages/messageText';
 import { MULTIRUN_EXECUTION_FORK_PROMPT_META_TEXT } from '@/lib/messages/executionMeta';
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -55,6 +55,8 @@ import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
 import { LiveActivityCollapse } from '../components/LiveActivityCollapse';
 import { LiveFinalActivityContext } from '../components/liveActivityContext';
+import { MessageSliceContext } from './messageSliceContext';
+import { ActivityRowSkipContext, isActivityRowPart } from '../lib/turns/activityRows';
 import { ShownToolCard } from './parts/ShownToolCard';
 import { isShownInPlace } from './parts/pageRenderView';
 import { toToolView } from './parts/toolView';
@@ -75,7 +77,13 @@ import { useAgentColors } from '@/hooks/useAgentColors';
 import { isCapacitorMobileApp } from '@/apps/mobileNativeChrome';
 import { shareFileFromNativeApp } from '@/lib/nativeFileShare';
 import { WorktreeRequiresGitRepositoryError } from '@/lib/worktrees/worktreeCreate';
-import { cloneMessageImageExportSource } from './imageExport';
+import {
+    buildTurnImageExportSource,
+    cloneMessageImageExportSource,
+    fitMessageImageExportLayout,
+    resolveMessageImageExportPixelRatio,
+    resolveMessageImageExportWidth,
+} from './imageExport';
 import { problemMessage } from '@/lib/problemMessage';
 
 
@@ -1410,6 +1418,11 @@ const AssistantMessageBody = React.memo(({
     const timeFormatPreference = useUIStore((state) => state.timeFormatPreference);
     const isSortedRenderMode = chatRenderMode === 'sorted';
     const liveFinalActivity = React.useContext(LiveFinalActivityContext);
+    // A long answer spans several rows; each draws its slice of the message,
+    // the first one what comes before the answer, the last one what follows.
+    const slice = React.useContext(MessageSliceContext);
+    const isSliceEnd = !slice?.to;
+    const activityRowSkip = React.useContext(ActivityRowSkipContext);
     const collapsedPreviewCount = 7;
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
     const isTurnCompleted = !turnGroupingContext?.isWorking && isMessageCompleted;
@@ -1589,14 +1602,26 @@ const AssistantMessageBody = React.memo(({
                     computedStyle.backgroundColor ||
                     window.getComputedStyle(document.body).backgroundColor;
                 const paddingSize = 24;
+                // The turn source is built off-screen, so the visible column is the
+                // only element still holding the width the reader saw.
+                const exportWidth = resolveMessageImageExportWidth(messageContentRef.current ?? originalElement);
 
                 wrapper = document.createElement('div');
                 wrapper.setAttribute('data-message-image-export', 'true');
                 wrapper.style.cssText = `
                     padding: ${paddingSize}px;
+                    ${exportWidth ? `width: ${exportWidth}px; box-sizing: content-box;` : ''}
                     background-color: ${resolvedBackgroundColor};
                     display: inline-block;
                 `;
+                // Scrollbars are dead weight in a still image, and hiding them stops
+                // their gutter from clipping the last column of a wide table.
+                const exportStyle = document.createElement('style');
+                exportStyle.textContent = `
+                    [data-message-image-export] * { scrollbar-width: none; }
+                    [data-message-image-export] *::-webkit-scrollbar { display: none; }
+                `;
+                wrapper.appendChild(exportStyle);
 
                 const clone = cloneMessageImageExportSource(originalElement);
                 clone.style.cssText = `
@@ -1605,6 +1630,12 @@ const AssistantMessageBody = React.memo(({
                     contain: none;
                 `;
 
+                // A column-width canvas would clip an unwrapped code line behind its
+                // scroll container, so long lines wrap only for the export.
+                const codeWrapRoots = clone.querySelectorAll<HTMLElement>('[data-code-wrap]');
+                codeWrapRoots.forEach((root) => {
+                    root.setAttribute('data-code-wrap', 'true');
+                });
                 const actionRows = clone.querySelectorAll<HTMLElement>('[data-message-actions="true"]');
                 actionRows.forEach((row) => {
                     row.style.display = 'none';
@@ -1640,10 +1671,21 @@ const AssistantMessageBody = React.memo(({
 
                 wrapper.appendChild(clone);
                 document.body.appendChild(wrapper);
+                if (exportWidth) {
+                    // Keep the clone at the column so prose wraps where the reader saw it;
+                    // only the canvas and the clipped blocks grow.
+                    fitMessageImageExportLayout(wrapper, clone, exportWidth);
+                }
+
+                const bounds = wrapper.getBoundingClientRect();
+                const canvasWidth = Math.ceil(bounds.width);
+                const canvasHeight = Math.ceil(bounds.height);
 
                 const dataUrl = await toPng(wrapper, {
                     quality: 1,
-                    pixelRatio: 2,
+                    width: canvasWidth,
+                    height: canvasHeight,
+                    pixelRatio: resolveMessageImageExportPixelRatio(canvasWidth, canvasHeight),
                     backgroundColor: resolvedBackgroundColor,
                 });
 
@@ -1672,6 +1714,35 @@ const AssistantMessageBody = React.memo(({
             }
         },
         [messageId, t]
+    );
+
+    const shareTextAsImage = React.useCallback(
+        async (segments: string[], requestedSourceElement?: HTMLElement | null) => {
+            if (segments.length === 0) {
+                await shareMessageAsImage(requestedSourceElement);
+                return;
+            }
+            const syntaxStyle = messageContentRef.current?.querySelector('[data-markdown-content]')?.getAttribute('style') ?? null;
+            let turnSource: HTMLElement;
+            try {
+                turnSource = await buildTurnImageExportSource(segments, syntaxStyle);
+            } catch (error) {
+                console.error('Failed to generate image:', error);
+                toast.error(problemMessage(error, t('chat.messageBody.toast.generateImageFailed')));
+                return;
+            }
+            await shareMessageAsImage(turnSource);
+        },
+        [shareMessageAsImage, t]
+    );
+
+    // This row draws only part of a long answer: the image is made from the
+    // message's text, not from what this row shows.
+    const shareShownMessageAsImage = React.useCallback(
+        (requestedSourceElement?: HTMLElement | null) => (slice
+            ? shareTextAsImage(assistantTextSegments(assistantTextParts), requestedSourceElement)
+            : shareMessageAsImage(requestedSourceElement)),
+        [assistantTextParts, shareMessageAsImage, shareTextAsImage, slice]
     );
 
     const activityPartsForTurn = React.useMemo(() => {
@@ -1739,10 +1810,10 @@ const AssistantMessageBody = React.memo(({
     }, [toolParts]);
 
     const shouldDeferSortedInlineText = isSortedRenderMode && !isFinalAnswer && !hasQuestionTool;
-    const showErrorMessage = Boolean(errorMessage);
+    const showErrorMessage = Boolean(errorMessage) && isSliceEnd;
     const isPeekSurface = chatSurfaceMode === 'peek';
-    const shouldShowMessageActions = hasCopyableText && !isPeekSurface;
-    const shouldShowTurnFooter = isLastAssistantInTurn && hasTextContent && (isFinalAnswer || Boolean(errorMessage)) && !isPeekSurface;
+    const shouldShowMessageActions = hasCopyableText && !isPeekSurface && isSliceEnd;
+    const shouldShowTurnFooter = isLastAssistantInTurn && hasTextContent && (isFinalAnswer || Boolean(errorMessage)) && !isPeekSurface && isSliceEnd;
     const shouldRenderActionsInActivity = isSortedRenderMode;
     const shouldShowStandaloneMessageActions = showSplitAssistantMessageActions && shouldShowMessageActions && !shouldShowTurnFooter && !shouldRenderActionsInActivity;
 
@@ -1752,13 +1823,13 @@ const AssistantMessageBody = React.memo(({
             isTouchContext={isTouchContext}
             onCopyMessage={onCopyMessage}
             onCopyLink={onCopyLink}
-            onShareImage={shareMessageAsImage}
+            onShareImage={shareShownMessageAsImage}
             ttsText={assistantPlanText}
             ttsReadingKey={messageId}
             reviewTransferAction={reviewTransferAction}
             extraActions={extraActions}
         />
-    ), [assistantPlanText, extraActions, hasCopyableText, isTouchContext, messageId, onCopyLink, onCopyMessage, reviewTransferAction, shareMessageAsImage]);
+    ), [assistantPlanText, extraActions, hasCopyableText, isTouchContext, messageId, onCopyLink, onCopyMessage, reviewTransferAction, shareShownMessageAsImage]);
 
     // The turn footer appends its own buttons (fork, multi-run) after this
     // group, so extension actions are rendered there separately, last.
@@ -1768,12 +1839,12 @@ const AssistantMessageBody = React.memo(({
             isTouchContext={isTouchContext}
             onCopyMessage={onCopyMessage}
             onCopyLink={onCopyLink}
-            onShareImage={shareMessageAsImage}
+            onShareImage={shareShownMessageAsImage}
             ttsText={assistantPlanText}
             ttsReadingKey={messageId}
             reviewTransferAction={reviewTransferAction}
         />
-    ), [assistantPlanText, hasCopyableText, isTouchContext, messageId, onCopyLink, onCopyMessage, reviewTransferAction, shareMessageAsImage]);
+    ), [assistantPlanText, hasCopyableText, isTouchContext, messageId, onCopyLink, onCopyMessage, reviewTransferAction, shareShownMessageAsImage]);
 
     const renderJustificationActions = React.useCallback((activity: NonNullable<TurnGroupingContext['activityParts']>[number]) => {
         if (!showSplitAssistantMessageActions || !isSortedRenderMode) {
@@ -1883,18 +1954,40 @@ const AssistantMessageBody = React.memo(({
         // after that tool's row so e.g. an Agent Task sits chronologically
         // between the activity before it and the activity after it.
         const localToolPartIds = new Set<string>();
-        visibleParts.forEach((part) => {
+        const sliceToolPartIds = new Set<string>();
+        let inSliceTools = !slice?.from;
+        let sliceEndedTools = false;
+        visibleParts.forEach((part, index) => {
+            if (!inSliceTools && part.partId === slice?.from?.partId) {
+                inSliceTools = true;
+            }
+            if (!sliceEndedTools && slice?.to && (
+                slice.to.offset === 0
+                    ? part.partId === slice.to.partId
+                    : visibleParts[index - 1]?.partId === slice.to.partId
+            )) {
+                sliceEndedTools = true;
+            }
             if (part.type === 'tool_call' || part.type === 'tool_result') {
                 localToolPartIds.add(part.partId);
+                if (inSliceTools && !sliceEndedTools) {
+                    sliceToolPartIds.add(part.partId);
+                }
             }
         });
         const segmentsAfterLocalTool = new Map<string, TurnActivityGroup[]>();
         if (shouldRenderActivityGroup && toggleActivityGroup) {
             activityGroupSegmentsForMessage.forEach((segment) => {
                 if (segment.afterToolPartId && localToolPartIds.has(segment.afterToolPartId)) {
+                    if (!sliceToolPartIds.has(segment.afterToolPartId)) {
+                        return;
+                    }
                     const list = segmentsAfterLocalTool.get(segment.afterToolPartId) ?? [];
                     list.push(segment);
                     segmentsAfterLocalTool.set(segment.afterToolPartId, list);
+                    return;
+                }
+                if (slice?.from) {
                     return;
                 }
                 const block = renderSegmentBlock(segment);
@@ -1918,13 +2011,30 @@ const AssistantMessageBody = React.memo(({
             });
         };
 
-        // Flat rendering: iterate parts in natural order.
-        // Group consecutive static tools (read, grep, glob, etc.) into compact rows.
-        // Expandable tools (bash, edit, task) get individual rows.
-        // Text renders inline at its natural position.
+        // A working turn with Activity collapsed shows only its latest rows;
+        // the first rows of the message it cuts into are left out here.
+        let rowsToSkip = activityRowSkip?.messageId === messageId ? activityRowSkip.rows : 0;
+        // A slice starts at a part or inside a text, and ends at or inside
+        // another (or the same) one; the parts outside it are other rows'.
+        let sliceStarted = !slice?.from;
+        const firstTextPartId = visibleParts.find((candidate) => candidate.type === 'text')?.partId;
         let i = 0;
         while (i < visibleParts.length) {
             const part = visibleParts[i];
+            if (!sliceStarted) {
+                sliceStarted = part.partId === slice?.from?.partId;
+                if (!sliceStarted) {
+                    i += 1;
+                    continue;
+                }
+            }
+            // The next row starts at this part, or inside the one just drawn.
+            if (slice?.to && (slice.to.offset === 0 ? part.partId === slice.to.partId : visibleParts[i - 1]?.partId === slice.to.partId)) break;
+            if (rowsToSkip > 0 && isActivityRowPart(part)) {
+                rowsToSkip -= 1;
+                i += 1;
+                continue;
+            }
             rendered = splitLiveActivity && part.type !== 'text' ? activityRendered : answerRendered;
 
             if (part.type === 'text') {
@@ -1937,7 +2047,12 @@ const AssistantMessageBody = React.memo(({
                     i += 1;
                     continue;
                 }
-                if (isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || activityRendered.length > 0 || hasEarlierVisibleActivity || turnGroupingContext?.hasEarlierAssistantText)) {
+                const textStart = slice?.from?.partId === part.partId ? slice.from.offset : 0;
+                const textEnd = slice?.to?.partId === part.partId && slice.to.offset > 0 ? slice.to.offset : undefined;
+                if (textStart > 0 || (slice?.from && part.partId !== firstTextPartId)) {
+                    // An earlier row drew this answer's start, and what came before it.
+                    hasRenderedAnswerText = true;
+                } else if (isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || activityRendered.length > 0 || hasEarlierVisibleActivity || turnGroupingContext?.hasEarlierAssistantText)) {
                     rendered.push(
                         <div
                             key={`final-answer-divider-${messageId}`}
@@ -1956,6 +2071,7 @@ const AssistantMessageBody = React.memo(({
                             streamPhase={effectiveStreamPhase}
                             chatRenderMode={chatRenderMode}
                             onShowPopup={onShowPopup}
+                            range={textStart > 0 || textEnd !== undefined ? { start: textStart, end: textEnd } : undefined}
                         />
                     </div>
                 );
@@ -2043,6 +2159,7 @@ const AssistantMessageBody = React.memo(({
                     let j = i;
                     while (j < visibleParts.length) {
                         const candidate = visibleParts[j]!;
+                        if (slice?.to && (slice.to.offset === 0 ? candidate.partId === slice.to.partId : visibleParts[j - 1]?.partId === slice.to.partId)) break;
                         if (candidate.type !== 'tool_call' && candidate.type !== 'tool_result') break;
                         const cTool = candidate;
                         const cName = normalizeToolName(cTool.toolName);
@@ -2212,10 +2329,10 @@ const AssistantMessageBody = React.memo(({
             });
         });
 
-        if (splitLiveActivity && liveFinalActivity) {
+        if (splitLiveActivity && liveFinalActivity && (!slice?.from || activityRendered.length > 0)) {
             return [
                 <LiveActivityCollapse key="final-message-activity" expanded={liveFinalActivity.expanded}
-                    id={liveFinalActivity.contentId}>
+                    id={slice?.from ? undefined : liveFinalActivity.contentId}>
                     {activityRendered}
                 </LiveActivityCollapse>,
                 ...answerRendered,
@@ -2224,6 +2341,7 @@ const AssistantMessageBody = React.memo(({
         return answerRendered;
     }, [
         activityByPart,
+        activityRowSkip,
         callsForTurn,
         activityGroupSegmentsForMessage,
         alwaysShowMessageActions,
@@ -2245,6 +2363,7 @@ const AssistantMessageBody = React.memo(({
         pairedResultKeys,
         renderJustificationActions,
         sessionId,
+        slice,
         onShowPopup,
         onToggleTool,
         shouldRenderActivityGroup,
@@ -2333,7 +2452,7 @@ const AssistantMessageBody = React.memo(({
                 label: t('chat.messageBody.actions.saveAsImage'),
                 icon: <Icon name="image-download" className="h-3.5 w-3.5" />,
                 disabled: !hasCopyableText,
-                onSelect: () => { void shareMessageAsImage(); },
+                onSelect: () => { void shareShownMessageAsImage(); },
             });
         }
         if (!isMiniChatSurface && showMessageTTSButtons && hasCopyableText) {
@@ -2388,7 +2507,7 @@ const AssistantMessageBody = React.memo(({
             }
         }
         return actions;
-    }, [assistantPlanText, canUseProjectPlanActions, contextPinPending, contextPinned, currentProjectRef, extraActions, handleForkClick, handleForkFromHere, handleSaveAsPlanClick, hasCopyableText, isFooterTTSPlaying, isMiniChatSurface, isReviewSessionView, onCopyLink, onCopyMessage, onToggleContextPin, playFooterTTS, reviewTransferAction, shareMessageAsImage, showMessageTTSButtons, stopFooterTTS, t]);
+    }, [assistantPlanText, canUseProjectPlanActions, contextPinPending, contextPinned, currentProjectRef, extraActions, handleForkClick, handleForkFromHere, handleSaveAsPlanClick, hasCopyableText, isFooterTTSPlaying, isMiniChatSurface, isReviewSessionView, onCopyLink, onCopyMessage, onToggleContextPin, playFooterTTS, reviewTransferAction, shareShownMessageAsImage, showMessageTTSButtons, stopFooterTTS, t]);
 
     const finalTurnActionButtons = (
         <>
@@ -2580,7 +2699,7 @@ const AssistantMessageBody = React.memo(({
                         </FadeInOnReveal>
                     )}
                 </div>
-                <MessageFilesDisplay files={parts} workspaceId={workspaceId} onShowPopup={onShowPopup} />
+                {isSliceEnd ? <MessageFilesDisplay files={parts} workspaceId={workspaceId} onShowPopup={onShowPopup} /> : null}
                 {shouldRenderStandaloneActionsAfterContent && (
                     <div className={INLINE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
                         <div className="flex items-center gap-1.5" data-message-action-group="true">

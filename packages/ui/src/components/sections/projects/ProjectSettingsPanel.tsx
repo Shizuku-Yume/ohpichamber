@@ -77,10 +77,11 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
       onSelect={(id) => {
         if (isProjectSettingsTab(id)) onTabChange(id);
       }}
-      layoutMode="fit"
+      layoutMode="scrollable"
+      intrinsicWidth
       variant="active-pill"
-      pillSize="form"
-      className="h-8 max-w-[32rem]"
+      pillSize={frame === 'page' ? 'toolbar' : 'form'}
+      className="flex-none max-w-full"
     />
   );
   const tabContent = (
@@ -107,7 +108,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     ) : null;
     return (
       <SettingsPageLayout title={header} headerEnd={closeButton} showSaveStatus outerClassName="bg-background">
-        <div className="mb-8">{tabStrip}</div>
+        <div className="mb-8 flex min-w-0">{tabStrip}</div>
         {tabContent}
       </SettingsPageLayout>
     );
@@ -119,7 +120,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     <div className="flex min-h-0 flex-1 flex-col @container">
       <div className="shrink-0 space-y-6 px-4 pt-6 pb-5 sm:px-6 sm:pt-8">
         {header}
-        {tabStrip}
+        <div className="flex min-w-0">{tabStrip}</div>
       </div>
       <ScrollableOverlay outerClassName="min-h-0 flex-1" className="w-full">
         <div className="px-4 pb-6 sm:px-6 [&>section:first-of-type]:border-t-0 [&>section:first-of-type]:pt-0">{tabContent}</div>

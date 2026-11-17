@@ -10,8 +10,8 @@ import { BUILTIN_BROWSER_PROVIDER, browserProviderGuests } from '@/lib/guests/br
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
   SettingsCheckboxRow,
+  SettingsFieldRow,
   SettingsSection,
-  SettingsStackedField,
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
@@ -176,7 +176,7 @@ export const ToolsPage: React.FC = () => {
           />
           {agentWebToolEnabled ? (
             <div className="ps-6">
-              <SettingsStackedField
+              <SettingsFieldRow
                 settingsItem="sessions.browser-provider"
                 label={t('settings.openchamber.tools.browserProvider.label')}
                 info={t('settings.openchamber.tools.browserProvider.info')}
@@ -202,7 +202,7 @@ export const ToolsPage: React.FC = () => {
                     ))}
                   </SelectContent>
                 </Select>
-              </SettingsStackedField>
+              </SettingsFieldRow>
             </div>
           ) : null}
 

@@ -10,7 +10,6 @@ import {
   SETTINGS_HELPER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
-  SETTINGS_WIDTH_LONG_TEXT_CLASS,
   SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_WIDTH_SHORT_TEXT_CLASS,
   SETTINGS_WIDTH_SELECT_CLASS,
@@ -29,6 +28,7 @@ const UNIT_LABEL_KEYS = {
   kilobytes: 'settings.omp.unit.kilobytes',
   lines: 'settings.omp.unit.lines',
   columns: 'settings.omp.unit.columns',
+  calls: 'settings.omp.unit.calls',
 } satisfies Record<OmpRowUnit, I18nKey>;
 
 /** One option as the row draws it: already in the locale, with its explanation. */
@@ -83,8 +83,9 @@ function rowChoices(t: Translate, setting: OmpSetting, sentinelLabel?: string): 
  * The explanation belongs to the choice the user is looking at, so it stays
  * visible underneath instead of behind an info icon: an option whose
  * consequence is not self-evident is exactly what the picker is choosing.
- * The row's control column stacks these, so the sentence sits under the picker
- * at the documented long-text width instead of forcing the picker wider.
+ * The row's control column stacks these and the sentence fills it: the
+ * 24 rem long-text cap sizes a control, and reusing it here wrapped prose into
+ * a narrow block while the row had free space beside the picker.
  */
 const OmpOptionSelect: React.FC<{
   label: string;
@@ -110,7 +111,7 @@ const OmpOptionSelect: React.FC<{
         </SelectContent>
       </Select>
       {selected?.description ? (
-        <p className={cn(SETTINGS_HELPER_CLASS, SETTINGS_WIDTH_LONG_TEXT_CLASS)}>{selected.description}</p>
+        <p className={cn(SETTINGS_HELPER_CLASS, 'w-full')}>{selected.description}</p>
       ) : null}
     </>
   );

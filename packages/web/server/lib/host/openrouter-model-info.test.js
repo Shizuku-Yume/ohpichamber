@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { registerOpenRouterModelInfoRoute, createOpenRouterModelCatalog } from './openrouter-model-info.js';
+import { registerOpenRouterModelInfoRoute } from './openrouter-model-info.js';
 import { registerCommonRequestMiddleware } from './core-routes.js';
 
 const ENDPOINT = '/api/openchamber/openrouter/model-info';
@@ -312,6 +312,7 @@ describe('OpenRouter model info route', () => {
 
 describe('OpenRouter model info cache', () => {
   it('refetches after the TTL and never caches a failure as an empty list', async () => {
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => { });
     let nowMs = 0;
     let calls = 0;
     const fetchImpl = vi.fn(async () => {
@@ -319,13 +320,15 @@ describe('OpenRouter model info cache', () => {
       if (calls === 2) throw new Error('offline');
       return jsonResponse(listPayload);
     });
-    const catalog = createOpenRouterModelCatalog({ fetchImpl, now: () => nowMs, ttlMs: 1000 });
+    const app = createApp({ fetchImpl, now: () => nowMs, ttlMs: 1000 });
 
-    expect(await catalog.lookup(['anthropic/claude-sonnet-4.6'])).toHaveLength(1);
+    const first = await request(app).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }).expect(200);
+    expect(first.body.models).toHaveLength(1);
     nowMs = 2000;
-    await expect(catalog.lookup(['anthropic/claude-sonnet-4.6'])).rejects.toThrow('offline');
+    assertProblem(await request(app).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }), 502, 'PROVIDER_UNAVAILABLE');
     nowMs = 3000;
-    expect(await catalog.lookup(['anthropic/claude-sonnet-4.6'])).toHaveLength(1);
+    const recovered = await request(app).post(ENDPOINT).send({ modelIds: ['anthropic/claude-sonnet-4.6'] }).expect(200);
+    expect(recovered.body.models).toHaveLength(1);
     expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 });

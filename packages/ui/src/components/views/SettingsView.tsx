@@ -497,6 +497,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (isMobile) {
       setMobileStage('page-content');
     }
+    // The search overlay sits above the page on both surfaces, so leaving the
+    // query and its result list open hides the row the jump just revealed.
+    setSettingsSearchQuery('');
     if (result.id === 'plugins.create') {
       window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent('openchamber:settings-open-plugin-add'));

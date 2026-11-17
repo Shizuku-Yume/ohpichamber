@@ -20,7 +20,6 @@ import { I18nProvider } from '@/lib/i18n';
 import { useStreamingTextThrottle } from './hooks/useStreamingTextThrottle';
 import { resolveAssistantDisplayText } from './message/parts/assistantTextVisibility';
 import { TodoCard } from './message/parts/TodoCard';
-import { latestTodoPhases } from './todoHistory';
 import { SyncProvider } from '@/sync/sync-context';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -149,20 +148,16 @@ const replayTurn = (): State => {
         status: 'running',
     };
     const text: Part = { type: 'text', partId: 'part-text', content: '' };
+    const todos = [
+        { name: 'Discovery', tasks: [{ content: 'Search codebase', status: 'completed' as const }, { content: 'Inspect findings', status: 'in_progress' as const }] },
+        { name: 'Execution', tasks: [{ content: 'Apply modifications', status: 'pending' as const }] },
+    ];
     const todo: Part = {
         type: 'tool_result',
         partId: 'part-todo',
         toolCallId: 'call-todo',
         toolName: 'todo',
-        output: {
-            content: [],
-            details: {
-                phases: [
-                    { name: 'Discovery', tasks: [{ content: 'Search codebase', status: 'completed' }, { content: 'Inspect findings', status: 'in_progress' }] },
-                    { name: 'Execution', tasks: [{ content: 'Apply modifications', status: 'pending' }] },
-                ],
-            },
-        },
+        output: { content: [], details: { phases: todos } },
         isError: false,
     };
 
@@ -177,6 +172,7 @@ const replayTurn = (): State => {
         event(8, 'part.delta', { partId: 'part-text', delta: 'Here is the first' }),
         event(9, 'part.delta', { partId: 'part-text', delta: ' token of the answer, and it keeps going.' }),
         event(10, 'part.started', { messageId: assistantMessageId, part: todo }),
+        event(11, 'session.updated', { todos }),
     ];
 
     let state = initialState();
@@ -217,10 +213,9 @@ describe('OMP stream replay', () => {
     });
 
     test('the todo tray folds to the active item and its progress', () => {
-        const message = assistantMessage(replayTurn());
-        const phases = latestTodoPhases([message]);
-        expect(phases).not.toBeNull();
-
+        const replayed = replayTurn();
+        const phases = replayed.snapshot[SESSION_ID]?.todos ?? [];
+        expect(phases).toHaveLength(2);
         const container = document.createElement('div');
         document.body.append(container);
         const root = createRoot(container);

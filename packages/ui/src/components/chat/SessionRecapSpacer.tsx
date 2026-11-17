@@ -2,6 +2,7 @@ import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { useSessionAssistState } from '@/hooks/useSessionAssist';
+import { useSessionCompacting } from '@/sync/sync-context';
 import { useI18n } from '@/lib/i18n';
 import type { I18nKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
@@ -45,7 +46,8 @@ SessionRecapNote.displayName = 'SessionRecapNote';
 
 export interface CompactionDividerProps {
   method?: string;
-  tokensBefore: number;
+  compacting?: boolean;
+  tokensBefore?: number;
   tokensAfter?: number;
   summary?: string;
   warning?: string;
@@ -79,6 +81,7 @@ const COMPACTION_METHODS = ['soft-compacted', 'snap-compacted', 'shaken', 'remot
  */
 export const CompactionDivider: React.FC<CompactionDividerProps> = React.memo(({
   method,
+  compacting = false,
   tokensBefore,
   tokensAfter,
   summary,
@@ -90,28 +93,47 @@ export const CompactionDivider: React.FC<CompactionDividerProps> = React.memo(({
   const raw = (method ?? 'compacted').toLowerCase().trim();
   const normalized = LEGACY_METHOD[raw] ?? raw;
   const methodKey = COMPACTION_METHODS.some((entry) => entry === normalized) ? normalized : 'compacted';
+  const beforeTokens = tokensBefore ?? 0;
   return (
-    <div data-compaction-divider="" data-compaction-method={methodKey} className={cn('my-4 select-none', className)}>
+    <div
+      data-compaction-divider=""
+      data-compaction-state={compacting ? 'running' : 'settled'}
+      data-compaction-method={methodKey}
+      className={cn('my-4 select-none', className)}
+    >
       <div className="flex items-center gap-3 typography-meta text-muted-foreground">
         <div className="h-px flex-1 bg-border/40" />
-        <button
-          type="button"
-          onClick={summary ? () => setIsExpanded((previous) => !previous) : undefined}
-          aria-expanded={summary ? isExpanded : undefined}
-          aria-label={summary ? (isExpanded ? t('chat.compaction.collapseSummary') : t('chat.compaction.expandSummary')) : undefined}
-          className={cn('flex items-center gap-2 rounded-full border border-border/50 bg-background/80 px-3 py-1 font-medium', summary && 'hover:bg-interactive-hover')}
-        >
-          <Icon name="archive" className="size-3.5 text-muted-foreground" />
-          <span className="font-semibold text-foreground/80">
-            {tokensAfter === undefined
-              ? t('chat.compaction.titleNoAfter', { method: t(`chat.compaction.method.${methodKey}` as I18nKey), before: formatTokens(tokensBefore) })
-              : t('chat.compaction.title', { method: t(`chat.compaction.method.${methodKey}` as I18nKey), before: formatTokens(tokensBefore), after: formatTokens(tokensAfter) })}
-          </span>
-          {warning ? <Icon name="alert" className="size-3.5 text-status-warning" /> : null}
-        </button>
+        {compacting ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex items-center gap-2 rounded-full border border-border/50 bg-background/80 px-3 py-1 font-medium"
+          >
+            <Icon name="loader-4" className="size-3.5 animate-spin text-muted-foreground" />
+            <span className="font-semibold text-foreground/80">
+              {t('chat.compaction.running')}
+            </span>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={summary ? () => setIsExpanded((previous) => !previous) : undefined}
+            aria-expanded={summary ? isExpanded : undefined}
+            aria-label={summary ? (isExpanded ? t('chat.compaction.collapseSummary') : t('chat.compaction.expandSummary')) : undefined}
+            className={cn('flex items-center gap-2 rounded-full border border-border/50 bg-background/80 px-3 py-1 font-medium', summary && 'hover:bg-interactive-hover')}
+          >
+            <Icon name="archive" className="size-3.5 text-muted-foreground" />
+            <span className="font-semibold text-foreground/80">
+              {tokensAfter === undefined
+                ? t('chat.compaction.titleNoAfter', { method: t(`chat.compaction.method.${methodKey}` as I18nKey), before: formatTokens(beforeTokens) })
+                : t('chat.compaction.title', { method: t(`chat.compaction.method.${methodKey}` as I18nKey), before: formatTokens(beforeTokens), after: formatTokens(tokensAfter) })}
+            </span>
+            {warning ? <Icon name="alert" className="size-3.5 text-status-warning" /> : null}
+          </button>
+        )}
         <div className="h-px flex-1 bg-border/40" />
       </div>
-      {isExpanded && summary ? (
+      {!compacting && isExpanded && summary ? (
         <div className="mx-auto mt-2.5 max-w-2xl rounded-xl border border-border/40 bg-card/60 p-4 shadow-xs">
           {warning ? (
             <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-status-warning/20 bg-status-warning/5 p-2 text-status-warning">
@@ -129,3 +151,21 @@ export const CompactionDivider: React.FC<CompactionDividerProps> = React.memo(({
 });
 
 CompactionDivider.displayName = 'CompactionDivider';
+
+interface LiveCompactionDividerProps {
+  sessionId: string | null;
+  directory?: string;
+  className?: string;
+}
+
+export const LiveCompactionDivider: React.FC<LiveCompactionDividerProps> = React.memo(({
+  sessionId,
+  directory,
+  className,
+}) => {
+  const compacting = useSessionCompacting(sessionId, directory);
+  if (!compacting) return null;
+  return <CompactionDivider compacting method={compacting.method} className={className} />;
+});
+
+LiveCompactionDivider.displayName = 'LiveCompactionDivider';

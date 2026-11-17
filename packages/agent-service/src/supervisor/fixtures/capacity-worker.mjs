@@ -1,4 +1,4 @@
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, existsSync } from 'node:fs';
 
 let rootSessionId = '';
 let shellJobUntil = 0;
@@ -32,7 +32,9 @@ process.on('message', message => {
   if (message.type === 'operation') {
     const operation = message.operation;
     if (operation?.type === 'shell' && operation.operation?.type === 'snapshot') {
-      const running = Date.now() < shellJobUntil ? [{
+      const shellHoldFile = process.env.WORKER_SHELL_JOB_HOLD_FILE;
+      const shellJobActive = Date.now() < shellJobUntil || Boolean(shellHoldFile && existsSync(shellHoldFile));
+      const running = shellJobActive ? [{
         jobId: 'shell-job-fixture', sessionId: rootSessionId, epoch: 'fixture-epoch', workerGeneration: message.workerGeneration,
         workspaceId: 'workspace', projectId: 'project', command: 'sleep 1', background: true,
         startedAt: now, outputCursor: '0', status: 'running',
@@ -45,8 +47,19 @@ process.on('message', message => {
           }
         }
       };
+      const reply = { type: 'result', workerGeneration: message.workerGeneration, commandId: message.commandId, result };
       const delay = Number(process.env.WORKER_OPERATION_DELAY_MS ?? '0');
-      setTimeout(() => send({ type: 'result', workerGeneration: message.workerGeneration, commandId: message.commandId, result }), delay);
+      const operationHoldFile = process.env.WORKER_OPERATION_HOLD_FILE;
+      const finish = () => setTimeout(() => send(reply), delay);
+      if (operationHoldFile && existsSync(operationHoldFile)) {
+        const waitHold = () => {
+          if (existsSync(operationHoldFile)) setTimeout(waitHold, 10);
+          else finish();
+        };
+        setTimeout(waitHold, 10);
+        return;
+      }
+      finish();
       return;
     }
     if (operation?.type === 'mcp.configuration.read') {

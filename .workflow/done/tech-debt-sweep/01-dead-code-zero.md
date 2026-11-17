@@ -8,7 +8,6 @@
 **Read first:** `.workflow/specs/tech-debt-sweep.md` (item 1); `.agents/skills/openchamber-change-discipline/SKILL.md`; `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-16/task13/gate/final-07-dead-code.log`; `AGENTS.md` Validation
 **Check:** `bun run dead-code && bun run type-check && bun run lint && VITEST_MAX_WORKERS=2 bun run --cwd packages/ui test && bun run --cwd packages/web test` → all exit 0; `dead-code` prints no unused file, export, type or hint.
 **Base commit:** ca71544157c045f4200a81191a950667058793bc
-**Status:** active
 
 - [x] Rerun `bun run dead-code` on the integration tip after tasks 02-08 landed; that list, not the old log, is the work list.
 - [x] Each unused file is checked for dynamic imports, string-addressed loaders, tests and docs before deletion; retired relics (OpenCode, VS Code, old workflow cards) are deleted with their tests and stale doc mentions.
@@ -35,3 +34,4 @@
   - `VITEST_MAX_WORKERS=2 bun run --cwd packages/web test` -> exit `0`, `525` passed / `9` skipped test files (`8582` passed / `142` skipped tests; `wave3-web-test.log`; `git diff` confirms zero `packages/` changes since this run).
   - `bunx oxlint` on all modified TS/JS files -> exit `0`, 0 findings (`wave3-oxlint-changed.log`).
   - Real-path Web run on `127.0.0.1:4301`: `bun run --cwd packages/web build` exit `0` (`real-path-web-build.log`), `/health` `200`, `/api/agent/v1/ready` `200`, `0` initial console errors at `1440x900`, live provider chat round-trip `"Reply with exactly the single word: PONG"` -> `"PONG"` (`real-path-chat-4301.png`, `real-path-receipt.json`). All receipts under `/home/shizuku/Project/ohpichamber-omp-artifacts/tech-debt-sweep-2026-11-18/task01/`.
+- **Review:** pass (base ca71544157c045f4200a81191a950667058793bc) — independent read-only review via `independent-reviewer` (0 blocking findings; 1 nonblocking stale doc/comment pointer in `packages/mobile/` resolved).

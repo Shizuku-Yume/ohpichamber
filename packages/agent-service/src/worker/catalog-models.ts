@@ -17,6 +17,7 @@ import { filterAvailableModelsByEnabledPatterns, getModelMatchPreferences, pickD
 import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { resolveRoleModelFull } from '@oh-my-pi/pi-coding-agent/session/role-models';
 import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
+import { isDiscoveryBearerApiKey } from '@oh-my-pi/pi-coding-agent/config/model-provider-discovery';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import {
@@ -531,11 +532,15 @@ export class NativeModels {
    }
    if (!apiKey && !reference && ownsEndpoint && request.providerId) {
     const resolved = await this.context.authStorage.keys.get(request.providerId, undefined, { baseUrl: request.endpoint });
-    if (resolved && resolved !== AUTHENTICATED_SENTINEL && resolved !== 'N/A') apiKey = resolved;
+    // OMP keeps keyless-mode placeholders out of discovery bearers; ambient
+    // auth (a cloud profile, ADC) has no bearer to send either.
+    if (resolved && isDiscoveryBearerApiKey(resolved) && resolved !== AUTHENTICATED_SENTINEL) apiKey = resolved;
    }
    // A models.yml `apiKey` naming an environment variable the runtime does not
    // define resolves to its literal text in OMP, so the request leaves with a
    // bogus bearer. The cause is a missing credential, not the endpoint's auth.
+   // OMP exposes no credential provenance here, so the variable-name shape is
+   // a heuristic: a literal all-caps key would be reported this way on 401/403.
    const unsetKeyVariable = await (async () => {
     const configKey = nativeProvider?.apiKey;
     if (!ownsEndpoint || !configKey || configKey.startsWith('!')) return undefined;

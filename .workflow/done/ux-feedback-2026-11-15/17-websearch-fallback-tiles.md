@@ -1,0 +1,22 @@
+# 17: Redesign Web Search fallback items as cohesive rounded oc-tile rows
+
+**Effort:** ux-feedback-2026-11-15
+**Blocked by:** None
+**Covers:** W15
+**Files:** `packages/ui/src/components/sections/shared/SettingsSortableList.tsx`; `packages/ui/src/components/sections/websearch/WebSearchPage.tsx`; `packages/ui/src/components/sections/websearch/WebSearchPage.test.tsx`; `packages/ui/src/lib/i18n/messages/websearch.i18n.ts` (if new aria/action copy is needed)
+**Read first:** `.workflow/specs/ux-feedback-2026-11-15.md` (2026-11-18 follow-up amendment) (item 4, W15); decisions.md 2026-11-18 "fallbacks use oc-tile rows"; `/home/shizuku/Project/ohpichamber-omp-artifacts/feedback-2026-11-18/` (`4-pasted-image-ae7a3fcc1f63f726.png`); `.agents/skills/drag-to-reorder/SKILL.md`; `packages/ui/src/components/sections/shared/SettingsCards.tsx`; `packages/ui/src/styles/design-system.css` (`.oc-tile`, `.oc-tile-inset`, `.oc-tile-hover`); `packages/ui/src/components/sections/PATTERNS.md`
+**Check:** `bun test packages/ui/src/components/sections/websearch/WebSearchPage.test.tsx packages/ui/src/components/sections/settingsLayoutGuard.test.ts && bun run --cwd packages/ui type-check` → all exit 0; real path on Web at 1600 px (`zh-CN`): open Settings → 网页搜索 with multiple configured and unconfigured fallbacks, screenshot the rounded `oc-tile` rows, drag-reorder two rows and verify order persists across reload, and click an unconfigured fallback's setup action to verify navigation to its provider detail view.
+**Base commit:** 95faa0f0ab2ff720a14a2bc2811321c8a6312dbd
+
+- [x] Extend `SettingsSortableList.tsx` with optional `listClassName` and `rowClassName` props while keeping `SettingsSortableVisibilityList` flat and unchanged, preserving `@dnd-kit` `CSS.Translate.toString`, mouse/touch/keyboard sensors, and handle `touch-none select-none`.
+- [x] Restyle `FallbacksSection` in `WebSearchPage.tsx` with `listClassName="gap-2"` and `rowClassName="oc-tile oc-tile-hover rounded-xl px-3 py-2"` so each fallback item is a self-contained rounded-rectangle surface visually harmonized with the `ProviderCard` grid above it.
+- [x] Inside each fallback tile, render: drag handle, compact `oc-tile-inset` rounded priority badge (`1`, `2`, … `tabular-nums`), provider icon (`oc-tile-inset` badge matching `ProviderCard`), provider title (`typography-ui-label font-medium text-foreground`), an actionable warning/configure affordance when setup/key is missing (clicking opens `onOpenProvider(row.id)`), and the trailing icon-only remove button (`SETTINGS_ICON_BUTTON_CLASS`).
+- [x] Update `WebSearchPage.test.tsx` (and 15 locales in `websearch.i18n.ts` if any label/aria string is added) and verify `settingsLayoutGuard.test.ts` passes.
+
+## Progress
+
+- **Check after:** tip `a7590f4ce8` (base `95faa0f0ab2ff720a14a2bc2811321c8a6312dbd`):
+  - `bun test packages/ui/src/components/sections/websearch/WebSearchPage.test.tsx packages/ui/src/components/sections/settingsLayoutGuard.test.ts && bun run --cwd packages/ui type-check` → exit 0 (`WebSearchPage.test.tsx` 11 pass / 0 fail, `settingsLayoutGuard.test.ts` 12 pass / 0 fail, `packages/ui` type-check 0 errors across 3,548 files).
+  - `bun test packages/ui/src/lib/i18n/messages.test.ts packages/ui/src/lib/i18n/chinese-token-copy.test.ts` → exit 0 (20 pass / 0 fail); `bunx oxlint` on `SettingsSortableList.tsx`, `WebSearchPage.tsx`, `WebSearchPage.test.tsx`, and `websearch.i18n.ts` → exit 0 (0 warnings/errors).
+  - Real path on Web at 1600×1100 px (`zh-CN` and `en`, dark and light themes) on port 4417 with isolated data/home dirs — evidence in `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-18-r2/task17/` (`real-path-receipt.json`, `01-zh-cn-fallbacks-before-reorder.png`, `02-zh-cn-fallbacks-after-reorder-reloaded.png`, `03-zh-cn-fallback-setup-detail.png`, `04-en-fallbacks-tiles.png`, `05-zh-cn-light-fallbacks-tiles.png`): pointer drag-reorder moved `Exa` from 1 to 3 and persisted across page reload and in OMP `config.yml`, and clicking `Session model`'s `需要设置` pill navigated to its `ProviderDetail` view and returned cleanly.
+- **Review:** pass (base 95faa0f0ab2ff720a14a2bc2811321c8a6312dbd) — independent read-only worker `t17-reviewer` reviewed the git diff and 1600 px `zh-CN`/`en` dark/light screenshots against `feedback-2026-11-18/4-pasted-image-ae7a3fcc1f63f726.png`, `PATTERNS.md`, and `STYLING.md` with zero blocking or nonblocking findings.

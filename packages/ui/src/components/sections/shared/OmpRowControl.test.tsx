@@ -41,9 +41,45 @@ Object.assign(globalThis, {
 // Same reason for the app modules, which reach React and the i18n store.
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { I18nProvider } = await import('@/lib/i18n');
+const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
+const { ompSettingsI18n } = await import('@/lib/i18n/messages/omp-settings.i18n');
 const { OmpRowControl } = await import('./OmpRowControl');
 
+const settle = async () => {
+  await act(async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 0);
+    await promise;
+  });
+};
+
+const assertLeftColumnDescriptionAndHugTrigger = (
+  row: HTMLElement,
+  descriptionText: string,
+) => {
+  const leftCol = row.firstElementChild;
+  const controlCol = row.lastElementChild;
+  const trigger = row.querySelector<HTMLElement>('[role="combobox"]');
+  expect(leftCol).not.toBeNull();
+  expect(controlCol).not.toBeNull();
+  expect(leftCol).not.toBe(controlCol);
+  expect(leftCol!.compareDocumentPosition(controlCol!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  const descParagraph = Array.from(row.querySelectorAll('p')).find((p) =>
+    p.textContent?.includes(descriptionText));
+  expect(descParagraph).toBeDefined();
+  expect(leftCol!.contains(descParagraph!)).toBe(true);
+  expect(controlCol!.contains(descParagraph!)).toBe(false);
+
+  expect(trigger).not.toBeNull();
+  expect(controlCol!.contains(trigger!)).toBe(true);
+  expect(controlCol!.classList.contains('flex-col')).toBe(false);
+  expect(controlCol!.classList.contains('items-end')).toBe(false);
+  expect(trigger!.classList.contains('w-fit')).toBe(true);
+  expect(trigger!.classList.contains('min-w-[8ch]')).toBe(true);
+  expect(trigger!.classList.contains('max-w-[28ch]')).toBe(true);
+  expect(trigger!.classList.contains('@xl:w-56')).toBe(false);
+};
 const setting = (overrides: Partial<OmpSetting> & Pick<OmpSetting, 'id' | 'type'>): OmpSetting => ({
   value: null,
   default: null,
@@ -206,7 +242,7 @@ describe('the -1 option', () => {
 });
 
 describe('number options', () => {
-  test('labels come from the locale and the chosen option explains itself', async () => {
+  test('labels come from the locale and the chosen option explains itself under the field label', async () => {
     await render(setting({
       id: 'compaction.thresholdPercent',
       type: 'number',
@@ -216,8 +252,9 @@ describe('number options', () => {
       ],
     }), 50);
     const row = container.querySelector<HTMLElement>('[data-settings-item="omp.compaction.thresholdPercent"]');
-    expect(row?.textContent).toContain('50%');
-    expect(row?.textContent).toContain('Halfway point');
+    if (!row) throw new Error('row missing');
+    expect(row.textContent).toContain('50%');
+    assertLeftColumnDescriptionAndHugTrigger(row, 'Halfway point');
   });
 
   test('a string option value still selects its numeric stored value', async () => {
@@ -236,16 +273,25 @@ describe('number options', () => {
 });
 
 describe('enums', () => {
-  test('three short choices stay chips', async () => {
+  test('up to three short unexplained choices stay chips', async () => {
     await render(setting({
-      id: 'retry.fallbackOn',
+      id: 'steeringMode',
       type: 'enum',
-      enumValues: ['any', 'usage-limit', 'except-usage-limit'],
-    }), 'any');
-    const row = container.querySelector<HTMLElement>('[data-settings-item="omp.retry.fallbackOn"]');
-    expect(row?.querySelector('[role="group"]')).not.toBeNull();
-    expect(row?.querySelector('[role="combobox"]')).toBeNull();
-    expect(row?.textContent).toContain('Any error');
+      enumValues: ['all', 'one-at-a-time'],
+    }), 'all');
+    const steeringRow = container.querySelector<HTMLElement>('[data-settings-item="omp.steeringMode"]');
+    expect(steeringRow?.querySelector('[role="group"]')).not.toBeNull();
+    expect(steeringRow?.querySelector('[role="combobox"]')).toBeNull();
+    expect(steeringRow?.textContent).toContain('All at once');
+
+    await render(setting({
+      id: 'custom.threeChips',
+      type: 'enum',
+      enumValues: ['fast', 'balanced', 'thorough'],
+    }), 'fast');
+    const threeChipRow = container.querySelector<HTMLElement>('[data-settings-item="omp.custom.threeChips"]');
+    expect(threeChipRow?.querySelector('[role="group"]')).not.toBeNull();
+    expect(threeChipRow?.querySelector('[role="combobox"]')).toBeNull();
   });
 
   test('more than three choices become a select, translated', async () => {
@@ -266,7 +312,7 @@ describe('enums', () => {
     expect(labels).not.toContain('apply_patch');
   });
 
-  test('an enum with per-option descriptions becomes a select and explains the choice', async () => {
+  test('an enum with per-option descriptions becomes a select and explains the choice under the field label', async () => {
     await render(setting({
       id: 'ttsr.judge',
       type: 'enum',
@@ -278,9 +324,10 @@ describe('enums', () => {
       ],
     }), 'on');
     const row = document.querySelector<HTMLElement>('[data-settings-item="omp.ttsr.judge"]');
-    expect(row?.querySelector('[role="combobox"]')).not.toBeNull();
-    expect(row?.textContent).toContain('Always');
-    expect(row?.textContent).toContain('Judge every question rule');
+    if (!row) throw new Error('row missing');
+    expect(row.querySelector('[role="combobox"]')).not.toBeNull();
+    expect(row.textContent).toContain('Always');
+    assertLeftColumnDescriptionAndHugTrigger(row, 'Judge every question rule');
   });
 
   test('choosing an enum option writes the raw enum value', async () => {
@@ -311,5 +358,86 @@ describe('booleans and strings', () => {
     await render(setting({ id: 'custom.endpoint', type: 'string' }), 'https://example.test');
     const input = container.querySelector<HTMLInputElement>('[data-settings-item="omp.custom.endpoint"] input');
     expect(input?.value).toBe('https://example.test');
+  });
+});
+
+describe('page-placed options in zh-CN', () => {
+  test('page-placed number and enum selects render localized zh-CN labels and left-column descriptions', async () => {
+    const zhCn: Readonly<Record<string, string>> = ompSettingsI18n['zh-CN'];
+    await act(async () => {
+      useI18nStore.getState().setLocale('zh-CN');
+    });
+    while (useI18nStore.getState().loadingLocale) {
+      await settle();
+    }
+    try {
+      const samplingPlacement = { type: 'page', page: 'sessions', section: 'sampling' } as const;
+      const temperatureSetting = setting({
+        id: 'temperature',
+        type: 'number',
+        placement: samplingPlacement,
+        options: [
+          { value: '-1', label: 'Default', description: 'Use provider default' },
+          { value: '0.2', label: '0.2', description: 'Focused' },
+        ],
+      });
+
+      await render(temperatureSetting, -1);
+      const tempDefaultRow = container.querySelector<HTMLElement>('[data-settings-item="omp.temperature"]');
+      if (!tempDefaultRow) throw new Error('temperature row missing');
+      const tempDefaultTrigger = tempDefaultRow.querySelector<HTMLElement>('[role="combobox"]');
+      const expectedTempDefaultLabel = zhCn['settings.omp.items.temperature.options.unlimited'];
+      const expectedTempDefaultDesc = zhCn['settings.omp.items.temperature.options.unlimited.description'];
+      expect(expectedTempDefaultLabel).toBeDefined();
+      expect(expectedTempDefaultDesc).toBeDefined();
+      expect(expectedTempDefaultLabel).not.toBe('Default');
+      expect(expectedTempDefaultDesc).not.toBe('Use provider default');
+      expect(tempDefaultRow.firstElementChild?.textContent).toContain(zhCn['settings.omp.items.temperature.label']);
+      expect(tempDefaultTrigger?.textContent).toBe(expectedTempDefaultLabel);
+      assertLeftColumnDescriptionAndHugTrigger(tempDefaultRow, expectedTempDefaultDesc);
+
+      await render(temperatureSetting, 0.2);
+      const tempFocusedRow = container.querySelector<HTMLElement>('[data-settings-item="omp.temperature"]');
+      if (!tempFocusedRow) throw new Error('temperature focused row missing');
+      const tempFocusedTrigger = tempFocusedRow.querySelector<HTMLElement>('[role="combobox"]');
+      const expectedTempFocusedLabel = zhCn['settings.omp.items.temperature.options.0-2'];
+      const expectedTempFocusedDesc = zhCn['settings.omp.items.temperature.options.0-2.description'];
+      expect(expectedTempFocusedLabel).toBeDefined();
+      expect(expectedTempFocusedDesc).toBeDefined();
+      expect(expectedTempFocusedDesc).not.toBe('Focused');
+      expect(tempFocusedTrigger?.textContent).toBe(expectedTempFocusedLabel);
+      assertLeftColumnDescriptionAndHugTrigger(tempFocusedRow, expectedTempFocusedDesc);
+
+      await render(setting({
+        id: 'textVerbosity',
+        type: 'enum',
+        placement: samplingPlacement,
+        enumValues: ['low', 'medium', 'high'],
+        options: [
+          { value: 'low', label: 'Low', description: 'Prefer concise responses (default)' },
+          { value: 'medium', label: 'Medium', description: 'Balance brevity and detail' },
+          { value: 'high', label: 'High', description: 'Prefer detailed responses' },
+        ],
+      }), 'low');
+      const verbosityRow = container.querySelector<HTMLElement>('[data-settings-item="omp.textVerbosity"]');
+      if (!verbosityRow) throw new Error('textVerbosity row missing');
+      const verbosityTrigger = verbosityRow.querySelector<HTMLElement>('[role="combobox"]');
+      const expectedVerbosityLabel = zhCn['settings.omp.items.textVerbosity.options.low'];
+      const expectedVerbosityDesc = zhCn['settings.omp.items.textVerbosity.options.low.description'];
+      expect(expectedVerbosityLabel).toBeDefined();
+      expect(expectedVerbosityDesc).toBeDefined();
+      expect(expectedVerbosityLabel).not.toBe('Low');
+      expect(expectedVerbosityDesc).not.toBe('Prefer concise responses (default)');
+      expect(verbosityRow.firstElementChild?.textContent).toContain(zhCn['settings.omp.items.textVerbosity.label']);
+      expect(verbosityTrigger?.textContent).toBe(expectedVerbosityLabel);
+      assertLeftColumnDescriptionAndHugTrigger(verbosityRow, expectedVerbosityDesc);
+    } finally {
+      await act(async () => {
+        useI18nStore.getState().setLocale('en');
+      });
+      while (useI18nStore.getState().loadingLocale) {
+        await settle();
+      }
+    }
   });
 });

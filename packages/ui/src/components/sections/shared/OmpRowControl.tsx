@@ -7,7 +7,6 @@ import {
   SettingsCheckboxRow,
   SettingsChipGroup,
   SettingsFieldRow,
-  SETTINGS_HELPER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
   SETTINGS_WIDTH_NUMBER_CLASS,
@@ -15,7 +14,6 @@ import {
   SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { NumberInput } from '@/components/ui/number-input';
-import { cn } from '@/lib/utils';
 import { inferUnit, isSentinelOption, optionSlug, storedNumber, type OmpRowUnit } from './ompRowHelpers';
 
 type Translate = (key: I18nKey, params?: I18nParams) => string;
@@ -78,14 +76,13 @@ function rowChoices(t: Translate, setting: OmpSetting, sentinelLabel?: string): 
 }
 
 /**
- * Select plus the selected option's explanation.
+ * Settings select control for an OMP option row.
  *
- * The explanation belongs to the choice the user is looking at, so it stays
- * visible underneath instead of behind an info icon: an option whose
- * consequence is not self-evident is exactly what the picker is choosing.
- * The row's control column stacks these and the sentence fills it: the
- * 24 rem long-text cap sizes a control, and reusing it here wrapped prose into
- * a narrow block while the row had free space beside the picker.
+ * Renders the `<Select>` trigger with `SETTINGS_WIDTH_SELECT_CLASS` so it hugs
+ * its value between `8ch` and `28ch`. When the selected option carries an
+ * explanation, the caller passes it to `SettingsFieldRow`'s `description` prop
+ * so the helper text sits beneath the left field label while the trigger stays
+ * vertically centered on the trailing edge.
  */
 const OmpOptionSelect: React.FC<{
   label: string;
@@ -97,23 +94,18 @@ const OmpOptionSelect: React.FC<{
 }> = ({ label, value, choices, fallbackLabel, disabled, onChange }) => {
   const selected = choices.find((choice) => choice.value === value);
   return (
-    <>
-      <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={label}>
-          <SelectValue>{selected?.label ?? fallbackLabel}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {choices.map((choice) => (
-            <SelectItem key={choice.value} value={choice.value}>
-              {choice.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      {selected?.description ? (
-        <p className={cn(SETTINGS_HELPER_CLASS, 'w-full')}>{selected.description}</p>
-      ) : null}
-    </>
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={label}>
+        <SelectValue>{selected?.label ?? fallbackLabel}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {choices.map((choice) => (
+          <SelectItem key={choice.value} value={choice.value}>
+            {choice.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 };
 
@@ -129,12 +121,14 @@ function matchingOption(options: readonly OmpSettingOption[], value: OmpSettingV
  *
  * A boolean is an enable/disable switch, so it is a checkbox row; every other
  * type has a separate value control, so it is a field row (label left, control
- * trailing) exactly like the rest of Settings. The shared width classes keep
- * every OMP picker on the same right edge as the page's own rows.
+ * trailing via `SettingsFieldRow`'s `@xl:justify-end`) exactly like the rest
+ * of Settings. Hug-width row selects (`SETTINGS_WIDTH_SELECT_CLASS`) share the
+ * same trailing right edge as the page's own rows.
  *
  * An enum keeps chips while its choices are short and unexplained; once the
- * list is long or a choice needs a sentence, it becomes a select so the
- * explanation can sit under the chosen option.
+ * list is long or a choice needs a sentence, it becomes a select and the
+ * selected option's explanation sits beneath the field label via
+ * `SettingsFieldRow`'s `description` prop.
  */
 export const OmpRowControl: React.FC<{
   setting: OmpSetting;
@@ -188,18 +182,20 @@ export const OmpRowControl: React.FC<{
       const fallbackLabel = isDefault
         ? t('settings.omp.value.default')
         : value === undefined || value === null ? '' : String(value);
+      const choices = rowChoices(t, setting, t('settings.omp.value.default'));
+      const selectedChoice = choices.find((choice) => choice.value === selectValue);
 
       return (
         <SettingsFieldRow
           label={label}
+          description={selectedChoice?.description}
           info={description}
           settingsItem={anchor}
-          controlClassName="flex-col items-end"
         >
           <OmpOptionSelect
             label={label}
             value={selectValue}
-            choices={rowChoices(t, setting, t('settings.omp.value.default'))}
+            choices={choices}
             fallbackLabel={fallbackLabel}
             disabled={disabled}
             onChange={(next) => {
@@ -275,12 +271,14 @@ export const OmpRowControl: React.FC<{
     );
   }
 
+  const selectedChoice = choices.find((choice) => choice.value === current);
+
   return (
     <SettingsFieldRow
       label={label}
+      description={selectedChoice?.description}
       info={description}
       settingsItem={anchor}
-      controlClassName="flex-col items-end"
     >
       <OmpOptionSelect
         label={label}

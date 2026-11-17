@@ -6,7 +6,7 @@ The mobile package reuses the web build, then rewrites `mobile.html` to `index.h
 
 ### Migration status
 
-In OhPiChamber, the Mobile Capacitor shell is retained under `SCOPE-2.4` in `.workflow/omp-migration/scope.md`. The mobile app bundles the UI only and connects to an OpenChamber server whose Host Gateway serves the Canonical `/api/agent/v1` API. Mobile embeds neither the host server nor the agent runtime. Capacitor reconnect, push, and offline behavior and device certification remain unverified (M5). Guest iframe support is planned for M5 under `SCOPE-16.0`, without local background child processes.
+Under `SCOPE-2.4` in `.workflow/omp-migration/scope.md`, the Capacitor shell bundles `MobileApp` on the Canonical Client and connects to a Host Gateway serving `/api/agent/v1` (with fetch-based SSE event streaming and native header-bearing terminal WebSockets). Mobile embeds neither the Host Gateway nor the OMP Agent Service or background child processes. Guest SDK iframes and Guest extension services are not mounted on mobile today (`loadGuestCatalog` marks the mobile surface `unsupported`, leaving Guest panels, actions, and commands web/desktop-only). Physical-device runtime verification—Android APK pairing, canonical chat streaming, reconnects, approvals, and unsigned/ad-hoc iOS IPA artifacts—is owned by M7 (`.workflow/specs/m7-release-verification.md`).
 
 ## Runtime Model
 
@@ -99,20 +99,23 @@ target instead of guessing coordinates.
 
 ## Local Tooling
 
-The default scripts assume the local Homebrew/Xcode paths prepared for this workspace:
+`scripts/with-mobile-env.mjs` resolves toolchain paths per platform, with explicit `DEVELOPER_DIR`, `JAVA_HOME`, `ANDROID_HOME`, and `ANDROID_SDK_ROOT` environment variables always taking precedence:
 
-- Xcode: `/Applications/Xcode.app/Contents/Developer`
-- JDK 21: `/opt/homebrew/opt/openjdk@21`
-- Android SDK: `/opt/homebrew/share/android-commandlinetools`
-
-Override `DEVELOPER_DIR`, `JAVA_HOME`, `ANDROID_HOME`, or `ANDROID_SDK_ROOT` when using a different local setup.
+- **macOS (`darwin`)**:
+  - `DEVELOPER_DIR`: `$DEVELOPER_DIR` → `xcode-select -p` → `/Applications/Xcode.app/Contents/Developer`
+  - `JAVA_HOME`: `$JAVA_HOME` → Homebrew OpenJDK 21 (`/opt/homebrew/opt/openjdk@21`, or `/usr/local/opt/openjdk@21` if installed)
+  - `ANDROID_HOME` / `ANDROID_SDK_ROOT`: `$ANDROID_HOME` → `$ANDROID_SDK_ROOT` → Homebrew `/opt/homebrew/share/android-commandlinetools` (or `~/Library/Android/sdk` if present)
+- **Linux (`linux`)**:
+  - `DEVELOPER_DIR`: left unset unless explicitly provided (iOS builds and Simulator require macOS with Xcode)
+  - `JAVA_HOME`: `$JAVA_HOME` → first existing JDK 21 directory under `/usr/lib/jvm` (`java-21-openjdk-amd64`, `java-21-openjdk-arm64`, `java-21-openjdk`, `temurin-21-jdk*`, `zulu-21`, `jdk-21`) or Linuxbrew; left unset if none exists so `java` on `PATH` or the caller's environment applies
+  - `ANDROID_HOME` / `ANDROID_SDK_ROOT`: `$ANDROID_HOME` → `$ANDROID_SDK_ROOT` → first existing SDK directory (`~/Android/Sdk`, `~/Android/sdk`, `/opt/android-sdk`, `/usr/lib/android-sdk`, or Linuxbrew); left unset if none exists
+- **`PATH`**: prepends `$JAVA_HOME/bin` and `$ANDROID_HOME/platform-tools` when resolved.
 
 Required local tools:
 
-- Xcode with iOS Simulator support.
-- CocoaPods for iOS dependency installation.
-- JDK 21 for Android Gradle builds.
-- Android SDK command-line tools with platform/build-tools 35.
+- JDK 21 for Android Gradle builds (Linux and macOS).
+- Android SDK command-line tools with platform/build-tools 35 (Linux and macOS).
+- Xcode with iOS Simulator support and CocoaPods for iOS builds (macOS only).
 
 ## Cloudflare Access setup
 
@@ -134,13 +137,13 @@ This setup uses a named Cloudflare Tunnel, a hostname such as `oc.example.com`, 
    Accept
    X-Requested-With
    Cache-Control
-   X-OpenCode-Directory
-   X-OpenCode-Directory-Encoding
+   Last-Event-ID
+   X-OpenChamber-Directory
+   X-OpenChamber-Directory-Encoding
    Ngrok-Skip-Browser-Warning
    X-OpenChamber-Surface
    X-OpenChamber-Provider
    X-OpenChamber-Model
-   X-OpenChamber-Part-Shells
    CF-Access-Client-Id
    CF-Access-Client-Secret
    ```

@@ -104,6 +104,17 @@ from native readiness (`configured`) and write capability (`credentialWritable`)
 Enterprise mode disables new key entry but retains configuration and key removal.
 
 
+`useSessionWarmingStore` owns per-session canonical cache-warming state keyed by
+runtime (`readSessionCacheWarming` / `updateSessionCacheWarming`). Concurrent reads
+share one in-flight request per session, stale reads started before a newer
+mutation or eviction cannot overwrite committed state, and failed reads preserve
+the last authoritative entry alongside an explicit `'read'` error. Writes
+serialize per session with `expectedRevision` CAS protection, retrying once on
+`409 CATALOG_CONFLICT` after a forced refresh, and runtime endpoint switches
+abort pending requests and clear entries. `sync/session-warming-sync.ts`
+hydrates the active root session on selection and Host reconnects and prunes
+entries on confirmed session deletion.
+
 The Stats page keeps reports in the feature-local `components/views/usage/usageStatsStore.ts`, keyed by runtime, range and project directory, in memory only. Cached keys do not refetch automatically; runtime switches abort pending reads and clear entries. Canonical usage reads resolve selected directories through `resolveWorkspace` and send canonical workspace/project IDs with explicit range, bounds and viewer IANA timezone. The initial `/api/agent/v1/usage` report omits expensive tool parsing (`tools.mode: 'none'`); `/api/agent/v1/usage/tools` loads lazily over the loaded report window. Once requested, tools follow subsequent reports. Stale tool completions cannot replace a refreshed window. Failed refreshes preserve cached reports and tools with retry feedback. Partial reports retain valid sessions and expose per-session errors; unavailable reasoning and duration metrics remain null rather than fabricated zeroes. Web/PWA, Electron, hosted mobile and Capacitor share the active Host transport.
 
 PR status reads share the aggregate background-network budget as well as their PR-specific cap. Command discovery gates each scope/config read, including body decoding, rather than only gating the initial SDK list. Command reads have a bounded deadline and abort on runtime reset. Reset clears server-derived command caches and invalidates late reads and mutation responses while preserving unsaved command drafts.

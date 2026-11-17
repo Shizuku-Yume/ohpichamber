@@ -9,6 +9,7 @@ import { setOptimisticRefs } from '@/sync/session-actions';
 import { markSessionViewed } from '@/sync/notification-store';
 import { setExternallyViewedSession } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
+import { useSessionWarmingSync } from '@/sync/session-warming-sync';
 
 const MINI_CHAT_PRESENCE_CHANNEL = 'openchamber:mini-chat-presence';
 
@@ -69,6 +70,7 @@ export function SyncRuntimeEffects({ backgroundWorkEnabled }: {
   useSessionAutoCleanup({ enabled: backgroundWorkEnabled });
   useMergedWorktreeCleanup({ enabled: backgroundWorkEnabled });
   useMessageQueueHoldSync();
+  useSessionWarmingSync();
 
   return <SyncOptimisticBridge />;
 }

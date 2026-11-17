@@ -1,4 +1,4 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, SessionToolsCatalogSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
+import { CacheWarmingModeSchema, CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, SessionToolsCatalogSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
 import { GoalControlRequestSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -32,6 +32,7 @@ export const WorkerBootstrapSchema = z.strictObject({
   pluginRevision: CounterSchema.optional(),
   skillSources: SkillSourceRevisionsSchema.optional(),
   hostTools: z.record(z.string(), z.boolean()).optional(),
+  sessionWarmingMode: CacheWarmingModeSchema.nullable().optional(),
 });
 export type WorkerBootstrap = z.infer<typeof WorkerBootstrapSchema>;
 export const WorkerBootstrapMessageSchema = WorkerBootstrapSchema.omit({ env: true }).extend({

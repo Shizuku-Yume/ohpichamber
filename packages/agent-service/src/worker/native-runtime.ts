@@ -101,6 +101,7 @@ export async function openNativeRuntime(input: { cwd: string; agentDirectory: st
     });
     // Startup uses native local/cache discovery only; network entry is authorized at use.
     await modelRegistry.refresh('offline');
+    models.markPoliciesApplied();
     return {
       authStorage,
       modelRegistry,

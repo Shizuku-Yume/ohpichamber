@@ -1,13 +1,15 @@
-# 01: Eliminate inherited dead files, unused exports/types, and knip configuration hints
+# 01: Bring dead code to zero
 
 **Effort:** tech-debt-sweep
 **Task type:** refactor
-**Blocked by:** None
+**Blocked by:** 02, 03, 05, 06, 07, 08
 **Covers:** W1
-**Files:** `knip.json`; `packages/ui/src/components/sections/agents/AgentSelector.tsx`; `packages/ui/src/lib/settings/vscodeNavigation.ts`; `packages/ui/src/components/chat/workflows/WorkflowRunCard.tsx`; `packages/ui/src/sync/workflow-activity.ts`; `packages/ui/src/components/desktop/DesktopInstanceMenu.tsx`; `packages/agent-service/src/worker/catalog-settings.ts`; `packages/ui/src/lib/api/types.ts`
-**Read first:** `.workflow/specs/tech-debt-sweep.md`; `/home/shizuku/Project/ohpichamber-omp-artifacts/m6-gate-2026-11-07/receipts/gate-deadcode.log`; `.agents/skills/openchamber-change-discipline/SKILL.md`
-**Check:** `bun run dead-code && bun run type-check && bun run --cwd packages/ui test` → exits 0 with 0 unused files, 0 unused exports, 0 unused types, and 0 configuration hints.
+**Files:** `knip.json`; every file `bun run dead-code` reports on the integration tip
+**Read first:** `.workflow/specs/tech-debt-sweep.md` (item 1); `.agents/skills/openchamber-change-discipline/SKILL.md`; `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-16/task13/gate/final-07-dead-code.log`; `AGENTS.md` Validation
+**Check:** `bun run dead-code && bun run type-check && bun run lint && VITEST_MAX_WORKERS=2 bun run --cwd packages/ui test && bun run --cwd packages/web test` → all exit 0; `dead-code` prints no unused file, export, type or hint.
 
-- [ ] Audit and delete genuinely unused files reported by `bun run dead-code` (18 files, verifying no dynamic/runtime imports or tests rely on them) and delete associated orphaned dead tests if any.
-- [ ] Audit and un-export or remove the 65 unused value exports and 69 unused exported types reported by `bun run dead-code` (without touching `IntegrationsCatalogView.tsx`, `useTextareaInlinePicker.tsx`, `useSidebarGroupStatus.ts`, `ChatInput.tsx`, or `DiffWorkerProvider.tsx`).
-- [ ] Fix the 3 `knip.json` configuration hints (`packages/mobile`, `fix-deprecation.js`, `packages/web/bin/cli.js`) without adding blanket ignore masks, so `bun run dead-code` exits `0`.
+- [ ] Rerun `bun run dead-code` on the integration tip after tasks 02-08 landed; that list, not the old log, is the work list.
+- [ ] Each unused file is checked for dynamic imports, string-addressed loaders, tests and docs before deletion; retired relics (OpenCode, VS Code, old workflow cards) are deleted with their tests and stale doc mentions.
+- [ ] Each unused export is un-exported or deleted. Exports that are a real public contract (`@openchamber/sdk`, `@openchamber/agent-contract` consumers, package entrypoints) are declared as entries in `knip.json`, one named path each; no blanket ignore globs.
+- [ ] The 7 configuration hints are resolved.
+- [ ] Exports flagged in files other tasks just added (pins, unread, warming) are checked against their callers; a real caller wins over deletion.

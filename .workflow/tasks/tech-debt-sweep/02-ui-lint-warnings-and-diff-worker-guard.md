@@ -1,13 +1,13 @@
-# 02: Resolve UI React Hook lint warnings and guard DiffWorkerProvider worker initialization timeouts
+# 02: Zero lint warnings and a guarded diff worker
 
 **Effort:** tech-debt-sweep
 **Task type:** bugfix
 **Blocked by:** None
 **Covers:** W2
-**Files:** `packages/ui/src/components/views/IntegrationsCatalogView.tsx`; `packages/ui/src/components/inline-picker/useTextareaInlinePicker.tsx`; `packages/ui/src/components/session/sidebar/list/useSidebarGroupStatus.ts`; `packages/ui/src/components/chat/ChatInput.tsx`; `packages/ui/src/contexts/DiffWorkerProvider.tsx`; `packages/ui/src/contexts/DiffWorkerProvider.test.tsx`
-**Read first:** `.workflow/specs/tech-debt-sweep.md`; `/home/shizuku/Project/ohpichamber-omp-artifacts/m6-gate-2026-11-07/receipts/gate-lint.log`; `.workflow/done/m6-audit-and-polish/closeout.md`; `.agents/skills/openchamber-change-discipline/SKILL.md`
-**Check:** `bun run lint 2>&1 | tee /tmp/debt-w2-lint.log && ! grep -q 'warning' /tmp/debt-w2-lint.log && bun test packages/ui/src/contexts/DiffWorkerProvider.test.tsx packages/ui/src/components/session/sidebar/list/useSidebarGroupStatus.test.tsx && bun run --cwd packages/ui type-check` → exits 0 with 0 lint warnings and verified DiffWorkerProvider timeout fallback.
+**Files:** `packages/ui/src/contexts/DiffWorkerProvider.tsx` (+ new test); the files with `react-hooks(exhaustive-deps)` warnings: `ChatInput.tsx`, `ContextPanelRail.tsx`, `useTextareaInlinePicker.tsx`, `MessageBody.tsx`, `NewWorktreeDialog.tsx`, `useSidebarGroupStatus.ts`, `SessionProjectCollection.tsx`, `TodoSendDialog.tsx`, `OfficeArtifact.tsx`, `MarkdownRendererImpl.tsx`
+**Read first:** `.workflow/specs/tech-debt-sweep.md` (item 2); `.agents/skills/performance-engineering/SKILL.md` and `.agents/skills/sync-state-invariants/SKILL.md` for hooks on hot or sync paths; `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-16/task13/gate/final-03-lint.log`; prior art on tag `archive/tech-debt-sweep-2026-11-08` commit `35dc6718b2` (read only, do not cherry-pick)
+**Check:** `bun run lint 2>&1 | tee /tmp/debt02-lint.log; ! grep -qE ': warning ' /tmp/debt02-lint.log && bun run --cwd packages/ui type-check && VITEST_MAX_WORKERS=2 bun run --cwd packages/ui test` → no `: warning ` line in the lint output, type-check and UI tests exit 0; real path: open a diff in the Web UI on the task port and confirm it renders, then force a worker init failure (devtools: block the worker URL) and confirm no `Unhandled promise rejection` in the console.
 
-- [ ] Fix all 5 `react-hooks(exhaustive-deps)` warnings in `IntegrationsCatalogView.tsx` (lines 382, 397), `useTextareaInlinePicker.tsx` (line 47), `useSidebarGroupStatus.ts` (line 105), and `ChatInput.tsx` (line 1587) without `eslint-disable` / `oxlint-disable` comments.
-- [ ] Inspect `packages/ui/src/contexts/DiffWorkerProvider.tsx` where `@pierre/diffs` `WorkerPoolManager` initializes workers and attach proper rejection handling / graceful fallback when `WorkerPoolManager` initialization times out after 10000ms so long-lived pages never emit uncaught promise rejections.
-- [ ] Add a deterministic unit test in `packages/ui/src/contexts/DiffWorkerProvider.test.tsx` proving worker initialization timeout/rejection is caught cleanly without unhandled rejections.
+- [ ] Every `exhaustive-deps` warning is fixed by correcting the dependency list or restructuring the effect/memo, never by an eslint/oxlint disable comment. Each fix keeps behavior: stale-closure risks are covered by the existing tests or a new focused test.
+- [ ] `DiffWorkerProvider` catches pool initialization rejection and timeout, falls back to the non-worker render path, and logs once; a unit test proves both.
+- [ ] Rerun lint on the integration tip before landing; warnings added by other tasks meanwhile are fixed here too.

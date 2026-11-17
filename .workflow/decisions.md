@@ -1384,3 +1384,33 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** partly: restoring the generator is mine
 - **Revisit when:** the 16–32 px drawings cannot show the π legibly and the maintainer rejects the simplified small sizes.
 - **Effort:** rebrand
+
+## 2026-11-18 - Restart the technical debt sweep from main and fix every open entry
+
+- **Decided:** `tech-debt-sweep` restarts from `main` (`ad4d78dd57`) with a new integration branch. The old `tech-debt-sweep/integration` and its task branches are kept as tags under `archive/tech-debt-sweep-2026-11-08` and then deleted. Every open `technical-debt.md` entry gets a fixing task; fixed entries are deleted. An entry may stay only when its fix needs an upstream OMP change, with a decision naming that change.
+- **Instead of:** merging the 2026-11-08 branch (1,509 commits behind, built against 18 dead files where `main` now has 43) or declining the open entries.
+- **Because:** the maintainer asked on 2026-11-18 to finish the debt rather than carry it ("有的修复了就删去 没修复的去修复 最好全部结个尾").
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** never; this records the restart.
+- **Effort:** tech-debt-sweep
+
+## 2026-11-18 - Build per-session cache warming on the Agent Service
+
+- **Decided:** Implement per-session cache warming as a canonical session-level route and state on the Agent Service, applied by the worker through OMP's native warming, with the session menu toggle and Settings field rebuilt on it (`tech-debt-sweep/06`). The session value overrides the workspace mode for that session.
+- **Instead of:** keeping the 2026-10-29 deletion as final, or a Host-side ping loop.
+- **Because:** the 2026-10-29 entry deferred the feature until a canonical session-level route existed; the maintainer asked on 2026-11-18 for every open debt entry to be fixed, and this is one.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** OMP changes how cache warming is scoped.
+- **Effort:** tech-debt-sweep
+
+## 2026-11-18 - Close the five landed efforts on their recorded evidence
+
+- **Decided:** `omp-native-chat`, `omp-native-parity`, `omp-through-m3`, `upstream-rebaseline` and `ux-and-omp-parity-remediation` are accepted and closed. Each closeout maps its W checks to the recorded evidence, or to the later effort and full gate that re-verified the same surface (`m6-audit-and-polish`, `ux-feedback-2026-11-15` task 13), instead of rerunning historical checks on old tips.
+- **Instead of:** rerunning every historical W check on the current tip, or leaving the specs `in progress` indefinitely.
+- **Because:** every task of these efforts is archived and their code is on `main`; later efforts rebuilt and re-gated the same surfaces. The maintainer asked on 2026-11-18 to end what is finished ("该结束的结束").
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** a defect is traced to one of these efforts; it is fixed as a new task, not by reopening the spec.
+- **Effort:** tech-debt-sweep

@@ -346,24 +346,12 @@ server does not allow to the Android app. There is no pinch zoom, and PDFs that
 need pdf.js's CMap, standard font or wasm data (CJK text without embedded
 fonts, JPEG 2000 images) may lose that text or image.
 
-### Why table, data and office previews load on first use
+### Table and office previews
 
-`TableArtifact`, `DataFileArtifact` and `OfficeArtifact` are `React.lazy` in
-`FilesView`, each under its own error boundary keyed by the file, and the
-export reads `delimitedText.ts` with a dynamic import. Imported statically,
-their modules sat in a chunk `FilesView` loaded with itself, so a single
-missing file (Windows Defender quarantined that chunk in 2.7.0, #6630) failed
-the whole `FilesView` import and the app-wide boundary replaced the window
-with "Something went wrong". Now such a failure shows "Preview unavailable" in
-that file's pane, and the tree, the text editor and other previews keep
-working. `FilesView` uses plain `React.lazy` here, not `lazyWithChunkRecovery`:
-that helper reloads the window, which drops the user's place and cannot bring
-back a quarantined file. `React.lazy` keeps a failed import, so these previews
-stay unavailable until the window reloads; on the web that includes a tab left
-open across a server update, which needs the reload anyway. Swapping in a
-fresh `React.lazy` when the import fails made React retry at once and spin in
-the loading state while the file was missing. The VS Code webview inlines
-dynamic imports, so there nothing changes.
+`FilesView` mounts `TableArtifact` directly in `renderArtifactPreview` for
+delimited tables, and `OfficeArtifact` lives in `previews/` with its own test
+coverage. (The former `DataFileArtifact`, `ArchiveArtifact`, and
+`NotebookArtifact` previews are no longer present.)
 
 ### Office documents
 
@@ -485,26 +473,8 @@ and small notes about its cells. These must stay true:
   when the submenu mounts and never in render.
 
 A text table past `MAX_OPEN_FILE_BYTES` opens read-only from its bytes, because
-the editor could not hold it. `MAX_DATA_PREVIEW_BYTES` bounds data files; a phone
-keeps the office limit. Past `DEFAULT_TABLE_ROW_CAP` rows the grid holds the first
-ones, and a capped SQLite result sorts in the database (`onSort`) because the
-grid does not hold the rows that would come first. Filters and search see only
-the rows the grid holds.
-
-### Data files, archives, notebooks
-
-Each opens as a copy in memory, and nothing it does reaches the disk.
-
-- `DataFileArtifact` shows SQLite through sql.js and Parquet through hyparquet, in
-  the same grid. A query runs on the copy, so a write there changes nothing. A
-  WAL database opens with its flags patched, and the meta line says when a
-  non-empty `-wal` holds changes the copy lacks. It imports sql.js's browser
-  build: the default one pulls `node:fs` into the bundle, which fails only in
-  production.
-- `ArchiveArtifact` lists a zip without unpacking it and inflates one entry on
-  click, up to `MAX_ENTRY_BYTES`.
-- `NotebookArtifact` shows cells and saved outputs and runs nothing. HTML output
-  is the notebook's own content, so it stays in `officeFrameDocument`.
+the editor could not hold it. Past `DEFAULT_TABLE_ROW_CAP` rows the grid holds
+the first ones; filters and search see only the rows the grid holds.
 
 ### Export
 

@@ -1,32 +1,29 @@
-type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'abandoned' | 'blocked';
-export interface TodoItem { content: string; status: TodoStatus; blocker?: string }
-export interface TodoPhase { name: string; tasks: TodoItem[] }
+import { z } from 'zod';
+import { TodoStatusSchema, type TodoItem, type TodoPhase } from '@openchamber/agent-contract';
 
-const STATUSES: Record<TodoStatus, true> = { pending: true, in_progress: true, completed: true, abandoned: true, blocked: true };
-const isTodoStatus = (value: string): value is TodoStatus => Object.hasOwn(STATUSES, value);
-const readField = (value: object, key: string): unknown => key in value ? Reflect.get(value, key) : undefined;
+export type { TodoItem, TodoPhase };
+
+const TodoDetailsSchema = z.object({
+  phases: z.array(z.object({
+    name: z.string(),
+    tasks: z.array(z.object({
+      content: z.string(),
+      status: TodoStatusSchema,
+      blocker: z.string().optional(),
+    })),
+  })),
+});
 
 /** OMP todo details are parsed defensively because transcript data may predate the current result shape. */
 export function extractTodoPhases(value: unknown): TodoPhase[] | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const phases = readField(value, 'phases');
-  if (!Array.isArray(phases)) return null;
-  const parsed: TodoPhase[] = [];
-  for (const phase of phases) {
-    if (!phase || typeof phase !== 'object' || Array.isArray(phase)) return null;
-    const name = readField(phase, 'name');
-    const tasks = readField(phase, 'tasks');
-    if (typeof name !== 'string' || !Array.isArray(tasks)) return null;
-    const items: TodoItem[] = [];
-    for (const task of tasks) {
-      if (!task || typeof task !== 'object' || Array.isArray(task)) return null;
-      const content = readField(task, 'content');
-      const status = readField(task, 'status');
-      if (typeof content !== 'string' || typeof status !== 'string' || !isTodoStatus(status)) return null;
-      const blocker = readField(task, 'blocker');
-      items.push({ content, status, ...(typeof blocker === 'string' ? { blocker } : {}) });
-    }
-    parsed.push({ name, tasks: items });
-  }
-  return parsed;
+  const parsed = TodoDetailsSchema.safeParse(value);
+  if (!parsed.success) return null;
+  return parsed.data.phases.map((phase) => ({
+    name: phase.name,
+    tasks: phase.tasks.map((task) => ({
+      content: task.content,
+      status: task.status,
+      ...(task.blocker !== undefined ? { blocker: task.blocker } : {}),
+    })),
+  }));
 }

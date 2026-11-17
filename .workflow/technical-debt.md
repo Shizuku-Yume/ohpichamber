@@ -40,16 +40,6 @@ An entry leaves this file in one of two ways:
 - **Solution:** Add a canonical session-level warming route and state on the Agent Service (revision CAS, per-session apply outcome, native `AgentSession.setCacheWarmingMode` per session), then rebuild the Settings choice and the session toggle against it; no Host-side timer loop.
 - **Cost:** New contract and route in `packages/agent-contract` and `packages/agent-service`, worker-level session application, a store and sync subscriber in the UI, and 15 locales of copy; the workspace control and its tests must keep passing.
 
-## OMP TUI-owned behaviors have no GUI mirror or drift test
-
-- **Where:** `packages/agent-service/src/worker/{projection,mode,builtin-commands}.ts`; `packages/ui/src/components/chat/todoData.ts`
-- **Added:** 2026-11-13
-- **Priority:** worth-doing
-- **Problem:** `research/feedback-2026-11-12/12-tui-vs-sdk.md` found four gaps outside the 2026-11-12 maintainer report: `auto_compaction_start` is never consumed, so automatic compaction shows no live state; `todo_auto_clear` is unhandled and todos are read from transcript details instead of `session.getTodoPhases()`; plan-mode orchestration is mirrored from TUI-private code in `worker/mode.ts`; `worker/builtin-commands.ts` hand-keeps 30 of OMP's 89 slash commands.
-- **Impact:** automatic compaction looks like a stall, a cleared todo list may linger, and each OMP upgrade can silently diverge plan mode and the command list.
-- **Solution:** consume both events in the projection; add an upgrade-time test that compares the plan-mode mirror and the command allowlist with the pinned OMP package, as the tool presentation coverage test does.
-- **Cost:** small for the events; the drift test needs a stable way to read OMP's TUI-private plan-mode steps.
-
 ## Cold new-chat first token waits on OMP session construction
 
 - **Where:** `packages/agent-service/src/supervisor/workers.ts` (spare pool), `packages/agent-service/src/worker/session.ts`

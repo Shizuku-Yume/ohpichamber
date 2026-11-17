@@ -480,6 +480,8 @@ export function applyDirectoryEvent(state: State, event: CanonicalEvent): Direct
    if (event.continuationPending !== undefined) updated = { ...updated, session: { ...updated.session, continuationPending: event.continuationPending } }
    if (event.title !== undefined) updated = { ...updated, session: { ...updated.session, title: event.title } }
    if (event.selection !== undefined) updated = { ...updated, selection: event.selection }
+   if (event.compacting !== undefined) updated = { ...updated, compacting: event.compacting }
+   if (event.todos !== undefined) updated = { ...updated, todos: event.todos }
    if (event.loop !== undefined) updated = { ...updated, session: { ...updated.session, loop: event.loop } }
    const current = next.session.find((session) => session.sessionId === id)
    if (current) {

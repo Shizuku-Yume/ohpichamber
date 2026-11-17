@@ -508,5 +508,54 @@ describe("native canonical event reducer", () => {
 
     expect(deleted.state.cleanse?.["session-1"]).toBeUndefined();
     expect(deleted.state.advisor?.["session-1"]).toBeUndefined();
+    expect(deleted.state.advisor?.["session-1"]).toBeUndefined();
   });
+
+  test("projects live compacting state and clears it on null or snapshot recovery", () => {
+    const base = state({ snapshot: { "session-1": snapshot() }, sessionCursor: { "session-1": "epoch-1:0" } })
+    const started = applyDirectoryEvent(base, event("1", "session.updated", {
+      compacting: { method: "soft-compacted", reason: "threshold", startedAt: 100 },
+    }))
+    expect(started.kind).toBe("applied")
+    expect(started.state.snapshot["session-1"]?.compacting).toEqual({
+      method: "soft-compacted",
+      reason: "threshold",
+      startedAt: 100,
+    })
+
+    const cleared = applyDirectoryEvent(started.state, event("2", "session.updated", { compacting: null }))
+    expect(cleared.kind).toBe("applied")
+    expect(cleared.state.snapshot["session-1"]?.compacting).toBeNull()
+
+    const restarted = applyDirectoryEvent(cleared.state, event("3", "session.updated", {
+      compacting: { method: "soft-compacted", reason: "overflow", startedAt: 200 },
+    }))
+    expect(restarted.state.snapshot["session-1"]?.compacting?.method).toBe("soft-compacted")
+
+    const compacted = applyDirectoryEvent(restarted.state, event("4", "session.compacted", {
+      compactionId: "cmp-1",
+      tokensBefore: 1000,
+      completedAt: 250,
+    }))
+    expect(compacted.kind).toBe("resnapshot")
+
+    const recovered = installSessionSnapshot(restarted.state, snapshot({
+      session: runtime({ headSequence: "4" }),
+      cursor: "epoch-1:4",
+      compacting: null,
+    }))
+    expect(recovered.snapshot["session-1"]?.compacting).toBeNull()
+  })
+
+  test("projects live todos and clears them when todo_auto_clear emits an empty list", () => {
+    const base = state({ snapshot: { "session-1": snapshot() }, sessionCursor: { "session-1": "epoch-1:0" } })
+    const phases = [{ name: "Plan", tasks: [{ content: "Inspect", status: "in_progress" }] }]
+    const updated = applyDirectoryEvent(base, event("1", "session.updated", { todos: phases }))
+    expect(updated.kind).toBe("applied")
+    expect(updated.state.snapshot["session-1"]?.todos).toEqual(phases)
+
+    const cleared = applyDirectoryEvent(updated.state, event("2", "session.updated", { todos: [] }))
+    expect(cleared.kind).toBe("applied")
+    expect(cleared.state.snapshot["session-1"]?.todos).toEqual([])
+  })
 })

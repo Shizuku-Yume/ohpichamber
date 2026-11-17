@@ -1,8 +1,17 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { Window } from 'happy-dom';
 import type { Message, Part, ToolStatus } from '@openchamber/agent-contract';
+import type { StoreApi } from 'zustand';
 
-import { createParsedStatus, decodeParsedStatus, encodeParsedStatus, getActiveAssistantContext, retryInfoOf } from './useAssistantStatus';
-
+import { ChatColumnSessionContext } from '@/components/chat/chatColumnSession';
+import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
+import { SyncProvider, useDirectoryStore } from '@/sync/sync-context';
+import type { DirectoryStore } from '@/sync/child-store';
+import { applyDirectoryEvent, installSessionSnapshot } from '@/sync/event-reducer';
+import { nativeClient, nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
+import { createParsedStatus, decodeParsedStatus, encodeParsedStatus, getActiveAssistantContext, retryInfoOf, useAssistantStatus, type AssistantStatusSnapshot } from './useAssistantStatus';
 const userMessage = (messageId: string): Message => ({
     messageId,
     role: 'user',
@@ -234,5 +243,117 @@ describe('the status signature', () => {
         expect(fields[1]).toBe('2');
         expect(fields[2]).toBe('4000');
         expect(fields[3]).toBe('5');
+    });
+});
+
+describe('useAssistantStatus live compaction state', () => {
+    const browser = new Window({ url: 'http://runtime.test' });
+    const descriptors = new Map<string, PropertyDescriptor | undefined>();
+    for (const [name, value] of Object.entries({
+        window: browser,
+        document: browser.document,
+        navigator: browser.navigator,
+        HTMLElement: browser.HTMLElement,
+        Element: browser.Element,
+        Node: browser.Node,
+        IS_REACT_ACT_ENVIRONMENT: true,
+    })) {
+        descriptors.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+        Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+    }
+
+    const DIR = '/workspace/assistant-status';
+    const WORKSPACE_ID = 'workspace-assistant-status';
+    const SESSION_ID = 'session-assistant-status';
+
+    let host: HTMLElement;
+    let root: Root | null = null;
+    let directoryStore: StoreApi<DirectoryStore> | null = null;
+    let latestStatus: AssistantStatusSnapshot | null = null;
+
+    const StatusProbe = () => {
+        directoryStore = useDirectoryStore(DIR, { bootstrap: false });
+        latestStatus = useAssistantStatus();
+        return null;
+    };
+
+    beforeEach(() => {
+        registerWorkspaceDirectory(WORKSPACE_ID, DIR);
+        host = document.createElement('div');
+        document.body.append(host);
+        root = createRoot(host);
+        directoryStore = null;
+        latestStatus = null;
+    });
+
+    afterEach(async () => {
+        if (root) {
+            await act(async () => root!.unmount());
+            root = null;
+        }
+        host.remove();
+        resetWorkspaceDirectories();
+    });
+
+    afterAll(() => {
+        for (const [name, descriptor] of descriptors) {
+            if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+            else Reflect.deleteProperty(globalThis, name);
+        }
+        browser.close();
+    });
+
+    test('reports chat.agentStatus.compacting while snapshot.compacting is active and clears when null', async () => {
+        await act(async () => {
+            root!.render(
+                React.createElement(
+                    SyncProvider,
+                    {
+                        client: nativeClient(),
+                        directory: DIR,
+                        children: React.createElement(
+                            ChatColumnSessionContext.Provider,
+                            {
+                                value: { sessionId: SESSION_ID, directory: DIR },
+                                children: React.createElement(StatusProbe),
+                            },
+                        ),
+                    },
+                ),
+            );
+        });
+
+        const initial = nativeSnapshot(SESSION_ID, []);
+        await act(async () => {
+            directoryStore!.setState((prev) => installSessionSnapshot(prev, initial));
+        });
+        expect(latestStatus?.working.isWorking).toBe(false);
+        expect(latestStatus?.working.status).toBeNull();
+
+        await act(async () => {
+            directoryStore!.setState((prev) => applyDirectoryEvent(prev, {
+                sessionId: SESSION_ID,
+                epoch: initial.session.epoch,
+                sequence: '5',
+                timestamp: 100,
+                type: 'session.updated',
+                compacting: { method: 'soft-compacted', reason: 'idle', startedAt: 100 },
+            }).state);
+        });
+        expect(latestStatus?.working.isWorking).toBe(true);
+        expect(latestStatus?.working.status).toEqual({ key: 'chat.agentStatus.compacting' });
+
+        await act(async () => {
+            directoryStore!.setState((prev) => applyDirectoryEvent(prev, {
+                sessionId: SESSION_ID,
+                epoch: initial.session.epoch,
+                sequence: '6',
+                timestamp: 120,
+                type: 'session.updated',
+                compacting: null,
+            }).state);
+        });
+        expect(latestStatus?.working.isWorking).toBe(false);
+        expect(latestStatus?.working.status).toBeNull();
     });
 });

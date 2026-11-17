@@ -73,4 +73,51 @@ describe('canonical event boundaries', () => {
     expect(CanonicalEventSchema.parse(suggestion)).toEqual(suggestion);
     expect(CanonicalEventSchema.safeParse({ ...suggestion, suggestion: '' }).success).toBe(false);
   });
+
+  test('session.updated accepts compacting and todos updates and validates method/status bounds', () => {
+    const compactingStart = {
+      ...envelope,
+      type: 'session.updated',
+      compacting: { method: 'soft-compacted', reason: 'threshold', startedAt: 10 },
+    };
+    expect(CanonicalEventSchema.parse(compactingStart)).toEqual(compactingStart);
+    const compactingClear = { ...envelope, type: 'session.updated', compacting: null };
+    expect(CanonicalEventSchema.parse(compactingClear)).toEqual(compactingClear);
+    expect(CanonicalEventSchema.safeParse({ ...compactingStart, compacting: { method: 'unknown', startedAt: 10 } }).success).toBe(false);
+    expect(CanonicalEventSchema.safeParse({ ...compactingStart, compacting: { method: 'shaken', reason: 'other', startedAt: 10 } }).success).toBe(false);
+
+    const todosUpdate = {
+      ...envelope,
+      type: 'session.updated',
+      todos: [
+        {
+          name: 'Phase 1',
+          tasks: [
+            { content: 'Write tests', status: 'in_progress' },
+            { content: 'Deploy', status: 'blocked', blocker: 'Waiting on review' },
+          ],
+        },
+      ],
+    };
+    expect(CanonicalEventSchema.parse(todosUpdate)).toEqual(todosUpdate);
+    expect(CanonicalEventSchema.parse({ ...envelope, type: 'session.updated', todos: [] })).toEqual({
+      ...envelope,
+      type: 'session.updated',
+      todos: [],
+    });
+    expect(CanonicalEventSchema.safeParse({
+      ...todosUpdate,
+      todos: [{ name: 'Phase 1', tasks: [{ content: 'Bad', status: 'done' }] }],
+    }).success).toBe(false);
+    expect(CanonicalEventSchema.safeParse({
+      ...todosUpdate,
+      todos: [{ name: 'Phase 1', tasks: [{ content: 'Extra', status: 'pending', details: 'nope' }] }],
+    }).success).toBe(false);
+
+    for (const method of ['soft-compacted', 'snap-compacted', 'shaken', 'remote-compacted', 'handed-off', 'compacted']) {
+      const compacted = { ...envelope, type: 'session.compacted', compactionId: 'c1', method, tokensBefore: 100, completedAt: 12 };
+      expect(CanonicalEventSchema.parse(compacted)).toEqual(compacted);
+    }
+    expect(CanonicalEventSchema.safeParse({ ...envelope, type: 'session.compacted', compactionId: 'c1', method: 'invalid', tokensBefore: 100, completedAt: 12 }).success).toBe(false);
+  });
 });

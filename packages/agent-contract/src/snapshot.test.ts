@@ -89,3 +89,24 @@ test('pending replacement rejects stale epochs/generations, terminal records and
     { ...active, approvals: [{ ...approval, status: 'approved', version: '2', resolvedAt: 2, resolution: { decision: 'approve' } }] },
   ]) expect(SessionSnapshotSchema.safeParse(invalid).success).toBe(false);
 });
+
+test('snapshot carries compacting state and todo phases when present', () => {
+  const todos = [
+    {
+      name: 'Execution',
+      tasks: [
+        { content: 'Build schema', status: 'completed' },
+        { content: 'Verify snapshot', status: 'blocked', blocker: 'Needs sign-off' },
+      ],
+    },
+  ];
+  const compacting = { method: 'snap-compacted', reason: 'overflow', startedAt: 42 };
+  const hydrated = { ...empty, compacting, todos };
+  expect(SessionSnapshotSchema.parse(JSON.parse(JSON.stringify(hydrated)))).toEqual(hydrated);
+  expect(SessionSnapshotSchema.parse({ ...empty, compacting: null, todos: [] })).toEqual({ ...empty, compacting: null, todos: [] });
+  expect(SessionSnapshotSchema.safeParse({ ...empty, compacting: { method: 'bad', startedAt: 42 } }).success).toBe(false);
+  expect(SessionSnapshotSchema.safeParse({
+    ...empty,
+    todos: [{ name: 'Bad', tasks: [{ content: 'x', status: 'pending', extra: true }] }],
+  }).success).toBe(false);
+});

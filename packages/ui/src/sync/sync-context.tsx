@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- SyncProvider, its contexts, hooks, and runtime helpers are one contract module. */
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react"
 import { useStore, type StoreApi } from "zustand"
-import type { AdvisorNote, ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionRuntimeStatus, SessionSnapshot } from "@openchamber/agent-contract"
+import type { AdvisorNote, ApprovalRequest, CanonicalEvent, Message, Part, QuestionRequest, Run, Session, SessionCompacting, SessionRuntimeStatus, SessionSnapshot, TodoPhase } from "@openchamber/agent-contract"
 import { canonicalClient, type CanonicalClient } from "@/api/canonicalClient"
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from "@/lib/runtime-switch"
 import { normalizePath } from "@/lib/pathNormalization"
@@ -544,6 +544,13 @@ export function useSessionRenderable(sessionId: string, directory?: string): boo
 export function useSessionStatus(sessionId: string, directory?: string): SessionRuntimeStatus | undefined { return useDirectorySync(useCallback((state) => state.sessionStatusInvalidated?.[sessionId] ? "unavailable" : state.session_status[sessionId], [sessionId]), directory) }
 export function useSessionActiveRun(sessionId: string, directory?: string): Run | null {
   return useDirectorySync(useCallback((state) => state.snapshot[sessionId]?.activeRun ?? null, [sessionId]), directory)
+}
+export function useSessionCompacting(sessionId: string | null | undefined, directory?: string): SessionCompacting | null {
+  return useDirectorySync(useCallback((state) => (sessionId ? state.snapshot[sessionId]?.compacting ?? null : null), [sessionId]), directory)
+}
+const EMPTY_TODOS: TodoPhase[] = []
+export function useSessionTodos(sessionId: string | null | undefined, directory?: string): TodoPhase[] {
+  return useDirectorySync(useCallback((state) => (sessionId ? state.snapshot[sessionId]?.todos ?? EMPTY_TODOS : EMPTY_TODOS), [sessionId]), directory)
 }
 export function useSessionStatusSnapshotReady(directory?: string, sessionId?: string): boolean { return useDirectorySync(useCallback((state) => sessionId ? Boolean(state.snapshot[sessionId]) && !state.sessionStatusInvalidated?.[sessionId] : Boolean(state.sessionStatusReady), [sessionId]), directory) }
 export function useGlobalSessionStatus(sessionId: string): SessionRuntimeStatus | undefined { return useGlobalSessionStatusStore(useCallback((state) => state.statusById.get(sessionId)?.status, [sessionId])) }

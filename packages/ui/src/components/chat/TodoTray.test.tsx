@@ -2,11 +2,12 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:tes
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
-import type { JsonValue, Message, ToolResultPart } from '@openchamber/agent-contract';
+import type { Message, TodoPhase, ToolResultPart } from '@openchamber/agent-contract';
 import type { StoreApi } from 'zustand';
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from '@/stores/globalSessions';
 import { SyncProvider, useDirectoryStore } from '@/sync/sync-context';
 import type { DirectoryStore } from '@/sync/child-store';
+import { applyDirectoryEvent, installSessionSnapshot } from '@/sync/event-reducer';
 import { nativeClient, nativeSnapshot } from '@/sync/session-message-loader-test-fixtures';
 import { I18nProvider } from '@/lib/i18n';
 import { TodoTray } from './TodoTray';
@@ -30,7 +31,7 @@ const DIR = '/workspace/project';
 const WORKSPACE_ID = 'workspace-todo';
 const SESSION_ID = 'session-todo-1';
 
-const todoResult = (callId: string, phases: JsonValue, isError = false): ToolResultPart => ({
+const todoResult = (callId: string, phases: TodoPhase[], isError = false): ToolResultPart => ({
   type: 'tool_result',
   partId: `${callId}-result`,
   toolCallId: callId,
@@ -39,7 +40,7 @@ const todoResult = (callId: string, phases: JsonValue, isError = false): ToolRes
   isError,
 });
 
-const assistantTodoMessage = (messageId: string, phases: JsonValue, isError = false): Message => ({
+const assistantTodoMessage = (messageId: string, phases: TodoPhase[], isError = false): Message => ({
   messageId,
   role: 'assistant',
   sessionId: SESSION_ID,
@@ -48,7 +49,7 @@ const assistantTodoMessage = (messageId: string, phases: JsonValue, isError = fa
   parts: [todoResult(`call-${messageId}`, phases, isError)],
 });
 
-const twoPhaseTodos: JsonValue = [
+const twoPhaseTodos: TodoPhase[] = [
   {
     name: 'Discovery',
     tasks: [
@@ -64,7 +65,7 @@ const twoPhaseTodos: JsonValue = [
   },
 ];
 
-const updatedPhases: JsonValue = [
+const updatedPhases: TodoPhase[] = [
   {
     name: 'Discovery',
     tasks: [
@@ -79,7 +80,6 @@ const updatedPhases: JsonValue = [
     ],
   },
 ];
-
 describe('TodoTray integration', () => {
   let host: HTMLElement;
   let root: Root | null = null;
@@ -127,18 +127,18 @@ describe('TodoTray integration', () => {
     });
   };
 
-  const setMessages = async (messages: Message[], branchVersion = '1') => {
-    const snapshot = nativeSnapshot(SESSION_ID, []);
-    snapshot.branch = { branchId: 'branch-main', branchVersion, leafMessageId: messages.at(-1)?.messageId ?? 'msg-1' };
+  const setTodos = async (todos: TodoPhase[], messages: Message[] = []) => {
+    const snapshot = nativeSnapshot(SESSION_ID, messages);
+    snapshot.todos = todos;
     await act(async () => {
-      directoryStore!.setState({ snapshot: { [SESSION_ID]: snapshot }, message: { [SESSION_ID]: messages } });
+      directoryStore!.setState((prev) => installSessionSnapshot(prev, snapshot));
     });
   };
 
   test('folds to the active item and its progress, and expands to every phase', async () => {
     await renderTray();
     expect(directoryStore).not.toBeNull();
-    await setMessages([assistantTodoMessage('msg-1', twoPhaseTodos)]);
+    await setTodos(twoPhaseTodos);
 
     const tray = host.querySelector('[data-testid="todo-tray"]');
     expect(tray).not.toBeNull();
@@ -166,7 +166,7 @@ describe('TodoTray integration', () => {
 
   test('remount preserves two-phase history without loss', async () => {
     await renderTray();
-    await setMessages([assistantTodoMessage('msg-1', twoPhaseTodos)]);
+    await setTodos(twoPhaseTodos);
     expect(host.querySelector('[data-testid="todo-tray"]')).not.toBeNull();
 
     // Unmount TodoTray while keeping SyncProvider mounted
@@ -181,22 +181,46 @@ describe('TodoTray integration', () => {
     expect(remountedTray?.textContent).toContain('1/3');
   });
 
-  test('reacts to branch update with updated phases', async () => {
+  test('reacts to session.updated todos and clears the tray on todo_auto_clear even when transcript still has todo tool results', async () => {
     await renderTray();
-    const msg1 = assistantTodoMessage('msg-1', twoPhaseTodos);
-    await setMessages([msg1], '1');
+    const historicalMsg = assistantTodoMessage('msg-1', twoPhaseTodos);
+    await setTodos(twoPhaseTodos, [historicalMsg]);
     expect(host.querySelector('[data-testid="todo-tray"]')?.textContent).toContain('1/3');
 
-    const msg2 = assistantTodoMessage('msg-2', updatedPhases);
-    await setMessages([msg1, msg2], '2');
+    await act(async () => {
+      directoryStore!.setState((prev) => applyDirectoryEvent(prev, {
+        sessionId: SESSION_ID,
+        epoch: 'epoch-a',
+        sequence: '5',
+        timestamp: 10,
+        type: 'session.updated',
+        todos: updatedPhases,
+      }).state);
+    });
     // Every task closed: the folded row still names the plan and its progress.
     expect(host.querySelector('[data-testid="todo-tray"]')?.textContent).toContain('3/3');
     expect(host.querySelector('li[data-status="pending"]')).toBeNull();
+
+    // todo_auto_clear projects session.updated { todos: [] }: the tray leaves
+    // even though the historical todo tool_result remains in the transcript.
+    await act(async () => {
+      directoryStore!.setState((prev) => applyDirectoryEvent(prev, {
+        sessionId: SESSION_ID,
+        epoch: 'epoch-a',
+        sequence: '6',
+        timestamp: 11,
+        type: 'session.updated',
+        todos: [],
+      }).state);
+    });
+    expect(host.querySelector('[data-testid="todo-tray"]')).toBeNull();
+    expect(directoryStore!.getState().message[SESSION_ID]).toHaveLength(1);
   });
 
-  test('renders null when history has no todo phases or session is null', async () => {
+  test('renders null when snapshot has no todos or session is null, ignoring transcript tool details', async () => {
     await renderTray();
-    await setMessages([]);
+    await setTodos([], [assistantTodoMessage('msg-only-transcript', twoPhaseTodos)]);
+    expect(host.querySelector('[data-testid="todo-tray"]')).toBeNull();
 
     await renderTray(null);
     expect(host.querySelector('[data-testid="todo-tray"]')).toBeNull();

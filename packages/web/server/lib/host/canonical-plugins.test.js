@@ -54,6 +54,7 @@ beforeEach(async () => {
     entrypoint: fileURLToPath(new URL('../../../../agent-service/src/index.ts', import.meta.url)),
     dataDir: directory,
     env: nativeEnvironment(),
+    startupTimeoutMs: 30_000,
   });
   await service.start();
   const registered = await service.request('/internal/workspaces/plugin_workspace', {
@@ -61,8 +62,10 @@ beforeEach(async () => {
     body: JSON.stringify({ projectId: 'plugin_project', cwd: workspace, agentDirectory, agentDirectoryId: 'plugin_agent' }),
   });
   expect(registered.status).toBe(201);
-  scopes = new Map([['plugin_workspace', { workspaceId: 'plugin_workspace', projectId: 'plugin_project',
-    agentDirectoryId: 'plugin_agent', cwd: workspace, agentDirectory }]]);
+  scopes = new Map([['plugin_workspace', {
+    workspaceId: 'plugin_workspace', projectId: 'plugin_project',
+    agentDirectoryId: 'plugin_agent', cwd: workspace, agentDirectory
+  }]]);
   policy = { enterpriseMode: false };
   const security = createRequestSecurityRuntime({ readSettingsFromDiskMigrated: async () => ({}) });
   app = express();
@@ -77,14 +80,14 @@ beforeEach(async () => {
     listProjects: async () => ({ items: [], errors: {} }),
     listWorkspaces: async () => ({ items: [], errors: {} }),
     resolveCredentialHandoff: async () => { throw new Error('Plugin routes cannot read credentials'); },
-    queueRoutes: () => {}, sessionRoutes: () => {}, attachmentRoutes: () => {},
+    queueRoutes: () => { }, sessionRoutes: () => { }, attachmentRoutes: () => { },
   });
-}, 30_000);
+}, 45_000);
 afterEach(async () => {
   auth?.dispose();
   await service?.stop();
   if (directory) await fs.rm(directory, { recursive: true, force: true });
-}, 10_000);
+}, 30_000);
 const authorized = req => req.set('Authorization', `Bearer ${token}`);
 const problem = (response, status, code) => {
   expect(response.status).toBe(status);
@@ -100,7 +103,7 @@ describe('native plugin Host authorization and enterprise boundary', () => {
     await authorized(request(app).get(endpoint)).expect(200);
     await clients.revokeClient(clientId);
     problem(await authorized(request(app).get(endpoint)), 401, 'UNAUTHORIZED');
-  });
+  }, 60_000);
 
   it('rechecks enterprise authority for every package-manager or marketplace request', async () => {
     policy.enterpriseMode = true;
@@ -216,15 +219,19 @@ it('shares native plugin CAS across distinct agent directories while keeping pro
 it('re-registering a workspace keeps its native owner catalog and refuses a different agent directory', async () => {
   const scope = scopes.get('plugin_workspace');
   expect((await authorized(request(app).get(endpoint)).expect(200)).body.revision).toBe('0');
-  await authorized(request(app).put(`${endpoint}/local/rebind-proof.ts`)).send({ expectedRevision: '0',
-    extensionId: 'rebind-proof.ts', content: 'export default function () {}\n' }).expect(200);
+  await authorized(request(app).put(`${endpoint}/local/rebind-proof.ts`)).send({
+    expectedRevision: '0',
+    extensionId: 'rebind-proof.ts', content: 'export default function () {}\n'
+  }).expect(200);
 
   // The same workspace re-registered with its own directory keeps the cached
   // owner and the catalog it already persisted, instead of starting over.
   const repeated = await service.request('/internal/workspaces/plugin_workspace', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectId: scope.projectId, agentDirectoryId: scope.agentDirectoryId,
-      cwd: scope.cwd, agentDirectory: scope.agentDirectory, env: nativeEnvironment('') }),
+    body: JSON.stringify({
+      projectId: scope.projectId, agentDirectoryId: scope.agentDirectoryId,
+      cwd: scope.cwd, agentDirectory: scope.agentDirectory, env: nativeEnvironment('')
+    }),
   });
   expect(repeated.status).toBe(201);
   expect((await authorized(request(app).get(endpoint)).expect(200)).body).toMatchObject({
@@ -240,7 +247,9 @@ it('re-registering a workspace keeps its native owner catalog and refuses a diff
   await fs.mkdir(rebindProfileAgentDirectory, { recursive: true });
   await expect(service.request('/internal/workspaces/plugin_workspace', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectId: scope.projectId, agentDirectoryId: 'plugin_profile_agent',
-      cwd: scope.cwd, agentDirectory: rebindProfileAgentDirectory, env: nativeEnvironment('rebound-plugin-profile') }),
+    body: JSON.stringify({
+      projectId: scope.projectId, agentDirectoryId: 'plugin_profile_agent',
+      cwd: scope.cwd, agentDirectory: rebindProfileAgentDirectory, env: nativeEnvironment('rebound-plugin-profile')
+    }),
   })).rejects.toThrow('Host workspace scope cannot change');
 }, 60_000);

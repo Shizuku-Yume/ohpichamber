@@ -2244,6 +2244,7 @@ const AssistantMessageBody = React.memo(({
         messageActionButtons,
         pairedResultKeys,
         renderJustificationActions,
+        resultsForTurn,
         sessionId,
         onShowPopup,
         onToggleTool,

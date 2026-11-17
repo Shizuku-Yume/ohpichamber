@@ -32,7 +32,7 @@ import { useChangeRequestReviewContext } from '@/components/review/useChangeRequ
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { useWorkerPool } from '@/contexts/DiffWorkerProvider';
+import { useWorkerPoolState } from '@/contexts/DiffWorkerProvider';
 import { ensurePierreThemeRegistered, getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
 import { DIFFS_HIGHLIGHTER } from '@/lib/shiki/diffsHighlighter';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -1559,7 +1559,9 @@ const PierreDiffViewerBody: React.FC<
   }, [applyFindHighlights]);
 
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
-  const workerPool = useWorkerPool(isLargeContent ? 'unified' : (renderSideBySide ? 'split' : 'unified'));
+  const { status: workerPoolStatus, pool: workerPool } = useWorkerPoolState(
+    isLargeContent ? 'unified' : (renderSideBySide ? 'split' : 'unified'),
+  );
   const fileDiff = useDiffSwapAfterHighlight(incomingFileDiff, workerPool);
 
   const scrollToLine = useCallback((target: { lineNumber: number; side: DiffFindSide; align?: 'start' | 'center' }): boolean => {
@@ -1802,7 +1804,7 @@ const PierreDiffViewerBody: React.FC<
     const container = diffContainerRef.current;
     const wrapper = diffRootRef.current;
     if (!container) return;
-    if (!workerPool) return;
+    if (workerPoolStatus === 'pending') return;
 
     const preserveDone = preserveScrollPosition(wrapper, container);
     let sharedVirtualizer = sharedVirtualizerRef.current;
@@ -1906,7 +1908,7 @@ const PierreDiffViewerBody: React.FC<
       cancelReady();
       preserveDone();
     };
-  }, [diffThemeKey, fileDiff, fileName, language, modified, options, original, workerPool]);
+  }, [diffThemeKey, fileDiff, fileName, language, modified, options, original, workerPool, workerPoolStatus]);
 
   useEffect(() => {
     const instance = diffInstanceRef.current;

@@ -1392,3 +1392,12 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream's catalog gains an environment-input model the fork can adopt.
 - **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-17 - Settings controls share the 28 px height, and the stepper cluster opts in by `data-slot`
+
+- **Decided:** on desktop, a control inside `[data-settings-page]` is `h-7` (28 px), matching the dropdown trigger. `Input` gets there through the fork's `inputSize="compact"` prop at the call sites that upstream still sizes with a raw `h-8`, and `NumberInput`'s container carries `data-slot="number-input"` so the settings-page rule can size the stepper cluster and draw its 1 px border through `::after`, leaving the inner `<input>` (`h-full`) 28 px tall. `EnvironmentVariablesEditor` takes `inputSize="compact"` on its three fields instead of `h-8`; `NumberInput` gains only the slot marker.
+- **Instead of:** keeping upstream's `h-8` utilities per call site, or sizing `NumberInput` through a `containerClassName` each caller passes.
+- **Because:** the maintainer asked for one control height across Settings, and chat, dialogs and mobile touch targets must keep their own sizes. `inputSize` is a fork prop on a primitive upstream still has byte-identical (so `input.tsx` stays out of the ledger), and the slot marker is what the `[data-settings-page]` rule selects on: without it the stepper stayed 32 px beside 28 px selects. The same commit also re-indented `NumberInput`'s `no-explicit-any` oxlint directive, which is why that fork blob differs beyond the new attribute.
+- **Mine:** yes
+- **Revisit when:** upstream sizes settings controls from a shared token, or its `Input` grows a compact variant the fork can adopt instead of `inputSize`.
+- **Effort:** ux-feedback-2026-11-15

@@ -4,6 +4,25 @@ Read this record before implementation, together with the [agent guide](../AGENT
 
 ## Current state
 
+**2026-11-18 Task 19 Round-2 visual acceptance and full gate (effort `ux-feedback-2026-11-15`, branch `ux-feedback-2026-11-15/19`, base `4f9a7c7f39`, integration tip `57564bf232`, artifacts `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-18-r2/task19/`):**
+1. **Full gate on tip `57564bf232` (`gate/FINAL-SUMMARY.txt`):**
+   - `bun run check`: exit 0 (5/5 steps: `tsc -b` 3,880 files / 5 projects, `upstream-drift` clean, `error-cause` 0, `css-classes` 2,260 tokens, `upstream-gaps` 662/662 allowlisted / 0 unallowlisted).
+   - `bun run type-check`: exit 0 (root + electron + agent-contract + agent-service + mobile).
+   - `bun run lint` + `oxlint` on all 51 changed files (`gate/oxlint-changed.log`): exit 0 across 7 workspaces (0 errors, 0 warnings across all 51 changed files; 12 pre-existing untouched UI `react-hooks/exhaustive-deps` warnings).
+   - `VITEST_MAX_WORKERS=2 bun run test`: exit 0 (747 s; 7/7 suites passed, 0 failed — scripts 32/32, sdk 32/32, ui 1,247/1,247, agent-contract 265/0 across 27 files, agent-service 577 pass / 10 skip / 0 fail across 75 files, electron 71/71, web 527 passed / 9 skipped files with 8,614 passed / 142 skipped tests).
+   - `bun run docs:validate`: exit 0 (696 pages, 58 sidebar links).
+   - `.workflow/bin/workflow validate`: exit 0 (309 task files).
+   - `bun run dead-code`: exit 1 non-blocking (43 unused files / 166 unused exports / 115 unused exported types [-1 vs Task 13's 116] / 7 hints; 0 net-new findings).
+2. **Round-2 visual & functional acceptance (`ACCEPTANCE-ROUND2.md`; AppImage SHA-256 `1cc3d175b2de00b3ddf9dd789ce06f841f6c4585aafa43a7dc92739a0e285238` on `openchamber-ui://app/index.html` + Web `127.0.0.1:4419` at `1600×1000` CSS px in `zh-CN` & `en`, walked by independent read-only sessions `independent-walker-appimage` and `independent-walker-web` against `feedback-2026-11-18/1..6-*.png`):**
+   - **W12**: **PASS** (`8ada144835`; hug-width selects `61.8–226.8 px`, `0.0 px` trailing spread, left-column option subtext, 15-locale Sampling & OMP options).
+   - **W13**: **PASS** (`57564bf232`; clean `omp.configFile` row + `28 px` `打开 config.yml` button returning `200`, `placementCounts` removed).
+   - **W14**: **PASS** (`5ee11bfff4`; outline `+ 添加类别` button + creation `Dialog` validating inline with zero page banners/writes on invalid input and immediate `routing.json` persistence on valid submit).
+   - **W15**: **PASS** (`c30ec24b1d`; rounded `oc-tile` fallback rows, pointer/keyboard reorder persisted in `config.yml`, actionable `需要设置` detail link).
+   - **W16**: **PASS** (`870ff6096a`; flat default-collapsed `SettingsDisclosure` groups, 3-way `SettingsChipGroup`, single-line `SettingsCheckboxRow` + `SettingsInfoHint`, zero palette colors/`divide-y`, `null`/`[]`/`string[]` `allowedTools` preserved).
+   - **W17**: **PASS** (43 screenshots + DOM/API receipts).
+3. **Independent code review (`review/code-review-r1.md`):** `independent-code-reviewer` (read-only) audited `4f9a7c7f39..57564bf232` (63 files, `+9,389 / -1,578`) and issued **APPROVE** (0 blocking, 4 non-blocking notes; `settingsLayoutGuard.test.ts` 12/12 with 0 new file exceptions; 15-locale audit clean).
+4. **Remaining maintainer items:** Round-1 maintainer sign-off items (`M1`–`M4`, `M6`) remain open as listed under Task 13 below; `.workflow/specs/ux-feedback-2026-11-15.md` stays `in progress` pending maintainer sign-off.
+
 **2026-11-18 Task 13 reference acceptance and full gate (effort `ux-feedback-2026-11-15`, branch `ux-feedback-2026-11-15/13`, base `fd48f28944`, gate tip `0986f1f815`, artifacts `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-16/task13/`):**
 1. **Full gate on tip `0986f1f815` (`gate/FINAL2-SUMMARY.txt`):**
    - `bun run check`: exit 0 (40 s; 5/5 steps: `tsc -b` 3,875 files / 5 projects, `upstream-drift` clean vs `bc50ba5`, `error-cause` 0 baseline sites, `css-classes` 2,266 tokens, `upstream-gaps` 662/662 allowlisted / 0 unallowlisted).

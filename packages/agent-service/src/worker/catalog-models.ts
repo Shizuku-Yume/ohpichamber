@@ -141,6 +141,18 @@ export function credentialReference(providerId: string, id: number): string {
  return `credential_${createHash('sha256').update(`${providerId}\0${id}`).digest('hex').slice(0, 24)}`;
 }
 
+function sameDiscoveryEndpoint(left: string | undefined | null, right: string | undefined | null): boolean {
+ if (!left || !right) return false;
+ try {
+  const a = new URL(left);
+  const b = new URL(right);
+  return a.origin === b.origin
+   && a.pathname.replace(/\/+$/, '') === b.pathname.replace(/\/+$/, '')
+   && a.search === b.search;
+ } catch {
+  return left === right;
+ }
+}
 function apiProtocol(api: NativeCatalogModel['api'] | undefined): Provider['protocol'] {
  switch (api) {
   case 'openai-completions': case 'openrouter': return 'chat-completions';
@@ -493,29 +505,50 @@ export class NativeModels {
    const state = await this.load();
    await this.context.authStorage.credentials.reload();
    const configured = request.providerId ? state.metadata.providers[request.providerId] : undefined;
-   const matchesConfigured = configured?.endpoint === request.endpoint && configured.protocol === request.protocol;
-   const headers = new Headers(matchesConfigured ? {
-    ...await resolveConfigHeaders(state.config.providers?.[configured.providerId]?.headers),
-    ...state.metadata.providerHeaders[configured.providerId],
+   const nativeProvider = request.providerId ? state.config.providers?.[request.providerId] : undefined;
+   const providerEndpoint = configured?.endpoint ?? nativeProvider?.baseUrl
+    ?? (request.providerId ? this.context.modelRegistry.getProviderBaseUrl(request.providerId) : undefined);
+   const matchesConfigured = configured !== undefined
+    && sameDiscoveryEndpoint(configured.endpoint, request.endpoint)
+    && configured.protocol === request.protocol;
+   // Native models.yml providers have no OpenChamber metadata entry, yet OMP
+   // resolves their credentials and headers against this same base URL.
+   const ownsEndpoint = request.providerId !== undefined && sameDiscoveryEndpoint(providerEndpoint, request.endpoint);
+   const headers = new Headers(ownsEndpoint ? {
+    ...await resolveConfigHeaders(nativeProvider?.headers),
+    ...(configured && matchesConfigured ? state.metadata.providerHeaders[configured.providerId] : undefined),
    } : undefined);
    for (const [name, value] of Object.entries(request.headers ?? {})) headers.set(name, value);
    let apiKey = request.apiKey;
    const source = request.providerId ? this.context.authStorage.keys.source(request.providerId) : undefined;
    const storedSource = !source || source.kind === 'api_key' || source.kind === 'oauth';
-   const reference = request.credentialRef ?? (matchesConfigured && storedSource ? this.defaultCredentialRef(configured.providerId) : null);
+   const reference = request.credentialRef ?? (configured && matchesConfigured && storedSource ? this.defaultCredentialRef(configured.providerId) : null);
    if (!apiKey && reference) {
     if (!request.providerId) throw new ProjectionError(422, 'INVALID_REQUEST', 'Credential discovery requires a provider identity');
     const credential = await this.resolveBoundCredential(request.providerId, reference, undefined);
     if (!credential) throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider credential is unavailable');
     apiKey = credential.apiKey;
    }
-   if (!apiKey && !reference && matchesConfigured) {
-    apiKey = await this.context.authStorage.keys.get(configured.providerId, undefined, { baseUrl: request.endpoint });
+   if (!apiKey && !reference && ownsEndpoint && request.providerId) {
+    const resolved = await this.context.authStorage.keys.get(request.providerId, undefined, { baseUrl: request.endpoint });
+    if (resolved && resolved !== AUTHENTICATED_SENTINEL && resolved !== 'N/A') apiKey = resolved;
    }
+   // A models.yml `apiKey` naming an environment variable the runtime does not
+   // define resolves to its literal text in OMP, so the request leaves with a
+   // bogus bearer. The cause is a missing credential, not the endpoint's auth.
+   const unsetKeyVariable = await (async () => {
+    const configKey = nativeProvider?.apiKey;
+    if (!ownsEndpoint || !configKey || configKey.startsWith('!')) return undefined;
+    if (!/^[A-Z][A-Z0-9_]+$/.test(configKey)) return undefined;
+    // OMP's own resolver decides: an environment-backed name resolves away
+    // from its literal text, an unset one stays literal.
+    return (await resolveConfigValue(configKey)) === configKey ? configKey : undefined;
+   })();
+   const authHeaderName = request.protocol === 'messages' ? 'x-api-key' : request.protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
    if (apiKey) {
-    const name = request.protocol === 'messages' ? 'x-api-key' : request.protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
-    if (!headers.has(name)) headers.set(name, name === 'authorization' ? `Bearer ${apiKey}` : apiKey);
+    if (!headers.has(authHeaderName)) headers.set(authHeaderName, authHeaderName === 'authorization' ? `Bearer ${apiKey}` : apiKey);
    }
+   const hasCredential = headers.has(authHeaderName);
    if (request.protocol === 'messages' && !headers.has('anthropic-version')) headers.set('anthropic-version', '2023-06-01');
    // A custom base URL may carry a query (`?api-version=`); the discovery path
    // appends to the pathname, so the query has to be reattached afterwards.
@@ -530,7 +563,35 @@ export class NativeModels {
     if (pages.has(url.href)) throw new Error('Invalid discovery pagination');
     pages.add(url.href);
     const response = await fetch(url, { headers, signal, redirect: 'error' });
-    if (!response.ok) throw new Error('Discovery request failed');
+    if (!response.ok) {
+     if (response.status === 401 || response.status === 403) {
+      if (request.providerId && unsetKeyVariable) {
+       throw new ProjectionError(
+        422,
+        'CREDENTIAL_UNAVAILABLE',
+        `Provider ${request.providerId} has no credential: its models.yml apiKey names ${unsetKeyVariable}, which is not set. Set ${unsetKeyVariable} or save an API key.`,
+       );
+      }
+      if (!hasCredential) {
+       const envName = request.providerId ? getEnvApiKeyName(request.providerId) : undefined;
+       throw new ProjectionError(
+        422,
+        'CREDENTIAL_UNAVAILABLE',
+        request.providerId
+         ? `No credential is available for ${request.providerId}${envName ? ` (save an API key or set ${envName})` : ''}.`
+         : 'This endpoint requires an API key for model discovery.',
+       );
+      }
+      if (request.providerId) {
+       throw new ProjectionError(
+        422,
+        'CREDENTIAL_UNAVAILABLE',
+        `Provider ${request.providerId} rejected the model discovery credential (HTTP ${response.status}).`,
+       );
+      }
+     }
+     throw new Error('Discovery request failed');
+    }
     const payload = z.object({
      data: z.array(z.unknown()).optional(), models: z.array(z.unknown()).optional(),
      nextPageToken: z.string().optional(), has_more: z.boolean().optional(), last_id: z.string().optional()

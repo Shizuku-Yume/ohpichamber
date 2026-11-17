@@ -534,6 +534,105 @@ test('configured discovery falls back to native key cascade when no explicit acc
     expect(requests[0]!.authorization).toBe('Bearer cascade-key');
   } finally { server.stop(true); await fixture.close(); }
 });
+test('models.yml-only providers resolve apiKey env names and literal headers at discovery without metadata', async () => {
+  const requests: Array<{ path: string; authorization: string | null; custom: string | null }> = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      const path = new URL(request.url).pathname;
+      requests.push({
+        path,
+        authorization: request.headers.get('authorization'),
+        custom: request.headers.get('x-native-header'),
+      });
+      if (path.startsWith('/unauth')) return new Response('unauthorized', { status: 401 });
+      return Response.json({ data: [{ id: 'native-discovered' }] });
+    }
+  });
+  const root = await mkdtemp(join(tmpdir(), 'catalog-models-discovery-native-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  const envName = 'TEST_FB15_MODELS_YML_API_KEY';
+  const previousEnv = process.env[envName];
+  process.env[envName] = 'env-resolved-secret';
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const modelsPath = join(agentDirectory, 'models.yml');
+  const nativeEndpoint = `http://127.0.0.1:${server.port}/native/v1`;
+  const unauthEndpoint = `http://127.0.0.1:${server.port}/unauth/v1`;
+  await writeFile(modelsPath, YAML.stringify({
+    providers: {
+      'native-env-provider': {
+        baseUrl: nativeEndpoint,
+        apiKey: envName,
+        api: 'openai-responses',
+        headers: { 'X-Native-Header': 'native-header-value' },
+        models: [{ id: 'm-1', name: 'M1', api: 'openai-codex-responses', contextWindow: 8192, maxTokens: 1024 }],
+      },
+      'native-unset-key': {
+        baseUrl: unauthEndpoint,
+        apiKey: 'TEST_FB15_MODELS_YML_UNSET_KEY',
+        api: 'openai-responses',
+        models: [{ id: 'm-2', name: 'M2', api: 'openai-codex-responses', contextWindow: 8192, maxTokens: 1024 }],
+      },
+    },
+  }));
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    const result = await runtime.models.discoverProviderModels({
+      providerId: 'native-env-provider',
+      endpoint: nativeEndpoint,
+      protocol: 'responses',
+    });
+    expect(result.models.map(model => model.modelId)).toEqual(['native-discovered']);
+    // Must not forward the native provider credential to a different endpoint.
+    await runtime.models.discoverProviderModels({
+      providerId: 'native-env-provider',
+      endpoint: `http://127.0.0.1:${server.port}/other/v1`,
+      protocol: 'responses',
+    });
+    expect(requests).toEqual([
+      { path: '/native/v1/models', authorization: 'Bearer env-resolved-secret', custom: 'native-header-value' },
+      { path: '/other/v1/models', authorization: null, custom: null },
+    ]);
+    await runtime.models.configureProvider({
+      expectedRevision: '0',
+      configuration: {
+        providerId: 'native-missing-key',
+        name: 'Missing Key',
+        endpoint: unauthEndpoint,
+        protocol: 'responses',
+        credentialRef: null,
+      },
+    }, '1');
+    await expect(runtime.models.discoverProviderModels({
+      providerId: 'native-missing-key',
+      endpoint: unauthEndpoint,
+      protocol: 'responses',
+    })).rejects.toMatchObject({
+      status: 422,
+      code: 'CREDENTIAL_UNAVAILABLE',
+      message: expect.stringContaining('No credential is available for native-missing-key'),
+    });
+    // A models.yml apiKey naming an unset variable resolves to literal text in
+    // OMP; discovery must report the missing variable instead of blaming the endpoint.
+    await expect(runtime.models.discoverProviderModels({
+      providerId: 'native-unset-key',
+      endpoint: unauthEndpoint,
+      protocol: 'responses',
+    })).rejects.toMatchObject({
+      status: 422,
+      code: 'CREDENTIAL_UNAVAILABLE',
+      message: 'Provider native-unset-key has no credential: its models.yml apiKey names TEST_FB15_MODELS_YML_UNSET_KEY, which is not set. Set TEST_FB15_MODELS_YML_UNSET_KEY or save an API key.',
+    });
+  } finally {
+    if (previousEnv === undefined) delete process.env[envName];
+    else process.env[envName] = previousEnv;
+    server.stop(true);
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('environment-backed providers publish the variable name and keep it visible when a stored key wins', async () => {
   const fixture = await openCatalogFixture();

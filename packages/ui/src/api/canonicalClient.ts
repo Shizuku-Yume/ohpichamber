@@ -465,6 +465,24 @@ export class CanonicalClient {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed), signal,
     });
   }
+  readSessionCacheWarming(sessionId: string, signal?: AbortSignal): Promise<C.SessionCacheWarmingState> {
+    return request(
+      `/api/agent/v1/sessions/${id(sessionId)}/cache-warming`,
+      C.SessionCacheWarmingStateSchema,
+      { signal },
+    );
+  }
+  updateSessionCacheWarming(sessionId: string, input: C.SessionCacheWarmingUpdateRequest, signal?: AbortSignal): Promise<C.SessionCacheWarmingApplyResult> {
+    const parsed = C.SessionCacheWarmingUpdateRequestSchema.parse(input);
+    return request(
+      `/api/agent/v1/sessions/${id(sessionId)}/cache-warming`,
+      scoped(
+        C.SessionCacheWarmingApplyResultSchema,
+        result => result.persisted.mode === parsed.mode && BigInt(result.persisted.revision) === BigInt(parsed.expectedRevision) + 1n,
+      ),
+      { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(parsed), signal },
+    );
+  }
   getProviders(workspaceId: string): Promise<ProviderCatalog> { return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers`, scoped(C.ProviderCatalogSchema, result => result.workspaceId === workspaceId)); }
   providerAccounts(workspaceId: string, providerId: string): Promise<C.ProviderAccounts> {
     return request(`/api/agent/v1/workspaces/${id(workspaceId)}/providers/${id(providerId)}/accounts`, scoped(C.ProviderAccountsSchema, result => result.providerId === providerId));

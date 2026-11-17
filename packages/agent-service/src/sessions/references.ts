@@ -6,10 +6,14 @@ import type { JsonValue, ProblemCode } from '@openchamber/agent-contract';
 import { z } from 'zod';
 import { WorkerBootstrapSchema } from '../protocol.ts';
 
-const SessionReferenceSchema = WorkerBootstrapSchema.omit({ env: true, observationEpoch: true, catalogRevision: true, mcpConfiguration: true, skillSources: true }).required({ sessionFile: true })
-  .extend({ displayPath: DisplayPathSchema, parentSessionId: EntityIdSchema.optional(), createdAt: TimestampSchema, updatedAt: TimestampSchema,
-    deletedSpace: z.strictObject({ spaceId: EntityIdSchema, archivedAt: TimestampSchema, directory: z.string().min(1),
-      privateRoots: z.array(z.strictObject({ root: z.string().min(1), label: z.enum(['workspace', 'agent-directory', 'session-storage']) })).default([]) }).optional() });
+const SessionReferenceSchema = WorkerBootstrapSchema.omit({ env: true, observationEpoch: true, catalogRevision: true, mcpConfiguration: true, skillSources: true, sessionWarmingMode: true }).required({ sessionFile: true })
+  .extend({
+    displayPath: DisplayPathSchema, parentSessionId: EntityIdSchema.optional(), createdAt: TimestampSchema, updatedAt: TimestampSchema,
+    deletedSpace: z.strictObject({
+      spaceId: EntityIdSchema, archivedAt: TimestampSchema, directory: z.string().min(1),
+      privateRoots: z.array(z.strictObject({ root: z.string().min(1), label: z.enum(['workspace', 'agent-directory', 'session-storage']) })).default([])
+    }).optional()
+  });
 export type SessionReference = Readonly<z.infer<typeof SessionReferenceSchema>>;
 const SessionRelocationIntentSchema = z.strictObject({
   transactionId: EntityIdSchema, source: SessionReferenceSchema, destination: SessionReferenceSchema,
@@ -29,7 +33,7 @@ export type WorktreeDeleteIntent = z.infer<typeof WorktreeDeleteSchema>;
 const PersistedSchema = z.strictObject({ references: z.record(z.string(), JsonValueSchema), subagents: z.record(z.string(), z.array(ChildReferenceSchema)).default({}), relocations: z.record(z.string(), SessionRelocationIntentSchema).default({}), worktreeDeletes: z.record(z.string(), WorktreeDeleteSchema).default({}) })
   .refine(state => Object.entries(state.relocations).every(([id, intent]) => id === intent.source.rootSessionId), 'Relocation index must retain its root owner')
   .refine(state => Object.entries(state.worktreeDeletes).every(([id, intent]) => id === intent.reference.rootSessionId), 'Delete intent must retain its root owner');
- type References = z.infer<typeof PersistedSchema>['references'];
+type References = z.infer<typeof PersistedSchema>['references'];
 const FileErrorSchema = z.object({ code: z.string() });
 
 export class SessionReferenceError extends Error {
@@ -335,7 +339,7 @@ export class SessionReferences {
 
   private enqueue(operation: () => Promise<void>): Promise<void> {
     const result = this.tail.then(operation);
-    this.tail = result.catch(() => {});
+    this.tail = result.catch(() => { });
     return result;
   }
 

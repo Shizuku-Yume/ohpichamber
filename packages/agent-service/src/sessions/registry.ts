@@ -31,6 +31,7 @@ type NativeCold = { workspace: SessionWorkspaceScope; info: SessionInfo; identit
 type ArchiveChat = NativeArchiveInventory['chats'][number];
 export interface SessionList { items: RuntimeSession[]; errors: { sessionId: string; code: ProblemCode }[]; }
 export type SessionWorkspaceScope = Readonly<{ workspaceId: string; projectId: string; cwd: string; agentDirectory: string; agentDirectoryId?: string }>;
+export type SessionWarmingScope = Readonly<{ rootSessionId: string; workspaceId: string }>;
 type PromptOperation = Extract<WorkerOperation, { type: 'prompt' }>;
 type Opened = { generation: string; sessionFile: string; journal: SessionJournal };
 export interface SessionForkResult { sessionId: string; rootSessionId: string; sessionFile: string; sourceSessionId: string; entryId: string | null; mode: 'selected' | 'full' }
@@ -76,7 +77,14 @@ export class SessionRegistry {
   private readonly coldSnapshotOpenings = new Map<string, Promise<SessionSnapshot>>();
   private closing = false;
 
-  constructor(stateDirectory: string, private readonly workers: WorkerRegistry, policyCommit?: ApprovalPolicyCommit, private readonly policyLoad?: ApprovalPolicyLoad, permission?: PermissionAuthority) {
+  constructor(
+    stateDirectory: string,
+    private readonly workers: WorkerRegistry,
+    policyCommit?: ApprovalPolicyCommit,
+    private readonly policyLoad?: ApprovalPolicyLoad,
+    permission?: PermissionAuthority,
+    private readonly onSessionDeleted?: (sessionIds: readonly string[]) => Promise<void> | void,
+  ) {
     this.references = new SessionReferences(stateDirectory);
     this.interactions = new InteractionManager(undefined, policyCommit, permission);
   }
@@ -807,7 +815,9 @@ export class SessionRegistry {
       this.releaseColdJournals(reference.rootSessionId, children);
       this.entries.delete(reference.rootSessionId);
       for (const child of children) this.subagents.delete(child.subagentId);
-      return { sessionId, deletedSessionIds: [reference.rootSessionId, ...children.map(child => child.childSessionId)] };
+      const deletedSessionIds = [reference.rootSessionId, ...children.map(child => child.childSessionId)];
+      await this.onSessionDeleted?.(deletedSessionIds);
+      return { sessionId, deletedSessionIds };
     } finally { this.deleting.delete(sessionId); }
   }
   async deleteWorktreeArchiveFamily(sessionId: string, expected: { operationId: string; projectId: string; workspaceId: string; agentDirectoryId: string; sessionIds: string[] }) {
@@ -825,7 +835,10 @@ export class SessionRegistry {
       || JSON.stringify(ids) !== JSON.stringify([...expected.sessionIds].sort())
       || children.some(child => child.rootSessionId !== sessionId || child.projectId !== reference.projectId || child.workspaceId !== reference.workspaceId))
       throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The worktree delete request does not match the recorded reference');
-    if (saved?.state === 'completed') return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
+    if (saved?.state === 'completed') {
+      await this.onSessionDeleted?.(ids);
+      return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
+    }
     this.deleting.add(sessionId);
     try {
       return await this.workers.withStoppedRoot(sessionId, async () => {
@@ -897,18 +910,20 @@ export class SessionRegistry {
         this.interactions.closeSession(sessionId);
         this.entries.delete(sessionId);
         for (const child of children) this.subagents.delete(child.subagentId);
+        await this.onSessionDeleted?.(ids);
         return { operationId: expected.operationId, sessionId, deletedSessionIds: ids };
       });
     } finally { this.deleting.delete(sessionId); }
   }
 
-  retireWorktreeArchiveDelete(sessionId: string, expected: { operationId: string; projectId: string; workspaceId: string; agentDirectoryId: string; sessionIds: string[] }): Promise<void> {
+  async retireWorktreeArchiveDelete(sessionId: string, expected: { operationId: string; projectId: string; workspaceId: string; agentDirectoryId: string; sessionIds: string[] }): Promise<void> {
     const intent = this.references.worktreeDelete(sessionId);
     if (intent && (intent.state !== 'completed' || intent.operationId !== expected.operationId || intent.reference.projectId !== expected.projectId
       || intent.reference.workspaceId !== expected.workspaceId || intent.reference.agentDirectoryId !== expected.agentDirectoryId
       || JSON.stringify([sessionId, ...intent.children.map(child => child.childSessionId)].sort()) !== JSON.stringify([...expected.sessionIds].sort())))
       throw new WorkerOperationError(409, 'SESSION_RELOCATION_CONFLICT', 'The recorded relocation intent does not match this request');
-    return this.references.retireWorktreeDelete(sessionId, expected.operationId);
+    await this.references.retireWorktreeDelete(sessionId, expected.operationId);
+    await this.onSessionDeleted?.([sessionId, ...expected.sessionIds]);
   }
   async prompt(sessionId: string, operation: PromptOperation) {
     this.ensureOpen();
@@ -1442,6 +1457,28 @@ export class SessionRegistry {
     return this.interactions.approvals(sessionId).length === 0 && this.interactions.questions(sessionId).length === 0;
   }
 
+  warmingScope(sessionId: string): SessionWarmingScope {
+    this.ensureOpen();
+    const child = [...this.subagents.values()].find(record => record.childSessionId === sessionId);
+    const rootSessionId = child?.rootSessionId ?? sessionId;
+    if (this.deleting.has(sessionId) || this.deleting.has(rootSessionId)) {
+      throw new WorkerOperationError(409, 'COMMAND_IN_FLIGHT', 'The session is being deleted');
+    }
+    this.assertControlAvailable(sessionId);
+    if (rootSessionId !== sessionId) this.assertControlAvailable(rootSessionId);
+    const entry = this.entries.get(rootSessionId);
+    if (entry) {
+      this.references.get(rootSessionId);
+      const workspaceId = entry.state === 'unloaded' ? entry.reference.workspaceId : entry.input.workspaceId;
+      return { rootSessionId, workspaceId };
+    }
+    const native = this.nativeCold.get(sessionId);
+    if (native) {
+      return { rootSessionId: native.identity.rootSessionId, workspaceId: native.workspace.workspaceId };
+    }
+    throw new ProjectionError(404, 'SESSION_NOT_FOUND', 'Session not found');
+  }
+
   approvals(sessionId: string) { this.get(sessionId); return this.interactions.approvals(sessionId); }
 
   questions(sessionId: string) { this.get(sessionId); return this.interactions.questions(sessionId); }
@@ -1487,6 +1524,7 @@ export class SessionRegistry {
       // A listed native record must not outlive its deleted transcript and
       // resurrect a reference on the next reopen.
       for (const id of result.deletedSessionIds) this.nativeCold.delete(id);
+      await this.onSessionDeleted?.(result.deletedSessionIds);
       return { sessionId, deletedSessionIds: result.deletedSessionIds };
     } finally { this.deleting.delete(sessionId); }
   }

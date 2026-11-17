@@ -41,6 +41,7 @@ import { resetSessionOrdering } from '@/sync/session-ordering';
 import { resetSessionActivityTiming } from '@/sync/session-activity-timing';
 import { syncDesktopSettings } from '@/lib/persistence';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
+import { useSessionWarmingStore } from '@/stores/useSessionWarmingStore';
 
 // Transport-only switches preserve session state; SyncProvider reconnects canonical streams on the endpoint event.
 export const reconnectAppForTransportSwitch = (): void => {
@@ -74,6 +75,7 @@ export const resetAppForRuntimeEndpointChange = (detail: RuntimeEndpointChangedD
   resetSpaceModelAccess();
   resetSpaceCreationRequests();
   useMultiRunStore.getState().resetForRuntimeSwitch();
+  useSessionWarmingStore.getState().reset();
   useSessionMultiSelectStore.getState().disable();
   useCommandsStore.getState().resetForRuntimeSwitch();
   useAgentsStore.getState().resetForRuntimeSwitch();

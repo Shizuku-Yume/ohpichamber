@@ -2,6 +2,7 @@ import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createRoot, type Root } from 'react-dom/client';
 import { Window } from 'happy-dom';
+import { I18nProvider } from '@/lib/i18n';
 import type { CacheWarmingApplyResult, CacheWarmingState } from '@openchamber/agent-contract';
 
 let warmingState: CacheWarmingState = {
@@ -44,13 +45,10 @@ mock.module('@/api/canonicalClient', () => ({
 mock.module('@/hooks/useSettingsDirectory', () => ({
   useSettingsDirectory: () => '/project',
 }));
-
-mock.module('@/lib/i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
-}));
-
+// Loaded after mock.module('@/api/canonicalClient', ...) so the store binds to the mocked client.
+const { useSessionWarmingStore } = await import('@/stores/useSessionWarmingStore');
 mock.module('@/lib/persistence', () => ({
-  reportSettingsSaveState: () => {},
+  reportSettingsSaveState: () => { },
 }));
 
 mock.module('@/components/sections/shared/SettingsSection', () => ({
@@ -119,8 +117,25 @@ describe('SessionWarmingCheckbox', () => {
   });
 
   test('mounts, reads cache warming, toggles off to idle, and persists updated revision', async () => {
+    useSessionWarmingStore.setState({
+      entries: {
+        'session-1': {
+          state: {
+            sessionId: 'session-1',
+            workspaceId: 'workspace:/project',
+            revision: '0',
+            mode: null,
+            workspaceMode: 'off',
+            effectiveMode: 'off',
+          },
+          lastOutcome: null,
+          updatedAtRevision: 1,
+        },
+      },
+    });
+
     await act(async () => {
-      root.render(<SessionWarmingCheckbox />);
+      root.render(<I18nProvider><SessionWarmingCheckbox /></I18nProvider>);
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -144,14 +159,15 @@ describe('SessionWarmingCheckbox', () => {
     ]);
     expect(warmingState.mode).toBe('idle');
     expect(warmingState.revision).toBe('2');
+    expect(useSessionWarmingStore.getState().entries['session-1']?.state.workspaceMode).toBe('idle');
+    expect(useSessionWarmingStore.getState().entries['session-1']?.state.effectiveMode).toBe('idle');
 
     // Re-mount / reload reads the persisted state
     await act(async () => {
-      root.render(<SessionWarmingCheckbox key="reloaded" />);
+      root.render(<I18nProvider><SessionWarmingCheckbox key="reloaded" /></I18nProvider>);
       await Promise.resolve();
       await Promise.resolve();
     });
-
     const reloadedCheckbox = host.querySelector<HTMLInputElement>('input[type="checkbox"]');
     expect(reloadedCheckbox).not.toBeNull();
     if (!reloadedCheckbox) throw new Error('Reloaded checkbox not found');

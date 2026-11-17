@@ -107,6 +107,7 @@ Workspace resolution and session discovery retain bounded startup retries. Canon
 | `useAdvisorStore.ts` | Live Advisor watchdog notes with same-epoch sequence checking, opaque epoch scoping, and note deduplication | All known sessions in the active runtime |
 | `session-ui-store.ts` (Slice C) | Session selection, draft lifecycle, abort prompts, worktree metadata, action entrypoints | App UI state |
 | `useGlobalSessionsStore.ts` (Slice C) | Global active/archived entities plus root, parent/child, and directory indexes | All opened project/worktree session lists |
+| `session-warming-sync.ts` | Hydrates `useSessionWarmingStore` for the active root session (and on Host reconnect) and prunes deleted sessions after authoritative `useGlobalSessionsStore` snapshots | Active runtime via `SyncRuntimeEffects` |
 | `viewport-store.ts` | Scroll anchors, session memory, loading indicators | App UI state |
 | `attachment-files.ts` | Attachment picker allowlists, MIME/content validation, structured-text sanitization, HEIC conversion | Local chat attachments |
 | `document-attachments.ts` | Bounded Office/OpenDocument extraction, document text serialization, embedded-image extraction, positional citations | Office chat attachments |

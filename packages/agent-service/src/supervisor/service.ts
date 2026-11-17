@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { z } from 'zod';
-import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
+import { AgentServiceReadySchema, ApprovalReplySchema, CounterSchema, EntityIdSchema, HistoryPageRequestSchema, JsonObjectSchema, ProblemDetailsSchema, PromptRequestSchema, QuestionReplySchema, SessionBranchRequestSchema, SessionCacheWarmingUpdateRequestSchema, SessionTitleRequestSchema, MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPReconnectRequestSchema, MCPOAuthRequestSchema, SkillsApplyRequestSchema, SkillExpandRequestSchema, SessionControlRequestSchema, SessionControlAckSchema } from '@openchamber/agent-contract';
 import type {
   SessionControlAck,
   AgentCatalog, AgentMutationResult, AgentServiceReady, ApprovalRequest,
@@ -16,7 +16,7 @@ import type {
   QuestionRequest, Run, RuntimeSession, SessionBranchResult, SessionDeleteAck, SessionSnapshot, SteerAck, FollowUpAck, Subagent,
   ShellJob, ShellSnapshot, ShellOutput, ShellStopResult, ShellStreamResponse, ShellStdinResult, SkillsCatalogState, SkillsApplyResult, SkillExpandResult, SkillInstallResult,
   ProviderAccounts, ProviderOAuthMethods, ProviderOAuthResult, ProviderModelDiscoveryResult, ProviderConfigurationRead,
-  CacheWarmingState, CacheWarmingApplyResult, OmpSettingsState,
+  CacheWarmingState, CacheWarmingApplyResult, SessionCacheWarmingState, SessionCacheWarmingApplyResult, OmpSettingsState,
   UsageStats, UsageToolsResponse, ImageGenerateResult, ImageModelMutationResult,
   WebSearchConfigState, WebSearchMutationResult,
   PluginCatalogState, PluginMutationResult, PluginDoctorResult, PluginMarketplaceState,
@@ -37,6 +37,7 @@ import { WorkerOperationError, WorkerRegistry, type RegisteredWorkerInfo, type W
 import { deliverSessionStream } from './event-stream.ts';
 import { CatalogCoordinator, CatalogCoordinatorError, type CatalogAdmission, type CatalogBootstrap } from './catalog.ts';
 import { WorkspaceCatalogs } from './workspaces.ts';
+import { SessionWarming } from './session-warming.ts';
 import { WorkspaceRoutes } from './workspace-routes.ts';
 import { WebSearchCoordinator } from './websearch.ts';
 import { ShellCoordinator } from './shell.ts';
@@ -99,7 +100,7 @@ type ServiceResponse =
   | ModelCatalog | ProviderCatalog | AgentCatalog
   | ProviderMutationResult | ModelMutationResult | ProviderCredentialMutationResult | AgentMutationResult
   | ProviderAccounts | ProviderOAuthMethods | ProviderOAuthResult | ProviderModelDiscoveryResult | ProviderConfigurationRead
-  | CacheWarmingState | CacheWarmingApplyResult | OmpSettingsState
+  | CacheWarmingState | CacheWarmingApplyResult | SessionCacheWarmingState | SessionCacheWarmingApplyResult | OmpSettingsState
   | WebSearchConfigState | WebSearchMutationResult
   | { sessionId: string; permissionMode: PermissionMode }
   | CompletionResult | CompletionCancelResult | UsageStats | UsageToolsResponse | ImageGenerateResult | ImageModelMutationResult
@@ -150,6 +151,7 @@ export class AgentService {
   private readonly sessions: SessionRegistry;
   private readonly catalog: CatalogCoordinator;
   private readonly workspaceCatalogs: WorkspaceCatalogs;
+  private readonly sessionWarming: SessionWarming;
   private readonly webSearch: WebSearchCoordinator;
   private readonly workspaceRoutes: WorkspaceRoutes;
   private readonly shell: ShellCoordinator;
@@ -164,6 +166,7 @@ export class AgentService {
       workerEntrypoint: options.workerEntrypoint, workerRuntime: options.workerRuntime, onDiagnostic: options.onDiagnostic, policyCheck: options.policyCheck, invokeHostAction: options.invokeHostAction,
       capacityPolicy: options.workerCapacityPolicy,
       isSessionIdle: rootSessionId => this.sessions?.isIdleForEviction(rootSessionId) ?? false,
+      isSessionKeptWarm: rootSessionId => this.sessionWarming?.isKeptWarm(rootSessionId) ?? false,
       consumeApprovalGrant: (...args) => this.sessions.consumeApprovalGrant(...args),
       prepareBootstrap: async input => {
         this.sessions.assertBootstrapWritable(input);
@@ -171,7 +174,13 @@ export class AgentService {
         if (!this.workspaceCatalogs.matches(input)) throw new WorkerOperationError(403, 'UNAUTHORIZED', 'The session bootstrap does not match the admitted workspace');
         const workspace = this.workspaceCatalogs.get(input.workspaceId);
         const agentDirectoryId = input.agentDirectoryId ?? workspace.agentDirectoryId;
-        return { ...input, agentDirectoryId, catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId), observationEpoch: this.observationEpoch };
+        return {
+          ...input,
+          agentDirectoryId,
+          catalogRevision: this.workspaceCatalogs.revision(input.workspaceId, agentDirectoryId),
+          observationEpoch: this.observationEpoch,
+          sessionWarmingMode: this.sessionWarming.overrideMode(input.rootSessionId),
+        };
       }, callbacks: {
         onOpened: (...args) => this.sessions.onOpened(...args),
         onEvents: (...args) => this.sessions.onEvents(...args),
@@ -185,7 +194,13 @@ export class AgentService {
         },
       },
     });
-    this.workspaceCatalogs = new WorkspaceCatalogs(options.stateDirectory, this.workers, () => this.catalog);
+    this.workspaceCatalogs = new WorkspaceCatalogs(
+      options.stateDirectory,
+      this.workers,
+      () => this.catalog,
+      rootSessionId => this.sessionWarming?.overrideMode(rootSessionId) ?? null,
+    );
+    this.sessionWarming = new SessionWarming(options.stateDirectory, this.workspaceCatalogs, this.workers);
     this.catalog = new CatalogCoordinator(options.stateDirectory, {
       readMcpConfiguration: async workspaceId => {
         const root = await this.workspaceCatalogs.stateless(workspaceId);
@@ -211,7 +226,14 @@ export class AgentService {
         return result.result.result;
       },
     });
-    this.sessions = new SessionRegistry(options.stateDirectory, this.workers, options.approvalPolicyCommit, options.approvalPolicyLoad, options.permissionAuthority);
+    this.sessions = new SessionRegistry(
+      options.stateDirectory,
+      this.workers,
+      options.approvalPolicyCommit,
+      options.approvalPolicyLoad,
+      options.permissionAuthority,
+      sessionIds => this.sessionWarming.clear(sessionIds),
+    );
     this.webSearch = new WebSearchCoordinator(this.workspaceCatalogs, this.workers);
     this.workspaceRoutes = new WorkspaceRoutes(this.workspaceCatalogs, this.workers, this.catalog,
       this.sessions, options.stateDirectory, this.webSearch,
@@ -258,7 +280,8 @@ export class AgentService {
       const pluginRevision = await this.workspaceCatalogs.pluginRevision(input.workspaceId);
       const bootstrap = WorkerBootstrapSchema.parse({
         ...input, ...authority, agentDirectoryId, pluginRevision,
-        observationEpoch: this.observationEpoch, mcpConfigPath: join(input.cwd, '.omp', 'mcp.json')
+        observationEpoch: this.observationEpoch, mcpConfigPath: join(input.cwd, '.omp', 'mcp.json'),
+        sessionWarmingMode: this.sessionWarming.overrideMode(input.rootSessionId),
       });
       const result = await launch(bootstrap);
       try {
@@ -357,6 +380,7 @@ export class AgentService {
     await this.catalog.initialize();
     await this.workspaceCatalogs.initialize();
     await this.sessions.initialize();
+    await this.sessionWarming.initialize();
     const server = createServer((request, response) => { void this.handle(request, response); });
     this.server = server;
     await new Promise<void>((resolve, reject) => {
@@ -712,6 +736,21 @@ export class AgentService {
           if (sessionRoute[4] !== undefined) { respondJson(response, 200, { run: await this.sessions.abort(sessionId, identity(sessionRoute[4])) }); return; }
           const prompt = await readBody(request, PromptRequestSchema);
           respondJson(response, 202, { run: await this.sessions.prompt(sessionId, { type: 'prompt', runId: randomUUID(), request: prompt }) }); return;
+        }
+      }
+      const sessionWarmingRoute = /^\/api\/agent\/v1\/sessions\/([^/]+)\/cache-warming$/.exec(url.pathname);
+      if (sessionWarmingRoute) {
+        const sessionId = identity(sessionWarmingRoute[1]);
+        const scope = this.sessions.warmingScope(sessionId);
+        if (request.method === 'GET') {
+          respondJson(response, 200, await this.sessionWarming.read(scope.rootSessionId, scope.workspaceId));
+          return;
+        }
+        if (request.method === 'PUT') {
+          this.sessions.assertWritable(scope.rootSessionId);
+          const body = await readBody(request, SessionCacheWarmingUpdateRequestSchema);
+          respondJson(response, 200, await this.sessionWarming.update(scope.rootSessionId, scope.workspaceId, body));
+          return;
         }
       }
       const surfaceResponse = await sessionSurfaceRoute(this.sessions, request, url);

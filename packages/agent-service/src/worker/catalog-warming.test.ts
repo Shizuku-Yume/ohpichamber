@@ -9,7 +9,7 @@ import type { AgentSession } from '@oh-my-pi/pi-coding-agent/session/agent-sessi
 import { createAgentSession } from '@oh-my-pi/pi-coding-agent/sdk';
 import { NativeCacheWarming } from './catalog-warming.ts';
 import { openNativeRuntime, type NativeWorkerRuntime } from './native-runtime.ts';
-
+import { WorkerSession } from './session.ts';
 beforeEach(resetSettingsForTest);
 afterEach(resetSettingsForTest);
 
@@ -99,9 +99,11 @@ test('warming validates before disk writes and reports unavailable live applicat
     await expect(warming.persist('workspace', 'off', '18446744073709551616')).rejects.toThrow();
     expect((await warming.read('workspace', '0')).mode).toBe('idle');
     expect(() => warming.apply('off')).toThrow('No native session');
-    const rejecting = new NativeCacheWarming({ cwd, agentDirectory, session: {
-      setCacheWarmingMode: () => { throw new Error('private native failure'); },
-    } });
+    const rejecting = new NativeCacheWarming({
+      cwd, agentDirectory, session: {
+        setCacheWarmingMode: () => { throw new Error('private native failure'); },
+      }
+    });
     expect(() => rejecting.apply('idle')).toThrow('Native cache warming mode could not be applied');
     const mismatched = new NativeCacheWarming({ cwd, agentDirectory, session: { setCacheWarmingMode: () => 'off' } });
     expect(() => mismatched.apply('idle')).toThrow('Native cache warming mode could not be applied');
@@ -110,3 +112,51 @@ test('warming validates before disk writes and reports unavailable live applicat
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('worker session startup applies sessionWarmingMode override over workspace config and falls back to workspace when null', async () => {
+  const { root, cwd, agentDirectory } = await fixture();
+  const sessionsDirectory = join(root, 'sessions');
+  const network = spyOn(globalThis, 'fetch').mockImplementation(() => { throw new Error('Warming startup must not call a provider'); });
+  let first: WorkerSession | undefined;
+  let second: WorkerSession | undefined;
+  try {
+    await mkdir(sessionsDirectory, { recursive: true });
+    await new NativeCacheWarming({ cwd, agentDirectory }).persist('workspace', 'off', '1');
+    first = await WorkerSession.open({
+      type: 'bootstrap',
+      rootSessionId: 'ses-warm-override',
+      workerGeneration: 'gen-1',
+      projectId: 'project',
+      workspaceId: 'workspace',
+      agentDirectoryId: 'agent',
+      cwd,
+      agentDirectory,
+      sessionsDirectory,
+      sessionWarmingMode: 'streaming',
+    }, () => { }, () => { }, () => { }, async () => { }, async () => { throw new Error('Unexpected host action'); }, () => { }, () => { });
+    expect(cfgProvidersCacheWarming.get(first.session.settings)).toBe('streaming');
+    await first.close();
+    first = undefined;
+
+    resetSettingsForTest();
+    second = await WorkerSession.open({
+      type: 'bootstrap',
+      rootSessionId: 'ses-warm-inherit',
+      workerGeneration: 'gen-2',
+      projectId: 'project',
+      workspaceId: 'workspace',
+      agentDirectoryId: 'agent',
+      cwd,
+      agentDirectory,
+      sessionsDirectory,
+      sessionWarmingMode: null,
+    }, () => { }, () => { }, () => { }, async () => { }, async () => { throw new Error('Unexpected host action'); }, () => { }, () => { });
+    expect(cfgProvidersCacheWarming.get(second.session.settings)).toBe('off');
+  } finally {
+    await first?.close();
+    await second?.close();
+    network.mockRestore();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+}, 30_000);

@@ -770,7 +770,11 @@ export class WorkerSession {
         mode: 'rpc', uiContext: interaction.ui,
         reportSendError: () => owned?.fail(), reportRuntimeError: () => owned?.fail(), onShutdown: onFatal,
       }));
-      postInitTasks.push(warming.read(input.workspaceId, '0').then(w => warming.apply(w.mode)).catch(() => { }));
+      const sessionWarmingMode = input.sessionWarmingMode;
+      const startupWarming = sessionWarmingMode !== undefined && sessionWarmingMode !== null
+        ? Promise.resolve().then(() => warming.apply(sessionWarmingMode))
+        : warming.read(input.workspaceId, '0').then(w => warming.apply(w.mode));
+      postInitTasks.push(startupWarming.catch(() => { }));
       await Promise.all(postInitTasks);
       await initialPolicyCapture;
       owned.syncTodoAutoClear();

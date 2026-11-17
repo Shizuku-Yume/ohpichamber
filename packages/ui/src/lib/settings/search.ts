@@ -855,6 +855,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['warming', 'warm', 'cache', 'prompt cache', 'keep-alive', 'idle'],
   },
   {
+    id: 'sessions.session-warming',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.defaults.sessionWarming.label',
+    descriptionKey: 'settings.openchamber.defaults.sessionWarming.info',
+    keywords: ['warming', 'warm', 'cache', 'prompt cache', 'keep warm', 'session', 'override', 'idle'],
+  },
+  {
     id: 'sessions.show-chats',
     page: 'sessions',
     titleKey: 'settings.openchamber.defaults.field.showChats',

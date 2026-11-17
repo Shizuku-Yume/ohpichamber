@@ -19,15 +19,16 @@ export interface SettingsSortableListItem {
 const SortableListRow: React.FC<{
   item: SettingsSortableListItem;
   disabled: boolean;
+  rowClassName?: string;
   children: React.ReactNode;
-}> = ({ item, disabled, children }) => {
+}> = ({ item, disabled, rowClassName, children }) => {
   const { t } = useI18n();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled });
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn('relative flex items-center gap-2', isDragging && 'z-10 opacity-60')}
+      className={cn('relative flex items-center gap-2', rowClassName, isDragging && 'z-10 opacity-60')}
     >
       {item.groupStart ? <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 -top-px h-px bg-edge-muted" /> : null}
       {/* Closed during a drag: an open tooltip takes Escape, which cancels a keyboard drag. */}
@@ -66,6 +67,8 @@ export const SettingsSortableList = <Item extends SettingsSortableListItem>({
   disabled = false,
   onDraggingChange,
   renderRow,
+  listClassName,
+  rowClassName,
 }: {
   items: Item[];
   /** The new order of every listed id, after a drop that moved something. */
@@ -77,6 +80,8 @@ export const SettingsSortableList = <Item extends SettingsSortableListItem>({
   /** For a host that must not close or steal arrow keys mid-drag, such as a dialog. */
   onDraggingChange?: (dragging: boolean) => void;
   renderRow: (item: Item, index: number) => React.ReactNode;
+  listClassName?: string;
+  rowClassName?: string;
 }) => {
   const { t } = useI18n();
   const reportDialogDrag = React.useContext(SettingsDialogDragContext);
@@ -126,9 +131,9 @@ export const SettingsSortableList = <Item extends SettingsSortableListItem>({
       accessibility={accessibility}
     >
       <SortableContext items={items} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col">
+        <div className={cn('flex flex-col', listClassName)}>
           {items.map((item, index) => (
-            <SortableListRow key={item.id} item={item} disabled={disabled}>
+            <SortableListRow key={item.id} item={item} disabled={disabled} rowClassName={rowClassName}>
               {renderRow(item, index)}
             </SortableListRow>
           ))}

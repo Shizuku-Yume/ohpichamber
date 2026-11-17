@@ -31,7 +31,6 @@ beforeEach(() => {
     workspaceId,
     revision: '0',
     totalCount: 1,
-    placementCounts: { tuiOnly: 0, boundary: 0, elsewhere: 0 },
     settings: [{ id: 'modelRoles', type: 'record', value: ompSettingsRoles, default: null, configured: true, placement: { type: 'engine' } }],
   }));
   restorers = [() => scope.mockRestore(), () => catalog.mockRestore(), () => settingsMock.mockRestore()];

@@ -1,15 +1,17 @@
 # OpenChamber Mobile Handoff
 
-Status and process reference for the native iOS/Android apps. Written so work can continue after
-merge — either by finishing CI/release automation, or by adding features as follow-up fixes. The
-apps are feature-complete for a first public/TestFlight-style test; CI/signing is the main gap.
+Status and architecture reference for the native iOS and Android Capacitor shell. CI smoke builds and
+conditional-signing release workflows are in place; physical-device runtime verification belongs to M7
+(`.workflow/specs/m7-release-verification.md`).
 
 ## What this package is
 
-`packages/mobile` is a Capacitor workspace that wraps the **hosted mobile web UI** (the `MobileApp`
-renderer), not the desktop shell. The native app is a WKWebView (iOS) / Android WebView loading a
-bundled copy of the web build; native capabilities are added via Capacitor plugins and two iOS app
-extensions.
+`packages/mobile` is a Capacitor shell wrapping the **mobile web UI** (`MobileApp`) on the Canonical
+Client against a Host Gateway serving `/api/agent/v1`. The native app runs inside WKWebView (iOS) or
+Android WebView, uses fetch-based SSE event streaming and native header-bearing terminal WebSockets,
+and embeds neither the Host server nor the OMP Agent Service. Guest SDK iframes and Guest extension
+services are not mounted on mobile (`loadGuestCatalog` marks the mobile surface `unsupported`). Native
+capabilities are added via Capacitor plugins and two iOS app extensions.
 
 - App id / package: `com.openchamber.app`; app name `OpenChamber`.
 - Capacitor config: `capacitor.config.json`. It is JSON because the Capacitor CLI reads a
@@ -46,14 +48,20 @@ wrapper. Everything native-facing goes through `scripts/with-mobile-env.mjs`.
 
 ### `with-mobile-env.mjs` (toolchain wrapper — read this before debugging build env issues)
 
-Every build/deploy script runs through it. It sets, with env overrides honored first:
+Every build/deploy script runs through it. Explicit env overrides always win first:
 
-- `DEVELOPER_DIR` — `$DEVELOPER_DIR` → `xcode-select -p` → `/Applications/Xcode.app/...`. It
-  intentionally honors `xcode-select` so an Xcode beta / non-default install is used (hardcoding
-  the path previously forced builds onto the wrong Xcode / Command Line Tools).
-- `JAVA_HOME` — `$JAVA_HOME` → `/opt/homebrew/opt/openjdk@21`.
-- `ANDROID_HOME` / `ANDROID_SDK_ROOT` — `$ANDROID_HOME` → `/opt/homebrew/share/android-commandlinetools`.
-- `PATH` — prepends `$JAVA_HOME/bin` and `$ANDROID_HOME/platform-tools` (so `adb` resolves).
+- `DEVELOPER_DIR` — on macOS (`darwin`), `$DEVELOPER_DIR` → `xcode-select -p` →
+  `/Applications/Xcode.app/Contents/Developer`, honoring `xcode-select` so an Xcode beta or
+  non-default install is used. Left unset on Linux unless explicitly provided (iOS builds require macOS).
+- `JAVA_HOME` — on macOS, `$JAVA_HOME` → Homebrew OpenJDK 21 (`/opt/homebrew/opt/openjdk@21` or
+  `/usr/local/opt/openjdk@21` if installed). On Linux, `$JAVA_HOME` → first existing JDK 21 under
+  `/usr/lib/jvm` (`java-21-openjdk-amd64`, `java-21-openjdk-arm64`, `java-21-openjdk`,
+  `temurin-21-jdk*`, `zulu-21`, `jdk-21`) or Linuxbrew; left unset if none exists.
+- `ANDROID_HOME` / `ANDROID_SDK_ROOT` — on macOS, `$ANDROID_HOME` → `$ANDROID_SDK_ROOT` →
+  `/opt/homebrew/share/android-commandlinetools` (or `~/Library/Android/sdk` if present). On Linux,
+  `$ANDROID_HOME` → `$ANDROID_SDK_ROOT` → first existing SDK directory (`~/Android/Sdk`,
+  `~/Android/sdk`, `/opt/android-sdk`, `/usr/lib/android-sdk`, or Linuxbrew); left unset if none exists.
+- `PATH` — prepends `$JAVA_HOME/bin` and `$ANDROID_HOME/platform-tools` when resolved.
 
 On another machine, override these env vars rather than editing the script. `xcode-select` may
 point at Command Line Tools; the wrapper's `DEVELOPER_DIR` handling covers that for mobile commands.
@@ -205,36 +213,35 @@ bun run mobile:build:ios:simulator
 Web-inherited build warnings (KaTeX font URLs, `onnxruntime-web` eval, chunk-size) are expected and
 non-fatal.
 
-## The gap: CI / release automation (next work)
+## CI, release workflows, and remaining verification
 
-The apps build and deploy locally; there is no CI/signing/publishing yet. To take them to
-TestFlight / Play internal testing:
+Smoke and release workflows are implemented in `.github/workflows/mobile-ci.yml` (Linux `type-check`,
+`lint`, and Android debug APK plus macOS iOS simulator build) and `.github/workflows/mobile-release.yml`
+(Android APK/AAB via `bundleRelease` / `assembleRelease` and iOS `.ipa` via `xcodebuild archive`).
+Both release jobs sign conditionally: when signing secrets are absent, Android emits unsigned release
+artifacts and iOS packages an unsigned `App.ipa` rather than failing on Apple Developer ID or TestFlight
+credentials.
 
-### iOS
+Remaining work:
 
-- Apple Developer account; App IDs for the app **and** both extensions
-  (`com.openchamber.app`, `.OpenChamberWidget`, `.OpenChamberNotificationService`), each enabled for
-  the **App Group** and (app) **Push**.
-- Signing certificate + provisioning profiles for all three targets (extensions need their own).
-- App Store Connect API key for non-interactive TestFlight upload (`xcodebuild archive` +
-  `notarytool`/`altool`, or fastlane `gym`+`pilot`).
-- Runner: macOS with the same Xcode as `DEVELOPER_DIR`.
-
-### Android
-
-- Release keystore (kept as a CI secret); build a signed **AAB** (`bundleRelease`) — the debug
-  scripts here produce an unsigned debug APK.
-- Play Console app + internal testing track; a Play service account for automated upload (fastlane
-  `supply` or the Play Developer API).
-- `google-services.json` is committed, so FCM builds in CI without extra setup.
-- Runner: Linux with the Android SDK + `openjdk@21`.
+- **M7 physical-device runtime verification** (`.workflow/specs/m7-release-verification.md`): install the
+  Android APK on a device, pair with a Host, stream canonical `/api/agent/v1` chat, verify reconnects
+  and approvals, and emit unsigned/ad-hoc iOS `.ipa` artifacts cleanly.
+- **Optional store distribution** (only if publishing to TestFlight / App Store / Google Play):
+  - **iOS**: Apple Developer account; App IDs for the app **and** both extensions (`com.openchamber.app`,
+    `.OpenChamberWidget`, `.OpenChamberNotificationService`), each enabled for the **App Group** and
+    (app) **Push**; signing certificate + provisioning profiles for all three targets; App Store Connect
+    API key secrets for TestFlight upload.
+  - **Android**: Release keystore secrets (`ANDROID_KEYSTORE_BASE64`, passwords, alias) for signed AAB
+    uploads to Google Play (`google-services.json` is committed, so FCM builds without extra setup).
+  - **Infra / versioning**: Relay/push secrets (APNs key, FCM service account) live in the relay
+    infrastructure rather than app CI; `mobile-release.yml` accepts `version_name` and `build_number`
+    inputs (defaulting to `package.json` version and `github.run_number`).
 
 ### Notes for CI
 
-- Reuse `with-mobile-env.mjs`'s env contract (`DEVELOPER_DIR`, `JAVA_HOME`, `ANDROID_HOME`) — set
-  them in the workflow instead of relying on local Homebrew paths.
-- Relay/push secrets (APNs key, FCM service account) live in the relay infrastructure, not app CI.
-- Version/build-number bumping is not automated yet.
+- `with-mobile-env.mjs` resolves both Linux and macOS toolchain paths automatically and honors explicit
+  `DEVELOPER_DIR`, `JAVA_HOME`, and `ANDROID_HOME` / `ANDROID_SDK_ROOT` workflow overrides.
 
 ## Store review readiness
 

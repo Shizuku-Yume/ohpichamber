@@ -50,8 +50,8 @@ None. (Zero `Check waived:`, `Review: skipped`, or `Review: waived` entries acro
 
 ## Remaining debt & follow-ups
 
-- `tech-debt-sweep/01-dead-code-zero.md`: eliminates residual `bun run dead-code` findings (flagged in W26 at Task 14 and in `ux-feedback-2026-11-15` Task 13 `final2-07-dead-code.log`).
-- `technical-debt.md`: `"OMP TUI-owned behaviors have no GUI mirror or drift test"` (tracked in `tech-debt-sweep/05-omp-tui-mirror-and-drift-tests.md`).
-- `technical-debt.md`: `"Cold new-chat first token waits on OMP session construction"` (tracked in `tech-debt-sweep/07-cold-path-catalog-revision.md`).
-- `technical-debt.md`: `"Per-session warming has no Agent Service implementation"` (tracked in `tech-debt-sweep/06-per-session-cache-warming.md`).
+- `tech-debt-sweep/01-dead-code-zero.md` — resolved residual `bun run dead-code` findings (`0` unused files, exports, types, or `knip.json` hints).
+- `technical-debt.md`: `"OMP TUI-owned behaviors have no GUI mirror or drift test"` — resolved in `tech-debt-sweep/05-omp-tui-mirror-and-drift-tests.md` and deleted from `technical-debt.md`.
+- `technical-debt.md`: `"Cold new-chat first token waits on OMP session construction"` — catalog-selection rebuild fixed in `tech-debt-sweep/07-cold-path-catalog-revision.md`; the entry remains in `technical-debt.md` solely for the upstream `@oh-my-pi/pi-coding-agent` two-phase session-graph seam (`decisions.md: 2026-11-18 - Keep spare workers at runtime prewarm until OMP splits session-graph preparation from session binding`).
+- `technical-debt.md`: `"Per-session warming has no Agent Service implementation"` — resolved in `tech-debt-sweep/06-per-session-cache-warming.md` and deleted from `technical-debt.md`.
 - Task 14 recorded packaging/runtime limits: `packages/electron/scripts/prepare-ripgrep.mjs` stages the host `rg` binary rather than a pinned cross-architecture tarball (cross-arch builds require `OPENCHAMBER_RIPGREP`); `notifyPullRequest` persists without a live `merge-follow` caller.

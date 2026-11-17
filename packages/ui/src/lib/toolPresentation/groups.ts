@@ -20,21 +20,38 @@ export const TOOL_PERMISSION_GROUPS: readonly ToolPermissionGroupKey[] = [
 export function categorizeTool(name: string): ToolPermissionGroupKey {
   if (name.startsWith('mcp__') || name.startsWith('mcp:') || name.includes('__')) return 'mcp_and_extensions';
   if (name.startsWith('openchamber') || name === 'notify') return 'openchamber';
-  if (name.startsWith('vibe_') || name.startsWith('subagent_')) return 'multi_agent';
+  if (name.startsWith('vibe_') || name.startsWith('subagent_') || name === 'task' || name === 'wait') {
+    return 'multi_agent';
+  }
   if (
     ['read', 'write', 'edit', 'apply_patch', 'glob', 'grep', 'find'].includes(name) ||
     name.startsWith('ast_')
   ) {
     return 'files_and_search';
   }
-  if (['bash', 'eval', 'debug', 'lsp', 'task', 'wait'].includes(name)) {
+  if (['bash', 'eval', 'debug', 'lsp', 'ida', 'ask', 'security_scan'].includes(name)) {
     return 'execution';
   }
   if (['web_search', 'web', 'github'].includes(name)) {
     return 'web_and_external';
   }
   if (
-    ['todo', 'checkpoint', 'rewind', 'memory', 'recall', 'learn', 'goal', 'think', 'advise', 'retain', 'context_notes'].includes(name) ||
+    [
+      'todo',
+      'checkpoint',
+      'rewind',
+      'memory',
+      'recall',
+      'reflect',
+      'learn',
+      'goal',
+      'think',
+      'advise',
+      'retain',
+      'context_notes',
+      'new_context',
+      'manage_skill',
+    ].includes(name) ||
     name.startsWith('memory_')
   ) {
     return 'planning_and_memory';
@@ -56,31 +73,34 @@ const TOOL_ONE_LINE_DESCRIPTIONS = {
   eval: 'Execute code cells in isolated language runtimes',
   debug: 'Debug running processes with DAP',
   lsp: 'Query language server for definitions, types, and diagnostics',
+  ida: 'Inspect binaries using IDA Pro integration',
+  ask: 'Ask the user clarifying questions during execution',
+  security_scan: 'Run automated security scans on code or plans',
   task: 'Spawn concurrent subagents for delegated tasks',
   wait: 'Observe and barrier on background jobs and services',
   web_search: 'Search the web for documentation and current information',
+  web: 'Fetch web pages and inspect browser content',
   github: 'Interact with GitHub issues, PRs, and repositories',
   todo: 'Manage structured task list and phase milestones',
   checkpoint: 'Save session state checkpoint for recovery',
   rewind: 'Rewind conversation to a previous checkpoint',
+  context_notes: 'Save concise notes across context compactions',
+  new_context: 'Start a fresh context segment for the session',
   goal: 'Manage multi-turn objectives and auto-progression',
   think: 'Internal reasoning and planning step',
   advise: 'Provide structured advisor guidance notes',
+  memory_edit: 'Edit stored agent memory entries',
+  retain: 'Save durable facts into long-term memory',
+  recall: 'Retrieve relevant entries from long-term memory',
+  reflect: 'Synthesize insights across stored memories',
+  learn: 'Record a reusable lesson from recent experience',
+  manage_skill: 'Install, update, or remove agent skills',
   notify: 'Display desktop and in-app notifications',
   openchamber: 'Execute host workspace control actions',
   openchamber_render: 'Render interactive UI components and views',
   openchamber_knowledge: 'Query project documentation and knowledge context',
+  openchamber_workflow: 'Run and manage OpenChamber workflows',
 } as const;
-export const GROUP_DESCRIPTIONS = {
-  files_and_search: 'File reading, editing, and codebase search tools',
-  execution: 'Terminal, code evaluation, LSP, and process execution tools',
-  web_and_external: 'Web browsing, search, and external service integrations',
-  planning_and_memory: 'Task tracking, checkpoints, goals, and agent memory',
-  multi_agent: 'Subagent orchestration and delegation tools',
-  openchamber: 'Host workspace management and presentation tools',
-  mcp_and_extensions: 'Model Context Protocol and third-party extension tools',
-} as const;
-
 export function getToolOneLineDescription(name: string): string {
   if (Object.hasOwn(TOOL_ONE_LINE_DESCRIPTIONS, name)) {
     // SAFETY: Object.hasOwn ensures name is a valid key of TOOL_ONE_LINE_DESCRIPTIONS

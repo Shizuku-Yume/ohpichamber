@@ -1,46 +1,95 @@
 import React from 'react';
-import type { ToolCatalogEntry, ToolTier } from '@openchamber/agent-contract';
+import type { ToolCatalogEntry } from '@openchamber/agent-contract';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
 import {
   SettingsCheckboxRow,
   SettingsChipGroup,
-  SETTINGS_HELPER_CLASS,
+  SettingsDisclosure,
+  SettingsFieldRow,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
   SETTINGS_SPACE_ROW_CLASS,
-  SETTINGS_SPACE_SECTION_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import {
   categorizeTool,
   TOOL_PERMISSION_GROUPS,
-  GROUP_DESCRIPTIONS,
   getToolOneLineDescription,
   toolPresentation,
 } from '@/lib/toolPresentation';
+import type { ToolPermissionGroupKey } from '@/lib/toolPresentation/groups';
 
-export interface AgentPermissionsEditorProps {
+interface AgentPermissionsEditorProps {
   allowedTools: string[] | null;
   toolsCatalog: ToolCatalogEntry[];
   onChange: (allowedTools: string[] | null) => void;
   disabled?: boolean;
 }
 
-const TIER_CLASSES = {
-  read: 'border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
-  write: 'border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10',
-  exec: 'border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/10',
+type ToolPermissionMode = 'inherit' | 'all' | 'none' | 'custom';
+
+const GROUP_TITLE_KEYS: Record<
+  ToolPermissionGroupKey,
+  | 'settings.agents.page.toolPermissions.group.files_and_search'
+  | 'settings.agents.page.toolPermissions.group.execution'
+  | 'settings.agents.page.toolPermissions.group.web_and_external'
+  | 'settings.agents.page.toolPermissions.group.planning_and_memory'
+  | 'settings.agents.page.toolPermissions.group.multi_agent'
+  | 'settings.agents.page.toolPermissions.group.openchamber'
+  | 'settings.agents.page.toolPermissions.group.mcp_and_extensions'
+> = {
+  files_and_search: 'settings.agents.page.toolPermissions.group.files_and_search',
+  execution: 'settings.agents.page.toolPermissions.group.execution',
+  web_and_external: 'settings.agents.page.toolPermissions.group.web_and_external',
+  planning_and_memory: 'settings.agents.page.toolPermissions.group.planning_and_memory',
+  multi_agent: 'settings.agents.page.toolPermissions.group.multi_agent',
+  openchamber: 'settings.agents.page.toolPermissions.group.openchamber',
+  mcp_and_extensions: 'settings.agents.page.toolPermissions.group.mcp_and_extensions',
+};
+
+const TOOL_NAME_KEYS = {
+  read: 'settings.agents.page.toolPermissions.toolName.read',
+  write: 'settings.agents.page.toolPermissions.toolName.write',
+  edit: 'settings.agents.page.toolPermissions.toolName.edit',
+  apply_patch: 'settings.agents.page.toolPermissions.toolName.apply_patch',
+  ast_grep: 'settings.agents.page.toolPermissions.toolName.ast_grep',
+  ast_edit: 'settings.agents.page.toolPermissions.toolName.ast_edit',
+  glob: 'settings.agents.page.toolPermissions.toolName.glob',
+  grep: 'settings.agents.page.toolPermissions.toolName.grep',
+  find: 'settings.agents.page.toolPermissions.toolName.find',
+  bash: 'settings.agents.page.toolPermissions.toolName.bash',
+  eval: 'settings.agents.page.toolPermissions.toolName.eval',
+  debug: 'settings.agents.page.toolPermissions.toolName.debug',
+  lsp: 'settings.agents.page.toolPermissions.toolName.lsp',
+  ida: 'settings.agents.page.toolPermissions.toolName.ida',
+  ask: 'settings.agents.page.toolPermissions.toolName.ask',
+  security_scan: 'settings.agents.page.toolPermissions.toolName.security_scan',
+  task: 'settings.agents.page.toolPermissions.toolName.task',
+  wait: 'settings.agents.page.toolPermissions.toolName.wait',
+  web_search: 'settings.agents.page.toolPermissions.toolName.web_search',
+  web: 'settings.agents.page.toolPermissions.toolName.web',
+  github: 'settings.agents.page.toolPermissions.toolName.github',
+  todo: 'settings.agents.page.toolPermissions.toolName.todo',
+  checkpoint: 'settings.agents.page.toolPermissions.toolName.checkpoint',
+  rewind: 'settings.agents.page.toolPermissions.toolName.rewind',
+  context_notes: 'settings.agents.page.toolPermissions.toolName.context_notes',
+  new_context: 'settings.agents.page.toolPermissions.toolName.new_context',
+  goal: 'settings.agents.page.toolPermissions.toolName.goal',
+  think: 'settings.agents.page.toolPermissions.toolName.think',
+  advise: 'settings.agents.page.toolPermissions.toolName.advise',
+  memory_edit: 'settings.agents.page.toolPermissions.toolName.memory_edit',
+  retain: 'settings.agents.page.toolPermissions.toolName.retain',
+  recall: 'settings.agents.page.toolPermissions.toolName.recall',
+  reflect: 'settings.agents.page.toolPermissions.toolName.reflect',
+  learn: 'settings.agents.page.toolPermissions.toolName.learn',
+  manage_skill: 'settings.agents.page.toolPermissions.toolName.manage_skill',
+  notify: 'settings.agents.page.toolPermissions.toolName.notify',
+  openchamber: 'settings.agents.page.toolPermissions.toolName.openchamber',
+  openchamber_render: 'settings.agents.page.toolPermissions.toolName.openchamber_render',
+  openchamber_knowledge: 'settings.agents.page.toolPermissions.toolName.openchamber_knowledge',
+  openchamber_workflow: 'settings.agents.page.toolPermissions.toolName.openchamber_workflow',
 } as const;
 
-const GROUP_DESC_KEYS = {
-  files_and_search: 'settings.agents.page.toolPermissions.groupDesc.files_and_search',
-  execution: 'settings.agents.page.toolPermissions.groupDesc.execution',
-  web_and_external: 'settings.agents.page.toolPermissions.groupDesc.web_and_external',
-  planning_and_memory: 'settings.agents.page.toolPermissions.groupDesc.planning_and_memory',
-  multi_agent: 'settings.agents.page.toolPermissions.groupDesc.multi_agent',
-  openchamber: 'settings.agents.page.toolPermissions.groupDesc.openchamber',
-  mcp_and_extensions: 'settings.agents.page.toolPermissions.groupDesc.mcp_and_extensions',
-} as const;
 const TOOL_DESC_KEYS = {
   read: 'settings.agents.page.toolPermissions.toolDesc.read',
   write: 'settings.agents.page.toolPermissions.toolDesc.write',
@@ -55,46 +104,46 @@ const TOOL_DESC_KEYS = {
   eval: 'settings.agents.page.toolPermissions.toolDesc.eval',
   debug: 'settings.agents.page.toolPermissions.toolDesc.debug',
   lsp: 'settings.agents.page.toolPermissions.toolDesc.lsp',
+  ida: 'settings.agents.page.toolPermissions.toolDesc.ida',
+  ask: 'settings.agents.page.toolPermissions.toolDesc.ask',
+  security_scan: 'settings.agents.page.toolPermissions.toolDesc.security_scan',
   task: 'settings.agents.page.toolPermissions.toolDesc.task',
   wait: 'settings.agents.page.toolPermissions.toolDesc.wait',
   web_search: 'settings.agents.page.toolPermissions.toolDesc.web_search',
+  web: 'settings.agents.page.toolPermissions.toolDesc.web',
   github: 'settings.agents.page.toolPermissions.toolDesc.github',
   todo: 'settings.agents.page.toolPermissions.toolDesc.todo',
   checkpoint: 'settings.agents.page.toolPermissions.toolDesc.checkpoint',
   rewind: 'settings.agents.page.toolPermissions.toolDesc.rewind',
+  context_notes: 'settings.agents.page.toolPermissions.toolDesc.context_notes',
+  new_context: 'settings.agents.page.toolPermissions.toolDesc.new_context',
   goal: 'settings.agents.page.toolPermissions.toolDesc.goal',
   think: 'settings.agents.page.toolPermissions.toolDesc.think',
   advise: 'settings.agents.page.toolPermissions.toolDesc.advise',
+  memory_edit: 'settings.agents.page.toolPermissions.toolDesc.memory_edit',
+  retain: 'settings.agents.page.toolPermissions.toolDesc.retain',
+  recall: 'settings.agents.page.toolPermissions.toolDesc.recall',
+  reflect: 'settings.agents.page.toolPermissions.toolDesc.reflect',
+  learn: 'settings.agents.page.toolPermissions.toolDesc.learn',
+  manage_skill: 'settings.agents.page.toolPermissions.toolDesc.manage_skill',
   notify: 'settings.agents.page.toolPermissions.toolDesc.notify',
   openchamber: 'settings.agents.page.toolPermissions.toolDesc.openchamber',
   openchamber_render: 'settings.agents.page.toolPermissions.toolDesc.openchamber_render',
   openchamber_knowledge: 'settings.agents.page.toolPermissions.toolDesc.openchamber_knowledge',
+  openchamber_workflow: 'settings.agents.page.toolPermissions.toolDesc.openchamber_workflow',
 } as const;
 
-type DescribedToolName = keyof typeof TOOL_DESC_KEYS;
+type KnownToolPermissionId = keyof typeof TOOL_NAME_KEYS;
 
-const isDescribedToolName = (name: string): name is DescribedToolName =>
-  Object.hasOwn(TOOL_DESC_KEYS, name);
+const isKnownToolPermissionId = (name: string): name is KnownToolPermissionId =>
+  Object.hasOwn(TOOL_NAME_KEYS, name);
 
-/**
- * The row's name for a tool, from the same registry the transcript uses. The
- * catalog's label is only a case transform of the id, so it read as
- * `Openchamber` for `openchamber`.
- */
-const toolPresentationLabel = (name: string): string => toolPresentation(name).label;
-const TierChip: React.FC<{ tier: ToolTier }> = ({ tier }) => {
-  const { t } = useI18n();
-  const label = t(`settings.agents.page.toolPermissions.tier.${tier}`);
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider border leading-none select-none',
-        TIER_CLASSES[tier],
-      )}
-    >
-      {label}
-    </span>
-  );
+const MAX_TOOL_DESCRIPTION_LENGTH = 280;
+
+const sanitizeDescription = (raw: string): string => {
+  const normalized = raw.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= MAX_TOOL_DESCRIPTION_LENGTH) return normalized;
+  return `${normalized.slice(0, MAX_TOOL_DESCRIPTION_LENGTH - 1).trimEnd()}…`;
 };
 
 export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
@@ -105,14 +154,12 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
 }) => {
   const { t } = useI18n();
 
-  // Collapsed state for each group
-  const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
+  const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({});
 
-  const toggleGroupCollapse = (groupKey: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
+  const toggleGroupExpand = (groupKey: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [groupKey]: !prev[groupKey] }));
   };
 
-  // Build the complete tool list combining toolsCatalog with any existing tools in allowedTools
   const tools = React.useMemo(() => {
     const list: ToolCatalogEntry[] = [...toolsCatalog];
     const catalogNames = new Set(toolsCatalog.map((tool) => tool.name));
@@ -138,41 +185,26 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
     [tools],
   );
 
-  // Group tools into the 7 fork-owned categories
   const groupedTools = React.useMemo(() => {
-    const files_and_search: ToolCatalogEntry[] = [];
-    const execution: ToolCatalogEntry[] = [];
-    const web_and_external: ToolCatalogEntry[] = [];
-    const planning_and_memory: ToolCatalogEntry[] = [];
-    const multi_agent: ToolCatalogEntry[] = [];
-    const openchamber: ToolCatalogEntry[] = [];
-    const mcp_and_extensions: ToolCatalogEntry[] = [];
-    for (const tool of tools) {
-      const groupKey = categorizeTool(tool.name);
-      if (groupKey === 'files_and_search') files_and_search.push(tool);
-      else if (groupKey === 'execution') execution.push(tool);
-      else if (groupKey === 'web_and_external') web_and_external.push(tool);
-      else if (groupKey === 'planning_and_memory') planning_and_memory.push(tool);
-      else if (groupKey === 'multi_agent') multi_agent.push(tool);
-      else if (groupKey === 'openchamber') openchamber.push(tool);
-      else mcp_and_extensions.push(tool);
-    }
-    return {
-      files_and_search,
-      execution,
-      web_and_external,
-      planning_and_memory,
-      multi_agent,
-      openchamber,
-      mcp_and_extensions,
+    const groups: Record<ToolPermissionGroupKey, ToolCatalogEntry[]> = {
+      files_and_search: [],
+      execution: [],
+      web_and_external: [],
+      planning_and_memory: [],
+      multi_agent: [],
+      openchamber: [],
+      mcp_and_extensions: [],
     };
+    for (const tool of tools) {
+      groups[categorizeTool(tool.name)].push(tool);
+    }
+    return groups;
   }, [tools]);
 
-  // Determine active quick action
-  const quickActionValue = React.useMemo(() => {
+  const quickActionValue: ToolPermissionMode = React.useMemo(() => {
     if (allowedTools === null) return 'inherit';
     if (allowedTools.length === 0) return 'none';
-    const availableNames = availableTools.map((t) => t.name);
+    const availableNames = availableTools.map((tool) => tool.name);
     if (
       availableNames.length > 0 &&
       availableNames.every((name) => allowedTools.includes(name)) &&
@@ -183,28 +215,27 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
     return 'custom';
   }, [allowedTools, availableTools]);
 
-  const handleQuickAction = (value: string) => {
+  const handleQuickAction = (value: ToolPermissionMode) => {
     if (disabled) return;
     if (value === 'inherit') {
       onChange(null);
     } else if (value === 'all') {
-      // Select ONLY available tools
-      onChange(availableTools.map((t) => t.name));
+      onChange(availableTools.map((tool) => tool.name));
     } else if (value === 'none') {
       onChange([]);
     }
   };
 
-  const isToolChecked = (toolName: string): boolean => {
-    if (allowedTools === null) return true;
-    return allowedTools.includes(toolName);
+  const isToolChecked = (tool: ToolCatalogEntry): boolean => {
+    if (allowedTools === null) return Boolean(tool.availability);
+    return allowedTools.includes(tool.name);
   };
 
   const toggleTool = (toolName: string, checked: boolean) => {
     if (disabled) return;
-    const tool = tools.find((t) => t.name === toolName);
+    const tool = tools.find((entry) => entry.name === toolName);
     if (checked && (!tool || !tool.availability)) return;
-    const currentList = allowedTools === null ? availableTools.map((t) => t.name) : [...allowedTools];
+    const currentList = allowedTools === null ? availableTools.map((entry) => entry.name) : [...allowedTools];
     const nextList = checked
       ? [...new Set([...currentList, toolName])]
       : currentList.filter((name) => name !== toolName);
@@ -214,7 +245,7 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
   const toggleGroup = (groupTools: ToolCatalogEntry[], nextChecked: boolean) => {
     if (disabled) return;
     const currentList = new Set(
-      allowedTools === null ? availableTools.map((t) => t.name) : allowedTools,
+      allowedTools === null ? availableTools.map((entry) => entry.name) : allowedTools,
     );
     for (const tool of groupTools) {
       if (nextChecked) {
@@ -226,11 +257,23 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
     onChange([...currentList]);
   };
 
+  const enabledCount = tools.filter((tool) => isToolChecked(tool)).length;
+  const summaryText =
+    allowedTools === null
+      ? t('settings.agents.page.toolPermissions.summary.default')
+      : t('settings.agents.page.toolPermissions.summary.enabledCount', {
+        enabled: enabledCount,
+        total: tools.length,
+      });
+
   return (
-    <div className={SETTINGS_SPACE_ROW_CLASS}>
-      {/* Quick actions chip group */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <SettingsChipGroup<string>
+    <div data-settings-tools-editor className={SETTINGS_SPACE_ROW_CLASS}>
+      <SettingsFieldRow
+        label={t('settings.agents.page.toolPermissions.mode.label')}
+        description={summaryText}
+        settingsItem="agents.allowed-tools"
+      >
+        <SettingsChipGroup<ToolPermissionMode>
           value={quickActionValue}
           options={[
             {
@@ -252,145 +295,89 @@ export const AgentPermissionsEditor: React.FC<AgentPermissionsEditorProps> = ({
           onChange={handleQuickAction}
           aria-label={t('settings.agents.page.field.allowedTools')}
         />
-        {allowedTools === null && (
-          <span className={cn(SETTINGS_HELPER_CLASS, 'text-xs')}>
-            {t('settings.agents.page.field.allowedToolsInherit')}
-          </span>
-        )}
-      </div>
+      </SettingsFieldRow>
 
-      {/* Collapsible tool groups */}
-      <div className={SETTINGS_SPACE_SECTION_CLASS}>
+      <div>
         {TOOL_PERMISSION_GROUPS.map((groupKey) => {
           const groupToolList = groupedTools[groupKey];
           if (groupToolList.length === 0) return null;
 
-          const isCollapsed = Boolean(collapsedGroups[groupKey]);
-          const selectedTools = groupToolList.filter((tool) => isToolChecked(tool.name));
-          const isAllChecked = selectedTools.length === groupToolList.length && groupToolList.length > 0;
-          const isIndeterminate = selectedTools.length > 0 && selectedTools.length < groupToolList.length;
+          const expanded = Boolean(expandedGroups[groupKey]);
+          const selectedCount = groupToolList.filter((tool) => isToolChecked(tool)).length;
+          const availableGroupTools = groupToolList.filter((tool) => Boolean(tool.availability));
+          const allAvailableChecked =
+            availableGroupTools.length > 0 &&
+            availableGroupTools.every((tool) => isToolChecked(tool));
+          const isFullyChecked = groupToolList.length > 0 && selectedCount === groupToolList.length;
+          const isIndeterminate = selectedCount > 0 && !isFullyChecked;
 
-          // Unique tiers in this group
-          const groupTiers = Array.from(new Set(groupToolList.map((tool) => tool.tier)));
-
-          const groupTitle = t(`settings.agents.page.toolPermissions.group.${groupKey}`);
-          const groupDescription = t(GROUP_DESC_KEYS[groupKey]) || GROUP_DESCRIPTIONS[groupKey];
+          const groupTitle = t(GROUP_TITLE_KEYS[groupKey]);
           const countLabel = t('settings.agents.page.toolPermissions.selectedCount', {
-            selected: selectedTools.length,
+            selected: selectedCount,
             total: groupToolList.length,
           });
 
           return (
-            <div
+            <SettingsDisclosure
               key={groupKey}
-              className="rounded-lg border border-border/50 bg-[var(--surface-subtle)]/40 overflow-hidden"
-            >
-              {/* Group Header */}
-              <div
-                className="flex items-center justify-between gap-3 px-3 py-2 bg-[var(--surface-subtle)]/60 cursor-pointer select-none hover:bg-[var(--surface-subtle)] transition-colors"
-                onClick={() => toggleGroupCollapse(groupKey)}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <button
-                    type="button"
-                    aria-label={isCollapsed ? t('settings.agents.page.toolPermissions.expandSection') : t('settings.agents.page.toolPermissions.collapseSection')}
-                    className="flex items-center justify-center size-5 text-muted-foreground hover:text-foreground transition-transform"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleGroupCollapse(groupKey);
-                    }}
-                  >
-                    <Icon
-                      name="arrow-right-s"
-                      className={cn(
-                        'size-3.5 transition-transform duration-200',
-                        !isCollapsed && 'rotate-90',
-                      )}
-                    />
-                  </button>
-
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={isAllChecked}
-                      indeterminate={isIndeterminate}
-                      disabled={disabled}
-                      onChange={(checked) => toggleGroup(groupToolList, checked)}
-                      ariaLabel={groupTitle}
-                    />
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-foreground truncate">
-                        {groupTitle}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground tabular-nums">
-                        {countLabel}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {groupDescription}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Tier chips summary */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {groupTiers.map((tier) => (
-                    <TierChip key={tier} tier={tier} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Group Body (Tool Rows) */}
-              {!isCollapsed && (
-                <div className="divide-y divide-border/20 px-3 py-1 space-y-1">
-                  {groupToolList.map((tool) => {
-                    const checked = isToolChecked(tool.name);
-                    const descKey = isDescribedToolName(tool.name) ? TOOL_DESC_KEYS[tool.name] : null;
-                    const localizedDesc = descKey ? t(descKey) : null;
-                    const description = localizedDesc || tool.description || '';
-                    return (
-                      <SettingsCheckboxRow
-                        key={tool.name}
-                        checked={checked}
-                        disabled={disabled || !tool.availability}
-                        onChange={(nextChecked) => toggleTool(tool.name, nextChecked)}
-                        label={
-                          <span className="flex items-center gap-2">
-                            {/* The row names the tool the way the transcript
-                                does, from the shared presentation registry. The
-                                catalog's own label is a case transform of the
-                                id, which rendered as `Openchamber`. */}
-                            <span className="font-mono text-xs">{toolPresentationLabel(tool.name)}</span>
-                            {/* The id only adds information when it differs from
-                                the name on screen; `openchamber (openchamber)`
-                                said nothing. */}
-                            {toolPresentationLabel(tool.name) !== tool.name && (
-                              <span className="text-[11px] text-muted-foreground font-mono">({tool.name})</span>
-                            )}
-                            {!tool.availability && (
-                              <span className="text-[10px] uppercase font-mono tracking-wider px-1 py-0.5 rounded border border-border/40 text-muted-foreground bg-muted/20">
-                                {t('common.unavailable')}
-                              </span>
-                            )}
-                          </span>
-                        }
-                        // A catalog tool can carry paragraphs of instructions.
-                        // Two lines keep the list scannable; the full text stays
-                        // reachable through `title`.
-                        description={description ? (
-                          <span className="line-clamp-2 text-xs text-muted-foreground" title={description}>
-                            {description}
-                          </span>
-                        ) : undefined}
-                        labelAccessory={<TierChip tier={tool.tier} />}
-                      />
-                    );
-                  })}
-                </div>
+              title={groupTitle}
+              secondary={<span className="tabular-nums">{countLabel}</span>}
+              accessory={(
+                <Checkbox
+                  checked={isFullyChecked}
+                  indeterminate={isIndeterminate}
+                  disabled={disabled || (availableGroupTools.length === 0 && selectedCount === 0)}
+                  onChange={() => toggleGroup(groupToolList, !allAvailableChecked && availableGroupTools.length > 0)}
+                  ariaLabel={t('settings.agents.page.toolPermissions.toggleGroupAria', { group: groupTitle })}
+                />
               )}
-            </div>
+              expanded={expanded}
+              onToggle={() => toggleGroupExpand(groupKey)}
+            >
+              <div className={cn(SETTINGS_SPACE_CHECKBOX_CLASS, 'ps-6')}>
+                {groupToolList.map((tool) => {
+                  const knownId = isKnownToolPermissionId(tool.name) ? tool.name : null;
+                  const presentationLabel = toolPresentation(tool.name).label;
+                  const displayTitle = knownId
+                    ? t(TOOL_NAME_KEYS[knownId])
+                    : presentationLabel !== tool.name
+                      ? presentationLabel
+                      : tool.label && tool.label.toLowerCase() !== tool.name.toLowerCase()
+                        ? tool.label
+                        : tool.name;
+
+                  const rawDesc = knownId
+                    ? t(TOOL_DESC_KEYS[knownId])
+                    : tool.description || getToolOneLineDescription(tool.name);
+                  const description = rawDesc ? sanitizeDescription(rawDesc) : '';
+                  const showInlineId = displayTitle.toLowerCase() !== tool.name.toLowerCase();
+
+                  return (
+                    <SettingsCheckboxRow
+                      key={tool.name}
+                      checked={isToolChecked(tool)}
+                      disabled={disabled || !tool.availability}
+                      onChange={(nextChecked) => toggleTool(tool.name, nextChecked)}
+                      label={(
+                        <span className="inline-flex min-w-0 items-baseline gap-1.5">
+                          <span className={cn(displayTitle === tool.name && 'font-mono')}>
+                            {displayTitle}
+                          </span>
+                          {showInlineId ? (
+                            <span className="font-mono typography-meta text-muted-foreground">({tool.name})</span>
+                          ) : null}
+                        </span>
+                      )}
+                      ariaLabel={displayTitle}
+                      labelAccessory={!tool.availability ? (
+                        <span className="typography-meta text-muted-foreground">{`· ${t('common.unavailable')}`}</span>
+                      ) : undefined}
+                      info={description || undefined}
+                    />
+                  );
+                })}
+              </div>
+            </SettingsDisclosure>
           );
         })}
       </div>

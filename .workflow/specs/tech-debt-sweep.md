@@ -6,7 +6,7 @@
 
 ## What this is for
 
-The first sweep (2026-11-08, cut from `2cd1a8c836`) landed three tasks on its integration branch and never reached `main`; by 2026-11-18 that branch was 1,509 commits behind and its numbers were stale. The maintainer asked on 2026-11-18 to finish the debt instead of carrying it: fix every open `technical-debt.md` entry and delete the fixed ones, close the efforts whose work already landed, and clean the worktrees and branches left behind. The sweep restarts from `main` at `ad4d78dd57`; the old branch is kept as tag `archive/tech-debt-sweep-2026-11-08` (decisions.md 2026-11-18).
+The first sweep (2026-11-08, cut from `2cd1a8c836`) landed three tasks on its integration branch and never reached `main`; by 2026-11-18 that branch was 1,509 commits behind and its numbers were stale. The maintainer asked on 2026-11-18 to finish the debt instead of carrying it: fix every open `technical-debt.md` entry and delete the fixed ones, close the efforts whose work already landed, and clean the worktrees and branches left behind. The sweep restarts from `main` at `ad4d78dd57`; the old branches are kept as tags `archive/tech-debt-sweep-2026-11-08/{integration,01-…,02-…,03-…}` (decisions.md 2026-11-18).
 
 What `main` carries today (task 13 gate logs of `ux-feedback-2026-11-15`, `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-16/task13/gate/`):
 

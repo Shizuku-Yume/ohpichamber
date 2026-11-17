@@ -308,15 +308,14 @@ test('every exposed OMP row has a label and description in all fifteen locales',
   expect(untranslated).toEqual([]);
 });
 
-test('every engine option has a label and, where OMP describes it, a description in all fifteen locales', () => {
-  // Enum chips and number selects render OMP's raw English option label when the
-  // slug key is missing, so a zh-CN user reads `prose-only` or `Very aggressive`.
-  // Only `engine` rows are in scope here: they are the rows the OMP page draws.
-  // Rows placed on Sessions, Chat, Tools and the other concept pages keep OMP's
-  // own option labels. Every value an engine control offers needs copy in all
-  // fifteen locales, and an option OMP describes needs its helper line
-  // translated too. The values come from OMP's own descriptors, not a hand list.
-  // The slug rule mirrors `optionSlug` in
+test('every page and engine option has a label and, where OMP describes it, a description in all fifteen locales', () => {
+  // Enum chips and option selects on both Concept pages (`page`) and the OMP
+  // page (`engine`) render OMP's raw English option label and description when
+  // the slug key is missing, so a zh-CN user reads `prose-only`, `Prompt`, or
+  // `Legacy reserve-based threshold`. Every value a page or engine control
+  // offers needs copy in all fifteen locales, and an option OMP describes needs
+  // its helper line translated too. The values come from OMP's own descriptors,
+  // not a hand list. The slug rule mirrors `optionSlug` in
   // `packages/ui/src/components/sections/shared/ompRowHelpers.ts`, which this
   // package cannot import.
   const dictionaries = readDictionaries();
@@ -328,7 +327,8 @@ test('every engine option has a label and, where OMP describes it, a description
   const untranslated = new Map<string, string[]>();
   for (const [locale, entries] of dictionaries) {
     for (const id of OMP_SETTING_EXPOSED_IDS) {
-      if (OMP_SETTING_PLACEMENTS[id]?.type !== 'engine') continue;
+      const placement = OMP_SETTING_PLACEMENTS[id];
+      if (!placement || (placement.type !== 'engine' && placement.type !== 'page')) continue;
       const setting = byId.get(id);
       if (!setting) continue;
       const declared = setting.ui?.options;
@@ -338,9 +338,11 @@ test('every engine option has a label and, where OMP describes it, a description
         : (setting.enumValues ?? []).map((value) => ({ value: String(value) }));
       for (const option of options) {
         const value = String(option.value).trim();
-        // A number row's `default` sentinel is drawn with the shared label, not
-        // an option label; `-1` means unlimited and reads as its own choice.
-        if (setting.type === 'number' && value === 'default') continue;
+        // A number row's `default` sentinel uses the shared Default label,
+        // unless OMP attaches an option description rendered under the label;
+        // keeping both keys preserves the label+description key pairing.
+        // `-1` means unlimited (or provider default) and reads as its own choice.
+        if (setting.type === 'number' && value === 'default' && option.description === undefined) continue;
         const slug = setting.type === 'number' && value === '-1'
           ? 'unlimited'
           : value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');

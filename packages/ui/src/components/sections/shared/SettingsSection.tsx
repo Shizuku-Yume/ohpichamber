@@ -33,16 +33,20 @@ export const SETTINGS_SELECT_TRIGGER_CLASS = SETTINGS_HUG_WIDTH_CLASS;
 /**
  * Settings select trigger in a `SettingsFieldRow` control column.
  *
- * Every row picker takes this one width, and the row's growing control column
- * pushes it to the trailing edge, so the selects in a section share one right
- * edge. 14rem holds a model or option name; anything longer truncates instead
- * of moving the edge.
+ * Hugs its selected value between `8ch` and `28ch` (font-relative `ch`, so the
+ * bounds scale with interface font size). Short labels (`Default`, `500 行`,
+ * `Low`) stay compact instead of stretching into wide empty bars, while long
+ * labels cap at `28ch` and truncate. `SettingsFieldRow` packs the control
+ * column to the trailing edge (`@xl:justify-end`), so row selects still share
+ * one right edge.
  */
-export const SETTINGS_WIDTH_SELECT_CLASS = 'w-full @xl:w-56';
+export const SETTINGS_WIDTH_SELECT_CLASS = 'w-fit min-w-[8ch] max-w-[28ch]';
 
 /**
- * Short text field in a row (a name, an id): the same footprint as the row's
- * select, so a section of selects and short inputs keeps one right edge.
+ * Short text field in a row (a name, an id): full width when stacked below
+ * `@xl`, and `14rem` on `@xl`+. `SettingsFieldRow` packs it to the trailing edge
+ * (`@xl:justify-end`), so a section of selects and short inputs keeps one right
+ * edge.
  */
 export const SETTINGS_WIDTH_SHORT_TEXT_CLASS = 'w-full @xl:w-56';
 
@@ -360,11 +364,13 @@ interface SettingsFieldRowProps {
  * Side-by-side form row: fixed label column + control column that grows to
  * the row's trailing edge.
  *
- * The control column is `flex-1` at every width, so `alignEnd` can actually
- * push its content right (a `w-fit` column had no free space to distribute).
- * Below `@xl` the row stacks, so a narrow pane keeps label above control.
- * A control that fills the column (a row-filling input) passes
- * `controlClassName`; the shared width classes keep pickers one size.
+ * The control column is `flex-1` at every width, so `alignEnd` (`@xl:justify-end`)
+ * packs its content to the trailing edge (a `w-fit` column would have no free
+ * space to distribute). That lets hug-width row selects (`SETTINGS_WIDTH_SELECT_CLASS`)
+ * and other controls share one right edge without stretching short labels into
+ * fixed-width bars. Below `@xl` the row stacks, so a narrow pane keeps label
+ * above control. A control that fills the column (a row-filling input) passes
+ * `controlClassName`.
  *
  * The row's own vertical padding keeps two stacked rows of 32px controls
  * apart (8px between them), so a list of field rows needs no spacing of its

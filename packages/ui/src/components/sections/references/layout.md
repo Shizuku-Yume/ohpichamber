@@ -95,19 +95,21 @@ express fill or shrink and stay allowed.
 
 | Control | Class | Value |
 |---|---|---|
-| Select trigger in a field row | `SETTINGS_WIDTH_SELECT_CLASS` | `w-full @xl:w-56` |
+| Select trigger in a field row | `SETTINGS_WIDTH_SELECT_CLASS` | `w-fit min-w-[8ch] max-w-[28ch]` |
 | Short text input (name, id, path) | `SETTINGS_WIDTH_SHORT_TEXT_CLASS` | `w-full @xl:w-56` |
 | Textarea, long text, stacked control cluster | `SETTINGS_WIDTH_LONG_TEXT_CLASS` | `w-full max-w-[24rem]` |
 | `NumberInput` stepper input | `SETTINGS_WIDTH_NUMBER_CLASS` inside `SETTINGS_NUMBER_STEPPER_ROW_CLASS` | `typography-ui-label w-[calc(5.75rem+5ch)]` |
 | Select trigger in a stacked cell or dialog | `SETTINGS_SELECT_TRIGGER_CLASS` | `w-fit max-w-[28ch]` |
 | Custom dropdown trigger (ModelSelector, AgentSelector) | `SETTINGS_CUSTOM_TRIGGER_CLASS` | `dropdownTriggerVariants()` + hug |
 
-A select and a short text input share `@xl:w-56`, and the row packs its
-control right, so every select in one section ends on the same right edge.
-The number stepper keeps its own font-relative width and never grows; its
-unit label uses `SETTINGS_NUMBER_UNIT_CLASS`. A control that must fill the
-whole row passes `controlClassName` from the call site; a dialog textarea
-uses the documented opt-out in [control sizing](controls.md#standard-sizes-and-widths).
+A row select hugs its value between `8ch` and `28ch` while `SettingsFieldRow`
+packs controls to the trailing edge (`@xl:justify-end`), so selects and other
+controls share one right edge without stretching short labels into wide empty
+bars; short text inputs keep `w-full @xl:w-56`. The number stepper keeps its own
+font-relative width and never grows; its unit label uses
+`SETTINGS_NUMBER_UNIT_CLASS`. A control that must fill the whole row passes
+`controlClassName` from the call site; a dialog textarea uses the documented
+opt-out in [control sizing](controls.md#standard-sizes-and-widths).
 
 ## Spacing
 

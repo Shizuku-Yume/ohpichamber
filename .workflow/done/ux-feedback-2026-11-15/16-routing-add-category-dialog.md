@@ -1,0 +1,20 @@
+# 16: Replace Routing's broken inline category-add stub with a complete creation dialog
+
+**Effort:** ux-feedback-2026-11-15
+**Blocked by:** None
+**Covers:** W14
+**Files:** `packages/ui/src/components/sections/routing/RoutingPage.tsx`; `packages/ui/src/components/sections/routing/RoutingPage.test.tsx`; `packages/ui/src/lib/i18n/messages/routing.i18n.ts`
+**Read first:** `.workflow/specs/ux-feedback-2026-11-15.md` (2026-11-18 follow-up amendment) (item 3, W14); decisions.md 2026-11-18 "Routing categories are created in a complete dialog"; `/home/shizuku/Project/ohpichamber-omp-artifacts/feedback-2026-11-18/` (`2-pasted-image-65460742c3b7c862.png`, `3-pasted-image-77e2092bfb9786ca.png`); `packages/ui/src/components/sections/PATTERNS.md`; `packages/ui/src/components/sections/references/controls.md` (Dialogs); `packages/web/server/lib/routing/store.js` (`userCategorySchema`)
+**Check:** `bun test packages/ui/src/components/sections/routing/RoutingPage.test.tsx packages/ui/src/components/sections/settingsLayoutGuard.test.ts && bun run --cwd packages/ui type-check` → all exit 0; real path on Web at 1600 px (`zh-CN`): open Settings → 路由, click `+ 添加类别`, verify dialog opens cleanly with zero warning/error banners, test empty-description submit validation inside the dialog, then submit Name + Model + Thinking + Description and verify immediate persistence in `routing.json` with screenshots.
+**Base commit:** 95faa0f0ab2ff720a14a2bc2811321c8a6312dbd
+
+- [x] Remove the bottom `新类别 [input] [添加]` row (`RoutingPage.tsx:467-486`) that inserted an invalid empty-description category into `draft.categories` and triggered simultaneous warning and error messages.
+- [x] Add an outline `+ 添加类别` (`Button variant="outline" size="xs"` with `Icon name="add"`, disabled at `MAX_CATEGORIES`) that opens a `Dialog` containing complete fields: Name (`Input`, required, max 60), Model (`ModelSelector`, optional, defaults to fallback), Thinking (`VariantSelect`, disabled when model has no reasoning variants), and Description (`Textarea`, required, max 2000, `controlClassName="w-full max-w-none"`, with `info` hint).
+- [x] Validate inside the dialog on submit (no errors shown on initial open; clear inline field error if Name or Description is blank or collides; never mutate `draft.categories` or call `saveConfig` until valid). On valid submit, generate the unique slug ID, append the valid category to `draft.categories`, close the dialog, and persist immediately.
+- [x] Keep existing-row validation on `CategoryRow` only for edits that clear an existing category's Name or Description; add/update copy in all 15 locales in `routing.i18n.ts` and update `RoutingPage.test.tsx`.
+
+## Progress
+
+- Check before: maintainer defect screenshots `feedback-2026-11-18/2-pasted-image-65460742c3b7c862.png` and `3-pasted-image-77e2092bfb9786ca.png` showed inline category addition inserting an empty-description stub into `draft.categories` and triggering simultaneous warning and error banners.
+- Check after: `bun test packages/ui/src/components/sections/routing/RoutingPage.test.tsx packages/ui/src/components/sections/settingsLayoutGuard.test.ts packages/ui/src/lib/i18n/messages/routing.i18n.test.ts packages/ui/src/lib/i18n/messages.test.ts && bun run --cwd packages/ui type-check` -> 41 pass, 0 fail, type-check exit 0; `bunx oxlint` on all changed/new TS/TSX files -> 0 warnings, 0 errors; `bun run dead-code` -> 0 findings in touched routing/i18n files. Real path on Web at 1600x1000 (`zh-CN` and `en`, UI port `4416`, API port `44160`, isolated `OPENCHAMBER_DATA_DIR` and `HOME`): verified `+ 添加类别` opens `CreateRoutingCategoryDialog` with zero warning/error banners, validates empty description and duplicate names inline without mutating or saving `routing.json`, and submitting Name + Model + Thinking + Description persists immediately (`ux-feedback-2026-11-18-r2/task16/01..06-*.png`, `persisted-routing.json`).
+- Review: pass (base 95faa0f0ab2ff720a14a2bc2811321c8a6312dbd) — two rounds by independent read-only reviewer worker `reviewer-task16`; all blocking and non-blocking findings fixed.

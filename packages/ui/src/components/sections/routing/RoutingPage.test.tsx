@@ -149,12 +149,19 @@ const setInputValue = async (element: HTMLInputElement | HTMLTextAreaElement, va
   });
 };
 
-const buttonContaining = (text: string): HTMLButtonElement => {
-  const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find((entry) => entry.textContent?.includes(text));
+const buttonIn = (root: ParentNode, text: string): HTMLButtonElement => {
+  const button = [...root.querySelectorAll<HTMLButtonElement>('button')].find((entry) => entry.textContent?.includes(text));
   if (!button) throw new Error(`Missing button: ${text}`);
   return button;
 };
 
+const buttonContaining = (text: string): HTMLButtonElement => buttonIn(document, text);
+
+const getCreateDialog = (): HTMLElement => {
+  const dialog = document.querySelector<HTMLElement>('[data-slot="dialog-content"]');
+  if (!dialog) throw new Error('Expected create-category dialog to be open');
+  return dialog;
+};
 describe('RoutingPage', () => {
   let container: HTMLElement;
   let root: Root;
@@ -168,7 +175,7 @@ describe('RoutingPage', () => {
       autoReady: true,
       config: mockConfig,
       builtins: mockConfig.categories,
-      load: async () => {},
+      load: async () => { },
       // Mirrors the server's schema: it trims both fields, rejects an empty one,
       // and caps the list at 32, so a leaked invalid save would report an error.
       saveConfig: async (config: RoutingConfig) => {
@@ -212,43 +219,180 @@ describe('RoutingPage', () => {
     expect(container.textContent).toContain('settings.routing.category.model');
   });
 
-  test('adding a category without a description keeps the draft idle and saves once it is valid', async () => {
+  test('renders addCategory button instead of legacy inline add row', async () => {
     await act(async () => {
       root.render(<RoutingPage />);
     });
 
-    const addInput = document.querySelector<HTMLInputElement>('[aria-label="settings.routing.categories.addLabel"]');
-    if (!addInput) throw new Error('Missing add input');
-    await setInputValue(addInput, 'Docs');
+    expect(document.querySelector('[aria-label="settings.routing.categories.addLabel"]')).toBeNull();
+    const legacyAddButton = [...document.querySelectorAll<HTMLButtonElement>('button')]
+      .find((entry) => entry.textContent?.trim() === 'settings.routing.categories.add');
+    expect(legacyAddButton).toBeUndefined();
+
+    const addCategoryButton = buttonContaining('settings.routing.categories.addCategory');
+    expect(addCategoryButton.disabled).toBe(false);
+  });
+
+  test('opening the create category dialog shows clean fields with no initial errors and closes on cancel', async () => {
     await act(async () => {
-      buttonContaining('settings.routing.categories.add').click();
+      root.render(<RoutingPage />);
     });
 
-    saveStateCalls.length = 0;
-    saveCalls.length = 0;
+    await act(async () => {
+      buttonContaining('settings.routing.categories.addCategory').click();
+    });
+
+    const dialog = getCreateDialog();
+    expect(dialog.textContent).toContain('settings.routing.categories.createDialog.title');
+    expect(document.body.textContent).not.toContain('settings.routing.categories.invalidDraft');
+    expect(document.body.textContent).not.toContain('settings.routing.category.nameRequired');
+    expect(document.body.textContent).not.toContain('settings.routing.category.descriptionRequired');
+    expect(document.body.textContent).not.toContain('settings.routing.category.nameDuplicate');
+
+    const nameInput = dialog.querySelector<HTMLInputElement>('[aria-label="settings.routing.category.name"]');
+    if (!nameInput) throw new Error('Missing dialog name input');
+    expect(nameInput.maxLength).toBe(60);
+
+    const modelSelector = dialog.querySelector('[data-testid="model-selector"]');
+    if (!modelSelector) throw new Error('Missing dialog model selector');
+    expect(modelSelector.textContent).toContain('settings.routing.model.useFallback');
+
+    const thinkingSelect = dialog.querySelector('[aria-label="settings.routing.category.thinking"]');
+    if (!thinkingSelect) throw new Error('Missing dialog thinking select');
+    expect(
+      thinkingSelect.hasAttribute('disabled')
+      || thinkingSelect.getAttribute('aria-disabled') === 'true'
+      || thinkingSelect.hasAttribute('data-disabled')
+    ).toBe(true);
+
+    const descriptionInput = dialog.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!descriptionInput) throw new Error('Missing dialog description textarea');
+    expect(descriptionInput.maxLength).toBe(2000);
+
+    expect(buttonIn(dialog, 'settings.routing.categories.createDialog.submit')).toBeDefined();
+
+    // Selecting a reasoning model enables the Thinking selector inside the dialog.
+    await act(async () => {
+      buttonIn(dialog, 'Select Model').click();
+    });
+    const updatedThinkingSelect = dialog.querySelector('[aria-label="settings.routing.category.thinking"]');
+    if (!updatedThinkingSelect) throw new Error('Missing dialog thinking select after model selection');
+    expect(
+      updatedThinkingSelect.hasAttribute('disabled')
+      || updatedThinkingSelect.getAttribute('aria-disabled') === 'true'
+      || updatedThinkingSelect.hasAttribute('data-disabled')
+    ).toBe(false);
+
+    await act(async () => {
+      buttonIn(dialog, 'settings.common.actions.cancel').click();
+    });
+
+    expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
+    expect(saveCalls.length).toBe(0);
+  });
+
+  test('dialog validates empty fields, clears description error on input, and blocks duplicate names without saving', async () => {
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    await act(async () => {
+      buttonContaining('settings.routing.categories.addCategory').click();
+    });
+
+    const dialog = getCreateDialog();
+    const submitButton = buttonIn(dialog, 'settings.routing.categories.createDialog.submit');
+
+    // Empty Name and empty Description -> both field errors inside dialog, no invalidDraft banner, no save.
+    await act(async () => {
+      submitButton.click();
+    });
     await act(async () => {
       await sleep(DEBOUNCE_SETTLE_MS);
     });
 
+    expect(dialog.textContent).toContain('settings.routing.category.nameRequired');
+    expect(dialog.textContent).toContain('settings.routing.category.descriptionRequired');
+    expect(document.body.textContent).not.toContain('settings.routing.categories.invalidDraft');
     expect(saveCalls.length).toBe(0);
     expect(saveStateCalls).not.toContain('error');
     expect(saveStateCalls).not.toContain('saving');
-    expect(container.textContent).toContain('settings.routing.category.descriptionRequired');
 
-    const description = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
-    if (!description) throw new Error('Missing description field');
-    expect(document.activeElement).toBe(description);
-    await setInputValue(description, 'Docs and reference writing');
+    // Valid Name with empty Description -> only descriptionRequired remains; typing into Description clears it immediately.
+    const nameInput = dialog.querySelector<HTMLInputElement>('[aria-label="settings.routing.category.name"]');
+    const descriptionInput = dialog.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!nameInput || !descriptionInput) throw new Error('Missing dialog inputs');
+
+    await setInputValue(nameInput, 'Docs');
+    await act(async () => {
+      submitButton.click();
+    });
+
+    expect(dialog.textContent).not.toContain('settings.routing.category.nameRequired');
+    expect(dialog.textContent).toContain('settings.routing.category.descriptionRequired');
+    expect(saveCalls.length).toBe(0);
+
+    await setInputValue(descriptionInput, 'Docs and reference writing');
+    expect(dialog.textContent).not.toContain('settings.routing.category.descriptionRequired');
+    expect(saveCalls.length).toBe(0);
+
+    // Case-insensitive collision with existing 'Trivial' -> shows nameDuplicate, keeps dialog open, no save.
+    await setInputValue(nameInput, 'trivial');
+    await act(async () => {
+      submitButton.click();
+    });
+
+    expect(dialog.textContent).toContain('settings.routing.category.nameDuplicate');
+    expect(document.querySelector('[data-slot="dialog-content"]')).not.toBeNull();
+    expect(saveCalls.length).toBe(0);
+  });
+
+  test('submitting a valid category in the dialog appends it, closes the dialog, and saves immediately', async () => {
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    await act(async () => {
+      buttonContaining('settings.routing.categories.addCategory').click();
+    });
+
+    const dialog = getCreateDialog();
+    const nameInput = dialog.querySelector<HTMLInputElement>('[aria-label="settings.routing.category.name"]');
+    const descriptionInput = dialog.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!nameInput || !descriptionInput) throw new Error('Missing dialog inputs');
+
+    await setInputValue(nameInput, 'Docs');
+    await act(async () => {
+      buttonIn(dialog, 'Select Model').click();
+    });
+    await setInputValue(descriptionInput, 'Docs and reference writing');
+
+    saveStateCalls.length = 0;
+    saveCalls.length = 0;
+    await act(async () => {
+      buttonIn(dialog, 'settings.routing.categories.createDialog.submit').click();
+    });
+
+    expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
+    expect(saveCalls.length).toBe(1);
+
+    const docs = saveCalls[0].categories.find((category) => category.id === 'docs');
+    expect(docs).toEqual({
+      id: 'docs',
+      builtin: false,
+      enabled: true,
+      name: 'Docs',
+      description: 'Docs and reference writing',
+      model: { providerID: 'anthropic', modelID: 'claude-3-7-sonnet' },
+      variant: null,
+      agent: null,
+    });
+
     await act(async () => {
       await sleep(DEBOUNCE_SETTLE_MS);
     });
 
     expect(saveCalls.length).toBe(1);
-    const docs = saveCalls[0].categories.find((category) => category.id === 'docs');
-    expect(docs).toBeDefined();
-    expect(docs?.builtin).toBe(false);
-    expect(docs?.name).toBe('Docs');
-    expect(docs?.description).toBe('Docs and reference writing');
     expect(saveStateCalls).toContain('saved');
   });
 
@@ -384,23 +528,70 @@ describe('RoutingPage', () => {
       root.render(<RoutingPage />);
     });
 
-    const addInput = document.querySelector<HTMLInputElement>('[aria-label="settings.routing.categories.addLabel"]');
-    if (!addInput) throw new Error('Missing add input');
-    await setInputValue(addInput, 'Research');
     await act(async () => {
-      buttonContaining('settings.routing.categories.add').click();
+      buttonContaining('settings.routing.categories.addCategory').click();
     });
-    const description = container.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
-    if (!description) throw new Error('Missing description field');
-    await setInputValue(description, 'Summarising papers');
+
+    const dialog = getCreateDialog();
+    const nameInput = dialog.querySelector<HTMLInputElement>('[aria-label="settings.routing.category.name"]');
+    const descriptionInput = dialog.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!nameInput || !descriptionInput) throw new Error('Missing dialog inputs');
+
+    await setInputValue(nameInput, 'Research');
+    await setInputValue(descriptionInput, 'Summarising papers');
     await act(async () => {
-      await sleep(DEBOUNCE_SETTLE_MS);
+      buttonIn(dialog, 'settings.routing.categories.createDialog.submit').click();
     });
 
     expect(saveCalls.length).toBe(1);
     const added = saveCalls[0].categories.find((category) => !category.builtin && category.name === 'Research');
     expect(added).toBeDefined();
-    expect(added?.id).not.toBe('research');
+    expect(added?.id).toBe('research-2');
+  });
+
+  test('a new category deduplicates its slug against an existing user category id', async () => {
+    useRoutingStore.setState({
+      config: {
+        ...mockConfig,
+        categories: [
+          ...mockConfig.categories,
+          {
+            id: 'docs',
+            builtin: false,
+            enabled: true,
+            name: 'Documentation',
+            description: 'Existing documentation bucket',
+            model: null,
+            variant: null,
+            agent: null,
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      root.render(<RoutingPage />);
+    });
+
+    await act(async () => {
+      buttonContaining('settings.routing.categories.addCategory').click();
+    });
+
+    const dialog = getCreateDialog();
+    const nameInput = dialog.querySelector<HTMLInputElement>('[aria-label="settings.routing.category.name"]');
+    const descriptionInput = dialog.querySelector<HTMLTextAreaElement>('[aria-label="settings.routing.category.description"]');
+    if (!nameInput || !descriptionInput) throw new Error('Missing dialog inputs');
+
+    await setInputValue(nameInput, 'Docs');
+    await setInputValue(descriptionInput, 'Docs and reference writing');
+    await act(async () => {
+      buttonIn(dialog, 'settings.routing.categories.createDialog.submit').click();
+    });
+
+    expect(saveCalls.length).toBe(1);
+    const added = saveCalls[0].categories.find((category) => !category.builtin && category.name === 'Docs');
+    expect(added).toBeDefined();
+    expect(added?.id).toBe('docs-2');
   });
 
   test('Add is disabled at the server cap of 32 categories', async () => {
@@ -423,11 +614,12 @@ describe('RoutingPage', () => {
       root.render(<RoutingPage />);
     });
 
-    const addInput = document.querySelector<HTMLInputElement>('[aria-label="settings.routing.categories.addLabel"]');
-    if (!addInput) throw new Error('Missing add input');
-    await setInputValue(addInput, 'Extra');
-    const addButton = buttonContaining('settings.routing.categories.add');
+    const addButton = buttonContaining('settings.routing.categories.addCategory');
     expect(addButton.disabled).toBe(true);
+    await act(async () => {
+      addButton.click();
+    });
+    expect(document.querySelector('[data-slot="dialog-content"]')).toBeNull();
   });
 
   test('thinking select displays reasoning effort options rather than legacy model variants', async () => {

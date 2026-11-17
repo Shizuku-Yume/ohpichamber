@@ -63,9 +63,6 @@ const state: OmpSettingsState = {
   revision: '7',
   configPath: CONFIG_PATH,
   totalCount: 40,
-  // Counted by the worker from its placement table: tui-only and boundary rows
-  // never reach `settings`, so the page cannot derive these.
-  placementCounts: { tuiOnly: 2, boundary: 1, elsewhere: 4 },
   settings: [
     // Common tab: a switch, a three-choice enum and a numeric picker.
     setting({ id: 'bash.enabled', type: 'boolean', value: true, label: 'Bash', group: 'Bash', tab: 'shell' }),
@@ -120,7 +117,7 @@ const state: OmpSettingsState = {
     setting({ id: 'tools.format', type: 'enum', value: 'auto', label: 'Tool Calling Mode', group: 'Experimental', enumValues: ['auto', 'native'] }),
     // Two short, unexplained choices stay chips; a longer or explained list is a select.
     setting({ id: 'ttsr.contextMode', type: 'enum', value: 'keep', label: 'TTSR Context Mode', group: 'Rules (TTSR)', enumValues: ['discard', 'keep'] }),
-    // Terminal presentation, page rows, owned-by rows and egress rows are counted, never drawn.
+    // Terminal presentation, page rows, owned-by rows and egress rows are never drawn.
     setting({ id: 'tui.maxFps', type: 'number', value: 30, placement: { type: 'tui-only' }, label: 'Max FPS' }),
     setting({ id: 'cycleOrder', type: 'array', value: ['smol', 'default'], placement: { type: 'tui-only' } }),
     setting({ id: 'tools.artifactTailLines', type: 'number', value: 1000, placement: { type: 'page', page: 'tools', section: 'limits' } }),
@@ -285,39 +282,40 @@ test('leaves terminal-only, page and duplicate settings off every tab', async ()
   }
 });
 
-test('the config file footer counts what it leaves out by reason', async () => {
+test('the config file footer renders only the heading and open button without audit paragraphs or file path', async () => {
   await render();
+  for (const tabName of ['common', 'editing', 'execution'] as const) {
+    await switchTab(tabName);
+    expect(container.querySelector('[data-settings-item="omp.configFile"]')).toBeNull();
+  }
   await switchTab('advanced');
 
-  expect(container.textContent).toContain(CONFIG_PATH);
-  const sentence = (key: 'terminal' | 'elsewhere' | 'egress', count: number) =>
-    (en[`settings.omp.configFile.${key}` as const] as string).replace('{count}', String(count));
-  // The counts come from the state's own placement counts, not from the rows
-  // this tab (or any tab) draws: tui-only and boundary rows are absent from
-  // `settings` altogether.
-  expect(container.textContent).toContain(sentence('terminal', 2));
-  expect(container.textContent).toContain(sentence('elsewhere', 4));
-  expect(container.textContent).toContain(sentence('egress', 1));
+  const footer = container.querySelector('[data-settings-item="omp.configFile"]');
+  expect(footer).not.toBeNull();
+  expect(footer?.textContent).toContain(en['settings.omp.configFile.title']);
+  expect(footer?.textContent).toContain(en['settings.omp.openConfig']);
+  expect(container.textContent).not.toContain(CONFIG_PATH);
+  expect(footer?.querySelectorAll('p').length).toBe(0);
 
-  const openConfig = Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes(en['settings.omp.openConfig'] as string));
+  const openConfig = Array.from(footer?.querySelectorAll('button') ?? []).find(
+    (button) => button.textContent?.includes(en['settings.omp.openConfig']),
+  );
   if (!openConfig) throw new Error('open config button missing');
+  revealPath.mockClear();
   await act(async () => { openConfig.click(); });
   expect(revealPath).toHaveBeenCalledWith(CONFIG_PATH);
 });
 
-test('omits a config-file sentence whose count is zero', async () => {
-  getSettings.mockResolvedValueOnce({
-    ...state,
-    placementCounts: { tuiOnly: 0, boundary: 3, elsewhere: 0 },
-  });
+test('omits the open config button when no config path is reported', async () => {
+  getSettings.mockResolvedValueOnce({ ...state, configPath: undefined });
   await render();
   await switchTab('advanced');
 
-  const sentence = (key: 'terminal' | 'elsewhere' | 'egress', count: number) =>
-    (en[`settings.omp.configFile.${key}` as const] as string).replace('{count}', String(count));
-  expect(container.textContent).not.toContain(sentence('terminal', 0));
-  expect(container.textContent).not.toContain(sentence('elsewhere', 0));
-  expect(container.textContent).toContain(sentence('egress', 3));
+  const footer = container.querySelector('[data-settings-item="omp.configFile"]');
+  expect(footer).not.toBeNull();
+  expect(footer?.textContent).toContain(en['settings.omp.configFile.title']);
+  expect(footer?.querySelectorAll('p').length).toBe(0);
+  expect(footer?.querySelectorAll('button').length).toBe(0);
 });
 
 test('applying the read-summary preset sends one update carrying every changed key', async () => {
@@ -435,6 +433,9 @@ test('renders every drawn row and heading translated in zh-CN with no raw settin
       expect(container.textContent).not.toContain('settings.omp.group.');
       expect(container.textContent).not.toContain('settings.omp.tab.');
     }
+    expect(container.textContent).toContain(dictionary['settings.omp.configFile.title']);
+    expect(container.textContent).toContain(dictionary['settings.omp.openConfig']);
+    expect(container.textContent).not.toContain(CONFIG_PATH);
     // Every heading comes from the locale, never from OMP's own group name: a
     // group the vocabulary missed would show its raw English name here.
     for (const rawGroup of ['Compaction', 'Subagents', 'Commands & Skills', 'Discovery & MCP', 'Modes', 'Retry & Fallback']) {

@@ -298,7 +298,7 @@ export const useOmpSettingsTabStore = create<{
 /**
  * The tab a Settings search anchor lands in: `omp.<settingId>` for a row,
  * `omp.preset.readSummary` for the read-summary preset, and `omp.configFile`
- * for the closing section that explains the file.
+ * for the closing section that opens config.yml.
  */
 export const ompSettingsTabForSearchTarget = (anchor: string): OmpSettingsTab | null => {
   if (!anchor.startsWith('omp.')) return null;

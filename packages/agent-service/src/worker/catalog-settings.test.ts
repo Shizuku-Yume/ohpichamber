@@ -46,6 +46,9 @@ test('the setting list is derived from orderedSettings and never exposes credent
       expect(ids.has(cred)).toBe(false);
     }
     const boundaryIds = Object.keys(OMP_SETTING_PLACEMENTS).filter(id => OMP_SETTING_PLACEMENTS[id].type === 'boundary');
+    for (const id of ['dev.autoqa', 'spotlight.experiment.enabled', 'dev.autoqaPush.endpoint']) {
+      expect(boundaryIds, id).toContain(id);
+    }
     for (const id of boundaryIds) expect(ids.has(id), id).toBe(false);
     const shown = all.filter(s => !s.isCredential && OMP_SETTING_EXPOSED_IDS.has(s.id));
     expect(state.settings.length).toBe(shown.length);
@@ -54,29 +57,6 @@ test('the setting list is derived from orderedSettings and never exposes credent
       type: 'number', label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
     });
     expect(JSON.stringify(state)).not.toContain('apiKey');
-  } finally { await f.close(); }
-});
-
-test('the state carries the placement counts the OMP footer needs', async () => {
-  const f = await fixture();
-  try {
-    const state = await f.native.read('workspace_1', '0');
-    const placements = Object.values(OMP_SETTING_PLACEMENTS);
-    // `tui-only` and `boundary` rows never appear in `settings`, so a count over
-    // the returned rows could only ever be zero: the worker counts the whole
-    // registry instead.
-    expect(state.placementCounts.tuiOnly).toBe(placements.filter((p) => p.type === 'tui-only').length);
-    expect(state.placementCounts.tuiOnly).toBeGreaterThan(0);
-    expect(state.placementCounts.boundary).toBe(placements.filter((p) => p.type === 'boundary').length);
-    const boundaryIds = Object.keys(OMP_SETTING_PLACEMENTS).filter((id) => OMP_SETTING_PLACEMENTS[id].type === 'boundary');
-    for (const id of ['dev.autoqa', 'spotlight.experiment.enabled', 'dev.autoqaPush.endpoint']) {
-      expect(boundaryIds, id).toContain(id);
-    }
-    // `elsewhere` is what the state actually carries for another page, so it
-    // matches those rows in `settings` rather than the whole placement table.
-    const elsewhere = state.settings.filter((s) => s.placement.type === 'page' || s.placement.type === 'owned-by');
-    expect(state.placementCounts.elsewhere).toBe(elsewhere.length);
-    expect(state.placementCounts.elsewhere).toBeGreaterThan(0);
   } finally { await f.close(); }
 });
 

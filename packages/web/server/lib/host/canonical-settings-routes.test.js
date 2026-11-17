@@ -24,7 +24,7 @@ afterAll(async () => {
 
 const endpoint = '/api/agent/v1/workspaces/workspace_1/settings';
 const state = {
-  workspaceId: 'workspace_1', revision: '7', totalCount: 1, placementCounts: { tuiOnly: 0, boundary: 0, elsewhere: 0 }, settings: [{
+  workspaceId: 'workspace_1', revision: '7', totalCount: 1, settings: [{
     id: 'compaction.thresholdPercent', type: 'number', value: 50, default: -1, configured: true,
     label: 'Compaction Threshold', group: 'Compaction', tab: 'context',
     placement: { type: 'page', page: 'context', section: 'compaction' },

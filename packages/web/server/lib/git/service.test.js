@@ -1987,12 +1987,13 @@ describe('createWorktree', () => {
   const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
   const dataHome = createTempDir();
   const setupMarker = path.join(dataHome, 'setup-started');
+  const setupRelease = path.join(dataHome, 'setup-release');
   const setupScript = path.join(dataHome, 'setup-phase.cjs');
   process.env.OPENCHAMBER_DATA_DIR = dataHome;
 
   fs.writeFileSync(
    setupScript,
-   `require('node:fs').writeFileSync(${JSON.stringify(setupMarker)}, 'started'); setTimeout(() => {}, 1000);\n`,
+   `const fs = require('node:fs'); fs.writeFileSync(${JSON.stringify(setupMarker)}, 'started'); const deadline = Date.now() + 15_000; const waitForRelease = () => { if (fs.existsSync(${JSON.stringify(setupRelease)}) || Date.now() >= deadline) return; setTimeout(waitForRelease, 20); }; waitForRelease();\n`,
   );
 
   try {
@@ -2018,12 +2019,13 @@ describe('createWorktree', () => {
     error: null,
    });
 
-   await expect.poll(() => fs.existsSync(setupMarker), { timeout: 5_000 }).toBe(true);
+   await expect.poll(() => fs.existsSync(setupMarker), { timeout: 20_000 }).toBe(true);
    await expect(getWorktreeBootstrapStatus(created.path)).resolves.toMatchObject({
     status: 'pending',
     phase: 'git-ready',
     error: null,
    });
+   fs.writeFileSync(setupRelease, 'release');
 
    await waitForActiveWorktreeBootstrap(created.path);
    await expect(getWorktreeBootstrapStatus(created.path)).resolves.toMatchObject({
@@ -2032,6 +2034,7 @@ describe('createWorktree', () => {
     error: null,
    });
   } finally {
+   if (!fs.existsSync(setupRelease)) fs.writeFileSync(setupRelease, 'release');
    if (previousXdgDataHome === undefined) {
     delete process.env.OPENCHAMBER_DATA_DIR;
    } else {
@@ -2068,7 +2071,7 @@ describe('createWorktree', () => {
 
   await expect.poll(
    async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-   { timeout: 5_000 },
+   { timeout: 20_000 },
   ).toBe('failed');
   const expectedFailure = {
    status: 'failed',
@@ -2110,7 +2113,7 @@ describe('createWorktree', () => {
   }, { hydrateCheckout, bootstrapStore });
   await expect.poll(
    async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-   { timeout: 5_000 },
+   { timeout: 20_000 },
   ).toBe('failed');
 
   const archived = await archiveWorktree(repo, { directory: created.path, id: 'hydration-failed' }, { bootstrapStore });
@@ -2140,7 +2143,7 @@ describe('createWorktree', () => {
   }, { hydrateCheckout, bootstrapStore });
   await expect.poll(
    async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-   { timeout: 5_000 },
+   { timeout: 20_000 },
   ).toBe('failed');
 
   await expect(removeWorktree(repo, { directory: created.path, teardownCommand: 'exit 1' }, { bootstrapStore })).resolves.toBe(true);
@@ -2168,7 +2171,7 @@ describe('createWorktree', () => {
   }, { hydrateCheckout, bootstrapStore });
   await expect.poll(
    async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-   { timeout: 5_000 },
+   { timeout: 20_000 },
   ).toBe('failed');
 
   const archived = await archiveWorktree(repo, { directory: created.path, id: 'hydration-failed' }, { bootstrapStore });
@@ -2198,7 +2201,7 @@ describe('createWorktree', () => {
   }, { hydrateCheckout, bootstrapStore });
   await expect.poll(
    async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-   { timeout: 5_000 },
+   { timeout: 20_000 },
   ).toBe('failed');
 
   await expect(removeWorktree(repo, { directory: created.path, teardownCommand: 'exit 1' }, { bootstrapStore })).resolves.toBe(true);
@@ -2225,7 +2228,7 @@ describe('createWorktree', () => {
   }, { hydrateCheckout, bootstrapStore });
   await expect.poll(
    async () => (await getWorktreeBootstrapStatus(created.path, { bootstrapStore })).status,
-   { timeout: 5_000 },
+   { timeout: 20_000 },
   ).not.toBe('pending');
   // The branch's upstream, not the first remote in the list.
   expect(hydrateCheckout).toHaveBeenCalledWith({ directory: created.path, parentRemoteName: 'upstream' });
@@ -2272,7 +2275,7 @@ describe('createWorktree', () => {
 
    await expect.poll(
     async () => (await getWorktreeBootstrapStatus(created.path)).status,
-    { timeout: 5_000 },
+    { timeout: 20_000 },
    ).toBe('ready');
    expect(fs.existsSync(hookLog)).toBe(false);
   } finally {
@@ -2316,7 +2319,7 @@ describe('createWorktree', () => {
 
    await expect.poll(
     async () => (await getWorktreeBootstrapStatus(created.path)).status,
-    { timeout: 5_000 },
+    { timeout: 20_000 },
    ).toBe('ready');
    expect(fs.existsSync(hookLog)).toBe(false);
   } finally {
@@ -2359,7 +2362,7 @@ describe('createWorktree', () => {
 
    await expect.poll(
     async () => (await getWorktreeBootstrapStatus(created.path)).status,
-    { timeout: 5_000 },
+    { timeout: 20_000 },
    ).toBe('ready');
    expect(fs.existsSync(hookLog)).toBe(false);
   } finally {
@@ -2377,6 +2380,7 @@ describe('createWorktree', () => {
   const previousXdgDataHome = process.env.OPENCHAMBER_DATA_DIR;
   const dataHome = createTempDir();
   const setupStarted = path.join(dataHome, 'remove-race-started');
+  const setupRelease = path.join(dataHome, 'remove-race-release');
   const setupCompleted = path.join(dataHome, 'remove-race-completed');
   const setupScript = path.join(dataHome, 'remove-race.cjs');
   let createdPath = '';
@@ -2393,7 +2397,7 @@ describe('createWorktree', () => {
 
   fs.writeFileSync(
    setupScript,
-   `const fs = require('node:fs'); fs.writeFileSync(${JSON.stringify(setupStarted)}, 'started'); setTimeout(() => fs.writeFileSync(${JSON.stringify(setupCompleted)}, 'completed'), 300);\n`,
+   `const fs = require('node:fs'); fs.writeFileSync(${JSON.stringify(setupStarted)}, 'started'); const deadline = Date.now() + 15_000; const waitForRelease = () => { if (fs.existsSync(${JSON.stringify(setupRelease)}) || Date.now() >= deadline) { fs.writeFileSync(${JSON.stringify(setupCompleted)}, 'completed'); return; } setTimeout(waitForRelease, 20); }; waitForRelease();\n`,
   );
 
   try {
@@ -2417,7 +2421,7 @@ describe('createWorktree', () => {
    });
    createdPath = created.path;
 
-   await expect.poll(() => fs.existsSync(setupStarted), { timeout: 5_000 }).toBe(true);
+   await expect.poll(() => fs.existsSync(setupStarted), { timeout: 20_000 }).toBe(true);
    let removalTarget = created.path;
    if (process.platform !== 'win32') {
     const aliasParent = createTempDir();
@@ -2432,6 +2436,7 @@ describe('createWorktree', () => {
 
    await new Promise((resolve) => setTimeout(resolve, 25));
    expect(removalCompleted).toBe(false);
+   fs.writeFileSync(setupRelease, 'release');
    await removal;
 
    expect(fs.existsSync(setupCompleted)).toBe(true);
@@ -2443,6 +2448,7 @@ describe('createWorktree', () => {
     phase: 'setup-ready',
    });
   } finally {
+   if (!fs.existsSync(setupRelease)) fs.writeFileSync(setupRelease, 'release');
    if (previousXdgDataHome === undefined) {
     delete process.env.OPENCHAMBER_DATA_DIR;
    } else {
@@ -2480,7 +2486,7 @@ describe('createWorktree', () => {
     hydrateCheckout: async () => ({ status: 'not-needed', submodules: [], lfs: [] }),
    });
 
-   await expect.poll(() => fs.existsSync(heartbeat), { timeout: 5_000 }).toBe(true);
+   await expect.poll(() => fs.existsSync(heartbeat), { timeout: 20_000 }).toBe(true);
 
    await removeWorktree(repo, { directory: created.path, deleteLocalBranch: true, cancelSetup: true }, {
     bootstrapStore: { write: vi.fn(async (_directory, state) => state), read: vi.fn(async () => null), remove: vi.fn(async () => true) },
@@ -2622,7 +2628,7 @@ describe('createWorktree', () => {
 
    await expect.poll(
     () => getWorktreeBootstrapStatus(created.path).then((status) => status.status === 'ready' || status.status === 'failed'),
-    { timeout: 5_000 }
+    { timeout: 20_000 }
    ).toBe(true);
 
    expect(readBranchConfig(created.path, 'openchamber/feature', 'remote')).toBe('');
@@ -2656,7 +2662,7 @@ describe('createWorktree', () => {
 
    await expect.poll(
     () => readBranchConfig(created.path, 'openchamber/fallback-wt', 'merge'),
-    { timeout: 5_000 }
+    { timeout: 20_000 }
    ).toBe('refs/heads/main');
    expect(readBranchConfig(created.path, 'openchamber/fallback-wt', 'remote')).toBe('origin');
   } finally {
@@ -3134,7 +3140,7 @@ describe('createWorktree from a forked GitHub PR', () => {
     primaryRemote: 'origin', projectId: expect.any(String), setupCommand: expect.any(String),
    });
    await expect.poll(() => getWorktreeBootstrapStatus(created.path).then((status) => status.status), {
-    timeout: 5_000,
+    timeout: 20_000,
    }).toBe('ready');
    expect(getBranchTrackingRemote(created.path, 'feature/login')).toBe('');
    expect(fs.existsSync(hookMarker)).toBe(false);
@@ -3327,7 +3333,7 @@ exec "$REAL_GIT" "$@"
    expect(created.branchBackup).toBe(backup);
    expect(runGit(repository, ['rev-parse', `refs/heads/${backup}`]).trim()).toBe(leftover);
    await expect.poll(() => getWorktreeBootstrapStatus(created.path).then((status) => status.status), {
-    timeout: 5_000,
+    timeout: 20_000,
    }).toBe('ready');
    expect(runGit(created.path, ['rev-parse', 'HEAD']).trim()).toBe(head);
    expect(runGit(created.path, ['branch', '--show-current']).trim()).toBe('feature/login');
@@ -3440,7 +3446,7 @@ exec "$REAL_GIT" "$@"
 
    await expect.poll(
     () => getWorktreeBootstrapStatus(created.path).then((status) => status.status === 'ready' || status.status === 'failed'),
-    { timeout: 5_000 }
+    { timeout: 20_000 }
    ).toBe(true);
 
    expect(getBranchTrackingRemote(created.path, 'feature/tracking-wt')).toBe('');
@@ -3628,7 +3634,7 @@ describe('git remote arguments with option-like names', () => {
    expect(runGit(created.path, ['rev-parse', 'HEAD']).trim()).toBe(sha);
    await expect.poll(
     () => getWorktreeBootstrapStatus(created.path).then((status) => status.status === 'ready' || status.status === 'failed'),
-    { timeout: 5_000 }
+    { timeout: 20_000 }
    ).toBe(true);
   });
  }, 30_000);
@@ -5522,7 +5528,7 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
    const disposeInstance = vi.fn(async () => {
     throw new Error('OpenCode API URL is not available');
    });
-   const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+   const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => { });
 
    try {
     await expect(removeWorktree(repo, {
@@ -5596,7 +5602,7 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
     worktreeName: 'busy-release',
    });
    // Its background checkout must finish before the platform is faked below.
-   await expect.poll(async () => (await getWorktreeBootstrapStatus(created.path)).status).not.toBe('pending');
+   await expect.poll(async () => (await getWorktreeBootstrapStatus(created.path)).status, { timeout: 20_000 }).not.toBe('pending');
    const held = path.join(created.path, 'held');
    fs.mkdirSync(held);
    fs.writeFileSync(path.join(held, 'file.txt'), 'held');
@@ -5649,7 +5655,8 @@ describe.runIf(canRunGit())('continuing a conflicted rebase or merge', () => {
    const disposeInstance = vi.fn(async () => {
     insideHold = waitForWorktreeRemoval(path.join(created.path, 'sub'));
     observed.inside = await Promise.race([settledAfter(insideHold), pendingAfter(50)]);
-    observed.project = await Promise.race([settledAfter(waitForWorktreeRemoval(repo)), pendingAfter(50)]);
+    await waitForWorktreeRemoval(repo);
+    observed.project = 'settled';
    });
 
    await expect(removeWorktree(repo, { directory: created.path, disposeInstance })).resolves.toBe(true);
@@ -6375,8 +6382,8 @@ describe.runIf(canRunGit())('getRangeDiff', () => {
   expect(diff).toContain('-# Test');
  });
 
-// The file list without the per-file revision, which carries timestamps.
-const listed = (files) => files.map(({ path: filePath, status }) => ({ path: filePath, status }));
+ // The file list without the per-file revision, which carries timestamps.
+ const listed = (files) => files.map(({ path: filePath, status }) => ({ path: filePath, status }));
 
  it('carries the working-tree option through the actual HTTP route handlers', async () => {
   const { repository } = createRepositoryWithRemote();

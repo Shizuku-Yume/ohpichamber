@@ -703,7 +703,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         projects: sortedProjects,
         availableWorktreesByProject,
         knownDirectories: knownSessionDirectories,
-        isVSCode,
         worktreeMetadata,
         gitBranches,
         projectRepoStatus,

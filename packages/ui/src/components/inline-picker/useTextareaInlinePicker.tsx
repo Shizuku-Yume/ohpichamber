@@ -42,11 +42,32 @@ export function useTextareaInlinePicker(
 ): React.ReactNode {
   const [field, setField] = React.useState<HTMLTextAreaElement | null>(null);
 
-  // The element behind the ref can change between renders (a field that
-  // remounts); follow it.
+  // The element behind the ref can mount conditionally or remount between
+  // renders; observe assignments to `.current` so we follow it without a
+  // dependency-less effect.
   React.useEffect(() => {
-    if (fieldRef.current !== field) setField(fieldRef.current);
-  });
+    setField((current) => (current === fieldRef.current ? current : fieldRef.current));
+    const descriptor = Object.getOwnPropertyDescriptor(fieldRef, 'current');
+    if (descriptor && !descriptor.configurable) return;
+    let value = fieldRef.current;
+    Object.defineProperty(fieldRef, 'current', {
+      configurable: true,
+      enumerable: true,
+      get: () => value,
+      set: (next: HTMLTextAreaElement | null) => {
+        value = next;
+        setField((current) => (current === next ? current : next));
+      },
+    });
+    return () => {
+      Object.defineProperty(fieldRef, 'current', {
+        configurable: true,
+        enumerable: true,
+        writable: true,
+        value,
+      });
+    };
+  }, [fieldRef]);
 
   const { sync, close, handleKeyDown, picker } = useInlinePicker({
     pickers,

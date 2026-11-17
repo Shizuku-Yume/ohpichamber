@@ -97,8 +97,6 @@ export function createRepositoryIdResolver({
   return (directory) => readRepositoryId(directory, { fsImpl, resolveGitPaths });
 }
 
-export const resolveRepositoryId = createRepositoryIdResolver();
-
 function createRepositoryIdentityResolver({
   fsImpl = fs,
   resolveGitPaths = resolveRepositoryGitPaths,

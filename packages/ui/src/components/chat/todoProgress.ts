@@ -3,7 +3,7 @@ import type { TodoItem, TodoPhase } from './todoData';
 /** A task that no longer needs work: OMP counts completed and abandoned alike. */
 export const isClosedTodo = (task: TodoItem): boolean => task.status === 'completed' || task.status === 'abandoned';
 
-export interface TodoProgress {
+interface TodoProgress {
     closed: number;
     total: number;
 }

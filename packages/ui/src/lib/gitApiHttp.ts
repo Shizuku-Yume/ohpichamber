@@ -17,7 +17,6 @@ import type {
   GitUnpushedBranchCounts,
   GitDeleteBranchPayload,
   GitRemoveRemotePayload,
-  GeneratedCommitMessage,
   GitWorktreeInfo,
   CreateGitWorktreePayload,
   GitWorktreeCreateResult,
@@ -83,10 +82,12 @@ const gitRangeFilesSchema = z.object({ files: z.array(z.object({ path: z.string(
 const gitRangeErrorSchema = z.object({ error: z.string() });
 // `/api/git/status` when Git could not tell whether the directory is a repository.
 const gitRepositoryUnreadableBodySchema = z.object({ error: z.string(), code: z.literal(GIT_REPOSITORY_UNREADABLE) });
-const gitCommitFilesSchema = z.object({ files: z.array(z.object({
-  path: z.string(), previousPath: z.string().optional(), changeType: z.string(),
-  insertions: z.number(), deletions: z.number(), isBinary: z.boolean(),
-})) });
+const gitCommitFilesSchema = z.object({
+  files: z.array(z.object({
+    path: z.string(), previousPath: z.string().optional(), changeType: z.string(),
+    insertions: z.number(), deletions: z.number(), isBinary: z.boolean(),
+  }))
+});
 const gitLogEntrySchema = z.object({
   hash: z.string(), date: z.string(), message: z.string(), refs: z.string(), body: z.string(),
   author_name: z.string(), author_email: z.string(), filesChanged: z.number(),
@@ -174,9 +175,11 @@ const contributorDestinationSchema = z.object({
   expiresInMs: z.number().int().safe().positive().max(15 * 60 * 1000),
 }).strict();
 const contributorDestinationCandidateSchema = z.object({
-  remote: z.object({ name: identityStringSchema, endpoint: z.object({
-    displayUrl: endpointSchema, fingerprint: fingerprintSchema,
-  }).strict() }).strict(),
+  remote: z.object({
+    name: identityStringSchema, endpoint: z.object({
+      displayUrl: endpointSchema, fingerprint: fingerprintSchema,
+    }).strict()
+  }).strict(),
   transportMode: z.literal('managed'),
   classification: z.enum(['contributor-fork', 'own-fork', 'bound-repository', 'other']),
 }).strict();
@@ -369,27 +372,27 @@ const completedStepSchema = z.enum([
   'cleaned-up',
 ]);
 const operationErrorCodeSchema = z.enum([
-    'INVALID_REQUEST',
-    'NOT_FOUND',
-    'STALE_REPOSITORY',
-    'STALE_BINDING',
-    'STALE_CONFIG',
-    'REMOTE_CHANGED',
-    'REMOTE_URL_USERINFO',
-    'AUTHENTICATION_REQUIRED',
-    'DESTINATION_SELECTION_REQUIRED',
-    'CONTRIBUTOR_MANAGED_TRANSPORT_REQUIRED',
-    'AUTHENTICATION_FAILED',
-    'TRANSPORT_FAILED',
-    'CONFLICT',
-    'CANCELLED',
-    'TIMEOUT',
-    'OUTCOME_UNKNOWN',
-    'RUNTIME_UNSUPPORTED',
-    'GIT_LFS_CLIENT_MISSING',
-    'CHECKOUT_TOO_LARGE',
-    'UNKNOWN',
-  ]);
+  'INVALID_REQUEST',
+  'NOT_FOUND',
+  'STALE_REPOSITORY',
+  'STALE_BINDING',
+  'STALE_CONFIG',
+  'REMOTE_CHANGED',
+  'REMOTE_URL_USERINFO',
+  'AUTHENTICATION_REQUIRED',
+  'DESTINATION_SELECTION_REQUIRED',
+  'CONTRIBUTOR_MANAGED_TRANSPORT_REQUIRED',
+  'AUTHENTICATION_FAILED',
+  'TRANSPORT_FAILED',
+  'CONFLICT',
+  'CANCELLED',
+  'TIMEOUT',
+  'OUTCOME_UNKNOWN',
+  'RUNTIME_UNSUPPORTED',
+  'GIT_LFS_CLIENT_MISSING',
+  'CHECKOUT_TOO_LARGE',
+  'UNKNOWN',
+]);
 const operationErrorSchema = <const Code extends readonly [string, ...string[]]>(codes: Code) => z.object({
   code: z.enum(codes),
   message: boundedString(NETWORK_OPERATION_ERROR_MESSAGE_MAX_CHARS),
@@ -1200,12 +1203,12 @@ export async function getGitCommitSummaries(
   return {
     commits: Array.isArray(payload.commits)
       ? payload.commits
-          .map((entry) => ({
-            sha: typeof entry.sha === 'string' ? entry.sha : '',
-            short: typeof entry.short === 'string' ? entry.short : '',
-            subject: typeof entry.subject === 'string' ? entry.subject : '',
-          }))
-          .filter((entry) => entry.sha && entry.short)
+        .map((entry) => ({
+          sha: typeof entry.sha === 'string' ? entry.sha : '',
+          short: typeof entry.short === 'string' ? entry.short : '',
+          subject: typeof entry.subject === 'string' ? entry.subject : '',
+        }))
+        .filter((entry) => entry.sha && entry.short)
       : [],
   };
 }
@@ -1535,113 +1538,6 @@ export async function removeRemote(directory: string, payload: GitRemoveRemotePa
   return completeStatusMutation(directory, response);
 }
 
-export async function generateCommitMessage(
-  directory: string,
-  files: string[],
-  options?: { zenModel?: string; providerId?: string; modelId?: string }
-): Promise<{ message: GeneratedCommitMessage }> {
-  if (!Array.isArray(files) || files.length === 0) {
-    throw new Error('No files provided to generate commit message');
-  }
-
-  const body: Record<string, unknown> = { files };
-  if (options?.zenModel) {
-    body.zenModel = options.zenModel;
-  }
-  if (options?.providerId) {
-    body.providerId = options.providerId;
-  }
-  if (options?.modelId) {
-    body.modelId = options.modelId;
-  }
-
-  const response = await runtimeFetch(buildUrl(`${API_BASE}/commit-message`, directory), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    console.error('[git-generation][browser] http error', {
-      status: response.status,
-      statusText: response.statusText,
-      error,
-    });
-    const traceSuffix = typeof error?.traceId === 'string' && error.traceId
-      ? ` (traceId: ${error.traceId})`
-      : '';
-    throw new Error(`${error.error || 'Failed to generate commit message'}${traceSuffix}`);
-  }
-
-  const data = await response.json();
-
-  if (!data?.message || typeof data.message !== 'object') {
-    throw new Error('Malformed commit generation response');
-  }
-
-  const subject =
-    typeof data.message.subject === 'string' && data.message.subject.trim().length > 0
-      ? data.message.subject.trim()
-      : '';
-
-  const highlights: string[] = Array.isArray(data.message.highlights)
-    ? (data.message.highlights as unknown[])
-        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
-        .map((item) => (item as string).trim())
-    : [];
-
-  return {
-    message: {
-      subject,
-      highlights,
-    },
-  };
-}
-
-export async function generatePullRequestDescription(
-  directory: string,
-  payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string }
-): Promise<{ title: string; body: string }> {
-  const { base, head, context, zenModel, providerId, modelId } = payload;
-  if (!base || !head) {
-    throw new Error('base and head are required');
-  }
-
-  const requestBody: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string } = { base, head };
-  if (context?.trim()) {
-    requestBody.context = context.trim();
-  }
-  if (zenModel) {
-    requestBody.zenModel = zenModel;
-  }
-  if (providerId) {
-    requestBody.providerId = providerId;
-  }
-  if (modelId) {
-    requestBody.modelId = modelId;
-  }
-
-  const response = await runtimeFetch(buildUrl(`${API_BASE}/pr-description`, directory), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to generate PR description');
-  }
-
-  const data = await response.json().catch(() => null);
-  const title = typeof data?.title === 'string' ? data.title : '';
-  const body = typeof data?.body === 'string' ? data.body : '';
-  if (!title && !body) {
-    throw new Error('Malformed PR description response');
-  }
-  return { title, body };
-}
-
 export async function listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]> {
   const overview = await readProjectOverview(directory, 'worktrees');
   return overview.worktrees ?? [];
@@ -1961,7 +1857,7 @@ const handleNetworkOperationSnapshot = (
     const terminal = operation.state !== 'planned' && operation.state !== 'running';
     const targetMatches = sameValue(tracked.value.target, operation.target)
       || terminal
-        && durableTargetText(tracked.value.target) === JSON.stringify(operation.target);
+      && durableTargetText(tracked.value.target) === JSON.stringify(operation.target);
     if (!sameValue(tracked.value.runtimeIdentity, operation.runtimeIdentity)
       || !targetMatches
       || !transportMatches(expectedTransport, operation.transport, terminal)) {

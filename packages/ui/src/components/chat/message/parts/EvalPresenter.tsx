@@ -9,7 +9,7 @@ import { useEvalView } from '@/lib/toolPresentation';
 import { EvalCellBlock } from './EvalCellBlock';
 import { EvalStepList } from './EvalStepList';
 
-export interface EvalPresenterProps {
+interface EvalPresenterProps {
     call: ToolCallPart | undefined;
     result: ToolResultPart | undefined;
     onShowPopup?: (content: ToolPopupContent) => void;

@@ -1,9 +1,5 @@
 import { isDesktopShell } from '@/lib/desktop';
 
-/** True on Linux, where Chromium middle-click pastes the PRIMARY selection. */
-export const isLinuxPlatform = (): boolean => navigator.platform.toLowerCase().startsWith('linux');
-
-/** True on Linux, where Chromium middle-click pastes the PRIMARY selection. */
 export const isCapacitorApp = (): boolean => {
  if (typeof window === 'undefined') return false;
  const capacitor = (window as typeof window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;

@@ -67,7 +67,7 @@ with its sessions, and a woken turn would run in a session on its way out.
 A wake ends the watch: the item leaves the interest, and the agent calls
 `pr.watch` again when it needs to wait once more. The message waits until the
 session is not running and none of its subagents runs (a user may be talking
-to the agent), checked against OpenCode (`../opencode/session-activity.js`);
+to the agent), checked via `../canonical-session-state.js` (`createCanonicalSessionState`);
 the session's next idle event re-arms it. An archived session is not woken,
 its watch ends. The message id is minted and saved before the first attempt,
 and OpenCode answering 409 to a second admission counts as delivered, so a

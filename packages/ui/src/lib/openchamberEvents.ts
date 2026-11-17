@@ -217,8 +217,8 @@ const notificationPropertiesSchema = z.object({
  showWhenFocused: z.boolean().optional(),
 });
 
-export type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
-export type OpenChamberEvent =
+type SessionMetadataEvent = { type: 'session-metadata'; state: SessionMetadataState };
+type OpenChamberEvent =
  | { type: 'notification'; payload: z.infer<typeof notificationPropertiesSchema> }
  /** An extension was installed, updated, approved, paused or removed: the catalog changed. */
  | { type: 'guests-changed' }

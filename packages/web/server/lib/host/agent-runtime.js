@@ -34,18 +34,11 @@ import {
   ensureAgentRuntimeSymlinks,
   resolveWebAgentRuntime,
 } from '../../../scripts/standalone-loader.mjs';
-import {
-  detectSystemOmpRuntime,
-  findSystemOmpCandidates,
-  probeSystemOmp,
-} from './system-omp-runtime.js';
+import { detectSystemOmpRuntime } from './system-omp-runtime.js';
 
 export {
   ensureAgentRuntimeSymlinks,
   resolveWebAgentRuntime,
-  detectSystemOmpRuntime,
-  findSystemOmpCandidates,
-  probeSystemOmp,
 };
 
 /** Node admission and machine policy around the separate, SDK-owning Bun service. */

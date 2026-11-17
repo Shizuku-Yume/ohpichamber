@@ -31,18 +31,6 @@ const uiBlockReplyAnswerData = z.object({
 });
 export type UiBlockReplyAnswerData = z.infer<typeof uiBlockReplyAnswerData>;
 
-/**
- * Where the answer to a reply's block is kept: the metadata of the synthetic
- * input that carried it to the agent. `messageId` and `block` find the block
- * again, so it shows the choices after a reload.
- */
-export const UI_BLOCK_ANSWER_METADATA_KEY = 'openchamberUiBlockAnswer';
-export const uiBlockAnswerRecord = z.object({
-  messageId: z.string(),
-  block: z.string(),
-  answer: uiBlockReplyAnswerData,
-});
-
 /** A short stable key for one block's source within its message. */
 export function uiBlockKey(source: string): string {
   let hash = 0x811c9dc5;

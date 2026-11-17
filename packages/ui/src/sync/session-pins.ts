@@ -4,12 +4,10 @@ import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/
 import { forgetLegacyPins, getLegacyPins, setPendingPin, useSessionPinnedStore } from '@/stores/useSessionPinnedStore';
 import { setSessionPinned } from './session-actions';
 
-export { setPendingPin };
-
 export type PinTarget = { directory: string; sessionId: string };
 
 // Clicks on one session run in order, so the last one wins on the server too.
-export const pinQueues = new Map<string, { tail: Promise<void>; count: number }>();
+const pinQueues = new Map<string, { tail: Promise<void>; count: number }>();
 
 /**
  * Pin or unpin a session. The row flips at once; the pin is stored in the
@@ -20,19 +18,6 @@ export function toggleSessionPin(target: PinTarget): Promise<void> {
  const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
  if (!key) return Promise.resolve();
  const pinned = !useSessionPinnedStore.getState().ids.has(key);
- return writeSessionPin(key, target, pinned);
-}
-
-/**
- * Pin the session, or unpin it with `pinned` false. `list` is the pin list the
- * user picked (Pin to); the Host stores one pin stamp per session and carries
- * no list, so any list other than Pinned files the pin in Pinned until the
- * metadata contract gains `openchamber.pinned.list` (2026-11-11 decision).
- */
-export function setSessionPinList(target: PinTarget, pinned: boolean, list: string | null): Promise<void> {
- const key = getPinnedSessionKey(getRuntimeKey(), target.directory, target.sessionId);
- if (!key) return Promise.resolve();
- void list;
  return writeSessionPin(key, target, pinned);
 }
 

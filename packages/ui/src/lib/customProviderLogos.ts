@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { runtimeFetch } from '@/lib/runtime-fetch';
-import { useRuntimeObjectUrl, type RuntimeObjectUrl } from '@/lib/runtimeObjectUrl';
 
 /** Mirrors PROVIDER_LOGO_MIMES in packages/web/server/lib/opencode/provider-logo-routes.js. */
 const CUSTOM_PROVIDER_LOGO_MIMES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'] as const;
@@ -84,19 +83,3 @@ export const removeProviderLogo = async (providerId: string): Promise<void> => {
   if (!response.ok) throw await errorOf(response);
 };
 
-/**
- * The uploaded logo as an object URL. An SVG is asked for in the theme's
- * variant, so one drawn in `currentColor` reads on either background; other
- * images keep their own colours.
- */
-export const useUploadedProviderLogoUrl = (
-  providerId: string,
-  logo: CustomProviderLogo | undefined,
-  themeVariant: 'light' | 'dark',
-): RuntimeObjectUrl => {
-  const path = logo ? logoPath(providerId) : null;
-  const query = logo
-    ? new URLSearchParams(logo.mime === 'image/svg+xml' ? { v: String(logo.updatedAt), theme: themeVariant } : { v: String(logo.updatedAt) }).toString()
-    : '';
-  return useRuntimeObjectUrl(path, query);
-};

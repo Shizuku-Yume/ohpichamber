@@ -42,7 +42,7 @@ const widthDragListeners = new Set<() => void>();
 export const isLayoutAnimating = (): boolean => holds > 0 || settleTimer !== null || settleFrame !== null;
 
 /** Readers who asked for reduced motion get no width animation at all. */
-export const prefersReducedMotion = (): boolean =>
+const prefersReducedMotion = (): boolean =>
   globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
 
 const settle = () => {
@@ -93,7 +93,7 @@ export const beginLayoutAnimation = (durationMs: number = LAYOUT_ANIMATION_MS): 
  * proportion to what the chat and the panel showed.
  */
 export const holdLayoutAnimation = (axis: 'width' | 'height' = 'width'): (() => void) => {
-  if (!globalThis.document) return () => {};
+  if (!globalThis.document) return () => { };
   const starting = !isLayoutAnimating();
   const widthStarting = axis === 'width' && widthHolds === 0;
   holds += 1;

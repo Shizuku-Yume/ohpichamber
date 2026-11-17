@@ -4,7 +4,7 @@ import { useI18n } from '@/lib/i18n';
 import type { AdvisorNote } from '@openchamber/agent-contract';
 import { useAdvisorStore } from '@/stores/useAdvisorStore';
 
-export interface AdvisorMessageProps {
+interface AdvisorMessageProps {
   notes: AdvisorNote[];
   className?: string;
   onDismiss?: () => void;
@@ -51,10 +51,10 @@ export const AdvisorMessage: React.FC<AdvisorMessageProps> = ({ notes, className
             <div
               key={note.noteId}
               className={`border-s-2 ps-2.5 py-1 ${isBlocker
-                  ? 'border-s-destructive'
-                  : isConcern
-                    ? 'border-s-warning'
-                    : 'border-s-muted-foreground'
+                ? 'border-s-destructive'
+                : isConcern
+                  ? 'border-s-warning'
+                  : 'border-s-muted-foreground'
                 }`}
               data-testid={`advisor-note-${note.noteId}`}
             >
@@ -81,7 +81,7 @@ export const AdvisorMessage: React.FC<AdvisorMessageProps> = ({ notes, className
   );
 };
 
-export interface AdvisorTimelineCardProps {
+interface AdvisorTimelineCardProps {
   sessionId: string | null;
   directory?: string;
   className?: string;

@@ -7,7 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import type { ReferencePickerConfirmFailure } from './ReferencePickerDialog';
 import type { ReferencePickerSelection } from './referencePickerItems';
 import { readTrackerItemDetail, useRepositoryReadContext } from './referenceSources';
-import { resolveComposerReferences, resolveReferenceLink, type ReferenceLinkTarget, type ReferenceResolveDeps } from './resolveComposerReferences';
+import { resolveComposerReferences, type ReferenceResolveDeps } from './resolveComposerReferences';
 import { readTrackerDescriptor } from '@/lib/trackers/registry';
 
 /**
@@ -47,10 +47,4 @@ export function useAttachReferences(
             }),
         };
     }, [deps, onAttach, t]);
-}
-
-/** Reads the item a pasted link names, through `directory`'s project (`resolveReferenceLink`). */
-export function useReadReferenceLink(directory: string | null): (target: ReferenceLinkTarget) => Promise<ComposerReference> {
-    const deps = useReferenceResolveDeps(directory);
-    return React.useCallback((target) => resolveReferenceLink(target, deps), [deps]);
 }

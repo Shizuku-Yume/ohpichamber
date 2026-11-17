@@ -5,7 +5,7 @@ export interface LatestReply {
  text: string;
 }
 
-export const extractMessageText = (message: Message): string => message.parts
+const extractMessageText = (message: Message): string => message.parts
  .filter((part) => part.type === 'text')
  .map((part) => part.content)
  .join('')

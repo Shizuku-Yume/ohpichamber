@@ -3,12 +3,11 @@
   "ignore": [
     "packages/mobile/android/app/src/main/assets/public/**",
     "packages/mobile/ios/App/App/public/**",
-    "packages/sdk/examples/**",
+    "packages/sdk/examples/**"
   ],
   "workspaces": {
     ".": {
       "entry": [
-        "fix-deprecation.js",
         "oxlint.config.ts",
         "oxlint.anti-slop.config.ts",
         "postcss.config.js",
@@ -31,8 +30,6 @@
     },
     "packages/web": {
       "entry": [
-        "bin/cli.js",
-        "server/lib/opencode/login-shell-env.js",
         "src/mobile-main.tsx",
         "src/mini-chat-main.tsx",
         "src/main.tsx",
@@ -66,7 +63,6 @@
     "packages/sdk": {
       "entry": [
         "src/index.ts",
-        "scripts/check-guest.ts",
         "src/ui/index.ts",
         "src/schemas.ts",
         "src/**/*.{test,spec}.ts",
@@ -91,7 +87,8 @@
         "src/index.ts",
         "src/worker/index.ts",
         "src/**/*.{test,spec}.ts",
-        "scripts/*.mjs"
+        "scripts/*.mjs",
+        "src/interaction/host-policy.ipc.child.ts"
       ],
       "project": [
         "src/**/*.ts",
@@ -103,7 +100,6 @@
         "scripts/**/*.{js,cjs,mjs,ts}"
       ],
       "project": [
-        "*.{js,cjs,mjs,ts}",
         "scripts/**/*.{js,cjs,mjs,ts}"
       ]
     }

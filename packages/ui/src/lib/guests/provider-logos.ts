@@ -1,5 +1,3 @@
-import { useRuntimeObjectUrl, type RuntimeObjectUrl } from '@/lib/runtimeObjectUrl';
-
 import { isGuestActive } from './capabilities.ts';
 import { useGuestsStore } from './store.ts';
 import type { InstalledGuest } from './types.ts';
@@ -59,15 +57,3 @@ const firstLogo = (guests: readonly InstalledGuest[], ids: readonly string[]): G
 export const guestProviderLogoOf = (ids: readonly string[]): GuestProviderLogo | null => (
   firstLogo(useGuestsStore.getState().guests, ids)
 );
-
-export const useGuestProviderLogo = (ids: readonly string[]): GuestProviderLogo | null => (
-  useGuestsStore((state) => firstLogo(state.guests, ids))
-);
-
-/** The logo as an object URL. An SVG is asked for in the theme's variant, so `currentColor` reads on either background. */
-export const useGuestProviderLogoUrl = (logo: GuestProviderLogo | null, themeVariant: 'light' | 'dark'): RuntimeObjectUrl => {
-  const query = logo
-    ? new URLSearchParams(logo.isSvg ? { v: logo.version, theme: themeVariant } : { v: logo.version }).toString()
-    : '';
-  return useRuntimeObjectUrl(logo?.path ?? null, query);
-};

@@ -36,8 +36,6 @@ export const sqliteTables = (database: Database): string[] => {
   return result[0]?.values.map((row) => String(row[0])) ?? [];
 };
 
-export const quoteSqlName = (name: string): string => `"${name.replace(/"/g, '""')}"`;
-
 /**
  * The last result of a query, its rows past the cap only counted: a table of
  * millions never lands in memory. The database is a copy, so a query changes

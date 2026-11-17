@@ -94,7 +94,7 @@ const unsyncedDraftKeys = new Set<string>();
 export const hasUnsyncedSessionDraft = (draftId: string): boolean => unsyncedDraftKeys.has(uploadKey(draftId));
 
 /** A save the server refused because the draft's attachments are too large to keep. */
-export class SessionDraftTooLargeError extends Error {}
+class SessionDraftTooLargeError extends Error { }
 
 // A load that started before a write must not bring back what the write
 // changed: every write bumps its runtime's revision, which a load of the same

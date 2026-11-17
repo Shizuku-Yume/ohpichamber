@@ -34,8 +34,6 @@ const ANSWER_CHAR_LIMIT = 50_000;
 
 const DISPATCH_RESULT_SOURCE = 'openchamber-session';
 
-const ID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-
 // Boundary schemas: the only place raw JSON (the file, OpenCode answers, hub
 // events) is inspected. Everything below branches on what they return.
 const sessionIdSchema = z.string().regex(/^[A-Za-z0-9_-]{4,128}$/);
@@ -66,14 +64,6 @@ const parse = (schema, value) => {
 const retryDelay = (failures) => Math.min(RETRY_BASE_DELAY_MS * 2 ** Math.max(failures - 1, 0), RETRY_MAX_DELAY_MS);
 
 const unavailableError = (message, status) => Object.assign(new Error(message), { status });
-
-/** A durable delivery id minted once and reused across retries. */
-export const createMessageId = (now) => {
-  const time = (BigInt(now) * 0x1000n + BigInt(Math.floor(Math.random() * 0x1000))).toString(16).padStart(12, '0').slice(-12);
-  let random = '';
-  for (let index = 0; index < 14; index += 1) random += ID_CHARS[Math.floor(Math.random() * ID_CHARS.length)];
-  return `msg_${time}${random}`;
-};
 
 export const escapeAttribute = (value) => value
   .replace(/&/g, '&amp;')

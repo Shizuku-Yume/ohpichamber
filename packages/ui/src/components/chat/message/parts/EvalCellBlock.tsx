@@ -82,7 +82,7 @@ const EvalTableView: React.FC<{
     );
 };
 
-export interface EvalCellBlockProps {
+interface EvalCellBlockProps {
     cell: EvalCellView;
     cellIndex: number;
     totalCells: number;

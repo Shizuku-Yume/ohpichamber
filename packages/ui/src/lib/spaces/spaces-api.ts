@@ -71,18 +71,6 @@ type SpacesSwitchState =
   | { enabled: true; spaces: z.infer<typeof switchSpaceSchema>[] }
   | { enabled: true; spaces: null; failure: SpaceFailure };
 
-const stillRunningSchema = z.object({ id: spaceIdSchema, name: z.string(), code: z.string(), message: z.string() });
-
-const switchChangeSchema = z.object({
-  enabled: z.boolean(),
-  stopped: z.array(z.object({ id: spaceIdSchema, name: z.string() })),
-  stillRunning: z.array(stillRunningSchema),
-  // The place could not list its spaces: the switch went off without knowing what still runs.
-  unknown: failureSchema.optional(),
-});
-
-export type SpacesSwitchChange = z.infer<typeof switchChangeSchema>;
-
 const networkSchema = z.object({
   mode: z.enum(['allowlist', 'open']),
   domains: z.array(z.string()),
@@ -210,9 +198,6 @@ const toSwitchState = (answer: z.infer<typeof switchStateSchema>): SpacesSwitchS
 export const readSpacesSwitch = async (signal?: AbortSignal): Promise<SpacesSwitchState> =>
   toSwitchState(await request(`${SPACES_ROUTE}/switch`, switchStateSchema, { signal }));
 
-export const setSpacesSwitch = (enabled: boolean): Promise<SpacesSwitchChange> =>
-  request(`${SPACES_ROUTE}/switch`, switchChangeSchema, { method: 'PUT', body: JSON.stringify({ enabled }) });
-
 export const listSpacePlaces = async (signal?: AbortSignal): Promise<SpacePlace[]> =>
   (await request(`${SPACES_ROUTE}/places`, z.object({ places: z.array(placeSchema) }), { signal })).places;
 
@@ -229,7 +214,7 @@ const spaceDiskSchema = z.object({
   freesImage: z.boolean(),
 });
 
-export type SpaceDisk = z.infer<typeof spaceDiskSchema>;
+type SpaceDisk = z.infer<typeof spaceDiskSchema>;
 
 // What a clean-up freed, and what Docker kept because something uses it or the removal failed.
 const spaceCleanUpSchema = z.object({
@@ -238,7 +223,7 @@ const spaceCleanUpSchema = z.object({
   disk: spaceDiskSchema,
 });
 
-export type SpaceCleanUp = z.infer<typeof spaceCleanUpSchema>;
+type SpaceCleanUp = z.infer<typeof spaceCleanUpSchema>;
 
 export const readSpaceDisk = (placeId: string, signal?: AbortSignal): Promise<SpaceDisk> =>
   request(`${SPACES_ROUTE}/places/${encodeURIComponent(placeId)}/disk`, spaceDiskSchema, { signal });
@@ -312,15 +297,15 @@ export const restartSpace = (spaceId: string): Promise<SpaceEntry> =>
   request(`${SPACES_ROUTE}/${spaceId}/restart`, spaceEntrySchema, { method: 'POST' });
 
 // The idle stop (decision 11): on or off, and after how many whole hours with no session working.
-export const SPACE_IDLE_STOP_MIN_HOURS = 1;
-export const SPACE_IDLE_STOP_MAX_HOURS = 168;
+const SPACE_IDLE_STOP_MIN_HOURS = 1;
+const SPACE_IDLE_STOP_MAX_HOURS = 168;
 
 const idleStopSchema = z.object({
   enabled: z.boolean(),
   hours: z.number().int().min(SPACE_IDLE_STOP_MIN_HOURS).max(SPACE_IDLE_STOP_MAX_HOURS),
 });
 
-export type SpaceIdleStop = z.infer<typeof idleStopSchema>;
+type SpaceIdleStop = z.infer<typeof idleStopSchema>;
 
 export const readSpaceIdleStop = (signal?: AbortSignal): Promise<SpaceIdleStop> =>
   request(`${SPACES_ROUTE}/idle-stop`, idleStopSchema, { signal });

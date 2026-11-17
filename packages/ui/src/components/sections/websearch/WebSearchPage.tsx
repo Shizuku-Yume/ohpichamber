@@ -213,22 +213,42 @@ const TimeoutRow: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => 
   );
 };
 
-const FallbackStatus: React.FC<{ provider: WebSearchProviderEntry | undefined }> = ({ provider }) => {
+const FallbackStatus: React.FC<{
+  provider: WebSearchProviderEntry | undefined;
+  label: string;
+  busy: boolean;
+  onOpen: () => void;
+}> = ({ provider, label, busy, onOpen }) => {
   const { t } = useI18n();
-  if (provider?.requiresCredential && !provider.credentialConfigured) {
-    return <SettingsCardPill tone="warning">{t('settings.webSearch.card.needsKey')}</SettingsCardPill>;
-  }
-  if (!provider?.configured) {
+  if (!provider) {
     return <SettingsCardPill tone="warning">{t('settings.webSearch.card.needsSetup')}</SettingsCardPill>;
   }
-  return null;
+  const needsKey = provider.requiresCredential && !provider.credentialConfigured;
+  const needsSetup = !provider.configured;
+  if (!needsKey && !needsSetup) return null;
+
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={onOpen}
+      aria-label={t('settings.webSearch.native.configureFallback', { provider: label })}
+      title={t('settings.webSearch.native.configureFallback', { provider: label })}
+      className="max-w-40 shrink-0 cursor-pointer truncate rounded-full bg-[var(--status-warning)]/15 px-2 py-0.5 text-[0.625rem] font-medium text-[var(--status-warning)] transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {needsKey ? t('settings.webSearch.card.needsKey') : t('settings.webSearch.card.needsSetup')}
+    </button>
+  );
 };
 
 interface FallbackRow extends SettingsSortableListItem {
   provider: WebSearchProviderEntry | undefined;
 }
 
-const FallbacksSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot }) => {
+const FallbacksSection: React.FC<{
+  snapshot: WebSearchSnapshot;
+  onOpenProvider: (providerId: string) => void;
+}> = ({ snapshot, onOpenProvider }) => {
   const { t } = useI18n();
   const { busy, commit } = useChoose(snapshot);
   const rows: FallbackRow[] = snapshot.fallbackProviderIds.map((providerId) => {
@@ -257,12 +277,32 @@ const FallbacksSection: React.FC<{ snapshot: WebSearchSnapshot }> = ({ snapshot 
             items={rows}
             disabled={busy}
             dragInstructions={t('settings.webSearch.native.dragInstructions')}
+            listClassName="gap-2"
+            rowClassName="oc-tile oc-tile-hover rounded-xl px-3 py-2"
             onReorder={(providerIds) => void commit({ fallbackProviderIds: providerIds })}
             renderRow={(row, index) => (
-              <div className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="typography-meta w-4 shrink-0 text-end tabular-nums text-muted-foreground">{index + 1}</span>
-                <span className="min-w-0 flex-1 truncate typography-ui-label text-foreground">{row.label}</span>
-                <FallbackStatus provider={row.provider} />
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
+                <span className="oc-tile-inset flex size-5 shrink-0 items-center justify-center rounded-md typography-micro font-medium tabular-nums text-muted-foreground">
+                  {index + 1}
+                </span>
+                <span
+                  className={cn(
+                    'oc-tile-inset flex size-7 shrink-0 items-center justify-center rounded-lg',
+                    (!row.provider?.configured || (row.provider.requiresCredential && !row.provider.credentialConfigured)) && 'opacity-60',
+                  )}
+                  aria-hidden="true"
+                >
+                  <Icon name="global" className="size-4 text-muted-foreground" />
+                </span>
+                <span className="min-w-0 flex-1 truncate typography-ui-label font-medium text-foreground">
+                  {row.label}
+                </span>
+                <FallbackStatus
+                  provider={row.provider}
+                  label={row.label}
+                  busy={busy}
+                  onOpen={() => onOpenProvider(row.id)}
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -518,7 +558,7 @@ export const WebSearchPage: React.FC = () => {
               </div>
             )}
           </SettingsSection>
-          <FallbacksSection snapshot={snapshot} />
+          <FallbacksSection snapshot={snapshot} onOpenProvider={(providerId) => setOpenId(providerId)} />
         </>
       ) : failed || error !== null ? null : (
         <SettingsSection divider={false}>

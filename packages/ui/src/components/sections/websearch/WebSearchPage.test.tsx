@@ -194,6 +194,8 @@ describe('WebSearchPage', () => {
   const addFallbackLabel = en['settings.webSearch.native.addFallback'];
   const removeLabel = (provider: string) =>
     en['settings.webSearch.native.removeFallback'].replace('{provider}', provider);
+  const configureLabel = (provider: string) =>
+    en['settings.webSearch.native.configureFallback'].replace('{provider}', provider);
 
   const fallbackSnapshot = (fallbackProviderIds: string[]): WebSearchSnapshot => ({
     workspaceId: 'workspace-1',
@@ -241,19 +243,24 @@ describe('WebSearchPage', () => {
       );
     });
 
-    const section = container.querySelector('[data-settings-item="web-search.fallbacks"]');
-    if (!(section instanceof HTMLElement)) throw new Error('The fallback section did not render');
-    const handles = () => Array.from(section.querySelectorAll<HTMLButtonElement>('button[aria-label^="Drag "]'));
+    const getSection = () => {
+      const element = container.querySelector('[data-settings-item="web-search.fallbacks"]');
+      if (!(element instanceof HTMLElement)) throw new Error('The fallback section did not render');
+      return element;
+    };
+    const section = getSection();
+    const handles = () => Array.from(getSection().querySelectorAll<HTMLButtonElement>('button[aria-label^="Drag "]'));
     // A row is the sortable item that wraps each handle; its content is the
-    // sibling list of ordinal, name, optional pill and remove button.
+    // sibling list of ordinal, icon, name, optional pill and remove button.
     const rows = () => handles().map((handle) => handle.parentElement).filter((row): row is HTMLElement => row !== null);
     const rowNames = () => rows().map((row) => row.querySelector('.typography-ui-label.text-foreground')?.textContent);
-    const rowOrdinals = () => rows().map((row) => row.querySelector('.tabular-nums')?.textContent);
-    // Only `SettingsCardPill` renders a rounded-full span inside a row, so this
-    // counts status pills structurally instead of matching their copy.
-    const rowPillCounts = () => rows().map((row) => row.querySelectorAll('span.rounded-full').length);
-    const helperLines = () => Array.from(section.querySelectorAll('p.typography-meta')).map((line) => line.textContent);
-    const addButton = () => [...section.querySelectorAll<HTMLButtonElement>('button')]
+    const rowOrdinals = () => rows().map((row) => row.querySelector('.oc-tile-inset.tabular-nums')?.textContent);
+    // Both static `SettingsCardPill` spans and interactive warning setup
+    // buttons carry `rounded-full` inside a row, so this counts status pills
+    // structurally instead of matching their copy.
+    const rowPillCounts = () => rows().map((row) => row.querySelectorAll('.rounded-full').length);
+    const helperLines = () => Array.from(getSection().querySelectorAll('p.typography-meta')).map((line) => line.textContent);
+    const addButton = () => [...getSection().querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent?.includes(addFallbackLabel));
     return { section, saved, handles, rows, rowNames, rowOrdinals, rowPillCounts, helperLines, addButton };
   };
@@ -312,11 +319,23 @@ describe('WebSearchPage', () => {
   test('a row shows a warning only when setup is missing and removes by icon label', async () => {
     const page = await renderWithSnapshot(fallbackSnapshot(['brave', 'serper']));
 
+    const rows = page.rows();
+    expect(rows[0]?.parentElement?.classList.contains('gap-2')).toBe(true);
+    rows.forEach((row, index) => {
+      expect(row.classList.contains('oc-tile')).toBe(true);
+      expect(row.classList.contains('oc-tile-hover')).toBe(true);
+      expect(row.classList.contains('rounded-xl')).toBe(true);
+      expect(row.querySelector('.oc-tile-inset.tabular-nums')?.textContent).toBe(String(index + 1));
+      expect(row.querySelector('.oc-tile-inset svg')).not.toBeNull();
+    });
+
     expect(page.rowNames()).toEqual(['Brave Search', 'Serper']);
     expect(page.rowPillCounts()).toEqual([1, 1]);
-    const [keyRow, setupRow] = page.rows();
+    const [keyRow, setupRow] = rows;
     expect(keyRow?.textContent).toContain(en['settings.webSearch.card.needsKey']);
+    expect(keyRow?.querySelector(`button[aria-label="${configureLabel('Brave Search')}"]`)).toBeInstanceOf(HTMLButtonElement);
     expect(setupRow?.textContent).toContain(en['settings.webSearch.card.needsSetup']);
+    expect(setupRow?.querySelector(`button[aria-label="${configureLabel('Serper')}"]`)).toBeInstanceOf(HTMLButtonElement);
 
     const remove = page.section.querySelector<HTMLButtonElement>(`button[aria-label="${removeLabel('Brave Search')}"]`);
     expect(remove).toBeInstanceOf(HTMLButtonElement);
@@ -324,6 +343,26 @@ describe('WebSearchPage', () => {
     await act(async () => { remove?.click(); });
     expect(page.saved[page.saved.length - 1]).toEqual(['serper']);
     expect(page.rowNames()).toEqual(['Serper']);
+  });
+
+  test('clicking an unconfigured fallback warning pill opens provider detail and back returns to the list', async () => {
+    const page = await renderWithSnapshot(fallbackSnapshot(['brave', 'serper']));
+
+    const configureButton = page.section.querySelector<HTMLButtonElement>(
+      `button[aria-label="${configureLabel('Brave Search')}"]`,
+    );
+    expect(configureButton).toBeInstanceOf(HTMLButtonElement);
+    await act(async () => { configureButton?.click(); });
+
+    const keyInput = container.querySelector('input[aria-label="Brave Search API key"]');
+    expect(keyInput).toBeInstanceOf(HTMLInputElement);
+    const backButton = container.querySelector<HTMLButtonElement>(
+      `button[aria-label="${en['settings.webSearch.detail.back']}"]`,
+    );
+    expect(backButton).toBeInstanceOf(HTMLButtonElement);
+
+    await act(async () => { backButton?.click(); });
+    expect(page.rowNames()).toEqual(['Brave Search', 'Serper']);
   });
 
   // A fully configured fallback says nothing: the list already implies that a

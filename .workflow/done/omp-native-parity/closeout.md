@@ -46,9 +46,9 @@ Recorded review/check notes from task logs:
 
 ## Remaining debt & follow-ups
 
-No `technical-debt.md` entry was opened specifically by `omp-native-parity`. Related open entries in `.workflow/technical-debt.md` covering overlapping parity and upstream-merge surfaces:
+Related `.workflow/technical-debt.md` entries covering overlapping parity and upstream-merge surfaces at the time of closeout:
 
-- `Per-session warming has no Agent Service implementation` (created during `upstream-refresh`; parity Task `11` preserved workspace-only `cache-warming` until `tech-debt-sweep` implements canonical per-session warming per `decisions.md: 2026-11-18 - Build per-session cache warming on the Agent Service`).
-- `OMP TUI-owned behaviors have no GUI mirror or drift test` (later finding covering `packages/agent-service/src/worker/{projection,mode,builtin-commands}.ts` and `packages/ui/src/components/chat/todoData.ts`).
-- `Cold new-chat first token waits on OMP session construction` (later finding covering `packages/agent-service/src/supervisor/workers.ts`, `worker/session.ts`, and `worker/catalog-models.ts`).
+- `Per-session warming has no Agent Service implementation` — resolved in `tech-debt-sweep/06` (`GET/PUT /api/agent/v1/sessions/:sessionId/cache-warming`, UI toggle, Settings field, and 15 locales) and deleted from `technical-debt.md`.
+- `OMP TUI-owned behaviors have no GUI mirror or drift test` — resolved in `tech-debt-sweep/05` (`auto_compaction_start`, `todo_auto_clear`, `session.getTodoPhases()`, and `omp-mirror-drift.test.ts`) and deleted from `technical-debt.md`.
+- `Cold new-chat first token waits on OMP session construction` — catalog-selection rebuild fixed in `tech-debt-sweep/07`; the entry remains in `technical-debt.md` solely for the upstream `@oh-my-pi/pi-coding-agent` two-phase session-graph seam (`decisions.md: 2026-11-18 - Keep spare workers at runtime prewarm until OMP splits session-graph preparation from session binding`).
 - Revisit trigger in `decisions.md: 2026-11-05 - Retain parity useBtwPanelState implementation until upstream helpers are used` (switch to upstream `useBtwPanelState.ts` if a future upstream refresh introduces callers/setters for `btwHoldsDock` or `parentPromoted`).

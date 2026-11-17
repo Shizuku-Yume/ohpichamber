@@ -63,6 +63,6 @@ No task file in `.workflow/done/omp-through-m3/*.md` records `Check waived:`. Th
 
 ## Remaining debt & follow-ups
 
-- **Open `.workflow/technical-debt.md` entry related to M3 scope:** `Per-session warming has no Agent Service implementation` (M3 Task `50` delivered workspace-level cache warming; per-session warming remains open and is assigned to `tech-debt-sweep/06`).
+- **`.workflow/technical-debt.md` entry related to M3 scope:** `Per-session warming has no Agent Service implementation` (M3 Task `50` delivered workspace-level cache warming; canonical per-session warming was subsequently implemented in `tech-debt-sweep/06` and the debt entry was deleted).
 - **Remaining cross-platform & release verification:** Non-Linux desktop targets (macOS, Windows), Linux arm64, physical mobile devices, Docker containment, and packaged release certification remain owned by **M7 (`m7-release-verification`)** (`m4-orchestration`, `m5-release-surfaces`, and `m6-audit-and-polish` subsequently landed and closed).
 - **Retained M0 worker memory baseline:** Dedicated worker RSS (381–392 MB in M2 vs the failed 100 MiB hypothesis) remains an accepted architectural baseline risk under `2026-10-11 - Accept measured worker memory as an M0 limitation`.

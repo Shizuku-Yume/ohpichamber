@@ -53,4 +53,4 @@ Operational notes from task execution and closeout:
 
 ## Remaining debt & follow-ups
 
-- `technical-debt.md`: **`OMP TUI-owned behaviors have no GUI mirror or drift test`** (added 2026-11-13) — covers plan-mode orchestration mirrored in `packages/agent-service/src/worker/mode.ts` and the hand-kept allowlist in `packages/agent-service/src/worker/builtin-commands.ts` (plus `auto_compaction_start`, `todo_auto_clear`, and `session.getTodoPhases()`), targeted by `tech-debt-sweep/07`.
+- `technical-debt.md`: **`OMP TUI-owned behaviors have no GUI mirror or drift test`** (added 2026-11-13) — covered plan-mode orchestration mirrored in `packages/agent-service/src/worker/mode.ts` and the hand-kept allowlist in `packages/agent-service/src/worker/builtin-commands.ts` (plus `auto_compaction_start`, `todo_auto_clear`, and `session.getTodoPhases()`); resolved in `tech-debt-sweep/05` and deleted from `technical-debt.md`.

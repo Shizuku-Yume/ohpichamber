@@ -8,7 +8,7 @@ import { isAdvisorCard } from '@oh-my-pi/pi-coding-agent/session/queued-messages
 import { logger, prompt } from '@oh-my-pi/pi-utils';
 import type { ProjectionInput } from '../projection/protocol.ts';
 
-export const SUGGESTION_GENERATOR_VALUES = ['session', 'small', 'off'] as const;
+const SUGGESTION_GENERATOR_VALUES = ['session', 'small', 'off'] as const;
 export type SuggestionGenerator = (typeof SUGGESTION_GENERATOR_VALUES)[number];
 
 export const cfgSuggestionGenerator = register({
@@ -30,9 +30,9 @@ export const cfgSuggestionGenerator = register({
 });
 
 export const USAGE_PURPOSE = 'composer-prediction';
-export const PREDICTION_MAX_TOKENS = 1024;
-export const PREDICTION_DEADLINE_MS = 15_000;
-export const SKIP_REPLY = 'NO_PREDICTION';
+const PREDICTION_MAX_TOKENS = 1024;
+const PREDICTION_DEADLINE_MS = 15_000;
+const SKIP_REPLY = 'NO_PREDICTION';
 /**
  * Alternatives requested per prediction. OMP's own controller asks for a single
  * message unless `composer.predictionAlternatives` is on, and models that are

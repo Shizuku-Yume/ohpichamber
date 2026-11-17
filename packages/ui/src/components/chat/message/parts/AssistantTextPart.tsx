@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 import type { Part } from '@openchamber/agent-contract';
 import { MarkdownRenderer } from '../../MarkdownRenderer';
 import type { StreamPhase, ToolPopupContent } from '../types';
@@ -89,7 +90,13 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
 
     return (
         <div
-            className={`group/assistant-text relative break-words ${chatRenderMode === 'live' && !range ? 'my-1' : ''}`}
+            className={cn(
+                'group/assistant-text relative break-words',
+                // Rows of one answer stack as the whole text did: only its
+                // outer edges keep their spacing.
+                chatRenderMode === 'live' && !range?.start ? 'mt-1' : null,
+                chatRenderMode === 'live' && range?.end === undefined ? 'mb-1' : null,
+            )}
             data-answer-continues={range?.start ? '' : undefined}
             // The rows of one answer read as one text when a selection crosses them.
             data-answer-part={range ? `${messageId}:${part.partId}` : undefined}

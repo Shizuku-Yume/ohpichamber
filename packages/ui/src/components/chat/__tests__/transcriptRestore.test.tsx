@@ -123,7 +123,7 @@ describe('restored transcript composition', () => {
             window: win, document: win.document, navigator: win.navigator, localStorage: win.localStorage,
             customElements: win.customElements,
             Node: win.Node, NodeList: win.NodeList, Element: win.Element, HTMLElement: win.HTMLElement, SVGElement: win.SVGElement,
-            HTMLAnchorElement: win.HTMLAnchorElement,
+            HTMLAnchorElement: win.HTMLAnchorElement, DOMParser: win.DOMParser, DOMRect: win.DOMRect,
             MutationObserver: win.MutationObserver, ResizeObserver: win.ResizeObserver,
             IntersectionObserver: win.IntersectionObserver,
             requestAnimationFrame: win.requestAnimationFrame.bind(win), cancelAnimationFrame: win.cancelAnimationFrame.bind(win),
@@ -331,5 +331,128 @@ describe('restored transcript composition', () => {
         expect(container.querySelectorAll('[data-message-slice]')).toHaveLength(rows.length - 1);
         // Only the last row ends the message.
         expect(container.querySelectorAll('[data-message-continues]')).toHaveLength(rows.length - 1);
+
+        // Outer margins stay on the outer slices only so rows stack seamlessly.
+        const answerWrappers = Array.from(container.querySelectorAll<HTMLElement>('[data-answer-part="long:long-text"]'));
+        expect(answerWrappers).toHaveLength(rows.length);
+        expect(rows.length).toBeGreaterThanOrEqual(3);
+        expect(answerWrappers[0]?.classList.contains('mt-1')).toBe(true);
+        expect(answerWrappers[0]?.classList.contains('mb-1')).toBe(false);
+        expect(answerWrappers[1]?.classList.contains('mt-1')).toBe(false);
+        expect(answerWrappers[1]?.classList.contains('mb-1')).toBe(false);
+        expect(answerWrappers[rows.length - 1]?.classList.contains('mt-1')).toBe(false);
+        expect(answerWrappers[rows.length - 1]?.classList.contains('mb-1')).toBe(true);
+    });
+
+    test('touch footer sheet image export renders all slices and fits the column width', async () => {
+        const { default: MessageBody } = await import('../message/MessageBody');
+        const { MessageSliceContext } = await import('../message/messageSliceContext');
+        const { answerChunkCuts } = await import('../lib/turns/answerChunks');
+
+        const paragraphs = Array.from({ length: 10 }, (_, index) => `Paragraph ${index + 1} of the answer ${'detail '.repeat(90)}`);
+        const longText = paragraphs.join('\n\n');
+        const cuts = answerChunkCuts(longText);
+        expect(cuts.length).toBeGreaterThan(0);
+        const lastOffset = cuts[cuts.length - 1];
+        if (lastOffset === undefined) {
+            throw new Error('Expected at least one chunk cut');
+        }
+        const lastSlice = { from: { partId: 'long-text', offset: lastOffset }, index: cuts.length, count: cuts.length + 1 };
+        const longParts = [text('long-text', longText)];
+
+        await act(async () => root.render(
+            <Providers>
+                <MessageSliceContext.Provider value={lastSlice}>
+                    <MessageBody
+                        sessionId="session"
+                        messageId="long"
+                        parts={longParts}
+                        isUser={false}
+                        isMessageCompleted
+                        isMobile
+                        hasTouchInput
+                        copiedCode={null}
+                        onCopyCode={() => undefined}
+                        expandedTools={new Set()}
+                        onToggleTool={() => undefined}
+                        onShowPopup={() => undefined}
+                        streamPhase="completed"
+                        allowAnimation={false}
+                        hasTextContent
+                        onCopyMessage={() => true}
+                        turnGroupingContext={{
+                            turnId: 'turn',
+                            isFirstAssistantInTurn: true,
+                            isLastAssistantInTurn: true,
+                            isLatestTurn: true,
+                            hasTools: false,
+                            hasReasoning: false,
+                            isWorking: false,
+                        }}
+                    />
+                </MessageSliceContext.Provider>
+            </Providers>,
+        ));
+
+        const exportRoot = container.querySelector<HTMLElement>('[data-message-text-export-root]');
+        expect(exportRoot).not.toBeNull();
+        if (exportRoot) {
+            exportRoot.getBoundingClientRect = () => new DOMRect(0, 0, 640, 200);
+        }
+
+        const dictionary = useI18nStore.getState().dictionary;
+        const moreLabel = dictionary['chat.messageBody.actions.moreActions'];
+        const saveAsImageLabel = dictionary['chat.messageBody.actions.saveAsImage'];
+        const moreButton = container.querySelector<HTMLButtonElement>(`button[aria-label="${moreLabel}"]`);
+        expect(moreButton).not.toBeNull();
+        await act(async () => moreButton?.click());
+
+        const sheetButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button'))
+            .find((button) => button.textContent?.includes(saveAsImageLabel));
+        expect(sheetButton).not.toBeUndefined();
+
+        let exportedWrapper: HTMLElement | null = null;
+        const exportDone = Promise.withResolvers<void>();
+        const safetyTimer = setTimeout(exportDone.resolve, 2000);
+        const observer = new MutationObserver((records) => {
+            for (const record of records) {
+                for (const node of record.addedNodes) {
+                    if (node instanceof HTMLElement && node.getAttribute('data-message-image-export') === 'true') {
+                        exportedWrapper = node;
+                    }
+                }
+                for (const node of record.removedNodes) {
+                    if (node === exportedWrapper) {
+                        exportDone.resolve();
+                    }
+                }
+            }
+        });
+        observer.observe(document.body, { childList: true });
+
+        let capturedText = '';
+        let capturedWrapperWidth = '';
+        let capturedCloneWidth = '';
+        try {
+            await act(async () => {
+                sheetButton?.click();
+                await exportDone.promise;
+            });
+            if (exportedWrapper) {
+                const wrapperEl: HTMLElement = exportedWrapper;
+                capturedText = wrapperEl.textContent ?? '';
+                capturedWrapperWidth = wrapperEl.style.width;
+                capturedCloneWidth = wrapperEl.lastElementChild instanceof HTMLElement ? wrapperEl.lastElementChild.style.width : '';
+            }
+        } finally {
+            clearTimeout(safetyTimer);
+            observer.disconnect();
+        }
+
+        expect(exportedWrapper).not.toBeNull();
+        expect(capturedWrapperWidth).toBe('640px');
+        expect(capturedCloneWidth).toBe('640px');
+        expect(capturedText).toContain('Paragraph 1 of the answer');
+        expect(capturedText).toContain('Paragraph 10 of the answer');
     });
 });

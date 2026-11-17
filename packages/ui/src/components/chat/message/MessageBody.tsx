@@ -77,7 +77,13 @@ import { useAgentColors } from '@/hooks/useAgentColors';
 import { isCapacitorMobileApp } from '@/apps/mobileNativeChrome';
 import { shareFileFromNativeApp } from '@/lib/nativeFileShare';
 import { WorktreeRequiresGitRepositoryError } from '@/lib/worktrees/worktreeCreate';
-import { buildTurnImageExportSource, cloneMessageImageExportSource } from './imageExport';
+import {
+    buildTurnImageExportSource,
+    cloneMessageImageExportSource,
+    fitMessageImageExportLayout,
+    resolveMessageImageExportPixelRatio,
+    resolveMessageImageExportWidth,
+} from './imageExport';
 import { problemMessage } from '@/lib/problemMessage';
 
 
@@ -1596,14 +1602,26 @@ const AssistantMessageBody = React.memo(({
                     computedStyle.backgroundColor ||
                     window.getComputedStyle(document.body).backgroundColor;
                 const paddingSize = 24;
+                // The turn source is built off-screen, so the visible column is the
+                // only element still holding the width the reader saw.
+                const exportWidth = resolveMessageImageExportWidth(messageContentRef.current ?? originalElement);
 
                 wrapper = document.createElement('div');
                 wrapper.setAttribute('data-message-image-export', 'true');
                 wrapper.style.cssText = `
                     padding: ${paddingSize}px;
+                    ${exportWidth ? `width: ${exportWidth}px; box-sizing: content-box;` : ''}
                     background-color: ${resolvedBackgroundColor};
                     display: inline-block;
                 `;
+                // Scrollbars are dead weight in a still image, and hiding them stops
+                // their gutter from clipping the last column of a wide table.
+                const exportStyle = document.createElement('style');
+                exportStyle.textContent = `
+                    [data-message-image-export] * { scrollbar-width: none; }
+                    [data-message-image-export] *::-webkit-scrollbar { display: none; }
+                `;
+                wrapper.appendChild(exportStyle);
 
                 const clone = cloneMessageImageExportSource(originalElement);
                 clone.style.cssText = `
@@ -1612,6 +1630,12 @@ const AssistantMessageBody = React.memo(({
                     contain: none;
                 `;
 
+                // A column-width canvas would clip an unwrapped code line behind its
+                // scroll container, so long lines wrap only for the export.
+                const codeWrapRoots = clone.querySelectorAll<HTMLElement>('[data-code-wrap]');
+                codeWrapRoots.forEach((root) => {
+                    root.setAttribute('data-code-wrap', 'true');
+                });
                 const actionRows = clone.querySelectorAll<HTMLElement>('[data-message-actions="true"]');
                 actionRows.forEach((row) => {
                     row.style.display = 'none';
@@ -1647,10 +1671,21 @@ const AssistantMessageBody = React.memo(({
 
                 wrapper.appendChild(clone);
                 document.body.appendChild(wrapper);
+                if (exportWidth) {
+                    // Keep the clone at the column so prose wraps where the reader saw it;
+                    // only the canvas and the clipped blocks grow.
+                    fitMessageImageExportLayout(wrapper, clone, exportWidth);
+                }
+
+                const bounds = wrapper.getBoundingClientRect();
+                const canvasWidth = Math.ceil(bounds.width);
+                const canvasHeight = Math.ceil(bounds.height);
 
                 const dataUrl = await toPng(wrapper, {
                     quality: 1,
-                    pixelRatio: 2,
+                    width: canvasWidth,
+                    height: canvasHeight,
+                    pixelRatio: resolveMessageImageExportPixelRatio(canvasWidth, canvasHeight),
                     backgroundColor: resolvedBackgroundColor,
                 });
 
@@ -2417,7 +2452,7 @@ const AssistantMessageBody = React.memo(({
                 label: t('chat.messageBody.actions.saveAsImage'),
                 icon: <Icon name="image-download" className="h-3.5 w-3.5" />,
                 disabled: !hasCopyableText,
-                onSelect: () => { void shareMessageAsImage(); },
+                onSelect: () => { void shareShownMessageAsImage(); },
             });
         }
         if (!isMiniChatSurface && showMessageTTSButtons && hasCopyableText) {
@@ -2472,7 +2507,7 @@ const AssistantMessageBody = React.memo(({
             }
         }
         return actions;
-    }, [assistantPlanText, canUseProjectPlanActions, contextPinPending, contextPinned, currentProjectRef, extraActions, handleForkClick, handleForkFromHere, handleSaveAsPlanClick, hasCopyableText, isFooterTTSPlaying, isMiniChatSurface, isReviewSessionView, onCopyLink, onCopyMessage, onToggleContextPin, playFooterTTS, reviewTransferAction, shareMessageAsImage, showMessageTTSButtons, stopFooterTTS, t]);
+    }, [assistantPlanText, canUseProjectPlanActions, contextPinPending, contextPinned, currentProjectRef, extraActions, handleForkClick, handleForkFromHere, handleSaveAsPlanClick, hasCopyableText, isFooterTTSPlaying, isMiniChatSurface, isReviewSessionView, onCopyLink, onCopyMessage, onToggleContextPin, playFooterTTS, reviewTransferAction, shareShownMessageAsImage, showMessageTTSButtons, stopFooterTTS, t]);
 
     const finalTurnActionButtons = (
         <>

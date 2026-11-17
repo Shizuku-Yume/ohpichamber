@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { CanonicalEventSchema, CounterSchema, CursorSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, RuntimeSessionSchema, SessionSnapshotSchema } from '@openchamber/agent-contract';
-import type { ApprovalRequest, CanonicalEvent, HistoryPage, HistoryPageRequest, JsonObject, Message, Part, ProblemCode, QuestionRequest, Run, RuntimeSession, SessionMode, SessionSnapshot, StreamInvalidated, Turn } from '@openchamber/agent-contract';
+import type { ApprovalRequest, CanonicalEvent, HistoryPage, HistoryPageRequest, JsonObject, Message, Part, ProblemCode, QuestionRequest, Run, RuntimeSession, SessionMode, SessionSnapshot, StreamInvalidated, TodoPhase, Turn } from '@openchamber/agent-contract';
 import type { ProjectionInput, ProjectionSeed } from './protocol.ts';
 
 export class ProjectionError extends Error {
@@ -34,6 +34,8 @@ export class SessionJournal {
   private messages: Message[];
   private mode: SessionMode;
   private selection: ProjectionSeed['selection'];
+  private compacting: SessionSnapshot['compacting'] = null;
+  private todos: TodoPhase[] = [];
   private activeRunId: string | null = null;
   private runtimeStatus: RuntimeSession['runtimeStatus'] = 'idle';
   private title: string | undefined;
@@ -48,6 +50,8 @@ export class SessionJournal {
     this.mode = structuredClone(seed.mode);
     this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
     this.messages = structuredClone(seed.messages);
+    this.compacting = seed.compacting ? structuredClone(seed.compacting) : null;
+    this.todos = structuredClone(seed.todos ?? []);
     this.title = seed.title;
     this.rebuildIndexes();
   }
@@ -101,7 +105,7 @@ export class SessionJournal {
     }
     return SessionSnapshotSchema.parse({
       session: this.runtime(), cursor: `${this.epoch}:${this.head}`, activeRun: this.activeRunId ? this.runs.get(this.activeRunId) : null,
-      branch: this.branch, selection: this.selection,
+      branch: this.branch, selection: this.selection, compacting: this.compacting, todos: this.todos,
       window: {
         firstTurnId: turns[0]?.turnId ?? null, lastTurnId: turns.at(-1)?.turnId ?? null,
         firstMessageId: messages[0]?.messageId ?? null, lastMessageId: messages.at(-1)?.messageId ?? null,
@@ -165,6 +169,8 @@ export class SessionJournal {
     this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
     this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
+    this.compacting = seed.compacting ? structuredClone(seed.compacting) : null;
+    this.todos = structuredClone(seed.todos ?? []);
     this.rebuildIndexes();
   }
 
@@ -173,6 +179,8 @@ export class SessionJournal {
     this.createdAt = seed.createdAt; this.updatedAt = seed.updatedAt; this.mode = structuredClone(seed.mode);
     this.branch = structuredClone(seed.branch); this.turns = structuredClone(seed.turns); this.messages = structuredClone(seed.messages);
     this.selection = structuredClone(seed.selection ?? { model: null, thinkingLevel: null });
+    this.compacting = seed.compacting ? structuredClone(seed.compacting) : null;
+    this.todos = structuredClone(seed.todos ?? []);
     this.runs.clear(); this.approvals.clear(); this.questions.clear();
     this.activeRunId = null; this.runtimeStatus = 'idle';
     this.continuationPending = false;
@@ -191,6 +199,7 @@ export class SessionJournal {
     this.runtimeStatus = 'unavailable'; this.activeRunId = null;
     this.continuationPending = false;
     this.approvals.clear(); this.questions.clear();
+    this.compacting = null;
   }
 
   reasonUnavailable(): string | undefined {
@@ -251,7 +260,44 @@ export class SessionJournal {
         if (event.title !== undefined) this.title = event.title;
         if (event.continuationPending !== undefined) this.continuationPending = event.continuationPending;
         if (event.selection !== undefined) this.selection = structuredClone(event.selection);
+        if (event.compacting !== undefined) this.compacting = event.compacting ? structuredClone(event.compacting) : null;
+        if (event.todos !== undefined) this.todos = structuredClone(event.todos);
         return;
+      case 'session.compacted': {
+        this.compacting = null;
+        const turn = this.turns.at(-1);
+        if (turn && !this.messageById.has(event.compactionId)) {
+          const compactionPart: Part = {
+            type: 'notice',
+            partId: `${event.compactionId}:compaction`,
+            noticeType: 'compaction',
+            level: 'info',
+            details: {
+              method: event.method ?? 'compacted',
+              tokensBefore: event.tokensBefore,
+              ...(event.tokensAfter !== undefined ? { tokensAfter: event.tokensAfter } : {}),
+              ...(event.summary !== undefined ? { summary: event.summary } : {}),
+              ...(event.warning !== undefined ? { warning: event.warning } : {}),
+            },
+          };
+          const message: Message = {
+            messageId: event.compactionId,
+            sessionId: this.identity.sessionId,
+            turnId: turn.turnId,
+            role: 'assistant',
+            createdAt: event.completedAt,
+            parts: [compactionPart],
+          };
+          this.messages.push(message);
+          this.messageById.set(message.messageId, message);
+          turn.assistantMessageIds.push(message.messageId);
+          this.indexMessage(message);
+          this.partById.set(compactionPart.partId, { message, index: 0 });
+          this.branch.leafMessageId = message.messageId;
+          this.branch.branchVersion = (BigInt(this.branch.branchVersion) + 1n).toString();
+        }
+        return;
+      }
       case 'session.status': this.runtimeStatus = event.runtimeStatus; this.activeRunId = event.activeRunId; return;
       case 'turn.started': {
         const turn: Turn = {

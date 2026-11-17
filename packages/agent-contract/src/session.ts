@@ -334,3 +334,19 @@ export const SessionMoveToWorktreeResultSchema = z.strictObject({
   untrustedSetupCommandsSkipped: z.array(z.string()).optional(),
 });
 export type SessionMoveToWorktreeResult = z.infer<typeof SessionMoveToWorktreeResultSchema>;
+
+export const TodoStatusSchema = z.enum(['pending', 'in_progress', 'completed', 'abandoned', 'blocked']);
+export type TodoStatus = z.infer<typeof TodoStatusSchema>;
+export const TodoItemSchema = z.strictObject({
+  content: z.string(),
+  status: TodoStatusSchema,
+  blocker: z.string().optional(),
+});
+export type TodoItem = z.infer<typeof TodoItemSchema>;
+export const TodoPhaseSchema = z.strictObject({
+  name: z.string(),
+  tasks: z.array(TodoItemSchema),
+});
+export type TodoPhase = z.infer<typeof TodoPhaseSchema>;
+export const CompactionMethodSchema = z.enum(['soft-compacted', 'snap-compacted', 'shaken', 'remote-compacted', 'handed-off', 'compacted']);
+export type CompactionMethod = z.infer<typeof CompactionMethodSchema>;

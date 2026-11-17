@@ -101,22 +101,6 @@ function diffCommentOriginLabel(origin: DiffCommentOrigin): string {
     }
 }
 
-/** English for the model: where the commented lines come from. */
-export function describeDiffCommentOrigin(origin: DiffCommentOrigin): string {
-    switch (origin.kind) {
-        case 'commit':
-            return `in commit ${shortHash(origin.hash)}`;
-        case 'branch':
-            return `in the changes of branch \`${origin.headRef}\` compared with \`${origin.baseRef}\``;
-        case 'change-request': {
-            const noun = origin.provider === 'gitlab' ? 'GitLab merge request' : 'GitHub pull request';
-            const repository = origin.repository ? ` in ${origin.repository}` : '';
-            const revision = origin.revision ? ` at commit ${shortHash(origin.revision)}` : '';
-            return `in ${noun} ${changeRequestReference(origin)}${repository}${revision}`;
-        }
-    }
-}
-
 /** A file name as chips show it, with the diff it came from when not on disk: `app.ts (#5543)`. */
 export function fileWithDiffCommentOrigin(file: string, origin: DiffCommentOrigin | undefined): string {
     return origin ? `${file} (${diffCommentOriginLabel(origin)})` : file;

@@ -746,4 +746,3 @@ export class CanonicalClient {
 
 export const canonicalClient = new CanonicalClient();
 export type { SessionList };
-export type { ImageModel, ImageGenerateRequest, ImageGenerateResult } from '@openchamber/agent-contract';

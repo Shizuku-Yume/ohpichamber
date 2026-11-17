@@ -77,7 +77,7 @@ export const parseNotificationChannelsJson = (json: string): NotificationChannel
   return channels;
 };
 
-export type LoadChannelsResult =
+type LoadChannelsResult =
   | { ok: true; channels: NotificationChannel[] }
   | { ok: false; absent: boolean };
 

@@ -13,16 +13,10 @@ const CYRILLIC_TO_LATIN = new Map(Object.entries({
   ч: 'ch', ш: 'sh', щ: 'shch', ь: '', ю: 'iu', я: 'ia', ё: 'e', ъ: '', ы: 'y', э: 'e',
 }));
 
-export const isValidSnippetName = (name: string): boolean => SNIPPET_NAME_PATTERN.test(name);
-
-/** What a name field keeps of typed text: spaces become dashes, other characters drop. */
-export const normalizeSnippetNameInput = (value: string): string => value
-  .replace(/\s+/g, '-')
-  .replace(/[^a-z0-9_-]/gi, '')
-  .slice(0, 80);
+const isValidSnippetName = (name: string): boolean => SNIPPET_NAME_PATTERN.test(name);
 
 /** The snippet that `#name` already triggers. */
-export const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
+const findSnippetByTrigger = (snippets: readonly Snippet[], name: string): Snippet | undefined => {
   const key = name.toLowerCase();
   return snippets.find((snippet) => snippet.name.toLowerCase() === key);
 };

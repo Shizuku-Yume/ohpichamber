@@ -17,7 +17,7 @@ import {
   toolPresentation,
 } from '@/lib/toolPresentation';
 
-export interface AgentPermissionsEditorProps {
+interface AgentPermissionsEditorProps {
   allowedTools: string[] | null;
   toolsCatalog: ToolCatalogEntry[];
   onChange: (allowedTools: string[] | null) => void;

@@ -275,13 +275,6 @@ export async function deleteArchivedWorktree(input: {
   }
 }
 
-/** The project's archive that holds `sessionId`, read fresh; null when none does. */
-export async function findWorktreeArchiveForSession(projectPath: string, sessionId: string): Promise<GitWorktreeArchive | null> {
-  if (!canArchiveWorktrees()) return null;
-  const archives = await loadWorktreeArchives(projectPath);
-  return archives.find((archive) => (archive.sessionIds ?? []).includes(sessionId)) ?? null;
-}
-
 // Worktrees restored here, for the merged-PR cleanup: restoring one whose PR
 // is merged is the user taking it back, and the cleanup would otherwise
 // archive it again on its next pass.

@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { nativeToolResultContent } from '@/components/chat/message/toolRenderers';
 
 /** Runtime backend that an eval cell dispatches to. */
-export type EvalLanguage = 'python' | 'js';
+type EvalLanguage = 'python' | 'js';
 
 /** One column of a table view. */
 export interface EvalTableColumn {
@@ -14,7 +14,7 @@ export interface EvalTableColumn {
 }
 
 /** Pretty rendering of structured data produced by a cell. */
-export type EvalView =
+type EvalView =
     | { kind: 'table'; columns: EvalTableColumn[]; rows: string[][] }
     | { kind: 'json'; value: unknown }
     | { kind: 'markdown'; text: string };
@@ -119,7 +119,7 @@ const evalCellResultSchema = z.object({
     statusEventsElided: z.number().optional(),
 });
 
-export const evalToolDetailsSchema = z.object({
+const evalToolDetailsSchema = z.object({
     cells: z.array(evalCellResultSchema).optional(),
     images: z.array(z.record(z.string(), z.unknown())).optional(),
     statusEvents: z.array(evalStatusEventSchema).optional(),
@@ -137,8 +137,6 @@ export const evalToolDetailsSchema = z.object({
     }).optional(),
 }).passthrough();
 
-export type EvalToolDetails = z.infer<typeof evalToolDetailsSchema>;
-
 export function normalizeEvalLanguage(lang: string | undefined): EvalLanguage {
     if (lang === 'js' || lang === 'javascript') return 'js';
     return 'python';
@@ -152,12 +150,12 @@ const NON_TOOL_STATUS_OPS: Record<string, true> = {
     tool_define: true,
 };
 
-export function isToolCallStatusEvent(event: { op: string }): boolean {
+function isToolCallStatusEvent(event: { op: string }): boolean {
     return !NON_TOOL_STATUS_OPS[event.op];
 }
 
 /** One ordered piece of a cell's output: printed text, or a view shown in place of matching text. */
-export type EvalOutputPart =
+type EvalOutputPart =
     | { kind: 'text'; text: string }
     | { kind: 'view'; view: EvalView };
 

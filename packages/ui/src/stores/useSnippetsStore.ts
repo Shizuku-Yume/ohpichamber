@@ -12,7 +12,7 @@ import { useUIStore } from '@/stores/useUIStore';
 export type SnippetScope = FileResourceScope;
 
 /** The quick "save as snippet" dialog: text from a message, a selection or the composer. */
-export interface SnippetQuickCreate {
+interface SnippetQuickCreate {
   name?: string;
   content: string;
   /** Runs once the snippet is saved, with the name it got. */

@@ -6,7 +6,5 @@
  * the same parent. This module exists so draft persistence can recognise it
  * without pulling in the whole fork flow.
  */
-export const btwPendingComposerKey = (parentSessionId: string): string => `btw-pending:${parentSessionId}`;
-
 export const isBtwPendingComposerKey = (sessionId: string | null | undefined): boolean =>
     Boolean(sessionId?.startsWith('btw-pending:'));

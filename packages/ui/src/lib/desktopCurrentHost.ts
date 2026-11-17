@@ -113,9 +113,3 @@ export const resolveCurrentDesktopHost = (hosts: DesktopHost[]): ResolvedDesktop
     url: address,
   };
 };
-
-export const buildLocalDesktopHost = (localOrigin?: string | null): DesktopHost => ({
-  id: LOCAL_HOST_ID,
-  label: 'Local',
-  url: localOrigin || getLocalDesktopOrigin(),
-});

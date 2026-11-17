@@ -245,21 +245,6 @@ export const SettingsCardSearch: React.FC<{
   </div>
 );
 
-/**
- * The row above a card grid: the search on the start side, the page's actions
- * (project picker, refresh) on the end side. Without cards there is nothing
- * to search, and the actions keep their place.
- */
-export const SettingsCardToolbar: React.FC<{
-  search: { value: string; onChange: (value: string) => void; placeholder: string } | null;
-  actions: React.ReactNode;
-}> = ({ search, actions }) => (
-  <div className="mb-4 flex flex-wrap items-center gap-2">
-    {search ? <SettingsCardSearch {...search} compact className="mb-0 min-w-0 flex-1 basis-56" /> : null}
-    <div className="ms-auto flex shrink-0 items-center gap-2">{actions}</div>
-  </div>
-);
-
 /** Back arrow placed before a detail screen's title. */
 export const SettingsBackButton: React.FC<{ label: string; onClick: () => void }> = ({ label, onClick }) => (
   <Button

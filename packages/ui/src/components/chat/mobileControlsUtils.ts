@@ -54,7 +54,7 @@ const EFFORT_TONE_CLASS = {
 
 type EffortTone = keyof typeof EFFORT_TONE_CLASS;
 
-export const getEffortTone = (variant?: string): EffortTone => {
+const getEffortTone = (variant?: string): EffortTone => {
     const name = variant?.trim().toLowerCase();
     if (!name || name === 'default') return 'default';
     if (name === 'medium' || name === 'high') return 'warning';

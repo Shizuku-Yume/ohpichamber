@@ -83,11 +83,6 @@ export function dispatchNavigationRelease(scroller: HTMLElement): void {
     scroller.dispatchEvent(new CustomEvent(NAVIGATION_RELEASE_EVENT));
 }
 
-export function onNavigationRelease(scroller: HTMLElement, listener: () => void): () => void {
-    scroller.addEventListener(NAVIGATION_RELEASE_EVENT, listener);
-    return () => scroller.removeEventListener(NAVIGATION_RELEASE_EVENT, listener);
-}
-
 // A page waiting for the reader's answer (`openchamber_render` with
 // `awaitAnswer`) raises this from its block when it appears and whenever its
 // height changes, so the timeline holding it can bring it into view. The

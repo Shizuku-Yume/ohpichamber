@@ -8,7 +8,7 @@ import { isSessionDirectoryAdmitted } from './session-admission-rule';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { isVSCodeRuntime } from '@/lib/desktop';
 
-export const isSessionAdmitted = (directory: string | null | undefined): boolean => isSessionDirectoryAdmitted(
+const isSessionAdmitted = (directory: string | null | undefined): boolean => isSessionDirectoryAdmitted(
   directory, useProjectsStore.getState().projects, useSessionUIStore.getState().availableWorktreesByProject,
 );
 
@@ -68,13 +68,6 @@ const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean>
   pending.set(key, { sessionIds, request });
   return request;
 };
-
-export const admitSession = (sessionId: string, directory: string): Promise<boolean> => (
-  tryAdmitSession(sessionId, directory).catch((error) => {
-    console.warn('[session-admission] Could not register the session project:', error);
-    return false;
-  })
-);
 
 const RETRY_DELAYS = [1000, 2000, 4000];
 type AdmissionAttempt = { sessionId: string; retries: number; timer: ReturnType<typeof setTimeout> | null };

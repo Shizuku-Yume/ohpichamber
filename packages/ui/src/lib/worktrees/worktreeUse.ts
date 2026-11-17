@@ -8,7 +8,7 @@ const isInside = (directory: string | null | undefined, root: string): boolean =
 };
 
 /** Sessions working in the worktree, its subdirectories and subsessions included. */
-export const sessionsInWorktree = (sessions: readonly Session[], path: string): Session[] => {
+const sessionsInWorktree = (sessions: readonly Session[], path: string): Session[] => {
   const root = normalizePath(path);
   return root ? sessions.filter((session) => isInside(resolveGlobalSessionDirectory(session), root)) : [];
 };

@@ -296,7 +296,6 @@ let _optimisticConfirm: ((input: OptimisticConfirmInput) => void) | null = null
 
 export function optimisticAdd(input: OptimisticAddInput): void { _optimisticAdd?.(input) }
 export function optimisticRemove(input: OptimisticRemoveInput): void { _optimisticRemove?.(input) }
-export function optimisticConfirm(input: OptimisticConfirmInput): void { _optimisticConfirm?.(input) }
 /**
  * Revision patch for one or more sessions changing in the same store write.
  *

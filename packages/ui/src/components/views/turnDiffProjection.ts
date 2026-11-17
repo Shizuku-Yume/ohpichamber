@@ -10,7 +10,7 @@ import type { TurnSnapshotDiff } from './turnSnapshotDiff';
  * carries hunks against its own base, so they are appended in call order under
  * the first header instead of keeping a header that would truncate the parse.
  */
-export const combineTurnPatches = (patches: readonly string[]): string | undefined => {
+const combineTurnPatches = (patches: readonly string[]): string | undefined => {
  const firstHunkPatch = patches.findIndex((patch) => /^@@\s/m.test(patch));
  if (firstHunkPatch < 0) return patches[0];
  const headerEnd = patches[firstHunkPatch].search(/^@@\s/m);

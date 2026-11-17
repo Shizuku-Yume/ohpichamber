@@ -261,6 +261,33 @@ test('table columns preserve short content and allocate remaining width to long 
   }
 });
 
+test('tableWidthScope reaches MarkdownTable through presentation context', async () => {
+  const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+  const bounds = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
+    if (this.style.width === 'min-content') return new window.DOMRect(0, 0, 60, 30);
+    const width = this.tagName === 'TH' || this.tagName === 'TD' ? 120 : 500;
+    return new window.DOMRect(0, 0, width, 30);
+  });
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 500 });
+  const tableMarkdown = '| colA | colB |\n| --- | --- |\n| 1 | 2 |';
+  try {
+    await act(async () => {
+      root.render(React.createElement(I18nProvider, null, React.createElement(Renderer.MarkdownContent, { content: tableMarkdown, enableFileReferences: false })));
+    });
+    expect(host.querySelectorAll('th [role="separator"]')).toHaveLength(0);
+
+    await act(async () => {
+      root.render(React.createElement(I18nProvider, null, React.createElement(Renderer.MarkdownContent, { content: tableMarkdown, enableFileReferences: false, tableWidthScope: 'session:test' })));
+    });
+    expect(host.querySelectorAll('th [role="separator"]')).toHaveLength(2);
+  } finally {
+    bounds.mockRestore();
+    if (clientWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidth);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+    await act(() => root.render(null));
+  }
+});
+
 test('a streaming table is not measured until the reply settles', async () => {
   const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 500 });

@@ -84,7 +84,7 @@ export function TodoSendDialog(props: TodoSendDialogProps) {
       variants: listModelVariantIds(model?.variants),
       configuredVariant: useConfigStore.getState().getDefaultVariantForModel(providerID, modelID),
     }) ?? '';
-  }, [projectDirectory, providers]);
+  }, [providers]);
 
   React.useEffect(() => {
     if (!open) return;

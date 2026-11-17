@@ -28,10 +28,24 @@ interface DiffWorkerProviderProps {
 }
 
 type WorkerPoolStyle = 'unified' | 'split';
+export type WorkerPoolStatus = 'pending' | 'ready' | 'failed';
+export interface WorkerPoolState {
+  status: WorkerPoolStatus;
+  pool: WorkerPoolManager | undefined;
+}
+type InternalPoolStatus = 'idle' | WorkerPoolStatus;
+
+const WORKER_POOL_STYLES: readonly WorkerPoolStyle[] = ['unified', 'split'];
 
 const MAIN_THREAD_MAX_CHARACTERS = 64 * 1024;
 
-const WORKER_POOL_CONFIG: Record<WorkerPoolStyle, { poolSize: number; totalASTLRUCacheSize: number; lineDiffType: 'none' | 'word-line' }> = {
+interface WorkerPoolConfigEntry {
+  poolSize: number;
+  totalASTLRUCacheSize: number;
+  lineDiffType: 'none' | 'word-line';
+}
+
+const WORKER_POOL_CONFIG = {
   unified: {
     poolSize: 1,
     totalASTLRUCacheSize: 24,
@@ -42,7 +56,12 @@ const WORKER_POOL_CONFIG: Record<WorkerPoolStyle, { poolSize: number; totalASTLR
     totalASTLRUCacheSize: 56,
     lineDiffType: 'word-line',
   },
-};
+} satisfies Record<WorkerPoolStyle, WorkerPoolConfigEntry>;
+
+interface RenderTheme {
+  light: string;
+  dark: string;
+}
 
 type PoolModules = {
   WorkerPoolManager: typeof WorkerPoolManager;
@@ -52,6 +71,24 @@ type PoolModules = {
 };
 
 let poolModulesPromise: Promise<PoolModules> | null = null;
+let hasLoggedWorkerFailure = false;
+let workerInitTimeoutOverride: number | undefined;
+let poolLifecycleGeneration = 0;
+
+const logWorkerFailureOnce = (cause: unknown): void => {
+  if (hasLoggedWorkerFailure) return;
+  hasLoggedWorkerFailure = true;
+  console.warn('[DiffWorkerProvider] Diff worker pool unavailable; falling back to main-thread rendering.', cause);
+};
+
+const terminatePoolSafely = (pool: WorkerPoolManager | undefined): void => {
+  if (!pool) return;
+  try {
+    pool.terminate();
+  } catch {
+    // Ignore termination errors on failed or disposed pool
+  }
+};
 
 const loadPoolModules = (): Promise<PoolModules> => {
   poolModulesPromise ??= Promise.all([
@@ -59,66 +96,173 @@ const loadPoolModules = (): Promise<PoolModules> => {
     import('@/lib/diff/workerFactory'),
     import('@/lib/shiki/appThemeRegistry'),
     import('@/lib/shiki/diffsHighlighter'),
-  ]).then(([workerModule, factoryModule, themeRegistryModule, highlighterModule]) => ({
-    WorkerPoolManager: workerModule.WorkerPoolManager,
-    workerFactory: factoryModule.workerFactory,
-    ensurePierreThemeRegistered: themeRegistryModule.ensurePierreThemeRegistered,
-    highlighter: highlighterModule.DIFFS_HIGHLIGHTER,
-  }));
+  ])
+    .then(([workerModule, factoryModule, themeRegistryModule, highlighterModule]) => ({
+      WorkerPoolManager: workerModule.WorkerPoolManager,
+      workerFactory: factoryModule.workerFactory,
+      ensurePierreThemeRegistered: themeRegistryModule.ensurePierreThemeRegistered,
+      highlighter: highlighterModule.DIFFS_HIGHLIGHTER,
+    }))
+    .catch((cause: unknown) => {
+      poolModulesPromise = null;
+      throw cause;
+    });
   return poolModulesPromise;
 };
 
+interface PoolStatusByStyle {
+  unified: InternalPoolStatus;
+  split: InternalPoolStatus;
+}
+interface PoolSnapshotsByStyle {
+  unified: WorkerPoolState;
+  split: WorkerPoolState;
+}
 const pools: Partial<Record<WorkerPoolStyle, WorkerPoolManager>> = {};
+const poolStates: PoolStatusByStyle = {
+  unified: 'idle',
+  split: 'idle',
+};
+const cachedSnapshots: PoolSnapshotsByStyle = {
+  unified: { status: 'pending', pool: undefined },
+  split: { status: 'pending', pool: undefined },
+};
+const SERVER_POOL_STATE: WorkerPoolState = { status: 'pending', pool: undefined };
 const poolsRequested = new Set<WorkerPoolStyle>();
 const poolListeners = new Set<() => void>();
 
-let currentRenderTheme: { light: string; dark: string } = {
+const DEFAULT_RENDER_THEME: RenderTheme = {
   light: 'pierre-light',
   dark: 'pierre-dark',
 };
+
+let currentRenderTheme: RenderTheme = { ...DEFAULT_RENDER_THEME };
 
 const notifyPoolListeners = () => {
   for (const listener of poolListeners) listener();
 };
 
-const applyRenderOptions = (style: WorkerPoolStyle, pool: WorkerPoolManager) => {
-  void pool.setRenderOptions({
-    theme: currentRenderTheme,
-    lineDiffType: WORKER_POOL_CONFIG[style].lineDiffType,
-  });
+const setPoolState = (
+  style: WorkerPoolStyle,
+  status: InternalPoolStatus,
+  pool: WorkerPoolManager | undefined,
+): void => {
+  poolStates[style] = status;
+  if (pool) {
+    pools[style] = pool;
+  } else {
+    delete pools[style];
+  }
+  const exposedStatus: WorkerPoolStatus = status === 'idle' ? 'pending' : status;
+  const prev = cachedSnapshots[style];
+  if (prev.status !== exposedStatus || prev.pool !== pool) {
+    cachedSnapshots[style] = { status: exposedStatus, pool };
+    notifyPoolListeners();
+  }
+};
+
+const evictFailedPool = (style: WorkerPoolStyle, pool: WorkerPoolManager, cause: unknown): void => {
+  logWorkerFailureOnce(cause);
+  terminatePoolSafely(pool);
+  if (pools[style] === pool) {
+    setPoolState(style, 'failed', undefined);
+  }
+};
+
+const applyRenderOptions = (style: WorkerPoolStyle, pool: WorkerPoolManager): Promise<void> => {
+  const generation = poolLifecycleGeneration;
+  return pool
+    .setRenderOptions({
+      theme: currentRenderTheme,
+      lineDiffType: WORKER_POOL_CONFIG[style].lineDiffType,
+    })
+    .then(() => {
+      if (generation !== poolLifecycleGeneration) return;
+      if (!pool.isWorkingPool()) {
+        evictFailedPool(style, pool, new Error(`Diff worker pool (${style}) stopped working after setRenderOptions`));
+      }
+    })
+    .catch((cause: unknown) => {
+      if (generation !== poolLifecycleGeneration) return;
+      evictFailedPool(style, pool, cause);
+    });
 };
 
 const ensurePool = (style: WorkerPoolStyle): void => {
-  if (typeof window === 'undefined' || poolsRequested.has(style)) return;
+  if (globalThis.window === undefined || poolsRequested.has(style)) return;
   poolsRequested.add(style);
-  void loadPoolModules().then((modules) => {
-    if (pools[style]) return;
-    const config = WORKER_POOL_CONFIG[style];
-    const pool = new modules.WorkerPoolManager(
-      {
-        workerFactory: modules.workerFactory,
-        poolSize: config.poolSize,
-        totalASTLRUCacheSize: config.totalASTLRUCacheSize,
-        // Highlights tokenizes this much in about a millisecond, less than a
-        // worker round trip, so small files and diffs paint highlighted in
-        // their first frame. Shiki is slower but the threshold stays small.
-        mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
-      },
-      {
-        theme: {
-          light: 'pierre-light',
-          dark: 'pierre-dark',
+  setPoolState(style, 'pending', undefined);
+  const generation = poolLifecycleGeneration;
+  void loadPoolModules()
+    .then(async (modules) => {
+      if (generation !== poolLifecycleGeneration || pools[style]) return;
+      const config = WORKER_POOL_CONFIG[style];
+      const pool = new modules.WorkerPoolManager(
+        {
+          workerFactory: modules.workerFactory,
+          poolSize: config.poolSize,
+          totalASTLRUCacheSize: config.totalASTLRUCacheSize,
+          // Highlights tokenizes this much in about a millisecond, less than a
+          // worker round trip, so small files and diffs paint highlighted in
+          // their first frame. Shiki is slower but the threshold stays small.
+          mainThreadMaxCharacters: MAIN_THREAD_MAX_CHARACTERS,
+          workerInitializationTimeout: workerInitTimeoutOverride,
+          onWorkerError: (event) => {
+            event.preventDefault();
+          },
         },
-        langs: PRELOAD_LANGS,
-        lineDiffType: config.lineDiffType,
-        preferredHighlighter: modules.highlighter,
+        {
+          theme: {
+            light: 'pierre-light',
+            dark: 'pierre-dark',
+          },
+          langs: PRELOAD_LANGS,
+          lineDiffType: config.lineDiffType,
+          preferredHighlighter: modules.highlighter,
+        }
+      );
+      try {
+        await pool.initialize();
+        if (generation !== poolLifecycleGeneration) {
+          terminatePoolSafely(pool);
+          return;
+        }
+        if (!pool.isWorkingPool()) {
+          logWorkerFailureOnce(new Error(`Diff worker pool (${style}) failed to initialize`));
+          terminatePoolSafely(pool);
+          setPoolState(style, 'failed', undefined);
+          return;
+        }
+        await pool.setRenderOptions({
+          theme: currentRenderTheme,
+          lineDiffType: config.lineDiffType,
+        });
+        if (generation !== poolLifecycleGeneration) {
+          terminatePoolSafely(pool);
+          return;
+        }
+        if (!pool.isWorkingPool()) {
+          logWorkerFailureOnce(new Error(`Diff worker pool (${style}) failed to configure render options`));
+          terminatePoolSafely(pool);
+          setPoolState(style, 'failed', undefined);
+          return;
+        }
+        setPoolState(style, 'ready', pool);
+      } catch (cause: unknown) {
+        if (generation !== poolLifecycleGeneration) {
+          terminatePoolSafely(pool);
+          return;
+        }
+        logWorkerFailureOnce(cause);
+        terminatePoolSafely(pool);
+        setPoolState(style, 'failed', undefined);
       }
-    );
-    void pool.initialize();
-    pools[style] = pool;
-    applyRenderOptions(style, pool);
-    notifyPoolListeners();
-  });
+    })
+    .catch((cause: unknown) => {
+      if (generation !== poolLifecycleGeneration) return;
+      logWorkerFailureOnce(cause);
+      setPoolState(style, 'failed', undefined);
+    });
 };
 
 const subscribeToPools = (listener: () => void): (() => void) => {
@@ -126,18 +270,23 @@ const subscribeToPools = (listener: () => void): (() => void) => {
   return () => poolListeners.delete(listener);
 };
 
-const setRenderTheme = (renderTheme: { light: string; dark: string }) => {
+const setRenderTheme = (renderTheme: RenderTheme) => {
   if (currentRenderTheme.light === renderTheme.light && currentRenderTheme.dark === renderTheme.dark) {
     return;
   }
   currentRenderTheme = renderTheme;
-  for (const style of Object.keys(pools) as WorkerPoolStyle[]) {
+  for (const style of WORKER_POOL_STYLES) {
     const pool = pools[style];
-    if (pool) applyRenderOptions(style, pool);
+    if (pool) void applyRenderOptions(style, pool);
   }
 };
 
-export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children }) => {
+interface DiffWorkerProviderComponent extends React.FC<DiffWorkerProviderProps> {
+  _setWorkerInitTimeoutForTesting?: (timeout: number | undefined) => void;
+  _resetPoolsForTesting?: () => void;
+}
+
+export const DiffWorkerProvider: DiffWorkerProviderComponent = ({ children }) => {
   const themeSystem = useOptionalThemeSystem();
 
   const fallbackLight = getDefaultTheme(false);
@@ -160,13 +309,19 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   // with, so ordering is preserved even before this resolves.
   useEffect(() => {
     let cancelled = false;
-    void loadPoolModules().then((modules) => {
-      if (cancelled) return;
-      setRenderTheme({
-        light: modules.ensurePierreThemeRegistered(lightTheme),
-        dark: modules.ensurePierreThemeRegistered(darkTheme),
+    const generation = poolLifecycleGeneration;
+    void loadPoolModules()
+      .then((modules) => {
+        if (cancelled || generation !== poolLifecycleGeneration) return;
+        setRenderTheme({
+          light: modules.ensurePierreThemeRegistered(lightTheme),
+          dark: modules.ensurePierreThemeRegistered(darkTheme),
+        });
+      })
+      .catch((cause: unknown) => {
+        if (cancelled || generation !== poolLifecycleGeneration) return;
+        logWorkerFailureOnce(cause);
       });
-    });
     return () => {
       cancelled = true;
     };
@@ -178,15 +333,20 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   // when it ran during mount. Main-thread Highlights warms with them, so the
   // first code block in chat paints highlighted instead of plain.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (globalThis.window === undefined) return;
     const warm = () => {
       ensurePool('unified');
       ensurePool('split');
-      void import('@/components/chat/markdown/highlightsEngine').then(({ loadHighlights }) => loadHighlights());
+      void import('@/components/chat/markdown/highlightsEngine')
+        .then(({ loadHighlights }) => loadHighlights())
+        .catch(() => {
+          // Non-fatal warmup failure; markdown code blocks render plain until loaded on demand.
+        });
     };
-    if (typeof window.requestIdleCallback === 'function') {
-      const handle = window.requestIdleCallback(warm, { timeout: 5000 });
-      return () => window.cancelIdleCallback(handle);
+    const scheduleIdle = window.requestIdleCallback?.bind(window);
+    if (scheduleIdle) {
+      const handle = scheduleIdle(warm, { timeout: 5000 });
+      return () => window.cancelIdleCallback?.(handle);
     }
     const timeout = window.setTimeout(warm, 2000);
     return () => window.clearTimeout(timeout);
@@ -195,15 +355,39 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   return <>{children}</>;
 };
 
+DiffWorkerProvider._setWorkerInitTimeoutForTesting = (timeout: number | undefined): void => {
+  workerInitTimeoutOverride = timeout;
+};
+
+DiffWorkerProvider._resetPoolsForTesting = (): void => {
+  poolLifecycleGeneration += 1;
+  workerInitTimeoutOverride = undefined;
+  poolModulesPromise = null;
+  hasLoggedWorkerFailure = false;
+  currentRenderTheme = { ...DEFAULT_RENDER_THEME };
+  for (const style of WORKER_POOL_STYLES) {
+    terminatePoolSafely(pools[style]);
+    delete pools[style];
+    poolStates[style] = 'idle';
+    cachedSnapshots[style] = { status: 'pending', pool: undefined };
+  }
+  poolsRequested.clear();
+  poolListeners.clear();
+};
+
 // oxlint-disable-next-line react/only-export-components
-export const useWorkerPool = (style: WorkerPoolStyle = 'unified'): WorkerPoolManager | undefined => {
-  const pool = useSyncExternalStore(
+export const useWorkerPoolState = (style: WorkerPoolStyle = 'unified'): WorkerPoolState => {
+  const state = useSyncExternalStore(
     subscribeToPools,
-    () => pools[style],
-    () => undefined,
+    () => cachedSnapshots[style],
+    () => SERVER_POOL_STATE,
   );
   useEffect(() => {
     ensurePool(style);
   }, [style]);
-  return pool;
+  return state;
 };
+
+// oxlint-disable-next-line react/only-export-components
+export const useWorkerPool = (style: WorkerPoolStyle = 'unified'): WorkerPoolManager | undefined =>
+  useWorkerPoolState(style).pool;

@@ -5,8 +5,10 @@ import { z } from 'zod';
 import type { AgentSessionEvent } from '@oh-my-pi/pi-coding-agent/session/agent-session-events';
 import type { SessionManager } from '@oh-my-pi/pi-coding-agent/session/session-manager';
 import type { SessionEntry } from '@oh-my-pi/pi-coding-agent/session/session-entries';
+import { getLatestTodoPhasesFromEntries, getTodoHudVisibility, isTodoPhase } from '@oh-my-pi/pi-coding-agent/tools/todo';
+import { isClosedTodo } from '@oh-my-pi/pi-tui/tools/todo';
 import { CounterSchema, EntityIdSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, NoticePartSchema, PromptAttachmentSchema, SessionMentionSchema, TokenUsageSchema, parseModelString } from '@openchamber/agent-contract';
-import type { EditPreview, EditPreviewFile, HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionMention, StepTiming, TokenUsage, Turn } from '@openchamber/agent-contract';
+import type { CompactionMethod, EditPreview, EditPreviewFile, HistoryPage, HistoryPageRequest, JsonObject, JsonValue, Message, NoticePart, Part, PromptAttachment, PromptContext, Run, RunOrigin, SessionCompacting, SessionMention, StepTiming, TodoPhase, TodoStatus, TokenUsage, Turn } from '@openchamber/agent-contract';
 import type { ProjectionEvent, ProjectionInput, ProjectionSeed } from '../projection/protocol.ts';
 import { ProjectionError } from '../projection/journal.ts';
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
@@ -213,6 +215,49 @@ const ToolFailureDetailsSchema = z.looseObject({
 });
 const ToolTextBlockSchema = z.looseObject({ type: z.literal('text'), text: z.string() });
 const HostDetailsSchema = z.looseObject({ openchamber: z.json().optional() });
+const CompactionResultExtrasSchema = z.looseObject({
+  tokensAfter: z.number().int().nonnegative().optional(),
+  warning: z.string().optional(),
+});
+const TodoToolResultDetailsSchema = z.looseObject({ op: z.string().optional(), phases: z.array(z.unknown()).optional() });
+
+type NativeTodoPhaseInput = {
+  readonly name: string;
+  readonly tasks: readonly { readonly content: string; readonly status: TodoStatus; readonly blocker?: string }[];
+};
+
+function mapCompactionAction(action: string | undefined): CompactionMethod {
+  switch (action) {
+    case 'context-full':
+    case 'soft':
+      return 'soft-compacted';
+    case 'remote':
+      return 'remote-compacted';
+    case 'shake':
+      return 'shaken';
+    case 'snapcompact':
+      return 'snap-compacted';
+    case 'handoff':
+      return 'handed-off';
+    default:
+      return 'compacted';
+  }
+}
+
+function mapManualCompactionMode(mode: string | undefined): CompactionMethod {
+  switch (mode) {
+    case 'shake':
+      return 'shaken';
+    case 'snapcompact':
+      return 'snap-compacted';
+    case 'remote':
+      return 'remote-compacted';
+    case 'handoff':
+      return 'handed-off';
+    default:
+      return 'soft-compacted';
+  }
+}
 
 /** The text a reader sees for a result: its text blocks, joined. */
 function toolResultText(content: unknown): string {
@@ -323,6 +368,8 @@ export class WorkerProjection {
   private readonly textSuffixes = new Map<string, { suffix: string; context: string }>();
   private lastCacheRead = 0;
   private manualCompactionMode: string | undefined;
+  private compactingState: SessionCompacting | null = null;
+  private lastProjectedTodosJson = '[]';
   private readonly deferredNotices: NoticePart[] = [];
   /**
    * Which message owns each live tool call, and the part its result attaches
@@ -395,7 +442,12 @@ export class WorkerProjection {
       this.deferredNotices.push(noticePart);
     }
   }
-  constructor(private readonly manager: SessionManager, private readonly sessionId: string, privateRoots: readonly PrivateRoot[] = []) {
+  constructor(
+    private readonly manager: SessionManager,
+    private readonly sessionId: string,
+    privateRoots: readonly PrivateRoot[] = [],
+    private readonly readLiveTodos?: () => readonly NativeTodoPhaseInput[],
+  ) {
     this.entryOffset = manager.getBranch().length;
     const roots = new Map(nativePrivateRootContext(manager).map((value) => [value.root, value]));
     for (const value of storageRoots(manager)) roots.set(value.root, value);
@@ -403,6 +455,7 @@ export class WorkerProjection {
     const cwd = manager.getHeader()?.cwd;
     if (cwd) roots.set(cwd, { root: cwd, label: 'workspace' });
     this.privateRoots = [...roots.values()].sort((left, right) => right.root.length - left.root.length);
+    this.lastProjectedTodosJson = JSON.stringify(this.currentTodos());
   }
 
   publicText(text: string, context = ''): string {
@@ -530,6 +583,13 @@ export class WorkerProjection {
           if (event.providerId !== undefined) event.providerId = this.publicText(event.providerId);
           if (event.modelId !== undefined) event.modelId = this.publicText(event.modelId);
           break;
+        case 'session.updated':
+          if (event.todos !== undefined) event.todos = this.sanitizeTodoPhases(event.todos);
+          break;
+        case 'session.compacted':
+          if (event.summary !== undefined) event.summary = this.publicText(event.summary);
+          if (event.warning !== undefined) event.warning = this.publicText(event.warning);
+          break;
         // Text deltas already carry bounded stream context; never reinterpret a chunk as a new path.
         default: break;
       }
@@ -553,8 +613,59 @@ export class WorkerProjection {
     return this.publicText(emitted, context);
   }
 
+  private sanitizeTodoPhases(phases: readonly NativeTodoPhaseInput[]): TodoPhase[] {
+    return phases.map((phase) => ({
+      name: this.publicText(phase.name),
+      tasks: phase.tasks.map((task) => ({
+        content: this.publicText(task.content),
+        status: task.status,
+        ...(task.blocker !== undefined ? { blocker: this.publicText(task.blocker) } : {}),
+      })),
+    }));
+  }
+  private toNativeTodoPhases(phases: readonly NativeTodoPhaseInput[]): TodoPhase[] {
+    return phases.map((phase) => ({
+      name: phase.name,
+      tasks: phase.tasks.map((task) => ({
+        content: task.content,
+        status: task.status,
+        ...(task.blocker !== undefined ? { blocker: task.blocker } : {}),
+      })),
+    }));
+  }
+
+  currentTodos(): TodoPhase[] {
+    const raw = this.readLiveTodos
+      ? this.readLiveTodos()
+      : getLatestTodoPhasesFromEntries(this.manager.getBranch());
+    if (raw.length > 0 && getTodoHudVisibility(this.manager.getBranch(), this.toNativeTodoPhases(raw)) === 'dismissed') {
+      return [];
+    }
+    return this.sanitizeTodoPhases(raw);
+  }
+
+  hasPendingAutoClearTodos(): boolean {
+    const todos = this.currentTodos();
+    if (todos.length === 0) return false;
+    const tasks = todos.flatMap((phase) => phase.tasks);
+    return tasks.length > 0 && tasks.every(isClosedTodo);
+  }
+
+  syncTodosIfChanged(timestamp: number): ProjectionInput | undefined {
+    const todos = this.currentTodos();
+    const serialized = JSON.stringify(todos);
+    if (serialized === this.lastProjectedTodosJson) return undefined;
+    this.lastProjectedTodosJson = serialized;
+    return { timestamp, event: { type: 'session.updated', todos } };
+  }
+
   seed(): ProjectionSeed { return this.readHistory(); }
-  resetSelection(): void { this.entryOffset = this.manager.getBranch().length; }
+  resetSelection(): void {
+    this.entryOffset = this.manager.getBranch().length;
+    this.compactingState = null;
+    this.manualCompactionMode = undefined;
+    this.lastProjectedTodosJson = JSON.stringify(this.currentTodos());
+  }
   activeRun(): Run | null { return this.run; }
   currentTurn(): { turnId: string } | undefined { return this.turn?.open ? { turnId: this.turn.turnId } : undefined; }
   admitQueuedPrompt(message: Extract<NativeMessage, { role: 'user' }>, attachments: PromptAttachment[], context: readonly PromptContext[] = []): string {
@@ -596,6 +707,35 @@ export class WorkerProjection {
     return result;
   }
 
+  private projectCompactionCommitted(
+    method: CompactionMethod,
+    compactionResult: NonNullable<Extract<AgentSessionEvent, { type: 'auto_compaction_end' }>['result']>,
+    timestamp: number,
+    emit: (event: ProjectionEvent) => void,
+  ): void {
+    const latestCompaction = this.manager.getBranch().findLast((entry) => entry.type === 'compaction');
+    const matchedCompaction = latestCompaction
+      && latestCompaction.firstKeptEntryId === compactionResult.firstKeptEntryId
+      && latestCompaction.tokensBefore === compactionResult.tokensBefore
+      ? latestCompaction
+      : undefined;
+    const parsedExtras = CompactionResultExtrasSchema.safeParse(compactionResult);
+    const tokensAfter = (parsedExtras.success ? parsedExtras.data.tokensAfter : undefined) ?? matchedCompaction?.tokensAfter;
+    const warning = (parsedExtras.success ? parsedExtras.data.warning : undefined) ?? matchedCompaction?.warning;
+    emit({
+      type: 'session.compacted',
+      compactionId: randomUUID(),
+      method,
+      tokensBefore: compactionResult.tokensBefore,
+      ...(tokensAfter !== undefined ? { tokensAfter } : {}),
+      ...(compactionResult.summary ? { summary: this.publicText(compactionResult.summary) } : {}),
+      ...(warning ? { warning: this.publicText(warning) } : {}),
+      completedAt: timestamp,
+    });
+    const todoUpdate = this.syncTodosIfChanged(timestamp);
+    if (todoUpdate) emit(todoUpdate.event);
+  }
+
   consume(event: AgentSessionEvent): ProjectionInput[] {
     const queued = event.type === 'message_start' && event.message.role === 'user' ? this.queuedPrompts.get(event.message) : undefined;
     const timestamp = Date.now();
@@ -603,52 +743,42 @@ export class WorkerProjection {
     const emit = (payload: ProjectionEvent): void => { result.push({ timestamp, event: payload }); };
 
     switch (event.type) {
-      case 'manual_compaction_start':
+      case 'auto_compaction_start': {
+        const method = mapCompactionAction(event.action);
+        this.compactingState = { method, reason: event.reason, startedAt: timestamp };
+        emit({ type: 'session.updated', compacting: structuredClone(this.compactingState) });
+        return this.publicEvents(result);
+      }
+      case 'manual_compaction_start': {
         this.manualCompactionMode = event.mode;
-        return result;
+        const method = mapManualCompactionMode(event.mode);
+        this.compactingState = { method, startedAt: timestamp };
+        emit({ type: 'session.updated', compacting: structuredClone(this.compactingState) });
+        return this.publicEvents(result);
+      }
       case 'auto_compaction_end': {
-        if (event.result === undefined || event.aborted || event.willRetry || event.skipped === true) return result;
-        const methodMap: Record<string, 'soft-compacted' | 'remote-compacted' | 'shaken' | 'snap-compacted' | 'handed-off'> = {
-          'context-full': 'soft-compacted',
-          'remote': 'remote-compacted',
-          'shake': 'shaken',
-          'snapcompact': 'snap-compacted',
-          'handoff': 'handed-off',
-        };
-        const method = methodMap[event.action] ?? 'compacted';
-        const tokensAfter = event.result && 'tokensAfter' in event.result && typeof (event.result as { tokensAfter?: unknown }).tokensAfter === 'number'
-          ? (event.result as { tokensAfter: number }).tokensAfter
-          : undefined;
-        emit({
-          type: 'session.compacted',
-          compactionId: randomUUID(),
-          method,
-          tokensBefore: event.result.tokensBefore,
-          tokensAfter,
-          summary: event.result.summary ? this.publicText(event.result.summary) : undefined,
-          completedAt: timestamp,
-        });
+        this.compactingState = null;
+        if (event.result === undefined || event.aborted || event.willRetry || event.skipped === true) {
+          emit({ type: 'session.updated', compacting: null });
+          return this.publicEvents(result);
+        }
+        this.projectCompactionCommitted(mapCompactionAction(event.action), event.result, timestamp, emit);
         return this.publicEvents(result);
       }
       case 'manual_compaction_end': {
-        if (event.result === undefined || event.aborted || event.skipped === true) return result;
+        this.compactingState = null;
         const mode = this.manualCompactionMode;
-        const method = mode === 'shake' ? 'shaken'
-          : mode === 'snapcompact' ? 'snap-compacted'
-            : mode === 'remote' ? 'remote-compacted'
-              : 'soft-compacted';
-        const tokensAfter = event.result && 'tokensAfter' in event.result && typeof (event.result as { tokensAfter?: unknown }).tokensAfter === 'number'
-          ? (event.result as { tokensAfter: number }).tokensAfter
-          : undefined;
-        emit({
-          type: 'session.compacted',
-          compactionId: randomUUID(),
-          method,
-          tokensBefore: event.result.tokensBefore,
-          tokensAfter,
-          summary: event.result.summary ? this.publicText(event.result.summary) : undefined,
-          completedAt: timestamp,
-        });
+        this.manualCompactionMode = undefined;
+        if (event.result === undefined || event.aborted || event.skipped === true) {
+          emit({ type: 'session.updated', compacting: null });
+          return this.publicEvents(result);
+        }
+        this.projectCompactionCommitted(mapManualCompactionMode(mode), event.result, timestamp, emit);
+        return this.publicEvents(result);
+      }
+      case 'todo_auto_clear': {
+        this.lastProjectedTodosJson = '[]';
+        emit({ type: 'session.updated', todos: [] });
         return this.publicEvents(result);
       }
       case 'todo_reminder': {
@@ -961,6 +1091,25 @@ export class WorkerProjection {
           ...(part.type === 'tool_result' && part.errorKind !== undefined ? { errorKind: part.errorKind } : {}),
         });
         this.toolCallPreviews.delete(event.toolCallId);
+        if (event.toolName === 'todo' && !outcome.isError) {
+          const details = TodoToolResultDetailsSchema.safeParse(outcome.details);
+          if (!details.success || details.data.op !== 'view') {
+            const phasesFromDetails = details.success && Array.isArray(details.data.phases)
+              ? details.data.phases.filter(isTodoPhase)
+              : undefined;
+            const rawPhases = this.readLiveTodos
+              ? this.readLiveTodos()
+              : (phasesFromDetails ?? getLatestTodoPhasesFromEntries(this.manager.getBranch()));
+            const todos = rawPhases.length > 0 && getTodoHudVisibility(this.manager.getBranch(), this.toNativeTodoPhases(rawPhases)) === 'dismissed'
+              ? []
+              : this.sanitizeTodoPhases(rawPhases);
+            const serialized = JSON.stringify(todos);
+            if (serialized !== this.lastProjectedTodosJson) {
+              this.lastProjectedTodosJson = serialized;
+              emit({ type: 'session.updated', todos });
+            }
+          }
+        }
         break;
       }
       case 'tool_stream_update': {
@@ -1136,7 +1285,8 @@ export class WorkerProjection {
       // A tool result is a part of the message that made the call, not a
       // message of its own, so only messages that author a row count.
       if ((entry.type === 'message' && visible(entry.message) && entry.message.role !== 'toolResult')
-        || (entry.type === 'custom_message' && entry.customType === 'rewind-report')) version++;
+        || (entry.type === 'custom_message' && entry.customType === 'rewind-report')
+        || entry.type === 'compaction') version++;
       if (entry.type !== 'custom') continue;
       if (entry.customType === BRANCH_TYPE) version++;
       if (entry.customType === REF_TYPE) {
@@ -1191,14 +1341,7 @@ export class WorkerProjection {
         continue;
       }
       if (entry.type === 'compaction') {
-        const rawMethod = entry.method;
-        const method: 'soft-compacted' | 'snap-compacted' | 'shaken' | 'remote-compacted' | 'handed-off' | 'compacted' =
-          rawMethod === 'soft' ? 'soft-compacted'
-            : rawMethod === 'remote' ? 'remote-compacted'
-              : rawMethod === 'shake' ? 'shaken'
-                : rawMethod === 'snapcompact' ? 'snap-compacted'
-                  : rawMethod === 'handoff' ? 'handed-off'
-                    : 'compacted';
+        const method = mapCompactionAction(entry.method);
         const compactionPart: NoticePart = {
           type: 'notice',
           partId: `${entry.id}:compaction`,
@@ -1207,21 +1350,40 @@ export class WorkerProjection {
           details: {
             method,
             tokensBefore: entry.tokensBefore ?? 0,
-            tokensAfter: entry.tokensAfter,
-            summary: entry.summary,
+            ...(entry.tokensAfter !== undefined ? { tokensAfter: entry.tokensAfter } : {}),
+            ...(entry.summary ? { summary: entry.summary } : {}),
+            ...(entry.warning ? { warning: entry.warning } : {}),
           },
         };
         const messageId = opaqueNativeId('message', this.sessionId, entry.id);
-        const turnId = current?.turnId ?? opaqueNativeId('turn', this.sessionId, entry.id);
         const createdAt = Date.parse(entry.timestamp) || Date.now();
+        let turn = current;
+        if (!turn) {
+          const turnId = opaqueNativeId('turn', this.sessionId, entry.id);
+          turn = {
+            turnId,
+            sessionId: this.sessionId,
+            runId: opaqueNativeId('run', this.sessionId, entry.id),
+            userMessageId: messageId,
+            assistantMessageIds: [],
+            status: 'completed',
+            startedAt: createdAt,
+            finishedAt: createdAt,
+          };
+          turns.push(turn);
+          turnById.set(turnId, turn);
+          current = turn;
+        }
+        turn.assistantMessageIds.push(messageId);
         messages.push({
           messageId,
-          turnId,
+          turnId: turn.turnId,
           sessionId: this.sessionId,
           role: 'assistant',
           createdAt,
           parts: [compactionPart],
         });
+        leafMessageId = messageId;
         continue;
       }
       if (entry.type !== 'message' || !visible(entry.message)) continue;
@@ -1331,8 +1493,12 @@ export class WorkerProjection {
     }
     for (const turn of turns) if (turn.error !== undefined) turn.error = this.publicText(turn.error);
     const title = this.manager.getSessionName()?.trim();
+    const todos = this.currentTodos();
+    this.lastProjectedTodosJson = JSON.stringify(todos);
     const seed: ProjectionSeed = {
       createdAt, updatedAt: Math.max(createdAt, updatedAt, messages.at(-1)?.createdAt ?? createdAt), mode, selection: nativeSelection,
+      compacting: this.compactingState ? structuredClone(this.compactingState) : null,
+      todos,
       branch: {
         branchId: `branch:${this.sessionId}`, branchVersion: version.toString(), leafMessageId,
         ...(selection?.revertedMessageId ? { revert: { messageId: selection.revertedMessageId } } : undefined)

@@ -2,7 +2,9 @@
 
 ## Ownership
 
-The app-local `RuntimeWebSocket` plugins own header-bearing direct WebSockets on iOS and Android. Shared selection and socket lifecycle live in `packages/ui/src/lib/relay/native-websocket.ts` and `runtime-socket.ts`. Feature callers use `openRuntimeWebSocket`; SSE remains in the fetch-based event reader.
+The Capacitor shell runs `MobileApp` on the Canonical Client against a Host Gateway serving `/api/agent/v1` and embeds neither the Host server nor the OMP Agent Service. Guest SDK iframes and Guest extension services are not mounted on mobile (`loadGuestCatalog` marks the mobile surface `unsupported`).
+
+Within that shell, the app-local `RuntimeWebSocket` plugins own header-bearing direct WebSockets on iOS and Android. Shared selection and socket lifecycle live in `packages/ui/src/lib/relay/native-websocket.ts` and `runtime-socket.ts`. Feature callers use `openRuntimeWebSocket`; SSE remains in the fetch-based event reader.
 
 ## Invariants
 
@@ -16,7 +18,7 @@ The app-local `RuntimeWebSocket` plugins own header-bearing direct WebSockets on
 
 ### Why the socket task factory is separate from the Capacitor plugin
 
-The Foundation-only factory lets the native regression test receive large snapshots through the production URLSession task configuration without loading a WebView or building the app. Run `node --test scripts/runtime-websocket.test.mjs` from `packages/mobile` on macOS with Swift installed. This covers Foundation receive behavior; plugin bridge delivery and device reconnect still need an app check.
+The Foundation-only factory lets the native regression test receive large snapshots through the production URLSession task configuration without loading a WebView or building the app. Run `node --test scripts/runtime-websocket.test.mjs` from `packages/mobile` on macOS with Swift installed, and `node --test scripts/with-mobile-env.test.mjs` for toolchain resolution on Linux and macOS. `runtime-websocket.test.mjs` covers Foundation receive behavior; plugin bridge delivery, physical-device reconnect, and app-level runtime verification belong to M7 (`.workflow/specs/m7-release-verification.md`).
 
 ### Why native sockets and not browser WebSockets
 

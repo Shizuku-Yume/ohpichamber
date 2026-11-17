@@ -330,6 +330,7 @@ export interface SessionCompactedEvent extends DataEventEnvelope {
 ```
 
 Messages strictly adhere to three roles: `'user' | 'assistant' | 'system'`. There is no compaction message role. Step summaries within turns are represented as `StepSummaryPart` (`type: 'step_summary'`, `partId`, `title`, optional `durationMs`) inside `message.parts`. When a `session.compacted` event is received by the directory reducer, it marks a structural recovery condition and requests a full resnapshot.
+Live compaction state (`snapshot.compacting`) is projected via `session.updated` (`compacting: { method, reason?, startedAt } | null`) and cleared either by `compacting: null` on aborted/skipped/retry endings or by authoritative snapshot recovery on `session.compacted`. OMP's active todo checklist (`snapshot.todos`) is likewise projected via `session.updated` (`todos: TodoPhase[]`, including `[]` on `todo_auto_clear`) and read directly by `TodoTray` without scanning transcript tool parts.
 
 ## Workspace lifecycle and directory eviction
 

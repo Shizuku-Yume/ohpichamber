@@ -19,10 +19,12 @@ import { cfgTaskDisabledAgents, cfgTaskAgentModelOverrides } from '@oh-my-pi/pi-
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import { AgentSchema, AgentCatalogSchema, AgentCreateRequestSchema, AgentUpdateRequestSchema, AgentDeleteRequestSchema, AgentMutationResultSchema, parseModelSelector, parseRoleAlias, PositiveCounterSchema, type Agent, type AgentCatalog, type AgentCreateRequest, type AgentUpdateRequest, type AgentDeleteRequest, type AgentMutationResult, type AgentThinkingLevel, formatModelRef } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
+import type { NativeModels } from './catalog-models.ts';
 
 export type NativeAgentsContext = {
   cwd: string;
   agentDirectory: string;
+  models: NativeModels;
   modelRegistry: ModelRegistry;
   settings: Settings;
   extensionRoots: EffectiveExtensionRoots;
@@ -77,9 +79,7 @@ export class NativeAgents {
   }
 
   private async discover(includeDisabled = false): Promise<AgentDefinition[]> {
-    try { await this.context.settings.reloadFromDisk(); }
-    catch { throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Native settings could not be read'); }
-    await this.context.modelRegistry.reapplyModelPolicies();
+    await this.context.models.ensurePoliciesCurrent();
     // Use the native discovery roots and precedence, but select this worker's authorized user directory.
     // Native discoverAgents uses the process-global default user directory and masks filesystem failures.
     const project = findAllNearestProjectConfigDirs('agents', this.context.cwd).find(entry => entry.source === '.omp');

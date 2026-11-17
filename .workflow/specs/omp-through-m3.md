@@ -1,6 +1,6 @@
 # OMP migration through M3
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 
 ## What this is for

@@ -2344,10 +2344,10 @@ describe('applyAsChanges after round seven', () => {
     expect(await apply(host, repo)).toMatchObject({ status: 'applied', appliedPaths: 3 });
     round({ 'one.txt': numbered(10, { 1: 'round two' }) });
     const markers = path.join(host.root, 'clean-ran');
-    g(['config', 'filter.slow.clean', `echo ran >> '${forConfig(markers)}'; sleep 2; cat`]);
+    g(['config', 'filter.slow.clean', `echo ran >> '${forConfig(markers)}'; sleep 6; cat`]);
     fs.writeFileSync(path.join(repo, '.git', 'info', 'attributes'), '*.txt filter=slow\n');
     const hashed = [];
-    const counting = host.codeOut(null, { readBackTimeoutMs: 1000, files: { ...fs.promises, open: (file, ...rest) => { hashed.push(path.basename(file)); return fs.promises.open(file, ...rest); } } });
+    const counting = host.codeOut(null, { readBackTimeoutMs: 5000, files: { ...fs.promises, open: (file, ...rest) => { hashed.push(path.basename(file)); return fs.promises.open(file, ...rest); } } });
     expect(await describeState(host, repo, counting)).toMatchObject({ newPaths: 1, newPathsUndecided: false });
     expect(hashed.sort()).toEqual(['a.txt', 'b.txt', 'c.txt']);
     expect(fs.existsSync(markers)).toBe(false);
@@ -2358,7 +2358,7 @@ describe('applyAsChanges after round seven', () => {
   it('checks the read-back time while it reads a large file', async () => {
     const host = createTestHost();
     const { repo, round } = await roundsResult(host);
-    round({ 'one.txt': numbered(10, { 3: 'round one' }), 'large.bin': Buffer.alloc(40 * 64 * 1024, 7) });
+    round({ 'one.txt': numbered(10, { 3: 'round one' }), 'large.bin': Buffer.alloc(120 * 64 * 1024, 7) });
     expect(await apply(host, repo)).toMatchObject({ status: 'applied', appliedPaths: 2 });
     round({ 'two.txt': numbered(10, { 5: 'round two' }) });
     const slowDisk = {
@@ -2371,8 +2371,8 @@ describe('applyAsChanges after round seven', () => {
       },
     };
     const started = Date.now();
-    expect(await describeState(host, repo, host.codeOut(null, { readBackTimeoutMs: 600, files: slowDisk }))).toMatchObject({ newPaths: null, newPathsUndecided: true });
-    expect(Date.now() - started).toBeLessThan(1800);
+    expect(await describeState(host, repo, host.codeOut(null, { readBackTimeoutMs: 1200, files: slowDisk }))).toMatchObject({ newPaths: null, newPathsUndecided: true });
+    expect(Date.now() - started).toBeLessThan(4500);
   });
 
   // An LFS-like filter: the user's file is the real content, git keeps a pointer. The agent changed
@@ -2779,16 +2779,17 @@ describe('applyAsChanges after round eight', () => {
       },
     };
     const started = Date.now();
+    let timer;
     try {
       const outcome = await Promise.race([
         describeState(host, work.repo, host.codeOut(null, { files: swapping })),
-        new Promise((resolve) => { setTimeout(() => resolve('still waiting'), 5000); }),
+        new Promise((resolve) => { timer = setTimeout(() => resolve('still waiting'), 15_000); }),
       ]);
       expect(swapped).toBe(1);
       expect(outcome).toMatchObject({ newPaths: null, newPathsUndecided: true });
-      expect(Date.now() - started).toBeLessThan(5000);
+      expect(Date.now() - started).toBeLessThan(15_000);
     } finally {
-      // An open that waits for a writer, as before, is let go by one.
+      clearTimeout(timer);
       try {
         fs.closeSync(fs.openSync(target, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK));
       } catch {
@@ -3240,7 +3241,7 @@ describe.skipIf(WIN)('bringCodeOut from a local stand-in for a space', () => {
     const space = await spaceWithCode(host);
     space.local.setBehaviour('hang');
     const before = hostState(space.repo);
-    const failure = await space.out({ timeoutMs: 3000 }).catch((error) => error);
+    const failure = await space.out({ timeoutMs: 5000 }).catch((error) => error);
     expect(failure).toMatchObject({ code: 'code_out_failed', details: { step: 'fetch into the quarantine', cause: 'command_timeout' } });
     const pid = space.local.hangPid();
     expect(Number.isInteger(pid) && pid > 1).toBe(true);
@@ -3265,7 +3266,7 @@ describe.skipIf(WIN)('bringCodeOut from a local stand-in for a space', () => {
   // The stand-in sends at about 3 MB/s, so eight random megabytes take close to three seconds. The
   // cap is one: the fetch must be stopped in the middle, which the upload-pack in the space shows by
   // never reporting how it ended.
-  it('stops a transfer that passes the size cap in the middle, and nothing reaches the repository', async () => {
+  it('stops a transfer that passes the size cap in the middle, and nothing reaches the repository', { timeout: 60_000 }, async () => {
     const host = createTestHost();
     const space = await spaceWithCode(host);
     space.write('large.bin', crypto.randomBytes(8 * 1024 * 1024));

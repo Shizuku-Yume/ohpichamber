@@ -2,12 +2,16 @@ import { afterEach, beforeEach, expect, test } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { YAML } from 'bun';
 import { BUILTIN_TOOL_NAMES } from '@oh-my-pi/pi-coding-agent/tools/builtin-names';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
 import { loadBundledAgents } from '@oh-my-pi/pi-coding-agent/task/agents';
+import { cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
+import { NativeModels } from './catalog-models.ts';
 import { NativeAgents } from './catalog-agents.ts';
 import { nativeExtensionRoots, nativeModelsContext, openNativeRuntime } from './native-runtime.ts';
+import { captureNativePolicy } from './native-policy-snapshot.ts';
 import { StatelessWorker } from './stateless.ts';
 import { WorkerSession } from './session.ts';
 
@@ -36,7 +40,7 @@ test('agent profile mutations round-trip through native markdown and model resol
       }
     }, '2');
     const agents = new NativeAgents({
-      cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES
     });
     const agent = {
@@ -68,7 +72,7 @@ test('an agent write creates a profile that can be read back', async () => {
   const runtime = await openNativeRuntime({ cwd, agentDirectory });
   try {
     const agents = new NativeAgents({
-      cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES,
     });
     await agents.create({ expectedRevision: '0', agent: { agentId: 'test-owner', name: 'Test owner', description: 'Test proof', model: null, allowedTools: null } }, '1');
@@ -91,7 +95,7 @@ test('bundled profiles expose only tools installed in the native worker', async 
   const runtime = await openNativeRuntime({ cwd, agentDirectory });
   try {
     const agents = new NativeAgents({
-      cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       extensionRoots: nativeExtensionRoots(runtime.settings),
       availableToolNames: () => ['read', 'grep', 'glob', 'web_search']
     });
@@ -115,7 +119,7 @@ test('canonical profiles distinguish inherit null, explicit none and exact array
   const available = ['read', 'write', 'edit', 'bash', 'grep', 'glob', 'find', 'yield'];
   try {
     const agents = new NativeAgents({
-      cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => available
     });
     const catalog = await agents.read('workspace_1', '0');
@@ -149,12 +153,20 @@ test('a long-lived native profile reader observes bundled deletion and subsequen
   const runtime = await openNativeRuntime({ cwd, agentDirectory });
   const readerSettings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
   const readerRegistry = new ModelRegistry(runtime.authStorage, runtime.modelsPath, { settings: readerSettings });
+  const readerModels = new NativeModels({
+    modelRegistry: readerRegistry,
+    authStorage: runtime.authStorage,
+    settings: readerSettings,
+    modelsPath: runtime.modelsPath,
+    oauthProviderIds: () => new Set<string>(),
+    currentNativeSessionId: () => 'reader-session',
+  });
   const owner = new NativeAgents({
-    cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+    cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
     extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES
   });
   const reader = new NativeAgents({
-    cwd, agentDirectory, modelRegistry: readerRegistry, settings: readerSettings,
+    cwd, agentDirectory, models: readerModels, modelRegistry: readerRegistry, settings: readerSettings,
     extensionRoots: nativeExtensionRoots(readerSettings), availableToolNames: () => BUILTIN_TOOL_NAMES
   });
   const bundled = loadBundledAgents()[0];
@@ -205,7 +217,7 @@ You are an agent with legacy preset metadata.
   const runtime = await openNativeRuntime({ cwd, agentDirectory });
   try {
     const agents = new NativeAgents({
-      cwd, agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES
     });
     const catalog = await agents.read('workspace_1', '0');
@@ -249,6 +261,64 @@ You are an agent with legacy preset metadata.
     await sessionWorker.close();
   } finally {
     runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('NativeAgents.read and captureNativePolicy skip reapplyModelPolicies when inputs are unchanged and reapply once per change', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-agents-policy-guard-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  const writerSettings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
+  const original = runtime.modelRegistry.reapplyModelPolicies.bind(runtime.modelRegistry);
+  let reapplyCalls = 0;
+  runtime.modelRegistry.reapplyModelPolicies = () => {
+    reapplyCalls += 1;
+    return original();
+  };
+  try {
+    const agents = new NativeAgents({
+      cwd, agentDirectory, models: runtime.models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      extensionRoots: nativeExtensionRoots(runtime.settings), availableToolNames: () => BUILTIN_TOOL_NAMES,
+    });
+    const snapshotInput = { projectId: 'project_1', workspaceId: 'workspace_1', cwd, agentDirectory, agentDirectoryId: 'source' };
+    await agents.read('workspace_1', '0');
+    await captureNativePolicy(snapshotInput, runtime, agents, []);
+    await agents.read('workspace_1', '0');
+    await captureNativePolicy(snapshotInput, runtime, agents, []);
+    expect(reapplyCalls).toBe(0);
+
+    // Policy setting change triggers exactly one reapply across read and policy snapshot.
+    cfgExtendedContext.set(writerSettings, !cfgExtendedContext.get(runtime.settings));
+    await writerSettings.flush();
+    await agents.read('workspace_1', '1');
+    expect(reapplyCalls).toBe(1);
+    await captureNativePolicy(snapshotInput, runtime, agents, []);
+    expect(reapplyCalls).toBe(1);
+
+    // models.yml change triggers exactly one reapply on captureNativePolicy, then stays at 0 on repeat reads.
+    await writeFile(runtime.modelsPath, YAML.stringify({
+      providers: {
+        'agents-guard-loopback': {
+          baseUrl: 'http://127.0.0.1:18080/v1',
+          auth: 'none',
+          api: 'openai-completions',
+          models: [{ id: 'guard-model', name: 'Guard Model', contextWindow: 8192, maxTokens: 256 }],
+        },
+      },
+    }), 'utf8');
+    await captureNativePolicy(snapshotInput, runtime, agents, []);
+    expect(reapplyCalls).toBe(2);
+    await agents.read('workspace_1', '2');
+    await captureNativePolicy(snapshotInput, runtime, agents, []);
+    expect(reapplyCalls).toBe(2);
+  } finally {
+    runtime.authStorage.close();
+    writerSettings.cancelPendingSaves();
     resetSettingsForTest();
     await rm(root, { recursive: true, force: true });
   }

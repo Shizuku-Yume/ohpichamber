@@ -6,6 +6,8 @@ import { setSyncRefs } from "./sync-refs"
 import { useSessionUIStore } from "./session-ui-store"
 import { useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
 import { registerWorkspaceDirectory, resetWorkspaceDirectories } from "@/stores/globalSessions"
+import { useProjectsStore } from "@/stores/useProjectsStore"
+import { subscribeSessionAdmission } from "./session-admission"
 
 /**
  * Selecting a session whose directory this client has not indexed yet routes it
@@ -138,5 +140,33 @@ describe("adoptAuthoritativeSessionDirectory", () => {
 
     expect(useSessionUIStore.getState().currentSessionId).toBe("ses_other")
     expect(useSessionUIStore.getState().currentSessionDirectory).toBe(before)
+  })
+
+  test("restores a cold-start parked session once projects and global discovery bind its directory", () => {
+    const previousProjects = useProjectsStore.getState().projects
+    useProjectsStore.setState({ projects: [] })
+    useGlobalSessionsStore.getState().resetForRuntimeSwitch()
+    useSessionUIStore.getState().setCurrentSession(SESSION_ID, PARENT)
+
+    const unsubscribe = subscribeSessionAdmission()
+    try {
+      // Unadmitted startup state parks the session while projects/global load.
+      expect(useSessionUIStore.getState().currentSessionId).toBeNull()
+
+      // Projects arrive before global session discovery completes: parked must survive.
+      useProjectsStore.setState({ projects: [{ id: "proj-1", path: PARENT, addedAt: 1 }] })
+      expect(useSessionUIStore.getState().currentSessionId).toBeNull()
+
+      // Global discovery finishes and binds the session's workspace directory.
+      registerWorkspaceDirectory("workspace-adoption", PARENT)
+      useGlobalSessionsStore.getState().applySnapshot([session(SESSION_ID, "workspace-adoption")], [], "ready")
+
+      expect(useSessionUIStore.getState().currentSessionId).toBe(SESSION_ID)
+      expect(useSessionUIStore.getState().currentSessionDirectory).toBe(PARENT)
+    } finally {
+      unsubscribe()
+      useProjectsStore.setState({ projects: previousProjects })
+      useGlobalSessionsStore.getState().resetForRuntimeSwitch()
+    }
   })
 })

@@ -125,17 +125,21 @@ export const subscribeSessionAdmission = (): (() => void) => {
   const gateSelection = () => {
     if (!current()) return;
     const ui = useSessionUIStore.getState();
-    const records = useGlobalSessionsStore.getState().entityById;
+    const global = useGlobalSessionsStore.getState();
+    const records = global.entityById;
     if (parked) {
       const record = records.get(parked.id);
       const directory = record ? resolveGlobalSessionDirectory(record) : null;
-      // Any navigation since, a draft included, replaces the parked session.
-      if (ui.currentSessionId || parked.revision !== getAdmissionNavigationRevision() || !directory) parked = null;
-      else if (isSessionAdmitted(directory)) {
+      // Any navigation since replaces the parked session; keep waiting while
+      // cold discovery has not yet indexed it or resolved its directory.
+      if (ui.currentSessionId || parked.revision !== getAdmissionNavigationRevision()) parked = null;
+      else if (directory && isSessionAdmitted(directory)) {
         const { id } = parked;
         parked = null;
         void ui.setCurrentSession(id, directory);
         return;
+      } else if (global.hasLoaded && !record) {
+        parked = null;
       }
     }
     const selectedRecord = ui.currentSessionId ? records.get(ui.currentSessionId) : null;

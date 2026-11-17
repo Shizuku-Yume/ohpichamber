@@ -35,6 +35,33 @@ export const resolveWorkspaceDirectory = (workspaceId: string): string | null =>
   ensureDirectoryRuntime();
   return directoriesByWorkspaceId.get(workspaceId) ?? null;
 };
+/**
+ * Resolves a workspace's relative `displayPath` against its admitted project
+ * root directory. Absolute inputs or paths escaping the filesystem root return
+ * null so only verified Host-relative paths reach workspace admission.
+ */
+export const resolveWorkspaceDisplayPath = (root: string, displayPath: string): string | null => {
+  const normalizedRoot = normalizePath(root);
+  if (!normalizedRoot) return null;
+  const trimmed = displayPath.trim().replace(/\\/g, '/');
+  if (!trimmed || trimmed === '.') return normalizedRoot;
+  if (trimmed.startsWith('/') || /^[A-Za-z]:/.test(trimmed)) return null;
+  const driveMatch = /^([A-Za-z]:)(?:\/(.*))?$/.exec(normalizedRoot);
+  const prefix = driveMatch ? driveMatch[1]! : normalizedRoot.startsWith('/') ? '/' : null;
+  if (!prefix) return null;
+  const baseBody = driveMatch ? (driveMatch[2] ?? '') : normalizedRoot.slice(1);
+  const stack = baseBody.split('/').filter(Boolean);
+  for (const segment of trimmed.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      if (stack.length === 0) return null;
+      stack.pop();
+      continue;
+    }
+    stack.push(segment);
+  }
+  return prefix === '/' ? `/${stack.join('/')}` : `${prefix}/${stack.join('/')}`;
+};
 
 export const resetWorkspaceDirectories = (): void => {
   directoriesByWorkspaceId.clear();

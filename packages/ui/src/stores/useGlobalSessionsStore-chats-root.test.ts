@@ -5,8 +5,9 @@ import { hostFilesystem } from '@/lib/host-filesystem';
 import { switchRuntimeEndpoint } from '@/lib/runtime-switch';
 import { flushPendingSessionWrites, persistManagedChatSessions, readManagedChatSessions } from '@/sync/persist-cache';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
-import { registerWorkspaceDirectory } from './globalSessions';
+import { registerWorkspaceDirectory, resolveWorkspaceDirectory } from './globalSessions';
 import { useGlobalSessionsStore } from './useGlobalSessionsStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 
 class TestStorage implements Storage {
   readonly values = new Map<string, string>();
@@ -154,5 +155,58 @@ describe('native global managed-chat readiness', () => {
       expect(useGlobalSessionsStore.getState().activeSessions).toEqual([]);
       expect(readManagedChatSessions()).toEqual([]);
     } finally { list.mockRestore(); }
+  });
+
+  test('cold load binds per-chat workspace directories from listWorkspaces and promotes a guessed session selection', async () => {
+    const perChatDirectory = '/srv/chats/2026-11-16/session-one';
+    const perChatSession: Session = {
+      sessionId: 'ses_per_chat',
+      projectId: 'pro_chats',
+      workspaceId: 'wsp_per_chat',
+      displayPath: '2026-11-16/session-one',
+      rootSessionId: 'ses_per_chat',
+      createdAt: 1,
+      updatedAt: 2,
+      epoch: 'epoch',
+      headSequence: '0',
+      runtimeStatus: 'idle',
+      activeRunId: null,
+      mode: { kind: 'main' },
+      title: 'Per-chat session',
+      metadata: {},
+      metadataRevision: '1',
+      archiveRevision: '0',
+    };
+    resolveWorkspace.mockImplementation(async (directory) => {
+      if (directory === '/srv/chats') {
+        return { workspaceId: 'wsp_chats_root', projectId: 'pro_chats', name: 'Chats', displayPath: '.' };
+      }
+      if (directory === perChatDirectory) {
+        return { workspaceId: 'wsp_per_chat', projectId: 'pro_chats', name: 'session-one', displayPath: '2026-11-16/session-one' };
+      }
+      return { workspaceId: 'wsp_project', projectId: 'pro_project', name: 'Project', displayPath: '.' };
+    });
+    const listWorkspaces = spyOn(canonicalClient, 'listWorkspaces').mockResolvedValue({
+      items: [
+        { workspaceId: 'wsp_chats_root', projectId: 'pro_chats', name: 'Chats', displayPath: '.' },
+        { workspaceId: 'wsp_per_chat', projectId: 'pro_chats', name: 'session-one', displayPath: '2026-11-16/session-one' },
+      ],
+      errors: {},
+    });
+    const list = spyOn(canonicalClient, 'listSessions').mockResolvedValue({ items: [perChatSession], errors: {} });
+    try {
+      // Simulate opening ?session=ses_per_chat on cold start before global load has bound wsp_per_chat.
+      useSessionUIStore.getState().setCurrentSession('ses_per_chat');
+      expect(useSessionUIStore.getState().currentSessionDirectory).not.toBe(perChatDirectory);
+
+      await useGlobalSessionsStore.getState().loadSessions();
+
+      expect(resolveWorkspaceDirectory('wsp_per_chat')).toBe(perChatDirectory);
+      expect(useGlobalSessionsStore.getState().structure.activeIdsByDirectory.get(perChatDirectory)).toEqual(['ses_per_chat']);
+      expect(useSessionUIStore.getState().currentSessionDirectory).toBe(perChatDirectory);
+    } finally {
+      listWorkspaces.mockRestore();
+      list.mockRestore();
+    }
   });
 });

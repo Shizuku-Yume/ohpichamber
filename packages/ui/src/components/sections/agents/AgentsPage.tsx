@@ -485,30 +485,27 @@ export const AgentsPage: React.FC = () => {
           className="w-full font-mono typography-meta min-h-[120px] max-h-[60vh] bg-transparent" />
       </SettingsSection>
       <SettingsSection title={t('settings.agents.page.section.toolPermissions')} settingsItem="agents.permissions" contentClassName={SETTINGS_SPACE_ROW_CLASS}>
-        <SettingsStackedField
-          settingsItem="agents.allowed-tools"
-          label={t('settings.agents.page.field.allowedTools')}
-          controlClassName="w-full max-w-none flex-col items-stretch"
-        >
-          {toolsCatalogError && (
-            <div role="status" className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between gap-2">
-              <span>{t('common.unavailable')}</span>
-              <Button size="xs" variant="outline" onClick={() => setCatalogRetryCount((c) => c + 1)}>
-                {t('settings.agents.page.permissionsEditor.actions.retry')}
-              </Button>
-            </div>
-          )}
-          <AgentPermissionsEditor
-            allowedTools={form.allowedTools}
-            toolsCatalog={toolsCatalog}
-            disabled={Boolean(toolsCatalogError)}
-            onChange={(nextTools) => {
-              if (toolsCatalogError) return;
-              setForm((current) => ({ ...current, allowedTools: nextTools }));
-              requestSave();
-            }}
-          />
-        </SettingsStackedField>
+        {toolsCatalogError ? (
+          <div
+            role="status"
+            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 px-3 py-2 typography-meta text-[var(--status-warning)]"
+          >
+            <span>{t('common.unavailable')}</span>
+            <Button size="xs" variant="outline" onClick={() => setCatalogRetryCount((c) => c + 1)}>
+              {t('settings.agents.page.permissionsEditor.actions.retry')}
+            </Button>
+          </div>
+        ) : null}
+        <AgentPermissionsEditor
+          allowedTools={form.allowedTools}
+          toolsCatalog={toolsCatalog}
+          disabled={Boolean(toolsCatalogError)}
+          onChange={(nextTools) => {
+            if (toolsCatalogError) return;
+            setForm((current) => ({ ...current, allowedTools: nextTools }));
+            requestSave();
+          }}
+        />
       </SettingsSection>
       {isNewAgent && <div className="flex items-center gap-2 pb-8">
         <Button onClick={() => void handleCreate()} disabled={isCreating || !form.name.trim()} size="xs" className="!font-normal">

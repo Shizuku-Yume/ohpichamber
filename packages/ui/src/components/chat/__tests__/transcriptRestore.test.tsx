@@ -288,4 +288,48 @@ describe('restored transcript composition', () => {
         await renderRow(undefined);
         expect(rowElement()?.classList.contains('pb-2')).toBe(true);
     });
+
+    test('a long answer splits across rows without drawing itself twice', async () => {
+        const { default: ChatMessage } = await import('../ChatMessage');
+        const { MessageSliceContext } = await import('../message/messageSliceContext');
+        const { answerChunkCuts } = await import('../lib/turns/answerChunks');
+
+        // Ten paragraphs, well past the chunk threshold.
+        const paragraphs = Array.from({ length: 10 }, (_, index) => `Paragraph ${index + 1} of the answer ${'detail '.repeat(90)}`);
+        const longText = paragraphs.join('\n\n');
+        const cuts = answerChunkCuts(longText);
+        expect(cuts.length).toBeGreaterThan(0);
+
+        const longMessage = message('long', 'assistant', [text('long-text', longText)], 2);
+        const boundaries = [...cuts.map((offset) => ({ partId: 'long-text', offset }))];
+        const rows = [
+            { to: boundaries[0], index: 0, count: boundaries.length + 1 },
+            ...boundaries.slice(1).map((cut, index) => ({
+                from: boundaries[index], to: cut, index: index + 1, count: boundaries.length + 1,
+            })),
+            { from: boundaries[boundaries.length - 1], index: boundaries.length, count: boundaries.length + 1 },
+        ];
+
+        await act(async () => root.render(
+            <Providers>
+                {rows.map((slice) => (
+                    <MessageSliceContext.Provider key={slice.index} value={slice}>
+                        <ChatMessage message={longMessage} />
+                    </MessageSliceContext.Provider>
+                ))}
+            </Providers>,
+        ));
+
+        // Each paragraph appears exactly once across the rows: every row draws
+        // only its own stretch of the answer.
+        for (let index = 0; index < paragraphs.length; index += 1) {
+            const marker = `Paragraph ${index + 1} of the answer`;
+            const occurrences = container.textContent?.split(marker).length ?? 0;
+            expect(occurrences - 1).toBe(1);
+        }
+        expect(container.querySelectorAll('[data-message-id="long"]')).toHaveLength(rows.length);
+        expect(container.querySelectorAll('[data-message-slice]')).toHaveLength(rows.length - 1);
+        // Only the last row ends the message.
+        expect(container.querySelectorAll('[data-message-continues]')).toHaveLength(rows.length - 1);
+    });
 });

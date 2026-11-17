@@ -25,6 +25,7 @@ let runtime = 0;
 let request = deferred<SessionDiscoveryResult>();
 let list = spyOn(canonicalClient, 'listSessions');
 let resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace');
+let listWorkspaces = spyOn(canonicalClient, 'listWorkspaces');
 let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
 let subagents = spyOn(canonicalClient, 'listSubagents');
 
@@ -35,6 +36,7 @@ beforeEach(async () => {
   await ensureChatsRootDirectory();
   request = deferred<SessionDiscoveryResult>();
   list = spyOn(canonicalClient, 'listSessions').mockImplementation(() => request.promise);
+  listWorkspaces = spyOn(canonicalClient, 'listWorkspaces').mockResolvedValue({ items: [], errors: {} });
   subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
     workspaceId: directory === '/repo' ? 'wsp_repo' : directory === '/other' ? 'wsp_other' : 'wsp_hint',
@@ -49,6 +51,7 @@ beforeEach(async () => {
 afterEach(() => {
   list.mockRestore();
   resolveWorkspace.mockRestore();
+  listWorkspaces.mockRestore();
   home.mockRestore();
   subagents.mockRestore();
 });

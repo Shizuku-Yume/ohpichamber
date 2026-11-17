@@ -159,15 +159,14 @@ const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyM
 
 const bindKnownWorkspaceDirectories = async (generation: number): Promise<{
   projectRootsById: Map<string, string>;
+  /** The store action itself, called once the discovery snapshot has committed. */
   adoptGuessedSession: () => void;
 }> => {
   const [{ useProjectsStore }, { useSessionUIStore }] = await Promise.all([
     import('@/stores/useProjectsStore'), import('@/sync/session-ui-store'),
   ]);
   const projectRootsById = new Map<string, string>();
-  const adoptGuessedSession = () => {
-    useSessionUIStore.getState().adoptAuthoritativeSessionDirectory();
-  };
+  const adoptGuessedSession = useSessionUIStore.getState().adoptAuthoritativeSessionDirectory;
   if (generation !== loadGeneration) return { projectRootsById, adoptGuessedSession };
   const directoryState = useDirectoryStore.getState();
   const sessionState = useSessionUIStore.getState();
@@ -181,9 +180,9 @@ const bindKnownWorkspaceDirectories = async (generation: number): Promise<{
     ...[...sessionState.worktreeMetadata.values()].map((worktree) => worktree.path),
     ...(chatsRoot ? [chatsRoot] : []),
   ]);
-  const listedWorkspacesPromise = typeof canonicalClient.listWorkspaces === 'function'
-    ? canonicalClient.listWorkspaces().catch(() => null)
-    : Promise.resolve(null);
+  // A failed workspace list only means no derived directories this pass; the
+  // candidate loop below still admits every directory it can resolve.
+  const listedWorkspacesPromise = canonicalClient.listWorkspaces().catch(() => null);
   await mapWithConcurrency([...candidates], DIRECTORY_SESSION_REFRESH_CONCURRENCY, async (directory) => {
     if (generation !== loadGeneration) return;
     try {

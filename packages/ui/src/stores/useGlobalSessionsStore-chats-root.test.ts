@@ -30,6 +30,7 @@ let runtime = 0;
 const nextRuntime = () => switchRuntimeEndpoint({ apiBaseUrl: 'https://native-store-chats.test', runtimeKey: `native-store-chats-${++runtime}` });
 let home = spyOn(hostFilesystem, 'getFilesystemHomeInfo');
 let resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace');
+let listWorkspaces = spyOn(canonicalClient, 'listWorkspaces');
 let subagents = spyOn(canonicalClient, 'listSubagents');
 const originalStorage = globalThis.localStorage;
 
@@ -39,6 +40,7 @@ beforeEach(() => {
   nextRuntime();
   useGlobalSessionsStore.getState().resetForRuntimeSwitch();
   home = spyOn(hostFilesystem, 'getFilesystemHomeInfo').mockResolvedValue({ home: '/home/user', chatsRoot: '/srv/chats' });
+  listWorkspaces = spyOn(canonicalClient, 'listWorkspaces').mockResolvedValue({ items: [], errors: {} });
   subagents = spyOn(canonicalClient, 'listSubagents').mockResolvedValue([]);
   resolveWorkspace = spyOn(canonicalClient, 'resolveWorkspace').mockImplementation(async (directory) => ({
     workspaceId: directory === savedDirectory ? 'wsp_saved' : 'wsp_hint', projectId: 'pro_chats', name: 'Chat',
@@ -49,6 +51,7 @@ afterEach(() => {
   flushPendingSessionWrites();
   home.mockRestore();
   resolveWorkspace.mockRestore();
+  listWorkspaces.mockRestore();
   subagents.mockRestore();
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: originalStorage });
 });
@@ -186,7 +189,7 @@ describe('native global managed-chat readiness', () => {
       }
       return { workspaceId: 'wsp_project', projectId: 'pro_project', name: 'Project', displayPath: '.' };
     });
-    const listWorkspaces = spyOn(canonicalClient, 'listWorkspaces').mockResolvedValue({
+    listWorkspaces.mockResolvedValue({
       items: [
         { workspaceId: 'wsp_chats_root', projectId: 'pro_chats', name: 'Chats', displayPath: '.' },
         { workspaceId: 'wsp_per_chat', projectId: 'pro_chats', name: 'session-one', displayPath: '2026-11-16/session-one' },
@@ -205,8 +208,8 @@ describe('native global managed-chat readiness', () => {
       expect(useGlobalSessionsStore.getState().structure.activeIdsByDirectory.get(perChatDirectory)).toEqual(['ses_per_chat']);
       expect(useSessionUIStore.getState().currentSessionDirectory).toBe(perChatDirectory);
     } finally {
-      listWorkspaces.mockRestore();
       list.mockRestore();
+      listWorkspaces.mockResolvedValue({ items: [], errors: {} });
     }
   });
 });

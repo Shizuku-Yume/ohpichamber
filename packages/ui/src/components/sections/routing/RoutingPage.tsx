@@ -1,7 +1,7 @@
 import React from 'react';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/icon/Icon';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,6 @@ import {
   SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
   SETTINGS_SPACE_CHECKBOX_CLASS,
-  SETTINGS_WIDTH_SELECT_CLASS,
   SettingsCheckboxRow,
   SettingsControlGroup,
   SettingsDisclosure,
@@ -30,12 +29,19 @@ import { parseModelSelector } from '@openchamber/agent-contract';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useRoutingStore } from '@/stores/useRoutingStore';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
+import {
+  CreateRoutingCategoryDialog,
+  type CreateRoutingCategoryInput,
+} from './CreateRoutingCategoryDialog';
+import { VariantSelect } from './VariantSelect';
+import {
+  MAX_CATEGORIES,
+  buildUniqueCategoryId,
+  knownVariant,
+  useModelReasoningEfforts,
+} from './routingCategoryUtils';
 
-const DEFAULT_VARIANT_VALUE = '__default__';
 const SAVE_DEBOUNCE_MS = 500;
-/** The server's cap on categories; beyond it every save is a 400. */
-const MAX_CATEGORIES = 32;
-
 
 /**
  * Whether the server's copy is the draft as the server stores it. The server
@@ -59,73 +65,17 @@ const invalidCategoryIds = (config: RoutingConfig): string[] => config.categorie
   .filter((category) => category.name.trim().length === 0 || category.description.trim().length === 0)
   .map((category) => category.id);
 
-const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
-/** The thinking efforts OMP reports for one model; 'off' plus reasoningOptions. Empty when the model has none. */
-const useModelReasoningEfforts = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
-  const providers = useConfigStore((state) => state.providers);
-  return React.useMemo(() => {
-    if (!providerID || !modelID) return [];
-    const provider = providers.find((entry) => entry.providerId === providerID);
-    const model = provider?.models.find((entry) => entry.modelId === modelID);
-    if (!model?.reasoningEffortSupported && !model?.reasoningOptions?.length) return [];
-    return ['off', ...model.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')];
-  }, [modelID, providerID, providers]);
-};
-
-/**
- * The saved level, or null when the model does not list it: list positions
- * saved before #4133 run as the model's default on the server, so they read
- * as Default here too. A model with no known levels keeps what was saved.
- */
-const knownVariant = (value: string | null | undefined, variants: string[]): string | null => (
-  value && (variants.length === 0 || variants.includes(value)) ? value : null
-);
-
-const VariantSelect: React.FC<{
-  providerID: string | null | undefined;
-  modelID: string | null | undefined;
-  value: string | null;
-  onChange: (variant: string | null) => void;
-  ariaLabel: string;
-  className?: string;
-}> = ({ providerID, modelID, value, onChange, ariaLabel, className }) => {
-  const { t } = useI18n();
-  const efforts = useModelReasoningEfforts(providerID, modelID);
-  const selected = knownVariant(value, efforts) ?? DEFAULT_VARIANT_VALUE;
-  const label = (variant: string) => {
-    if (variant === DEFAULT_VARIANT_VALUE) return t('settings.routing.thinking.default');
-    if (variant === 'off') return t('chat.modelControls.off');
-    return variant.charAt(0).toUpperCase() + variant.slice(1);
-  };
-  return (
-    <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={efforts.length === 0}>
-      <SelectTrigger className={cn(SETTINGS_WIDTH_SELECT_CLASS, className)} aria-label={ariaLabel}>
-        <SelectValue>{label(selected)}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={DEFAULT_VARIANT_VALUE}>{label(DEFAULT_VARIANT_VALUE)}</SelectItem>
-        {efforts.map((effort) => (
-          <SelectItem key={effort} value={effort}>{label(effort)}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-};
-
 
 /** One category: a flat disclosure row that expands into its editor. */
 const CategoryRow: React.FC<{
   category: RoutingCategory;
   expanded: boolean;
-  autoFocusDescription: boolean;
-  onDescriptionFocused: () => void;
   onToggle: () => void;
   onChange: (patch: Partial<RoutingCategory>) => void;
   onReset: (() => void) | null;
   onRemove: () => void;
-}> = ({ category, expanded, autoFocusDescription, onDescriptionFocused, onToggle, onChange, onReset, onRemove }) => {
+}> = ({ category, expanded, onToggle, onChange, onReset, onRemove }) => {
   const { t } = useI18n();
-  const descriptionRef = React.useRef<HTMLTextAreaElement>(null);
   const efforts = useModelReasoningEfforts(category.model?.providerID, category.model?.modelID);
   const shownVariant = knownVariant(category.variant, efforts);
   const errorId = React.useId();
@@ -137,14 +87,6 @@ const CategoryRow: React.FC<{
   const missingName = category.name.trim().length === 0;
   const missingDescription = category.description.trim().length === 0;
   const displayName = category.name.trim() || category.id;
-
-  // A freshly added category opens with its description empty, which is what
-  // the user must fill first; put the caret there instead of making them hunt.
-  React.useEffect(() => {
-    if (!expanded || !autoFocusDescription) return;
-    descriptionRef.current?.focus();
-    onDescriptionFocused();
-  }, [expanded, autoFocusDescription, onDescriptionFocused]);
 
   return (
     <SettingsDisclosure
@@ -207,7 +149,6 @@ const CategoryRow: React.FC<{
       >
         <div className="w-full">
           <Textarea
-            ref={descriptionRef}
             value={category.description}
             onChange={(event) => onChange({ description: event.target.value })}
             aria-label={t('settings.routing.category.description')}
@@ -246,10 +187,8 @@ export const RoutingPage: React.FC = () => {
   const saveConfig = useRoutingStore((state) => state.saveConfig);
 
   const [draft, setDraft] = React.useState<RoutingConfig | null>(serverConfig);
-  const [newCategoryName, setNewCategoryName] = React.useState('');
   const [expandedIds, setExpandedIds] = React.useState<string[]>([]);
-  // The category just added: its editor opens and its description takes focus.
-  const [focusCategoryId, setFocusCategoryId] = React.useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   // A pending edit remembers the server it was made against; a save that would
   // run after a runtime switch is dropped rather than sent to the new server.
   const pendingRef = React.useRef<{ config: RoutingConfig; runtimeKey: string } | null>(null);
@@ -340,25 +279,36 @@ export const RoutingPage: React.FC = () => {
     update((config) => ({ ...config, categories: config.categories.map((category) => (category.id === id ? { ...category, ...patch } : category)) }));
   }, [update]);
 
-  const addCategory = () => {
-    const name = newCategoryName.trim();
-    if (!name || !draft || draft.categories.length >= MAX_CATEGORIES) return;
-    const base = slugify(name) || `category-${Date.now()}`;
-    let id = base;
-    let counter = 2;
-    // A built-in id is never stored as a user category, so a new category must
-    // not take the id of a built-in the user removed.
-    while (draft.categories.some((category) => category.id === id) || builtins.some((builtin) => builtin.id === id)) {
-      id = `${base}-${counter++}`;
+  const createCategory = React.useCallback((input: CreateRoutingCategoryInput) => {
+    if (!draft || draft.categories.length >= MAX_CATEGORIES) return;
+    const existingIds = [
+      ...draft.categories.map((category) => category.id),
+      ...builtins.map((builtin) => builtin.id),
+    ];
+    const id = buildUniqueCategoryId(input.name, existingIds);
+    const newCategory: RoutingCategory = {
+      id,
+      builtin: false,
+      enabled: true,
+      name: input.name.trim(),
+      description: input.description.trim(),
+      model: input.model,
+      variant: input.model ? input.variant : null,
+      agent: null,
+    };
+    const next: RoutingConfig = {
+      ...draft,
+      categories: [...draft.categories, newCategory],
+    };
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
-    update((config) => ({
-      ...config,
-      categories: [...config.categories, { id, builtin: false, enabled: true, name, description: '', model: null, variant: null, agent: null }],
-    }));
-    setNewCategoryName('');
-    setExpandedIds((current) => (current.includes(id) ? current : [...current, id]));
-    setFocusCategoryId(id);
-  };
+    setDraft(next);
+    pendingRef.current = { config: next, runtimeKey: getRuntimeKey() };
+    setCreateDialogOpen(false);
+    void flush();
+  }, [builtins, draft, flush]);
 
   const toggleCategory = (id: string) => {
     // A row held open by the invalid-draft gate stays open: collapsing it would
@@ -483,8 +433,6 @@ export const RoutingPage: React.FC = () => {
                     key={category.id}
                     category={category}
                     expanded={expandedIds.includes(category.id) || invalidIds.includes(category.id)}
-                    autoFocusDescription={focusCategoryId === category.id}
-                    onDescriptionFocused={() => setFocusCategoryId(null)}
                     onToggle={() => toggleCategory(category.id)}
                     onChange={(patch) => updateCategory(category.id, patch)}
                     onReset={category.builtin ? () => resetCategory(category.id) : null}
@@ -503,28 +451,26 @@ export const RoutingPage: React.FC = () => {
                   </div>
                 </SettingsControlGroup>
               ) : null}
-              <SettingsFieldRow label={t('settings.routing.categories.addLabel')} settingsItem="routing.add-category">
-                <Input
-                  value={newCategoryName}
-                  onChange={(event) => setNewCategoryName(event.target.value)}
-                  onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) addCategory(); }}
-                  placeholder={t('settings.routing.categories.addPlaceholder')}
-                  aria-label={t('settings.routing.categories.addLabel')}
-                  inputSize="compact"
-                  className="min-w-0 flex-1"
-                  maxLength={60}
-                />
+              <div data-settings-item="routing.add-category" className="pt-1">
                 <Button
+                  type="button"
                   size="xs"
                   variant="outline"
-                  onClick={addCategory}
-                  disabled={newCategoryName.trim().length === 0 || draft.categories.length >= MAX_CATEGORIES}
+                  onClick={() => setCreateDialogOpen(true)}
+                  disabled={draft.categories.length >= MAX_CATEGORIES}
                 >
-                  {t('settings.routing.categories.add')}
+                  <Icon name="add" className="size-3.5" />
+                  {t('settings.routing.categories.addCategory')}
                 </Button>
-              </SettingsFieldRow>
+              </div>
             </div>
           </SettingsSection>
+          <CreateRoutingCategoryDialog
+            open={createDialogOpen}
+            onOpenChange={setCreateDialogOpen}
+            existingCategories={draft.categories}
+            onCreate={createCategory}
+          />
         </>
       )}
     </SettingsPageLayout>

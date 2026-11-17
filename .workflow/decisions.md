@@ -1401,3 +1401,33 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** upstream sizes settings controls from a shared token, or its `Input` grows a compact variant the fork can adopt instead of `inputSize`.
 - **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-18 - Row selects hug their value again, and OMP option notes sit under the field label
+
+- **Decided:** `SETTINGS_WIDTH_SELECT_CLASS` returns from `w-full @xl:w-56` to hug-with-cap sizing (`w-fit min-w-[8ch] max-w-[28ch]`), while `SettingsFieldRow` keeps `@xl:justify-end` so every row control still shares one trailing right edge. `OmpRowControl` passes the selected option's `description` to `SettingsFieldRow`'s `description` prop (under the left label) instead of stacking a `w-full` paragraph inside the `flex-1` control column. `settings-ui.test.ts` extends option-copy enforcement from `engine` rows to `page` rows as well.
+- **Instead of:** keeping 224 px fixed-width row selects and right-aligning or floating the option helper text in the control column.
+- **Because:** the maintainer reviewed the `4f9a7c7f39` candidate (`feedback-2026-11-18/1-*.png`, `6-*.png`) and reported both that 224 px selects look overlong and uncoordinated on short values (`Default`, `默认`, `500 行`) and that the helper subtext sits in the middle of the row. Upstream v2.7.0 used hug-width select triggers for the same reason, and `SettingsFieldRow` already owns a left-column `description` slot.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** never; supersedes the fixed-select-width clause of 2026-11-15.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-18 - Drop the `placementCounts` breakdown from the OMP `config.yml` footer
+
+- **Decided:** remove the three placement-count sentences and raw config path from `OmpSettingsPage`'s `omp.configFile` footer, keeping only the `仍需在 config.yml 中修改` row/title and the `打开 config.yml` button, and remove `placementCounts` if no other caller reads it. Supersedes `2026-11-16 - OmpSettingsState carries placementCounts`.
+- **Instead of:** keeping the count audit prose under the button.
+- **Because:** the maintainer reviewed `feedback-2026-11-18/6-*.png` and explicitly asked to remove the footer small print ("omp高级设置最后 这个小字就没必要搞了"); `AGENTS.md` only requires the `open config.yml` affordance.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** never.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-18 - Routing categories are created in a complete dialog, fallbacks use `oc-tile` rows, and agent tools use flat `SettingsDisclosure` groups
+
+- **Decided:** (1) Routing replaces its bare `新类别 [input] [添加]` row (which inserted an invalid empty-description category into the live draft and immediately showed warning + error banners) with an outline `+ 添加类别` button that opens a complete creation `Dialog` (Name, Model, Thinking, Description) validated on submit. (2) Web Search's fallback list renders each item inside a rounded `oc-tile oc-tile-hover rounded-xl` row via optional `listClassName`/`rowClassName` props on `SettingsSortableList`. (3) `AgentPermissionsEditor` drops its boxed cards, `divide-y` dividers, hardcoded palette `TierChip`s and `"Show all"`/`"Hide all"` wording in favor of accurate `Default` / `All available` / `None` chips, flat default-collapsed `SettingsDisclosure` groups with tri-state `accessory` checkboxes, and single-line `SettingsCheckboxRow` items with descriptions behind `SettingsInfoHint`.
+- **Instead of:** patching individual error messages on inline incomplete category rows, adding borders to bare fallback rows, or restyling `AgentPermissionsEditor`'s cards.
+- **Because:** the maintainer reviewed `feedback-2026-11-18/2..5-*.png` and asked for a complete rethink of routing category addition, rounded-rectangle surfaces on fallback items, and a ground-up rewrite of agent tool settings to match OpenChamber's design system (`PATTERNS.md`, `STYLING.md`).
+- **Decided by:** user
+- **Mine:** partly (specific `Dialog`, `oc-tile` and `SettingsDisclosure` mappings are mine)
+- **Revisit when:** never.
+- **Effort:** ux-feedback-2026-11-15

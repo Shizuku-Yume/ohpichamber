@@ -80,7 +80,6 @@ import { RUNTIME_CONFIG_SCRIPT, RUNTIME_CONFIG_SCRIPT_PATHNAME, createRuntimeCon
 import { settleMainProcessCompileCache } from './compile-cache.mjs';
 import { probeDirectHostWithRetry } from './host-probe-policy.mjs';
 import { probeElectronHostWithDeadline } from './electron-host-probe.mjs';
-import { requestRemoteHostUpdate } from './remote-host-update.mjs';
 import { ensureDesktopLocalClientToken, shouldBootstrapPackagedLocalAuth } from './desktop-local-auth.mjs';
 import { assertUpdaterCapability, readLinuxPackageType } from './updater-capability.mjs';
 import { relaunchAfterExit } from './linux-relaunch.mjs';
@@ -103,14 +102,7 @@ import { menuAccelerator, normalizeMenuShortcuts } from './menu-shortcuts.mjs';
 import { createCopyLinkMenuHook } from './context-menu-clipboard.mjs';
 import { createCopyMenuAction } from './menu-copy-action.mjs';
 import {
-  CANARY_MIRROR_UPDATER_FEED,
-  CANARY_UPDATER_FEED,
   PRODUCTION_UPDATER_FEED,
-  STABLE_MIRROR_UPDATER_FEED,
-  isCanaryVersion,
-  isUpdateChannel,
-  normalizeUpdateChannel,
-  pickUpdaterSource,
   resolveUpdaterFeed,
 } from './updater-feed.mjs';
 import {
@@ -142,12 +134,12 @@ import { createRelayDevTunnelBridge } from './relay-dev-tunnel.mjs';
 import { parsePairingDeepLink } from './pairing-deep-link.mjs';
 import { attachRendererRecovery, takeSafeStart } from './renderer-recovery.mjs';
 import { createLoadFailureWarningFilter } from './load-failure-warnings.mjs';
-import { mintOutsideFileGrant } from '@openchamber/web/server/lib/fs/routes.js';
-import { fetchUpdateNotes } from '@openchamber/web/server/lib/changelog/update-notes.js';
-import { compareVersions } from '@openchamber/web/server/lib/version-order.js';
-import { applyConnectAttemptTimeout } from '@openchamber/web/server/lib/network-defaults.js';
-import { isNetworkAccessBlocked } from '@openchamber/web/server/lib/enterprise-mode.js';
-import { assignInjectedEnv } from '@openchamber/web/server/lib/injected-env.js';
+import { mintOutsideFileGrant } from 'ohpichamber/server/lib/fs/routes.js';
+import { fetchUpdateNotes } from 'ohpichamber/server/lib/changelog/update-notes.js';
+import { compareVersions } from 'ohpichamber/server/lib/version-order.js';
+import { applyConnectAttemptTimeout } from 'ohpichamber/server/lib/network-defaults.js';
+import { isNetworkAccessBlocked } from 'ohpichamber/server/lib/enterprise-mode.js';
+import { assignInjectedEnv } from 'ohpichamber/server/lib/injected-env.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -171,7 +163,7 @@ log.transports.console.level = isDev ? 'debug' : 'warn';
 
 // The in-process web server runs in this same Node process and uses plain
 // `console.log/warn/error`. Without piping console through electron-log,
-// that output never lands in ~/Library/Logs/OpenChamber/main.log and we
+// that output never lands in ~/Library/Logs/OhPiChamber/main.log and we
 // can't diagnose issues (e.g. server and Agent Service lifecycle, SSE disconnects) after
 // the fact. Route all console calls through electron-log so server-side
 // diagnostics are persisted.
@@ -246,13 +238,18 @@ try {
 } catch {
 }
 
-try {
-  if (!app.isDefaultProtocolClient(DEEP_LINK_PROTOCOL)) {
-    app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL);
+const registerDeepLinkProtocol = () => {
+  try {
+    if (!app.isDefaultProtocolClient(DEEP_LINK_PROTOCOL)) {
+      app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL);
+    }
+  } catch (error) {
+    // log.* not yet initialized at module top-level; fall back to console.
+    console.warn('[electron] failed to register deep-link protocol:', error);
   }
-} catch (error) {
-  // log.* not yet initialized at this point; fall back to console.
-  console.warn('[electron] failed to register deep-link protocol:', error);
+};
+if (process.platform !== 'linux' || !app.isPackaged) {
+  registerDeepLinkProtocol();
 }
 
 const readAppMetadata = () => {
@@ -292,9 +289,8 @@ const LOCAL_DESKTOP_CLIENT_DEDUPE_KEY = 'desktop-local';
 // connecting to someone else's server).
 const REMOTE_DESKTOP_CLIENT_KIND = 'desktop';
 const ENV_OVERRIDE_HOST_ID = '__env';
-const GITHUB_BUG_REPORT_URL = 'https://github.com/openchamber/openchamber/issues/new?template=bug_report.yml';
-const GITHUB_FEATURE_REQUEST_URL = 'https://github.com/openchamber/openchamber/issues/new?template=feature_request.yml';
-const DISCORD_INVITE_URL = 'https://discord.gg/ZYRSdnwwKA';
+const GITHUB_BUG_REPORT_URL = 'https://github.com/Shizuku-Yume/ohpichamber/issues/new?template=bug_report.yml';
+const GITHUB_FEATURE_REQUEST_URL = 'https://github.com/Shizuku-Yume/ohpichamber/issues/new?template=feature_request.yml';
 const INSTALLED_APPS_CACHE_TTL_SECS = 60 * 60 * 24;
 const INSTALLED_APPS_CACHE_FILE = 'discovered-apps.json';
 // Bump when discovery results change shape or matching semantics change, so cached
@@ -331,14 +327,9 @@ const state = {
   // path may end the process: the update sequence owns the exit.
   updateInstallPending: false,
   pendingUpdate: null,
-  // The channel and source ('mirror' or 'github') the updater's feed was last
-  // pointed at (applyUpdaterChannel), and the update check in flight, if any.
-  updaterChannel: null,
-  updaterSource: null,
-  // When the Stable mirror last failed a check or a download; checks read
-  // GitHub for a while after (pickUpdaterSource).
-  updaterMirrorFailedAt: null,
-  updateCheck: null,
+  // The feed the updater's provider was last configured for; re-applying it
+  // would replace the provider a download in flight is reading from.
+  updaterFeed: null,
   updateDownloadPromise: null,
   updateDownloadVersion: null,
   unreachableHosts: new Set(),
@@ -432,7 +423,7 @@ const quitConfirmationMessage = () => {
   if (reasons.length === 0) {
     return 'Background processes (sidecar, SSH sessions) will be stopped.';
   }
-  return `OpenChamber detected ${reasons.join(', ')}. Quitting now will stop sidecar/background processes and may interrupt pending work.`;
+  return `OhPiChamber detected ${reasons.join(', ')}. Quitting now will stop sidecar/background processes and may interrupt pending work.`;
 };
 
 const shutdownBackgroundServices = () => {
@@ -440,7 +431,7 @@ const shutdownBackgroundServices = () => {
     setDesktopKeepAwakeActive(false);
     shellEnvironmentAbort.abort();
     state.backgroundShutdownPromise = Promise.all([
-      startShellEnvironmentProbe().catch(() => {}),
+      startShellEnvironmentProbe().catch(() => { }),
       killSidecar(),
       shutdownSshSessions(),
     ]).finally(() => {
@@ -616,8 +607,8 @@ const requestQuitWithConfirmation = async () => {
   try {
     const result = await dialog.showMessageBox({
       type: 'warning',
-      title: 'Quit OpenChamber?',
-      message: 'Quit OpenChamber?',
+      title: 'Quit OhPiChamber?',
+      message: 'Quit OhPiChamber?',
       detail: quitConfirmationMessage(),
       buttons: ['Quit', 'Cancel'],
       defaultId: 1,
@@ -705,7 +696,7 @@ const writeJsonFile = async (filePath, data) => {
     await replaceFileWithRetry(tmp, filePath);
     if (process.platform !== 'win32') await fsp.chmod(filePath, 0o600);
   } catch (error) {
-    await fsp.rm(tmp, { force: true }).catch(() => {});
+    await fsp.rm(tmp, { force: true }).catch(() => { });
     throw error;
   }
 };
@@ -724,7 +715,7 @@ const mutateSettingsRoot = (mutator) => {
     await writeJsonFile(settingsFilePath(), nextRoot);
   });
   // Keep the chain alive even if one mutator throws.
-  settingsMutationChain = next.catch(() => {});
+  settingsMutationChain = next.catch(() => { });
   return next;
 };
 
@@ -853,8 +844,8 @@ const writeDesktopHostsConfig = async (config) => {
   await mutateSettingsRoot((root) => {
     root.desktopHosts = Array.isArray(config?.hosts)
       ? config.hosts
-          .map(buildStoredHostEntry)
-          .filter(Boolean)
+        .map(buildStoredHostEntry)
+        .filter(Boolean)
       : [];
     root.desktopDefaultHostId = typeof config?.defaultHostId === 'string' && config.defaultHostId.trim()
       ? config.defaultHostId.trim()
@@ -989,7 +980,7 @@ const isPortFree = async (port, host = '127.0.0.1') => {
   return await new Promise((resolve) => {
     const test = net.createServer();
     const done = (value) => {
-      try { test.close(); } catch {}
+      try { test.close(); } catch { }
       resolve(value);
     };
     test.once('error', () => done(false));
@@ -1006,7 +997,7 @@ const detectLanIPv4Address = async () => {
   const ip = await new Promise((resolve) => {
     const socket = dgram.createSocket('udp4');
     const finish = (value) => {
-      try { socket.close(); } catch {}
+      try { socket.close(); } catch { }
       resolve(value);
     };
     socket.once('error', () => finish(null));
@@ -1216,7 +1207,7 @@ const spacePreviewOf = (spaceId) => {
 /** Writes the space's current port set into its session, one write after another. */
 const applySpacePreviewProxy = (spaceId) => {
   const entry = spacePreviewOf(spaceId);
-  entry.chain = entry.chain.catch(() => {}).then(async () => {
+  entry.chain = entry.chain.catch(() => { }).then(async () => {
     const panelSession = session.fromPartition(spacePreviewPartition(spaceId));
     hardenPanelSession(panelSession);
     const deadProxyPort = await getDeadProxyPort();
@@ -1421,7 +1412,7 @@ const maybeShowNativeNotification = (rawInput) => {
 
   const title = typeof payload.title === 'string' && payload.title.trim()
     ? payload.title.trim()
-    : 'OpenChamber';
+    : 'OhPiChamber';
   const body = typeof payload.body === 'string' ? payload.body : '';
   const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.trim()
     ? payload.sessionId.trim()
@@ -1484,8 +1475,8 @@ const mapUpdaterProgressEvent = (payload) => ({
   data: payload.data,
 });
 
-import { pathLooksUserConfigured, mergePathValues } from '@openchamber/web/server/lib/host/path-utils.js';
-import { provideLoginShellEnvSnapshot } from '@openchamber/web/server/lib/host/login-shell-env.js';
+import { pathLooksUserConfigured, mergePathValues } from 'ohpichamber/server/lib/host/path-utils.js';
+import { provideLoginShellEnvSnapshot } from 'ohpichamber/server/lib/host/login-shell-env.js';
 
 // Merge the user's login-shell env (PATH, etc.) into this process before we
 // import/start the server in-process. The server and its children (Agent Service,
@@ -1597,7 +1588,7 @@ const spawnLocalServer = async () => {
     ...(agentRuntime.env || {}),
   });
 
-  const { startWebUiServer } = await import('@openchamber/web/server/index.js');
+  const { startWebUiServer } = await import('ohpichamber/server/index.js');
 
   const handle = await startWebUiServer({
     port: chosenPort,
@@ -1607,7 +1598,7 @@ const spawnLocalServer = async () => {
     exitOnShutdown: false,
     apiOnly: false,
     builtInExtensionsDir: app.isPackaged
-      ? path.join(app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath(), 'node_modules/@openchamber/web/server/built-in-extensions')
+      ? path.join(app.getAppPath().endsWith('.asar') ? `${app.getAppPath()}.unpacked` : app.getAppPath(), 'node_modules/ohpichamber/server/built-in-extensions')
       : undefined,
     // The in-process server's notifications belong to the local instance.
     onDesktopNotification: (payload) => maybeShowNativeNotification({ ...payload, runtimeKey: 'local' }),
@@ -1616,23 +1607,6 @@ const spawnLocalServer = async () => {
       apiBaseUrl: state.apiBaseUrl || '',
       requestHeaders: sanitizeRuntimeRequestHeaders(state.requestHeaders || {}),
     }),
-    // Remote clients only. A package install asks for the administrator
-    // password on this machine's screen, so nobody at a phone could answer it
-    // and the server would stay down until someone at the desk did.
-    desktopUpdater: {
-      check: async () => {
-        const updateInfo = await handleInvoke(null, 'desktop_check_for_updates');
-        return isLinuxPackageInstall() ? { ...updateInfo, installBlocked: 'desktop-host' } : updateInfo;
-      },
-      install: async () => {
-        const updateInfo = await handleInvoke(null, 'desktop_check_for_updates');
-        if (!updateInfo.available) return updateInfo;
-        if (isLinuxPackageInstall()) return { ...updateInfo, installBlocked: 'desktop-host' };
-        await handleInvoke(null, 'desktop_download_and_install_update');
-        return updateInfo;
-      },
-      restart: () => handleInvoke(null, 'desktop_restart'),
-    },
   });
 
   const port = handle.getPort();
@@ -1816,7 +1790,7 @@ const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice, requ
       password: candidatePassword,
       trustDevice: trustDevice === true,
       issueClientToken: true,
-      clientLabel: 'OpenChamber Desktop',
+      clientLabel: 'OhPiChamber Desktop',
       ...clientIdentity,
     }),
   });
@@ -1844,7 +1818,7 @@ const loginRemoteAndIssueClientToken = async ({ url, password, trustDevice, requ
       Cookie: cookie,
     },
     body: JSON.stringify({
-      label: 'OpenChamber Desktop',
+      label: 'OhPiChamber Desktop',
       ...clientIdentity,
     }),
   });
@@ -1897,7 +1871,7 @@ let mainWindowTrayActionsReady = false;
 let lastJumpListKey = '';
 const PENDING_SESSION_LINK_FALLBACK_MS = 10_000;
 
-// A session link (`openchamber://session/<id>`) can also name the message to
+// A session link (`ohpichamber://session/<id>`) can also name the message to
 // show (`?message=<id>`) and the saved host that owns the session
 // (`?host=<id>`). The renderer validates the IDs and opens a session of
 // another host in that host's window, as for a notification click.
@@ -1924,7 +1898,7 @@ const takePendingSessionDeepLinks = () => {
   return taken;
 };
 
-// `openchamber://extensions/install?url=…`: any web page can raise this link, so
+// `ohpichamber://extensions/install?url=…`: any web page can raise this link, so
 // only an https repository passes, and the app asks before it fetches anything.
 const extensionInstallUrl = (link) => {
   if (link.value !== 'install') return null;
@@ -2047,7 +2021,7 @@ const confirmConnectDeepLink = async (payload) => {
   }
   const options = {
     type: 'warning',
-    title: 'Connect to OpenChamber server?',
+    title: 'Connect to OhPiChamber server?',
     message: `Connect to "${payload.label}"?`,
     detail:
       `This will add ${payload.serverUrl} as a remote instance and route this app's activity ` +
@@ -2181,7 +2155,7 @@ const dispatchDomEventToWindow = (browserWindow, event, detail) => {
     ? `window.dispatchEvent(new Event(${eventLiteral}));`
     : `window.dispatchEvent(new CustomEvent(${eventLiteral}, { detail: ${JSON.stringify(detail)} }));`;
 
-  void browserWindow.webContents.executeJavaScript(script, true).catch(() => {});
+  void browserWindow.webContents.executeJavaScript(script, true).catch(() => { });
 };
 
 const closeTabTargets = new WeakSet();
@@ -2632,7 +2606,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
       try {
         browserWindow.setWindowButtonVisibility(true);
         browserWindow.setTrafficLightPosition(macTrafficLightPosition());
-      } catch {}
+      } catch { }
     };
     browserWindow.on('minimize', () => {
       refreshTrafficLights();
@@ -2767,14 +2741,14 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
       if (route) emitToWindow(browserWindow, 'openchamber:open-session', route);
       return { action: 'deny' };
     }
-    void shell.openExternal(url).catch(() => {});
+    void shell.openExternal(url).catch(() => { });
     return { action: 'deny' };
   });
 
   browserWindow.webContents.on('will-navigate', (event, url) => {
     if (isAllowedNavigationUrl(url)) return;
     event.preventDefault();
-    void shell.openExternal(url).catch(() => {});
+    void shell.openExternal(url).catch(() => { });
   });
 
   // The runtime key says which instance this window shows, and only a page of
@@ -2812,7 +2786,7 @@ const createBrowserWindow = ({ label, restoreGeometry, url, runtimeConfig = {}, 
     }
     const initScript = browserWindow.__ocInitScript;
     if (initScript) {
-      void browserWindow.webContents.executeJavaScript(initScript).catch(() => {});
+      void browserWindow.webContents.executeJavaScript(initScript).catch(() => { });
     }
   });
 
@@ -2861,7 +2835,7 @@ const startEarlyMainNavigation = (url) => {
   runtimeConfigGate.hold();
   const loaded = navigateWindow(mainWindow, url, { allowAbort: true });
   // Awaited by activateMainWindow; a startup that fails first exits the app.
-  loaded.catch(() => {});
+  loaded.catch(() => { });
   state.earlyNavigation = { window: mainWindow, url, loaded };
 };
 
@@ -3247,7 +3221,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
   const desktopClientToken = effectiveRuntimeConfig.clientToken || '';
   const desktopRequestHeaders = effectiveRuntimeConfig.requestHeaders || {};
   const browserWindow = new BrowserWindow({
-    title: 'OpenChamber Mini Chat',
+    title: 'OhPiChamber Mini Chat',
     width: MINI_CHAT_WINDOW_WIDTH,
     height: MINI_CHAT_WINDOW_HEIGHT,
     minWidth: MINI_CHAT_MIN_WINDOW_WIDTH,
@@ -3309,7 +3283,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
       try {
         browserWindow.setWindowButtonVisibility(true);
         browserWindow.setTrafficLightPosition(macTrafficLightPosition());
-      } catch {}
+      } catch { }
     };
     browserWindow.on('show', refreshTrafficLights);
     browserWindow.on('focus', refreshTrafficLights);
@@ -3321,7 +3295,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
   });
 
   browserWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url).catch(() => {});
+    void shell.openExternal(url).catch(() => { });
     return { action: 'deny' };
   });
   browserWindow.webContents.on('will-navigate', (event, url) => {
@@ -3332,12 +3306,12 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
     } catch {
     }
     event.preventDefault();
-    void shell.openExternal(url).catch(() => {});
+    void shell.openExternal(url).catch(() => { });
   });
   browserWindow.webContents.on('dom-ready', () => {
     const initScript = browserWindow.__ocInitScript;
     if (initScript) {
-      void browserWindow.webContents.executeJavaScript(initScript).catch(() => {});
+      void browserWindow.webContents.executeJavaScript(initScript).catch(() => { });
     }
   });
 
@@ -3439,7 +3413,7 @@ const showSplashStatus = (text) => {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', show, { once: true });
     else show();
   })();`;
-  mainWindow.webContents.executeJavaScript(script).catch(() => {});
+  mainWindow.webContents.executeJavaScript(script).catch(() => { });
 };
 
 const showSplashConnecting = (hostLabel) => {
@@ -3485,8 +3459,8 @@ const resolveInitialUrl = async ({ onPlainLocalBoot = null } = {}) => {
   const localUiUrl = usePackagedUi
     ? buildPackagedUiUrl('/index.html')
     : startupProbePlan.probeHmrUi && await waitForHealth(hmrUiUrl, 8_000, 100)
-    ? hmrUiUrl
-    : localUrl;
+      ? hmrUiUrl
+      : localUrl;
 
   if (localUiUrl === hmrUiUrl) {
     // The HMR dev script wipes Vite's dependency cache on every start, so the
@@ -3606,38 +3580,28 @@ const resolveInitialUrl = async ({ onPlainLocalBoot = null } = {}) => {
 const UPDATER_E2E_BUILD = typeof __OPENCHAMBER_UPDATER_E2E_BUILD__ !== 'undefined'
   && __OPENCHAMBER_UPDATER_E2E_BUILD__ === true;
 
-const readUpdateChannel = () => normalizeUpdateChannel(readSettingsRoot().desktopUpdateChannel, APP_VERSION);
-
 /**
- * Points the updater at the chosen channel's feed; every check re-reads the
- * stored channel, so a switch takes effect on the next check without a
- * restart. Stable from a Canary build allows the downgrade to the latest
- * release, which is the way back; a release build never downgrades.
+ * Points the updater at the fork's GitHub Releases feed. Called before every
+ * check, and again when a build carrying the compile-time E2E marker swaps in
+ * the loopback feed. Re-setting the same feed would replace the provider that
+ * a download in flight reads from, so it happens once per feed.
  */
-const applyUpdaterChannel = (channel, source = pickUpdaterSource({ mirrorFailedAt: state.updaterMirrorFailedAt })) => {
-  if (state.updaterChannel === channel && state.updaterSource === source) return;
-  // An update found on the other channel is not this channel's; the next
-  // check starts clean (a failed feed otherwise keeps it, #5921).
-  if (state.updaterChannel !== null && state.updaterChannel !== channel) state.pendingUpdate = null;
-  const feed = resolveUpdaterFeed({ testBuild: UPDATER_E2E_BUILD, channel, source });
-  // Every published feed carries the Windows ARM64 manifest; the E2E fixture does not.
-  const updaterChannel = [PRODUCTION_UPDATER_FEED, CANARY_UPDATER_FEED, STABLE_MIRROR_UPDATER_FEED, CANARY_MIRROR_UPDATER_FEED].includes(feed)
+const applyUpdaterFeed = () => {
+  const feed = resolveUpdaterFeed({ testBuild: UPDATER_E2E_BUILD });
+  if (state.updaterFeed?.provider === feed.provider && state.updaterFeed?.url === feed.url) return;
+  // The published feed carries the Windows ARM64 manifest; the E2E fixture does not.
+  const manifestChannel = feed === PRODUCTION_UPDATER_FEED
     ? resolveUpdaterChannel({ platform: process.platform, architecture: process.arch })
     : null;
-  if (updaterChannel) {
-    autoUpdater.channel = updaterChannel;
+  if (manifestChannel) {
+    autoUpdater.channel = manifestChannel;
   }
   autoUpdater.setFeedURL(feed);
-  autoUpdater.allowDowngrade = channel === 'stable' && isCanaryVersion(APP_VERSION);
-  state.updaterChannel = channel;
-  state.updaterSource = source;
+  state.updaterFeed = feed;
   log.info('[electron] updater feed configured', {
-    channel,
-    source,
     provider: feed.provider,
     target: feed.provider === 'github' ? `${feed.owner}/${feed.repo}` : feed.url,
-    manifest: updaterChannel || 'latest',
-    allowDowngrade: autoUpdater.allowDowngrade,
+    manifest: manifestChannel || 'latest',
   });
 };
 
@@ -3651,7 +3615,7 @@ const setupAutoUpdater = () => {
   autoUpdater.fullChangelog = true;
   autoUpdater.disableWebInstaller = false;
   autoUpdater.logger = log;
-  applyUpdaterChannel(readUpdateChannel());
+  applyUpdaterFeed();
 
   autoUpdater.on('download-progress', (progress) => {
     const total = Number(progress.total || 0);
@@ -3763,7 +3727,6 @@ const installDownloadedUpdate = () => new Promise((resolve, reject) => {
         await installLinuxPackage({
           packageType: readLinuxPackageType(),
           file: state.pendingUpdate?.downloadedFile,
-          downgrade: state.pendingUpdate?.downgrade === true,
         });
         settled = true;
         autoUpdater.off('error', fail);
@@ -3853,7 +3816,7 @@ const iconToDataUrl = async (iconPath, appName) => {
     const bytes = await fsp.readFile(tempPath);
     return `data:image/png;base64,${bytes.toString('base64')}`;
   } finally {
-    await fsp.rm(tempPath, { force: true }).catch(() => {});
+    await fsp.rm(tempPath, { force: true }).catch(() => { });
   }
 };
 
@@ -4123,7 +4086,7 @@ const relayDevTunnelBridge = createRelayDevTunnelBridge({
 });
 const getDevTunnelClient = async () => {
   if (!devTunnelClientPromise) {
-    devTunnelClientPromise = import('@openchamber/web/server/lib/dev-tunnel/client.js')
+    devTunnelClientPromise = import('ohpichamber/server/lib/dev-tunnel/client.js')
       .then(({ createDevTunnelClient }) => createDevTunnelClient({ logger: log }))
       .catch((error) => {
         devTunnelClientPromise = null;
@@ -4139,7 +4102,7 @@ const closeAllDevTunnels = () => {
   if (!devTunnelClientPromise) return;
   const pending = devTunnelClientPromise;
   devTunnelClientPromise = null;
-  pending.then((client) => client.closeAll()).catch(() => {});
+  pending.then((client) => client.closeAll()).catch(() => { });
 };
 
 const handleInvoke = async (browserWindow, command, args = {}) => {
@@ -4606,7 +4569,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       if (!underHome && !underTmp) {
         throw new Error('File is outside the allowed workspace');
       }
-      const DENIED_SEGMENTS = ['.ssh', '.aws', '.gnupg', '.gpg', '.config/gh', '.config/openchamber/credentials'];
+      const DENIED_SEGMENTS = ['.ssh', '.aws', '.gnupg', '.gpg', '.config/gh', '.config/ohpichamber/credentials'];
       const relFromHome = underHome ? filePath.slice(home.length + 1) : '';
       const relNormalized = relFromHome.split(path.sep).join('/');
       if (DENIED_SEGMENTS.some((segment) => relNormalized === segment || relNormalized.startsWith(`${segment}/`))) {
@@ -4971,7 +4934,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
     // A page that another instance served cannot switch to Local in place. The
     // local server answers only this app's own origins, and the local token
     // stays with local pages. For such a page the main window loads the Local
-    // UI, the same way openchamber://host/local does. The app's own pages get
+    // UI, the same way ohpichamber://host/local does. The app's own pages get
     // false and switch in place.
     case 'desktop_switch_to_local': {
       if (!browserWindow || browserWindow.id !== state.mainWindow?.id) return false;
@@ -4994,21 +4957,6 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         args.requestHeaders || {},
         String(args.expectedServerId || ''),
       ));
-
-    // A saved host only: the address and token come from the hosts file, never
-    // from the caller, so a page cannot aim the token at another server.
-    case 'desktop_host_update_server': {
-      const hostId = String(args.hostId || '');
-      const host = (readDesktopHostsConfig().hosts || []).find((entry) => entry?.id === hostId);
-      const url = normalizeHostUrl(host?.apiUrl || host?.url || '');
-      if (!host || !url) return { status: 'failed', error: null };
-      return requestRemoteHostUpdate({
-        url,
-        clientToken: sanitizeClientTokenForStorage(host.clientToken) || '',
-        requestHeaders: host.requestHeaders || {},
-        chromiumFetch: (requestUrl, options) => electronNet.fetch(requestUrl, options),
-      });
-    }
 
     case 'desktop_remote_password_login':
       return loginRemoteAndIssueClientToken({
@@ -5065,65 +5013,15 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       return null;
     }
 
-    case 'desktop_get_update_channel': {
-      return { channel: readUpdateChannel() };
-    }
-
-    case 'desktop_set_update_channel': {
-      if (!isUpdateChannel(args?.channel)) {
-        throw new Error('Unknown update channel');
-      }
-      const channel = args.channel;
-      await mutateSettingsRoot((root) => {
-        root.desktopUpdateChannel = channel;
-      });
-      return { channel };
-    }
-
     case 'desktop_check_for_updates': {
       assertUpdaterCapability({ packaged: app.isPackaged });
-      // electron-updater answers a check that is already running, for the
-      // feed it started on. A channel switched meanwhile waits for that check
-      // to end, then checks its own feed.
-      if (state.updateCheck && readUpdateChannel() !== state.updaterChannel) {
-        await state.updateCheck.catch(() => null);
-      }
-      const channel = readUpdateChannel();
-      applyUpdaterChannel(channel);
-      // The source this check started on. A check running beside it can fall
-      // back first and move the shared state to GitHub; this one still owes
-      // its caller the same fallback.
-      const startedOn = state.updaterSource;
+      applyUpdaterFeed();
       const currentVersion = APP_VERSION;
-      const runCheck = () => checkForDesktopUpdate({
+      const { available, updateInfo, nextVersion, pendingUpdate } = await checkForDesktopUpdate({
         autoUpdater,
         currentVersion,
         pendingUpdate: state.pendingUpdate,
-        missingFeedIsError: state.updaterSource === 'mirror',
       });
-      // The whole check, the GitHub retry included, is what a channel switch
-      // waits for: a switch that ran between the two would have its feed
-      // replaced by the retry.
-      const check = (async () => {
-        try {
-          return await runCheck();
-        } catch (error) {
-          if (startedOn !== 'mirror') throw error;
-          // The mirror failed: GitHub answers this check and the next ones for a while.
-          log.warn('[electron] update mirror failed, checking GitHub', error instanceof Error ? error.message : String(error));
-          state.updaterMirrorFailedAt = Date.now();
-          applyUpdaterChannel(channel, 'github');
-          return runCheck();
-        }
-      })();
-      state.updateCheck = check;
-      let result;
-      try {
-        result = await check;
-      } finally {
-        if (state.updateCheck === check) state.updateCheck = null;
-      }
-      const { available, updateInfo, nextVersion, pendingUpdate } = result;
       // Assign before the changelog fetch: a download can finish while the
       // notes load and mark this record as downloaded. Assigning after that
       // await would replace it with the pre-await copy and drop the payload.
@@ -5161,11 +5059,6 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
           data: {},
         }));
         return null;
-      } catch (error) {
-        // A retry checks first (useUpdateStore.downloadUpdate), so marking the
-        // mirror failed sends the retry's check and download to GitHub.
-        if (state.updaterSource === 'mirror') state.updaterMirrorFailedAt = Date.now();
-        throw error;
       } finally {
         setTaskbarProgress(-1);
       }
@@ -5177,7 +5070,7 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       if (applyUpdate && process.platform === 'darwin' && typeof app.isInApplicationsFolder === 'function') {
         try {
           if (!app.isInApplicationsFolder()) {
-            throw new Error('Desktop update requires OpenChamber.app to be installed in /Applications');
+            throw new Error('Desktop update requires OhPiChamber.app to be installed in /Applications');
           }
         } catch (error) {
           log.warn('[electron] desktop_restart blocked', error);
@@ -5573,8 +5466,6 @@ const buildMacMenu = (locale = 'en') => {
         { type: 'separator' },
         { label: t('reportABug'), click: () => shell.openExternal(GITHUB_BUG_REPORT_URL) },
         { label: t('suggestFeature'), click: () => shell.openExternal(GITHUB_FEATURE_REQUEST_URL) },
-        { type: 'separator' },
-        { label: t('joinDiscord'), click: () => shell.openExternal(DISCORD_INVITE_URL) },
       ],
     },
   ]);
@@ -5690,8 +5581,6 @@ const buildAutoHiddenMenu = (locale = 'en') => {
         { type: 'separator' },
         { label: t('reportABug'), click: () => shell.openExternal(GITHUB_BUG_REPORT_URL) },
         { label: t('suggestFeature'), click: () => shell.openExternal(GITHUB_FEATURE_REQUEST_URL) },
-        { type: 'separator' },
-        { label: t('joinDiscord'), click: () => shell.openExternal(DISCORD_INVITE_URL) },
       ],
     },
   ]);
@@ -5926,13 +5815,13 @@ ipcMain.handle('openchamber:dialog:open', async (event, options) => {
       : undefined,
     filters: Array.isArray(options?.filters)
       ? options.filters
-          .filter((filter) => filter && typeof filter === 'object')
-          .map((filter) => ({
-            name: typeof filter.name === 'string' && filter.name.trim().length > 0 ? filter.name : 'Files',
-            extensions: Array.isArray(filter.extensions)
-              ? filter.extensions.filter((extension) => typeof extension === 'string' && extension.trim().length > 0)
-              : [],
-          }))
+        .filter((filter) => filter && typeof filter === 'object')
+        .map((filter) => ({
+          name: typeof filter.name === 'string' && filter.name.trim().length > 0 ? filter.name : 'Files',
+          extensions: Array.isArray(filter.extensions)
+            ? filter.extensions.filter((extension) => typeof extension === 'string' && extension.trim().length > 0)
+            : [],
+        }))
       : undefined,
     properties: [
       options?.directory ? 'openDirectory' : 'openFile',
@@ -6358,9 +6247,26 @@ app.whenReady().then(async () => {
     } catch (error) {
       log.warn('[electron] failed to reconcile Linux autostart entry', error);
     }
-    void reconcileAppImageDesktopEntry()
-      .then((result) => log.info('[electron] AppImage launcher entry', result))
-      .catch((error) => log.warn('[electron] failed to reconcile AppImage launcher entry', error));
+    try {
+      const desktopResult = await reconcileAppImageDesktopEntry();
+      log.info('[electron] AppImage launcher entry', desktopResult);
+      if (desktopResult?.status === 'integrated' && desktopResult.desktopPath) {
+        try {
+          await execFileAsync('update-desktop-database', [path.dirname(desktopResult.desktopPath)]);
+        } catch {
+        }
+        try {
+          const { stdout } = await execFileAsync('xdg-mime', ['query', 'default', 'x-scheme-handler/ohpichamber'], { encoding: 'utf8' });
+          if (!stdout.trim()) {
+            await execFileAsync('xdg-mime', ['default', 'ohpichamber.desktop', 'x-scheme-handler/ohpichamber']);
+          }
+        } catch {
+        }
+      }
+    } catch (error) {
+      log.warn('[electron] failed to reconcile AppImage launcher entry', error);
+    }
+    registerDeepLinkProtocol();
   }
 
   if (isBackgroundStart) {

@@ -1,6 +1,6 @@
 ---
 title: Host API
-description: Jede connectHost-Methode, die eine Erweiterung aufrufen kann, was OpenChamber an sie schickt, die Grenzen und die Fehlercodes.
+description: Jede connectHost-Methode, die eine Erweiterung aufrufen kann, was OhPiChamber an sie schickt, die Grenzen und die Fehlercodes.
 ---
 
 # Host API
@@ -8,16 +8,16 @@ description: Jede connectHost-Methode, die eine Erweiterung aufrufen kann, was O
 Diese Seite ist für dich, wenn du die genauen `connectHost`-Methoden, Grenzen und Fehlercodes brauchst. Für Ordneraufbau, Manifest und Installation fang bei [Eine Erweiterung bauen](/sdk/) an.
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
 
 const host = connectHost();
 ```
 
-`connectHost` wirft `HOST_UNAVAILABLE`, wenn es kein `window` gibt. Außerhalb von OpenChamber liefert es einen Client, bei dem jeder Aufruf mit `HOST_UNAVAILABLE` abgewiesen wird. Ruf `dispose()` auf, wenn du die Seite abbaust; noch laufende Aufrufe werden mit demselben Code abgewiesen.
+`connectHost` wirft `HOST_UNAVAILABLE`, wenn es kein `window` gibt. Außerhalb von OhPiChamber liefert es einen Client, bei dem jeder Aufruf mit `HOST_UNAVAILABLE` abgewiesen wird. Ruf `dispose()` auf, wenn du die Seite abbaust; noch laufende Aufrufe werden mit demselben Code abgewiesen.
 
-## Was OpenChamber an dich schickt
+## Was OhPiChamber an dich schickt
 
-`onReady` feuert mit dem ersten Snapshot und danach jedes Mal, wenn OpenChamber ihn aktualisiert.
+`onReady` feuert mit dem ersten Snapshot und danach jedes Mal, wenn OhPiChamber ihn aktualisiert.
 
 Das ist kein einmaliger Mount-Callback. Mounte die UI und registriere Abonnements einmal; aktualisiere danach Theme und Kontext, ohne Eingaben oder Entwürfe zu ersetzen. Ein Beispiel mit Mount-Schutz steht im [UI kit](/sdk/ui/). Listener wie `onConnection` liefern sofort den aktuellen Wert und können ihn bei neuen Snapshots wiederholen. Vergleiche die relevanten Felder vor einer neuen Anfrage und ignoriere Antworten überholter Anfragen.
 
@@ -65,12 +65,12 @@ Zugriffstokens tauchen hier nie auf, auch nicht in einem `request`-Ergebnis.
 | `generate({ prompt, system?, maxOutputTokens? })` | einmaliger Text vom Small Model des Nutzers. Liefert `{ text }`. Braucht die Berechtigung `model`. |
 | `onResolve(handler)` | den Handler für deine Slash-Befehle registrieren. Er bekommt `{ command, args }` und liefert einen Eintrag zum Anhängen oder `null`. |
 | `setBadge(count)` | dein Symbol in der Leiste mit einem Punkt markieren und die Zahl (0 bis 999) im Tooltip zeigen, oder `null`, um sie zu entfernen |
-| `openCommit(sha)` | die Diff-Ansicht für diesen Commit des aktuellen Projekts öffnen. `sha` hat 7 bis 64 Hex-Zeichen; OpenChamber liest den Commit selbst. |
-| `setHeight(px)` | die Höhe deines Work-Status-Abschnitts setzen. OpenChamber hält sie zwischen 24 und 320 Pixeln; höherer Inhalt scrollt in deiner Seite. Anderswo wird es ignoriert. |
+| `openCommit(sha)` | die Diff-Ansicht für diesen Commit des aktuellen Projekts öffnen. `sha` hat 7 bis 64 Hex-Zeichen; OhPiChamber liest den Commit selbst. |
+| `setHeight(px)` | die Höhe deines Work-Status-Abschnitts setzen. OhPiChamber hält sie zwischen 24 und 320 Pixeln; höherer Inhalt scrollt in deiner Seite. Anderswo wird es ignoriert. |
 | `onFileOpen(listener)` | Datei-Editoren: die zu bearbeitende Datei erhalten, `{ path, name, readOnly }` plus `encoding: "text"` mit `content` oder `encoding: "binary"` mit `bytes`. Sorgt außerdem dafür, dass Cmd/Ctrl+S in deiner Seite speichert. |
-| `onFileSnapshot(handler)` | Datei-Editoren: `{ content, version }` zurückgeben (oder `{ bytes, version }` bei einem binären Editor), die ganze bearbeitete Datei. OpenChamber ruft es zum Speichern auf und bevor zur Quelltextansicht oder in den Vollbildmodus gewechselt wird. |
+| `onFileSnapshot(handler)` | Datei-Editoren: `{ content, version }` zurückgeben (oder `{ bytes, version }` bei einem binären Editor), die ganze bearbeitete Datei. OhPiChamber ruft es zum Speichern auf und bevor zur Quelltextansicht oder in den Vollbildmodus gewechselt wird. |
 | `onFileSaved(listener)` | Datei-Editoren: der Snapshot mit dieser `version` liegt auf der Festplatte. Antworte mit `reportFileChange`. |
-| `reportFileChange({ dirty, edited })` | Datei-Editoren: OpenChamber mitteilen, ob es ungespeicherte Änderungen gibt und ob sich das Dokument gerade geändert hat |
+| `reportFileChange({ dirty, edited })` | Datei-Editoren: OhPiChamber mitteilen, ob es ungespeicherte Änderungen gibt und ob sich das Dokument gerade geändert hat |
 | `requestFileSave()` | Datei-Editoren: jetzt speichern, wie mit Cmd/Ctrl+S |
 | `reportFileUnsupported()` | Datei-Editoren: diese Datei lässt sich hier nicht öffnen, stattdessen ihren Quelltext zeigen |
 
@@ -108,7 +108,7 @@ await host.startSession({
 });
 ```
 
-`providerId` ist deine Panel-ID; OpenChamber überschreibt sie ohnehin mit deiner ID. `id` ist deine eigene Kennung für den Eintrag. `kind` ist `issue` (Standard) oder `pull`. `text` ist optionaler Kontext für das Modell, 1 bis 16000 Zeichen nach dem Trimmen. `data` ist optionales JSON nach deinem Belieben (Status, Kommentare, was auch immer), serialisiert bis zu 16000 Zeichen. OpenChamber speichert es zusammen mit dem Chip und gibt es unverändert in `ctx.item` zurück, wenn der Nutzer den Chip anklickt; das Modell bekommt es nie zu sehen.
+`providerId` ist deine Panel-ID; OhPiChamber überschreibt sie ohnehin mit deiner ID. `id` ist deine eigene Kennung für den Eintrag. `kind` ist `issue` (Standard) oder `pull`. `text` ist optionaler Kontext für das Modell, 1 bis 16000 Zeichen nach dem Trimmen. `data` ist optionales JSON nach deinem Belieben (Status, Kommentare, was auch immer), serialisiert bis zu 16000 Zeichen. OhPiChamber speichert es zusammen mit dem Chip und gibt es unverändert in `ctx.item` zurück, wenn der Nutzer den Chip anklickt; das Modell bekommt es nie zu sehen.
 
 `startSession` akzeptiert `projectId`, ohne das aktive Projekt zu wechseln. `worktree` weglassen für das Zielverzeichnis, `true` für einen generierten Worktree, `{ kind: "existing", directory }` für einen bekannten oder `{ kind: "new", name?, baseBranch? }` für einen neuen. Der Name gilt für Branch und Worktree. `navigation` ist standardmäßig `"preserve"`; `"open"` öffnet den neuen Chat. Modell, Agent und Variante der ersten Nachricht werden beim Start festgehalten.
 
@@ -159,9 +159,9 @@ Ohne `send` ersetzt `prompt` den Text im Chatfeld. Mit `send: true` sendet es di
 const user = await host.request({ method: "GET", path: "/api/v2/user" });
 ```
 
-`path` beginnt mit `/` und hat weder Schema noch Host; OpenChamber hängt ihn an den `apiOrigin` aus deinem Manifest und fügt den `Authorization`-Header hinzu. Token-Integrationen senden den eingefügten Token unverändert, als `Bearer <token>`, wenn das Manifest `token.scheme: "bearer"` setzt, oder als `Basic base64(username:token)`, wenn es `"basic"` setzt. OAuth- und Linear-Integrationen senden immer `Bearer`. Das Ergebnis ist `{ status, body }`. Der Body ist Text; JSON parst du selbst.
+`path` beginnt mit `/` und hat weder Schema noch Host; OhPiChamber hängt ihn an den `apiOrigin` aus deinem Manifest und fügt den `Authorization`-Header hinzu. Token-Integrationen senden den eingefügten Token unverändert, als `Bearer <token>`, wenn das Manifest `token.scheme: "bearer"` setzt, oder als `Basic base64(username:token)`, wenn es `"basic"` setzt. OAuth- und Linear-Integrationen senden immer `Bearer`. Das Ergebnis ist `{ status, body }`. Der Body ist Text; JSON parst du selbst.
 
-Eine Linear-Integration darf außerdem `GET /api/linear/issues/get` aufrufen, das OpenChamber aus seiner eigenen Linear-Route beantwortet.
+Eine Linear-Integration darf außerdem `GET /api/linear/issues/get` aufrufen, das OhPiChamber aus seiner eigenen Linear-Route beantwortet.
 
 Keine Antwort innerhalb von 20 Sekunden ist `HOST_TIMEOUT`.
 
@@ -177,7 +177,7 @@ try {
 
 ## serviceRequest
 
-Deklariert das Manifest `contributes.service`, startet OpenChamber diesen Prozess, und deine Seite spricht über dieselbe Art von Aufruf mit ihm. Die Seite öffnet den Socket nie selbst.
+Deklariert das Manifest `contributes.service`, startet OhPiChamber diesen Prozess, und deine Seite spricht über dieselbe Art von Aufruf mit ihm. Die Seite öffnet den Socket nie selbst.
 
 ```ts
 const status = await host.serviceStatus();
@@ -188,7 +188,7 @@ const result = await host.serviceRequest({ method: "GET", path: "/containers" })
 
 ## Sitzungsereignisse
 
-Deine Seite weiß nur von einer Sitzung, solange sie offen ist. Dein Dienst kann mehr wissen: Deklariere `contributes.sessionEvents` neben `contributes.service`, und OpenChamber schickt die Ereignisse, die du auflistest, an den Dienst, aus jedem Projekt, ob ein Fenster offen ist oder nicht.
+Deine Seite weiß nur von einer Sitzung, solange sie offen ist. Dein Dienst kann mehr wissen: Deklariere `contributes.sessionEvents` neben `contributes.service`, und OhPiChamber schickt die Ereignisse, die du auflistest, an den Dienst, aus jedem Projekt, ob ein Fenster offen ist oder nicht.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host" },
@@ -200,7 +200,7 @@ Die Ereignisse sind `turn-started`, `session-created`, `session-archived`, `sess
 Jedes Ereignis kommt als ein `POST /session-events` mit dem Bearer-Token des Dienstes an. Lies es mit `readSessionEventRequest` und antworte mit `{ "ok": true }`:
 
 ```ts
-import { SESSION_EVENTS_PATH, readSessionEventRequest } from "@openchamber/sdk";
+import { SESSION_EVENTS_PATH, readSessionEventRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === SESSION_EVENTS_PATH) {
@@ -214,14 +214,14 @@ if (url.pathname === SESSION_EVENTS_PATH) {
 }
 ```
 
-Die Ereignisse jedes Projekts werden geschickt; vergleiche `event.project.directory` mit deinen eigenen Einstellungen und antworte für den Rest mit `{ "ok": true }`. Die Zustellung erfolgt höchstens einmal und in Reihenfolge, eine Anfrage nach der anderen; eine fehlgeschlagene Antwort verwirft deine Ereignisse für 30 Sekunden, und nichts wird nachgeliefert, nachdem OpenChamber oder dein Dienst nicht erreichbar war. Der Dienst braucht dafür kein Panel. Das Beispiel `session-events-log` schreibt jedes Ereignis in eine Datei.
+Die Ereignisse jedes Projekts werden geschickt; vergleiche `event.project.directory` mit deinen eigenen Einstellungen und antworte für den Rest mit `{ "ok": true }`. Die Zustellung erfolgt höchstens einmal und in Reihenfolge, eine Anfrage nach der anderen; eine fehlgeschlagene Antwort verwirft deine Ereignisse für 30 Sekunden, und nichts wird nachgeliefert, nachdem OhPiChamber oder dein Dienst nicht erreichbar war. Der Dienst braucht dafür kein Panel. Das Beispiel `session-events-log` schreibt jedes Ereignis in eine Datei.
 
-## OpenChamber aus deinem Dienst aufrufen
+## OhPiChamber aus deinem Dienst aufrufen
 
-Ein Dienst kann handeln, ohne dass ein Fenster offen ist. `createServiceHost` ist sein Weg zurück zu OpenChamber:
+Ein Dienst kann handeln, ohne dass ein Fenster offen ist. `createServiceHost` ist sein Weg zurück zu OhPiChamber:
 
 ```ts
-import { createServiceHost } from '@openchamber/sdk';
+import { createServiceHost } from 'ohpichamber-sdk';
 
 const host = createServiceHost({ env: process.env });
 
@@ -241,7 +241,7 @@ Um die Anfragen des Agenten woandershin zu bringen, etwa in eine Chat-App, füge
 
 ## Laufen, ohne dass jemand fragt
 
-Ein Dienst startet bei der ersten Anfrage, und der Dienst einer Rolle stoppt im Leerlauf. `service.keepRunning: true` startet ihn mit OpenChamber und holt ihn zurück, wenn er stoppt. `service.schedule` weckt ihn nach Zeitplan:
+Ein Dienst startet bei der ersten Anfrage, und der Dienst einer Rolle stoppt im Leerlauf. `service.keepRunning: true` startet ihn mit OhPiChamber und holt ihn zurück, wenn er stoppt. `service.schedule` weckt ihn nach Zeitplan:
 
 ```json
 "service": {
@@ -252,7 +252,7 @@ Ein Dienst startet bei der ersten Anfrage, und der Dienst einer Rolle stoppt im 
 }
 ```
 
-Ein Lauf ist ein `POST /schedule`. Lies ihn mit `readServiceScheduleRequest` und antworte mit 200. Ein Lauf, der verpasst wird, während OpenChamber nicht läuft, entfällt. Ein Dienst, der externe Ereignisse braucht, hält seine eigene Verbindung oder pollt.
+Ein Lauf ist ein `POST /schedule`. Lies ihn mit `readServiceScheduleRequest` und antworte mit 200. Ein Lauf, der verpasst wird, während OhPiChamber nicht läuft, entfällt. Ein Dienst, der externe Ereignisse braucht, hält seine eigene Verbindung oder pollt.
 
 ## Zeilen im @-Menü
 
@@ -281,7 +281,7 @@ host.onBlock(({ args, answered }) => draw(args.key, answered));
 button.onclick = () => host.answerBlock('Close this ticket');
 ```
 
-Setze `"answers": true` bei einer Komponente, die das tut. Agenten werden angewiesen, mit ihr statt mit der eingebauten Auswahl zu fragen, wenn ihre Beschreibung passt, und eine Seite, die auf eine Antwort wartet, lässt ihren Senden-Button weg. Unter einem solchen Block bietet OpenChamber dasselbe Notizfeld wie bei seinen eigenen Formularen an: Der Agent liest die Notiz zusammen mit deiner Antwort, und eine Notiz allein ist ebenfalls eine Antwort.
+Setze `"answers": true` bei einer Komponente, die das tut. Agenten werden angewiesen, mit ihr statt mit der eingebauten Auswahl zu fragen, wenn ihre Beschreibung passt, und eine Seite, die auf eine Antwort wartet, lässt ihren Senden-Button weg. Unter einem solchen Block bietet OhPiChamber dasselbe Notizfeld wie bei seinen eigenen Formularen an: Der Agent liest die Notiz zusammen mit deiner Antwort, und eine Notiz allein ist ebenfalls eine Antwort.
 
 Die Argumente schreibt ein Modell, also kann Text von einer Webseite oder aus einem Ticket sie steuern. Behandle sie als nicht vertrauenswürdig und tu nichts mit Nebenwirkungen, bis der Nutzer klickt.
 
@@ -298,12 +298,12 @@ Ein Dienst kann die Benachrichtigungen des Nutzers zustellen, neben Desktop und 
 }
 ```
 
-OpenChamber zeichnet aus dieser Beschreibung eine Kontokarte für den Kanal unter Einstellungen → Integrationen und verwaltet das Konto: Der Nutzer verbindet es dort, das Token bleibt in OpenChamber, und dein Dienst sieht es nie. Sobald ein Konto verbunden ist, geht jede Benachrichtigung, die OpenChamber ans Telefon schicken würde, auch an deinen Dienst, nach den Benachrichtigungseinstellungen des Nutzers und nur, solange kein Fenster sichtbar ist, es sei denn, der Nutzer hat gewählt, immer benachrichtigt zu werden. Das Pausieren der Erweiterung beendet es.
+OhPiChamber zeichnet aus dieser Beschreibung eine Kontokarte für den Kanal unter Einstellungen → Integrationen und verwaltet das Konto: Der Nutzer verbindet es dort, das Token bleibt in OhPiChamber, und dein Dienst sieht es nie. Sobald ein Konto verbunden ist, geht jede Benachrichtigung, die OhPiChamber ans Telefon schicken würde, auch an deinen Dienst, nach den Benachrichtigungseinstellungen des Nutzers und nur, solange kein Fenster sichtbar ist, es sei denn, der Nutzer hat gewählt, immer benachrichtigt zu werden. Das Pausieren der Erweiterung beendet es.
 
-OpenChamber leitet drei Aufrufe an `POST /notifications` weiter: `auth.probe` (ist dieser Server einer, an den du zustellst), `auth.verify` (wem gehört dieses Token) und `notify` (eine Benachrichtigung). Lies jeden mit `readNotificationsProviderRequest` und erreiche den Server des Kanals nur über den Outbound-Helfer, der deine Anfrage mit dem Handle des Aufrufs an OpenChamber schickt; OpenChamber fügt das Token hinzu und hält die Anfrage auf dem Server des Kontos.
+OhPiChamber leitet drei Aufrufe an `POST /notifications` weiter: `auth.probe` (ist dieser Server einer, an den du zustellst), `auth.verify` (wem gehört dieses Token) und `notify` (eine Benachrichtigung). Lies jeden mit `readNotificationsProviderRequest` und erreiche den Server des Kanals nur über den Outbound-Helfer, der deine Anfrage mit dem Handle des Aufrufs an OhPiChamber schickt; OhPiChamber fügt das Token hinzu und hält die Anfrage auf dem Server des Kontos.
 
 ```ts
-import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "@openchamber/sdk";
+import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createNotificationsOutbound({ env: process.env });
 
@@ -328,7 +328,7 @@ In welchen Raum oder Kanal ein Projekt geht, entscheidet deine Erweiterung selbs
 
 ## Tracker
 
-Ein Dienst kann neben Linear ein Tracker für Arbeitselemente sein: Deklariere `provides: ["tracker"]` und beschreibe den Tracker in `contributes.tracker`. OpenChamber listet ihn dann überall neben Linear, wo Tracker auftauchen, allein aus dem Manifest, bevor der Dienst je läuft.
+Ein Dienst kann neben Linear ein Tracker für Arbeitselemente sein: Deklariere `provides: ["tracker"]` und beschreibe den Tracker in `contributes.tracker`. OhPiChamber listet ihn dann überall neben Linear, wo Tracker auftauchen, allein aus dem Manifest, bevor der Dienst je läuft.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["tracker"] },
@@ -344,12 +344,12 @@ Ein Dienst kann neben Linear ein Tracker für Arbeitselemente sein: Deklariere `
 }
 ```
 
-Der Nutzer verbindet Konten auf der Karte des Trackers unter Erweiterungskonten: mit einem Token oder per Anmeldung im Browser, wenn du `auth.oauth` deklarierst (OpenChamber führt die Anmeldung mit der Client-ID durch, die der Nutzer eingibt, und behält die Tokens). Dein Dienst sieht nie Zugangsdaten. `urls.item` sind Vorlagen für die Adresse eines Elements, mit `{id}` für den Bezeichner (auch als `?name={id}`, wenn er in der Query reist); OpenChamber kompiliert sie, damit eingefügte Links zu verknüpften Elementen werden. `identifier` sagt, wie der Schlüssel aussieht: `key-number` (`PROJ-42`), `number` oder `short-code`.
+Der Nutzer verbindet Konten auf der Karte des Trackers unter Erweiterungskonten: mit einem Token oder per Anmeldung im Browser, wenn du `auth.oauth` deklarierst (OhPiChamber führt die Anmeldung mit der Client-ID durch, die der Nutzer eingibt, und behält die Tokens). Dein Dienst sieht nie Zugangsdaten. `urls.item` sind Vorlagen für die Adresse eines Elements, mit `{id}` für den Bezeichner (auch als `?name={id}`, wenn er in der Query reist); OhPiChamber kompiliert sie, damit eingefügte Links zu verknüpften Elementen werden. `identifier` sagt, wie der Schlüssel aussieht: `key-number` (`PROJ-42`), `number` oder `short-code`.
 
-OpenChamber leitet neun Aufrufe an `POST /tracker` weiter: `auth.probe` und `auth.verify`, die Lesezugriffe `items.list`, `items.get`, `items.liveSummaries`, `states.list` und `containers.list` sowie die Schreibzugriffe `items.updateState` und `comments.create`. Lies jeden mit `readTrackerProviderRequest`, antworte in den neutralen Elementformen und erreiche den Server des Trackers nur über den Outbound-Helfer, der deine Anfrage mit dem Handle des Aufrufs an OpenChamber schickt; OpenChamber fügt die Zugangsdaten hinzu und hält die Anfrage auf dem Server des Kontos. Das Handle eines Lesezugriffs sendet nur `GET`.
+OhPiChamber leitet neun Aufrufe an `POST /tracker` weiter: `auth.probe` und `auth.verify`, die Lesezugriffe `items.list`, `items.get`, `items.liveSummaries`, `states.list` und `containers.list` sowie die Schreibzugriffe `items.updateState` und `comments.create`. Lies jeden mit `readTrackerProviderRequest`, antworte in den neutralen Elementformen und erreiche den Server des Trackers nur über den Outbound-Helfer, der deine Anfrage mit dem Handle des Aufrufs an OhPiChamber schickt; OhPiChamber fügt die Zugangsdaten hinzu und hält die Anfrage auf dem Server des Kontos. Das Handle eines Lesezugriffs sendet nur `GET`.
 
 ```ts
-import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "@openchamber/sdk";
+import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createTrackerOutbound({ env: process.env });
 
@@ -366,23 +366,23 @@ if (url.pathname === TRACKER_PROVIDER_PATH) {
 }
 ```
 
-Schaltet der Nutzer Sitzungskommentare ein, ruft OpenChamber `comments.create` mit "session started", "completed" oder "failed" und einem Link zur Sitzung auf, je einmal; der Kommentar trägt nichts weiter. Das Beispiel `tracker-provider` ist ein vollständiger Tracker mit einem Fake-Server zum Ausprobieren.
+Schaltet der Nutzer Sitzungskommentare ein, ruft OhPiChamber `comments.create` mit "session started", "completed" oder "failed" und einem Link zur Sitzung auf, je einmal; der Kommentar trägt nichts weiter. Das Beispiel `tracker-provider` ist ein vollständiger Tracker mit einem Fake-Server zum Ausprobieren.
 
 ## Nutzungsanbieter
 
-Ein Dienst kann die Nutzung neben den eingebauten Anbietern melden: Deklariere `provides: ["quota"]` und zähle in `contributes.quota.providers` die OpenCode-Anbieter auf, deren Zugangsdaten er braucht. OpenChamber nennt den Anbieter `ext-<panel.id>`, zeichnet seine Karte mit Name und Symbol der Erweiterung und fragt ihn so wie einen eingebauten Anbieter.
+Ein Dienst kann die Nutzung neben den eingebauten Anbietern melden: Deklariere `provides: ["quota"]` und zähle in `contributes.quota.providers` die OpenCode-Anbieter auf, deren Zugangsdaten er braucht. OhPiChamber nennt den Anbieter `ext-<panel.id>`, zeichnet seine Karte mit Name und Symbol der Erweiterung und fragt ihn so wie einen eingebauten Anbieter.
 
 ```json
 "service": { "entry": "service/main.js", "runtime": "host", "provides": ["quota"] },
 "quota": { "providers": ["openrouter"] }
 ```
 
-Der Freigabedialog zählt diese Anbieter auf, und eine Version, die die Liste ändert, fragt erneut. Bei jeder Aktualisierung sendet OpenChamber einen Aufruf, `usage.read`, an `POST /quota`; `input.credentials` enthält die Zugangsdaten, die OpenCode für jeden aufgezählten Anbieter hält, für den es welche hat (einen API-Schlüssel oder die Tokens einer Browser-Anmeldung), und sonst nichts aus dem Speicher. Ein aufgezählter Anbieter ohne Zugangsdaten in OpenCode wird als nicht eingerichtet angezeigt, und der Dienst wird nicht aufgerufen; eine leere Liste ist erlaubt, für einen Anbieter, dessen Schlüssel in den eigenen Einstellungen der Erweiterung liegt.
+Der Freigabedialog zählt diese Anbieter auf, und eine Version, die die Liste ändert, fragt erneut. Bei jeder Aktualisierung sendet OhPiChamber einen Aufruf, `usage.read`, an `POST /quota`; `input.credentials` enthält die Zugangsdaten, die OpenCode für jeden aufgezählten Anbieter hält, für den es welche hat (einen API-Schlüssel oder die Tokens einer Browser-Anmeldung), und sonst nichts aus dem Speicher. Ein aufgezählter Anbieter ohne Zugangsdaten in OpenCode wird als nicht eingerichtet angezeigt, und der Dienst wird nicht aufgerufen; eine leere Liste ist erlaubt, für einen Anbieter, dessen Schlüssel in den eigenen Einstellungen der Erweiterung liegt.
 
-Lies den Body mit `readQuotaProviderRequest` und antworte mit `{ ok: true, data }` und dem Ergebnis, das ein eingebauter Anbieter berechnet: `ok`, `configured`, `error`, `planLabel` und `usage.windows` nach Fensternamen, jedes mit `usedPercent`, `windowSeconds`, `resetAt` (Epoche in Millisekunden) und optional `valueLabel` oder `value`, dazu `usage.models` für Fenster je Modell. OpenChamber leitet den verbleibenden Anteil, den Countdown bis zum Reset und die formatierten Zeichenketten ab, sodass die Karte der eines eingebauten Anbieters entspricht.
+Lies den Body mit `readQuotaProviderRequest` und antworte mit `{ ok: true, data }` und dem Ergebnis, das ein eingebauter Anbieter berechnet: `ok`, `configured`, `error`, `planLabel` und `usage.windows` nach Fensternamen, jedes mit `usedPercent`, `windowSeconds`, `resetAt` (Epoche in Millisekunden) und optional `valueLabel` oder `value`, dazu `usage.models` für Fenster je Modell. OhPiChamber leitet den verbleibenden Anteil, den Countdown bis zum Reset und die formatierten Zeichenketten ab, sodass die Karte der eines eingebauten Anbieters entspricht.
 
 ```ts
-import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "@openchamber/sdk";
+import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === QUOTA_PROVIDER_PATH) {
@@ -406,7 +406,7 @@ Ein relativer Pfad liegt innerhalb des offenen Projekts und braucht die Berechti
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/openchamber/config.json");
+const info = await host.stat("~/.config/ohpichamber/config.json");
 ```
 
 Grenzen: Pfad bis 1024 Zeichen, Inhalt bis 2.000.000 Zeichen, Auflistung bis 2000 Einträge. Über der Inhaltsgrenze ist `FILE_TOO_LARGE`.
@@ -425,9 +425,9 @@ Fehlgeschlagene Aufrufe werfen `HostRequestError`. `code` ist einer der folgende
 
 | Code | Wann |
 | --- | --- |
-| `HOST_UNAVAILABLE` | kein window, nicht innerhalb von OpenChamber, oder `dispose()` wurde aufgerufen |
+| `HOST_UNAVAILABLE` | kein window, nicht innerhalb von OhPiChamber, oder `dispose()` wurde aufgerufen |
 | `HOST_TIMEOUT` | 20 Sekunden lang keine Antwort |
-| `HOST_REJECTED` | OpenChamber hat abgelehnt oder mit einem Code geantwortet, den dieses SDK nicht kennt |
+| `HOST_REJECTED` | OhPiChamber hat abgelehnt oder mit einem Code geantwortet, den dieses SDK nicht kennt |
 | `DISCONNECTED` | kein Token oder keine Linear-Verbindung für deine Integration |
 | `BAD_PATH` | `path` war fehlerhaft oder wollte den erlaubten Origin verlassen |
 | `NO_INTEGRATION` | das Manifest hat keine `integration` |
@@ -443,7 +443,7 @@ Fehlgeschlagene Aufrufe werfen `HostRequestError`. `code` ist einer der folgende
 | `DENIED` | das Betriebssystem hat die Dateioperation verweigert |
 | `NO_MODEL` | `generate` ohne verfügbares Small Model |
 | `MODEL_FAILED` | das Small Model hat einen Fehler zurückgegeben |
-| `UNSUPPORTED` | dieses OpenChamber kann den Aufruf nicht ausführen, zum Beispiel `openCommit` ohne Diff-Ansicht |
+| `UNSUPPORTED` | dieses OhPiChamber kann den Aufruf nicht ausführen, zum Beispiel `openCommit` ohne Diff-Ansicht |
 
 ## Verwandt
 

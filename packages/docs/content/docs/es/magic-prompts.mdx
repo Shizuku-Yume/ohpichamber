@@ -1,11 +1,11 @@
 ---
 title: Magic Prompts
-description: Personaliza los prompts integrados detrás de los flujos automatizados de OpenChamber.
+description: Personaliza los prompts integrados detrás de los flujos automatizados de OhPiChamber.
 ---
 
 # Magic Prompts
 
-OpenChamber usa prompts integrados en segundo plano cada vez que hace algo automáticamente: escribir un mensaje de commit, redactar un PR, revisar una issue, resolver un conflicto, resumir una sesión. Magic Prompts es donde lees y reescribes esos prompts. Ábrelo en **Settings → Magic Prompts**.
+OhPiChamber usa prompts integrados en segundo plano cada vez que hace algo automáticamente: escribir un mensaje de commit, redactar un PR, revisar una issue, resolver un conflicto, resumir una sesión. Magic Prompts es donde lees y reescribes esos prompts. Ábrelo en **Settings → Magic Prompts**.
 
 No necesitas esta página para el uso normal. Recurre a ella cuando quieras que un flujo se comporte de otra manera; por ejemplo, mensajes de commit con un estilo particular.
 
@@ -15,7 +15,7 @@ No necesitas esta página para el uso normal. Recurre a ella cuando quieras que 
 2. Elige un prompt de los grupos en la barra lateral: Git, Planning y Session.
 3. Edita el texto y guarda.
 
-Algunos prompts tienen una parte visible (el mensaje que verías) y una parte de instrucciones (guía oculta para el agente). Los prompts pueden incluir `{{placeholders}}` que OpenChamber rellena, como el diff o el título de la issue; mantenlos en su sitio.
+Algunos prompts tienen una parte visible (el mensaje que verías) y una parte de instrucciones (guía oculta para el agente). Los prompts pueden incluir `{{placeholders}}` que OhPiChamber rellena, como el diff o el título de la issue; mantenlos en su sitio.
 
 ## Restablecer
 
@@ -23,13 +23,13 @@ Algunos prompts tienen una parte visible (el mensaje que verías) y una parte de
 
 ## Prompts de proyecto
 
-Un prompt también puede tener una sobrescritura para un solo proyecto. OpenChamber usa la sobrescritura del proyecto si la hay; si no, tu sobrescritura global; y si tampoco, el texto integrado. Una sobrescritura guardada cuenta aunque esté vacía.
+Un prompt también puede tener una sobrescritura para un solo proyecto. OhPiChamber usa la sobrescritura del proyecto si la hay; si no, tu sobrescritura global; y si tampoco, el texto integrado. Una sobrescritura guardada cuenta aunque esté vacía.
 
 Para crear una, elige el proyecto en el selector de la parte superior de la barra lateral y luego **Proyecto** en **Ámbito**. Pulsa **Guardar** debajo de cada bloque que cambies. Los botones para restablecer cambian solo el ámbito que tienes abierto. En **Proyecto**, **Quitar sobrescritura del proyecto** y **Quitar todas las sobrescrituras del proyecto** devuelven tu sobrescritura global o el texto integrado. Si guardas el texto integrado en **Global**, se quita tu sobrescritura global. En **Proyecto**, ese texto queda guardado, así que el proyecto mantiene el texto integrado aunque tu sobrescritura global diga otra cosa.
 
 Las sobrescrituras del proyecto se guardan en la clave `magicPrompts` de `.openchamber/project.json`, en el checkout del proyecto. Es el mismo archivo que la [configuración en el repositorio](/es/repository-config/). Haz commit de él para compartir los prompts con tu equipo. Las sobrescrituras globales siguen en `magic-prompts.json`, en la carpeta de datos del servidor.
 
-Un worktree usa los prompts del proyecto de su checkout principal, salvo que hayas añadido el worktree como proyecto propio. Un chat sin proyecto, una carpeta que no pertenece a ningún proyecto y el trabajo en un espacio aislado usan solo prompts globales. El archivo global siempre es `~/.config/openchamber/magic-prompts.json`.
+Un worktree usa los prompts del proyecto de su checkout principal, salvo que hayas añadido el worktree como proyecto propio. Un chat sin proyecto, una carpeta que no pertenece a ningún proyecto y el trabajo en un espacio aislado usan solo prompts globales. El archivo global siempre es `~/.config/ohpichamber/magic-prompts.json`.
 
 Si no se puede leer el archivo del proyecto, por ejemplo porque no es JSON válido, los flujos que lo necesitan se detienen con un error y no recurren al texto integrado. Settings muestra el motivo y un botón **Reintentar**. Que falte el archivo del proyecto no es un error. El proyecto hereda entonces todos los prompts.
 

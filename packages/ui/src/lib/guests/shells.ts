@@ -1,5 +1,5 @@
-import type { GuestEndedShell, GuestRunningShell, GuestRunningShellsSnapshot, GuestShellOutputResult, GuestShellsScope } from '@openchamber/sdk';
-import { GUEST_SHELLS_MAX, HostRequestError } from '@openchamber/sdk';
+import type { GuestEndedShell, GuestRunningShell, GuestRunningShellsSnapshot, GuestShellOutputResult, GuestShellsScope } from 'ohpichamber-sdk';
+import { GUEST_SHELLS_MAX, HostRequestError } from 'ohpichamber-sdk';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { sessionsInTree, useBackgroundShellsStore, type EndedShell, type TrackedShell } from '@/sync/background-shells';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
@@ -79,7 +79,7 @@ export const readGuestShells = (scope: GuestShellsScope): GuestRunningShellsSnap
 export const readGuestShellOutput = async (shellId: string, cursor?: number, tailBytes?: number, signal?: AbortSignal): Promise<GuestShellOutputResult> => {
   const store = useBackgroundShellsStore.getState();
   const shell = [...store.byId.values(), ...store.ended.values()].find((entry) => entry.jobId === shellId);
-  if (!shell || ('termination' in shell && shell.termination.reason === 'stopped')) throw new HostRequestError('NOT_FOUND', 'OpenChamber has not seen that shell.');
+  if (!shell || ('termination' in shell && shell.termination.reason === 'stopped')) throw new HostRequestError('NOT_FOUND', 'OhPiChamber has not seen that shell.');
   try {
     const result = await canonicalClient.getShellOutput(shell.sessionId, { jobId: shell.jobId, epoch: shell.epoch, workerGeneration: shell.workerGeneration }, String(cursor ?? 0), tailBytes ?? 65536, signal);
     return { cursor: Number(result.cursor), output: result.output, skipped: false };

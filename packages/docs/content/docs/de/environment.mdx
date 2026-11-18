@@ -1,32 +1,32 @@
 ---
 title: Umgebungsvariablen
-description: Konfiguriere OpenChamber mit Umgebungsvariablen.
+description: Konfiguriere OhPiChamber mit Umgebungsvariablen.
 ---
 
 # Umgebungsvariablen
 
-OpenChamber liest diese Umgebungsvariablen beim Start. Für Startdienste speichert `openchamber startup enable` die aktuelle Umgebung standardmäßig als Schnappschuss, also führe den Befehl nach Änderungen an den Variablen, die der Dienst verwenden soll, erneut aus.
+OhPiChamber liest diese Umgebungsvariablen beim Start. Für Startdienste speichert `ohpichamber startup enable` die aktuelle Umgebung standardmäßig als Schnappschuss, also führe den Befehl nach Änderungen an den Variablen, die der Dienst verwenden soll, erneut aus.
 
 ## Variablen für Agent-Sitzungen, Git und das Terminal
 
-Um Agent-Sitzungen, Git, dem Terminal und [Projektaktionen](/de/project-actions/) eigene Variablen mitzugeben, etwa ein API-Token oder die Adresse einer Datenbank, trage sie unter **Einstellungen → Allgemein → Umgebungsvariablen** ein, statt sie vor dem Start von OpenChamber zu exportieren. Die Werte bleiben auf dem Rechner, auf dem OpenChamber läuft, in `environment.json` im Datenverzeichnis, und nur dein Benutzer kann sie lesen. Die Einstellungen zeigen einen Wert nie wieder an: Du kannst ihn ersetzen oder entfernen, aber nicht zurücklesen.
+Um Agent-Sitzungen, Git, dem Terminal und [Projektaktionen](/de/project-actions/) eigene Variablen mitzugeben, etwa ein API-Token oder die Adresse einer Datenbank, trage sie unter **Einstellungen → Allgemein → Umgebungsvariablen** ein, statt sie vor dem Start von OhPiChamber zu exportieren. Die Werte bleiben auf dem Rechner, auf dem OhPiChamber läuft, in `environment.json` im Datenverzeichnis, und nur dein Benutzer kann sie lesen. Die Einstellungen zeigen einen Wert nie wieder an: Du kannst ihn ersetzen oder entfernen, aber nicht zurücklesen.
 
 - Agent-Sitzungen erhalten sie beim Start.
 - Git, das Terminal und Projektaktionen bekommen sie beim nächsten Lauf.
 
 Ein Projekt kann unter **Einstellungen → Projekte** eigene Variablen hinzufügen oder einen Befehl, der sie ausgibt, etwa `direnv export json`. Siehe [Projekte](/de/projects/#projektumgebung).
 
-Alles Weitere unten liest OpenChamber selbst beim Start.
+Alles Weitere unten liest OhPiChamber selbst beim Start.
 
-## OpenChamber-Server
+## OhPiChamber-Server
 
 ### `OPENCHAMBER_HOST`
 
-Bind-Adresse für den OpenChamber-Webserver. Verwende `0.0.0.0`, um Zugriff von anderen Maschinen zu erlauben.
+Bind-Adresse für den OhPiChamber-Webserver. Verwende `0.0.0.0`, um Zugriff von anderen Maschinen zu erlauben.
 
 ### `OPENCHAMBER_LAN_URL`
 
-Die Adresse, unter der andere Geräte in deinem Netzwerk OpenChamber erreichen, zum Beispiel `http://192.168.1.20:3000`. Kopplungslinks und QR-Codes bieten sie statt der selbst erkannten Adresse an. Setze sie, wenn diese Erkennung falsch liegt, etwa in Docker, wo OpenChamber nur die interne Adresse des Containers sieht.
+Die Adresse, unter der andere Geräte in deinem Netzwerk OhPiChamber erreichen, zum Beispiel `http://192.168.1.20:3000`. Kopplungslinks und QR-Codes bieten sie statt der selbst erkannten Adresse an. Setze sie, wenn diese Erkennung falsch liegt, etwa in Docker, wo OhPiChamber nur die interne Adresse des Containers sieht.
 
 ### `OPENCHAMBER_UI_PASSWORD`
 
@@ -42,24 +42,23 @@ Wie lange eine Anmeldung gilt, in Tagen, auf einem Gerät, dem du vertraust. Sta
 
 ### `OPENCODE_JWT_SECRET`
 
-Überschreibt das Geheimnis zum Signieren von Host-UI-Sitzungstokens. Diese Einstellung steuert die Sitzungssignierung des Hosts und betrifft nicht die Agent-Runtime. Halte diesen Wert geheim. Wenn gesetzt, ist die globale Abmeldung nicht verfügbar, da OpenChamber das Signiergeheimnis nicht rotieren kann.
-
+Überschreibt das Geheimnis zum Signieren von Host-UI-Sitzungstokens. Diese Einstellung steuert die Sitzungssignierung des Hosts und betrifft nicht die Agent-Runtime. Halte diesen Wert geheim. Wenn gesetzt, ist die globale Abmeldung nicht verfügbar, da OhPiChamber das Signiergeheimnis nicht rotieren kann.
 
 ### `OPENCHAMBER_API_ONLY`
 
-Startet OpenChamber im Headless-Modus, wenn auf `true` oder `1` gesetzt. API-Routen bleiben für Desktop- und Mobile-Clients verfügbar, aber die Browser-Oberfläche wird nicht ausgeliefert.
+Startet OhPiChamber im Headless-Modus, wenn auf `true` oder `1` gesetzt. API-Routen bleiben für Desktop- und Mobile-Clients verfügbar, aber die Browser-Oberfläche wird nicht ausgeliefert.
 
 ### `OPENCHAMBER_FRAME_ANCESTORS`
 
-Origins, die OpenChamber in einem Frame auf ihrer eigenen Seite zeigen dürfen, durch Leerzeichen getrennt, zum Beispiel `https://dash.example.com`. `*` erlaubt jede Seite. Standardmäßig dürfen nur OpenChamber selbst und seine Desktop- und Mobile-Apps es einbetten, damit keine fremde Seite seine Schaltflächen überlagern kann.
+Origins, die OhPiChamber in einem Frame auf ihrer eigenen Seite zeigen dürfen, durch Leerzeichen getrennt, zum Beispiel `https://dash.example.com`. `*` erlaubt jede Seite. Standardmäßig dürfen nur OhPiChamber selbst und seine Desktop- und Mobile-Apps es einbetten, damit keine fremde Seite seine Schaltflächen überlagern kann.
 
 ### `OPENCHAMBER_DATA_DIR`
 
-Überschreibt das OpenChamber-Datenverzeichnis. Standard ist `~/.config/openchamber`.
+Überschreibt das OhPiChamber-Datenverzeichnis. Standard ist `~/.config/ohpichamber`.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-Verschiebt die verwalteten Chat-Verzeichnisse, die OpenChamber für Chats ohne Projekt anlegt. Standard ist `~/.config/openchamber/chats`. Bestehende Chats werden nicht verschoben.
+Verschiebt die verwalteten Chat-Verzeichnisse, die OhPiChamber für Chats ohne Projekt anlegt. Standard ist `~/.config/ohpichamber/chats`. Bestehende Chats werden nicht verschoben.
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -73,33 +72,25 @@ Deaktiviert die Komprimierung von API-Antworten, wenn auf `true` oder `1` gesetz
 
 Aktiviert ausführliche HTTP-Request-Logs, wenn auf `true` oder `1` gesetzt.
 
-### `OPENCHAMBER_UPDATE_API_URL`
-
-Überschreibt den API-Endpunkt für Update-Prüfungen. Die meisten Nutzer sollten das nicht setzen.
-
-### `OPENCHAMBER_PACKAGE_MANAGER`
-
-Erzwingt den Paketmanager, den Update-Operationen verwenden, wenn die automatische Erkennung falsch liegt.
-
 ## Proxy
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-Leitet die eigenen ausgehenden Anfragen von OpenChamber, etwa Nutzungslimits und Skill-Kataloge, über einen Proxy. Kleingeschriebene Namen funktionieren ebenfalls. Hosts in `NO_PROXY` verbinden sich direkt, `localhost`, `127.0.0.1` und `::1` immer, sodass Anmelde-Callbacks und lokale Verbindungen weiter funktionieren.
+Leitet die eigenen ausgehenden Anfragen von OhPiChamber, etwa Nutzungslimits und Skill-Kataloge, über einen Proxy. Kleingeschriebene Namen funktionieren ebenfalls. Hosts in `NO_PROXY` verbinden sich direkt, `localhost`, `127.0.0.1` und `::1` immer, sodass Anmelde-Callbacks und lokale Verbindungen weiter funktionieren.
 
 ## Terminal und Git
 
 ### `OPENCHAMBER_TERMINAL_SHELL`
 
-Shell-Executable, die OpenChamber für Terminal-Sessions verwendet.
+Shell-Executable, die OhPiChamber für Terminal-Sessions verwendet.
 
 ### `OPENCHAMBER_GIT_BINARY`
 
-Git-Executable, die OpenChamber-Git-Funktionen verwenden.
+Git-Executable, die OhPiChamber-Git-Funktionen verwenden.
 
 ### `GIT_BINARY`
 
-Alternative Git-Executable-Überschreibung. Bevorzuge `OPENCHAMBER_GIT_BINARY` für OpenChamber-spezifische Konfiguration.
+Alternative Git-Executable-Überschreibung. Bevorzuge `OPENCHAMBER_GIT_BINARY` für OhPiChamber-spezifische Konfiguration.
 
 ### `OPENCHAMBER_GIT_READ_CACHE_TTL_MS`
 
@@ -109,7 +100,7 @@ Lebensdauer in Millisekunden für zwischengespeicherte Git-gestützte Dateilesev
 
 ### `OPENAI_API_KEY`
 
-API-Schlüssel, den OpenChamber-Voice-Funktionen verwenden, wenn sie OpenAI selbst aufrufen. An einen eigenen OpenAI-kompatiblen Server wird er nie gesendet: Gib diesem Server in den Einstellungen einen eigenen Schlüssel.
+API-Schlüssel, den OhPiChamber-Voice-Funktionen verwenden, wenn sie OpenAI selbst aufrufen. An einen eigenen OpenAI-kompatiblen Server wird er nie gesendet: Gib diesem Server in den Einstellungen einen eigenen Schlüssel.
 
 ### `OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
 
@@ -117,14 +108,14 @@ Erlaubt entfernte OpenAI-kompatible Basis-URLs für Voice-Funktionen, wenn auf `
 
 ### `NGROK_AUTHTOKEN`
 
-ngrok-Auth-Token, den OpenChamber-Tunnel-Befehle verwenden. Du kannst ngrok auch mit `ngrok config add-authtoken <token>` konfigurieren.
+ngrok-Auth-Token, den OhPiChamber-Tunnel-Befehle verwenden. Du kannst ngrok auch mit `ngrok config add-authtoken <token>` konfigurieren.
 
 ## Laufzeit-Helfer
 
 ### `BUN_BINARY`
 
-Bun-Executable, die OpenChamber beim Starten von Daemon-Prozessen verwenden soll.
+Bun-Executable, die OhPiChamber beim Starten von Daemon-Prozessen verwenden soll.
 
 ### `BUN_INSTALL`
 
-Installationswurzel von Bun. OpenChamber verwendet sie, um `bin/bun` für Daemon-Start und Updates zu finden.
+Installationswurzel von Bun. OhPiChamber verwendet sie, um `bin/bun` für Daemon-Start und Updates zu finden.

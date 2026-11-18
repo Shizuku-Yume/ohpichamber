@@ -15,6 +15,22 @@ export const RELEASE_PACKAGE_FILES = [
   'packages/web/package.json',
   'packages/sdk/package.json',
   'packages/electron/package.json',
+  'packages/mobile/package.json',
+  'packages/sdk/examples/agent-desk/package.json',
+  'packages/sdk/examples/browser-provider-stub/package.json',
+  'packages/sdk/examples/checklist-editor/package.json',
+  'packages/sdk/examples/config-editor/package.json',
+  'packages/sdk/examples/git-graph-status/package.json',
+  'packages/sdk/examples/github-token/package.json',
+  'packages/sdk/examples/hello-kit/package.json',
+  'packages/sdk/examples/notification-webhook/package.json',
+  'packages/sdk/examples/quota-provider/package.json',
+  'packages/sdk/examples/service-echo/package.json',
+  'packages/sdk/examples/session-events-log/package.json',
+  'packages/sdk/examples/source-control-provider/package.json',
+  'packages/sdk/examples/tasks-demo/package.json',
+  'packages/sdk/examples/tools-only/package.json',
+  'packages/sdk/examples/tracker-provider/package.json',
 ];
 
 const isDirectRun = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

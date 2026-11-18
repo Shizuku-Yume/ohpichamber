@@ -317,7 +317,7 @@ export const TOOL_PRESENTATIONS = {
     vibe_kill: plainTool('Vibe kill', 'close', ['id']),
     vibe_list: plainTool('Vibe list', 'layout'),
     openchamber: {
-        label: 'OpenChamber', icon: 'openchamber', group: 'call', outputLanguage: 'text',
+        label: 'OhPiChamber', icon: 'openchamber', group: 'call', outputLanguage: 'text',
         describeCall: hostCall,
         describeResult: jsonSummary,
     },

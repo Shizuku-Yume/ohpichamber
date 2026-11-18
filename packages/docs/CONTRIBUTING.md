@@ -1,6 +1,6 @@
 # Docs Authoring Guide
 
-This package contains documentation content source for OpenChamber and OhPiChamber.
+This package contains documentation content source for OhPiChamber.
 
 ## Voice & style
 
@@ -14,17 +14,17 @@ stays the same no matter who is writing.
 ### Who you're writing for
 
 - Assume curiosity, not expertise. The reader knows what they want to do, not
-  how OpenChamber works inside.
+  how OhPiChamber works inside.
 - One page = one job. If a page is answering two unrelated questions, split it.
 
 ### Keep it short
 
 - Lead with the task, not background. The first line should say what the page is
-  for ("Use `openchamber tunnel` to expose a running OpenChamber instance.").
+  for ("Use `ohpichamber tunnel` to expose a running OhPiChamber instance.").
 - Cut anything that doesn't change what the reader does next.
 - A basic page should fit in a screen or two. Long, dense reference pages (like
   Reverse Proxy) are the exception — and they say so in their first line ("Use
-  this page if you run OpenChamber behind...").
+  this page if you run OhPiChamber behind...").
 
 ### Steps
 
@@ -34,17 +34,17 @@ stays the same no matter who is writing.
   they did it right.
 
 ```mdx
-3. Run `openchamber --ui-password be-creative-here`.
+3. Run `ohpichamber --ui-password be-creative-here`.
 4. Open the printed URL (usually `http://localhost:3000`).
 
-You should land on the OpenChamber session list. If you see it, the server is
+You should land on the OhPiChamber session list. If you see it, the server is
 running.
 ```
 
 ### Plain language
 
 - Explain a term the first time it appears, in parentheses, in everyday words:
-  - good: start a tunnel (a public link to your local OpenChamber)
+  - good: start a tunnel (a public link to your local OhPiChamber)
   - bad: start a tunnel — the reader doesn't know what that is yet
 - Prefer common words over internal ones. "App", "version", "page" beat
   "surface", "instance", "route" when the meaning is the same. If an internal
@@ -97,7 +97,7 @@ update every translated copy of the page the same way.
    ```mdx
    ---
    title: Remote Access
-   description: Access OpenChamber from outside your local network.
+   description: Access OhPiChamber from outside your local network.
    ---
    ```
 
@@ -194,7 +194,7 @@ Notes:
 
 ## Localization
 
-The docs are translated into the same languages the OpenChamber app ships in.
+The docs are translated into the same languages the OhPiChamber app ships in.
 English is the source of truth and lives at the root of `content/docs/`. Every
 other language mirrors the English files under a locale folder.
 
@@ -254,7 +254,7 @@ Each translated file needs its **own translated frontmatter** (`title` and
 ```mdx
 ---
 title: Встановлення
-description: Встановіть OpenChamber для десктопа, вебу або мобільних пристроїв.
+description: Встановіть OhPiChamber для десктопа, вебу або мобільних пристроїв.
 ---
 ```
 

@@ -1,14 +1,17 @@
 # Linear OAuth broker hand-off
 
+This fork ships no broker and no built-in Linear application. OAuth sign-in is
+available only when an operator points the server at a broker they run.
+
 ## Required Linear application change
 
-Register this exact redirect URI in the Linear OAuth application used by the
-baked-in client ID:
+The broker operator registers their own Linear OAuth application and this exact
+redirect URI, substituting their own host:
 
-`https://api.openchamber.dev/v1/oauth/linear/callback`
+`https://broker.example.com/v1/oauth/linear/callback`
 
 Linear compares the full redirect URI, including scheme, host, path, and port.
-Deploy the API broker and apply its D1 migration before testing this branch.
+Deploy the broker before testing the flow.
 
 ## Why the original callback failed
 
@@ -28,15 +31,15 @@ Linear requires an exact pre-registered callback. Registering every possible
 desktop or self-hosted address is impossible, and forcing desktop onto one port
 would make startup fail whenever another process owns that port.
 
-## New flow
+## Flow
 
-The built-in Linear client now uses the stable callback broker in
-`openchamber-website/apps/api`:
+When `OPENCHAMBER_LINEAR_BROKER_URL` or `settings.json` `linearBrokerUrl` names a
+broker, the Linear client uses its stable callback:
 
 1. The OpenChamber server generates OAuth state, a PKCE verifier, and a separate
    claim secret.
 2. The broker stores only hashes of state and the claim secret for ten minutes.
-3. Linear sends its authorization code to the stable public callback.
+3. Linear sends its authorization code to the broker's public callback.
 4. The OpenChamber server polls the broker with state and the claim secret.
 5. The OpenChamber server exchanges the code using the PKCE verifier and stores
    the Linear tokens locally.
@@ -46,11 +49,28 @@ The built-in Linear client now uses the stable callback broker in
 The broker never receives the PKCE verifier, access token, or refresh token.
 Private Relay is not involved; the local server only needs outbound HTTPS.
 
+With no broker URL and no explicit redirect URI, OAuth sign-in is unavailable:
+`POST /api/linear/auth/start` answers 400 with `code: 'LINEAR_BROKER_NOT_CONFIGURED'`, and
+`GET /api/linear/auth/status` (and the tracker status) carries
+`signIn: { reason: 'broker-url-missing', setting: 'OPENCHAMBER_LINEAR_BROKER_URL', settingsKey:
+'linearBrokerUrl' }`, which is what the card renders as the reason plus the setting that enables
+it. Workspaces already connected and every non-OAuth Linear path keep working.
+
+## Broker contract
+
+A self-hosted broker exposes the same contract the client expects:
+
+- `POST /start` with `{ state, claimSecret }`; answers with `{ redirectUri }`, which must equal
+  `<broker-url>/callback`.
+- `GET /callback`: where Linear redirects with `code` and `state`.
+- `POST /poll` with `{ state, claimSecret }`; answers `202` while Linear has not redirected yet,
+  then `{ status: 'complete', code }` or `{ status: 'failed', error, errorDescription }`.
+- `POST /complete` with `{ state, claimSecret }`; marks the transaction consumed.
+
 ## Compatibility and configuration
 
-- `OPENCHAMBER_LINEAR_BROKER_URL` or `settings.json` `linearBrokerUrl` selects a
-  self-hosted broker. The default is
-  `https://api.openchamber.dev/v1/oauth/linear`.
+- `OPENCHAMBER_LINEAR_BROKER_URL` or `settings.json` `linearBrokerUrl` selects the
+  broker. There is no default.
 - `OPENCHAMBER_LINEAR_REDIRECT_URI` or `settings.json` `linearRedirectUri`
   bypasses the broker and preserves the direct callback flow for a custom
   Linear OAuth application.
@@ -64,11 +84,8 @@ OpenChamber:
 - `routes.js`: starts authorization and completes broker results during status
   polling.
 
-Hosted API, in the `openchamber-website` repository:
-
-- `apps/api/src/routes/linear-oauth.ts`
-- `apps/api/migrations/0010_linear_oauth_transactions.sql`
-- `apps/api/LINEAR-OAUTH.md`
+The broker is deployed by its operator; no broker source ships in this
+repository.
 
 ## Validation
 
@@ -79,13 +96,4 @@ bunx vitest run \
   packages/web/server/lib/linear/oauth.test.js \
   packages/web/server/lib/linear/auth.test.js \
   packages/web/server/lib/linear/routes.test.js
-```
-
-Hosted API checks:
-
-```sh
-cd apps/api
-bun test src/routes/linear-oauth.test.ts
-bun run check
-bun run build
 ```

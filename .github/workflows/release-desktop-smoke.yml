@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       repository:
-        description: Repository to checkout, for example openchamber/openchamber or daveotero/openchamber
+        description: Repository to checkout, for example Shizuku-Yume/ohpichamber
         required: false
-        default: openchamber/openchamber
+        default: Shizuku-Yume/ohpichamber
         type: string
       ref:
         description: Git ref to build (branch, tag, or sha)
@@ -101,6 +101,9 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+      - name: Generate brand assets
+        run: bun run brand:generate
+
       - name: Build Electron app
         working-directory: packages/electron
         env:
@@ -129,7 +132,7 @@ jobs:
               --config.mac.notarize=false \
               --config.mac.verifyUpdateCodeSignature=false
           fi
-          bun run verify:agent-runtime "dist/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/OpenChamber.app/Contents/Resources"
+          bun run verify:agent-runtime "dist/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/OhPiChamber.app/Contents/Resources"
 
       - name: Verify signature + entitlements + notarization
         if: ${{ secrets.APPLE_CERTIFICATE != '' }}
@@ -358,7 +361,7 @@ jobs:
           MANIFEST: ${{ matrix.manifest }}
         run: |
           set -euo pipefail
-          APPIMAGE="dist/OpenChamber-${VERSION}-linux-${ARTIFACT_ARCH}.AppImage"
+          APPIMAGE="dist/OhPiChamber-${VERSION}-linux-${ARTIFACT_ARCH}.AppImage"
           node ./scripts/verify-update-manifest.mjs "dist/${MANIFEST}" "$APPIMAGE" "$VERSION"
 
       - name: Upload Linux installable artifacts
@@ -366,7 +369,7 @@ jobs:
         with:
           name: desktop-release-smoke-linux-${{ matrix.arch }}
           path: |
-            packages/electron/dist/OpenChamber-${{ steps.versions.outputs.app }}-linux-${{ matrix.artifact_arch }}.AppImage
+            packages/electron/dist/OhPiChamber-${{ steps.versions.outputs.app }}-linux-${{ matrix.artifact_arch }}.AppImage
             packages/electron/dist/${{ matrix.manifest }}
           if-no-files-found: error
           retention-days: ${{ fromJSON(inputs.retention_days) }}

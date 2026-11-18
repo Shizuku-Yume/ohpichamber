@@ -2,7 +2,7 @@
 // a CLI's own login state; it contains no credentials and never calls a forge.
 import fs from 'node:fs/promises';
 import http from 'node:http';
-import { readSourceControlProviderRequest } from '@openchamber/sdk';
+import { readSourceControlProviderRequest } from 'ohpichamber-sdk';
 
 const stateUrl = new URL('./login-state.json', import.meta.url);
 const sha = 'b'.repeat(40);

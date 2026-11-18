@@ -93,7 +93,7 @@ const resolveRegistryDir = (registryDir) => {
   const configured = nonEmptyString(registryDir);
   if (configured) return path.resolve(configured);
   const dataDir = nonEmptyString(process.env.OPENCHAMBER_DATA_DIR);
-  return path.join(dataDir ? path.resolve(dataDir) : path.join(os.homedir(), '.config', 'openchamber'), 'managed-processes');
+  return path.join(dataDir ? path.resolve(dataDir) : path.join(os.homedir(), '.config', 'ohpichamber'), 'managed-processes');
 };
 
 const isPidAlive = (pid) => {

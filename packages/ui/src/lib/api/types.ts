@@ -29,6 +29,7 @@ export type {
   TrackerProviderId,
   TrackerSessionStatusPostInput,
   TrackerSessionStatusPostResult,
+  TrackerSignInUnavailable,
   TrackerStateCategory,
   TrackerStateUpdateInput,
   TrackerStatesResult,
@@ -1646,10 +1647,26 @@ export interface PushAPI {
   subscribe(payload: PushSubscribePayload): Promise<{ ok: true } | null>;
   unsubscribe(payload: PushUnsubscribePayload): Promise<{ ok: true } | null>;
   setVisibility(payload: { visible: boolean; platform?: string }): Promise<{ ok: true } | null>;
+  /**
+   * Whether this server can deliver remote push to phones at all, and the
+   * setting that would turn it on. A server with no push relay configured
+   * sends nothing; the settings page says so from this answer, never by guessing.
+   */
+  nativeStatus(): Promise<NativePushStatus | null>;
   /** Register a native iOS APNs device token (Capacitor mobile app only). */
   registerApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
   unregisterApnsToken(payload: ApnsTokenPayload): Promise<{ ok: true } | null>;
 }
+
+/**
+ * Whether this server can deliver remote push to phones at all. Each
+ * unavailable reason names the setting that would turn it on; the page builds
+ * its sentence from the reason, never from a guess.
+ */
+export type NativePushStatus =
+  | { available: true }
+  | { available: false; reason: 'relay-url-missing'; relaySetting: string }
+  | { available: false; reason: 'direct-config-missing'; relaySetting: string; disabledSetting: string };
 
 type GitHubRepoRef = {
   owner: string;

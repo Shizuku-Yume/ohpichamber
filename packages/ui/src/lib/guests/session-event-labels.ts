@@ -1,4 +1,4 @@
-import type { GuestSessionEventType } from '@openchamber/sdk';
+import type { GuestSessionEventType } from 'ohpichamber-sdk';
 
 import type { I18nKey } from '@/lib/i18n';
 

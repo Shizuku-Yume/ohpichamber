@@ -5,6 +5,8 @@ Read this record before implementation, together with the [agent guide](../AGENT
 ## Current state
 
 **2026-11-18 Task 19 Round-2 visual acceptance and full gate (effort `ux-feedback-2026-11-15`, branch `ux-feedback-2026-11-15/19`, base `4f9a7c7f39`, integration tip `57564bf232`, artifacts `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-18-r2/task19/`):**
+**2026-11-18 Operator cutover (task rebrand/07, base `7e9251f0d9`):** Cut the operator files (`omp-m0-provider.env`, `chats/`) over to OhPiChamber's own data directory, making `~/.config/ohpichamber` the maintainer's real product data directory. Dev/test runs now isolate data from this directory and real-provider checks configure the provider through the app instead of sourcing an environment file.
+
 1. **Full gate on tip `57564bf232` (`gate/FINAL-SUMMARY.txt`):**
    - `bun run check`: exit 0 (5/5 steps: `tsc -b` 3,880 files / 5 projects, `upstream-drift` clean, `error-cause` 0, `css-classes` 2,260 tokens, `upstream-gaps` 662/662 allowlisted / 0 unallowlisted).
    - `bun run type-check`: exit 0 (root + electron + agent-contract + agent-service + mobile).
@@ -315,14 +317,14 @@ Execution order is M1 Host extraction and authenticated credential preflight, M2
 
 ### Running the real provider smoke
 
-To run the real provider test, load the local fish configuration and run the probe:
+To run the real provider test, run the probe directly:
 
 ```fish
-source ~/.config/ohpichamber/omp-m0-provider.env
 bun run scripts/omp-m0/run.mjs --suite capabilities --fixture --real-provider --output /home/shizuku/Project/ohpichamber-omp-artifacts/omp-m0-real-provider.json
 ```
 
-`~/.config/ohpichamber/omp-m0-provider.env` is the operator-managed local configuration containing the already-approved provider settings. It stays outside the repository. The probe reads the exported values, sends one short completion request, and writes only the sanitized result to the evidence directory named in [standards.md](standards.md).
+This probe reads `OMP_M0_PROVIDER_API`, `OMP_M0_PROVIDER_API_KEY`, `OMP_M0_PROVIDER_BASE_URL`, and `OMP_M0_PROVIDER_MODEL` from the shell environment. For M0, these were supplied by the operator environment file (now deleted); to rerun, export these variables directly in the shell for this command. The probe writes only the sanitized report to the `--output` path in the evidence directory named in [standards.md](standards.md).
+
 
 ## Next implementation step
 
@@ -853,3 +855,7 @@ The second independent review (`rowreview/SUMMARY2.md`) re-judged round 4 as 15 
 - **Some commands carry no `acpDescription`.** The projection now prefers it, which fixed `/effort`'s load-order-dependent `Shift+Tab`/`⇧⇥`; `loop`, `retry`, `pin` and similar still fall back because OMP provides no description for them.
 
 **Operational findings worth keeping.** `--appimage-extract-and-run` reuses an extraction directory, so a stale `extracted_*` tree silently serves an older binary; clear it before a run. Electron composes the Settings overlay in a layer a whole-page `Page.captureScreenshot` does not include, so settings evidence must be an element capture with a same-step text receipt, and the chat usage panel only renders correctly once any settings dialog is closed. A failed native session admission leaves `COMMAND_IN_FLIGHT` until recovery, so a partly failed script needs a fresh data directory rather than a retry.
+
+2026-11-18 Rebrand Phase A packaged acceptance (task rebrand/05, base `e92f2ae3d8`, source closure `7ca126412e` + CI workflow commit on `rebrand/05`): verified Phase A (`W1`–`W6`) on the rebuilt Linux x64 AppImage (`OhPiChamber-1.0.0-linux-x86_64.AppImage`, `sha256: 9fd0674850b2b01ca09c845d4d9d59224b3611e879f3805e44588c5c29e6d092`) in an isolated Xvfb `HOME` without overriding data paths. Baseline testing uncovered four defects fixed at `7ca126412e`: (1) desktop/splash/mini-chat/notification window titles still defaulted to `OpenChamber`, (2) Linux AppImage `xdg-open ohpichamber://host/local` failed (`exit 4`) because `linux-desktop-entry.mjs` omitted `MimeType=x-scheme-handler/ohpichamber;` and double-quoted `Exec`, while `main.mjs` registered the scheme before desktop-entry reconciliation and skipped `update-desktop-database`/`xdg-mime`, (3) `Settings → General` still exposed the orphaned `reportUsage` / Privacy switch, breaking `registry.test.ts`, and (4) `tunnel.test.js` lacked an IPv4 `ECONNREFUSED` precheck before binding its `::1`-only test server. A `flow-break` amend (`59978cbb5f`) scoped Phase-B `packages/docs/**` (53 lines) to task `rebrand/06` and clarified Phase-A `rg` exclusions and offline `1.24.2` bundled release-note / Capacitor push checks; follow-up CI updates added `bun run brand:generate` before macOS/iOS packaging and fixed `OhPiChamber.app/Contents/Resources` and artifact names in `.github/workflows/{release,build-macos-arm64-dmg,release-desktop-smoke,mobile-release}.yml`. All W2/W3/W5 live checks, `brand:generate --check`, `check` (`5/5`), `type-check`, `lint`, `dead-code`, `docs:validate`, `workflow validate`, and `VITEST_MAX_WORKERS=2 bun run test` (`7/7` suites) pass (receipts in `/home/shizuku/Project/ohpichamber-omp-artifacts/rebrand-05-2026-11-18/ACCEPTANCE.md`). Unverified on Linux: macOS `Assets.car`/`icon.icns`/`dev-icon.png` and iOS `OCLogoSymbol.symbolset`/Swift compile (produced by macOS-26 CI jobs) and Android debug APK / iOS device runtime checks (waived/deferred to M7).
+2026-11-18 Operator cutover (task rebrand/07): Deleted `omp-m0-provider.env` and `chats/` from `~/.config/ohpichamber`. That directory is now the maintainer's real product data.
+2026-11-18 Rebrand Phase B user-facing copy (task rebrand/06, base `79c262dee0`): replaced user-facing `OpenChamber` copy with `OhPiChamber` across all 15 UI locale catalogs...

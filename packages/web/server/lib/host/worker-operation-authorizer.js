@@ -146,7 +146,7 @@ export const createWorkerOperationAuthorizer = ({
      ? proposedServerPermitted(request.server)
      : policy.mcpServers.some(server => isDeepStrictEqual(server, request.server));
     if (!permitted) return denied(request.proposed === true
-     ? 'The proposed MCP server is disabled or is not managed by OpenChamber'
+     ? 'The proposed MCP server is disabled or is not managed by OhPiChamber'
      : 'The MCP server is not in the workspace configuration');
     if (request.type === 'mcp-oauth' && (request.server.transport.type === 'stdio'
      || !OAuthPolicyConfigurationSchema.safeParse(request.configuration).success)) return denied('The MCP OAuth configuration is not a valid remote OAuth configuration', 'INVALID_REQUEST', 400);

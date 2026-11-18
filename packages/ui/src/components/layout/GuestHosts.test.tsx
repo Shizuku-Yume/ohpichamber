@@ -3,9 +3,9 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CanonicalClient } from '@/api/canonicalClient';
 import { Window } from 'happy-dom';
-import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, OPENCHAMBER_SDK_API_VERSION } from '@openchamber/sdk';
-import { hostMessageSchema } from '@openchamber/sdk/schemas';
-import type { GuestMessage, HostMessage } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, OPENCHAMBER_SDK_API_VERSION } from 'ohpichamber-sdk';
+import { hostMessageSchema } from 'ohpichamber-sdk/schemas';
+import type { GuestMessage, HostMessage } from 'ohpichamber-sdk';
 
 import { toast } from 'sonner';
 import { ThemeSystemContext, type ThemeContextValue } from '@/contexts/theme-system-context';

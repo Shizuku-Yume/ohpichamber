@@ -1,4 +1,4 @@
-import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from 'ohpichamber-sdk';
 
 // The panel iframe inherits the host's dark color scheme, and a document that
 // does not declare one gets an opaque white canvas until its own theme loads:

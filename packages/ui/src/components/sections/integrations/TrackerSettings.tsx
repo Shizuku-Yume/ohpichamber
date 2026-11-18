@@ -7,7 +7,7 @@ import { SettingsChipGroup, SettingsStackedField } from '@/components/sections/s
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useTrackerAuthEntry, useTrackerAuthStore } from '@/stores/useTrackerAuthStore';
 import type { TrackerAuthStatus, TrackerConnectResult, TrackerConnectTokenInput, TrackerDescriptor } from '@/lib/api/types';
-import type { PublicTracker } from '@openchamber/sdk';
+import type { PublicTracker } from 'ohpichamber-sdk';
 import type { InstalledGuest } from '@/lib/guests/types';
 import { guestPackageIconSrc, resolveGuestIconName } from '@/lib/guests/icon';
 import { getRuntimeUrlResolver } from '@/lib/runtime-url';
@@ -314,6 +314,13 @@ export const TrackerSettings: React.FC<TrackerSettingsProps> = ({ descriptor, ex
   // tracker draws every method its manifest declares.
   const canConnect = takesOauth || takesToken;
   const connected = Boolean(status?.connected);
+  // The server says when its own sign-in cannot start (Linear needs an OAuth
+  // broker the operator configures). The card never draws a button that cannot work.
+  const signInRefusal = status?.signIn;
+  const signInUnavailable = Boolean(signInRefusal);
+  const signInUnavailableText = signInRefusal
+    ? t(copy.signIn.brokerMissing, { provider, setting: signInRefusal.setting, settingsKey: signInRefusal.settingsKey })
+    : null;
   const account = status?.connected ? status.account ?? null : null;
   const user = account?.user;
   // Disconnected with stored accounts: every one of them was written off (the server refused its credential).
@@ -449,13 +456,13 @@ export const TrackerSettings: React.FC<TrackerSettingsProps> = ({ descriptor, ex
           {t(copy.connect, { provider })}
         </Button>
       ) : null}
-      {!extension && takesOauth && !connected ? (
+      {!extension && takesOauth && !connected && !signInUnavailable ? (
         <Button type="button" size="sm" variant="default" onClick={() => void startConnect()} disabled={isBusy || isWaiting || (isLoading && !hasChecked)}>
           {isBusy ? <Icon name="loader-4" className="size-3.5 animate-spin" /> : null}
           {t(copy.connect, { provider })}
         </Button>
       ) : null}
-      {connected && capabilities.multipleAccounts && canConnect && !showForms ? (
+      {connected && capabilities.multipleAccounts && canConnect && !showForms && !signInUnavailable ? (
         <Button
           type="button"
           size="sm"
@@ -579,10 +586,19 @@ export const TrackerSettings: React.FC<TrackerSettingsProps> = ({ descriptor, ex
             </Button>
           </div>
         ) : canConnect ? (
-          <>
-            {connectForms}
-            {connectButtons}
-          </>
+          signInUnavailable ? (
+            // The server has no broker: name the setting that turns sign-in on
+            // instead of drawing a Connect that cannot start.
+            <div className="space-y-2">
+              <p className="typography-meta text-muted-foreground">{signInUnavailableText}</p>
+              {connectButtons}
+            </div>
+          ) : (
+            <>
+              {connectForms}
+              {connectButtons}
+            </>
+          )
         ) : (
           <p className="typography-meta text-muted-foreground">{t(copy.unsupportedSignIn, { provider })}</p>
         )}

@@ -2303,7 +2303,7 @@ export const useSessionUIStore: UseBoundStore<StoreApi<SessionUIState>> = create
         sourceDirectory,
       )
       if (!project?.path) {
-        throw new Error("Project is not registered in OpenChamber")
+        throw new Error("Project is not registered in OhPiChamber")
       }
 
       const [branchNameModule, configModule, trustModule, createModule] = await Promise.all([

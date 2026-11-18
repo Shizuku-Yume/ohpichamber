@@ -32,9 +32,8 @@ module.exports = async (context) => {
     execFileSync('codesign', ['--force', '--sign', '-', executablePath], { stdio: 'inherit' });
   }
 
-  // The compiled catalog sits with the other icons of the build's channel.
-  const iconsDir = process.env.OPENCHAMBER_DESKTOP_CHANNEL === 'canary' ? 'icons-canary' : 'icons';
-  const sourceAssetsPath = path.join(__dirname, '..', 'resources', iconsDir, 'Assets.car');
+  // The compiled catalog sits with the other icons of the build.
+  const sourceAssetsPath = path.join(__dirname, '..', 'resources', 'icons', 'Assets.car');
 
   if (!fs.existsSync(sourceAssetsPath)) {
     throw new Error(`Missing compiled app icon asset catalog at ${sourceAssetsPath}`);

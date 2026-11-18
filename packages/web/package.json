@@ -1,12 +1,18 @@
 {
-  "name": "@openchamber/web",
-  "version": "3.0.0",
+  "name": "ohpichamber",
+  "version": "1.0.0",
   "private": false,
   "type": "module",
   "main": "./server/index.js",
   "types": "./server/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shizuku-Yume/ohpichamber.git",
+    "directory": "packages/web"
+  },
+  "homepage": "https://github.com/Shizuku-Yume/ohpichamber",
   "bin": {
-    "openchamber": "./bin/cli.js"
+    "ohpichamber": "./bin/cli.js"
   },
   "publishConfig": {
     "access": "public"
@@ -18,7 +24,8 @@
     "dev": "bun run build:watch",
     "dev:server": "bun ../../scripts/build-builtin-extensions.mjs && OPENCHAMBER_RELAY_HOST=${OPENCHAMBER_RELAY_HOST:-off} OPENCHAMBER_ALLOW_DEV_ORIGINS=1 bun server/index.js --port ${OPENCHAMBER_PORT:-3001}",
     "dev:server:watch": "bun ../../scripts/build-builtin-extensions.mjs && node ./scripts/dev-server-watch.mjs",
-    "build": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build",
+    "build": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build && node ./scripts/stage-changelog.mjs",
+    "stage:changelog": "node ./scripts/stage-changelog.mjs",
     "build:diag": "bun ../../scripts/build-builtin-extensions.mjs && NODE_OPTIONS=--max-old-space-size=6144 vite build --config vite.diag.config.ts",
     "build:watch": "bun ../../scripts/build-builtin-extensions.mjs && vite build --watch",
     "prepack": "node ./scripts/prepack.mjs",
@@ -35,7 +42,7 @@
     "@clack/prompts": "^1.1.0",
     "@gitbeaker/rest": "43.8.0",
     "@octokit/rest": "^22.0.1",
-    "@openchamber/sdk": "workspace:*",
+    "ohpichamber-sdk": "workspace:*",
     "@simplewebauthn/server": "13.3.3",
     "bun-pty": "0.6.0",
     "compression": "^1.8.1",
@@ -112,6 +119,7 @@
     "bin",
     "public",
     "resources/agent-runtime",
+    "resources/changelog",
     "scripts/standalone-loader.mjs",
     "package.json",
     "README.md"

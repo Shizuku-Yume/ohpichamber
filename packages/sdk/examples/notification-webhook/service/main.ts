@@ -14,7 +14,7 @@ import {
   type NotificationsAccountData,
   type NotificationsProbeData,
   type NotificationsProviderResult,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
 const serviceToken = process.env.OPENCHAMBER_SERVICE_TOKEN ?? '';
@@ -61,7 +61,7 @@ const relay = async (handle: string, request: Parameters<typeof outbound.request
   try {
     return await outbound.request(handle, request);
   } catch (error) {
-    if (error instanceof NotificationsOutboundError) throw new RelayFailure(`OpenChamber refused the request: ${error.message}`);
+    if (error instanceof NotificationsOutboundError) throw new RelayFailure(`OhPiChamber refused the request: ${error.message}`);
     throw new RelayFailure(error instanceof Error ? error.message : String(error));
   }
 };

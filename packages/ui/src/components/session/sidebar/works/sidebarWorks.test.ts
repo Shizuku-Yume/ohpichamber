@@ -111,7 +111,7 @@ describe('sidebar works', () => {
       const index = buildSidebarWorkIndex([section]);
       const archived = session('archived', { ...outside, ...inWork, archivedAt: 2 });
       const idle = session('idle', outside);
-      registerWorkspaceDirectory('workspace-chat', '/home/.config/openchamber/chats/2026-10-26/session-1');
+      registerWorkspaceDirectory('workspace-chat', '/home/.config/ohpichamber/chats/2026-10-26/session-1');
       const chat = session('chat', { ...inWork, workspaceId: 'workspace-chat' });
       const rootIndex = buildSessionRootIndex([archived, idle, chat], new Map());
       expect(orderInWorkWorks([archived, idle, chat], index, rootIndex, (directory) => directory?.includes('/chats/') ?? false))

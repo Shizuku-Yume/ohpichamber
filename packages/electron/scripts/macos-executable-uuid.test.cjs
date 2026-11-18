@@ -39,10 +39,10 @@ const withExecutable = (contents, run) => {
 test('replaces only the UUID, with one derived from the appId', () => {
   const original = machO();
   withExecutable(original, (executablePath) => {
-    setExecutableUuid(executablePath, 'dev.openchamber.desktop');
+    setExecutableUuid(executablePath, 'dev.ohpichamber.desktop');
     const patched = fs.readFileSync(executablePath);
     const uuidOffset = 32 + 72 + 8;
-    assert.deepEqual(patched.subarray(uuidOffset, uuidOffset + 16), deriveExecutableUuid('dev.openchamber.desktop'));
+    assert.deepEqual(patched.subarray(uuidOffset, uuidOffset + 16), deriveExecutableUuid('dev.ohpichamber.desktop'));
     assert.notDeepEqual(patched.subarray(uuidOffset, uuidOffset + 16), STOCK_UUID);
     assert.deepEqual(patched.subarray(0, uuidOffset), original.subarray(0, uuidOffset));
     assert.deepEqual(patched.subarray(uuidOffset + 16), original.subarray(uuidOffset + 16));
@@ -50,17 +50,17 @@ test('replaces only the UUID, with one derived from the appId', () => {
 });
 
 test('the UUID is stable for an appId and differs between appIds', () => {
-  assert.deepEqual(deriveExecutableUuid('dev.openchamber.desktop'), deriveExecutableUuid('dev.openchamber.desktop'));
-  assert.notDeepEqual(deriveExecutableUuid('dev.openchamber.desktop'), deriveExecutableUuid('dev.openchamber.desktop.canary'));
+  assert.deepEqual(deriveExecutableUuid('dev.ohpichamber.desktop'), deriveExecutableUuid('dev.ohpichamber.desktop'));
+  assert.notDeepEqual(deriveExecutableUuid('dev.ohpichamber.desktop'), deriveExecutableUuid('dev.openchamber.desktop'));
 });
 
 test('an executable it cannot patch fails the build', () => {
   withExecutable(Buffer.from('#!/bin/sh\n'), (executablePath) => {
-    assert.throws(() => setExecutableUuid(executablePath, 'dev.openchamber.desktop'), /thin 64-bit/);
+    assert.throws(() => setExecutableUuid(executablePath, 'dev.ohpichamber.desktop'), /thin 64-bit/);
   });
   const withoutUuid = machO();
   withoutUuid.writeUInt32LE(1, 16);
   withExecutable(withoutUuid, (executablePath) => {
-    assert.throws(() => setExecutableUuid(executablePath, 'dev.openchamber.desktop'), /no LC_UUID/);
+    assert.throws(() => setExecutableUuid(executablePath, 'dev.ohpichamber.desktop'), /no LC_UUID/);
   });
 });

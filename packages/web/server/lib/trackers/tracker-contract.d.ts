@@ -90,8 +90,22 @@ export type TrackerConnectInfo = {
 
 /** Disconnected with `accounts` means every stored account is written off: the card shows them so the user can reconnect or remove them. */
 export type TrackerAuthStatus =
-  | { connected: false; accounts?: TrackerAccount[]; connect?: TrackerConnectInfo }
-  | { connected: true; account?: TrackerAccount | null; accounts?: TrackerAccount[]; connect?: TrackerConnectInfo };
+  | { connected: false; accounts?: TrackerAccount[]; connect?: TrackerConnectInfo; signIn?: TrackerSignInUnavailable }
+  | { connected: true; account?: TrackerAccount | null; accounts?: TrackerAccount[]; connect?: TrackerConnectInfo; signIn?: TrackerSignInUnavailable };
+
+/**
+ * Why the tracker's browser sign-in cannot start on this server. Present only
+ * as a refusal: a server that can sign in leaves it out, and so does an older
+ * server that does not know the field. `setting`/`settingsKey` name the two
+ * ways an operator turns it on; the sentence itself is the client's.
+ */
+export type TrackerSignInUnavailable = {
+  reason: 'broker-url-missing';
+  /** The environment variable that turns sign-in on (kept literal, untranslated). */
+  setting: string;
+  /** The settings.json key that turns it on (kept literal, untranslated). */
+  settingsKey: string;
+};
 
 export type Connected<T> = { connected: false } | ({ connected: true } & T);
 

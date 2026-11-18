@@ -1,32 +1,32 @@
 ---
 title: 환경 변수
-description: 환경 변수로 OpenChamber를 설정합니다.
+description: 환경 변수로 OhPiChamber를 설정합니다.
 ---
 
 # 환경 변수
 
-OpenChamber는 시작할 때 이 변수들을 읽습니다. 시작 서비스는 `openchamber startup enable` 실행 시 기본적으로 현재 환경의 snapshot을 저장하므로, 서비스에 적용할 변수를 바꾼 뒤에는 다시 실행하세요.
+OhPiChamber는 시작할 때 이 변수들을 읽습니다. 시작 서비스는 `ohpichamber startup enable` 실행 시 기본적으로 현재 환경의 snapshot을 저장하므로, 서비스에 적용할 변수를 바꾼 뒤에는 다시 실행하세요.
 
 ## 에이전트 세션, Git, 터미널용 변수
 
-에이전트 세션, Git, 터미널, [프로젝트 작업](/ko/project-actions/)에 API 토큰이나 데이터베이스 주소 같은 직접 정한 변수를 넘기려면, OpenChamber를 시작하기 전에 export하는 대신 **설정 → 일반 → 환경 변수**에 추가하세요. 값은 OpenChamber가 실행되는 컴퓨터의 데이터 디렉터리에 있는 `environment.json`에 저장되며, 내 사용자 계정만 읽을 수 있습니다. 설정은 저장된 값을 다시 보여 주지 않습니다. 값을 바꾸거나 지울 수는 있지만 다시 읽을 수는 없습니다.
+에이전트 세션, Git, 터미널, [프로젝트 작업](/ko/project-actions/)에 API 토큰이나 데이터베이스 주소 같은 직접 정한 변수를 넘기려면, OhPiChamber를 시작하기 전에 export하는 대신 **설정 → 일반 → 환경 변수**에 추가하세요. 값은 OhPiChamber가 실행되는 컴퓨터의 데이터 디렉터리에 있는 `environment.json`에 저장되며, 내 사용자 계정만 읽을 수 있습니다. 설정은 저장된 값을 다시 보여 주지 않습니다. 값을 바꾸거나 지울 수는 있지만 다시 읽을 수는 없습니다.
 
 - 에이전트 세션은 시작할 때 변수를 받습니다.
 - Git, 터미널, 프로젝트 작업은 다음에 실행될 때 변수를 받습니다.
 
 프로젝트는 **설정 → 프로젝트**에서 자체 변수나, `direnv export json`처럼 변수를 출력하는 명령을 추가할 수 있습니다. [프로젝트](/ko/projects/#프로젝트-환경)를 참고하세요.
 
-아래 변수는 모두 OpenChamber가 시작할 때 직접 읽습니다.
+아래 변수는 모두 OhPiChamber가 시작할 때 직접 읽습니다.
 
-## OpenChamber 서버
+## OhPiChamber 서버
 
 ### `OPENCHAMBER_HOST`
 
-OpenChamber 웹 서버가 바인딩할 주소입니다. 다른 컴퓨터에서 접속해야 하면 `0.0.0.0`을 사용하세요.
+OhPiChamber 웹 서버가 바인딩할 주소입니다. 다른 컴퓨터에서 접속해야 하면 `0.0.0.0`을 사용하세요.
 
 ### `OPENCHAMBER_LAN_URL`
 
-네트워크의 다른 기기가 OpenChamber에 접속할 주소입니다(예: `http://192.168.1.20:3000`). 페어링 링크와 QR 코드는 OpenChamber가 직접 감지한 주소 대신 이 주소를 사용합니다. 감지가 틀릴 때 설정하세요. 예를 들어 Docker에서는 OpenChamber가 컨테이너 내부 주소만 볼 수 있습니다.
+네트워크의 다른 기기가 OhPiChamber에 접속할 주소입니다(예: `http://192.168.1.20:3000`). 페어링 링크와 QR 코드는 OhPiChamber가 직접 감지한 주소 대신 이 주소를 사용합니다. 감지가 틀릴 때 설정하세요. 예를 들어 Docker에서는 OhPiChamber가 컨테이너 내부 주소만 볼 수 있습니다.
 
 ### `OPENCHAMBER_UI_PASSWORD`
 
@@ -42,19 +42,19 @@ OpenChamber 웹 서버가 바인딩할 주소입니다. 다른 컴퓨터에서 �
 
 ### `OPENCHAMBER_API_ONLY`
 
-`true` 또는 `1`이면 OpenChamber를 headless 모드로 시작합니다. 데스크톱과 모바일 클라이언트용 API route는 계속 사용할 수 있지만 브라우저 UI는 제공하지 않습니다.
+`true` 또는 `1`이면 OhPiChamber를 headless 모드로 시작합니다. 데스크톱과 모바일 클라이언트용 API route는 계속 사용할 수 있지만 브라우저 UI는 제공하지 않습니다.
 
 ### `OPENCHAMBER_FRAME_ANCESTORS`
 
-자신의 페이지 안 프레임에 OpenChamber를 표시할 수 있는 origin을 공백으로 구분해 지정합니다. 예: `https://dash.example.com`. `*`는 모든 사이트를 허용합니다. 기본값에서는 OpenChamber 자신과 데스크톱·모바일 앱만 임베드할 수 있어, 다른 사이트가 버튼 위에 덮어씌울 수 없습니다.
+자신의 페이지 안 프레임에 OhPiChamber를 표시할 수 있는 origin을 공백으로 구분해 지정합니다. 예: `https://dash.example.com`. `*`는 모든 사이트를 허용합니다. 기본값에서는 OhPiChamber 자신과 데스크톱·모바일 앱만 임베드할 수 있어, 다른 사이트가 버튼 위에 덮어씌울 수 없습니다.
 
 ### `OPENCHAMBER_DATA_DIR`
 
-OpenChamber 데이터 디렉터리를 바꿉니다. 기본값은 `~/.config/openchamber`입니다.
+OhPiChamber 데이터 디렉터리를 바꿉니다. 기본값은 `~/.config/ohpichamber`입니다.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-프로젝트가 없는 채팅을 위해 OpenChamber가 만드는 관리 대상 채팅 디렉터리의 위치를 변경합니다. 기본값은 `~/.config/openchamber/chats`입니다. 기존 채팅은 이동되지 않습니다.
+프로젝트가 없는 채팅을 위해 OhPiChamber가 만드는 관리 대상 채팅 디렉터리의 위치를 변경합니다. 기본값은 `~/.config/ohpichamber/chats`입니다. 기존 채팅은 이동되지 않습니다.
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -68,33 +68,25 @@ API 응답 압축을 제어합니다. `true` 또는 `1`은 켜고, `false` 또�
 
 `true` 또는 `1`이면 자세한 HTTP request logs를 켭니다.
 
-### `OPENCHAMBER_UPDATE_API_URL`
-
-업데이트 확인 API endpoint를 바꿉니다. 대부분의 사용자는 설정하지 않아도 됩니다.
-
-### `OPENCHAMBER_PACKAGE_MANAGER`
-
-자동 감지가 틀렸을 때 업데이트에 사용할 package manager를 강제로 지정합니다.
-
 ## 프록시
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-사용량 한도나 스킬 카탈로그처럼 OpenChamber가 직접 보내는 요청을 프록시로 보냅니다. 소문자 이름도 동작합니다. `NO_PROXY`에 있는 호스트는 직접 연결되며, `localhost`, `127.0.0.1`, `::1`은 항상 직접 연결되므로 로그인 콜백과 로컬 연결은 그대로 동작합니다.
+사용량 한도나 스킬 카탈로그처럼 OhPiChamber가 직접 보내는 요청을 프록시로 보냅니다. 소문자 이름도 동작합니다. `NO_PROXY`에 있는 호스트는 직접 연결되며, `localhost`, `127.0.0.1`, `::1`은 항상 직접 연결되므로 로그인 콜백과 로컬 연결은 그대로 동작합니다.
 
 ## Terminal 및 Git
 
 ### `OPENCHAMBER_TERMINAL_SHELL`
 
-OpenChamber terminal sessions에서 사용할 shell executable입니다.
+OhPiChamber terminal sessions에서 사용할 shell executable입니다.
 
 ### `OPENCHAMBER_GIT_BINARY`
 
-OpenChamber Git 기능에서 사용할 Git executable입니다.
+OhPiChamber Git 기능에서 사용할 Git executable입니다.
 
 ### `GIT_BINARY`
 
-Git executable의 대체 override입니다. OpenChamber 전용 설정에는 `OPENCHAMBER_GIT_BINARY`를 권장합니다.
+Git executable의 대체 override입니다. OhPiChamber 전용 설정에는 `OPENCHAMBER_GIT_BINARY`를 권장합니다.
 
 ### `OPENCHAMBER_GIT_READ_CACHE_TTL_MS`
 
@@ -104,7 +96,7 @@ Git-backed file reads cache의 TTL이며 단위는 밀리초입니다. 디버깅
 
 ### `OPENAI_API_KEY`
 
-OpenChamber 음성 기능이 OpenAI 자체를 호출할 때 사용하는 API key입니다. 사용자 지정 OpenAI 호환 서버로는 전송되지 않으니, 그 서버에는 설정에서 별도의 키를 지정하세요.
+OhPiChamber 음성 기능이 OpenAI 자체를 호출할 때 사용하는 API key입니다. 사용자 지정 OpenAI 호환 서버로는 전송되지 않으니, 그 서버에는 설정에서 별도의 키를 지정하세요.
 
 ### `OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
 
@@ -112,15 +104,15 @@ OpenChamber 음성 기능이 OpenAI 자체를 호출할 때 사용하는 API key
 
 ### `NGROK_AUTHTOKEN`
 
-OpenChamber tunnel commands에서 사용하는 ngrok auth token입니다. `ngrok config add-authtoken <token>`으로도 설정할 수 있습니다.
+OhPiChamber tunnel commands에서 사용하는 ngrok auth token입니다. `ngrok config add-authtoken <token>`으로도 설정할 수 있습니다.
 
 ## Runtime helpers
 
 ### `BUN_BINARY`
 
-OpenChamber가 daemon processes를 시작할 때 사용할 Bun executable입니다.
+OhPiChamber가 daemon processes를 시작할 때 사용할 Bun executable입니다.
 
 ### `BUN_INSTALL`
 
-Bun 설치 루트입니다. OpenChamber는 daemon 시작과 업데이트를 위해 여기서 `bin/bun`을 찾습니다.
+Bun 설치 루트입니다. OhPiChamber는 daemon 시작과 업데이트를 위해 여기서 `bin/bun`을 찾습니다.
 

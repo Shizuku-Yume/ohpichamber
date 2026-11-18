@@ -1,16 +1,14 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { spawn, spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { DEFAULT_PORT } from './cli-args.js';
 import { EXIT_CODE, TunnelCliError } from './cli-errors.js';
 import { getDataDir } from './cli-paths.js';
 import { hasUiPasswordConfigured } from './cli-network.js';
-import { requestServerShutdown } from './cli-http.js';
-import { isProcessRunning, stopInstanceProcess } from './cli-process.js';
 import { injectedEnvKeys } from '../../server/lib/injected-env.js';
 
-const STARTUP_SERVICE_ID = 'dev.openchamber.web';
+const STARTUP_SERVICE_ID = 'dev.ohpichamber.web';
 
 function getStartupServicePaths() {
   if (process.platform === 'darwin') {
@@ -22,7 +20,7 @@ function getStartupServicePaths() {
   if (process.platform === 'linux') {
     return {
       platform: 'linux',
-      servicePath: path.join(os.homedir(), '.config', 'systemd', 'user', 'openchamber.service'),
+      servicePath: path.join(os.homedir(), '.config', 'systemd', 'user', 'ohpichamber.service'),
     };
   }
   if (process.platform === 'win32') {
@@ -73,11 +71,11 @@ function getStartupEnvFilePath() {
 }
 
 function getMacosStartupWrapperPath() {
-  return path.join(getDataDir(), 'bin', 'OpenChamber');
+  return path.join(getDataDir(), 'bin', 'OhPiChamber');
 }
 
 function getWindowsStartupWrapperPath() {
-  return path.join(getDataDir(), 'bin', 'OpenChamber.ps1');
+  return path.join(getDataDir(), 'bin', 'OhPiChamber.ps1');
 }
 
 function collectStartupEnv(options = {}) {
@@ -160,7 +158,7 @@ function removeStartupEnvFile() {
 }
 
 const PNPM_STORE_SEGMENT = `${path.sep}.pnpm${path.sep}`;
-const PACKAGE_SEGMENT = `${path.sep}node_modules${path.sep}@openchamber${path.sep}web${path.sep}`;
+const PACKAGE_SEGMENT = `${path.sep}node_modules${path.sep}ohpichamber${path.sep}`;
 
 // pnpm keeps every installed version in its own store directory and links the
 // current one into node_modules. A startup service pointed at the store path
@@ -172,8 +170,7 @@ function stablePnpmEntrypoint(resolved, exists = fs.existsSync) {
   if (packageIndex < 0) return null;
   const stable = path.join(
     resolved.slice(0, storeIndex),
-    '@openchamber',
-    'web',
+    'ohpichamber',
     resolved.slice(packageIndex + PACKAGE_SEGMENT.length),
   );
   return exists(stable) ? stable : null;
@@ -260,7 +257,7 @@ function buildMacosLaunchAgent(options = {}) {
   const wrapperPath = writeMacosStartupWrapper(options);
   const args = [wrapperPath];
   const env = collectStartupEnv(options);
-  const logDir = path.join(os.homedir(), 'Library', 'Logs', 'OpenChamber');
+  const logDir = path.join(os.homedir(), 'Library', 'Logs', 'OhPiChamber');
   const argXml = args.map((arg) => `    <string>${escapeXml(arg)}</string>`).join('\n');
   const envXml = Object.entries(env).length > 0
     ? `  <key>EnvironmentVariables</key>\n  <dict>\n${Object.entries(env).map(([key, value]) => `    <key>${escapeXml(key)}</key>\n    <string>${escapeXml(value)}</string>`).join('\n')}\n  </dict>\n`
@@ -294,7 +291,7 @@ function buildSystemdUserService(options = {}) {
   const args = buildStartupArgs(options).map((arg) => `"${systemdEscapeArg(arg)}"`).join(' ');
   const envFilePath = getStartupEnvFilePath();
   return `[Unit]
-Description=OpenChamber web server
+Description=OhPiChamber web server
 After=network-online.target
 
 [Service]
@@ -385,8 +382,8 @@ function getStartupStatus() {
     return { supported: true, platform: paths.platform, enabled: result.status === 0, active: null, servicePath: paths.servicePath };
   }
   if (paths.platform === 'linux') {
-    const enabledResult = runStartupCommand('systemctl', ['--user', 'is-enabled', 'openchamber.service'], { allowFailure: true });
-    const activeResult = runStartupCommand('systemctl', ['--user', 'is-active', 'openchamber.service'], { allowFailure: true });
+    const enabledResult = runStartupCommand('systemctl', ['--user', 'is-enabled', 'ohpichamber.service'], { allowFailure: true });
+    const activeResult = runStartupCommand('systemctl', ['--user', 'is-active', 'ohpichamber.service'], { allowFailure: true });
     const activeState = (activeResult.stdout || '').trim() || 'inactive';
     const lingerUser = getCurrentUsername();
     return {
@@ -409,217 +406,8 @@ function getStartupStatus() {
   };
 }
 
-// The pid systemd reports as the unit's MainPID, from `systemctl show` output.
-function parseSystemdMainPid(stdout) {
-  const pid = Number.parseInt(String(stdout || '').trim(), 10);
-  return Number.isFinite(pid) && pid > 0 ? pid : null;
-}
-
-// The pid launchd reports for a running job, from `launchctl list <label>`
-// output. The `"PID"` key is absent while the job is not running.
-function parseLaunchdJobPid(stdout) {
-  const match = /^\s*"PID"\s*=\s*(\d+);/m.exec(String(stdout || ''));
-  const pid = match ? Number.parseInt(match[1], 10) : null;
-  return Number.isFinite(pid) && pid > 0 ? pid : null;
-}
-
-// The process id of the running startup service, or null when it is not
-// running or startup integration here is not a service. systemd answers with
-// the unit's MainPID; launchd reports the pid of the job it runs.
-function getStartupServicePid() {
-  if (process.platform === 'linux') {
-    let result;
-    try {
-      result = runStartupCommand('systemctl', ['--user', 'show', '--property=MainPID', '--value', 'openchamber.service'], { allowFailure: true });
-    } catch {
-      return null;
-    }
-    return result.status === 0 ? parseSystemdMainPid(result.stdout) : null;
-  }
-  if (process.platform === 'darwin') {
-    let result;
-    try {
-      result = runStartupCommand('/bin/launchctl', ['list', STARTUP_SERVICE_ID], { allowFailure: true });
-    } catch {
-      return null;
-    }
-    return result.status === 0 ? parseLaunchdJobPid(result.stdout) : null;
-  }
-  return null;
-}
-
-// Task Scheduler has no pid to ask for, so the task's processes are read from
-// the task itself: its state, then the PowerShell wrapper running the task's
-// own arguments, then that wrapper's children. A second process with the same
-// command line cannot be told from the task's, so it reports no processes.
-const WINDOWS_TASK_PROCESSES_SCRIPT = [
-  '$ErrorActionPreference = "Stop"',
-  `$task = Get-ScheduledTask -TaskPath "\\" -TaskName "${STARTUP_SERVICE_ID}"`,
-  'if ($task.State -ne "Running") { "stopped"; exit 0 }',
-  '$arguments = $task.Actions[0].Arguments',
-  '$wrappers = @(Get-CimInstance Win32_Process -Filter "Name=\'powershell.exe\'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($arguments) })',
-  'if ($wrappers.Count -ne 1) { "running"; exit 0 }',
-  '$children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId=$($wrappers[0].ProcessId)")',
-  '"running " + (($children | ForEach-Object { $_.ProcessId }) -join " ")',
-].join('\n');
-
-// The pids the running task owns, from the script's output, or null when the
-// task is not running. The wrapper's children include its console host, so the
-// list is matched against the known instances.
-function parseWindowsTaskProcesses(stdout) {
-  const output = String(stdout || '').trim();
-  if (output === 'stopped') {
-    return null;
-  }
-  const match = /^running((?:\s+\d+)*)$/.exec(output);
-  if (!match) {
-    throw new Error(`unexpected task state: ${output || 'no output'}`);
-  }
-  return match[1].split(/\s+/).filter(Boolean).map(Number);
-}
-
-function windowsPowershellPath() {
-  return path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-}
-
-function windowsPowershellArgs(script) {
-  return ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')];
-}
-
-function getWindowsTaskProcesses() {
-  if (getStartupStatus().enabled !== true) {
-    return null;
-  }
-  const result = runStartupCommand(windowsPowershellPath(), windowsPowershellArgs(WINDOWS_TASK_PROCESSES_SCRIPT), { allowFailure: true, timeout: 15000 });
-  if (result.status !== 0) {
-    throw new Error((result.stderr || result.stdout || '').trim() || `PowerShell exited with ${result.status}`);
-  }
-  return parseWindowsTaskProcesses(result.stdout);
-}
-
-// Throws when the task is running and no instance can be matched to it: the
-// update would otherwise stop the service as a plain CLI copy, or leave it on
-// the old release. Discovery skips a server that does not answer its probe, so
-// an empty list says nothing about the task.
-function findWindowsTaskInstance(instances, getTaskProcesses) {
-  let taskPids;
-  try {
-    taskPids = getTaskProcesses();
-  } catch (error) {
-    throw windowsTaskOwnershipError(error.message);
-  }
-  if (taskPids === null) {
-    return null;
-  }
-  const instance = instances.find((candidate) => taskPids.includes(candidate.pid));
-  if (!instance) {
-    throw windowsTaskOwnershipError('the task is running, but none of the running servers is its process');
-  }
-  return instance;
-}
-
-function windowsTaskOwnershipError(detail) {
-  return new Error(`Could not tell which running server belongs to the startup task: ${detail}. Nothing was stopped or installed. Run \`openchamber startup disable\`, update, then run \`openchamber startup enable\`.`);
-}
-
-// The instance a process manager will start again on its own, or null when
-// none of the running instances is that one. systemd and launchd report a pid,
-// and a null pid means the service is not running. Windows matches the running
-// task's processes and throws when it cannot.
-function findStartupServiceInstance(instances, {
-  getPid = getStartupServicePid,
-  getTaskProcesses = getWindowsTaskProcesses,
-  platform = process.platform,
-} = {}) {
-  if (platform === 'win32') {
-    return findWindowsTaskInstance(instances, getTaskProcesses);
-  }
-  const pid = getPid();
-  return pid === null ? null : instances.find((instance) => instance.pid === pid) ?? null;
-}
-
 function restartSystemdService() {
-  runStartupCommand('systemctl', ['--user', 'restart', 'openchamber.service']);
-}
-
-// Starts the task once the old server is gone and the task has stopped, and
-// gives up after 30 seconds, longer than the restart below waits for the exit.
-function buildWindowsTaskStartScript(serverPid) {
-  return [
-    '$deadline = (Get-Date).AddSeconds(30)',
-    'while ((Get-Date) -lt $deadline) {',
-    `  $serverGone = -not (Get-Process -Id ${serverPid} -ErrorAction SilentlyContinue)`,
-    `  $task = Get-ScheduledTask -TaskPath "\\" -TaskName "${STARTUP_SERVICE_ID}" -ErrorAction SilentlyContinue`,
-    '  if ($serverGone -and $task.State -ne "Running") {',
-    `    schtasks.exe /Run /TN ${STARTUP_SERVICE_ID}`,
-    '    exit $LASTEXITCODE',
-    '  }',
-    '  Start-Sleep -Milliseconds 250',
-    '}',
-  ].join('\n');
-}
-
-// The update may run in a terminal of this very server, and that terminal dies
-// with it, so a detached process has to issue the `/Run`.
-function startWindowsTaskAfterExit(serverPid, spawnProcess = spawn) {
-  return new Promise((resolve, reject) => {
-    const helper = spawnProcess(windowsPowershellPath(), windowsPowershellArgs(buildWindowsTaskStartScript(serverPid)), {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    helper.once('error', reject);
-    helper.once('spawn', () => {
-      helper.unref();
-      resolve();
-    });
-  });
-}
-
-// A bare `/Run` on a running task is a no-op, and a `/Run` while the old server
-// holds the port starts a process that cannot bind it, so the helper waits for
-// the old server to be gone. `/End` stops the program the task started, which
-// is the PowerShell wrapper, so the server can outlive it and is stopped by
-// pid. `/End` comes first: after the server exits it would end the new run.
-async function restartWindowsStartupTask(instance, {
-  run = runStartupCommand,
-  requestShutdown = requestServerShutdown,
-  isRunning = isProcessRunning,
-  stopProcess = stopInstanceProcess,
-  startTaskAfterExit = startWindowsTaskAfterExit,
-} = {}) {
-  try {
-    await startTaskAfterExit(instance.pid);
-  } catch (error) {
-    throw new Error(`Could not prepare the startup task restart: ${error.message}. The new version is installed. Run \`taskkill /PID ${instance.pid} /T /F\`, then \`schtasks /Run /TN ${STARTUP_SERVICE_ID}\`.`);
-  }
-  const ended = run('schtasks.exe', ['/End', '/TN', STARTUP_SERVICE_ID], { allowFailure: true });
-  const requested = await requestShutdown(instance.port, instance.host);
-  if (ended.status !== 0 && !requested && isRunning(instance.pid)) {
-    const detail = (ended.stderr || ended.stdout || '').trim();
-    throw new Error(`Could not end the startup task${detail ? `: ${detail}` : ''}. The new version is installed. Run \`schtasks /End /TN ${STARTUP_SERVICE_ID}\`, then \`schtasks /Run /TN ${STARTUP_SERVICE_ID}\`.`);
-  }
-  const exited = await stopProcess(instance.pid, {
-    shutdownWaitMs: 5000,
-    gracefulTimeoutMs: 2500,
-    forceTimeoutMs: 3000,
-  });
-  if (!exited) {
-    throw new Error(`The startup server (pid ${instance.pid}) did not exit, so the task was not started again. The new version is installed. Run \`taskkill /PID ${instance.pid} /T /F\`, then \`schtasks /Run /TN ${STARTUP_SERVICE_ID}\`.`);
-  }
-}
-
-async function restartStartupService(instance) {
-  const paths = getStartupServicePaths();
-  if (paths.platform === 'macos') {
-    runStartupCommand('/bin/launchctl', ['kickstart', '-k', `gui/${process.getuid()}/${STARTUP_SERVICE_ID}`]);
-    return;
-  }
-  if (paths.platform === 'windows') {
-    await restartWindowsStartupTask(instance);
-    return;
-  }
-  restartSystemdService();
+  runStartupCommand('systemctl', ['--user', 'restart', 'ohpichamber.service']);
 }
 
 function enableStartupService(options = {}) {
@@ -631,7 +419,7 @@ function enableStartupService(options = {}) {
   if (paths.platform === 'macos') {
     removeStartupEnvFile();
     fs.mkdirSync(path.dirname(paths.servicePath), { recursive: true, mode: 0o700 });
-    fs.mkdirSync(path.join(os.homedir(), 'Library', 'Logs', 'OpenChamber'), { recursive: true, mode: 0o700 });
+    fs.mkdirSync(path.join(os.homedir(), 'Library', 'Logs', 'OhPiChamber'), { recursive: true, mode: 0o700 });
     fs.writeFileSync(paths.servicePath, buildMacosLaunchAgent(options), { mode: 0o600 });
     runStartupCommand('/bin/launchctl', ['bootout', `gui/${process.getuid()}`, paths.servicePath], { allowFailure: true });
     runStartupCommand('/bin/launchctl', ['bootstrap', `gui/${process.getuid()}`, paths.servicePath]);
@@ -644,7 +432,7 @@ function enableStartupService(options = {}) {
     fs.mkdirSync(path.dirname(paths.servicePath), { recursive: true, mode: 0o700 });
     fs.writeFileSync(paths.servicePath, buildSystemdUserService(options), { mode: 0o600 });
     runStartupCommand('systemctl', ['--user', 'daemon-reload']);
-    runStartupCommand('systemctl', ['--user', 'enable', 'openchamber.service']);
+    runStartupCommand('systemctl', ['--user', 'enable', 'ohpichamber.service']);
     // `enable --now` leaves a running service alone, so it would keep the old
     // unit and the old release.
     restartSystemdService();
@@ -679,7 +467,7 @@ function disableStartupService() {
   }
 
   if (paths.platform === 'linux') {
-    runStartupCommand('systemctl', ['--user', 'disable', '--now', 'openchamber.service'], { allowFailure: true });
+    runStartupCommand('systemctl', ['--user', 'disable', '--now', 'ohpichamber.service'], { allowFailure: true });
     try { fs.unlinkSync(paths.servicePath); } catch {}
     runStartupCommand('systemctl', ['--user', 'daemon-reload'], { allowFailure: true });
     return getStartupStatus();
@@ -697,13 +485,6 @@ export {
   stablePnpmEntrypoint,
   buildSystemdUserService,
   getStartupStatus,
-  parseSystemdMainPid,
-  parseLaunchdJobPid,
-  parseWindowsTaskProcesses,
-  findStartupServiceInstance,
-  startWindowsTaskAfterExit,
-  restartWindowsStartupTask,
-  restartStartupService,
   enableStartupService,
   disableStartupService,
   buildWindowsStartupTaskCommand,

@@ -17,7 +17,7 @@ import { createRelayIdentityRuntime } from './identity.js';
 import { describeRelayError, startRelayHost } from './host-client.js';
 import { isEnterpriseMode, readEnterprisePolicy } from '../enterprise-mode.js';
 
-export const DEFAULT_RELAY_URL = 'wss://relay.openchamber.dev/ws';
+
 
 const isValidRelayUrl = (value) => {
   if (typeof value !== 'string') return false;
@@ -30,9 +30,9 @@ const isValidRelayUrl = (value) => {
 };
 
 const normalizeRelayUrl = (value) => {
-  if (typeof value !== 'string') return DEFAULT_RELAY_URL;
+  if (typeof value !== 'string') return null;
   const trimmed = value.trim();
-  if (!trimmed || !isValidRelayUrl(trimmed)) return DEFAULT_RELAY_URL;
+  if (!trimmed || !isValidRelayUrl(trimmed)) return null;
   return trimmed;
 };
 
@@ -52,6 +52,7 @@ export const pinnedRelayUrl = () => {
 // Traffic is end-to-end encrypted either way; what stays in-house is the
 // metadata and the path into this machine.
 const RELAY_BLOCKED_ERROR = 'In enterprise mode the relay runs on your own endpoint: set relayUrl in the policy file or OPENCHAMBER_RELAY_URL to a self-hosted relay.';
+const RELAY_UNCONFIGURED_ERROR = 'No relay URL is configured. Set OPENCHAMBER_RELAY_URL, relayUrl in the policy file, or privateRelay.relayUrl in settings.json.';
 export const relayBlockedByEnterprise = () => isEnterpriseMode() && pinnedRelayUrl() === null;
 
 /**
@@ -132,8 +133,8 @@ export const createRelayService = ({
   const standbyStatus = (holder) => ({
     state: 'standby',
     lastError: holder?.host
-      ? `relay host is owned by another OpenChamber process sharing this data dir (pid ${holder.pid} on ${holder.host})`
-      : 'relay host is owned by another OpenChamber process sharing this data dir',
+      ? `relay host is owned by another OhPiChamber process sharing this data dir (pid ${holder.pid} on ${holder.host})`
+      : 'relay host is owned by another OhPiChamber process sharing this data dir',
     connectedClients: 0,
   });
 
@@ -152,10 +153,14 @@ export const createRelayService = ({
       void serializedLifecycle(async () => {
         try {
           const config = await readConfig();
-          if (!config.enabled || relayBlockedByEnterprise()) {
+          if (!config.enabled || relayBlockedByEnterprise() || !config.relayUrl) {
             stopClaimWatch();
             stopHostClient();
-            status = { state: 'disabled', lastError: null, connectedClients: 0 };
+            status = {
+              state: 'disabled',
+              lastError: config.enabled && !relayBlockedByEnterprise() && !config.relayUrl ? RELAY_UNCONFIGURED_ERROR : null,
+              connectedClients: 0,
+            };
             return;
           }
           if (hostClient) {
@@ -203,6 +208,11 @@ export const createRelayService = ({
       status = { state: 'disabled', lastError: RELAY_BLOCKED_ERROR, connectedClients: 0 };
       return;
     }
+    const normalizedUrl = normalizeRelayUrl(relayUrl);
+    if (!normalizedUrl) {
+      status = { state: 'disabled', lastError: RELAY_UNCONFIGURED_ERROR, connectedClients: 0 };
+      return;
+    }
     if (claim !== 'force' && !allowPassiveHost) {
       status = {
         state: 'standby',
@@ -221,7 +231,7 @@ export const createRelayService = ({
     }
     const identity = await identityRuntime.getRelayIdentity();
     hostClient = startRelayHost({
-      relayUrl,
+      relayUrl: normalizedUrl,
       identity,
       getLocalPort,
       logger,
@@ -259,6 +269,16 @@ export const createRelayService = ({
       const demand = await hasRelayDemand();
       const config = await readConfig();
       if (demand) {
+        if (relayBlockedByEnterprise()) {
+          stopHost();
+          status = { state: 'disabled', lastError: RELAY_BLOCKED_ERROR, connectedClients: 0 };
+          return;
+        }
+        if (!config.relayUrl) {
+          stopHost();
+          status = { state: 'disabled', lastError: RELAY_UNCONFIGURED_ERROR, connectedClients: 0 };
+          return;
+        }
         if (!config.enabled) await writeConfig({ enabled: true, relayUrl: config.relayUrl });
         if (!hostClient) {
           const next = await readConfig();
@@ -309,8 +329,9 @@ export const createRelayService = ({
   // tunnel like any other candidate. Returns null when the host relay is off, so
   // callers only advertise relay when it is actually reachable. Priority is high
   // (tried after LAN/tunnel) since the relay path is the last-resort transport.
-  const buildPairingCandidate = async () => {
-    const config = await readConfig();
+  const buildPairingCandidate = async (configOverride) => {
+    const config = configOverride ?? await readConfig();
+    if (!config.relayUrl) return null;
     const identity = await identityRuntime.getRelayIdentity();
     return {
       type: 'relay',
@@ -323,8 +344,8 @@ export const createRelayService = ({
 
   const getPairingCandidate = async () => {
     const config = await readConfig();
-    if (!config.enabled || relayBlockedByEnterprise()) return null;
-    return buildPairingCandidate();
+    if (!config.enabled || !config.relayUrl || relayBlockedByEnterprise()) return null;
+    return buildPairingCandidate(config);
   };
 
   // Enable the relay host on demand and return its pairing candidate. Creating a
@@ -335,11 +356,13 @@ export const createRelayService = ({
     // Direct pairing still works: the pairing route drops a failed relay candidate.
     if (relayBlockedByEnterprise()) throw Object.assign(new Error(RELAY_BLOCKED_ERROR), { statusCode: 403 });
     const config = await readConfig();
+    if (!config.relayUrl) throw Object.assign(new Error(RELAY_UNCONFIGURED_ERROR), { statusCode: 400 });
     if (!config.enabled) {
       await writeConfig({ enabled: true, relayUrl: config.relayUrl });
     }
     if (!hostClient) {
       const next = await readConfig();
+      if (!next.relayUrl) throw Object.assign(new Error(RELAY_UNCONFIGURED_ERROR), { statusCode: 400 });
       // Force-claim: creating a pairing link is explicit user intent — the
       // instance the user is pairing against MUST be the one devices reach,
       // even if another local process currently holds the machine's claim
@@ -362,7 +385,7 @@ export const createRelayService = ({
     stopHostClient();
     if (!wasHosting) return;
     const config = await readConfig();
-    if (!config.enabled || relayBlockedByEnterprise()) return;
+    if (!config.enabled || !config.relayUrl || relayBlockedByEnterprise()) return;
     // Explicit identity rotation is user intent: claim the host like enable.
     await startHost(config.relayUrl, { claim: 'force' });
   };
@@ -403,7 +426,18 @@ export const createRelayService = ({
       }
       try {
         const current = await readConfig();
-        const relayUrl = typeof req.body?.relayUrl === 'string' ? normalizeRelayUrl(req.body.relayUrl) : current.relayUrl;
+        const hasExplicitUrl = req.body?.relayUrl !== undefined && req.body?.relayUrl !== null;
+        if (hasExplicitUrl && !isValidRelayUrl(req.body.relayUrl)) {
+          return res.status(400).json({ error: 'Invalid relay URL. Use a ws:// or wss:// URL.' });
+        }
+        const relayUrl = current.relayUrlLocked
+          ? current.relayUrl
+          : hasExplicitUrl
+            ? normalizeRelayUrl(req.body.relayUrl)
+            : current.relayUrl;
+        if (!relayUrl) {
+          return res.status(400).json({ error: RELAY_UNCONFIGURED_ERROR });
+        }
         await writeConfig({ enabled: true, relayUrl });
         // Explicit user action: take the machine's host claim like pairing does.
         await enableRelay(relayUrl);
@@ -441,6 +475,7 @@ export const createRelayService = ({
     reconcile,
     stop,
     getStatus,
+    isConfigured: async () => !relayBlockedByEnterprise() && (await readConfig()).relayUrl !== null,
     getServerId,
     resetIdentity,
     getPairingCandidate,

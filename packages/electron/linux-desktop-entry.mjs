@@ -10,11 +10,11 @@ import path from 'node:path';
 // GNOME re-matches open windows when the file appears, so the first launch
 // gets the icon a few seconds after this runs.
 
-const DESKTOP_FILE_NAME = 'openchamber.desktop';
-const WM_CLASS = 'openchamber';
+const DESKTOP_FILE_NAME = 'ohpichamber.desktop';
+const WM_CLASS = 'ohpichamber';
 const MANAGED_KEY = 'X-OpenChamber-Managed';
-const ICON_RELATIVE_PATH = path.join('icons', 'hicolor', '512x512', 'apps', 'openchamber.png');
-const APPDIR_ICON_RELATIVE_PATH = path.join('usr', 'share', 'icons', 'hicolor', '512x512', 'apps', 'openchamber.png');
+const ICON_RELATIVE_PATH = path.join('icons', 'hicolor', '512x512', 'apps', 'ohpichamber.png');
+const APPDIR_ICON_RELATIVE_PATH = path.join('usr', 'share', 'icons', 'hicolor', '512x512', 'apps', 'ohpichamber.png');
 
 const resolveDataHome = (env, homeDir) => {
   const value = (env.XDG_DATA_HOME ?? '').trim();
@@ -24,13 +24,18 @@ const resolveDataHome = (env, homeDir) => {
 // Desktop Entry spec: a string value escapes backslashes; an Exec argument is
 // double-quoted with ", `, $ and \ escaped, and a literal % is written %%.
 const escapeDesktopString = (value) => value.replace(/\\/g, '\\\\');
-const quoteExecArgument = (value) => `"${value.replace(/(["`$\\])/g, '\\$1')}"`.replace(/%/g, '%%');
+const EXEC_NEEDS_QUOTES = /[\s"'`$\\<>~|&;*?#()]/;
+const quoteExecArgument = (value) => (
+  EXEC_NEEDS_QUOTES.test(value)
+    ? `"${value.replace(/(["`$\\])/g, '\\$1')}"`
+    : value
+).replace(/%/g, '%%');
 
 export const buildAppImageDesktopEntry = ({ appImagePath, iconPath }) => [
   '[Desktop Entry]',
   'Type=Application',
-  'Name=OpenChamber',
-  'Comment=Desktop runtime for OpenChamber',
+  'Name=OhPiChamber',
+  'Comment=Desktop runtime for OhPiChamber',
   `Exec=${escapeDesktopString(quoteExecArgument(appImagePath))} %U`,
   `TryExec=${escapeDesktopString(appImagePath)}`,
   `Icon=${escapeDesktopString(iconPath)}`,
@@ -38,6 +43,7 @@ export const buildAppImageDesktopEntry = ({ appImagePath, iconPath }) => [
   'StartupNotify=true',
   `StartupWMClass=${WM_CLASS}`,
   'Categories=Development;',
+  'MimeType=x-scheme-handler/ohpichamber;',
   `${MANAGED_KEY}=true`,
   '',
 ].join('\n');
@@ -147,7 +153,7 @@ export const reconcileAppImageDesktopEntry = async ({
   const appImagePath = (env.APPIMAGE ?? '').trim();
   const appDir = (env.APPDIR ?? '').trim();
   if (!path.isAbsolute(appImagePath) || !path.isAbsolute(appDir) || /[\r\n]/.test(appImagePath)) {
-    // An installed .deb or .rpm ships its own openchamber.desktop, which an
+    // An installed .deb or .rpm ships its own ohpichamber.desktop, which an
     // entry left by an earlier AppImage run would hide: ours takes precedence.
     // An extracted AppImage also runs without APPIMAGE; it keeps the entry.
     const installed = await findInstalledPackageEntry(env, desktopPath);

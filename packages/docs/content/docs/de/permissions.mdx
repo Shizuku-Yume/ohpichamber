@@ -5,7 +5,7 @@ description: Leg pro Sitzung fest, wie viel der Agent ohne Rückfrage tun darf.
 
 # Berechtigungen und Sicherheitsnetz
 
-Jede Aktion des Agenten (einen Befehl ausführen, eine Datei bearbeiten, ein MCP-Tool aufrufen, eine Seite abrufen) wird von der Host-Autorisierung und der Worker-Richtlinie des Agent Service ausgewertet. Die Berechtigungsmodi von OpenChamber entscheiden, was passiert, wenn eine Aktion eine Bestätigung erfordert.
+Jede Aktion des Agenten (einen Befehl ausführen, eine Datei bearbeiten, ein MCP-Tool aufrufen, eine Seite abrufen) wird von der Host-Autorisierung und der Worker-Richtlinie des Agent Service ausgewertet. Die Berechtigungsmodi von OhPiChamber entscheiden, was passiert, wenn eine Aktion eine Bestätigung erfordert.
 
 ## Allow, ask und deny
 
@@ -23,7 +23,7 @@ Um zu konfigurieren, welche Tools ein Agent sehen und aufrufen kann, nutze das F
 | --- | --- |
 | **Jedes Mal fragen** | Du. Jede Anfrage wartet auf deine Antwort. |
 | **Sicherheitsnetz** | Jev lässt Routineaktionen durch und hält riskante für dich zurück. |
-| **Alles akzeptieren** | OpenChamber, immer mit Ja. Jede Anfrage wird sofort erlaubt, ohne Prüfung. |
+| **Alles akzeptieren** | OhPiChamber, immer mit Ja. Jede Anfrage wird sofort erlaubt, ohne Prüfung. |
 
 **Alles akzeptieren** braucht nichts weiter: Der Modus behandelt jedes „ask“ einfach als erlaubt. Nutze ihn, wenn du der Aufgabe vertraust und keine Unterbrechungen willst.
 
@@ -36,7 +36,7 @@ Subagenten folgen der Sitzung, die sie gestartet hat.
 
 ## Das Sicherheitsnetz
 
-In diesem Modus fragt OpenChamber [Jev](/de/classification-providers/) zu jeder Anfrage: Ist das Routine, oder solltest du entscheiden? Lesen, Bauen, Tests ausführen, Projektdateien bearbeiten und normale Commits gehen durch. Git-Verlauf umschreiben, Daten löschen, das System ändern, deployen, irgendwo etwas veröffentlichen oder Dateien nach außen schicken warten auf dich, genauso wie alles, was unklar ist.
+In diesem Modus fragt OhPiChamber [Jev](/de/classification-providers/) zu jeder Anfrage: Ist das Routine, oder solltest du entscheiden? Lesen, Bauen, Tests ausführen, Projektdateien bearbeiten und normale Commits gehen durch. Git-Verlauf umschreiben, Daten löschen, das System ändern, deployen, irgendwo etwas veröffentlichen oder Dateien nach außen schicken warten auf dich, genauso wie alles, was unklar ist.
 
 Eine zurückgehaltene Anfrage zeigt die übliche Berechtigungskarte mit einer zusätzlichen Zeile, **Das Sicherheitsnetz hat diese Aktion angehalten, damit Sie entscheiden**, und der Art der Aktion. Antwortet Jev nicht innerhalb von vier Sekunden, wartet die Aktion ebenfalls auf dich. Das Sicherheitsnetz erlaubt nie etwas, nur weil die Prüfung fehlgeschlagen ist.
 
@@ -44,7 +44,7 @@ Das Sicherheitsnetz braucht einen [Klassifizierungsanbieter](/de/classification-
 
 ## Läuft weiter, während du weg bist
 
-Der Modus lebt im OpenChamber-Server. Er beantwortet Anfragen also weiter, nachdem du den Tab geschlossen oder das Handy gesperrt hast, und übersteht Neustarts.
+Der Modus lebt im OhPiChamber-Server. Er beantwortet Anfragen also weiter, nachdem du den Tab geschlossen oder das Handy gesperrt hast, und übersteht Neustarts.
 
 
 ## Verwandt

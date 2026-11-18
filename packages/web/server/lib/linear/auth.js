@@ -5,7 +5,6 @@ import { isPlainObject, readEnv, readFiniteNumber, readTrimmedString } from './p
 
 const DEFAULT_LINEAR_CLIENT_ID = '91bbe26a69a2c8568d3683f1e01e776c';
 const DEFAULT_LINEAR_SCOPES = 'read,write,comments:create';
-const DEFAULT_LINEAR_BROKER_URL = 'https://api.openchamber.dev/v1/oauth/linear';
 const ACCESS_TOKEN_REFRESH_SKEW_MS = 2 * 60_000;
 const LEGACY_WORKSPACE_ID = 'legacy';
 const SESSION_COMMENTS_SETTING_KEY = 'linearSessionComments';
@@ -15,7 +14,7 @@ function resolveDataDir() {
   if (fromEnv) {
     return path.resolve(fromEnv);
   }
-  return path.join(os.homedir(), '.config', 'openchamber');
+  return path.join(os.homedir(), '.config', 'ohpichamber');
 }
 
 function storageFile() {
@@ -398,20 +397,47 @@ export function getLinearScopes() {
   return DEFAULT_LINEAR_SCOPES;
 }
 
+const trimTrailingSlashes = (value) => value.replace(/\/+$/, '');
+
+/** The setting names the UI shows when Linear's browser sign-in cannot start. */
+export const LINEAR_SIGN_IN_SETTING = 'OPENCHAMBER_LINEAR_BROKER_URL';
+export const LINEAR_SIGN_IN_SETTINGS_KEY = 'linearBrokerUrl';
+
+/**
+ * The OAuth broker this server talks to. There is no built-in broker: unset
+ * here means Linear's browser sign-in is unavailable, and nothing dials out.
+ */
 export function getLinearBrokerUrl() {
   const fromEnv = readEnv('OPENCHAMBER_LINEAR_BROKER_URL');
-  if (fromEnv) return fromEnv.replace(/\/+$/, '');
+  if (fromEnv) return trimTrailingSlashes(fromEnv);
   const stored = readSettingString('linearBrokerUrl');
-  if (stored) return stored.replace(/\/+$/, '');
-  return DEFAULT_LINEAR_BROKER_URL;
+  if (stored) return trimTrailingSlashes(stored);
+  return '';
 }
 
-export function getLinearRedirectUri() {
+/** An explicitly configured callback, for a custom Linear OAuth app. */
+function getExplicitLinearRedirectUri() {
   const fromEnv = readEnv('OPENCHAMBER_LINEAR_REDIRECT_URI');
   if (fromEnv) return fromEnv;
   const stored = readSettingString('linearRedirectUri');
   if (stored) return stored;
-  return `${getLinearBrokerUrl()}/callback`;
+  return '';
+}
+
+/**
+ * The registered callback: the explicit one, else the broker's. Empty when
+ * neither is configured — never an invented upstream address.
+ */
+export function getLinearRedirectUri() {
+  const explicit = getExplicitLinearRedirectUri();
+  if (explicit) return explicit;
+  const brokerUrl = getLinearBrokerUrl();
+  return brokerUrl ? `${brokerUrl}/callback` : '';
+}
+
+/** Whether this server can start Linear's browser sign-in at all. */
+export function isLinearSignInConfigured() {
+  return Boolean(getLinearRedirectUri());
 }
 
 /**

@@ -30,7 +30,7 @@ describe('parseConnectionPayload', () => {
   });
 
   test('accepts a pasted pairing link when the WebView URL parser loses its host', () => {
-    // Android WebView 124 parses openchamber://connect?... with hostname "" and pathname
+    // Android WebView 124 parses ohpichamber://connect?... with hostname "" and pathname
     // "//connect". The paste handler in MobileConnectionWelcome calls this function directly.
     const OriginalURL = globalThis.URL;
     class OldWebViewURL extends OriginalURL {
@@ -58,12 +58,12 @@ describe('parseConnectionPayload', () => {
   test('rejects non-connection and legacy/relay-offer payloads', () => {
     expect(parseConnectionPayload('')).toBeNull();
     expect(parseConnectionPayload('hello world')).toBeNull();
-    expect(parseConnectionPayload('openchamber://connect')).toBeNull();
-    expect(parseConnectionPayload('openchamber://session/abc')).toBeNull();
+    expect(parseConnectionPayload('ohpichamber://connect')).toBeNull();
+    expect(parseConnectionPayload('ohpichamber://session/abc')).toBeNull();
     // Legacy v1 direct links are no longer accepted.
-    expect(parseConnectionPayload('openchamber://connect?v=1&server=http%3A%2F%2F192.168.1.10%3A2606&token=tok')).toBeNull();
+    expect(parseConnectionPayload('ohpichamber://connect?v=1&server=http%3A%2F%2F192.168.1.10%3A2606&token=tok')).toBeNull();
     // Legacy relay-offer format (mode=relay + fragment) is no longer accepted.
-    expect(parseConnectionPayload('openchamber://connect?v=1&mode=relay#offer=eyJ2IjoxfQ')).toBeNull();
+    expect(parseConnectionPayload('ohpichamber://connect?v=1&mode=relay#offer=eyJ2IjoxfQ')).toBeNull();
   });
 });
 
@@ -110,7 +110,7 @@ describe('scanConnectionQr on Android', () => {
   });
 
   test('falls back to string parsing when the WebView URL parser rejects the link (old Android WebView)', async () => {
-    // Old Android WebViews resolve openchamber://connect?... with hostname "" and
+    // Old Android WebViews resolve ohpichamber://connect?... with hostname "" and
     // pathname "//connect", so the URL-based parse fails on an intact string. The test
     // runtime's URL parser handles the canonical form fine, so simulate the rejection
     // with a case variant the URL parser refuses while the string parser accepts.
@@ -119,7 +119,7 @@ describe('scanConnectionQr on Android', () => {
       secret: 'one-time',
       candidates: [{ type: 'lan', url: 'http://192.168.1.20:4096', priority: 10 }],
     }));
-    const mixedCase = url.replace('openchamber://connect', 'OpenChamber://CONNECT');
+    const mixedCase = url.replace('ohpichamber://connect', 'OhPiChamber://CONNECT');
     const listeners = new Map<string, (event: { barcodes?: Array<{ rawValue?: string }> }) => void>();
     const plugin = {
       requestPermissions: mock(async () => ({ camera: 'granted' })),

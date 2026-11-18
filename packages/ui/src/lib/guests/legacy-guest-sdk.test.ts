@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from '@openchamber/sdk';
+import { OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL } from 'ohpichamber-sdk';
 
 import { isLegacyGuestSdkMessage } from './legacy-guest-sdk.ts';
 

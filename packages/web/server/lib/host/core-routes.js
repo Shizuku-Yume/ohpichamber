@@ -413,7 +413,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     // Returns { local, lan, relayAvailable } — the direct transport URLs the
     // server can actually be reached on (LAN derived from the server bind, not
     // the UI origin), for the create-device dialog.
-    getPairingTransports = () => ({ local: null, lan: null, relayAvailable: true }),
+    getPairingTransports = () => ({ local: null, lan: null, relayAvailable: false }),
     // Returns ALL direct LAN URLs the server is currently reachable on (client-
     // reached address first, then interface scan) for the candidates-refresh
     // endpoint. Empty when the server is loopback-only.
@@ -422,7 +422,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     getServerId = async () => null,
     // Display name a paired device shows for THIS server (issuing machine's
     // hostname), distinct from the per-device pairing label typed by the operator.
-    getServerLabel = () => 'OpenChamber',
+    getServerLabel = () => 'OhPiChamber',
     getLegacyDataPresence = hasLegacyOpenCodeData,
   } = dependencies;
   const PAIRING_REDEEM_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
@@ -951,7 +951,7 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
   app.get('/api/client-auth/pairing/transports', async (req, res, next) => {
     await runWithClientCreateAuth(req, res, next, async () => {
       res.setHeader('Cache-Control', 'no-store');
-      res.json(getPairingTransports(req));
+      res.json(await getPairingTransports(req));
     });
   });
 

@@ -189,7 +189,7 @@ declare const __APP_VERSION__: string | undefined;
 
 /** Version, platform and how the agent runtime was launched: the questions a support thread opens with. */
 const formatEnvironment = (health: DiagnosticHealthSample | null, openCodeVersion: string | undefined): string[] => [
-  `OpenChamber: ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown'} (${canUseElectronDesktopIPC() ? 'desktop' : 'web'})`,
+  `OhPiChamber: ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'unknown'} (${canUseElectronDesktopIPC() ? 'desktop' : 'web'})`,
   `Platform: ${navigator.userAgent}`,
   // An engine-shaped Host still reports its engine; the fork's Host does not run one.
   ...(health && health.status !== null
@@ -209,9 +209,9 @@ const formatHealth = (health: DiagnosticHealthSample | null): string => {
 };
 
 const formatLog = (at: number, health: DiagnosticHealthSample | null, openCodeVersion: string | undefined, coverage: string[], events: DiagnosticEvent[]): string =>
-  `OpenChamber diagnostic timeline\nGenerated: ${new Date(at).toISOString()}\n${formatEnvironment(health, openCodeVersion).join('\n')}\n\nCurrent health: ${formatHealth(health)}\n\nSources:\n${coverage.map((item) => `- ${item}`).join('\n')}\n\nEvents (${events.length}):\n${formatDiagnosticEvents(events)}`;
+  `OhPiChamber diagnostic timeline\nGenerated: ${new Date(at).toISOString()}\n${formatEnvironment(health, openCodeVersion).join('\n')}\n\nCurrent health: ${formatHealth(health)}\n\nSources:\n${coverage.map((item) => `- ${item}`).join('\n')}\n\nEvents (${events.length}):\n${formatDiagnosticEvents(events)}`;
 
-const runtimeChanged = () => `OpenChamber diagnostic timeline\nGenerated: ${new Date().toISOString()}\n${formatEnvironment(null, undefined).slice(0, 2).join('\n')}\n\nSources:\n- Export interrupted: the active runtime changed while it was collected; export again\n\nEvents (0):\n`;
+const runtimeChanged = () => `OhPiChamber diagnostic timeline\nGenerated: ${new Date().toISOString()}\n${formatEnvironment(null, undefined).slice(0, 2).join('\n')}\n\nSources:\n- Export interrupted: the active runtime changed while it was collected; export again\n\nEvents (0):\n`;
 
 /**
  * A remote runtime (another machine, an SSH host, a relay) has no local files,

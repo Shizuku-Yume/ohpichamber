@@ -1,6 +1,6 @@
 ---
 title: Outil de contrôle pour les agents
-description: Permettez à un agent de gérer les sessions, worktrees et tâches planifiées d’OpenChamber depuis le chat.
+description: Permettez à un agent de gérer les sessions, worktrees et tâches planifiées d’OhPiChamber depuis le chat.
 ---
 
 # Outil de contrôle pour les agents
@@ -11,25 +11,25 @@ Utilisez l’outil d’agent `openchamber` pour gérer le travail dans l’appli
 
 Parlez à l’agent en langage naturel. Par exemple :
 
-- « Crée une nouvelle session OpenChamber dans ce projet, utilise le modèle `openai/gpt-5.6-sol` et envoie-lui ce prompt : revois le flux d’authentification. »
-- « Crée une nouvelle session OpenChamber pour cette tâche dans un worktree séparé et demande-lui d’ajouter des tests pour le flux de connexion. »
-- « Utilise OpenChamber pour lister mes 10 sessions les plus récentes avec leur état actuel. »
-- « Crée une tâche planifiée OpenChamber nommée Revue de semaine qui envoie ce prompt à 09:00 chaque jour ouvré : revois les changements depuis la dernière exécution. »
-- « Lance maintenant la tâche planifiée OpenChamber nommée Revue de semaine. »
-- « Vérifie la session OpenChamber nommée Revue d’authentification et montre-moi la dernière réponse de l’assistant. »
+- « Crée une nouvelle session OhPiChamber dans ce projet, utilise le modèle `openai/gpt-5.6-sol` et envoie-lui ce prompt : revois le flux d’authentification. »
+- « Crée une nouvelle session OhPiChamber pour cette tâche dans un worktree séparé et demande-lui d’ajouter des tests pour le flux de connexion. »
+- « Utilise OhPiChamber pour lister mes 10 sessions les plus récentes avec leur état actuel. »
+- « Crée une tâche planifiée OhPiChamber nommée Revue de semaine qui envoie ce prompt à 09:00 chaque jour ouvré : revois les changements depuis la dernière exécution. »
+- « Lance maintenant la tâche planifiée OhPiChamber nommée Revue de semaine. »
+- « Vérifie la session OhPiChamber nommée Revue d’authentification et montre-moi la dernière réponse de l’assistant. »
 
-L’outil de contrôle liste les projets et les préférences de modèles, cherche dans le catalogue de modèles, crée des sessions et les suit, forke une session et crée des sessions isolées dans des worktrees. L’outil de planification crée, modifie, lance, met en pause et supprime des tâches planifiées. Les sessions lancées ainsi apparaissent dans OpenChamber comme les autres : vous pouvez les ouvrir et poursuivre le travail vous-même.
+L’outil de contrôle liste les projets et les préférences de modèles, cherche dans le catalogue de modèles, crée des sessions et les suit, forke une session et crée des sessions isolées dans des worktrees. L’outil de planification crée, modifie, lance, met en pause et supprime des tâches planifiées. Les sessions lancées ainsi apparaissent dans OhPiChamber comme les autres : vous pouvez les ouvrir et poursuivre le travail vous-même.
 
 ## À garder en tête
 
-- Par défaut, les prompts envoyés à de nouvelles sessions reviennent tout de suite. Suivez la session dans OpenChamber ou demandez à l’agent de la vérifier plus tard.
+- Par défaut, les prompts envoyés à de nouvelles sessions reviennent tout de suite. Suivez la session dans OhPiChamber ou demandez à l’agent de la vérifier plus tard.
 - Un worktree séparé n’est créé que si vous le demandez. Les changements non commités de votre worktree actuel n’y sont pas copiés.
 - Quand le checkout semble occupé, par exemple parce qu’une autre session travaille sur la même branche, l’agent peut proposer de déplacer sa propre session dans un nouveau worktree. Il la déplace une fois que vous êtes d’accord et n’emporte que les fichiers qu’il a modifiés.
 - Les outils ne peuvent pas supprimer de sessions ni de worktrees, enregistrer des chemins de projet, lancer des commandes shell arbitraires ni appeler des URL arbitraires.
 
 ## Activer ou désactiver les outils
 
-Ouvrez **Paramètres → Général → Outils OpenChamber** et modifiez **Outil de contrôle pour les agents**. Le réglage s’applique immédiatement sans redémarrage. L'outil fonctionne via la limite d'action native de l'hôte OpenChamber pour gérer les sessions, les worktrees et les tâches planifiées.
+Ouvrez **Paramètres → Général → Outils OhPiChamber** et modifiez **Outil de contrôle pour les agents**. Le réglage s’applique immédiatement sans redémarrage. L'outil fonctionne via la limite d'action native de l'hôte OhPiChamber pour gérer les sessions, les worktrees et les tâches planifiées.
 
 ## Voir aussi
 
@@ -37,5 +37,5 @@ Ouvrez **Paramètres → Général → Outils OpenChamber** et modifiez **Outil 
 - [Sessions worktree](/fr/worktrees/)
 - [Objectifs de session](/fr/session-goals/)
 - [Workflows](/fr/workflows/) : l’outil de workflows, pour répartir une grosse tâche entre de nombreux agents
-- [Panneau navigateur](/fr/desktop-browser/) : l’outil OpenChamber Web, pour regarder et piloter une page
+- [Panneau navigateur](/fr/desktop-browser/) : l’outil OhPiChamber Web, pour regarder et piloter une page
 - [Notes, todos et plans de projet](/fr/notes-todos-plans/) : l’outil de connaissances du projet, pour les notes, todos et plans de l’onglet Contexte

@@ -54,7 +54,6 @@ import { z } from 'zod';
  * - Speech and transcription go only to servers on this machine (`tts`,
  *   `dictation`).
  * - Push notifications carry no message text or session name (`notifications`).
- * - Update checks still run but never report usage (`package-manager.js`).
  * - The draw.io diagram editor, diagrams.net's own page in a frame, is not
  *   loaded; a .drawio file opens as its XML (`packages/ui` FilesView). The
  *   crossing happens in the browser, so the UI is where it is held back.
@@ -276,7 +275,7 @@ export const isNetworkAccessBlocked = (options) => {
 
 export const ENTERPRISE_MODE_ERROR = 'Not available in enterprise mode: this operation is blocked by enterprise policy.';
 
-export const NETWORK_ACCESS_BLOCKED_ERROR = 'Enterprise mode keeps OpenChamber on this machine: it does not listen on a network address. '
+export const NETWORK_ACCESS_BLOCKED_ERROR = 'Enterprise mode keeps OhPiChamber on this machine: it does not listen on a network address. '
  + 'An administrator can allow it with "allowNetworkAccess": true in the policy file, or OPENCHAMBER_ALLOW_NETWORK_ACCESS=1 where the environment turns enterprise mode on.';
 
 /** What a client may know about the policy; pinned endpoints and keys stay on the server. */

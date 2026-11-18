@@ -50,6 +50,7 @@ export const createBootstrapRuntime = (dependencies) => {
       removePushSubscription,
       addOrUpdateApnsToken,
       removeApnsToken,
+      resolveApnsStatus,
       updateUiVisibility,
       clearPendingPushBadge,
       isUiVisible,
@@ -57,17 +58,10 @@ export const createBootstrapRuntime = (dependencies) => {
       writeSseEvent,
       sessionRuntime,
       setPushInitialized,
-      fs,
-      os,
-      path,
-      server,
-      __dirname,
-      openchamberDataDir,
       modelsDevApiUrl,
       modelsMetadataCacheTtl,
       setAutoAcceptSession,
       pluginNotificationEmitter,
-      desktopUpdater,
       skipBodyParsing,
       isRequestOriginAllowed,
     } = options;
@@ -145,6 +139,7 @@ export const createBootstrapRuntime = (dependencies) => {
       removePushSubscription,
       addOrUpdateApnsToken,
       removeApnsToken,
+      resolveApnsStatus,
       updateUiVisibility,
       clearPendingPushBadge,
       isUiVisible,
@@ -159,17 +154,8 @@ export const createBootstrapRuntime = (dependencies) => {
     });
 
     registerOpenChamberRoutes(app, {
-      fs,
-      os,
-      path,
-      process,
-      server,
-      __dirname,
-      openchamberDataDir,
       modelsDevApiUrl,
       modelsMetadataCacheTtl,
-      readSettingsFromDiskMigrated,
-      desktopUpdater,
     });
 
     return {

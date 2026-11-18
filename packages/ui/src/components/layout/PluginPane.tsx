@@ -25,8 +25,8 @@ import {
  type ResolveResultPayload,
  type JsonValue,
  trackerProviderIdOf,
-} from '@openchamber/sdk';
-import { guestMessageSchema } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { guestMessageSchema } from 'ohpichamber-sdk/schemas';
 
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { getReadableThemeColors } from '@/lib/theme/readableColors';

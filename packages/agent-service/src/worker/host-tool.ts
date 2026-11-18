@@ -48,18 +48,18 @@ export function normalizeHostToolEnablement(input?: Record<string, boolean>): Re
 export interface HostToolScope { sessionId: string; rootSessionId: string; workspaceId: string }
 export interface HostToolInvocation extends HostToolScope { request: HostActionRequest; signal: AbortSignal }
 export const HOST_TOOL_DESCRIPTIONS = {
-  openchamber: 'Invoke retained OpenChamber project/model, session, pull request watch, schedule or file.open actions in the captured workspace. '
+  openchamber: 'Invoke retained OhPiChamber project/model, session, pull request watch, schedule or file.open actions in the captured workspace. '
     + 'Pass action parameters inside input, for example {"action":"pr.watch","input":{"url":"https://github.com/owner/repo/pull/123"}} or {"action":"session.list","input":{}}. '
     + 'pr.watch watches a pull or merge request at url (GitHub/GitLab) for check status, reviews/comments, conflicts, or merge, waking the session with a message on change; requires url, optional sessionId (defaults to calling session) and directory. '
     + 'pr.unwatch stops watching a pull request for optional sessionId (defaults to calling session) without waking it.',
-  openchamber_knowledge: "The project's Notes, Todos and Plans, shown in OpenChamber's Project knowledge panel and shared by its sessions. One action per call. "
+  openchamber_knowledge: "The project's Notes, Todos and Plans, shown in OhPiChamber's Project knowledge panel and shared by its sessions. One action per call. "
     + 'knowledge.list returns everything unless planId or ready narrows it; read it before answering a question the project notes may hold. '
     + 'knowledge.save requires kind and body; with id it replaces, and an update may send only completed, planId or dependsOn. '
     + 'Notes are short facts the user wants at hand; your own learnings go to memory. Todos are the user\'s backlog: add one when asked or when you stop with work left, never for the steps of your current task. '
     + 'Plans are markdown files: list gives their paths, and read or edit one with your file tools; save creates or replaces one whole. '
     + 'knowledge.show opens a plan for the user. knowledge.delete requires kind and id.',
   web: 'Invoke retained browser navigation, snapshot, interaction, inspection, capture and resize actions. Browser credentials remain with the Host.',
-  notify: 'Invoke notify.send for an authorized OpenChamber notification.',
+  notify: 'Invoke notify.send for an authorized OhPiChamber notification.',
   openchamber_render: 'Show a page in the chat: one complete HTML document or one openui-lang program, with a title, in the same call. '
     + 'With awaitAnswer the page waits for the user\'s answer and returns their summary and data; without it the page is only shown. '
     + 'The chat draws the page inline, so do not restate what it already says.',

@@ -6,7 +6,6 @@ import { resolveGlobalSessionDirectory } from '@/stores/useGlobalSessionsStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { normalizeContextPanelDirectoryKey, useUIStore } from '@/stores/useUIStore';
-import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
@@ -15,6 +14,7 @@ import { showRuntimeStatus } from '@/lib/runtimeStatus';
 import { addSelectionToChat } from '@/lib/addSelectionToChat';
 import { navigateSessionHistory } from '@/lib/sessionNavigationHistory';
 import { getZoneView, resolveZoneActiveTabId, shownContextModes, zoneOfMode } from '@/lib/workspace/zones';
+import { useUpdateStore } from '@/stores/useUpdateStore';
 
 const getActiveElementSelectedText = (): string => {
   if (typeof document === 'undefined') {
@@ -59,6 +59,7 @@ const copyCurrentSelectionFallback = async (): Promise<boolean> => {
 };
 
 const MENU_ACTION_EVENT = 'openchamber:menu-action';
+// Electron's menu item emits this; the desktop app is the only updater.
 const CHECK_FOR_UPDATES_EVENT = 'openchamber:check-for-updates';
 
 type DesktopBridgeGlobal = {
@@ -109,8 +110,8 @@ export const useMenuActions = (
   const setSessionSwitcherOpen = useUIStore((s) => s.setSessionSwitcherOpen);
   const setSettingsDialogOpen = useUIStore((s) => s.setSettingsDialogOpen);
   const setAboutDialogOpen = useUIStore((s) => s.setAboutDialogOpen);
-  const checkForUpdates = useUpdateStore((state) => state.checkForUpdates);
   const { setThemeMode } = useThemeSystem();
+  const checkForUpdates = useUpdateStore((state) => state.checkForUpdates);
   const checkUpdatesInFlightRef = React.useRef(false);
 
   const handleCheckForUpdates = React.useCallback(() => {
@@ -121,22 +122,21 @@ export const useMenuActions = (
 
     void checkForUpdates()
       .then(() => {
-        const { available, error } = useUpdateStore.getState();
+        // A found update surfaces through the sidebar's update button (and the
+        // update dialog it opens); nothing else needs to be said here.
+        const { error } = useUpdateStore.getState();
         if (error) {
-          toast.error('Failed to check for updates', {
-            description: error,
-          });
+          toast.error(t('sessions.sidebar.updateCheck.errorTitle'), { description: error });
           return;
         }
-
-        if (!available) {
-          toast.success('You are on the latest version');
+        if (!useUpdateStore.getState().available) {
+          toast.success(t('sessions.sidebar.updateCheck.latestVersion'));
         }
       })
       .finally(() => {
         checkUpdatesInFlightRef.current = false;
       });
-  }, [checkForUpdates]);
+  }, [checkForUpdates, t]);
 
   const handleChangeWorkspace = React.useCallback(() => {
     sessionEvents.requestDirectoryDialog();

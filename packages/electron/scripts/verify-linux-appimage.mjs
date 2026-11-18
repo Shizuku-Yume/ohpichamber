@@ -68,7 +68,7 @@ const collectFiles = (root, predicate) => {
 const ONNX_ADDON_TARGET = /(?:^|\/)bin\/napi-v\d+\/([^/]+)\/([^/]+)\/onnxruntime_binding\.node$/;
 const PI_NATIVES_ADDON_TARGET = /(?:^|\/)@oh-my-pi\/pi-natives-([^-]+)-([^/]+)\//;
 
-// Launchers resolve `Icon=openchamber` through the hicolor theme, which only
+// Launchers resolve `Icon=ohpichamber` through the hicolor theme, which only
 // reads `<size>/apps/` directories it declares: `scalable` and square sizes up
 // to 512. A file one level up, or at 1024x1024, is never found (#4766, #2934).
 const isHicolorAppsDirectory = (sizeName) => {
@@ -81,11 +81,11 @@ const assertThemeIcon = (root) => {
   const hicolorRoot = path.join(root, 'usr', 'share', 'icons', 'hicolor');
   const sizeNames = fs.existsSync(hicolorRoot) ? fs.readdirSync(hicolorRoot) : [];
   const themeIcon = sizeNames.filter(isHicolorAppsDirectory).some((sizeName) => (
-    ['openchamber.png', 'openchamber.svg'].some((fileName) => (
+    ['ohpichamber.png', 'ohpichamber.svg'].some((fileName) => (
       fs.existsSync(path.join(hicolorRoot, sizeName, 'apps', fileName))
     ))
   ));
-  if (!themeIcon) throw new Error('Missing theme icon: no openchamber icon under usr/share/icons/hicolor/<size>/apps');
+  if (!themeIcon) throw new Error('Missing theme icon: no ohpichamber icon under usr/share/icons/hicolor/<size>/apps');
   if (!fs.existsSync(path.join(root, '.DirIcon'))) throw new Error('Missing AppImage icon: .DirIcon does not resolve');
 };
 
@@ -94,16 +94,16 @@ export const verifyExtractedPayload = ({
   targetArchitecture,
   runBunVersion,
 }) => {
-  const desktopPath = path.join(root, 'openchamber.desktop');
+  const desktopPath = path.join(root, 'ohpichamber.desktop');
   if (!fs.existsSync(desktopPath)) throw new Error(`Missing desktop entry: ${desktopPath}`);
   const desktop = fs.readFileSync(desktopPath, 'utf8');
-  for (const entry of ['Name=OpenChamber', 'Icon=openchamber', 'StartupWMClass=openchamber']) {
+  for (const entry of ['Name=OhPiChamber', 'Icon=ohpichamber', 'StartupWMClass=ohpichamber']) {
     if (!desktop.split(/\r?\n/).includes(entry)) throw new Error(`Desktop identity mismatch: missing ${entry}`);
   }
   if (!/^Exec=AppRun(?:\s|$)/m.test(desktop)) throw new Error('Desktop identity mismatch: expected AppImage AppRun entrypoint');
   assertThemeIcon(root);
 
-  assertElfArchitecture(path.join(root, 'openchamber'), targetArchitecture, 'Electron executable');
+  assertElfArchitecture(path.join(root, 'ohpichamber'), targetArchitecture, 'Electron executable');
   const agentRoot = path.join(root, 'resources', 'agent-runtime');
   assertElfArchitecture(path.join(agentRoot, 'bun'), targetArchitecture, 'Bun executable');
   const agent = verifyAgentPayload(agentRoot, { platform: 'linux', architecture: targetArchitecture, runBunVersion });
@@ -149,7 +149,7 @@ export const verifyExtractedPayload = ({
 
 const findAppImage = (version, architecture) => {
   const suffix = linuxAppImageArchSuffix(architecture);
-  const expected = path.join(electronRoot, 'dist', `OpenChamber-${version}-linux-${suffix}.AppImage`);
+  const expected = path.join(electronRoot, 'dist', `OhPiChamber-${version}-linux-${suffix}.AppImage`);
   if (!fs.existsSync(expected)) throw new Error(`Linux AppImage not found: ${expected}`);
   return expected;
 };
@@ -174,7 +174,7 @@ const main = () => {
   const appImagePath = process.argv[2] ? path.resolve(process.argv[2]) : findAppImage(rootPackage.version, target);
   assertElfArchitecture(appImagePath, target, 'AppImage');
 
-  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-appimage-'));
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'ohpichamber-appimage-'));
   try {
     const result = verifyExtractedPayload({
       root: extractAppImage(appImagePath, temporaryDirectory),

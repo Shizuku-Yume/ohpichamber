@@ -43,7 +43,7 @@ by default). All paths are relative to it.
 | `POST /token` | `authorization_code` grant with S256 PKCE, single-use code, client and redirect matching; `refresh_token` grant with rotation. Returns `access_token`, `refresh_token`, `token_type: Bearer`, `expires_in: 3600`. |
 | `GET /__state` | Debug JSON for evidence: mode flags, registered client count, issued code count, issued token count, active token counts, and the last authorize parameters (challenge truncated). |
 
-## Point OpenChamber at it
+## Point OhPiChamber at it
 
 Settings → **MCP** → add a server → remote **HTTP** with the URL:
 

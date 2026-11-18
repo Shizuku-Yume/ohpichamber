@@ -17,9 +17,9 @@ Een worktree-sessie werkt in een eigen uitgecheckte kopie van uw repository, op 
 3. Controleer **Based on** (de branch waarvan een nieuwe branch vertrekt, standaard de standaardbranch van de remote, zoals `origin/main`) en **Folder name**; wijzig ze alleen als dat nodig is.
 4. Maak de worktree aan. Heeft het project setupcommando's, dan worden ze direct daarna uitgevoerd.
 
-OpenChamber maakt de branch, richt de map in en opent daar een nieuwe sessie, klaar voor uw eerste bericht. U kunt ook direct vanuit een [taak](/nl/notes-todos-plans/) of een [issue of pull request](/nl/github/) beginnen.
+OhPiChamber maakt de branch, richt de map in en opent daar een nieuwe sessie, klaar voor uw eerste bericht. U kunt ook direct vanuit een [taak](/nl/notes-todos-plans/) of een [issue of pull request](/nl/github/) beginnen.
 
-Wil je geen vragen, kies dan **Snelle worktree** in hetzelfde branchmenu: OpenChamber geeft de branch een tijdelijke naam en richt de nieuwe sessie erop. Zodra de agent de taak een naam geeft, hernoemt hij ook de branch ernaar, bijvoorbeeld `fix/login-timeout`, zolang de branch nog niet is gepusht.
+Wil je geen vragen, kies dan **Snelle worktree** in hetzelfde branchmenu: OhPiChamber geeft de branch een tijdelijke naam en richt de nieuwe sessie erop. Zodra de agent de taak een naam geeft, hernoemt hij ook de branch ernaar, bijvoorbeeld `fix/login-timeout`, zolang de branch nog niet is gepusht.
 
 ## In de zijbalk
 
@@ -27,7 +27,7 @@ Een worktree is één rij in de zijbalk, met alle sessies erin daaronder. Onder 
 
 ## Projecten geopend op een map van de repository
 
-Open je een project op een map binnen een repository, zoals `repo/ai`, dan openen nieuwe worktrees ook daar. Een sessie in een nieuwe worktree start in dezelfde map van de checkout, zodat de agent de configuratie vindt die daar staat. Een project dat op de hoofdmap van de repository is geopend, start zoals voorheen in de hoofdmap van de worktree. Heeft een branch die map niet, dan start de sessie in de hoofdmap van de worktree en meldt OpenChamber dat.
+Open je een project op een map binnen een repository, zoals `repo/ai`, dan openen nieuwe worktrees ook daar. Een sessie in een nieuwe worktree start in dezelfde map van de checkout, zodat de agent de configuratie vindt die daar staat. Een project dat op de hoofdmap van de repository is geopend, start zoals voorheen in de hoofdmap van de worktree. Heeft een branch die map niet, dan start de sessie in de hoofdmap van de worktree en meldt OhPiChamber dat.
 
 ## Het werk overnemen
 
@@ -35,7 +35,7 @@ Is het werk klaar voor gebruik, kies dan **Integreren** in de Git-weergave om de
 
 ## Opruimen
 
-Is de taak klaar, kies dan **Worktree archiveren** in het menu van de rij, of houd Shift ingedrukt en klik op de archiveerknop die op de rij in de plaats komt van de knop voor een nieuwe sessie. OpenChamber archiveert hem: de map verdwijnt, en de sessies, de niet-gecommitte wijzigingen en de branch wachten op de pagina Archief. Loopt daar nog een sessie, dan blijft de worktree staan.
+Is de taak klaar, kies dan **Worktree archiveren** in het menu van de rij, of houd Shift ingedrukt en klik op de archiveerknop die op de rij in de plaats komt van de knop voor een nieuwe sessie. OhPiChamber archiveert hem: de map verdwijnt, en de sessies, de niet-gecommitte wijzigingen en de branch wachten op de pagina Archief. Loopt daar nog een sessie, dan blijft de worktree staan.
 
 Markeert u de rij als afgerond, dan haalt dat hem alleen uit In bewerking. Wilt u een worktree archiveren telkens als u hem als afgerond markeert, of zodra zijn PR is gemerged, zet dat dan aan bij **Instellingen → Sessies → Afgeronde worktrees**.
 
@@ -45,9 +45,9 @@ Wilt u een worktree definitief kwijt, verwijder hem dan via zijn menu, of verwij
 
 ## Als er iets niet klopt
 
-Een worktree kan aandacht nodig hebben als de map is verdwenen, er geen actieve branch is of een merge of rebase niet is afgerond. OpenChamber signaleert dat zodat u het kunt herstellen. Zie [Worktrees en Git](/nl/troubleshooting/worktrees-git/).
+Een worktree kan aandacht nodig hebben als de map is verdwenen, er geen actieve branch is of een merge of rebase niet is afgerond. OhPiChamber signaleert dat zodat u het kunt herstellen. Zie [Worktrees en Git](/nl/troubleshooting/worktrees-git/).
 
 ## Zie ook
 
 - [Parallelle runs](/nl/multi-run/) om meerdere worktree-sessies tegelijk te starten
-- [Git-workflows](/nl/git/) om vanuit OpenChamber te committen en integreren
+- [Git-workflows](/nl/git/) om vanuit OhPiChamber te committen en integreren

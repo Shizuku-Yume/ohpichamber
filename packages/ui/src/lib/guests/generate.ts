@@ -6,7 +6,7 @@ import {
   type GenerateRequest,
   type GenerateResult,
   type HostRequestErrorCode,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { canonicalClient } from '@/api/canonicalClient';

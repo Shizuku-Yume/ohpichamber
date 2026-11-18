@@ -40,7 +40,6 @@ import { scheduleCommand } from './lib/commands-schedule.js';
 import { sessionCommand } from './lib/commands-session.js';
 import { modelsCommand } from './lib/commands-models.js';
 import { projectsCommand } from './lib/commands-projects.js';
-import { createUpdateCommand } from './lib/commands-update.js';
 import { createConnectUrlCommand } from './lib/commands-connect-url.js';
 import { createLifecycleCommands } from './lib/commands-lifecycle.js';
 import { createServeCommand } from './lib/commands-serve.js';
@@ -76,7 +75,7 @@ import { applyConnectAttemptTimeout } from '../server/lib/network-defaults.js';
 import { bunVersionRunsBunPty } from '../server/lib/terminal/bun-pty-support.js';
 import { resolveWebAgentRuntime, registerStandaloneLoader } from '../scripts/standalone-loader.mjs';
 
-// The CLI process performs provider fetches (quota/usage, update notes) under
+// The CLI process performs provider fetches (quota/usage) under
 // Node/undici, whose happy-eyeballs default aborts each connect attempt after
 // 250ms — distant provider endpoints routinely need longer handshakes, surfacing
 // as "fetch failed" (#3399). No-op on runtimes without the setter.
@@ -134,10 +133,6 @@ function boldText(text) {
   return `${ANSI.bold}${text}${ANSI.unbold}`;
 }
 
-function importFromFilePath(filePath) {
-  return import(pathToFileURL(filePath).href);
-}
-
 function getBunBinary() {
   if (typeof process.env.BUN_BINARY === 'string' && process.env.BUN_BINARY.trim().length > 0) {
     return process.env.BUN_BINARY.trim();
@@ -178,7 +173,6 @@ function getInstalledBunVersion() {
 }
 
 // On older Bun the terminal has no working PTY backend (#6322), so the server runs on Node there.
-// The update restart reruns this CLI with the server's own runtime, which can be that older Bun.
 function getServerRuntimeBinary() {
   if (bunVersionRunsBunPty(getInstalledBunVersion())) return BUN_BIN;
   if (!isBunRuntime() || bunVersionRunsBunPty(globalThis.Bun?.version)) return process.execPath;
@@ -208,8 +202,6 @@ const commands = {
   logs: logsCommand,
 
   startup: startupCommand,
-
-  update: null,
 };
 
 commands.serve = createServeCommand({
@@ -234,12 +226,6 @@ commands.tunnel = createTunnelCommand({
 });
 
 commands['connect-url'] = createConnectUrlCommand({
-  serveCommand: commands.serve.bind(commands),
-});
-
-commands.update = createUpdateCommand({
-  importFromFilePath,
-  packageManagerPath: path.join(__dirname, '..', 'server', 'lib', 'package-manager.js'),
   serveCommand: commands.serve.bind(commands),
 });
 
@@ -336,7 +322,7 @@ async function main() {
   }
 
   if (!commands[command]) {
-    const knownCommands = ['serve', 'stop', 'restart', 'status', 'schedule', 'session', 'models', 'projects', 'control', 'tunnel', 'startup', 'logs', 'update'];
+    const knownCommands = ['serve', 'stop', 'restart', 'status', 'schedule', 'session', 'models', 'projects', 'control', 'tunnel', 'startup', 'logs', 'connect-url'];
     const suggestion = findClosestMatch(command, knownCommands);
     const hint = suggestion ? ` Did you mean '${suggestion}'?` : '';
     if (isJsonMode(options)) {
@@ -357,7 +343,7 @@ async function main() {
   await commands[command](options);
 }
 
-const isCliExecution = isModuleCliExecution(process.argv[1], import.meta.url, fs.realpathSync, 'openchamber');
+const isCliExecution = isModuleCliExecution(process.argv[1], import.meta.url, fs.realpathSync, 'ohpichamber');
 
 if (isCliExecution) {
   let isHandlingSigint = false;

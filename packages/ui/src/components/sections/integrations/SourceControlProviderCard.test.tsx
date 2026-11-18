@@ -469,7 +469,7 @@ describe('SourceControlProviderCard', () => {
     await mount(acmeDescriptor({
       settings: { fields: [{ id: 'instance', kind: 'instance-url', secret: false }, { id: 'region', kind: 'unknown', secret: false }] },
     }));
-    expect(container.textContent).toContain('Update OpenChamber');
+    expect(container.textContent).toContain('Update OhPiChamber');
     expect(buttonLabels()).not.toContain('Add instance');
     expect(passwordInput()).toBeNull();
   });

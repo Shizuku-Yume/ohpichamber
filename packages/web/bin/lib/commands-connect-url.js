@@ -16,7 +16,7 @@ import { createRemoteClientAuthRuntime } from '../../server/lib/client-auth/remo
 import { createClientPairingRuntime } from '../../server/lib/client-auth/pairing.js';
 import { createRelayIdentityRuntime } from '../../server/lib/relay/identity.js';
 import { createRelayKeyStore } from '../../server/lib/relay/key-store.js';
-import { DEFAULT_RELAY_URL, pinnedRelayUrl } from '../../server/lib/relay/service.js';
+import { pinnedRelayUrl } from '../../server/lib/relay/service.js';
 import { bytesToBase64Url } from '../../server/lib/relay/e2ee.js';
 import { createSettingsAccessors as createSettingsAccessorsModule } from './cli-settings-accessors.js';
 import {
@@ -44,14 +44,14 @@ function isValidRelayUrl(value) {
 
 // Resolve the relay endpoint the same way the running host does (service.js):
 // the administrator's pinned relay (policy file, then OPENCHAMBER_RELAY_URL),
-// then the stored setting, then the default — so the pairing link points at
-// the same relay the host connects out to.
+// then the stored setting, or null when none is configured — so the pairing
+// link points at the same relay the host connects out to.
 function resolveRelayUrl(settings) {
   const pinned = pinnedRelayUrl();
   if (pinned) return pinned;
   const stored = settings?.privateRelay?.relayUrl;
   if (isValidRelayUrl(stored)) return stored.trim();
-  return DEFAULT_RELAY_URL;
+  return null;
 }
 
 // Minimal settings.json read/write for the relay identity runtime. It reads the
@@ -81,6 +81,14 @@ async function buildRelayPairingCandidate() {
   const accessors = createSettingsAccessors();
   const settings = await accessors.readSettingsFromDiskMigrated();
   const relayUrl = resolveRelayUrl(settings);
+  if (!relayUrl) {
+    return {
+      enabled: settings?.privateRelay?.enabled === true,
+      relayUrl: null,
+      serverId: null,
+      candidate: null,
+    };
+  }
   const relayKeyStore = createRelayKeyStore({
     fsPromises: fs.promises,
     path,
@@ -128,7 +136,7 @@ function createCliPairingRuntime() {
 // query, so the one-time secret rides the link, never the network.
 function encodePairingConnectUrl(payload) {
   const encoded = bytesToBase64Url(new TextEncoder().encode(JSON.stringify(payload)));
-  return `openchamber://connect?v=2&p=${encoded}`;
+  return `ohpichamber://connect?v=2&p=${encoded}`;
 }
 
 function buildPairingPayload({ pairing, label, candidates }) {
@@ -215,7 +223,7 @@ function normalizeServerUrlForConnection(value) {
 function getOpenChamberDataDir() {
   return process.env.OPENCHAMBER_DATA_DIR
     ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-    : path.join(os.homedir(), '.config', 'openchamber');
+    : path.join(os.homedir(), '.config', 'ohpichamber');
 }
 
 async function displayTunnelQrCode(url) {
@@ -231,29 +239,36 @@ async function displayTunnelQrCode(url) {
 
 function createConnectUrlCommand({ serveCommand }) {
   return async function connectUrlCommand(options = {}) {
-    assertSafeBrowserPort(options.port, { context: 'OpenChamber connect-url' });
+    assertSafeBrowserPort(options.port, { context: 'OhPiChamber connect-url' });
     const explicitServerUrl = options.server ? normalizeServerUrlForConnection(options.server) : null;
     if (options.server && !explicitServerUrl) {
       throw new TunnelCliError('Invalid --server URL. Use an http:// or https:// URL.', EXIT_CODE.USAGE_ERROR);
     }
 
+    const relay = await buildRelayPairingCandidate();
+    if (options.relay && !relay.candidate) {
+      throw new TunnelCliError(
+        'No relay URL is configured. Set OPENCHAMBER_RELAY_URL or privateRelay.relayUrl in settings.json.',
+        EXIT_CODE.USAGE_ERROR,
+      );
+    }
     const running = await discoverRunningInstances();
     const serverState = running.some((entry) => entry.port === options.port)
       ? { port: options.port, autoStarted: false }
       : await (async () => {
-          await serveCommand({
-            port: options.port,
-            explicitPort: true,
-            host: options.host,
-            uiPassword: options.uiPassword,
-            apiOnly: options.apiOnly,
-            suppressUnsafePortWarning: true,
-            suppressUiPasswordWarning: true,
-            suppressStartupSummary: true,
-            suppressQuietOutput: true,
-          });
-          return { port: options.port, autoStarted: true };
-        })();
+        await serveCommand({
+          port: options.port,
+          explicitPort: true,
+          host: options.host,
+          uiPassword: options.uiPassword,
+          apiOnly: options.apiOnly,
+          suppressUnsafePortWarning: true,
+          suppressUiPasswordWarning: true,
+          suppressStartupSummary: true,
+          suppressQuietOutput: true,
+        });
+        return { port: options.port, autoStarted: true };
+      })();
 
     const resolvedServerUrl = explicitServerUrl
       ? { serverUrl: explicitServerUrl, source: 'explicit' }
@@ -268,8 +283,8 @@ function createConnectUrlCommand({ serveCommand }) {
     // when the host relay is not up yet (the demand-driven lifecycle starts it);
     // otherwise the relay rides along only when it is already enabled.
     const candidates = [{ type: serverUrl.startsWith('https://') ? 'tunnel' : 'lan', url: serverUrl, priority: 10 }];
-    const relay = await buildRelayPairingCandidate();
-    if (options.relay || relay.enabled) candidates.push(relay.candidate);
+    const includeRelay = Boolean(relay.candidate) && (options.relay || relay.enabled);
+    if (includeRelay) candidates.push(relay.candidate);
 
     const pairingRuntime = createCliPairingRuntime();
     // Mark relay-carrying sessions like the server route does, so the host's
@@ -296,31 +311,31 @@ function createConnectUrlCommand({ serveCommand }) {
       return;
     }
 
-    clackIntro('OpenChamber pairing link');
+    clackIntro('OhPiChamber pairing link');
     if (serverState.autoStarted) {
-      logStatus('success', `started OpenChamber on port ${options.port}`);
+      logStatus('success', `started OhPiChamber on port ${options.port}`);
     }
     logStatus('success', connectUrl);
     clackLog.info(`Server URL: ${serverUrl}`);
-    if (options.relay || relay.enabled) {
+    if (includeRelay) {
       clackLog.info(`Relay fallback: ${relay.relayUrl}`);
     }
-    if (options.relay && !relay.enabled) {
+    if (includeRelay && options.relay && !relay.enabled) {
       logStatus('info', '[RELAY_STARTING]', 'Relay is not up yet. A running instance starts it within a minute; a stopped instance starts it on next launch.');
     }
     if (pairing.fingerprint) {
       clackLog.info(`Fingerprint: ${pairing.fingerprint}`);
     }
     if (resolvedServerUrl.source === 'lan-detected') {
-      clackLog.info('Detected a LAN address because OpenChamber is bound to all interfaces. Use --server to override it.');
+      clackLog.info('Detected a LAN address because OhPiChamber is bound to all interfaces. Use --server to override it.');
     } else if (resolvedServerUrl.source === 'loopback-fallback') {
-      clackLog.warn('OpenChamber is bound to all interfaces, but no LAN address was detected. Use --server to provide a reachable URL.');
+      clackLog.warn('OhPiChamber is bound to all interfaces, but no LAN address was detected. Use --server to provide a reachable URL.');
     } else if (isLoopbackServerUrl(serverUrl)) {
       // The advertised address does not establish how the server is bound.
       // Localhost can also be intentional, including Windows-to-WSL forwarding.
       logStatus('info', '[LOOPBACK_URL]', 'This link uses localhost for direct connections. For another device, use --server with a reachable address or include --relay.');
     }
-    clackLog.info('Scan or paste this link into another OpenChamber client. It is single-use and expires.');
+    clackLog.info('Scan or paste this link into another OhPiChamber client. It is single-use and expires.');
     if (options.qr === true) {
       await displayTunnelQrCode(connectUrl);
     }

@@ -4,16 +4,16 @@ An extension that delivers your notifications to a server of your choosing,
 next to the desktop and the phone. It declares
 `contributes.service.provides: ["notifications"]` and describes the channel in
 `contributes.notifications`: its name, that the user types the receiver's
-address, and that the token travels as a bearer. OpenChamber names the channel
+address, and that the token travels as a bearer. OhPiChamber names the channel
 `ext-notification-webhook`, draws its account card in Settings → Integrations
 from that description, and keeps the account; the service never sees the token.
 
 The service (`service/main.ts`, built to `service/main.js`) answers the three
-calls OpenChamber forwards at `POST /notifications`: `auth.probe` (does this
+calls OhPiChamber forwards at `POST /notifications`: `auth.probe` (does this
 address answer at all), `auth.verify` (`GET /whoami` on the receiver, who the
 token belongs to) and `notify` (`POST /notify` with the notification). Every
 request to the receiver goes through `createNotificationsOutbound`, which posts
-it to OpenChamber's callback listener with the call's handle; OpenChamber adds
+it to OhPiChamber's callback listener with the call's handle; OhPiChamber adds
 the token and keeps the request on the receiver's origin.
 
 `receiver.ts` is a receiver to try it with: it accepts one bearer, answers
@@ -35,7 +35,7 @@ the token and keeps the request on the receiver's origin.
    notifications arrive the same way, following your notification toggles.
 
 Pause the extension and the lines stop. Disconnect the account and they stop
-too; connect again to resume. Stop the receiver and OpenChamber logs one line a
+too; connect again to resume. Stop the receiver and OhPiChamber logs one line a
 minute until it is back.
 
 ## What the receiver gets
@@ -56,4 +56,4 @@ bun packages/sdk/scripts/bundle-guest.ts --node packages/sdk/examples/notificati
 ```
 
 `scripts/notification-webhook-example.test.ts` runs the built service against a
-receiver and a stand-in for OpenChamber's outbound proxy, and checks each call.
+receiver and a stand-in for OhPiChamber's outbound proxy, and checks each call.

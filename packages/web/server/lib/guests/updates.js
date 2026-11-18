@@ -2,8 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { parseManifestJson } from '@openchamber/sdk/schemas';
-import { requestedGuestCapabilities } from '@openchamber/sdk';
+import { parseManifestJson } from 'ohpichamber-sdk/schemas';
+import { requestedGuestCapabilities } from 'ohpichamber-sdk';
 
 import { inspectGuestPackage, invalidateGuestCatalog, listInstalledGuests } from './catalog.js';
 import { enterpriseBlockedCapabilities } from './enterprise.js';

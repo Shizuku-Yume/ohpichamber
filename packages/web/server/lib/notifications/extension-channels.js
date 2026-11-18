@@ -12,8 +12,8 @@ import {
   requestedGuestCapabilities,
   serviceProvides,
   toPublicNotifications,
-} from '@openchamber/sdk';
-import { notificationsProviderSchemasV1 as schemas } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { notificationsProviderSchemasV1 as schemas } from 'ohpichamber-sdk/schemas';
 
 import { isProviderUsername } from '../source-control/provider-id.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';
@@ -259,7 +259,7 @@ export const createExtensionNotificationChannels = ({
           code, status: 503, kind: NOT_REACHED_CODES.has(code) ? 'unavailable' : 'provider-error',
         });
       }
-      const malformed = (detail) => callError(`${guest.name} answered something OpenChamber cannot use: ${detail}`, {
+      const malformed = (detail) => callError(`${guest.name} answered something OhPiChamber cannot use: ${detail}`, {
         status: 502, code: 'MALFORMED_PROVIDER_RESPONSE', kind: 'malformed',
       });
       if (proxied.status !== 200) throw malformed(`HTTP ${proxied.status}`);

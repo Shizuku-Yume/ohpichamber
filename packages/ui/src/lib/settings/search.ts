@@ -525,13 +525,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => !ctx.isMobile,
   },
   {
-    id: 'appearance.usage-reports',
-    page: 'general',
-    titleKey: 'settings.openchamber.visual.field.sendAnonymousUsageReports',
-    descriptionKey: 'settings.openchamber.visual.field.sendAnonymousUsageReportsHint',
-    keywords: ['telemetry', 'analytics'],
-  },
-  {
     id: 'general.app-links',
     page: 'general',
     titleKey: 'settings.openchamber.appLinks.title',

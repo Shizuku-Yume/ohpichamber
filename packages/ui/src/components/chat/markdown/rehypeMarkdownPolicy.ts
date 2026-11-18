@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { isAppLinkUrl } from '@/lib/url';
 import { isSessionDeepLink } from '@/lib/sessionLinks';
 
-const EXTENSION_INSTALL_PREFIX = 'openchamber://extensions/install?';
+const EXTENSION_INSTALL_PREFIX = 'ohpichamber://extensions/install?';
 
 const parseExtensionInstallLink = (href: string): { kind: 'url' | 'path'; source: string } | null => {
   if (!href.toLowerCase().startsWith(EXTENSION_INSTALL_PREFIX)) return null;

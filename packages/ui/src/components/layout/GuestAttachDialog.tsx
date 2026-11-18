@@ -1,5 +1,5 @@
 import React from 'react';
-import { isGuestAttachItem, isGuestLinkItem, type AttachIssueRequest, type GuestItem } from '@openchamber/sdk';
+import { isGuestAttachItem, isGuestLinkItem, type AttachIssueRequest, type GuestItem } from 'ohpichamber-sdk';
 import {
   Dialog,
   DialogContent,

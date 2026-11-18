@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { EMPTY_GUEST_CONNECTION } from '@openchamber/sdk';
+import { EMPTY_GUEST_CONNECTION } from 'ohpichamber-sdk';
 
 import { trackerGuestConnection } from './tracker-connection';
 

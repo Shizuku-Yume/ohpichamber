@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# OpenChamber Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/btriapitsyn/openchamber/main/scripts/install.sh | bash
+# OhPiChamber Install Script
+# Usage: curl -fsSL https://raw.githubusercontent.com/Shizuku-Yume/ohpichamber/main/scripts/install.sh | bash
 
 set -euo pipefail
 
-PACKAGE_NAME="@openchamber/web"
-BIN_NAME="openchamber"
+PACKAGE_NAME="ohpichamber"
+BIN_NAME="ohpichamber"
 MIN_NODE_MAJOR=24
 MIN_NODE_MINOR=14
 MIN_NODE_VERSION="$MIN_NODE_MAJOR.$MIN_NODE_MINOR"
@@ -101,7 +101,6 @@ detect_package_manager() {
 # Flags that approve the dependency builds pnpm 10+ blocks; pnpm 11+ stops to
 # ask about them in a terminal. `--allow-build` exists since pnpm 10.4.0; older
 # versions reject it, and pnpm 9 and older run the builds without approval.
-# Keep the list in sync with packages/web/server/lib/package-manager.js.
 get_pnpm_allow_build_flags() {
   local version major minor
   version=$(pnpm --version 2>/dev/null || true)
@@ -180,8 +179,8 @@ main() {
   echo ""
   echo "  ╭───────────────────────────────────╮"
   echo "  │                                   │"
-  echo "  │   OpenChamber Installer           │"
-  echo "  │   Web interface for OpenCode      │"
+  echo "  │   OhPiChamber Installer           │"
+  echo "  │   Web UI for the OMP agent        │"
   echo "  │                                   │"
   echo "  ╰───────────────────────────────────╯"
   echo ""
@@ -200,25 +199,19 @@ main() {
   fi
   success "Node.js v$NODE_VERSION found"
 
-  # If OpenChamber is already installed, hand off to its own updater instead
-  # of guessing a package manager. `openchamber update` detects which manager
-  # actually owns the existing global install and reinstalls with that one —
-  # reinstalling with a different manager here would orphan files and break PATH.
+  # Do not reinstall with a guessed package manager when OhPiChamber is
+  # already on PATH: reinstalling with a different manager would orphan the
+  # existing global install and break PATH.
   if command_exists "$BIN_NAME"; then
-    info "OpenChamber is already installed — updating via 'openchamber update'..."
+    info "OhPiChamber is already installed."
     echo ""
-    if openchamber update; then
-      echo ""
-      success "OpenChamber is up to date!"
-      exit 0
-    fi
+    echo "  Update it with the package manager you used to install it:"
+    echo "    npm install -g $PACKAGE_NAME@latest"
+    echo "    bun add -g $PACKAGE_NAME@latest"
+    echo "    pnpm add -g $PACKAGE_NAME@latest"
+    echo "    yarn global add $PACKAGE_NAME@latest"
     echo ""
-    error "Update failed."
-    echo ""
-    echo "  Try running it manually:"
-    echo "    openchamber update"
-    echo ""
-    exit 1
+    exit 0
   fi
 
   # Detect package manager
@@ -240,25 +233,25 @@ main() {
 
   # Install
   echo ""
-  info "Installing OpenChamber..."
+  info "Installing OhPiChamber..."
   echo "  Running: $INSTALL_CMD"
   echo ""
   
   if eval "$INSTALL_CMD"; then
     echo ""
-    # Wordmark (toilet "pagga", "Open"/"Chamber" stacked).
+    # Wordmark (toilet "pagga", "OhPi"/"Chamber" stacked).
     # Hardcoded so the user needs no extra tools.
     printf '%b' "$BLUE"
     cat <<'EOF'
-  ░█▀█░█▀█░█▀▀░█▀█
-  ░█░█░█▀▀░█▀▀░█░█
-  ░▀▀▀░▀░░░▀▀▀░▀░▀
+  ░█▀█░█░░░█▀█░▀░
+  ░█░█░█▀█░█▀▀░█░
+  ░▀▀▀░▀░▀░▀░░░▀░
   ░█▀▀░█░█░█▀█░█▄█░█▀▄░█▀▀░█▀▄
   ░█░░░█▀█░█▀█░█░█░█▀▄░█▀▀░█▀▄
   ░▀▀▀░▀░▀░▀░▀░▀░▀░▀▀░░▀▀▀░▀░▀
 EOF
     printf '%b\n' "$NC"
-    success "OpenChamber installed successfully!"
+    success "OhPiChamber installed successfully!"
     echo ""
 
     # Verify the binary is actually reachable. Global installs frequently
@@ -266,8 +259,8 @@ EOF
     # letting the user hit a confusing "command not found".
     if command_exists "$BIN_NAME"; then
       echo "  Get started:"
-      echo "    openchamber              # Start server on port 3000"
-      echo "    openchamber --help       # Show all options"
+      echo "    $BIN_NAME              # Start server on port 3000"
+      echo "    $BIN_NAME --help       # Show all options"
     else
       warn "'$BIN_NAME' was installed but isn't on your PATH yet."
       echo ""
@@ -283,12 +276,12 @@ EOF
         echo "    export PATH=\"$bin_dir:\$PATH\""
       else
         echo "  Add your package manager's global bin directory to PATH,"
-        echo "  then restart your terminal and run: openchamber"
+        echo "  then restart your terminal and run: $BIN_NAME"
       fi
     fi
     echo ""
     echo "  Prerequisites:"
-    echo "    Make sure OpenCode is running: opencode serve"
+    echo "    Make sure Bun 1.3.14+ and git are on PATH"
     echo ""
   else
     echo ""

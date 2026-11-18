@@ -107,7 +107,7 @@ import { beginGuestServiceHost, beginGuestServiceShutdown, stopAllGuestServices 
 import { findInstalledGuest, listInstalledGuests } from './lib/guests/catalog.js';
 import { extensionsPersistPath } from './lib/guests/persist.js';
 import { createGuestSurfaceRuntime } from './lib/guests/surface.js';
-import { BROWSER_PROVIDER_IDLE_MS } from '@openchamber/sdk';
+import { BROWSER_PROVIDER_IDLE_MS } from 'ohpichamber-sdk';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { worktreeSetupOf } from './lib/projects/worktree-setup.js';
 import { ensureChatsDir, migrateLegacyUserDirs } from './lib/data-dir-migration.js';
@@ -127,7 +127,7 @@ import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-stora
 import { createRemoteClientAuthRuntime } from './lib/client-auth/remote-clients.js';
 import { createClientPairingRuntime } from './lib/client-auth/pairing.js';
 import { attachRealtimeProxy } from './lib/realtime-proxy.js';
-import { createRelayService, relayBlockedByEnterprise } from './lib/relay/service.js';
+import { createRelayService, pinnedRelayUrl, relayBlockedByEnterprise } from './lib/relay/service.js';
 import { createRelayHostLock } from './lib/relay/host-lock.js';
 import { createRelayKeyStore } from './lib/relay/key-store.js';
 import { createBrowserControlBroker } from './lib/browser-control/broker.js';
@@ -160,7 +160,7 @@ import { applySystemCertificates } from './lib/system-ca.js';
 import { createOutboundHandles } from './lib/source-control/outbound-handles.js';
 import { createNotificationChannelAccounts, notificationChannelsPersistPath } from './lib/notifications/channel-accounts.js';
 import { createExtensionNotificationChannels } from './lib/notifications/extension-channels.js';
-import { NOTIFICATIONS_OUTBOUND_PATH } from '@openchamber/sdk';
+import { NOTIFICATIONS_OUTBOUND_PATH } from 'ohpichamber-sdk';
 import { createAutoReviewRuntime } from './lib/auto-review/runtime.js';
 import { createPrWatchRuntime } from './lib/pr-watch/runtime.js';
 import { createClientPushAccess } from './lib/notifications/client-push-access.js';
@@ -331,11 +331,11 @@ const sanitizeSkillCatalogs = (...args) => settingsNormalizationRuntime.sanitize
 const sanitizeProjects = (...args) => settingsNormalizationRuntime.sanitizeProjects(...args);
 
 // Every OpenChamber-owned file and folder hangs off one root: the default
-// `~/.config/openchamber`, or `OPENCHAMBER_DATA_DIR` when set. The user
+// `~/.config/ohpichamber`, or `OPENCHAMBER_DATA_DIR` when set. The user
 // folders (`projects/`, `themes/`, `speech-models/`) are copied into a custom
 // root once at startup (`migrateLegacyUserDirs`), because they used to ignore
 // the variable.
-const OPENCHAMBER_DEFAULT_CONFIG_ROOT = path.join(os.homedir(), '.config', 'openchamber');
+const OPENCHAMBER_DEFAULT_CONFIG_ROOT = path.join(os.homedir(), '.config', 'ohpichamber');
 const OPENCHAMBER_USER_CONFIG_ROOT = process.env.OPENCHAMBER_DATA_DIR
  ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
  : OPENCHAMBER_DEFAULT_CONFIG_ROOT;
@@ -523,6 +523,7 @@ const apnsRuntime = createApnsRuntime({
 const addOrUpdateApnsToken = (...args) => apnsRuntime.addOrUpdateApnsToken(...args);
 const removeApnsToken = (...args) => apnsRuntime.removeApnsToken(...args);
 const sendApnsToAllUiSessions = (...args) => apnsRuntime.sendApnsToAllUiSessions(...args);
+const resolveApnsStatus = (...args) => apnsRuntime.resolveApnsStatus(...args);
 
 const TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW = 128;
 const TERMINAL_INPUT_WS_REBIND_WINDOW_MS = 60 * 1000;
@@ -1480,7 +1481,7 @@ const openChamberControlService = createOpenChamberControlService({
  notifyUser: async (input) => {
   const settings = await readSettingsFromDiskMigrated().catch(() => null);
   if (settings?.agentNotifyToolEnabled !== true) {
-   return { status: 403, body: { error: 'The notify tool is turned off in OpenChamber settings' } };
+   return { status: 403, body: { error: 'The notify tool is turned off in OhPiChamber settings' } };
   }
   return pluginNotificationEmitter.emit(input);
  },
@@ -1623,11 +1624,13 @@ async function main(options = {}) {
   return address;
  };
  const advertisedLanUrl = readAdvertisedLanUrl();
- const resolvePairingTransports = (req) => {
+ const resolvePairingTransports = async (req) => {
   const activePort = tunnelRuntimeContext.getActivePort() || port;
   const local = `http://127.0.0.1:${activePort}`;
+  const relayAvailable = !relayBlockedByEnterprise()
+   && (relayServiceInstance ? await relayServiceInstance.isConfigured() : pinnedRelayUrl() !== null);
   if (advertisedLanUrl) {
-   return { local, lan: advertisedLanUrl, relayAvailable: !relayBlockedByEnterprise() };
+   return { local, lan: advertisedLanUrl, relayAvailable };
   }
   let lanHost = null;
   if (isNetworkExposedBindHost(effectiveBindHost)) {
@@ -1655,7 +1658,7 @@ async function main(options = {}) {
    if (h && h !== '127.0.0.1' && h !== 'localhost' && h !== '::1') lanHost = effectiveBindHost;
   }
   const lan = lanHost ? `http://${lanHost.includes(':') ? `[${lanHost}]` : lanHost}:${activePort}` : null;
-  return { local, lan, relayAvailable: !relayBlockedByEnterprise() };
+  return { local, lan, relayAvailable };
  };
  // ALL direct LAN URLs this server is currently reachable on, for the
  // candidates-refresh endpoint: the address the requesting client already
@@ -1744,14 +1747,8 @@ async function main(options = {}) {
  const getDesktopRuntimeConfig = typeof options.getDesktopRuntimeConfig === 'function'
   ? options.getDesktopRuntimeConfig
   : null;
- const desktopUpdater = options.desktopUpdater
-  && typeof options.desktopUpdater.check === 'function'
-  && typeof options.desktopUpdater.install === 'function'
-  && typeof options.desktopUpdater.restart === 'function'
-  ? options.desktopUpdater
-  : null;
 
- console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
+ console.log(`Starting OhPiChamber on port ${port === 0 ? 'auto' : port}`);
 
  // Voice enumeration is independent from route registration and Agent Service startup.
  const sayTTSCapability = detectSayTtsCapability(process);
@@ -1954,9 +1951,9 @@ async function main(options = {}) {
   getServerLabel: () => {
    try {
     const name = os.hostname();
-    return typeof name === 'string' && name.trim().length > 0 ? name.trim() : 'OpenChamber';
+    return typeof name === 'string' && name.trim().length > 0 ? name.trim() : 'OhPiChamber';
    } catch {
-    return 'OpenChamber';
+    return 'OhPiChamber';
    }
   },
   readSettingsFromDiskMigrated,
@@ -1994,6 +1991,7 @@ async function main(options = {}) {
   removePushSubscription,
   addOrUpdateApnsToken,
   removeApnsToken,
+  resolveApnsStatus,
   updateUiVisibility,
   clearPendingPushBadge: () => clearPendingPushBadge(),
   isUiVisible,
@@ -2002,15 +2000,8 @@ async function main(options = {}) {
   pluginNotificationEmitter,
   sessionRuntime,
   setPushInitialized,
-  fs,
-  os,
-  path,
-  server,
-  __dirname,
-  openchamberDataDir: OPENCHAMBER_DATA_DIR,
   modelsDevApiUrl: MODELS_DEV_API_URL,
   modelsMetadataCacheTtl: MODELS_METADATA_CACHE_TTL,
-  desktopUpdater,
   skipBodyParsing: (req) => spacesHost?.skipsBodyParsing(req) === true,
   isRequestOriginAllowed,
  });
@@ -2322,7 +2313,7 @@ async function main(options = {}) {
  // device/session exists, stop it (and clear a stale enabled flag) otherwise.
  void relayService.reconcile();
 
- // Relay demand can change outside our routes: `openchamber connect-url
+ // Relay demand can change outside our routes: `ohpichamber connect-url
  // --relay` writes a pending relay session straight to the on-disk store, and
  // pending sessions expire without any request hitting us. Poll reconcile so a
  // headless instance picks the relay up (or drops it) within a minute.

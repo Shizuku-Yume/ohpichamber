@@ -4,7 +4,7 @@ import { ChangeSet, Text } from '@codemirror/state';
 import { PastedSessionIds, sessionLinkOverPastedId, type PastedSessionIdRange } from './pastedSessionIds';
 
 const ID = 'ses_abc';
-const LINK = `openchamber://session/${ID}`;
+const LINK = `ohpichamber://session/${ID}`;
 
 const edit = (doc: string, from: number, to: number, insert: string) => {
     const changes = ChangeSet.of({ from, to, insert: Text.of(insert.split('\n')) }, doc.length);
@@ -69,7 +69,7 @@ describe('pasted session ids', () => {
     });
 
     test('leaves an id pasted into an address alone', () => {
-        const doc = 'openchamber://session/';
+        const doc = 'ohpichamber://session/';
         const { value, range } = paste(new PastedSessionIds(), doc, doc.length, ID);
         expect(replaceWithLink(value, range, 0)).toBeNull();
     });

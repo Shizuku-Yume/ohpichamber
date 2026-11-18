@@ -12,7 +12,7 @@ Services keep the iframe. They add a host-owned child process from the same pack
 
 Do not put `docker` (or any product name) on `connectHost`. The SDK knows panel, service, and a loopback proxy. The package owns the integration.
 
-Declare the OpenChamber floor with `engines.openchamber` (`3.0.0` or `>=3.0.0`). Install refuses when this host is older. Put a semver `version` on `package.json` (`1.0.0`); install requires it and Settings → Extensions shows `v1.0.0` on the card.
+Declare the OpenChamber floor with `engines.openchamber` (`1.0.0` or `>=1.0.0`). Install refuses when this host is older. Put a semver `version` on `package.json` (`1.0.0`); install requires it and Settings → Extensions shows `v1.0.0` on the card.
 
 ## Model
 
@@ -44,7 +44,7 @@ Use `exec` when the integration shells out (like a modern Docker CLI panel). Use
 {
   "apiVersion": 1,
   "engines": {
-    "openchamber": ">=3.0.0"
+    "openchamber": ">=1.0.0"
   },
   "contributes": {
     "panel": {
@@ -83,7 +83,7 @@ Socket entry shapes:
 Parse rules:
 
 - `apiVersion` is `1` (manifest schema). Wire `v` on the private port is `2`; the pre-M3 window `hello` is refused and a v1 bootstrap announcement is dropped.
-- `engines.openchamber` is optional. Values are `3.0.0` or `>=3.0.0` only. Install returns `host-too-old` when this OpenChamber build is older.
+- `engines.openchamber` is optional. Values are `1.0.0` or `>=1.0.0` only. Install returns `host-too-old` when this OpenChamber build is older.
 - `contributes.panel` stays required. Same id / name / icon / entry rules as any guest.
 - `contributes.service` is optional. A guest without `service` is HTML-only.
 - `service.entry` is a relative path inside the package. Ship compiled JS; the host never compiles TypeScript.
@@ -143,7 +143,7 @@ Env the host sets:
 
 - `OPENCHAMBER_SERVICE_PORT` — port to bind on `127.0.0.1`
 - `OPENCHAMBER_SERVICE_TOKEN` — shared secret
-- `OPENCHAMBER_SERVICE_DATA_DIR` — this extension's own folder (`OPENCHAMBER_SERVICE_DATA_DIR` in `@openchamber/sdk` names the variable). The host creates it before the start. It survives restarts and updates and is deleted when the extension is removed. Keep the service's files here, never next to OpenChamber's own: the location of OpenChamber's data is not part of this contract
+- `OPENCHAMBER_SERVICE_DATA_DIR` — this extension's own folder (`OPENCHAMBER_SERVICE_DATA_DIR` in `ohpichamber-sdk` names the variable). The host creates it before the start. It survives restarts and updates and is deleted when the extension is removed. Keep the service's files here, never next to OpenChamber's own: the location of OpenChamber's data is not part of this contract
 - `OPENCHAMBER_SERVICE_SOCKETS` — JSON map `{ [socketId]: absolutePath }` for every binding that resolved (override or first existing candidate)
 - `OPENCHAMBER_HOST_CALLBACK_URL` — OpenChamber's callback listener: what a service calls on its own (*Calling OpenChamber*, below) and the requests the `source-control`, `notifications` and `tracker` roles send out
 
@@ -248,7 +248,7 @@ Lifecycle differs from a panel-driven service in two ways. The host starts the s
 }
 ```
 
-`readBrowserProviderRequest(body)` from `@openchamber/sdk` parses it (`null` → answer HTTP 400). The host validated `parameters` for the action before posting, so the service can trust the shape.
+`readBrowserProviderRequest(body)` from `ohpichamber-sdk` parses it (`null` → answer HTTP 400). The host validated `parameters` for the action before posting, so the service can trust the shape.
 
 `context` says where the action came from: the project the agent works in and the chat it runs in. The host fills it from the tool call; the model never types it. A provider that keeps one browser per project or chat keys its targets on these; one that keeps a single browser ignores them. Either field is `null` when the host had none (an action sent from the CLI, for example); treat that as "unknown", not as a scope of its own. The shared surface is still one per service: if you keep several targets, choose which one the picture shows.
 
@@ -263,7 +263,7 @@ Answer HTTP 200 with one of:
 
 ### Actions
 
-Parameters the host sends and `data` the service answers; types are exported from `@openchamber/sdk` (`BrowserOpenParameters`, `BrowserOpenData`, …). Every shape is what the desktop app's own panel answers, so an agent's prompt written against one works against the other.
+Parameters the host sends and `data` the service answers; types are exported from `ohpichamber-sdk` (`BrowserOpenParameters`, `BrowserOpenData`, …). Every shape is what the desktop app's own panel answers, so an agent's prompt written against one works against the other.
 
 | Action | Parameters | `data` |
 |---|---|---|
@@ -665,4 +665,4 @@ Declare `panel.entry` as well and the host docks that page to one edge of the su
 
 While a viewer is open in the same window, every `serviceRequest` from your pages (the docked one included) reaches the service with three headers the host sets itself: `x-surface-viewer`, `x-surface-viewer-controls` (`1` while that viewer holds control, else `0`), and `x-surface-frame-seq` (the frame it last drew). Compare the viewer with the one from `/surface/control` to let the person in control use the dock while others only watch, and compare the frame with the view it belongs to so a toolbar command made on an old picture cannot change a view selected since. Without a viewer in that window the headers are absent.
 
-The types and paths are exported from `@openchamber/sdk` (`SURFACE_*`, `SurfaceInputEvent`, …). `examples/browser-provider-stub` also declares `surface: true` and paints its fake page with rectangles, so the viewer, the hand-off, and the input path can be seen working without a browser; its `panel/` is a one-line address bar docked above the picture.
+The types and paths are exported from `ohpichamber-sdk` (`SURFACE_*`, `SurfaceInputEvent`, …). `examples/browser-provider-stub` also declares `surface: true` and paints its fake page with rectangles, so the viewer, the hand-off, and the input path can be seen working without a browser; its `panel/` is a one-line address bar docked above the picture.

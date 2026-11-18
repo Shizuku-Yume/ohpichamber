@@ -1,4 +1,4 @@
-import { HostRequestError, type GuestLoadState, type GuestSessionRecord, type GuestWorkspaceQuery, type GuestWorkspaceSnapshot, type GuestWorktree } from '@openchamber/sdk';
+import { HostRequestError, type GuestLoadState, type GuestSessionRecord, type GuestWorkspaceQuery, type GuestWorkspaceSnapshot, type GuestWorktree } from 'ohpichamber-sdk';
 import type { Session as CanonicalSession } from '@openchamber/agent-contract';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGlobalSessionStatusStore } from '@/sync/global-session-status';

@@ -18,15 +18,21 @@ describe('Linear OAuth PKCE', () => {
   let previousDataDir;
   let previousPort;
   let previousRedirect;
+  let previousBroker;
+
+  // A broker the test runs against, so nothing points at an upstream host.
+  const BROKER_URL = 'https://broker.example.test/v1/oauth/linear';
 
   beforeEach(() => {
     previousDataDir = process.env.OPENCHAMBER_DATA_DIR;
     previousPort = process.env.OPENCHAMBER_PORT;
     previousRedirect = process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    previousBroker = process.env.OPENCHAMBER_LINEAR_BROKER_URL;
     dataDir = makeTempDir();
     process.env.OPENCHAMBER_DATA_DIR = dataDir;
     process.env.OPENCHAMBER_PORT = '3001';
     delete process.env.OPENCHAMBER_LINEAR_CLIENT_ID;
+    delete process.env.OPENCHAMBER_LINEAR_BROKER_URL;
     process.env.OPENCHAMBER_LINEAR_REDIRECT_URI = 'http://127.0.0.1:3001/linear/oauth/callback';
     clearPendingAuthorizationsForTests();
   });
@@ -37,6 +43,7 @@ describe('Linear OAuth PKCE', () => {
     restoreEnv('OPENCHAMBER_DATA_DIR', previousDataDir);
     restoreEnv('OPENCHAMBER_PORT', previousPort);
     restoreEnv('OPENCHAMBER_LINEAR_REDIRECT_URI', previousRedirect);
+    restoreEnv('OPENCHAMBER_LINEAR_BROKER_URL', previousBroker);
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
@@ -112,8 +119,24 @@ describe('Linear OAuth PKCE', () => {
     expect(body.get('refresh_token')).toBe('refresh-1');
   });
 
+  it('refuses to start when no broker or explicit redirect is configured', async () => {
+    delete process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    delete process.env.OPENCHAMBER_LINEAR_BROKER_URL;
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(startAuthorization({ origin: 'desktop' })).rejects.toMatchObject({
+      code: 'LINEAR_BROKER_NOT_CONFIGURED',
+      message: expect.stringContaining('OPENCHAMBER_LINEAR_BROKER_URL'),
+    });
+    // Nothing dialed out, and no pending verifier was left behind.
+    expect(fetchMock).not.toHaveBeenCalled();
+    await expect(pollAuthorizationBroker()).resolves.toBeNull();
+  });
+
   it('claims a broker callback and exchanges it locally with PKCE', async () => {
     delete process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    process.env.OPENCHAMBER_LINEAR_BROKER_URL = BROKER_URL;
     const brokerAndTokenFetch = vi.fn(async (url, init) => {
       const target = String(url);
       if (target.endsWith('/start')) {
@@ -121,7 +144,7 @@ describe('Linear OAuth PKCE', () => {
         expect(body.state).toMatch(/^[A-Za-z0-9_-]{43}$/);
         expect(body.claimSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
         return new Response(JSON.stringify({
-          redirectUri: 'https://api.openchamber.dev/v1/oauth/linear/callback',
+          redirectUri: `${BROKER_URL}/callback`,
           expiresIn: 600,
         }), { status: 200 });
       }
@@ -134,7 +157,7 @@ describe('Linear OAuth PKCE', () => {
       if (target === 'https://api.linear.app/oauth/token') {
         const body = new URLSearchParams(init.body);
         expect(body.get('code')).toBe('broker-code');
-        expect(body.get('redirect_uri')).toBe('https://api.openchamber.dev/v1/oauth/linear/callback');
+        expect(body.get('redirect_uri')).toBe(`${BROKER_URL}/callback`);
         expect(body.get('code_verifier')).toMatch(/^[A-Za-z0-9_-]{43}$/);
         return new Response(JSON.stringify({
           access_token: 'broker-access',
@@ -148,12 +171,18 @@ describe('Linear OAuth PKCE', () => {
 
     const started = await startAuthorization({ origin: 'desktop' });
     const authorizationUrl = new URL(started.authorizationUrl);
-    expect(authorizationUrl.searchParams.get('redirect_uri')).toBe('https://api.openchamber.dev/v1/oauth/linear/callback');
+    expect(authorizationUrl.searchParams.get('redirect_uri')).toBe(`${BROKER_URL}/callback`);
 
     const result = await pollAuthorizationBroker();
     expect(result).toMatchObject({ accessToken: 'broker-access', origin: 'desktop' });
     await expect(completeAuthorizationBroker(result.brokerReceipt)).resolves.toBe(true);
     expect(brokerAndTokenFetch).toHaveBeenCalledTimes(4);
+    // Broker calls stay on the configured broker; only the token exchange leaves it.
+    for (const [url] of brokerAndTokenFetch.mock.calls) {
+      const target = String(url);
+      if (target.startsWith('https://api.linear.app/')) continue;
+      expect(target.startsWith(BROKER_URL)).toBe(true);
+    }
   });
 });
 

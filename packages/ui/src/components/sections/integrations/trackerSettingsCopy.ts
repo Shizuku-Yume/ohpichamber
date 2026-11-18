@@ -23,6 +23,10 @@ type TrackerSettingsCopy = {
   avatarAlt: I18nKey;
   unknownUser: I18nKey;
   unsupportedSignIn: I18nKey;
+  signIn: {
+    /** The browser sign-in needs an operator-configured broker; `{setting}` and `{settingsKey}` name the two ways. */
+    brokerMissing: I18nKey;
+  };
   mapping: {
     defaultProject: I18nKey;
     defaultProjectInfo: I18nKey;
@@ -68,6 +72,9 @@ const GENERIC_COPY: TrackerSettingsCopy = {
   avatarAlt: 'settings.integrations.tracker.avatarAlt',
   unknownUser: 'settings.integrations.tracker.unknownUser',
   unsupportedSignIn: 'settings.integrations.tracker.updateApp',
+  signIn: {
+    brokerMissing: 'settings.integrations.tracker.signIn.brokerMissing',
+  },
   mapping: {
     defaultProject: 'settings.integrations.tracker.mapping.defaultProject',
     defaultProjectInfo: 'settings.integrations.tracker.mapping.defaultProject.info',

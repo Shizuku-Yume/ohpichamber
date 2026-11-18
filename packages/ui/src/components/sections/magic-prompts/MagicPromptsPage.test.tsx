@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeEach, expect, spyOn, test } from 'bun:test';
 import type { Spy } from 'bun:test';
 import { Window } from 'happy-dom';
-import type { JsonValue } from '@openchamber/sdk';
+import type { JsonValue } from 'ohpichamber-sdk';
 import type { Root } from 'react-dom/client';
 
 // React decides at import time whether a DOM exists, so the window comes first.

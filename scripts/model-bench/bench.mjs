@@ -8,7 +8,7 @@
 // no git history (so the model cannot read the real fix), lets `omp run`
 // work there, then drops in the commit's own tests and runs them. Every
 // task × model pair goes into one queue that runs N at a time. Results go to
-// ~/.config/openchamber/model-bench/results.jsonl; each run's patch, event log
+// ~/.config/ohpichamber/model-bench/results.jsonl; each run's patch, event log
 // and test output stay in ~/.cache/openchamber-model-bench/results/<run>/, and
 // the copy itself is deleted unless --keep is given.
 
@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '../..');
 const tasks = JSON.parse(readFileSync(path.join(here, 'tasks.json'), 'utf8'));
-const benchHome = path.join(os.homedir(), '.config/openchamber/model-bench');
+const benchHome = path.join(os.homedir(), '.config/ohpichamber/model-bench');
 const cacheRoot = path.join(os.homedir(), '.cache/openchamber-model-bench');
 
 // Generous on purpose: slow models still finish hard tasks, and `minutes` in

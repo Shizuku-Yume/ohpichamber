@@ -5,7 +5,7 @@ description: Conecte provedores de IA, escolha modelos e configure agentes.
 
 # Provedores, Modelos e Agentes
 
-Antes de o OpenChamber poder fazer qualquer coisa, ele precisa de pelo menos um provedor de IA conectado. Esta página cobre conectar um provedor, escolher um modelo e personalizar agentes.
+Antes de o OhPiChamber poder fazer qualquer coisa, ele precisa de pelo menos um provedor de IA conectado. Esta página cobre conectar um provedor, escolher um modelo e personalizar agentes.
 
 ## Conectar um provedor
 
@@ -13,7 +13,7 @@ Antes de o OpenChamber poder fazer qualquer coisa, ele precisa de pelo menos um 
 2. Abra o menu **Add provider** e escolha um provedor que ainda não esteja conectado.
 3. Faça login de uma de duas maneiras, dependendo do provedor:
    - **Chave de API** — cole sua chave e salve.
-   - **Login OAuth** — abra o link de autorização no navegador para fazer login. Se solicitado, cole o código de autorização no OpenChamber e conclua a conexão.
+   - **Login OAuth** — abra o link de autorização no navegador para fazer login. Se solicitado, cole o código de autorização no OhPiChamber e conclua a conexão.
 
 ### Provedores personalizados e outros
 
@@ -23,7 +23,7 @@ Para gateways, LLMs locais, Ollama, LiteLLM e APIs semelhantes compatíveis com 
 2. Insira um ID de provedor, nome de exibição, URL base (`http://` ou `https://`), uma chave de API opcional e pelo menos um ID e nome de modelo.
 3. Informe a janela de contexto e o limite máximo de tokens de saída do modelo. Metadados avançados (como opções de raciocínio, variantes e modalidades) podem ser configurados como JSON nos detalhes do modelo.
 4. Adicione cabeçalhos de requisição opcionais.
-5. Salve — o OpenChamber registra o provedor e os modelos por meio do Agent Service, armazenando as chaves de API como credenciais somente de gravação.
+5. Salve — o OhPiChamber registra o provedor e os modelos por meio do Agent Service, armazenando as chaves de API como credenciais somente de gravação.
 6. Para alterar um provedor personalizado existente, abra-o e escolha **Edit**.
 
 A chave de API é opcional. Endpoints locais sem chave (como Ollama, LiteLLM ou llama.cpp) e serviços autenticados por cabeçalhos personalizados podem ser conectados sem chave de API.

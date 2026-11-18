@@ -1,26 +1,26 @@
 ---
 title: Tworzenie rozszerzenia
-description: Dodaj własny panel do OpenChamber za pomocą @openchamber/sdk, zainstaluj go z folderu lub adresu git i komunikuj się z aplikacją przez connectHost.
+description: Dodaj własny panel do OhPiChamber za pomocą ohpichamber-sdk, zainstaluj go z folderu lub adresu git i komunikuj się z aplikacją przez connectHost.
 ---
 
 # Tworzenie rozszerzenia
 
-Użyj `@openchamber/sdk`, aby dodać własny panel do OpenChamber. Rozszerzenie to mała strona internetowa, którą OpenChamber pokazuje na prawym pasku bocznym. Komunikuje się z aplikacją przez `connectHost()`: może odczytać bieżący projekt i sesję, pokazywać toasty, wstawiać tekst do pola czatu, dołączać zadanie do sesji, a za zgodą użytkownika także uruchamiać sesje i wysyłać prompty.
+Użyj `ohpichamber-sdk`, aby dodać własny panel do OhPiChamber. Rozszerzenie to mała strona internetowa, którą OhPiChamber pokazuje na prawym pasku bocznym. Komunikuje się z aplikacją przez `connectHost()`: może odczytać bieżący projekt i sesję, pokazywać toasty, wstawiać tekst do pola czatu, dołączać zadanie do sesji, a za zgodą użytkownika także uruchamiać sesje i wysyłać prompty.
 
-Rozszerzenia działają w OpenChamber web i desktop.
+Rozszerzenia działają w OhPiChamber web i desktop.
 
 ## Czym jest rozszerzenie
 
 Folder z trzema plikami:
 
 - `package.json` z blokiem `openchamber` (manifest)
-- `panel/index.html`, strona, którą pokazuje OpenChamber
+- `panel/index.html`, strona, którą pokazuje OhPiChamber
 - `panel/main.js`, Twój skrypt, zbudowany do jednego klasycznego pliku (IIFE, nie moduł ES, bo strona ładuje się w iframe z sandboxem)
 
-OpenChamber nigdy nie kompiluje Twojego kodu. Dostarczaj gotowy, zbudowany plik `.js`. SDK zawiera polecenie do bundlowania; zadziała też każdy inny bundler, który wypuszcza IIFE.
+OhPiChamber nigdy nie kompiluje Twojego kodu. Dostarczaj gotowy, zbudowany plik `.js`. SDK zawiera polecenie do bundlowania; zadziała też każdy inny bundler, który wypuszcza IIFE.
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -32,13 +32,13 @@ Wskaż `main.js` w `index.html` zwykłym `<script src="main.js"></script>`.
 
 ## Instalacja w trakcie pracy
 
-1. Uruchom OpenChamber w wersji web lub desktop.
+1. Uruchom OhPiChamber w wersji web lub desktop.
 2. Otwórz Ustawienia → Rozszerzenia.
 3. Wklej bezwzględną ścieżkę do swojego folderu i kliknij Dodaj.
 
-OpenChamber odczytuje manifest i pokazuje okno z listą tego, o co rozszerzenie prosi (zobacz [Uprawnienia](#uprawnienia)). Zatwierdź, a Twoja ikona pojawi się na pasku bocznym. Kliknij ją i Twoja strona się załaduje.
+OhPiChamber odczytuje manifest i pokazuje okno z listą tego, o co rozszerzenie prosi (zobacz [Uprawnienia](#uprawnienia)). Zatwierdź, a Twoja ikona pojawi się na pasku bocznym. Kliknij ją i Twoja strona się załaduje.
 
-Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub pliku zip. Tylko instalacja z git może się aktualizować: podnieś `version` w `package.json`, wypchnij zmiany, a OpenChamber sprawdzi to wkrótce po otwarciu i co kilka godzin, powiadomi użytkownika raz i zaproponuje aktualizację w Ustawienia → Rozszerzenia. Link do `openchamber://extensions/install?url=<encoded repository URL>` na dowolnej stronie otwiera aplikację desktopową z tym repozytorium w oknie dodawania, więc możesz zaoferować przycisk instalacji. `#tag` albo `#branch` w adresie URL przypina, co jest śledzone. Te są kopiowane do folderu danych OpenChamber i uruchamiane z tej kopii, więc dostarczaj zbudowane pliki, a nie `node_modules` ani źródła TypeScript. Usunięcie rozszerzenia usuwa kopię. Instalacja z folderu działa bezpośrednio z Twojego folderu, więc możesz edytować, przebudowywać i przeładowywać.
+Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub pliku zip. Tylko instalacja z git może się aktualizować: podnieś `version` w `package.json`, wypchnij zmiany, a OhPiChamber sprawdzi to wkrótce po otwarciu i co kilka godzin, powiadomi użytkownika raz i zaproponuje aktualizację w Ustawienia → Rozszerzenia. Link do `ohpichamber://extensions/install?url=<encoded repository URL>` na dowolnej stronie otwiera aplikację desktopową z tym repozytorium w oknie dodawania, więc możesz zaoferować przycisk instalacji. `#tag` albo `#branch` w adresie URL przypina, co jest śledzone. Te są kopiowane do folderu danych OhPiChamber i uruchamiane z tej kopii, więc dostarczaj zbudowane pliki, a nie `node_modules` ani źródła TypeScript. Usunięcie rozszerzenia usuwa kopię. Instalacja z folderu działa bezpośrednio z Twojego folderu, więc możesz edytować, przebudowywać i przeładowywać.
 
 ## Manifest
 
@@ -48,7 +48,7 @@ Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub 
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -74,11 +74,11 @@ Możesz też dodać lokalny plik `.zip` albo link https do repozytorium git lub 
 
 `version` jest wymagane i musi być zgodne z semver. Ustawienia → Rozszerzenia pokazuje je na karcie.
 
-`apiVersion` to `1`. OpenChamber odrzuca każdą inną wartość.
+`apiVersion` to `1`. OhPiChamber odrzuca każdą inną wartość.
 
-SDK 3 zastępuje transport przez okno nadrzędne z SDK 2 prywatnym, wersjonowanym bootstrapem `MessagePort`. Panel, który nadal wysyła przedM3-owe `hello` v1, nie może się połączyć: OpenChamber pokazuje w panelu niezgodność wersji i nie przyznaje mu portu ani stanu hosta. Ogłoszenie bootstrapu v1 jest odrzucane bez przyznawania czegokolwiek. Zbuduj panel ponownie z `@openchamber/sdk` 3. `apiVersion` pozostaje `1`, ponieważ schemat manifestu się nie zmienił.
+SDK 3 zastępuje transport przez okno nadrzędne z SDK 2 prywatnym, wersjonowanym bootstrapem `MessagePort`. Panel, który nadal wysyła przedM3-owe `hello` v1, nie może się połączyć: OhPiChamber pokazuje w panelu niezgodność wersji i nie przyznaje mu portu ani stanu hosta. Ogłoszenie bootstrapu v1 jest odrzucane bez przyznawania czegokolwiek. Zbuduj panel ponownie z `ohpichamber-sdk` 3. `apiVersion` pozostaje `1`, ponieważ schemat manifestu się nie zmienił.
 
-`engines.openchamber` jest opcjonalne. Podaj najstarszą wersję OpenChamber, z którą działa Twoje rozszerzenie, jako `3.0.0` lub `>=3.0.0`. Starsze wersje odmówią instalacji zamiast zawieść później.
+`engines.openchamber` jest opcjonalne. Podaj najstarszą wersję OhPiChamber, z którą działa Twoje rozszerzenie, jako `1.0.0` lub `>=1.0.0`. Starsze wersje odmówią instalacji zamiast zawieść później.
 
 `id`, `name` i `icon` identyfikują rozszerzenie. `id` jest w kebab-case i musi być unikalne wśród zainstalowanych rozszerzeń. `icon` to nazwa ikony Remixicon (`RiWindowLine` staje się `window`) albo plik SVG w Twoim folderze, na przykład `icon.svg`. `contributes.panel` to panel rozszerzenia na pasku bocznym: jego `entry` to plik HTML w Twoim folderze. Rozszerzenie bez panelu na pasku bocznym pomija `panel`. Starsze pakiety trzymają `id`, `name` i `icon` w `panel` i to nadal działa.
 
@@ -97,7 +97,7 @@ Tablica może używać `host.storage` oraz list projektów, worktree i sesji ze 
 
 `contributes.integration` jest opcjonalne. Dodaje kartę w Ustawienia → Integracje, gdzie użytkownik podłącza konto. Zobacz [Konta i sieć](#konta-i-sieć).
 
-`contributes.service` jest opcjonalne. Deklaruje usługę lokalną (proces, który OpenChamber uruchamia obok rozszerzenia) do rzeczy, do których strona internetowa nie ma dostępu, na przykład socketu Dockera. Ten proces działa z pełnym dostępem użytkownika i bez piaskownicy, dlatego okno zatwierdzania o nim ostrzega; deklaruj taką usługę tylko wtedy, gdy strona nie jest w stanie wykonać tego zadania. Zobacz plik `GUEST_SERVICES.md` w pakiecie. Usługa z `provides: ["browser"]` może też zastąpić przeglądarkę agenta: odpowiada na działania `browser.*` na serwerze, więc agenci przeglądają bez otwartej aplikacji desktopowej, a użytkownik wybiera ją w Ustawienia → Narzędzia OpenChamber. Taka usługa nie potrzebuje panelu. Usługa może też dowiadywać się, co dzieje się w sesjach użytkownika: zadeklaruj obok niej `contributes.sessionEvents`, a OpenChamber wysyła do usługi każdą turę, która się kończy albo kończy się błędem, oraz każde uprawnienie i pytanie, o które prosi agent, ze wszystkich projektów i bez otwartego okna. Zobacz [Zdarzenia sesji](/sdk/host/#zdarzenia-sesji). A usługa z `provides: ["notifications"]` dostarcza powiadomienia użytkownika obok komputera i telefonu: na Slack, Matrix albo na własny serwer; użytkownik podłącza konto w Ustawienia → Integracje, a token zostaje w OpenChamber. Zobacz [Kanały powiadomień](/sdk/host/#kanały-powiadomień). Usługa z `provides: ["tracker"]` jest trackerem elementów pracy obok Linear, z kartą konta pod Kontami rozszerzeń; zobacz [Trackery](/sdk/host/#trackery). A usługa z `provides: ["quota"]` raportuje zużycie obok wbudowanych dostawców, odczytując dane logowania, które OpenCode przechowuje dla dostawców wymienionych w manifeście; zobacz [Dostawcy zużycia](/sdk/host/#dostawcy-zużycia).
+`contributes.service` jest opcjonalne. Deklaruje usługę lokalną (proces, który OhPiChamber uruchamia obok rozszerzenia) do rzeczy, do których strona internetowa nie ma dostępu, na przykład socketu Dockera. Ten proces działa z pełnym dostępem użytkownika i bez piaskownicy, dlatego okno zatwierdzania o nim ostrzega; deklaruj taką usługę tylko wtedy, gdy strona nie jest w stanie wykonać tego zadania. Zobacz plik `GUEST_SERVICES.md` w pakiecie. Usługa z `provides: ["browser"]` może też zastąpić przeglądarkę agenta: odpowiada na działania `browser.*` na serwerze, więc agenci przeglądają bez otwartej aplikacji desktopowej, a użytkownik wybiera ją w Ustawienia → Narzędzia OhPiChamber. Taka usługa nie potrzebuje panelu. Usługa może też dowiadywać się, co dzieje się w sesjach użytkownika: zadeklaruj obok niej `contributes.sessionEvents`, a OhPiChamber wysyła do usługi każdą turę, która się kończy albo kończy się błędem, oraz każde uprawnienie i pytanie, o które prosi agent, ze wszystkich projektów i bez otwartego okna. Zobacz [Zdarzenia sesji](/sdk/host/#zdarzenia-sesji). A usługa z `provides: ["notifications"]` dostarcza powiadomienia użytkownika obok komputera i telefonu: na Slack, Matrix albo na własny serwer; użytkownik podłącza konto w Ustawienia → Integracje, a token zostaje w OhPiChamber. Zobacz [Kanały powiadomień](/sdk/host/#kanały-powiadomień). Usługa z `provides: ["tracker"]` jest trackerem elementów pracy obok Linear, z kartą konta pod Kontami rozszerzeń; zobacz [Trackery](/sdk/host/#trackery). A usługa z `provides: ["quota"]` raportuje zużycie obok wbudowanych dostawców, odczytując dane logowania, które OpenCode przechowuje dla dostawców wymienionych w manifeście; zobacz [Dostawcy zużycia](/sdk/host/#dostawcy-zużycia).
 
 ## Uprawnienia
 
@@ -110,7 +110,7 @@ Rysowanie panelu i odczyt bieżącej sesji nie wymagają żadnej zgody. Wszystko
 | `files` | odczyt i zapis plików w otwartym projekcie (`readFile`, `writeFile`, `listDir`, `stat` ze ścieżką względną) |
 | `model` | jednorazowe generowanie tekstu za pomocą Small Model użytkownika (`generate`), poza jakąkolwiek sesją |
 
-Jedenaście kolejnych jest dodawanych automatycznie: `network`, gdy deklarujesz `integration`, `service`, gdy deklarujesz `service`, `filesystem`, gdy deklarujesz wzorce `filesystem`, `origins`, gdy deklarujesz `origins`, `conversation`, gdy akcja sesji prosi o wiadomości (zobacz [Akcje, polecenia i odznaka](#akcje-polecenia-i-odznaka)), `transcript`, gdy `sessionEvents` lub `sessionControl` prosi o `content` (zobacz [Zdarzenia sesji](/sdk/host/#zdarzenia-sesji)), `sessionControl`, gdy Twoja usługa działa na sesjach (zobacz [Wywoływanie OpenChamber](/sdk/host/#wywoływanie-openchamber-z-usługi)), `sessionAnswers`, gdy odpowiada w imieniu użytkownika na żądania uprawnień i formularze agenta (`sessionControl: { answers: true }`), `instructions`, gdy uzupełnia to, co czytają agenci, `skills`, gdy deklarujesz `contributes.skills`, folder pakietu ze skillami, które docierają do każdego agenta, dopóki rozszerzenie jest włączone, oraz `links`, gdy deklarujesz `contributes.links` (patrz [Linki w wiadomościach czatu](#linki-w-wiadomościach-czatu)).
+Jedenaście kolejnych jest dodawanych automatycznie: `network`, gdy deklarujesz `integration`, `service`, gdy deklarujesz `service`, `filesystem`, gdy deklarujesz wzorce `filesystem`, `origins`, gdy deklarujesz `origins`, `conversation`, gdy akcja sesji prosi o wiadomości (zobacz [Akcje, polecenia i odznaka](#akcje-polecenia-i-odznaka)), `transcript`, gdy `sessionEvents` lub `sessionControl` prosi o `content` (zobacz [Zdarzenia sesji](/sdk/host/#zdarzenia-sesji)), `sessionControl`, gdy Twoja usługa działa na sesjach (zobacz [Wywoływanie OhPiChamber](/sdk/host/#wywoływanie-ohpichamber-z-usługi)), `sessionAnswers`, gdy odpowiada w imieniu użytkownika na żądania uprawnień i formularze agenta (`sessionControl: { answers: true }`), `instructions`, gdy uzupełnia to, co czytają agenci, `skills`, gdy deklarujesz `contributes.skills`, folder pakietu ze skillami, które docierają do każdego agenta, dopóki rozszerzenie jest włączone, oraz `links`, gdy deklarujesz `contributes.links` (patrz [Linki w wiadomościach czatu](#linki-w-wiadomościach-czatu)).
 
 Użytkownik widzi pełną listę raz, przy instalacji rozszerzenia, i albo ją zatwierdza, albo usuwa rozszerzenie. Jeśli nowa wersja prosi o więcej, okno pojawia się ponownie. Wywołanie, które wymaga niezatwierdzonego uprawnienia, kończy się błędem `NOT_GRANTED`.
 
@@ -127,15 +127,15 @@ Rozszerzenie może sprawić, że jego identyfikatory i linki w wiadomościach cz
 ```
 
 - `identifier.keys` to do 8 stałych kluczy pisanych wielkimi literami. `DEMO` rozpoznaje `DEMO-12` tylko jako całe słowo; kod, linki, ścieżki, słowa takie jak `XDEMO-1` i wersje takie jak `DEMO-1.5` zostają tekstem.
-- `urls` rozpoznaje linki z jednego originu https, który musi pasować dokładnie. `item` to szablony linków w postaci, której używa sam tracker: `{id}` raz, w ścieżce albo jako `?name={id}`, oraz `{segment}` lub `{segments+}` dla części, które się zmieniają. `identifier` mówi, jak wygląda `{id}`: `key-number`, `number` lub `short-code`. Nigdy nie piszesz wyrażenia regularnego; OpenChamber sam kompiluje szablony.
+- `urls` rozpoznaje linki z jednego originu https, który musi pasować dokładnie. `item` to szablony linków w postaci, której używa sam tracker: `{id}` raz, w ścieżce albo jako `?name={id}`, oraz `{segment}` lub `{segments+}` dla części, które się zmieniają. `identifier` mówi, jak wygląda `{id}`: `key-number`, `number` lub `short-code`. Nigdy nie piszesz wyrażenia regularnego; OhPiChamber sam kompiluje szablony.
 - `action: "open"` otwiera Twoje rozszerzenie z `ready.item` (lub `onItem`) ustawionym na `{ kind: "link", identifier, url? }`: w Twoim oknie dialogowym, gdy `attach` ma wartość `"dialog"`, a w przeciwnym razie w panelu na pasku bocznym. Zawęź typ za pomocą `isGuestLinkItem`. Wymaga to `panel.entry`. `url` to kliknięty link bez fragmentu i bez parametrów zapytania innych niż te z samego szablonu; dla identyfikatora w tekście jest to link, który daje Twój pierwszy szablon bez `{segment}`, jeśli taki masz, a identyfikator ma postać zadeklarowaną w `urls.identifier` (`DEMO-12` nigdy nie wypełnia `number`).
 - `action: "attach"` zamiast tego dodaje do pola czatu chip z identyfikatorem i wymaga szablonu bez `{segment}` i `{segments+}`, żeby chip mógł wskazać swój link; przy `identifier.keys` `urls.identifier` nie może mieć wartości `number`.
 
-Rozpoznawanie działa w odpowiedziach agenta i we własnych wiadomościach użytkownika, ale nie w rozumowaniu, wynikach narzędzi ani w widoku Files, a skopiowana wiadomość zachowuje tekst w takiej postaci, w jakiej go napisano. Link, który OpenChamber odczytuje sam, czyli element trackera, issue lub pull request repozytorium albo commit, działa jak zwykle, a kliknięcie z klawiszem modyfikującym robi to, co zwykle robi przeglądarka. Zadeklarowanie `links` dodaje uprawnienie `links`: okno zatwierdzania wymienia Twoje klucze i origin oraz mówi, co robi kliknięcie, a wersja, która zmienia którąkolwiek z tych rzeczy, pyta ponownie. `examples/tasks-demo` rozpoznaje `DEMO-2` i `https://example.com/tasks/DEMO-2`.
+Rozpoznawanie działa w odpowiedziach agenta i we własnych wiadomościach użytkownika, ale nie w rozumowaniu, wynikach narzędzi ani w widoku Files, a skopiowana wiadomość zachowuje tekst w takiej postaci, w jakiej go napisano. Link, który OhPiChamber odczytuje sam, czyli element trackera, issue lub pull request repozytorium albo commit, działa jak zwykle, a kliknięcie z klawiszem modyfikującym robi to, co zwykle robi przeglądarka. Zadeklarowanie `links` dodaje uprawnienie `links`: okno zatwierdzania wymienia Twoje klucze i origin oraz mówi, co robi kliknięcie, a wersja, która zmienia którąkolwiek z tych rzeczy, pyta ponownie. `examples/tasks-demo` rozpoznaje `DEMO-2` i `https://example.com/tasks/DEMO-2`.
 
 ## Generowanie tekstu
 
-Dzięki uprawnieniu `model` `host.generate` prosi Small Model użytkownika o jednorazową odpowiedź: podsumowanie, tytuł, szkic. Nic nie trafia do sesji, historia nie jest zapisywana, a rozszerzenie nigdy nie wybiera dostawcy. OpenChamber używa modelu wybranego w Ustawienia → Sesje → Small Model albo małego modelu aktywnego dostawcy.
+Dzięki uprawnieniu `model` `host.generate` prosi Small Model użytkownika o jednorazową odpowiedź: podsumowanie, tytuł, szkic. Nic nie trafia do sesji, historia nie jest zapisywana, a rozszerzenie nigdy nie wybiera dostawcy. OhPiChamber używa modelu wybranego w Ustawienia → Sesje → Small Model albo małego modelu aktywnego dostawcy.
 
 ```ts
 const { text } = await host.generate({
@@ -151,7 +151,7 @@ Gdy żaden model nie jest dostępny, wywołanie kończy się błędem `NO_MODEL`
 
 Twoja strona działa w sandboxie i nie może sama łączyć się z siecią: skrypty, style, obrazy, czcionki i multimedia ładują się tylko z Twojego pakietu, a `fetch` sięga tylko do plików Twojego pakietu. Dołącz czcionki i obrazy do pakietu, zamiast ładować je z CDN.
 
-Aby rozmawiać z zewnętrzną usługą, zadeklaruj `integration`, a OpenChamber wykona wywołania za Ciebie przez `host.request`, dołączając token użytkownika. Token nigdy nie trafia do Twojej strony.
+Aby rozmawiać z zewnętrzną usługą, zadeklaruj `integration`, a OhPiChamber wykona wywołania za Ciebie przez `host.request`, dołączając token użytkownika. Token nigdy nie trafia do Twojej strony.
 
 Dla wszystkiego innego, czego Twoja strona potrzebuje bezpośrednio, np. czcionek lub obrazów z CDN albo publicznego API, wymień do 8 originów https:
 
@@ -164,12 +164,12 @@ Użytkownik widzi je w oknie zatwierdzania jako adresy, do których Twoje rozsze
 W [trybie enterprise](/security/) rozszerzenie z `origins`, `integration` albo `service` instaluje się tylko z repozytorium Git, które administrator umieścił na liście. Jeśli Twoje rozszerzenie może działać bez nich, takie zespoły nadal mogą je zainstalować. Aby tworzyć rozszerzenie na takiej maszynie, poproś administratora o `allowLocalExtensions`, dzięki czemu zainstalujesz je z jego folderu.
 
 - `token`: użytkownik wkleja token API na karcie w Ustawienia → Integracje. `apiOrigin` to jedyny origin, który `request` może wywołać. `account` jest opcjonalne: ścieżka GET i nazwa pola, żeby karta mogła pokazać, kto jest podłączony. `scheme` określa, jak token jest wysyłany; zobacz tabelę poniżej. Sprawdź w dokumentacji API dostawcy, jakiego nagłówka oczekuje.
-- `oauth`: użytkownik wkleja client id, a OpenChamber przeprowadza proces autoryzacji. Wymaga `authorizeUrl`, `tokenUrl` i `apiOrigin`.
-- `host: { "provider": "linear" }`: używa konta Linear już podłączonego w OpenChamber. Client id nie jest potrzebne.
+- `oauth`: użytkownik wkleja client id, a OhPiChamber przeprowadza proces autoryzacji. Wymaga `authorizeUrl`, `tokenUrl` i `apiOrigin`.
+- `host: { "provider": "linear" }`: używa konta Linear już podłączonego w OhPiChamber. Client id nie jest potrzebne.
 
 Co wysyła każdy `scheme`:
 
-| `scheme` | Nagłówek wysyłany przez OpenChamber | Kiedy używać |
+| `scheme` | Nagłówek wysyłany przez OhPiChamber | Kiedy używać |
 | --- | --- | --- |
 | pominięty | `Authorization: <token>` | API dokumentuje goły token w nagłówku |
 | `"bearer"` | `Authorization: Bearer <token>` | API dokumentuje token bearer lub personal access token |
@@ -179,24 +179,24 @@ Co wysyła każdy `scheme`:
 
 ## Pliki
 
-Twoja strona nie może sama dotykać dysku. OpenChamber czyta i zapisuje za nią, w granicach zatwierdzonych przez użytkownika.
+Twoja strona nie może sama dotykać dysku. OhPiChamber czyta i zapisuje za nią, w granicach zatwierdzonych przez użytkownika.
 
 - Ścieżka względna (`README.md`, `src/index.ts`, `.`) oznacza otwarty projekt. Wymaga uprawnienia `files`. Brak otwartego projektu to `NO_DIRECTORY`.
 - Ścieżka zaczynająca się od `/` lub `~/` oznacza dowolne inne miejsce. Musi pasować do jednego ze wzorców zadeklarowanych w `contributes.filesystem`, a użytkownik widzi dokładnie te wzorce w oknie zatwierdzania:
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 Wzorce używają `*` dla jednego segmentu ścieżki i `**` dla dowolnej głębokości. Wszystko poza nimi to `BAD_PATH`, nawet po zatwierdzeniu. `..` nigdy nie jest dozwolone.
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
-Zapisy są atomowe: OpenChamber zapisuje plik tymczasowy i zmienia jego nazwę, więc czytający nigdy nie zobaczy pliku zapisanego do połowy. Pliki są czytane i zapisywane jako tekst UTF-8, do 2 MB.
+Zapisy są atomowe: OhPiChamber zapisuje plik tymczasowy i zmienia jego nazwę, więc czytający nigdy nie zobaczy pliku zapisanego do połowy. Pliki są czytane i zapisywane jako tekst UTF-8, do 2 MB.
 
 ## Sekcja w Work Status
 
@@ -211,11 +211,11 @@ Zapisy są atomowe: OpenChamber zapisuje plik tymczasowy i zmienia jego nazwę, 
 - `title` zastępuje nazwę panelu w nagłówku sekcji, do 60 znaków.
 - `height` to początkowa wysokość w pikselach, od 24 do 320 (domyślnie 120). Wywołaj [`host.setHeight()`](/sdk/host/), gdy zmieni się rozmiar treści.
 
-Twoja strona widzi `ctx.surface` jako `status`. OpenChamber ładuje ją tylko wtedy, gdy panel Work Status jest widoczny, a twoja sekcja rozwinięta, i zwalnia ją, gdy użytkownik zwinie sekcję, więc nie trzymaj tam niczego, czego nie da się odtworzyć. Rozszerzenie z samą sekcją może używać uprawnień, usługi, integracji i plików, ale nie `page`, `attach`, `actions` ani `commands`. Tylko web i desktop. Przykład `git-graph-status` to kompletna sekcja.
+Twoja strona widzi `ctx.surface` jako `status`. OhPiChamber ładuje ją tylko wtedy, gdy panel Work Status jest widoczny, a twoja sekcja rozwinięta, i zwalnia ją, gdy użytkownik zwinie sekcję, więc nie trzymaj tam niczego, czego nie da się odtworzyć. Rozszerzenie z samą sekcją może używać uprawnień, usługi, integracji i plików, ale nie `page`, `attach`, `actions` ani `commands`. Tylko web i desktop. Przykład `git-graph-status` to kompletna sekcja.
 
 ## Edytor dla twojego typu pliku
 
-`contributes.fileEditors` otwiera pliki w twojej stronie zamiast w edytorze tekstu. Gdy użytkownik otworzy pasujący plik w Files, OpenChamber pokaże tam twój edytor, z tym samym przełącznikiem źródła, przyciskiem pełnego ekranu i przyciskiem zapisu, co wbudowane podglądy.
+`contributes.fileEditors` otwiera pliki w twojej stronie zamiast w edytorze tekstu. Gdy użytkownik otworzy pasujący plik w Files, OhPiChamber pokaże tam twój edytor, z tym samym przełącznikiem źródła, przyciskiem pełnego ekranu i przyciskiem zapisu, co wbudowane podglądy.
 
 ```json
 "fileEditors": [
@@ -228,10 +228,10 @@ Twoja strona widzi `ctx.surface` jako `status`. OpenChamber ładuje ją tylko wt
 - `content` to `"text"` (domyślnie) albo `"binary"`, patrz niżej.
 - Do 8 edytorów na rozszerzenie, każdy z maksymalnie 16 wzorcami.
 
-Plikiem zarządza OpenChamber. Twoja strona nigdy go nie czyta ani nie zapisuje i nie potrzebuje do tego żadnego uprawnienia. OpenChamber przekazuje ci tekst, prosi o zmieniony tekst przy zapisie i obsługuje Cmd/Ctrl+S, automatyczny zapis, pytanie o niezapisane zmiany, końce linii oraz zmiany wprowadzone na dysku:
+Plikiem zarządza OhPiChamber. Twoja strona nigdy go nie czyta ani nie zapisuje i nie potrzebuje do tego żadnego uprawnienia. OhPiChamber przekazuje ci tekst, prosi o zmieniony tekst przy zapisie i obsługuje Cmd/Ctrl+S, automatyczny zapis, pytanie o niezapisane zmiany, końce linii oraz zmiany wprowadzone na dysku:
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -247,11 +247,11 @@ const changed = () => host.reportFileChange(tracker.observe(versionOf(currentTex
 
 host.onFileSnapshot(() => ({ content: currentText(), version: versionOf(currentText()) }));
 
-// Zmiany wprowadzone w trakcie zapisu przez OpenChamber zostawiają plik niezapisany.
+// Zmiany wprowadzone w trakcie zapisu przez OhPiChamber zostawiają plik niezapisany.
 host.onFileSaved((version) => host.reportFileChange({ dirty: tracker.markSaved(version), edited: false }));
 ```
 
-`version` to dowolny krótki ciąg znaków, który zmienia się razem z dokumentem, na przykład hash. Jeśli plik nie nadaje się do otwarcia w twoim edytorze, wywołaj `host.reportFileUnsupported()`, a OpenChamber pokaże jego źródło z komunikatem. Pliki większe niż 20 MB zostają w widoku źródła.
+`version` to dowolny krótki ciąg znaków, który zmienia się razem z dokumentem, na przykład hash. Jeśli plik nie nadaje się do otwarcia w twoim edytorze, wywołaj `host.reportFileUnsupported()`, a OhPiChamber pokaże jego źródło z komunikatem. Pliki większe niż 20 MB zostają w widoku źródła.
 
 ### Pliki binarne
 
@@ -266,15 +266,15 @@ host.onFileOpen((file) => {
 host.onFileSnapshot(() => ({ bytes: currentBytes(), version: versionOf(currentBytes()) }));
 ```
 
-Edytor binarny może przejąć każdy plik pasujący do jego wzorców, także te, które OpenChamber sam pokazuje w podglądzie, jak obrazy i pliki PDF. Nie ma widoku źródła, a gdy użytkownik przełącza go na pełny ekran lub z niego wychodzi, mając niezapisane zmiany, OpenChamber najpierw je zapisuje. Odczyt i zapis formatu należy do twojego edytora: OpenChamber zapisuje dokładnie te bajty, które zwrócisz.
+Edytor binarny może przejąć każdy plik pasujący do jego wzorców, także te, które OhPiChamber sam pokazuje w podglądzie, jak obrazy i pliki PDF. Nie ma widoku źródła, a gdy użytkownik przełącza go na pełny ekran lub z niego wychodzi, mając niezapisane zmiany, OhPiChamber najpierw je zapisuje. Odczyt i zapis formatu należy do twojego edytora: OhPiChamber zapisuje dokładnie te bajty, które zwrócisz.
 
-Twoja strona widzi `ctx.surface` jako `file`. OpenChamber przeładowuje ją i ponownie przekazuje plik, gdy plik zmieni się na dysku, użytkownik odrzuci zmiany albo edytor przejdzie na pełny ekran lub z niego wyjdzie. Wygrywa pierwsze włączone rozszerzenie z pasującym wzorcem, przed własnymi podglądami OpenChamber. Rozszerzenie z samym edytorem może używać uprawnień, usługi, integracji i plików, ale nie `page`, `attach`, `actions` ani `commands`. Tylko web i desktop. Przykład `checklist-editor` to kompletny edytor.
+Twoja strona widzi `ctx.surface` jako `file`. OhPiChamber przeładowuje ją i ponownie przekazuje plik, gdy plik zmieni się na dysku, użytkownik odrzuci zmiany albo edytor przejdzie na pełny ekran lub z niego wyjdzie. Wygrywa pierwsze włączone rozszerzenie z pasującym wzorcem, przed własnymi podglądami OhPiChamber. Rozszerzenie z samym edytorem może używać uprawnień, usługi, integracji i plików, ale nie `page`, `attach`, `actions` ani `commands`. Tylko web i desktop. Przykład `checklist-editor` to kompletny edytor.
 
 ## Akcje, polecenia i odznaka
 
 Poza paskiem bocznym i menu + rozszerzenie może pojawić się w trzech kolejnych miejscach. Wszystkie przekazują rozszerzeniu `item` tak samo jak kliknięcie chipa.
 
-**Akcje na wiadomościach i sesjach.** Zadeklaruj pozycje menu, a OpenChamber pokaże je obok wbudowanych:
+**Akcje na wiadomościach i sesjach.** Zadeklaruj pozycje menu, a OhPiChamber pokaże je obok wbudowanych:
 
 ```json
 "actions": [
@@ -300,7 +300,7 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Gdy użytkownik wpisze `/task ABC-12` w polu czatu, OpenChamber prosi Twoje rozszerzenie o rozwiązanie go i dołącza to, co zwrócisz, jako chip, niczego nie otwierając. Zwróć `null` dla "nic nie znaleziono". Jeśli Twój panel jest zamknięty, OpenChamber ładuje go w tle na potrzeby tego wywołania. Nazwa, której OpenChamber już używa, jest ignorowana.
+Gdy użytkownik wpisze `/task ABC-12` w polu czatu, OhPiChamber prosi Twoje rozszerzenie o rozwiązanie go i dołącza to, co zwrócisz, jako chip, niczego nie otwierając. Zwróć `null` dla "nic nie znaleziono". Jeśli Twój panel jest zamknięty, OhPiChamber ładuje go w tle na potrzeby tego wywołania. Nazwa, której OhPiChamber już używa, jest ignorowana.
 
 **Odznaka na ikonie na pasku bocznym.** `host.setBadge(3)` stawia kropkę na Twojej ikonie, a liczbę pokazuje w jej podpowiedzi, na przykład otwarte zadania; `host.setBadge(null)` ją usuwa. Otwarcie panelu też ją usuwa.
 
@@ -341,7 +341,7 @@ Klucz to ID dostawcy w postaci, w jakiej podaje je OpenCode. Wartość to plik `
 ## Pierwsze linie w panelu
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -351,9 +351,9 @@ host.onReady((ctx) => {
 });
 ```
 
-`connectHost` działa tylko wewnątrz OpenChamber. Po otwarciu jako zwykły plik każde wywołanie jest odrzucane z `HOST_UNAVAILABLE`.
+`connectHost` działa tylko wewnątrz OhPiChamber. Po otwarciu jako zwykły plik każde wywołanie jest odrzucane z `HOST_UNAVAILABLE`.
 
-Najpierw zbuduj panel z gotowych elementów `@openchamber/sdk/ui`: przycisków, pól, list rozwijanych, zakładek, list i innych, ostylowanych kolorami i czcionkami aplikacji, żeby panel wyglądał jak część OpenChamber. Własny HTML i CSS pisz tylko dla tego, czego w zestawie brakuje. Zobacz [Zestaw UI](/sdk/ui/).
+Najpierw zbuduj panel z gotowych elementów `ohpichamber-sdk/ui`: przycisków, pól, list rozwijanych, zakładek, list i innych, ostylowanych kolorami i czcionkami aplikacji, żeby panel wyglądał jak część OhPiChamber. Własny HTML i CSS pisz tylko dla tego, czego w zestawie brakuje. Zobacz [Zestaw UI](/sdk/ui/).
 
 ## Zobacz też
 

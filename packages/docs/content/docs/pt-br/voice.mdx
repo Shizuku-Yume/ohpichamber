@@ -1,11 +1,11 @@
 ---
 title: Modo de Voz
-description: Fale com o OpenChamber e ouça as respostas lidas em voz alta.
+description: Fale com o OhPiChamber e ouça as respostas lidas em voz alta.
 ---
 
 # Modo de Voz
 
-O modo de voz permite ditar mensagens e ter as respostas lidas de volta para você. Ative-o em **Settings → OpenChamber → Voice**.
+O modo de voz permite ditar mensagens e ter as respostas lidas de volta para você. Ative-o em **Settings → OhPiChamber → Voice**.
 
 ## Ler respostas em voz alta (text-to-speech)
 
@@ -22,7 +22,7 @@ Uma vez ativado, você ganha um botão de play nas mensagens para ouvi-las lidas
 
 Escolha como sua fala é transcrita:
 
-- **Local** executa um modelo de fala no computador onde o OpenChamber roda. O modelo é baixado na primeira vez que você dita, e seu áudio fica nesse computador.
+- **Local** executa um modelo de fala no computador onde o OhPiChamber roda. O modelo é baixado na primeira vez que você dita, e seu áudio fica nesse computador.
 - **Servidor** envia seu áudio para um serviço de transcrição compatível com OpenAI. Insira a URL dele e, se ele precisar, uma chave de API.
 
 Modelos locais:
@@ -37,7 +37,7 @@ Os modelos Whisper e Qwen3-ASR detectam o idioma sozinhos e, em uma frase curta,
 
 Ative **Corrigir palavras mal entendidas** para que seu Small Model (Configurações → Sessões → Small Model) revise o texto depois que você parar de ditar. Ele substitui palavras que o modelo de fala entendeu errado e remove sons de hesitação como "hã". O texto então vai para o provedor do Small Model e aparece um ou dois segundos depois. Sem um Small Model, o texto é inserido como foi ouvido.
 
-As API keys que você digita para esses serviços ficam guardadas no servidor do OpenChamber, não no navegador. Digite uma chave e pressione Enter para salvá-la; o campo passa a mostrar que há uma chave salva, e o X a remove.
+As API keys que você digita para esses serviços ficam guardadas no servidor do OhPiChamber, não no navegador. Digite uma chave e pressione Enter para salvá-la; o campo passa a mostrar que há uma chave salva, e o X a remove.
 
 ## Uma nota para celulares
 

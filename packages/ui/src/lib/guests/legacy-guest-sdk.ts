@@ -1,4 +1,4 @@
-import { OPENCHAMBER_SDK_CHANNEL } from '@openchamber/sdk';
+import { OPENCHAMBER_SDK_CHANNEL } from 'ohpichamber-sdk';
 
 /**
  * Wire version of the pre-M3 Guest SDK. It posted `hello` and every call to

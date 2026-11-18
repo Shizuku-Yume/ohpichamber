@@ -172,7 +172,7 @@ async function waitForTcpPort(port, timeoutMs = 3000) {
 }
 
 function spawnOpenChamberLikeIdleProcess() {
-  return spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'openchamber-idle'], { stdio: 'ignore' });
+  return spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'ohpichamber-idle'], { stdio: 'ignore' });
 }
 
 function spawnOpenChamberLikeHungServer(port) {
@@ -186,7 +186,7 @@ function spawnOpenChamberLikeHungServer(port) {
     server.listen(${port}, '127.0.0.1');
     setInterval(() => {}, 1000);
   `;
-  return spawn(process.execPath, ['-e', script, 'openchamber-hung-server'], { stdio: 'ignore' });
+  return spawn(process.execPath, ['-e', script, 'ohpichamber-hung-server'], { stdio: 'ignore' });
 }
 
 describe('cli args', () => {
@@ -217,10 +217,10 @@ describe('cli args', () => {
   });
 
   it('parses explicit connect-url server overrides', () => {
-    const parsed = parseArgs(['connect-url', '--server', 'https://openchamber.example.com', '--port', '3002']);
+    const parsed = parseArgs(['connect-url', '--server', 'https://ohpichamber.example.com', '--port', '3002']);
 
     expect(parsed.command).toBe('connect-url');
-    expect(parsed.options.server).toBe('https://openchamber.example.com');
+    expect(parsed.options.server).toBe('https://ohpichamber.example.com');
     expect(parsed.options.port).toBe(3002);
   });
 
@@ -705,7 +705,7 @@ describe('cli API target resolution', () => {
       discoverDesktopInstance: async () => null,
       discoverLifecycleInstances: async () => [{ port: 3001 }, { port: 3002 }],
       isServerHealthReady: async () => false,
-    })).rejects.toThrow('Multiple OpenChamber instances are running');
+    })).rejects.toThrow('Multiple OhPiChamber instances are running');
   });
 });
 
@@ -1079,8 +1079,8 @@ describe('cli entry detection', () => {
   });
 
   it('accepts wrapper binary name fallback when requested', () => {
-    const wrapperPath = '/home/user/.local/bin/openchamber';
-    expect(isModuleCliExecution(wrapperPath, moduleUrl, undefined, 'openchamber')).toBe(true);
+    const wrapperPath = '/home/user/.local/bin/ohpichamber';
+    expect(isModuleCliExecution(wrapperPath, moduleUrl, undefined, 'ohpichamber')).toBe(true);
   });
 
   it('normalizes direct paths when realpath fails', () => {
@@ -1094,13 +1094,14 @@ describe('cli entry detection', () => {
 });
 
 describe('isOpenchamberCmdline', () => {
-  it('accepts OpenChamber CLI and daemon cmdlines', () => {
-    expect(isOpenchamberCmdline('node /x/@openchamber/web/bin/cli.js serve')).toBe(true);
-    expect(isOpenchamberCmdline('node /x/@openchamber/web/server/index.js --port 9090')).toBe(true);
-    expect(isOpenchamberCmdline('bun /home/u/projects/openchamber/packages/web/server/index.js --port 3001')).toBe(true);
+  it('accepts the packaged CLI and daemon cmdlines', () => {
+    expect(isOpenchamberCmdline('node /x/node_modules/ohpichamber/bin/cli.js serve')).toBe(true);
+    expect(isOpenchamberCmdline('node /x/node_modules/ohpichamber/server/index.js --port 9090')).toBe(true);
+    expect(isOpenchamberCmdline('bun /home/u/projects/ohpichamber/packages/web/server/index.js --port 3001')).toBe(true);
   });
 
   it('rejects recycled and unrelated processes (issue #1721)', () => {
+    expect(isOpenchamberCmdline('node /x/OpenChamber/bin/cli.js serve')).toBe(false);
     expect(isOpenchamberCmdline('node /home/herjarsa/npm-global/bin/agentmemory')).toBe(false);
     expect(isOpenchamberCmdline('node /usr/lib/node_modules/npm/bin/npm-cli.js install')).toBe(false);
     expect(isOpenchamberCmdline('')).toBe(false);
@@ -1584,7 +1585,7 @@ describe('startup command lingering output', () => {
     enabled: true,
     active: true,
     activeState: 'active',
-    servicePath: '/home/alice/.config/systemd/user/openchamber.service',
+    servicePath: '/home/alice/.config/systemd/user/ohpichamber.service',
     lingerEnabled,
     lingerUser,
   });

@@ -26,7 +26,7 @@ const judges = process.argv.slice(2).map((arg) => {
   const grades = new Map();
   for (const ref of refs.split('+')) {
     const [runId, key] = ref.split(':');
-    const run = JSON.parse(readFileSync(path.join(home, '.config/openchamber/workflow-runs', `${runId}.json`), 'utf8'));
+    const run = JSON.parse(readFileSync(path.join(home, '.config/ohpichamber/workflow-runs', `${runId}.json`), 'utf8'));
     const result = key ? run.result[key] : run.result;
     for (const g of result.code ?? []) if (!g.failed) grades.set(g.id, { ...g, review: false });
     for (const g of result.review ?? []) if (!g.failed) grades.set(g.id, { ...g, review: true });

@@ -1,6 +1,6 @@
 ---
 title: Narzędzie sterowania dla agentów
-description: Pozwól agentowi zarządzać sesjami, worktree i zaplanowanymi zadaniami OpenChamber z poziomu czatu.
+description: Pozwól agentowi zarządzać sesjami, worktree i zaplanowanymi zadaniami OhPiChamber z poziomu czatu.
 ---
 
 # Narzędzie sterowania dla agentów
@@ -11,25 +11,25 @@ Użyj narzędzia agenta `openchamber`, aby zarządzać pracą w aplikacji bezpo�
 
 Mów do agenta zwykłym językiem. Na przykład:
 
-- „Utwórz nową sesję OpenChamber w tym projekcie, użyj modelu `openai/gpt-5.6-sol` i wyślij jej ten prompt: przejrzyj proces uwierzytelniania.”
-- „Utwórz dla tego zadania nową sesję OpenChamber w osobnym worktree i poproś ją o dodanie testów procesu logowania.”
-- „Użyj OpenChamber, żeby wypisać moje 10 najnowszych sesji razem z ich bieżącym stanem.”
-- „Utwórz zaplanowane zadanie OpenChamber o nazwie Przegląd w dni robocze, które w każdy dzień roboczy o 09:00 wyśle ten prompt: przejrzyj zmiany od ostatniego uruchomienia.”
-- „Uruchom teraz zaplanowane zadanie OpenChamber o nazwie Przegląd w dni robocze.”
-- „Sprawdź sesję OpenChamber o nazwie Przegląd uwierzytelniania i pokaż mi najnowszą odpowiedź asystenta.”
+- „Utwórz nową sesję OhPiChamber w tym projekcie, użyj modelu `openai/gpt-5.6-sol` i wyślij jej ten prompt: przejrzyj proces uwierzytelniania.”
+- „Utwórz dla tego zadania nową sesję OhPiChamber w osobnym worktree i poproś ją o dodanie testów procesu logowania.”
+- „Użyj OhPiChamber, żeby wypisać moje 10 najnowszych sesji razem z ich bieżącym stanem.”
+- „Utwórz zaplanowane zadanie OhPiChamber o nazwie Przegląd w dni robocze, które w każdy dzień roboczy o 09:00 wyśle ten prompt: przejrzyj zmiany od ostatniego uruchomienia.”
+- „Uruchom teraz zaplanowane zadanie OhPiChamber o nazwie Przegląd w dni robocze.”
+- „Sprawdź sesję OhPiChamber o nazwie Przegląd uwierzytelniania i pokaż mi najnowszą odpowiedź asystenta.”
 
-Narzędzie sterowania wyświetla projekty i preferencje modeli, przeszukuje katalog modeli, tworzy sesje i je prowadzi, forkuje sesję i tworzy odizolowane sesje w worktree. Narzędzie harmonogramu tworzy, zmienia, uruchamia, wstrzymuje i usuwa zaplanowane zadania. Sesje uruchomione w ten sposób pojawiają się w OpenChamber jak każde inne, więc możesz je otworzyć i samodzielnie kontynuować pracę.
+Narzędzie sterowania wyświetla projekty i preferencje modeli, przeszukuje katalog modeli, tworzy sesje i je prowadzi, forkuje sesję i tworzy odizolowane sesje w worktree. Narzędzie harmonogramu tworzy, zmienia, uruchamia, wstrzymuje i usuwa zaplanowane zadania. Sesje uruchomione w ten sposób pojawiają się w OhPiChamber jak każde inne, więc możesz je otworzyć i samodzielnie kontynuować pracę.
 
 ## Pamiętaj
 
-- Prompty do nowych sesji domyślnie wracają od razu. Śledź sesję w OpenChamber albo poproś agenta, żeby sprawdził ją później.
+- Prompty do nowych sesji domyślnie wracają od razu. Śledź sesję w OhPiChamber albo poproś agenta, żeby sprawdził ją później.
 - Osobny worktree powstaje tylko na Twoją prośbę. Niezacommitowane zmiany z bieżącego worktree nie są do niego kopiowane.
 - Gdy checkout wygląda na zajęty, na przykład inna sesja pracuje na tym samym branchu, agent może zaproponować przeniesienie swojej sesji do nowego worktree. Przenosi ją po Twojej zgodzie i zabiera tylko pliki, które sam zmienił.
 - Narzędzia nie mogą usuwać sesji ani worktree, rejestrować ścieżek projektów, uruchamiać dowolnych poleceń shella ani wywoływać dowolnych adresów URL.
 
 ## Włączanie i wyłączanie narzędzi
 
-Otwórz **Ustawienia → Ogólne → Narzędzia OpenChamber** i zmień **Narzędzie sterowania dla agentów**. Ustawienie zaczyna działać natychmiast bez restartu. Narzędzie działa przez natywną granicę akcji hosta OpenChamber, zarządzając sesjami, worktree i zaplanowanymi zadaniami.
+Otwórz **Ustawienia → Ogólne → Narzędzia OhPiChamber** i zmień **Narzędzie sterowania dla agentów**. Ustawienie zaczyna działać natychmiast bez restartu. Narzędzie działa przez natywną granicę akcji hosta OhPiChamber, zarządzając sesjami, worktree i zaplanowanymi zadaniami.
 
 ## Powiązane
 
@@ -37,5 +37,5 @@ Otwórz **Ustawienia → Ogólne → Narzędzia OpenChamber** i zmień **Narzęd
 - [Sesje worktree](/pl/worktrees/)
 - [Cele sesji](/pl/session-goals/)
 - [Workflowy](/pl/workflows/): narzędzie workflow, do rozdzielania dużego zadania między wielu agentów
-- [Panel przeglądarki](/pl/desktop-browser/): narzędzie OpenChamber Web do oglądania strony i sterowania nią
+- [Panel przeglądarki](/pl/desktop-browser/): narzędzie OhPiChamber Web do oglądania strony i sterowania nią
 - [Notatki, listy zadań i plany projektu](/pl/notes-todos-plans/): narzędzie wiedzy o projekcie, dla notatek, zadań i planów w karcie Kontekst

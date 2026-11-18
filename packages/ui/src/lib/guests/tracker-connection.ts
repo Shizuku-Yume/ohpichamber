@@ -1,4 +1,4 @@
-import { EMPTY_GUEST_CONNECTION, type GuestConnection } from '@openchamber/sdk';
+import { EMPTY_GUEST_CONNECTION, type GuestConnection } from 'ohpichamber-sdk';
 
 import type { TrackerAuthStatus } from '@/lib/api/types';
 

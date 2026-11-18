@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
-import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, guestFramePolicy } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, guestFramePolicy } from 'ohpichamber-sdk';
 
 import { loadRelayGuestDocument } from './relay-document';
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { GUEST_BLOCK_RESERVED_NAMES, isGuestApproved, requestedGuestCapabilities } from '@openchamber/sdk';
+import { GUEST_BLOCK_RESERVED_NAMES, isGuestApproved, requestedGuestCapabilities } from 'ohpichamber-sdk';
 
 import { resolveOpenCodePluginFolder } from './opencode-plugin.js';
 

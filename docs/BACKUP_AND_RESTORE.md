@@ -1,15 +1,15 @@
 # Host and Agent Backup and Restore Guide
 
-This guide describes the operator procedure for backing up and restoring OpenChamber Host state and Oh-My-Pi (OMP) agent state, including SQLite databases, attachments, session transcripts, and credentials.
+This guide describes the operator procedure for backing up and restoring OhPiChamber Host state and Oh-My-Pi (OMP) agent state, including SQLite databases, attachments, session transcripts, and credentials.
 
 ---
 
 ## 1. Data Inventory and File Locations
 
-OpenChamber state is divided between the **Host Gateway data directory** and the **OMP Agent directory**.
+OhPiChamber state is divided between the **Host Gateway data directory** and the **OMP Agent directory**.
 
 ### Host Gateway Data Directory
-Default location: `~/.config/openchamber` (or the directory specified by `OPENCHAMBER_DATA_DIR`).
+Default location: `~/.config/ohpichamber` (or the directory specified by `OPENCHAMBER_DATA_DIR`).
 
 - **`host-metadata.sqlite`** (plus `-wal` and `-shm` sidecars):
   - Schema: Managed by `packages/web/server/lib/host/metadata-sqlite.js` with `PRAGMA user_version = 1`.
@@ -27,7 +27,7 @@ Default location: `~/.config/openchamber` (or the directory specified by `OPENCH
   - Full-text search index (FTS5). This database is strictly derived from session events and is automatically rebuilt if absent; it does not need to be preserved in backups.
 
 ### OMP Agent Directory
-OpenChamber assigns each workspace a captured agent directory. The Host default is `$HOME/.omp/agent`: `packages/web/server/lib/host/agent-scope-runtime.js` builds `path.join(os.homedir(), '.omp', 'agent')` and does not consult `PI_CODING_AGENT_DIR` or XDG variables when forming that default. The Host passes the captured path to the agent service, which forces every worker's `PI_CODING_AGENT_DIR` to it.
+OhPiChamber assigns each workspace a captured agent directory. The Host default is `$HOME/.omp/agent`: `packages/web/server/lib/host/agent-scope-runtime.js` builds `path.join(os.homedir(), '.omp', 'agent')` and does not consult `PI_CODING_AGENT_DIR` or XDG variables when forming that default. The Host passes the captured path to the agent service, which forces every worker's `PI_CODING_AGENT_DIR` to it.
 
 Inside a worker, `openNativeRuntime` (`packages/agent-service/src/worker/native-runtime.ts`) applies this precedence:
 1. **Named profile:** use `OMP_PROFILE` when it is defined, otherwise `PI_PROFILE`. An empty value or `default` selects no profile; an invalid name throws. When a profile resolves, `setProfile(profile)` selects `$HOME/.omp/profiles/<profile>/agent` in OMP's process-wide path resolver, and that resolver ignores the captured agent directory.
@@ -65,19 +65,19 @@ A coherent snapshot requires either:
 ### Step-by-Step Verifiable Offline Backup
 
 1. **Stop all running processes and verify full quiescence**:
-   Signal all OpenChamber and Agent Service processes to stop, then verify that all processes have exited:
+   Signal all OhPiChamber and Agent Service processes to stop, then verify that all processes have exited:
    ```bash
    # Terminate running Host and Agent Service processes
-   pkill -TERM -f "openchamber" 2>/dev/null || true
+   pkill -TERM -f "ohpichamber" 2>/dev/null || true
    pkill -TERM -f "agent-service" 2>/dev/null || true
 
    # Wait and verify complete termination
    timeout_counter=0
-   while pgrep -f "openchamber" >/dev/null || pgrep -f "agent-service" >/dev/null; do
+   while pgrep -f "ohpichamber" >/dev/null || pgrep -f "agent-service" >/dev/null; do
      if [ "$timeout_counter" -ge 10 ]; then
        echo "Warning: Processes did not terminate cleanly after 10s; sending SIGKILL" >&2
-       pkill -KILL -f "openchamber" 2>/dev/null || true
-       pkill -KILL -f "agent-service" 2>/dev/null || true
+      pkill -KILL -f "ohpichamber" 2>/dev/null || true
+      pkill -KILL -f "agent-service" 2>/dev/null || true
        sleep 1
        break
      fi
@@ -86,8 +86,8 @@ A coherent snapshot requires either:
    done
 
    # Verify no processes remain running
-   if pgrep -f "openchamber" >/dev/null || pgrep -f "agent-service" >/dev/null; then
-     echo "Error: Failed to stop OpenChamber processes; aborting backup to prevent incoherent state" >&2
+   if pgrep -f "ohpichamber" >/dev/null || pgrep -f "agent-service" >/dev/null; then
+     echo "Error: Failed to stop OhPiChamber processes; aborting backup to prevent incoherent state" >&2
      exit 1
    fi
    ```
@@ -97,14 +97,14 @@ A coherent snapshot requires either:
 
 3. **Archive Host Gateway data**:
    ```bash
-   DATA_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/openchamber}"
+   DATA_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/ohpichamber}"
    if [ ! -d "$DATA_DIR" ]; then
      echo "Error: Host data directory not found or not a directory: $DATA_DIR" >&2
      exit 1
    fi
 
-   # Define concrete backup root (default to $HOME/openchamber-backups, override with OPENCHAMBER_BACKUP_DIR):
-   BACKUP_ROOT="${OPENCHAMBER_BACKUP_DIR:-$HOME/openchamber-backups}"
+  # Define concrete backup root (default to $HOME/ohpichamber-backups, override with OPENCHAMBER_BACKUP_DIR):
+  BACKUP_ROOT="${OPENCHAMBER_BACKUP_DIR:-$HOME/ohpichamber-backups}"
    mkdir -p "$BACKUP_ROOT" || { echo "Error: Failed to create backup root directory: $BACKUP_ROOT" >&2; exit 1; }
    if [ ! -w "$BACKUP_ROOT" ]; then
      echo "Error: Backup root directory is not writable: $BACKUP_ROOT" >&2
@@ -112,7 +112,7 @@ A coherent snapshot requires either:
    fi
 
    TIMESTAMP="$(date +%Y%m%d%H%M%S)"
-   BACKUP_DEST="$BACKUP_ROOT/openchamber-host-$TIMESTAMP"
+  BACKUP_DEST="$BACKUP_ROOT/ohpichamber-host-$TIMESTAMP"
    mkdir -p "$BACKUP_DEST" || { echo "Error: Failed to create Host backup destination directory: $BACKUP_DEST" >&2; exit 1; }
    chmod 700 "$BACKUP_DEST" || { echo "Error: Failed to restrict Host backup destination permissions" >&2; exit 1; }
 
@@ -153,7 +153,7 @@ A coherent snapshot requires either:
 
 4. **Archive OMP session transcripts (content)**:
    ```bash
-   # Host-captured agent directory used for OpenChamber-managed sessions and credentials.
+  # Host-captured agent directory used for OhPiChamber-managed sessions and credentials.
    # The current Host default is fixed; named OMP profiles do not relocate it.
    OMP_DIR="$HOME/.omp/agent"
 
@@ -162,7 +162,7 @@ A coherent snapshot requires either:
      exit 1
    fi
 
-   BACKUP_ROOT="${OPENCHAMBER_BACKUP_DIR:-$HOME/openchamber-backups}"
+  BACKUP_ROOT="${OPENCHAMBER_BACKUP_DIR:-$HOME/ohpichamber-backups}"
    OMP_BACKUP_DEST="$BACKUP_ROOT/omp-sessions-${TIMESTAMP:-$(date +%Y%m%d%H%M%S)}"
    mkdir -p "$OMP_BACKUP_DEST" || { echo "Error: Failed to create OMP backup destination directory: $OMP_BACKUP_DEST" >&2; exit 1; }
    if [ ! -w "$OMP_BACKUP_DEST" ]; then
@@ -217,16 +217,16 @@ A coherent snapshot requires either:
 
 ## 4. Restore Procedure
 
-1. **Ensure all OpenChamber and Agent Service processes are stopped** on the target machine.
+1. **Ensure all OhPiChamber and Agent Service processes are stopped** on the target machine.
 2. **Prepare clean restore destination and restore Host data**:
    **IMPORTANT:** Never copy SQLite databases into a destination that contains stale `-wal` or `-shm` sidecar files from a previous run or different database instance. Merging a restored database with mismatched sidecars can corrupt the database upon recovery. If restoring into an existing data directory, remove any existing `*.sqlite*` files before copying:
    ```bash
    if [ -z "$BACKUP_DEST" ] || [ ! -d "$BACKUP_DEST" ]; then
-     echo "Error: BACKUP_DEST is not set or not a valid directory (e.g. export BACKUP_DEST=\"$HOME/openchamber-backups/openchamber-host-<timestamp>\")" >&2
+    echo "Error: BACKUP_DEST is not set or not a valid directory (e.g. export BACKUP_DEST=\"$HOME/ohpichamber-backups/ohpichamber-host-<timestamp>\")" >&2
      exit 1
    fi
 
-   RESTORE_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/openchamber}"
+   RESTORE_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/ohpichamber}"
    mkdir -p "$RESTORE_DIR" || { echo "Error: Failed to create restore directory: $RESTORE_DIR" >&2; exit 1; }
    if [ ! -w "$RESTORE_DIR" ]; then
      echo "Error: Restore directory is not writable: $RESTORE_DIR" >&2
@@ -354,11 +354,11 @@ A coherent snapshot requires either:
 3. **Restore OMP session transcripts**:
    ```bash
    if [ -z "$OMP_BACKUP_DEST" ] || [ ! -d "$OMP_BACKUP_DEST" ]; then
-     echo "Error: OMP_BACKUP_DEST is not set or not a valid directory (e.g. export OMP_BACKUP_DEST=\"$HOME/openchamber-backups/omp-sessions-<timestamp>\")" >&2
+    echo "Error: OMP_BACKUP_DEST is not set or not a valid directory (e.g. export OMP_BACKUP_DEST=\"$HOME/ohpichamber-backups/omp-sessions-<timestamp>\")" >&2
      exit 1
    fi
 
-   # Host-captured agent directory used for OpenChamber-managed sessions and credentials.
+  # Host-captured agent directory used for OhPiChamber-managed sessions and credentials.
    # The current Host default is fixed; named OMP profiles do not relocate it.
    OMP_RESTORE_DIR="$HOME/.omp/agent"
    mkdir -p "$OMP_RESTORE_DIR" || { echo "Error: Failed to create OMP restore directory: $OMP_RESTORE_DIR" >&2; exit 1; }
@@ -395,7 +395,7 @@ A coherent snapshot requires either:
    fi
    ```
 
-4. **Start OpenChamber**:
+4. **Start OhPiChamber**:
    - `openHostMetadataDatabase` checks `PRAGMA user_version`. If the database came from an older version, ordered migrations are executed within an atomic transaction.
    - If the database was created by a newer version than this build supports, startup refuses to open it with an explicit `METADATA_SCHEMA_TOO_NEW` error and makes no schema or data writes.
    - `openApprovalPolicyStore` performs the identical check with `APPROVAL_POLICY_SCHEMA_TOO_NEW`.

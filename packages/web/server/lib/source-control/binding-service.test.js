@@ -51,7 +51,7 @@ describe('explicit remote transport configuration', () => {
     credentialRevision: 3,
     providerUserId: 'github.com#42',
     status: 'valid',
-    secret: 'canary-private-token',
+    secret: 'secret-private-token',
   };
   const accountReference = () => createHttpsCredentialReference({
     provider: account.provider,
@@ -378,8 +378,8 @@ describe('explicit remote transport configuration', () => {
     expect(after.binding.remotes[1]).toMatchObject({ name: 'origin', mode: 'managed', credentialId: accountReference() });
     for (const field of ['providers', 'auxiliary']) expect(JSON.stringify(after.binding[field])).toBe(JSON.stringify(before.binding[field]));
     expect(JSON.stringify(after.binding.remotes[0])).toBe(JSON.stringify(before.binding.remotes[0]));
-    expect(JSON.stringify(after)).not.toMatch(/canary-private-token|rawUrl|\/repo"|private_revision/);
-    expect([...files.values()].join('')).not.toContain('canary-private-token');
+    expect(JSON.stringify(after)).not.toMatch(/secret-private-token|rawUrl|\/repo"|private_revision/);
+    expect([...files.values()].join('')).not.toContain('secret-private-token');
   });
 
   it('refuses a selected credential whose provider user belongs to another instance', async () => {
@@ -935,7 +935,7 @@ describe('source-control binding service', () => {
       providers: [], remotes, auxiliary: [] };
     const readTransportAccount = vi.fn(async ({ accountId }) => accountId === 'credential-one' ? {
       credentialId: 'credential-one', credentialRevision: 7, providerUserId: 'https://gitlab.example.com#42',
-      status: 'valid', source: 'pat', user: { id: 42, login: 'safe-user' }, token: 'private-canary-token',
+      status: 'valid', source: 'pat', user: { id: 42, login: 'safe-user' }, token: 'private-secret-token',
     } : null);
     const readManagedSshCredentialPresentation = vi.fn(async (credentialId) => {
       if (credentialId.endsWith('YnJva2Vu')) throw new Error('/private/key failed');
@@ -964,7 +964,7 @@ describe('source-control binding service', () => {
       accountId: 'credential-stale', credentialRevision: 3 });
     expect(readManagedSshCredentialPresentation).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(read.binding.remotes.map((remote) => remote.presentation)))
-      .not.toMatch(/private-canary-token|privateKeyPath|\/private\/key|credential-one|ocgit:/);
+      .not.toMatch(/private-secret-token|privateKeyPath|\/private\/key|credential-one|ocgit:/);
   });
 
   it('bounds one binding projection to 256 unique managed credential lookups', async () => {

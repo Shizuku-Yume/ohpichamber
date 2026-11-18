@@ -1,6 +1,6 @@
 # Built-in extensions
 
-App-owned extensions live here and use the public `@openchamber/sdk` contract. This directory owns built-in extension manifests and bundles staged to `@openchamber/web/server/built-in-extensions/`. This directory is not a Bun workspace and adds no runtime dependencies. The build resolves SDK entrypoints from the SDK workspace.
+App-owned extensions live here and use the public `ohpichamber-sdk` contract. This directory owns built-in extension manifests and bundles staged to `ohpichamber/server/built-in-extensions/`. This directory is not a Bun workspace and adds no runtime dependencies. The build resolves SDK entrypoints from the SDK workspace.
 
 ### Migration status
 

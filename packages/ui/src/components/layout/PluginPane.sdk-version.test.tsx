@@ -77,7 +77,7 @@ test('an old window-protocol hello shows an explicit version mismatch and grants
       await promise;
     });
     expect(container.querySelector('iframe')).not.toBeNull();
-    expect(container.textContent).not.toContain('older OpenChamber SDK');
+    expect(container.textContent).not.toContain('older OhPiChamber SDK');
 
     let foreignDelivered = false;
     foreignChannel.port1.addEventListener('message', () => { foreignDelivered = true; });
@@ -101,7 +101,7 @@ test('an old window-protocol hello shows an explicit version mismatch and grants
     });
     expect(foreignDelivered).toBe(false);
     expect(container.querySelector('iframe')).not.toBeNull();
-    expect(container.textContent).not.toContain('older OpenChamber SDK');
+    expect(container.textContent).not.toContain('older OhPiChamber SDK');
 
     let legacyDelivered = false;
     legacyChannel.port1.addEventListener('message', () => { legacyDelivered = true; });
@@ -125,8 +125,8 @@ test('an old window-protocol hello shows an explicit version mismatch and grants
     });
     expect(legacyDelivered).toBe(false);
     expect(guestPost).toHaveBeenCalledTimes(0);
-    expect(container.textContent).toContain('older OpenChamber SDK');
-    expect(container.textContent).toContain('@openchamber/sdk 3.0.0');
+    expect(container.textContent).toContain('older OhPiChamber SDK');
+    expect(container.textContent).toContain('ohpichamber-sdk 1.0.0');
     expect(container.querySelector('iframe')).toBeNull();
   } finally {
     await act(async () => root.unmount());

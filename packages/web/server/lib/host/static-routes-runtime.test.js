@@ -80,9 +80,11 @@ describe('static routes runtime', () => {
     const response = await request(app).get('/sessions/abc').set('Accept', 'text/html');
 
     expect(response.status).toBe(200);
-    expect(response.text).toContain('OpenChamber is running in headless mode');
-    expect(response.text).toContain('Open it from the OpenChamber desktop or mobile app');
-    expect(response.text).toContain('openchamber connect-url --help');
+    expect(response.text).toContain('<title>OhPiChamber API-only mode</title>');
+    expect(response.text).toContain('aria-label="OhPiChamber logo"');
+    expect(response.text).toContain('M-32.817 -20.447');
+    expect(response.text).toContain('OhPiChamber is running in headless mode');
+    expect(response.text).toContain('Open it from the OhPiChamber desktop or mobile app');
     expect(response.text).toContain('Copy command');
   });
 
@@ -96,7 +98,7 @@ describe('static routes runtime', () => {
     expect(response.body).toEqual({
       ok: true,
       mode: 'api-only',
-      message: 'OpenChamber is running in API-only mode',
+      message: 'OhPiChamber is running in API-only mode',
     });
   });
 
@@ -108,8 +110,8 @@ describe('static routes runtime', () => {
     const auth = await request(app).get('/auth/session');
     const health = await request(app).get('/health');
 
-    expect(api.body).not.toEqual({ ok: true, mode: 'api-only', message: 'OpenChamber is running in API-only mode' });
-    expect(auth.body).not.toEqual({ ok: true, mode: 'api-only', message: 'OpenChamber is running in API-only mode' });
-    expect(health.body).not.toEqual({ ok: true, mode: 'api-only', message: 'OpenChamber is running in API-only mode' });
+    expect(api.body).not.toEqual({ ok: true, mode: 'api-only', message: 'OhPiChamber is running in API-only mode' });
+    expect(auth.body).not.toEqual({ ok: true, mode: 'api-only', message: 'OhPiChamber is running in API-only mode' });
+    expect(health.body).not.toEqual({ ok: true, mode: 'api-only', message: 'OhPiChamber is running in API-only mode' });
   });
 });

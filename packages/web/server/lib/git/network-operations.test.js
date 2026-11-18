@@ -1621,7 +1621,7 @@ process.exit(safe ? 0 : 1);
   });
 
   it('forwards only the resolved SSH passphrase and redacts it from failed transfers', async () => {
-    const passphrase = 'ssh-passphrase-canary';
+    const passphrase = 'ssh-passphrase-sentinel';
     const setupValue = setup({ transport: 'ssh', env: { OPENCHAMBER_GIT_SSH_PASSPHRASE: 'ambient-secret',
       OPENCHAMBER_GIT_SSH_EXECUTABLE: '/ambient/ssh',
       SSH_ASKPASS: '/ambient/helper' }, spawnResults: [{ code: 1, stderr: `Permission denied ${passphrase}` }] });

@@ -1,11 +1,11 @@
 ---
 title: Voice Mode
-description: Speak to OpenChamber and hear replies read aloud.
+description: Speak to OhPiChamber and hear replies read aloud.
 ---
 
 # Voice Mode
 
-Voice mode lets you dictate messages and have replies read back to you. Turn it on at **Settings → OpenChamber → Voice**.
+Voice mode lets you dictate messages and have replies read back to you. Turn it on at **Settings → OhPiChamber → Voice**.
 
 ## Reading replies aloud (text-to-speech)
 
@@ -22,7 +22,7 @@ Once on, you get a play button on messages to hear them read aloud.
 
 Pick how your speech is transcribed:
 
-- **Local** runs a speech model on the computer where OpenChamber runs. The model downloads the first time you dictate, and your audio stays on that computer.
+- **Local** runs a speech model on the computer where OhPiChamber runs. The model downloads the first time you dictate, and your audio stays on that computer.
 - **Server** sends your audio to an OpenAI-compatible transcription service. Enter its URL and, if it needs one, an API key. If its transcription endpoint is not `/audio/transcriptions`, set **Endpoint path**. Leaving it empty keeps the OpenAI default.
 
 Local models:
@@ -37,7 +37,7 @@ The Whisper and Qwen3-ASR models detect the language on their own, and on a shor
 
 Turn on **Fix misheard words** to have your Small Model (Settings → Sessions → Small Model) go over the text after you stop. It replaces words the speech model misheard and drops filler sounds such as "uh". The text then goes to the Small Model's provider and appears a second or two later. Without a Small Model the text is inserted as heard.
 
-API keys you enter for these services are kept by the OpenChamber server, not in your browser. Type a key and press Enter to save it; the field then shows that a key is saved, and the cross removes it.
+API keys you enter for these services are kept by the OhPiChamber server, not in your browser. Type a key and press Enter to save it; the field then shows that a key is saved, and the cross removes it.
 
 ## A note for phones
 

@@ -654,25 +654,25 @@ const postOutbound = async (
       signal: AbortSignal.timeout(timeoutMs + 5_000),
     });
   } catch (error) {
-    throw fail(`OpenChamber did not answer: ${error instanceof Error ? error.message : String(error)}`, 'HOST_UNAVAILABLE', 0);
+    throw fail(`OhPiChamber did not answer: ${error instanceof Error ? error.message : String(error)}`, 'HOST_UNAVAILABLE', 0);
   }
   let answer: OutboundAnswer;
   try {
     answer = Object(await response.json());
   } catch {
-    throw fail('OpenChamber answered with something other than JSON', 'HOST_UNAVAILABLE', response.status);
+    throw fail('OhPiChamber answered with something other than JSON', 'HOST_UNAVAILABLE', response.status);
   }
   if (!response.ok) {
     const message = answer.error?.message;
     const code = answer.error?.code;
     throw fail(
-      String(message) === message && message.length > 0 ? message : `OpenChamber refused the request (${response.status})`,
+      String(message) === message && message.length > 0 ? message : `OhPiChamber refused the request (${response.status})`,
       String(code) === code && code.length > 0 ? code : 'OUTBOUND_REFUSED',
       response.status,
     );
   }
   if (!Number.isSafeInteger(answer.status) || String(answer.body) !== answer.body) {
-    throw fail('OpenChamber relayed a malformed answer', 'HOST_UNAVAILABLE', response.status);
+    throw fail('OhPiChamber relayed a malformed answer', 'HOST_UNAVAILABLE', response.status);
   }
   const headers: SourceControlOutboundResponse['headers'] = {};
   for (const [name, text] of Object.entries(Object(answer.headers ?? {}))) {

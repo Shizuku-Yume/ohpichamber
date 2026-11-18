@@ -99,12 +99,6 @@ export const SETTINGS_NUMBER_UNIT_CLASS =
   'typography-meta shrink-0 text-muted-foreground tabular-nums';
 
 /**
- * Between titled groups inside one section's content: the section already owns
- * the page-level rhythm (`py-8`), so pages never wrap sections in this.
- */
-export const SETTINGS_SPACE_SECTION_CLASS = 'space-y-6';
-
-/**
  * Stack of field rows and mixed shapes (a field row next to a checkbox row,
  * a role editor next to OMP rows). Never the 6px checkbox stack.
  */

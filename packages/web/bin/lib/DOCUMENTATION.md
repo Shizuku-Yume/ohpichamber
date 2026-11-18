@@ -10,7 +10,7 @@ In the pre-M0 baseline, the CLI manages both OpenChamber Host Gateway services a
 
 - `../cli.js`
   - Owns process bootstrap, package/version lookup, command table wiring, signal handlers, top-level error handling, and legacy exports used by tests or external consumers.
-  - Injects runtime dependencies into command factories, such as `serveCommand`, `stopCommand`, package-manager loading, cancel cleanup, and foreground server state setters.
+  - Injects runtime dependencies into command factories, such as `serveCommand`, `stopCommand`, cancel cleanup, and foreground server state setters.
   - Should not grow command-specific behavior. If a new branch needs more than dispatch/wiring, move it here into a command or helper module instead.
 
 ## Command Modules
@@ -18,19 +18,19 @@ In the pre-M0 baseline, the CLI manages both OpenChamber Host Gateway services a
 Command modules implement user-facing commands and preserve output contracts across interactive, non-TTY, `--quiet`, and `--json` modes. They should use `../cli-output.js` for presentation helpers and keep safety validation in command logic, not prompts.
 
 - `commands-serve.js`
-  - Implements `openchamber serve`.
+  - Implements `ohpichamber serve`.
   - Owns port resolution, log rotation, PID/instance registry writes, foreground/background Host launch, startup summaries, and foreground shutdown behavior. It does not discover or require an OpenCode executable; the Host supervises the Bun Agent Service and canonical readiness is reported through `/api/agent/v1`.
 
 - `commands-lifecycle.js`
-  - Implements `openchamber stop` and `openchamber restart`.
+  - Implements `ohpichamber stop` and `ohpichamber restart`.
   - Owns lifecycle stop/restart semantics, desktop-managed port rejection, unmanaged instance shutdown attempts, PID/instance cleanup, and restart reuse of stored instance options.
 
 - `commands-status.js`
-  - Implements `openchamber status`.
+  - Implements `ohpichamber status`.
   - Formats discovered instances and tunnel readiness/status for human, quiet, and JSON output.
 
 - `commands-session.js`
-  - Implements `openchamber session create`, `send`, `fork`, `list`, `status`, and `messages`.
+  - Implements `ohpichamber session create`, `send`, `fork`, `list`, `status`, and `messages`.
   - Maps CLI options to shared control-service inputs and owns only human, quiet, and JSON presentation.
   - A `--wait` that ends because the session waits for the user exits non-zero, with a line on stderr outside `--json`.
   - Message projection matches Export Markdown semantics: only ordered `text` parts are exposed; tool, reasoning, file, and other parts are omitted.
@@ -47,30 +47,24 @@ Command modules implement user-facing commands and preserve output contracts acr
   - Prints configured project labels, ids, and directories for later control-plane calls.
 
 - `commands-logs.js`
-  - Implements `openchamber logs`.
+  - Implements `ohpichamber logs`.
   - Resolves log files, tails recent lines, and follows log output.
 
 - `commands-startup.js`
-  - Implements `openchamber startup`.
+  - Implements `ohpichamber startup`.
   - Handles startup subcommand dispatch and presentation around the lower-level startup service helpers.
+  - The standalone tarball carries the Agent runtime and a copy of the SDK under `resources/`; at startup `scripts/standalone-loader.mjs` links them into the package's `node_modules` (`ohpichamber-sdk`, `@openchamber/agent-contract`, `@openchamber/agent-service`). The daemon runs under the bundled Bun, which ignores `node:module` resolve hooks, so those links are the only resolution a packed install has.
+  - Installs a user-level OS service named for the product: systemd `ohpichamber.service`, launchd label `dev.ohpichamber.web`, and the Windows task/wrapper `OhPiChamber`. A unit written by an older release is not migrated.
 
 - `commands-connect-url.js`
-  - Implements `openchamber connect-url`.
+  - Implements `ohpichamber connect-url`.
   - Finds or starts a local instance and prints the browser/connect URL according to the selected output mode.
-  - Emits a **pairing v2** link (`openchamber://connect?v=2&p=<base64url>`): it creates a one-time pairing session in the shared store (`client-pairing-sessions.json`) and encodes the pairing id + secret + transport candidates. The client redeems the secret over whichever candidate connects first (`/api/client-auth/pairing/redeem`). No standalone token is embedded; the QR itself is the single-use credential.
+  - Emits a **pairing v2** link (`ohpichamber://connect?v=2&p=<base64url>`): it creates a one-time pairing session in the shared store (`client-pairing-sessions.json`) and encodes the pairing id + secret + transport candidates. The client redeems the secret over whichever candidate connects first (`/api/client-auth/pairing/redeem`). No standalone token is embedded; the QR itself is the single-use credential.
   - The default form advertises the resolved server URL as a direct (lan/tunnel) candidate and folds in a relay candidate when the host relay is enabled, so one link works on-LAN and off-network.
-  - `--relay` builds a relay-only pairing link (the sole candidate is the relay transport), for sharing with a device that is not on the host's network: no server URL, no auto-start. The relay endpoint follows `OPENCHAMBER_RELAY_URL` / the stored setting / the default, matching the running host; the host must be running with the relay enabled to serve the redeem over the tunnel.
-
-- `commands-update.js`
-  - Implements `openchamber update`.
-  - Loads the package-manager helper, performs update flow, and coordinates restart behavior after updates.
-  - Installs the exact version returned by the update check and verifies the globally installed version after the package manager exits; a zero exit status without the target version is a loud failure, not a success report (#3083).
-  - An instance that is the startup service is not stopped before the install: its process manager would start the old release again while the package manager replaces its files. The service keeps running through the install, then the manager restarts it: `systemctl --user restart` on Linux, `launchctl kickstart -k` on macOS, a stop of the task and its server with a detached helper issuing `schtasks /Run` on Windows (#2542). The command then waits for `/health` to report the target version and fails with a pointer to `openchamber startup enable` when it does not, which is what a unit written by an older release looks like (#5793).
-  - Which instance is the service comes from `findStartupServiceInstance` in `cli-startup.js`: the pid the manager reports (systemd's `MainPID`, launchd's job `PID`) settles it on Linux and macOS, and a missing pid there means the service is not running, so a foreground server on those platforms is a plain CLI copy. On Windows an instance is the service only when its pid is a child of the wrapper the running task started. A task that is missing, stopped or disabled owns nothing, so a manual foreground server stays a plain CLI copy, and a running task is found beside other foreground servers. Without this, an update on macOS or Windows stopped the service and started a detached copy beside it while launchd or the task brought the old one back (#5793's Linux fix never reached those platforms).
-  - The Windows lookup can fail: PowerShell errors, or the task runs and no instance matches it, an empty discovery included, since discovery skips a server that does not answer its probe. The update then stops before it stops any instance or installs anything, and points at `openchamber startup disable`, because a wrong guess either kills the service or leaves it on the old release.
+  - `--relay` adds the relay transport candidate when sharing with a device that is not on the host's network. There is no built-in default relay URL: the endpoint follows the machine policy file / `OPENCHAMBER_RELAY_URL` / `settings.privateRelay.relayUrl`, matching the running host. With no relay URL configured, `--relay` fails fast with a usage error before starting a server, and plain links omit the relay candidate even when `privateRelay.enabled` is true.
 
 - `commands-tunnel.js`
-  - Implements `openchamber tunnel` and its subcommands: `profile`, `providers`, `ready`, `doctor`, `status`, `start`, `stop`, and `completion`.
+  - Implements `ohpichamber tunnel` and its subcommands: `profile`, `providers`, `ready`, `doctor`, `status`, `start`, `stop`, and `completion`.
   - Owns tunnel-specific command flow, interactive prompt decisions, managed-local/managed-remote startup, QR display rules, tunnel start/stop API calls, and tunnel profile command handling.
   - Receives `serveCommand` and `stopCommand` by dependency injection. Do not reach back into `cli.js` command globals from this module.
 
@@ -135,9 +129,8 @@ These modules hold reusable, non-presentational logic for commands.
 
 - `cli-startup.js`
   - Native startup service detection, install/uninstall/status helpers, and platform-specific startup command execution.
-  - The service runs the CLI by its resolved path. A pnpm global install resolves into a versioned `.pnpm` store directory that an update leaves behind, so the entrypoint is mapped back to the stable `node_modules/@openchamber/web` link when it exists.
+  - The service runs the CLI by its resolved path. A pnpm global install resolves into a versioned `.pnpm` store directory that a later install leaves behind, so the entrypoint is mapped back to the stable `node_modules/ohpichamber` link when it exists.
   - pnpm 11 and later install every global update into a new `global/v11/<dir>` and delete the old one; the link `global/v11/<hash>` beside it moves to each new directory, and pnpm's shim starts the CLI through it. When the CLI was started through that link, the service keeps the unresolved path, so a pnpm upgrade does not leave the unit pointing at a deleted directory (#5727).
-  - The Windows restart in `restartWindowsStartupTask` starts a detached hidden PowerShell helper, runs `schtasks /End`, asks the server to shut down, waits up to about 10 seconds for the server to exit and stops it by pid if it stays. The helper issues `/Run` once the server is gone and the task has stopped, and gives up after 30 seconds. `/End` covers the program the task started, which is the PowerShell wrapper, so the server can outlive it and keep the port. The helper owns `/Run` because an update run from a terminal of this server dies with the shutdown, and nothing else would start the task; `/End` runs first because after the server exits it would end the new run. A failed `/End` with the server still up, or a server that does not exit, ends the update with the commands to finish by hand. A `/Run` that fails shows up as the version wait in `commands-update.js` failing.
   - On Linux, `startup enable` restarts the unit after rewriting it. `enable --now` leaves a running service alone, so it kept the old unit and release while reporting `service active` (#5793). macOS already reloads the agent with `kickstart -k`.
   - The macOS LaunchAgent leaves `ProcessType` unset so launchd does not force the server into background-tier scheduling. Re-running `startup enable` replaces an existing plist.
   - The environment snapshot drops the variables a running OpenChamber put into the enabling shell, read from the `OPENCHAMBER_INJECTED_ENV` record (`server/lib/injected-env.js`), so a service enabled from the desktop app's terminal or an agent's shell does not inherit that instance's runtime flags or UI password (#4604). The user's own exports still carry over. `cli-args.js` applies the same record to the `OPENCHAMBER_UI_PASSWORD` default.

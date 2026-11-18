@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
-import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_SCRIPT, GUEST_SCROLLBAR_CSS, GUEST_SCROLLBAR_SCRIPT } from 'ohpichamber-sdk';
 import { injectGuestDocumentStyles } from './html-styles.js';
 import { registerGuestRoutes } from './routes.js';
 import { setCapabilityGrants, writeExtensionStore } from './persist.js';

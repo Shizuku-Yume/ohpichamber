@@ -297,11 +297,11 @@ export const createOpenChamberControlService = (dependencies) => {
 
  const wait = (duration, signal) => {
   if (!signal) return sleep(duration);
-  if (signal.aborted) return Promise.reject(new OpenChamberControlError('OpenChamber action was cancelled', 499));
+  if (signal.aborted) return Promise.reject(new OpenChamberControlError('OhPiChamber action was cancelled', 499));
   return new Promise((resolve, reject) => {
    const onAbort = () => {
     signal.removeEventListener('abort', onAbort);
-    reject(new OpenChamberControlError('OpenChamber action was cancelled', 499));
+    reject(new OpenChamberControlError('OhPiChamber action was cancelled', 499));
    };
    signal.addEventListener('abort', onAbort, { once: true });
    sleep(duration).then(() => {
@@ -555,7 +555,7 @@ export const createOpenChamberControlService = (dependencies) => {
   const deadline = now() + timeoutMs;
   let observedActivity = false;
   while (true) {
-   if (signal?.aborted) throw new OpenChamberControlError('OpenChamber action was cancelled', 499);
+   if (signal?.aborted) throw new OpenChamberControlError('OhPiChamber action was cancelled', 499);
    const status = await sessionStatus(sessionID);
    if (status.type === 'busy') {
     observedActivity = true;
@@ -911,7 +911,7 @@ export const createOpenChamberControlService = (dependencies) => {
  const execute = async (action, input = {}, contextDirectory, options = {}) => {
   try {
    if (!CONTROL_ACTIONS.has(action)) {
-    throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || "missing"}`, 400);
+    throw new OpenChamberControlError(`Unsupported OhPiChamber action: ${action || "missing"}`, 400);
    }
    if (OPENCHAMBER_KNOWLEDGE_ACTIONS.includes(action)) {
     return await knowledgeActions.execute(action, input, contextDirectory, options.contextSessionId);
@@ -1094,9 +1094,9 @@ export const createOpenChamberControlService = (dependencies) => {
      return { sessionId: sessionID, role, sessionStatus: currentStatus, messages: await sessionMessages(sessionID, role, limit) };
     }
    }
-   throw new OpenChamberControlError(`Unsupported OpenChamber action: ${action || 'missing'}`, 400);
+   throw new OpenChamberControlError(`Unsupported OhPiChamber action: ${action || 'missing'}`, 400);
   } catch (error) {
-   throw asControlError(error, `Failed to execute ${action || 'OpenChamber action'}`);
+   throw asControlError(error, `Failed to execute ${action || 'OhPiChamber action'}`);
   }
  };
  const featurePolicy = async (toolName, action) => {

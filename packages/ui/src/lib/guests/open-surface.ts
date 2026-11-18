@@ -1,4 +1,4 @@
-import type { HostRequestErrorCode } from '@openchamber/sdk';
+import type { HostRequestErrorCode } from 'ohpichamber-sdk';
 
 import type { ContextPanelMode } from '@/lib/surfaces/modes';
 import { shownContextModes } from '@/lib/workspace/zones';
@@ -28,7 +28,7 @@ const isShown = (directory: string, mode: ContextPanelMode): boolean => {
  * the rail toggles it closed, the SDK call only ever opens.
  */
 export const openGuestSurface = ({ mode, directory, supported }: OpenGuestSurfaceOptions): GuestOpenSurfaceResult => {
-  if (!supported) return { ok: false, code: 'UNSUPPORTED', message: 'This OpenChamber surface has no side panel.' };
+  if (!supported) return { ok: false, code: 'UNSUPPORTED', message: 'This OhPiChamber surface has no side panel.' };
   // While workflows are not shown it answers as for any surface it does not have.
   if (mode === 'workflows' && !selectWorkflowsShown(useUIStore.getState())) {
     return { ok: false, code: 'UNSUPPORTED', message: 'That surface cannot open here.' };

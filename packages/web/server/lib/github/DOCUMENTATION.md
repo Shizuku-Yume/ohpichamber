@@ -81,7 +81,7 @@ GitHub Enterprise authenticates per instance, the same model GitLab uses: each i
 - github.com's own gh switch is unchanged: its switch lives in Settings (`setGhCliActive` / `isGhCliActive`, stored in `settings.json`), and its `ghCliDisabled` kill switch turns github.com's CLI off. Each enterprise host's own switch and `cliDisabled` live with that instance, so turning one host off never takes another with it.
 ## Auth storage and config
 
-- Auth storage: `~/.config/openchamber/github-auth.json` — github.com's device-flow accounts. A GitHub Enterprise host's personal access tokens and its gh switch live in `source-control-auth.json`, the server token store GitLab uses, one entry per host; each instance keeps its own `activeCredentialId`, credentials, `cliDisabled`, and `cliActive`. github.com's gh switch keeps living in `settings.json`; a non-github.com host's switch lives with its instance there. Versions 1 and 2 flat files migrate into the `github.com` instance on first write.
+- Auth storage: `~/.config/ohpichamber/github-auth.json` — github.com's device-flow accounts. A GitHub Enterprise host's personal access tokens and its gh switch live in `source-control-auth.json`, the server token store GitLab uses, one entry per host; each instance keeps its own `activeCredentialId`, credentials, `cliDisabled`, and `cliActive`. github.com's gh switch keeps living in `settings.json`; a non-github.com host's switch lives with its instance there. Versions 1 and 2 flat files migrate into the `github.com` instance on first write.
 - Writes are atomic and file mode is `0o600`.
 - Client ID resolution order: `OPENCHAMBER_GITHUB_CLIENT_ID` -> `settings.json` -> default.
 - Scope resolution order: `OPENCHAMBER_GITHUB_SCOPES` -> `settings.json` -> default.

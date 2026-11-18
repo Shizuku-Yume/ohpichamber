@@ -123,12 +123,12 @@
     },
     "packages/electron": {
       "name": "@openchamber/electron",
-      "version": "3.0.0",
+      "version": "1.0.0",
       "dependencies": {
-        "@openchamber/web": "workspace:*",
         "electron-context-menu": "^4.1.2",
         "electron-log": "^5.4.3",
         "electron-updater": "^6.8.3",
+        "ohpichamber": "workspace:*",
         "zod": "^4.3.6",
       },
       "devDependencies": {
@@ -140,7 +140,7 @@
     },
     "packages/mobile": {
       "name": "@openchamber/mobile",
-      "version": "1.13.2",
+      "version": "1.0.0",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@capacitor-mlkit/barcode-scanning": "^8.1.0",
@@ -160,8 +160,8 @@
       },
     },
     "packages/sdk": {
-      "name": "@openchamber/sdk",
-      "version": "3.0.0",
+      "name": "ohpichamber-sdk",
+      "version": "1.0.0",
       "bin": {
         "openchamber-guest-bundle": "./scripts/bundle-guest.ts",
         "openchamber-guest-check": "./scripts/check-guest.ts",
@@ -174,110 +174,110 @@
       "name": "@openchamber/example-agent-desk",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/browser-provider-stub": {
       "name": "@openchamber/example-browser-provider-stub",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/checklist-editor": {
       "name": "@openchamber/example-checklist-editor",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/config-editor": {
       "name": "@openchamber/example-config-editor",
-      "version": "1.1.0",
+      "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/git-graph-status": {
       "name": "@openchamber/example-git-graph-status",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/github-token": {
       "name": "@openchamber/example-github-token",
-      "version": "1.1.0",
+      "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/hello-kit": {
       "name": "@openchamber/example-hello-kit",
-      "version": "1.1.0",
+      "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/notification-webhook": {
       "name": "@openchamber/example-notification-webhook",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/quota-provider": {
       "name": "@openchamber/example-quota-provider",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/service-echo": {
       "name": "@openchamber/example-service-echo",
-      "version": "1.1.0",
+      "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/session-events-log": {
       "name": "@openchamber/example-session-events-log",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/source-control-provider": {
       "name": "@openchamber/example-source-control-provider",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/tasks-demo": {
       "name": "@openchamber/example-tasks-demo",
-      "version": "1.1.0",
+      "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/tools-only": {
       "name": "@openchamber/example-tools-only",
-      "version": "1.1.0",
+      "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/sdk/examples/tracker-provider": {
       "name": "@openchamber/example-tracker-provider",
       "version": "1.0.0",
       "dependencies": {
-        "@openchamber/sdk": "workspace:*",
+        "ohpichamber-sdk": "workspace:*",
       },
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "3.0.0",
+      "version": "1.0.0",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@base-ui/react": "^1.4.0",
@@ -315,7 +315,6 @@
         "@legendapp/list": "3.7.1",
         "@lezer/highlight": "^1.2.3",
         "@openchamber/agent-contract": "workspace:*",
-        "@openchamber/sdk": "workspace:*",
         "@openuidev/lang-core": "1.0.2",
         "@pierre/diffs": "1.6.2",
         "@pierre/highlights": "0.2.0",
@@ -344,6 +343,7 @@
         "katex": "^0.19.0",
         "motion": "^12.23.24",
         "next-themes": "^0.4.6",
+        "ohpichamber-sdk": "workspace:*",
         "pdfjs-dist": "6.4.299",
         "qrcode": "^1.5.4",
         "react": "^19.1.1",
@@ -390,10 +390,10 @@
       },
     },
     "packages/web": {
-      "name": "@openchamber/web",
-      "version": "3.0.0",
+      "name": "ohpichamber",
+      "version": "1.0.0",
       "bin": {
-        "openchamber": "./bin/cli.js",
+        "ohpichamber": "./bin/cli.js",
       },
       "dependencies": {
         "7zip-bin": "5.2.0",
@@ -402,7 +402,6 @@
         "@octokit/rest": "^22.0.1",
         "@openchamber/agent-contract": "workspace:*",
         "@openchamber/agent-service": "workspace:*",
-        "@openchamber/sdk": "workspace:*",
         "@simplewebauthn/server": "13.3.3",
         "bun-pty": "0.6.0",
         "compression": "^1.8.1",
@@ -413,6 +412,7 @@
         "jsonc-parser": "^3.3.1",
         "luxon": "^3.5.0",
         "node-pty": "1.2.0-beta.18",
+        "ohpichamber-sdk": "workspace:*",
         "openai": "^7.18.0",
         "qrcode-terminal": "^0.12.0",
         "reflect-metadata": "^0.2.2",
@@ -1588,11 +1588,7 @@
 
     "@openchamber/mobile": ["@openchamber/mobile@workspace:packages/mobile"],
 
-    "@openchamber/sdk": ["@openchamber/sdk@workspace:packages/sdk"],
-
     "@openchamber/ui": ["@openchamber/ui@workspace:packages/ui"],
-
-    "@openchamber/web": ["@openchamber/web@workspace:packages/web"],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.1", "", {}, "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="],
 
@@ -3133,6 +3129,10 @@
     "object.assign": ["object.assign@4.1.7", "", { "dependencies": { "call-bind": "^1.0.8", "call-bound": "^1.0.3", "define-properties": "^1.2.1", "es-object-atoms": "^1.0.0", "has-symbols": "^1.1.0", "object-keys": "^1.1.1" } }, "sha512-nK28WOo+QIjBkDduTINE4JkF/UJJKyf2EJxvJKfblDpyg0Q+pkOHNTL0Qwy6NP6FhE/EnzV73BxxqcJaXY9anw=="],
 
     "obug": ["obug@2.2.1", "", {}, "sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q=="],
+
+    "ohpichamber": ["ohpichamber@workspace:packages/web"],
+
+    "ohpichamber-sdk": ["ohpichamber-sdk@workspace:packages/sdk"],
 
     "on-finished": ["on-finished@2.4.2", "", { "dependencies": { "ee-first": "1.1.1" } }, "sha512-ATWUv387i+nLD49EiDoOft5scf32Vsdz3ktrQJG9bi7jRFmaXTssvyvj1EmeKVVgvesbqUtvQQvaS2TpTukAZQ=="],
 

@@ -561,7 +561,7 @@ describe('core-routes', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body).toMatchObject({
       ok: true,
-      server: { label: 'OpenChamber', url: 'http://runtime.example', fingerprint: 'ABCD-1234' },
+      server: { label: 'OhPiChamber', url: 'http://runtime.example', fingerprint: 'ABCD-1234' },
       client: { id: 'client-1', authMethod: 'pairing' },
       clientToken: 'oc_client_token',
     });

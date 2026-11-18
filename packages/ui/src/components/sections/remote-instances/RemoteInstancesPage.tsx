@@ -648,9 +648,9 @@ export const RemoteInstancesPage: React.FC = () => {
     const redeemBody = JSON.stringify({
       pairingId: payload.pairingId,
       secret: payload.secret,
-      clientLabel: payload.label || 'OpenChamber Desktop',
+      clientLabel: payload.label || 'OhPiChamber Desktop',
       clientKind: 'desktop',
-      deviceName: 'OpenChamber Desktop',
+      deviceName: 'OhPiChamber Desktop',
       devicePlatform: desktopPlatformName(),
       ...(installId ? { dedupeKey: `desktop:${installId}` } : {}),
     });
@@ -1002,7 +1002,7 @@ export const RemoteInstancesPage: React.FC = () => {
     } catch {
       // keep null
     }
-    return { localUrl, lanUrl, relayAvailable: true };
+    return { localUrl, lanUrl, relayAvailable: false };
   }, [clientAuth]);
 
   const openAddDevice = React.useCallback(async () => {
@@ -1036,7 +1036,7 @@ export const RemoteInstancesPage: React.FC = () => {
         includeRelay = false;
       } else if (addDeviceTransport === 'lan') {
         serverUrl = transportOptions.lanUrl ?? undefined;
-        includeRelay = addDeviceFallback;
+        includeRelay = addDeviceFallback && Boolean(transportOptions.relayAvailable);
       } else if (addDeviceFallback && transportOptions.lanUrl) {
         // Relay, but prefer the local network when available: carry both.
         serverUrl = transportOptions.lanUrl;
@@ -1939,7 +1939,7 @@ export const RemoteInstancesPage: React.FC = () => {
                       );
                     })}
                   </div>
-                  {addDeviceTransport === 'lan' ? (
+                  {addDeviceTransport === 'lan' && transportOptions?.relayAvailable ? (
                     <label className="flex w-fit cursor-pointer items-center gap-2 pt-1">
                       <Checkbox checked={addDeviceFallback} onChange={setAddDeviceFallback} ariaLabel={t('settings.remoteInstances.clientAuth.addDevice.fallback.relay')} />
                       <span className="typography-meta text-muted-foreground">{t('settings.remoteInstances.clientAuth.addDevice.fallback.relay')}</span>

@@ -13,8 +13,8 @@ import {
   serviceProvides,
   trackerProviderIdOf,
   trackerProviderTimeoutMs,
-} from '@openchamber/sdk';
-import { trackerProviderSchemasV1 as schemas } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { trackerProviderSchemasV1 as schemas } from 'ohpichamber-sdk/schemas';
 
 import { GuestOAuthError } from '../guests/oauth.js';
 import { proxyGuestServiceRequest } from '../guests/service.js';
@@ -214,7 +214,7 @@ export function createExtensionTracker({
           code, status: 503, kind: NOT_REACHED_CODES.has(code) ? 'unavailable' : 'provider-error',
         });
       }
-      const malformed = (detail) => callError(`${label} answered something OpenChamber cannot use: ${detail}`, {
+      const malformed = (detail) => callError(`${label} answered something OhPiChamber cannot use: ${detail}`, {
         status: 502, code: 'MALFORMED_PROVIDER_RESPONSE', kind: 'malformed',
       });
       if (proxied.status !== 200) throw malformed(`HTTP ${proxied.status}`);
@@ -411,7 +411,7 @@ export function createExtensionTracker({
   const start = async ({ callbackOrigin, instance } = {}) => {
     requireLive();
     if (!oauthAuth) throw routeError(404, 'UNSUPPORTED', `${label} does not sign in through the browser`);
-    if (!callbackOrigin) throw routeError(400, 'ORIGIN_REQUIRED', 'The sign-in needs the address this OpenChamber is opened at.');
+    if (!callbackOrigin) throw routeError(400, 'ORIGIN_REQUIRED', 'The sign-in needs the address this OhPiChamber is opened at.');
     const stored = await accounts.read(id);
     requireRoom(stored);
     const origin = instanceFor(stored, instance);

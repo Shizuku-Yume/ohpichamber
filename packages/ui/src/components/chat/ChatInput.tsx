@@ -31,7 +31,7 @@ import * as sessionActions from '@/sync/session-actions';
 // Guest surfaces load on demand: mobile never mounts them, and the composer
 // must not pay for the guest bridge before an extension is installed.
 const GuestAttachDialog = React.lazy(() => import('@/components/layout/GuestAttachDialog').then((module) => ({ default: module.GuestAttachDialog })));
-import type { AttachIssueRequest } from '@openchamber/sdk';
+import type { AttachIssueRequest } from 'ohpichamber-sdk';
 import { getInlineCommentDraftKey, useInlineCommentDraftStore, type InlineCommentDraft, type InlineCommentDraftTarget } from '@/stores/useInlineCommentDraftStore';
 import { selectSnippetsForDirectory, useSnippetsStore } from '@/stores/useSnippetsStore';
 import { expandNativeFileResource, expandWorkspaceSkillNames } from '@/api/fileResourceExpansion';

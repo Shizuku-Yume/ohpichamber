@@ -170,6 +170,32 @@ describe('TrackerSettings', () => {
     expect(buttonLabels()).toContain('Disconnect');
   });
 
+  test('shows the broker setting instead of a Connect button when the server cannot sign in', async () => {
+    status = {
+      connected: false,
+      signIn: { reason: 'broker-url-missing', setting: 'OPENCHAMBER_LINEAR_BROKER_URL', settingsKey: 'linearBrokerUrl' },
+    };
+    await mount(linearLikeTrackerDescriptor());
+
+    expect(buttonLabels()).not.toContain('Connect');
+    expect(container.textContent).toContain('OAuth broker');
+    expect(container.textContent).toContain('OPENCHAMBER_LINEAR_BROKER_URL');
+    expect(container.textContent).toContain('linearBrokerUrl');
+  });
+
+  test('keeps a stored workspace usable when the server cannot start a new sign-in', async () => {
+    status = {
+      ...connectedStatus,
+      signIn: { reason: 'broker-url-missing', setting: 'OPENCHAMBER_LINEAR_BROKER_URL', settingsKey: 'linearBrokerUrl' },
+    };
+    await mount(linearLikeTrackerDescriptor());
+
+    // Only the sign-in affordance is gone; the connected account and its actions stay.
+    expect(container.textContent).toContain('Acme Org');
+    expect(buttonLabels()).not.toContain('Connect');
+    expect(buttonLabels()).toContain('Disconnect');
+  });
+
   test('keeps waiting for the browser sign-in when the opening status read failed', async () => {
     statusFailures = 1;
     await mount(linearLikeTrackerDescriptor());
@@ -237,7 +263,7 @@ describe('TrackerSettings', () => {
     expect(container.textContent).toContain('Acme Tickets');
     expect(container.querySelector('[data-settings-item="integrations.acme-tickets"]')).not.toBeNull();
     expect(buttonLabels()).not.toContain('Connect');
-    expect(container.textContent).toContain('Update OpenChamber');
+    expect(container.textContent).toContain('Update OhPiChamber');
   });
 
   const type = async (input: HTMLInputElement, value: string) => {
@@ -272,7 +298,7 @@ describe('TrackerSettings', () => {
     expect(container.textContent).toContain('Client ID');
     expect(container.textContent).not.toContain('The token needs:');
     expect(inputs().some((input) => input.readOnly && input.value === 'http://localhost/api/tracker/ext-youtrack/oauth/callback')).toBe(true);
-    expect(container.textContent).not.toContain('Update OpenChamber');
+    expect(container.textContent).not.toContain('Update OhPiChamber');
 
     await click('API token');
     expect(container.textContent).not.toContain('Client ID');

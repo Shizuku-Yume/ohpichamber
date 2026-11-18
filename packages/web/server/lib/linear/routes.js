@@ -1,5 +1,6 @@
 import express from 'express';
 import { disconnectCurrentLinearWorkspace, readLinearAuthStatus, storeLinearAuthorization } from './auth-status.js';
+import { LINEAR_SIGN_IN_SETTING, LINEAR_SIGN_IN_SETTINGS_KEY } from './auth.js';
 import { readTrimmedString } from './parse.js';
 
 const PENDING_JSON_LIMIT = '16kb';
@@ -30,7 +31,7 @@ function renderLinearOAuthCallbackPage({ title, message, desktopReturn }) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${escapeHtml(title)} — OpenChamber</title>
+<title>${escapeHtml(title)} — OhPiChamber</title>
 <style>
   :root { color-scheme: light dark; }
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -47,8 +48,8 @@ function renderLinearOAuthCallbackPage({ title, message, desktopReturn }) {
 <main>
 <h1>${escapeHtml(title)}</h1>
 <p>${escapeHtml(message)}</p>
-${desktopReturn ? `<a class="return" href="openchamber://focus/linear-auth">Return to OpenChamber</a>
-<script>window.location.href = 'openchamber://focus/linear-auth';</script>` : ''}
+${desktopReturn ? `<a class="return" href="ohpichamber://focus/linear-auth">Return to OhPiChamber</a>
+<script>window.location.href = 'ohpichamber://focus/linear-auth';</script>` : ''}
 </main>
 </body>
 </html>`;
@@ -91,7 +92,7 @@ export function registerLinearRoutes(app) {
 
       return finish(200, {
         title: 'Authorization Complete',
-        message: 'You can close this tab and return to OpenChamber.',
+        message: 'You can close this tab and return to OhPiChamber.',
         desktopReturn: result.origin === 'desktop',
       });
     } catch (error) {
@@ -101,7 +102,7 @@ export function registerLinearRoutes(app) {
         : 502;
       return finish(status, {
         title: 'Authorization Failed',
-        message: error instanceof Error ? error.message : 'Linear authorization failed. Return to OpenChamber and click Connect again.',
+        message: error instanceof Error ? error.message : 'Linear authorization failed. Return to OhPiChamber and click Connect again.',
         desktopReturn: error?.origin === 'desktop',
       });
     }
@@ -109,7 +110,19 @@ export function registerLinearRoutes(app) {
 
   app.get('/api/linear/auth/status', async (_req, res) => {
     try {
-      return res.json(await readLinearAuthStatus(await getLinearLibraries()));
+      const libraries = await getLinearLibraries();
+      const status = await readLinearAuthStatus(libraries);
+      // A server with no broker configured cannot start Linear's sign-in; say so
+      // rather than letting the UI draw a button that fails on click.
+      if (libraries.isLinearSignInConfigured()) return res.json(status);
+      return res.json({
+        ...status,
+        signIn: {
+          reason: 'broker-url-missing',
+          setting: LINEAR_SIGN_IN_SETTING,
+          settingsKey: LINEAR_SIGN_IN_SETTINGS_KEY,
+        },
+      });
     } catch (error) {
       console.error('Failed to get Linear auth status:', error);
       return res.status(500).json({ error: error.message || 'Failed to get Linear auth status' });
@@ -123,9 +136,14 @@ export function registerLinearRoutes(app) {
       const payload = await startAuthorization({ origin });
       return res.json(payload);
     } catch (error) {
-      const status = error?.code === 'LINEAR_CLIENT_ID_MISSING' ? 400 : 500;
-      console.error('Failed to start Linear authorization:', error);
-      return res.status(status).json({ error: error.message || 'Failed to start Linear authorization' });
+      // A user-fixable refusal (no client id, no broker) is 400 with the code that
+      // names the setting; anything else is this server's own failure.
+      const userFixable = error?.code === 'LINEAR_CLIENT_ID_MISSING' || error?.code === 'LINEAR_BROKER_NOT_CONFIGURED';
+      if (!userFixable) console.error('Failed to start Linear authorization:', error);
+      return res.status(userFixable ? 400 : 500).json({
+        error: error.message || 'Failed to start Linear authorization',
+        ...(userFixable ? { code: error.code } : {}),
+      });
     }
   });
 

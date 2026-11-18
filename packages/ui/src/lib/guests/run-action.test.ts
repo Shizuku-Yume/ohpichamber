@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import type { GuestMessageItem } from '@openchamber/sdk';
+import type { GuestMessageItem } from 'ohpichamber-sdk';
 import { toast } from 'sonner';
 import { Window } from 'happy-dom';
 

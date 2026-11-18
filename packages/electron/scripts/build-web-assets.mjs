@@ -78,10 +78,10 @@ const copyDir = async (src, dst) => {
 
 const bunExe = resolveBun();
 
-// The bundled server imports @openchamber/sdk from its built `dist`, which
+// The bundled server imports ohpichamber-sdk from its built `dist`, which
 // nothing else in packaging rebuilds: a stale one makes the app quit at start
 // once the server needs an export added since the last SDK build.
-console.log('[electron] building @openchamber/sdk dist...');
+console.log('[electron] building ohpichamber-sdk dist...');
 run(bunExe, ['run', 'build'], sdkDir);
 
 console.log('[electron] building web UI dist...');

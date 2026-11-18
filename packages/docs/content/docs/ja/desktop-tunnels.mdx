@@ -5,11 +5,11 @@ description: デスクトップアプリから Cloudflare、Ngrok、Tailscale �
 
 # デスクトップトンネル
 
-デスクトップアプリでは **Settings → OpenChamber → Tunnel** からトンネルを作成できます。この方法では CLI から OpenChamber を起動する必要はありません。
+デスクトップアプリでは **Settings → OhPiChamber → Tunnel** からトンネルを作成できます。この方法では CLI から OhPiChamber を起動する必要はありません。
 
 ## プロバイダーをインストールする
 
-OpenChamber はあなたのマシン上でプロバイダー CLI を起動します。使いたいプロバイダーを先にインストールしてください。
+OhPiChamber はあなたのマシン上でプロバイダー CLI を起動します。使いたいプロバイダーを先にインストールしてください。
 
 ```bash
 brew install cloudflared
@@ -26,7 +26,7 @@ Tailscale を使う場合は、[Tailscale アプリ](https://tailscale.com/downl
 
 ## アプリから開始する
 
-1. **Settings → OpenChamber → Tunnel** を開きます。
+1. **Settings → OhPiChamber → Tunnel** を開きます。
 2. **Cloudflare**、**Ngrok**、**Tailscale** のいずれかを選びます。
 3. トンネルの種類を選び、**Tunnel を起動** を選択します。
 4. 生成された QR コードをスマートフォンでスキャンします。
@@ -35,9 +35,9 @@ Tailscale を使う場合は、[Tailscale アプリ](https://tailscale.com/downl
 
 ## アクセス保護
 
-プロバイダー URL 自体が公開されていても、OpenChamber は独自の接続トークンでアクセスを保護します。生成される接続リンクには一度きりのトークンが含まれ、TTL があり、新しいリンクを生成するかトンネルを停止/再起動すると、未使用の古いリンクは無効化されます。
+プロバイダー URL 自体が公開されていても、OhPiChamber は独自の接続トークンでアクセスを保護します。生成される接続リンクには一度きりのトークンが含まれ、TTL があり、新しいリンクを生成するかトンネルを停止/再起動すると、未使用の古いリンクは無効化されます。
 
 ## 関連
 
 - [トンネル](/tunnels/) — CLI でのトンネル利用と管理対象 Cloudflare モード
-- [PWA とモバイル](/mobile/) — スマートフォンから OpenChamber にアクセスする
+- [PWA とモバイル](/mobile/) — スマートフォンから OhPiChamber にアクセスする

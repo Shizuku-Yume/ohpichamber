@@ -35,7 +35,7 @@ AGENT_PID=$(ps -axo pid=,ppid=,command= | awk -v app="$APP_PID" '$2 == app && (/
 # The main process also listens on the debugging port; the server port is the
 # one the desktop settings name.
 OWNER_HOME=$(eval echo "~$OWNER")
-SERVER_PORT=$(sed -n 's/.*"desktopLocalPort": *\([0-9]*\).*/\1/p' "$OWNER_HOME/.config/openchamber/settings.json" 2>/dev/null | head -n 1)
+SERVER_PORT=$(sed -n 's/.*"desktopLocalPort": *\([0-9]*\).*/\1/p' "$OWNER_HOME/.config/ohpichamber/settings.json" 2>/dev/null | head -n 1)
 AGENT_PORT=$(lsof -nP -a -p "$AGENT_PID" -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {sub(/.*:/, "", $9); print $9; exit}')
 if [ -z "$SERVER_PORT" ] || [ -z "$AGENT_PORT" ]; then
   echo "Could not find the server port ($SERVER_PORT) or the agent worker port ($AGENT_PORT)" >&2

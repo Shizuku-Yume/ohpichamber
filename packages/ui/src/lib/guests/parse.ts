@@ -30,7 +30,7 @@ import {
   isGuestProviderLogoPath,
   isGuestRequestPath,
   isOpenCodeProviderId,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 import { z } from 'zod';
 
 import type { GuestCatalog, InstalledGuest } from './types.ts';

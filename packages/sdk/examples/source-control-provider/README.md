@@ -1,14 +1,14 @@
 # Source-control provider: Teahouse
 
-An extension that adds a Git host to OpenChamber, next to GitHub, GitLab, Gitea
+An extension that adds a Git host to OhPiChamber, next to GitHub, GitLab, Gitea
 and Gerrit. It declares `contributes.service.provides: ["source-control"]` and
 describes the host in `contributes.sourceControl`: its name, its terms, which
-instances it accepts, what it can do, and how its token travels. OpenChamber
+instances it accepts, what it can do, and how its token travels. OhPiChamber
 calls the host `ext-source-control-provider` and draws its Settings card, its
 board and its badges from that description, without starting the service.
 
 The service (`service/main.ts`, built to `service/main.js`) answers each call
-OpenChamber forwards at `POST /source-control` by talking to a subset of
+OhPiChamber forwards at `POST /source-control` by talking to a subset of
 Gitea's REST v1. Pointing it at a real Gitea 1.21 or newer works for that
 subset: pull requests (list, read, create, edit, merge), issues (list, read),
 comments, close and reopen, branches, the live state of tracked items, and a
@@ -19,7 +19,7 @@ another remote only when that remote is a fork of it on the same server, and
 the service names the fork's branch `owner:branch` as Gitea expects. A branch
 whose pull request was merged or closed shows it instead of offering a new one.
 Labels, reviewers, reviews, drafts and CI are off in the manifest, so
-OpenChamber never asks for them.
+OhPiChamber never asks for them.
 
 The diff is Gitea's `/pulls/{n}.diff` as it comes; a pull request's context
 with `includeDiff` splits it per file next to `/pulls/{n}/files`, the same way
@@ -27,21 +27,20 @@ the built-in Gitea host does. A file's old side is read at the pull request's
 `merge_base` and its new side at the head commit, both from the target
 repository through `/raw/{path}?ref=`.
 
-## What stays in OpenChamber
+## What stays in OhPiChamber
 
-The service never sees a token. OpenChamber keeps the accounts, checks a new
+The service never sees a token. OhPiChamber keeps the accounts, checks a new
 token by calling `auth.verify`, and hands the service a handle for each call.
 The service sends forge requests through `createSourceControlForge`, which
-posts them to OpenChamber's callback listener (`OPENCHAMBER_HOST_CALLBACK_URL`);
-OpenChamber keeps them on the instance's origin, adds the token, and relays the
+posts them to OhPiChamber's callback listener (`OPENCHAMBER_HOST_CALLBACK_URL`);
+OhPiChamber keeps them on the instance's origin, adds the token, and relays the
 answer. The handle stops working when the call ends.
 
-OpenChamber also owns the parts that must not change between versions of an
+OhPiChamber also owns the parts that must not change between versions of an
 extension: the mutation kinds, the digest that decides whether a retried write
 is a replay, the idempotency records, the status cache and the Git credential
 used for clone and push. The service resolves what a write targets, performs it
 once, and after a restart says whether an earlier write landed.
-
 This is least exposure, not a sandbox: an approved service runs as the user.
 
 ## Version floor
@@ -73,11 +72,11 @@ the following contribution and implements `auth.status`. It can also keep
 ```json
 "login": {
   "kind": "service",
-  "hint": "Run forge auth login on the OpenChamber server"
+  "hint": "Run forge auth login on the OhPiChamber server"
 }
 ```
 
-`login` needs OpenChamber 2.7.1 or newer, so declare
+`login` needs OhPiChamber 2.7.1 or newer, so declare
 `engines.openchamber: ">=2.7.1"`. The token-only example keeps its existing
 floor.
 
@@ -91,7 +90,7 @@ ones beyond JavaScript's safe integer range.
 Resource handlers read through the CLI instead of `createSourceControlForge`.
 Compare `String(current.id)` with `String(session.user.id)` before the read and again
 before returning data. Discard data on a mismatch and return the following
-answer. This protects logout/login and identity changes outside OpenChamber
+answer. This protects logout/login and identity changes outside OhPiChamber
 without requiring a CLI switch command.
 
 ```json
@@ -107,7 +106,7 @@ without requiring a CLI switch command.
 
 The host uses its non-persisted `#cli:<id>` account. Its handles cannot call
 the forge proxy. Clone, fetch and push use system Git, `mode: 'system'`;
-do not extract or pass a CLI credential to OpenChamber. The full contract is
+do not extract or pass a CLI credential to OhPiChamber. The full contract is
 in [GUEST_SERVICES.md](../../GUEST_SERVICES.md#service-owned-sign-in).
 
 ## Change-based hosts
@@ -140,13 +139,13 @@ Gerrit does, adds them to `contributes.sourceControl`:
 - `merge: { methods: ["submit"] }`: `submit` is the only method when present.
   With `submitRequirements`, the context lists what must hold before a submit.
 - `scheme: "basic"` with `username: true`: Settings asks for a username, and
-  OpenChamber sends `Basic base64(<login>:<token>)` on every forge request.
+  OhPiChamber sends `Basic base64(<login>:<token>)` on every forge request.
 - `changeRequestStatus` may add `localRevision` and `stack`.
 
-OpenChamber sends `revision` and `votes` only to a host that declares the
+OhPiChamber sends `revision` and `votes` only to a host that declares the
 capability, so Teahouse never sees them. Creating a change by pushing to
-`refs/for/<branch>` stays with OpenChamber's built-in hosts; an extension's
-host opens one through `/pr/create`. Older OpenChamber builds refuse a manifest
+`refs/for/<branch>` stays with OhPiChamber's built-in hosts; an extension's
+host opens one through `/pr/create`. Older OhPiChamber builds refuse a manifest
 with these fields, so raise `engines.openchamber` to the first release that
 has them. The full contract is in `GUEST_SERVICES.md`.
 
@@ -159,7 +158,7 @@ it has a diff, a changed-file list and both sides of that file. It can refuse a 
 branch (`push`), and logs every write (`writes`), so a test can prove a
 mutation reached the forge exactly once.
 `packages/sdk/scripts/source-control-example.test.ts` runs the built service
-against it through a stand-in for OpenChamber's outbound proxy.
+against it through a stand-in for OhPiChamber's outbound proxy.
 
 Rebuild after editing the service or the SDK:
 

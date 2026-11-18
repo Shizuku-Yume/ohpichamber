@@ -3,9 +3,9 @@
 //
 //   node scripts/model-bench/report.mjs <workflow-run-id>
 //
-// Reads ~/.config/openchamber/workflow-runs/<id>.json and
+// Reads ~/.config/ohpichamber/workflow-runs/<id>.json and
 // ~/.cache/openchamber-model-bench/judge-map.txt, appends the joined grades to
-// ~/.config/openchamber/model-bench/judgments.jsonl, and prints JSON summaries.
+// ~/.config/ohpichamber/model-bench/judgments.jsonl, and prints JSON summaries.
 
 import { appendFileSync, readFileSync } from 'node:fs';
 import os from 'node:os';
@@ -17,11 +17,11 @@ if (!runId) {
   process.exit(1);
 }
 const home = os.homedir();
-const run = JSON.parse(readFileSync(path.join(home, '.config/openchamber/workflow-runs', `${runId}.json`), 'utf8'));
+const run = JSON.parse(readFileSync(path.join(home, '.config/ohpichamber/workflow-runs', `${runId}.json`), 'utf8'));
 const { result } = run;
 const map = new Map(readFileSync(path.join(home, '.cache/openchamber-model-bench/judge-map.txt'), 'utf8')
   .trim().split('\n').map((line) => line.split(' ')));
-const records = new Map(readFileSync(path.join(home, '.config/openchamber/model-bench/results.jsonl'), 'utf8')
+const records = new Map(readFileSync(path.join(home, '.config/ohpichamber/model-bench/results.jsonl'), 'utf8')
   .trim().split('\n').map((line) => JSON.parse(line)).map((r) => [path.basename(r.out), r]));
 
 const grades = [...(result.code ?? []), ...(result.review ?? [])].map((g) => {
@@ -29,7 +29,7 @@ const grades = [...(result.code ?? []), ...(result.review ?? [])].map((g) => {
   const record = records.get(runDir) ?? {};
   return { ...g, run: runDir, model: record.model?.replace(/#.*/, '').split('/').pop(), task: record.task, type: record.type, level: record.level, minutes: record.minutes };
 });
-appendFileSync(path.join(home, '.config/openchamber/model-bench/judgments.jsonl'),
+appendFileSync(path.join(home, '.config/ohpichamber/model-bench/judgments.jsonl'),
   `${grades.map((g) => JSON.stringify({ judge: runId, ...g })).join('\n')}\n`);
 
 const by = (list, key) => list.reduce((acc, g) => ((acc[g[key]] ??= []).push(g), acc), {});

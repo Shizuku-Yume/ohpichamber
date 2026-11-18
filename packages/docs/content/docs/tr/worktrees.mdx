@@ -17,9 +17,9 @@ Bir worktree oturumu, repo'nuzun kendi checkout edilmiş kopyasında ve kendi br
 3. **Based on** (yeni branch'in başlayacağı branch; varsayılan olarak uzak deponun varsayılan branch'i, örneğin `origin/main`) ve **Folder name** alanlarını kontrol edin; yalnızca gerekirse değiştirin.
 4. Oluşturun. Projede kurulum komutları varsa hemen ardından çalışırlar.
 
-OpenChamber branch'i oluşturur, klasörü hazırlar ve orada ilk mesajınızı bekleyen yeni bir oturum açar. Bunu bir [todo](/notes-todos-plans/) ya da bir [issue veya pull request](/github/) üzerinden de başlatabilirsiniz.
+OhPiChamber branch'i oluşturur, klasörü hazırlar ve orada ilk mesajınızı bekleyen yeni bir oturum açar. Bunu bir [todo](/notes-todos-plans/) ya da bir [issue veya pull request](/github/) üzerinden de başlatabilirsiniz.
 
-Soruları atlamak için aynı dal menüsünden **Hızlı worktree** seçin: OpenChamber dala geçici bir ad verir ve yeni oturumu ona yönlendirir. Agent göreve bir ad verdiğinde, dal henüz push edilmediyse dalı da göreve göre yeniden adlandırır, örneğin `fix/login-timeout`.
+Soruları atlamak için aynı dal menüsünden **Hızlı worktree** seçin: OhPiChamber dala geçici bir ad verir ve yeni oturumu ona yönlendirir. Agent göreve bir ad verdiğinde, dal henüz push edilmediyse dalı da göreve göre yeniden adlandırır, örneğin `fix/login-timeout`.
 
 ## Kenar çubuğunda
 
@@ -27,7 +27,7 @@ Bir worktree kenar çubuğunda tek bir satırdır; içindeki tüm oturumlar alt�
 
 ## Deponun bir klasöründe açılan projeler
 
-Bir projeyi `repo/ai` gibi deponun içindeki bir klasörde açtıysanız, yeni worktree'ler de orada açılır. Yeni bir worktree'deki oturum checkout içindeki aynı klasörde başlar; böylece agent orada duran yapılandırmayı bulur. Deponun kök dizininde açılan bir proje eskisi gibi worktree kök dizininde başlar. Bir dalda bu klasör yoksa oturum worktree kök dizininde başlar ve OpenChamber sizi bilgilendirir.
+Bir projeyi `repo/ai` gibi deponun içindeki bir klasörde açtıysanız, yeni worktree'ler de orada açılır. Yeni bir worktree'deki oturum checkout içindeki aynı klasörde başlar; böylece agent orada duran yapılandırmayı bulur. Deponun kök dizininde açılan bir proje eskisi gibi worktree kök dizininde başlar. Bir dalda bu klasör yoksa oturum worktree kök dizininde başlar ve OhPiChamber sizi bilgilendirir.
 
 ## Çalışmayı geri alın
 
@@ -35,7 +35,7 @@ Bir projeyi `repo/ai` gibi deponun içindeki bir klasörde açtıysanız, yeni w
 
 ## Temizleme
 
-Görev bittiğinde satırın menüsünden **Worktree’yi arşivle** seçin ya da Shift tuşunu basılı tutup satırda yeni oturum düğmesinin yerine çıkan arşiv düğmesine tıklayın. OpenChamber worktree'yi arşivler: Klasör kaldırılır; oturumları, commit edilmemiş değişiklikleri ve branch'i Arşiv sayfasında bekler. Orada hâlâ çalışan bir oturum varsa worktree kalır.
+Görev bittiğinde satırın menüsünden **Worktree’yi arşivle** seçin ya da Shift tuşunu basılı tutup satırda yeni oturum düğmesinin yerine çıkan arşiv düğmesine tıklayın. OhPiChamber worktree'yi arşivler: Klasör kaldırılır; oturumları, commit edilmemiş değişiklikleri ve branch'i Arşiv sayfasında bekler. Orada hâlâ çalışan bir oturum varsa worktree kalır.
 
 Satırı tamamlandı olarak işaretlemek onu yalnızca Devam eden bölümünden çıkarır. Bir worktree'yi her tamamlandı olarak işaretlediğinizde ya da PR'ı birleştirildiğinde arşivlemek için bunu **Ayarlar → Session'lar → Biten worktree’ler** bölümünden açın.
 
@@ -45,9 +45,9 @@ Bir worktree'den tamamen kurtulmak için onu menüsünden silin ya da arşivlenm
 
 ## Bir şey ters görünüyorsa
 
-Klasörü kaybolduysa, branch'i detached durumdaysa ya da bir merge veya rebase yarım kaldıysa worktree'nin bakıma ihtiyacı olabilir. OpenChamber bunları işaretler, böylece düzeltebilirsiniz. Bkz. [Worktrees & Git](/troubleshooting/worktrees-git/).
+Klasörü kaybolduysa, branch'i detached durumdaysa ya da bir merge veya rebase yarım kaldıysa worktree'nin bakıma ihtiyacı olabilir. OhPiChamber bunları işaretler, böylece düzeltebilirsiniz. Bkz. [Worktrees & Git](/troubleshooting/worktrees-git/).
 
 ## İlgili
 
 - [Multi-run](/multi-run/) — birçok worktree oturumunu aynı anda başlatın
-- [Git İş Akışları](/git/) — OpenChamber içinden commit edin ve integrate edin
+- [Git İş Akışları](/git/) — OhPiChamber içinden commit edin ve integrate edin

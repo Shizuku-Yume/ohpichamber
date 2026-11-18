@@ -8,8 +8,8 @@ import {
   SOURCE_CONTROL_PROVIDER_RESPONSE_MAX,
   SOURCE_CONTROL_PROVIDER_WIRE_VERSION,
   sourceControlProviderTimeoutMs,
-} from '@openchamber/sdk';
-import { sourceControlProviderSchemasV1 } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { sourceControlProviderSchemasV1 } from 'ohpichamber-sdk/schemas';
 
 import { GuestServiceError, proxyGuestServiceRequest } from '../guests/service.js';
 import { isString } from '../shared/guards.js';
@@ -80,7 +80,7 @@ const callError = (message, { status, code, kind = 'provider-error', outbound = 
   return error;
 };
 
-const malformed = (label, detail, outbound = []) => callError(`${label} answered something OpenChamber cannot use: ${detail}`, {
+const malformed = (label, detail, outbound = []) => callError(`${label} answered something OhPiChamber cannot use: ${detail}`, {
   status: 502, code: 'MALFORMED_PROVIDER_RESPONSE', outbound,
 });
 

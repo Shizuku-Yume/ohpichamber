@@ -65,7 +65,7 @@ describe('openchamber-guest-check', () => {
     const service = { entry: 'service/main.js', runtime: 'host' };
     const result = check(await packageWith({ panel: { id: 'x', name: 'X', icon: 'window' }, service, background: { entry: 'b.html' } }, {
       'b.html': '<p>x</p>',
-      'service/main.js': "import { createServiceHost } from '@openchamber/sdk';",
+      'service/main.js': "import { createServiceHost } from 'ohpichamber-sdk';",
     }));
     expect(result.code).toBe(1);
     expect(result.text).toContain('--node');

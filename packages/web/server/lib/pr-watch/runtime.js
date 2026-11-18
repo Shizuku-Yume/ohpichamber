@@ -564,7 +564,7 @@ export function createPrWatchRuntime({
         issues: [],
       });
       if (result?.status === 'disconnected') {
-        throw httpError(`OpenChamber has no ${item.provider === 'gitlab' ? 'GitLab' : 'GitHub'} account connected for ${threadInstance(item)}, so it cannot follow this pull request`, 400);
+        throw httpError(`OhPiChamber has no ${item.provider === 'gitlab' ? 'GitLab' : 'GitHub'} account connected for ${threadInstance(item)}, so it cannot follow this pull request`, 400);
       }
       if (result?.status === 'ok') {
         const summary = (result.pulls ?? []).find((pull) => pull?.number === item.number);

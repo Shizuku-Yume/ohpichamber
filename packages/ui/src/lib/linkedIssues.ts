@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Session } from '@openchamber/agent-contract';
-import { isJsonValue, type JsonValue } from '@openchamber/sdk';
+import { isJsonValue, type JsonValue } from 'ohpichamber-sdk';
 import { getSessionMetadata, type SessionMetadataRecord } from './sessionReviewMetadata';
 import type { RepositoryUrlMatcher } from './source-control/repositoryUrlMatcher';
 import { formatChangeRequestReference } from './source-control/providers/terminology';

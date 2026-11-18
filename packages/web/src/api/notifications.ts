@@ -160,7 +160,7 @@ const notifyWithServiceWorker = async (payload?: NotificationPayload): Promise<b
   try {
     const target = getNotificationTarget(payload);
     await registration.showNotification(
-      payload?.title ?? 'OpenChamber',
+      payload?.title ?? 'OhPiChamber',
       withNotificationTarget(payload, target),
     );
     return true;
@@ -226,7 +226,7 @@ const notifyWithWebAPI = async (payload?: NotificationPayload): Promise<boolean>
 
     const target = getNotificationTarget(payload);
     const notification = new Notification(
-      payload?.title ?? 'OpenChamber',
+      payload?.title ?? 'OhPiChamber',
       withNotificationTarget(payload, target),
     );
     notification.onclick = (event) => {

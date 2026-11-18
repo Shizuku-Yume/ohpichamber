@@ -3,16 +3,16 @@ import AppIntents
 // App Shortcuts, so "New Session" also shows up in the Shortcuts app and Siri can run it.
 //
 // The Control Center control's OpenNewSessionIntent (OpenChamberControl.swift) answers with an
-// OpenURLIntent for `openchamber://new`. The system honours that from a control, but Shortcuts
+// OpenURLIntent for `ohpichamber://new`. The system honours that from a control, but Shortcuts
 // and Siri refuse to open a custom URL scheme ("launch is prohibited"). This intent lives only
 // in the app target: it runs inside the launched app and hands its request to the page through
 // the ShortcutRequests plugin (ShortcutRequests.swift).
 // Gated to iOS 18.0 to match the control, so the app's 15.5 deployment target stays clean.
 @available(iOS 18.0, *)
 struct NewSessionShortcutIntent: AppIntent {
-    static let title: LocalizedStringResource = "New OpenChamber Session"
+    static let title: LocalizedStringResource = "New OhPiChamber Session"
     static let description = IntentDescription(
-        "Opens OpenChamber on a new session. With a message, starts the session in the project and sends the message."
+        "Opens OhPiChamber on a new session. With a message, starts the session in the project and sends the message."
     )
     static let openAppWhenRun: Bool = true
 

@@ -5,11 +5,11 @@ description: Masaüstü uygulamasından Cloudflare, Ngrok veya Tailscale tünell
 
 # Masaüstü Tünelleri
 
-Masaüstü uygulaması, **Settings → OpenChamber → Tunnel** bölümünden bir tünel oluşturabilir. Bu yol için OpenChamber'ı CLI'dan başlatmanız gerekmez.
+Masaüstü uygulaması, **Settings → OhPiChamber → Tunnel** bölümünden bir tünel oluşturabilir. Bu yol için OhPiChamber'ı CLI'dan başlatmanız gerekmez.
 
 ## Sağlayıcı kurun
 
-OpenChamber sağlayıcının CLI aracını makinenizde başlatır. Önce kullanmak istediğiniz sağlayıcıyı kurun:
+OhPiChamber sağlayıcının CLI aracını makinenizde başlatır. Önce kullanmak istediğiniz sağlayıcıyı kurun:
 
 ```bash
 brew install cloudflared
@@ -26,7 +26,7 @@ Tailscale için [Tailscale uygulamasını](https://tailscale.com/download) kurun
 
 ## Uygulamadan başlatma
 
-1. **Settings → OpenChamber → Tunnel** bölümünü açın.
+1. **Settings → OhPiChamber → Tunnel** bölümünü açın.
 2. **Cloudflare**, **Ngrok** ya da **Tailscale** seçin.
 3. Tünel türünü seçin ve **Tunnel'ı başlat** düğmesine basın.
 4. Oluşturulan QR kodunu telefonunuzdan tarayın.
@@ -35,9 +35,9 @@ Ngrok şu anda hızlı tünelleri destekler. Cloudflare ise hızlı tünelleri v
 
 ## Erişim koruması
 
-Sağlayıcı URL'si herkese açık olsa bile, OpenChamber erişimi kendi connect token'ı ile korur. Oluşturulan bağlantı bir kerelik token içerir, bir TTL'ye sahiptir ve eski kullanılmamış bağlantılar yeni bir bağlantı oluşturduğunuzda ya da tüneli durdurup yeniden başlattığınızda iptal edilir.
+Sağlayıcı URL'si herkese açık olsa bile, OhPiChamber erişimi kendi connect token'ı ile korur. Oluşturulan bağlantı bir kerelik token içerir, bir TTL'ye sahiptir ve eski kullanılmamış bağlantılar yeni bir bağlantı oluşturduğunuzda ya da tüneli durdurup yeniden başlattığınızda iptal edilir.
 
 ## İlgili
 
 - [Tunnels](/tunnels/) — CLI tünel kullanımı ve yönetilen Cloudflare modları
-- [PWA & Mobile](/mobile/) — OpenChamber'a telefonunuzdan erişin
+- [PWA & Mobile](/mobile/) — OhPiChamber'a telefonunuzdan erişin

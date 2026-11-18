@@ -66,7 +66,7 @@ Options:
   --model-label <text>     Record modelPickerShown: when the composer footer
                            first shows this model name
   --app <path>             Packaged app (.app bundle on macOS, executable elsewhere).
-                           Default: packages/electron/dist/mac-<arch>/OpenChamber.app
+                           Default: packages/electron/dist/mac-<arch>/OhPiChamber.app
   --compare <path>         Second build; launches alternate between the two
   --runs <n>               Measured launches per build (default: 5)
   --warmup <n>             Discarded launches per build before measuring (default: 1)
@@ -159,9 +159,9 @@ const repoRoot = resolve(new URL("..", import.meta.url).pathname)
 
 const defaultApp = () => {
   const arch = process.arch === "arm64" ? "arm64" : "x64"
-  if (process.platform === "darwin") return join(repoRoot, "packages/electron/dist", `mac-${arch}`, "OpenChamber.app")
-  if (process.platform === "linux") return join(repoRoot, "packages/electron/dist/linux-unpacked/openchamber")
-  return join(repoRoot, "packages/electron/dist/win-unpacked/OpenChamber.exe")
+  if (process.platform === "darwin") return join(repoRoot, "packages/electron/dist", `mac-${arch}`, "OhPiChamber.app")
+  if (process.platform === "linux") return join(repoRoot, "packages/electron/dist/linux-unpacked/ohpichamber")
+  return join(repoRoot, "packages/electron/dist/win-unpacked/OhPiChamber.exe")
 }
 
 // The executable to spawn and the bundled OpenCode CLI, per platform layout.
@@ -183,12 +183,12 @@ const resolveBuild = (appPath, label) => {
 // (single-instance lock, Chromium caches) follows OPENCHAMBER_DESKTOP_USER_DATA_DIR,
 // because macOS resolves the home directory from the user record rather than $HOME.
 const homeLayout = (home) => {
-  const config = join(home, ".config", "openchamber")
+  const config = join(home, ".config", "ohpichamber")
   const logs = process.platform === "darwin"
-    ? join(home, "Library", "Logs", "OpenChamber")
+    ? join(home, "Library", "Logs", "OhPiChamber")
     : process.platform === "win32"
-      ? join(home, "AppData", "Roaming", "OpenChamber", "logs")
-      : join(home, ".config", "OpenChamber", "logs")
+      ? join(home, "AppData", "Roaming", "OhPiChamber", "logs")
+      : join(home, ".config", "OhPiChamber", "logs")
   return { home, config, settings: join(config, "settings.json"), userData: join(home, "userData"), mainLog: join(logs, "main.log") }
 }
 
@@ -206,7 +206,7 @@ const isolatedEnv = (home, extra = {}) => ({
   XDG_DATA_HOME: join(home, ".local", "share"),
   XDG_STATE_HOME: join(home, ".local", "state"),
   XDG_CACHE_HOME: join(home, ".cache"),
-  OPENCHAMBER_DATA_DIR: join(home, ".config", "openchamber"),
+  OPENCHAMBER_DATA_DIR: join(home, ".config", "ohpichamber"),
   OPENCHAMBER_DESKTOP_USER_DATA_DIR: join(home, "userData"),
   OPENCHAMBER_STARTUP_PERF: "1",
   ...extra,

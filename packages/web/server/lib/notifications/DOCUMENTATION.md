@@ -36,6 +36,7 @@ delivery path.
   - `GET /api/push/vapid-public-key`
   - `POST /api/push/subscribe`
   - `DELETE /api/push/subscribe`
+  - `GET /api/push/native-status`: whether this server can deliver native push and why not — `{ available, reason, relaySetting, disabledSetting? }`, with `reason` `null`, `'relay-url-missing'` or `'direct-config-missing'` and `disabledSetting` present only for the direct case. The native app's settings page reads it instead of guessing. 404 when the server was not wired with `resolveApnsStatus`, 500 when the read fails.
   - `POST /api/push/apns-token` (native iOS APNs device-token registration)
   - `DELETE /api/push/apns-token`
   - `POST /api/push/visibility`
@@ -133,7 +134,7 @@ The relay has no route for it, and sends only ever start from this server's list
   - `removeApnsDevicesOfSessions(sessionKeys, keep)`
   - `sendApnsToAllUiSessions(payload)` — `payload.sealed` (`{ title, body }`, optional) is what a phone with a push key opens; it is never sent in the clear. Signs + sends to all registered tokens (no UI-visibility gate; iOS suppresses the foreground banner). No-ops with a single warning when APNs is unconfigured. Drops tokens on `410` / `BadDeviceToken` / `Unregistered`. Relay sends run in parallel, each limited to 15 s and sent once more only when the request never left this machine, since the relay does not deduplicate (`APNS.md`, *When the relay cannot be reached*).
   - `resolveApnsConfig()`
-- Configuration (env first, then `settings.apnsConfig`): `OPENCHAMBER_APNS_KEY_ID`, `OPENCHAMBER_APNS_TEAM_ID`, `OPENCHAMBER_APNS_P8` (PEM contents; literal `\n` accepted) or `OPENCHAMBER_APNS_P8_PATH`, `OPENCHAMBER_APNS_BUNDLE_ID` (default `com.openchamber.app`), `OPENCHAMBER_APNS_ENVIRONMENT` (optional override forcing every send to `sandbox` or `production`; when unset, each token is delivered to the environment it registered with, defaulting to `production` for tokens without one).
+- Configuration (env first, then `settings.apnsConfig`): `OPENCHAMBER_APNS_KEY_ID`, `OPENCHAMBER_APNS_TEAM_ID`, `OPENCHAMBER_APNS_P8` (PEM contents; literal `\n` accepted) or `OPENCHAMBER_APNS_P8_PATH`, `OPENCHAMBER_APNS_BUNDLE_ID` (default `dev.ohpichamber.app`), `OPENCHAMBER_APNS_ENVIRONMENT` (optional override forcing every send to `sandbox` or `production`; when unset, each token is delivered to the environment it registered with, defaulting to `production` for tokens without one).
 
 ### Emitter runtime API (emitter-runtime.js)
 - `createNotificationEmitterRuntime(dependencies)`: creates runtime for unified notification emission channels.

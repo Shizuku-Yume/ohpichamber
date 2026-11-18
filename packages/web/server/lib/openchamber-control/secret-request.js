@@ -73,7 +73,7 @@ export const createSecretRequests = ({ isEnabled, files, onWaitChange, hasUnread
 
   const request = async (input, { sessionId, callId, directory, signal } = {}) => {
     if (!await isEnabled()) {
-      throw new OpenChamberControlError('The secret tool is turned off in OpenChamber settings', 403);
+      throw new OpenChamberControlError('The secret tool is turned off in OhPiChamber settings', 403);
     }
     if (!files) {
       throw new OpenChamberControlError('This server cannot store secrets', 503);

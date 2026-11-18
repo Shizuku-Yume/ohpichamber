@@ -578,7 +578,7 @@ const WebviewBrowser: React.FC<BrowserPaneProps> = ({ initialUrl, directory: tab
         // that draws none has no surface to copy either, so the capture
         // answers at once instead of waiting out the server's timeout.
         if (!await waitForTwoFrames()) {
-          throw new Error('The OpenChamber window is not being drawn (minimized, on a workspace or tab that is not shown, or the screen is locked or off), so nothing can be captured. browser.snapshot still reads the page.');
+          throw new Error('The OhPiChamber window is not being drawn (minimized, on a workspace or tab that is not shown, or the screen is locked or off), so nothing can be captured. browser.snapshot still reads the page.');
         }
         // Wait for a settled page first: a screenshot of a half-painted layout is
         // worse than none, because it looks like a finished one.

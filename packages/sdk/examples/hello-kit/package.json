@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/example-hello-kit",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "private": true,
   "openchamber": {
     "apiVersion": 1,
@@ -12,13 +12,20 @@
         "entry": "panel/index.html"
       },
       "page": true,
-      "background": { "entry": "background/index.html" },
+      "background": {
+        "entry": "background/index.html"
+      },
       "actions": [
-        { "id": "message-length", "label": "Show message length", "where": "message", "mode": "background" }
+        {
+          "id": "message-length",
+          "label": "Show message length",
+          "where": "message",
+          "mode": "background"
+        }
       ]
     }
   },
   "dependencies": {
-    "@openchamber/sdk": "workspace:*"
+    "ohpichamber-sdk": "workspace:*"
   }
 }

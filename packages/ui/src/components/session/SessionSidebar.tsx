@@ -203,7 +203,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const updateStore = useUpdateStore(useShallow((s) => ({
     checkForUpdates: s.checkForUpdates,
     available: s.available,
-    runtimeType: s.runtimeType,
     info: s.info,
     downloading: s.downloading,
     downloaded: s.downloaded,
@@ -421,9 +420,8 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
     setSettingsDialogOpen(true);
   }, [mobileVariant, setSessionSwitcherOpen, setSettingsDialogOpen]);
 
-  const showSidebarUpdateButton =
-    updateStore.available &&
-    (updateStore.runtimeType === 'desktop' || updateStore.runtimeType === 'web');
+  // The desktop app's own update is the only one offered in the sidebar.
+  const showSidebarUpdateButton = updateStore.available;
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
     sessionEvents.requestDirectoryDialog();
@@ -813,7 +811,6 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         error={updateStore.error}
         onDownload={updateStore.downloadUpdate}
         onRestart={updateStore.restartToUpdate}
-        runtimeType={updateStore.runtimeType}
       />
 
       <ProjectEditDialog

@@ -7,7 +7,7 @@ import {
  type GuestMessageItem,
  type GuestSessionItem,
  type GuestSessionItemMessage,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 import type { Message } from '@openchamber/agent-contract';
 import type { IconName } from '@/components/icon/icons';

@@ -1,32 +1,32 @@
 ---
 title: Змінні середовища
-description: Налаштуйте OpenChamber через змінні середовища.
+description: Налаштуйте OhPiChamber через змінні середовища.
 ---
 
 # Змінні середовища
 
-OpenChamber читає ці змінні під час запуску. Для startup-сервісів `openchamber startup enable` типово зберігає snapshot поточного середовища, тому після змін перезапустіть цю команду.
+OhPiChamber читає ці змінні під час запуску. Для startup-сервісів `ohpichamber startup enable` типово зберігає snapshot поточного середовища, тому після змін перезапустіть цю команду.
 
 ## Змінні для сесій агентів, Git і термінала
 
-Щоб передати сесіям агентів, Git, терміналу та [діям проєкту](/uk/project-actions/) власні змінні, наприклад API-токен чи адресу бази даних, додайте їх у **Налаштування → Загальні → Змінні середовища**, а не експортуйте перед запуском OpenChamber. Значення лишаються на машині, де працює OpenChamber, у файлі `environment.json` у директорії даних, і прочитати його може лише ваш користувач. Налаштування більше ніколи не показують значення: його можна замінити або видалити, але не переглянути.
+Щоб передати сесіям агентів, Git, терміналу та [діям проєкту](/uk/project-actions/) власні змінні, наприклад API-токен чи адресу бази даних, додайте їх у **Налаштування → Загальні → Змінні середовища**, а не експортуйте перед запуском OhPiChamber. Значення лишаються на машині, де працює OhPiChamber, у файлі `environment.json` у директорії даних, і прочитати його може лише ваш користувач. Налаштування більше ніколи не показують значення: його можна замінити або видалити, але не переглянути.
 
 - Сесії агентів отримують їх під час запуску.
 - Git, термінал і дії проєкту отримують їх під час наступного запуску.
 
 Проєкт може додати власні змінні або команду, що їх виводить, наприклад `direnv export json`, у **Налаштування → Проєкти**. Див. [Проєкти](/uk/projects/#середовище-проєкту).
 
-Усе, що нижче, OpenChamber читає сам під час запуску.
+Усе, що нижче, OhPiChamber читає сам під час запуску.
 
-## Сервер OpenChamber
+## Сервер OhPiChamber
 
 ### `OPENCHAMBER_HOST`
 
-Адреса, на якій слухає web-сервер OpenChamber. Використовуйте `0.0.0.0`, щоб відкрити доступ з інших машин.
+Адреса, на якій слухає web-сервер OhPiChamber. Використовуйте `0.0.0.0`, щоб відкрити доступ з інших машин.
 
 ### `OPENCHAMBER_LAN_URL`
 
-Адреса, за якою інші пристрої у вашій мережі дістаються до OpenChamber, наприклад `http://192.168.1.20:3000`. Посилання і QR-коди для підключення пропонують її замість адреси, яку OpenChamber визначає сам. Задайте її, коли це визначення хибне, наприклад у Docker, де OpenChamber бачить лише внутрішню адресу контейнера.
+Адреса, за якою інші пристрої у вашій мережі дістаються до OhPiChamber, наприклад `http://192.168.1.20:3000`. Посилання і QR-коди для підключення пропонують її замість адреси, яку OhPiChamber визначає сам. Задайте її, коли це визначення хибне, наприклад у Docker, де OhPiChamber бачить лише внутрішню адресу контейнера.
 
 ### `OPENCHAMBER_UI_PASSWORD`
 
@@ -42,19 +42,19 @@ OpenChamber читає ці змінні під час запуску. Для st
 
 ### `OPENCHAMBER_API_ONLY`
 
-Запускає OpenChamber у headless mode, якщо встановлено `true` або `1`. API routes залишаються доступними для desktop і mobile clients, але browser UI не віддається.
+Запускає OhPiChamber у headless mode, якщо встановлено `true` або `1`. API routes залишаються доступними для desktop і mobile clients, але browser UI не віддається.
 
 ### `OPENCHAMBER_FRAME_ANCESTORS`
 
-Origins, яким дозволено показувати OpenChamber у фреймі на своїй сторінці, через пробіл, наприклад `https://dash.example.com`. `*` дозволяє будь-який сайт. Типово вбудовувати його можуть лише сам OpenChamber і його desktop- та mobile-застосунки, тож інші сайти не можуть перекрити його кнопки.
+Origins, яким дозволено показувати OhPiChamber у фреймі на своїй сторінці, через пробіл, наприклад `https://dash.example.com`. `*` дозволяє будь-який сайт. Типово вбудовувати його можуть лише сам OhPiChamber і його desktop- та mobile-застосунки, тож інші сайти не можуть перекрити його кнопки.
 
 ### `OPENCHAMBER_DATA_DIR`
 
-Перевизначає директорію даних OpenChamber. Типово це `~/.config/openchamber`.
+Перевизначає директорію даних OhPiChamber. Типово це `~/.config/ohpichamber`.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-Переносить директорії керованих чатів, які OpenChamber створює для чатів без проєкту. Типово це `~/.config/openchamber/chats`. Наявні чати не переносяться.
+Переносить директорії керованих чатів, які OhPiChamber створює для чатів без проєкту. Типово це `~/.config/ohpichamber/chats`. Наявні чати не переносяться.
 
 ### `OPENCHAMBER_COMPRESS_API`
 
@@ -68,33 +68,25 @@ Origins, яким дозволено показувати OpenChamber у фре�
 
 Вмикає детальні HTTP request logs, якщо встановлено `true` або `1`.
 
-### `OPENCHAMBER_UPDATE_API_URL`
-
-Перевизначає endpoint для перевірки оновлень. Більшості користувачів це не потрібно.
-
-### `OPENCHAMBER_PACKAGE_MANAGER`
-
-Примусово задає package manager для оновлень, якщо auto-detection помилився.
-
 ## Проксі
 
 ### `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`
 
-Спрямовує власні вихідні запити OpenChamber, як-от ліміти використання та каталоги скілів, через проксі. Назви в нижньому регістрі теж працюють. Хости з `NO_PROXY` під'єднуються напряму, а `localhost`, `127.0.0.1` і `::1` — завжди, тож зворотні виклики входу та локальні з'єднання працюють як раніше.
+Спрямовує власні вихідні запити OhPiChamber, як-от ліміти використання та каталоги скілів, через проксі. Назви в нижньому регістрі теж працюють. Хости з `NO_PROXY` під'єднуються напряму, а `localhost`, `127.0.0.1` і `::1` — завжди, тож зворотні виклики входу та локальні з'єднання працюють як раніше.
 
 ## Terminal і Git
 
 ### `OPENCHAMBER_TERMINAL_SHELL`
 
-Shell executable для terminal sessions в OpenChamber.
+Shell executable для terminal sessions в OhPiChamber.
 
 ### `OPENCHAMBER_GIT_BINARY`
 
-Git executable для Git-функцій OpenChamber.
+Git executable для Git-функцій OhPiChamber.
 
 ### `GIT_BINARY`
 
-Альтернативний override для Git executable. Для OpenChamber-specific налаштувань краще використовуйте `OPENCHAMBER_GIT_BINARY`.
+Альтернативний override для Git executable. Для OhPiChamber-specific налаштувань краще використовуйте `OPENCHAMBER_GIT_BINARY`.
 
 ### `OPENCHAMBER_GIT_READ_CACHE_TTL_MS`
 
@@ -104,7 +96,7 @@ TTL у мілісекундах для cached Git-backed file reads. Встан�
 
 ### `OPENAI_API_KEY`
 
-API key, яким голосові функції OpenChamber користуються, коли звертаються до самого OpenAI. На власний OpenAI-сумісний сервер він ніколи не надсилається: дай цьому серверу окремий ключ у Налаштуваннях.
+API key, яким голосові функції OhPiChamber користуються, коли звертаються до самого OpenAI. На власний OpenAI-сумісний сервер він ніколи не надсилається: дай цьому серверу окремий ключ у Налаштуваннях.
 
 ### `OPENCHAMBER_ALLOW_REMOTE_OPENAI_COMPAT_URLS`
 
@@ -112,15 +104,15 @@ API key, яким голосові функції OpenChamber користуют
 
 ### `NGROK_AUTHTOKEN`
 
-ngrok auth token для tunnel-команд OpenChamber. Також можна налаштувати ngrok через `ngrok config add-authtoken <token>`.
+ngrok auth token для tunnel-команд OhPiChamber. Також можна налаштувати ngrok через `ngrok config add-authtoken <token>`.
 
 ## Runtime helpers
 
 ### `BUN_BINARY`
 
-Bun executable, який OpenChamber має використовувати для запуску daemon processes.
+Bun executable, який OhPiChamber має використовувати для запуску daemon processes.
 
 ### `BUN_INSTALL`
 
-Корінь інсталяції Bun. OpenChamber використовує його, щоб знайти `bin/bun` для daemon startup і updates.
+Корінь інсталяції Bun. OhPiChamber використовує його, щоб знайти `bin/bun` для daemon startup і updates.
 

@@ -28,9 +28,9 @@ import {
 recordEarlyStartupMark('electron.entry');
 
 // Set the product name early so electron-log derives its log directory as
-// ~/Library/Logs/OpenChamber/ (not ~/Library/Logs/@openchamber/electron/).
+// ~/Library/Logs/OhPiChamber/ (not ~/Library/Logs/@openchamber/electron/).
 const versionBeforeRename = app.getVersion();
-app.setName('OpenChamber');
+app.setName('OhPiChamber');
 // An unpackaged run on Linux reports version "0.0" after the rename, and
 // electron-updater refuses a version that is not semver, so the dev app quit
 // before its first window. Restoring the version from before the rename gives
@@ -40,7 +40,7 @@ if (app.getVersion() !== versionBeforeRename) {
   app.setVersion(versionBeforeRename);
 }
 if (process.platform === 'linux') {
-  app.setDesktopName('openchamber.desktop');
+  app.setDesktopName('ohpichamber.desktop');
 }
 // Shared and service workers ignore the browser panel's session user agent and
 // use this fallback. Left at Electron's default, a page saw plain Chrome in its
@@ -49,7 +49,7 @@ if (process.platform === 'linux') {
 // has loaded, the default session keeps Electron's agent for its own requests.
 app.userAgentFallback = plainChromeUserAgent(app.userAgentFallback);
 if (isDev) {
-  app.setPath('userData', path.join(app.getPath('appData'), 'OpenChamber Dev'));
+  app.setPath('userData', path.join(app.getPath('appData'), 'OhPiChamber Dev'));
 }
 // Test hook for scripts/profile-startup.mjs: a packaged launch that must not
 // share the single-instance lock or the Chromium profile with the installed
@@ -112,14 +112,14 @@ deferAppEventsUntilMainLoads();
 app.whenReady().then(async () => {
   recordEarlyStartupMark('electron.app.ready');
   // The login shell runs in its own process; only its spawn touches this thread.
-  if (!shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => {});
+  if (!shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => { });
   // A login-item or --background launch has no window to show. Otherwise the
   // splash gets the main thread to itself until it is on screen: loading the
   // main module and the server behind it would starve its first paint.
   if (!shouldStartInBackground()) {
     await createEarlyWindow().whenShown;
   }
-  if (shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => {});
+  if (shellEnvironmentProbeBlocksMainThread) void startShellEnvironmentProbe().catch(() => { });
   return import('./main.mjs');
 }).catch((error) => {
   console.error('[electron] startup failed before the main module loaded:', error);

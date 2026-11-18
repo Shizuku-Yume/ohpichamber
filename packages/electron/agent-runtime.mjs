@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { detectSystemOmpRuntime } from '@openchamber/web/server/lib/host/system-omp-runtime.js';
+import { detectSystemOmpRuntime } from 'ohpichamber/server/lib/host/system-omp-runtime.js';
 // Bun must read physical files, never Electron's virtual ASAR filesystem.
 export function resolveAgentRuntime(resourcesDirectory, platform = process.platform) {
   const root = path.join(resourcesDirectory, 'agent-runtime');

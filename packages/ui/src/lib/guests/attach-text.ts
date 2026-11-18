@@ -1,4 +1,4 @@
-import type { AttachIssueRequest } from '@openchamber/sdk';
+import type { AttachIssueRequest } from 'ohpichamber-sdk';
 
 /**
  * The context text a guest chip sends to the model when the extension gave

@@ -1,4 +1,4 @@
-const DEFAULT_PWA_APP_NAME = 'OpenChamber';
+const DEFAULT_PWA_APP_NAME = 'OhPiChamber';
 const mapPwaOrientationToManifest = (value) => {
   if (value === 'portrait') {
     return 'portrait-primary';
@@ -129,7 +129,7 @@ export const registerPwaManifestRoute = (app, dependencies) => {
     const manifest = {
       name: appName,
       short_name: shortName,
-      description: 'Web interface for the OpenChamber native agent',
+      description: 'Web interface for the OhPiChamber native agent',
       id: '/',
       start_url: '/',
       scope: '/',

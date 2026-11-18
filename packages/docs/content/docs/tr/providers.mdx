@@ -5,7 +5,7 @@ description: Yapay zeka sağlayıcıları bağlayın, model seçin ve aracılar 
 
 # Sağlayıcılar, Modeller ve Aracılar
 
-OpenChamber'ın bir şey yapabilmesi için önce en az bir yapay zeka sağlayıcısı bağlanmış olmalıdır. Bu sayfa bir sağlayıcı bağlamayı, model seçmeyi ve aracıları ayarlamayı anlatır.
+OhPiChamber'ın bir şey yapabilmesi için önce en az bir yapay zeka sağlayıcısı bağlanmış olmalıdır. Bu sayfa bir sağlayıcı bağlamayı, model seçmeyi ve aracıları ayarlamayı anlatır.
 
 ## Bir sağlayıcı bağlayın
 
@@ -13,7 +13,7 @@ OpenChamber'ın bir şey yapabilmesi için önce en az bir yapay zeka sağlayıc
 2. **Add provider** menüsünü açın ve henüz bağlı olmayan bir sağlayıcı seçin ya da OpenAI uyumlu bir uç nokta için **Other / Custom** seçin.
 3. Sağlayıcıya göre iki yoldan biriyle oturum açın:
    - **API key** — anahtarınızı yapıştırın ve kaydedin.
-   - **Sign-in (device flow)** — OpenChamber size bir bağlantı ve kısa bir kod gösterir. Bağlantıyı açın, kodu girin ve onaylayın. OpenChamber bağlantıyı kendi başına tamamlar.
+   - **Sign-in (device flow)** — OhPiChamber size bir bağlantı ve kısa bir kod gösterir. Bağlantıyı açın, kodu girin ve onaylayın. OhPiChamber bağlantıyı kendi başına tamamlar.
 
 ### Custom / Other sağlayıcılar
 
@@ -23,7 +23,7 @@ Gateway'ler, kampüs LLM'leri, Ollama, LiteLLM ve benzeri OpenAI uyumlu API'ler 
 2. Bir sağlayıcı kimliği, görünen ad, base URL (`http://` veya `https://`), isteğe bağlı bir API anahtarı ve en az bir model kimliği ve adı girin.
 3. Modelin bağlam penceresini ve maksimum çıktı belirteci sınırını belirtin. Gelişmiş meta veriler (akıl yürütme seçenekleri, varyantlar ve modaliteler gibi), model ayrıntılarında JSON olarak yapılandırılabilir.
 4. İsteğe bağlı olarak istek başlıkları ekleyin.
-5. Kaydedin — OpenChamber sağlayıcıyı ve modelleri Agent Service üzerinden kaydeder ve API anahtarlarını salt yazılır kimlik bilgileri olarak saklar.
+5. Kaydedin — OhPiChamber sağlayıcıyı ve modelleri Agent Service üzerinden kaydeder ve API anahtarlarını salt yazılır kimlik bilgileri olarak saklar.
 6. Mevcut bir custom sağlayıcıyı değiştirmek için onu açın ve **Edit** seçin.
 
 Custom sağlayıcılar, tam bağlı görünmeden önce bir API anahtarı ya da `{env:VAR_NAME}` ister. Kimlik bilgisi yoksa modeller görünse bile sohbet çağrıları başarısız olur.

@@ -19,9 +19,9 @@ bun run type-check
 bun run lint
 ```
 
-Real path: build and run the app the way a user gets it (`bun run electron:build` and launch the packaged app, or `bun run dev` for the Web surface), then drive the visible UI: send a chat that completes through a real provider. Real provider settings come from `~/.config/ohpichamber/omp-m0-provider.env` (operator-managed, outside the repository; load it with `source`).
+Real-provider checks configure the provider through the app inside the isolated run, or use a read-only copy of `~/.omp/agent/models.yml` and `~/.omp/agent/agent.db` in `<isolated-HOME>/.omp/agent/`; never modify `~/.omp/agent`.
 
-Data isolation: `~/.config/openchamber` and `~/.config/OpenChamber` belong to the maintainer's installed upstream OpenChamber. Every real-path, dev or test run sets `OPENCHAMBER_DATA_DIR` (and, for Electron, `OPENCHAMBER_DESKTOP_USER_DATA_DIR`) to a throwaway directory, or launches the installed fork through `~/.local/bin/ohpichamber-iso`; never run the Host on the default data directory.
+Data isolation: `~/.config/ohpichamber` (web/CLI host data) and `~/.config/OhPiChamber` (Electron userData) are the maintainer's real product data directories and must NEVER be touched by dev or test runs. Every real-path, dev or test run sets `HOME`, `OPENCHAMBER_DATA_DIR`, and `OPENCHAMBER_DESKTOP_USER_DATA_DIR` to a throwaway directory under `/tmp` or the task's evidence directory; never run the Host on the default data directory.
 
 Evidence: `/home/shizuku/Project/ohpichamber-omp-artifacts/`, outside the repository, one directory per task and date (for example `task78-2026-10-24/`). Never a temporary directory.
 

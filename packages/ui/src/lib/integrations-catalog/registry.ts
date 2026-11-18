@@ -2516,7 +2516,7 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
   {
     id: 'excalidraw',
     name: 'Excalidraw',
-    publisher: 'OpenChamber',
+    publisher: 'OhPiChamber',
     verified: true,
     descriptionKey: 'integrationsCatalog.entry.excalidraw.description',
     detailsKey: 'integrationsCatalog.entry.excalidraw.details',
@@ -2529,7 +2529,7 @@ export const CATALOG_ENTRIES: readonly CatalogEntry[] = [
   {
     id: 'resource-monitor',
     name: 'Resource Monitor',
-    publisher: 'OpenChamber',
+    publisher: 'OhPiChamber',
     verified: true,
     descriptionKey: 'integrationsCatalog.entry.resource-monitor.description',
     detailsKey: 'integrationsCatalog.entry.resource-monitor.details',

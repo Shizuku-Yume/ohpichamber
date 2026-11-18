@@ -1,26 +1,26 @@
 ---
 title: Eklenti oluşturma
-description: "@openchamber/sdk ile OpenChamber'a kendi panelinizi ekleyin, bir klasörden veya git adresinden kurun ve connectHost üzerinden uygulamayla konuşun."
+description: "ohpichamber-sdk ile OhPiChamber'a kendi panelinizi ekleyin, bir klasörden veya git adresinden kurun ve connectHost üzerinden uygulamayla konuşun."
 ---
 
 # Eklenti oluşturma
 
-OpenChamber'a kendi panelinizi eklemek için `@openchamber/sdk` kullanın. Eklenti, OpenChamber'ın sağ şeritte gösterdiği küçük bir web sayfasıdır. Uygulamayla `connectHost()` üzerinden konuşur: geçerli projeyi ve oturumu okuyabilir, bildirim gösterebilir, sohbet kutusuna metin koyabilir, bir oturuma görev iliştirebilir ve kullanıcının onayıyla oturum başlatıp istem gönderebilir.
+OhPiChamber'a kendi panelinizi eklemek için `ohpichamber-sdk` kullanın. Eklenti, OhPiChamber'ın sağ şeritte gösterdiği küçük bir web sayfasıdır. Uygulamayla `connectHost()` üzerinden konuşur: geçerli projeyi ve oturumu okuyabilir, bildirim gösterebilir, sohbet kutusuna metin koyabilir, bir oturuma görev iliştirebilir ve kullanıcının onayıyla oturum başlatıp istem gönderebilir.
 
-Eklentiler OpenChamber web ve masaüstünde çalışır.
+Eklentiler OhPiChamber web ve masaüstünde çalışır.
 
 ## Eklenti nedir
 
 Üç dosyalı bir klasör:
 
 - `openchamber` bloğu (manifest) içeren `package.json`
-- `panel/index.html`, OpenChamber'ın gösterdiği sayfa
+- `panel/index.html`, OhPiChamber'ın gösterdiği sayfa
 - `panel/main.js`, tek bir klasik dosya olarak derlenmiş betiğiniz (sayfa sandbox'lı bir iframe içinde yüklendiği için ES modülü değil, IIFE)
 
-OpenChamber kodunuzu asla derlemez. Derlenmiş `.js` dosyasını yayınlayın. SDK bir paketleme komutu içerir; IIFE üreten herhangi bir paketleyici de olur.
+OhPiChamber kodunuzu asla derlemez. Derlenmiş `.js` dosyasını yayınlayın. SDK bir paketleme komutu içerir; IIFE üreten herhangi bir paketleyici de olur.
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -32,13 +32,13 @@ Paketleme komutu Bun üzerinde çalışır. Bun yoksa esbuild'i ya da başka bir
 
 ## Çalışırken kurma
 
-1. OpenChamber'ı web veya masaüstünde çalıştırın.
+1. OhPiChamber'ı web veya masaüstünde çalıştırın.
 2. Ayarlar → Uzantılar sayfasını açın.
 3. Klasörünüzün mutlak yolunu yapıştırıp Ekle'ye tıklayın.
 
-OpenChamber manifesti okur ve eklentinin ne istediğini listeleyen bir pencere gösterir (bkz. [Yetenekler](#yetenekler)). Onaylayın, simgeniz şeritte belirir. Tıklayın, sayfanız yüklenir.
+OhPiChamber manifesti okur ve eklentinin ne istediğini listeleyen bir pencere gösterir (bkz. [Yetenekler](#yetenekler)). Onaylayın, simgeniz şeritte belirir. Tıklayın, sayfanız yüklenir.
 
-Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https bağlantısı da ekleyebilirsiniz. Yalnızca git kurulumu güncellenebilir: `package.json` içindeki `version` değerini yükseltip push edin; OpenChamber açıldıktan kısa süre sonra ve birkaç saatte bir denetler, kullanıcıya bir kez haber verir ve güncellemeyi Ayarlar → Uzantılar sayfasında sunar. Herhangi bir sayfadaki `openchamber://extensions/install?url=<encoded repository URL>` bağlantısı, masaüstü uygulamasını bu depo ekleme iletişim kutusunda hazır olacak şekilde açar; böylece bir kurulum düğmesi sunabilirsiniz. URL'deki `#tag` ya da `#branch` neyi izleyeceğini sabitler. Bunlar OpenChamber'ın veri klasörüne kopyalanır ve o kopyadan çalışır; bu yüzden `node_modules` veya TypeScript kaynaklarını değil, derlenmiş dosyaları yayınlayın. Eklentiyi kaldırmak kopyayı siler. Klasörden kurulum doğrudan sizin klasörünüzden çalışır; düzenleyip yeniden derleyip yeniden yükleyebilirsiniz.
+Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https bağlantısı da ekleyebilirsiniz. Yalnızca git kurulumu güncellenebilir: `package.json` içindeki `version` değerini yükseltip push edin; OhPiChamber açıldıktan kısa süre sonra ve birkaç saatte bir denetler, kullanıcıya bir kez haber verir ve güncellemeyi Ayarlar → Uzantılar sayfasında sunar. Herhangi bir sayfadaki `ohpichamber://extensions/install?url=<encoded repository URL>` bağlantısı, masaüstü uygulamasını bu depo ekleme iletişim kutusunda hazır olacak şekilde açar; böylece bir kurulum düğmesi sunabilirsiniz. URL'deki `#tag` ya da `#branch` neyi izleyeceğini sabitler. Bunlar OhPiChamber'ın veri klasörüne kopyalanır ve o kopyadan çalışır; bu yüzden `node_modules` veya TypeScript kaynaklarını değil, derlenmiş dosyaları yayınlayın. Eklentiyi kaldırmak kopyayı siler. Klasörden kurulum doğrudan sizin klasörünüzden çalışır; düzenleyip yeniden derleyip yeniden yükleyebilirsiniz.
 
 ## Manifest
 
@@ -48,7 +48,7 @@ Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -74,11 +74,11 @@ Yerel bir `.zip` dosyası ya da bir git deposuna veya zip dosyasına giden https
 
 `version` zorunludur ve semver olmalıdır. Ayarlar → Uzantılar bunu kartta gösterir.
 
-`apiVersion` değeri `1`'dir. OpenChamber başka değerleri reddeder.
+`apiVersion` değeri `1`'dir. OhPiChamber başka değerleri reddeder.
 
-SDK 3, SDK 2'nin üst pencere taşımasını özel ve sürümlenmiş bir `MessagePort` önyüklemesiyle değiştirir. Hâlâ M3 öncesi v1 `hello` gönderen bir panel bağlanamaz: OpenChamber panelinde sürüm uyuşmazlığı gösterir ve ona ne port ne de ana makine durumu verir. Bir v1 önyükleme duyurusu hiçbir şey verilmeden atılır. Paneli `@openchamber/sdk` 3 ile yeniden derleyin. Şema değişmediği için `apiVersion` `1` olarak kalır.
+SDK 3, SDK 2'nin üst pencere taşımasını özel ve sürümlenmiş bir `MessagePort` önyüklemesiyle değiştirir. Hâlâ M3 öncesi v1 `hello` gönderen bir panel bağlanamaz: OhPiChamber panelinde sürüm uyuşmazlığı gösterir ve ona ne port ne de ana makine durumu verir. Bir v1 önyükleme duyurusu hiçbir şey verilmeden atılır. Paneli `ohpichamber-sdk` 3 ile yeniden derleyin. Şema değişmediği için `apiVersion` `1` olarak kalır.
 
-`engines.openchamber` isteğe bağlıdır. Eklentinizin çalıştığı en eski OpenChamber sürümünü `3.0.0` veya `>=3.0.0` biçiminde yazın. Daha eski sürümler sonradan hata vermek yerine kurulumu reddeder.
+`engines.openchamber` isteğe bağlıdır. Eklentinizin çalıştığı en eski OhPiChamber sürümünü `1.0.0` veya `>=1.0.0` biçiminde yazın. Daha eski sürümler sonradan hata vermek yerine kurulumu reddeder.
 
 `id`, `name` ve `icon` eklentiyi adlandırır. `id` kebab-case olmalı ve kurulu eklentiler arasında benzersiz olmalıdır. `icon` bir Remixicon adı (`RiWindowLine` için `window`) ya da klasörünüzdeki bir SVG dosyasıdır, örneğin `icon.svg`. `contributes.panel` eklentinin şeritteki panelidir: `entry` değeri klasörünüzdeki HTML dosyasıdır. Şeritte paneli olmayan bir eklenti `panel` alanını atlar. Eski paketler `id`, `name` ve `icon` alanlarını `panel` içinde tutar ve bu çalışmaya devam eder.
 
@@ -97,7 +97,7 @@ Panolar `host.storage` ile proje, worktree ve oturum listelerini ve canlı durum
 
 `contributes.integration` isteğe bağlıdır. Ayarlar → Entegrasyonlar sayfasına kullanıcının hesap bağladığı bir kart ekler. Bkz. [Hesaplar ve ağ](#hesaplar-ve-ağ).
 
-`contributes.service` isteğe bağlıdır. OpenChamber'ın eklentinin yanında başlattığı yerel bir süreç tanımlar; bir web sayfasının ulaşamadığı şeyler için, örneğin bir Docker soketi. Bu süreç kullanıcının tam erişimiyle ve sandbox olmadan çalışır, bu yüzden onay iletişim kutusu bunu uyarır; sayfa işi yapamadığında bir tane tanımlayın. Paket dosyası `GUEST_SERVICES.md` dosyasına bakın. `provides: ["browser"]` içeren bir hizmet ajanın tarayıcısının yerine de geçebilir: `browser.*` eylemlerini sunucuda yanıtlar, böylece ajanlar açık bir masaüstü uygulaması olmadan gezinir; kullanıcı bunu Ayarlar → OpenChamber Araçları'ndan seçer. Böyle bir hizmetin panele ihtiyacı yoktur. Bir hizmete kullanıcının oturumlarında olanlar da bildirilebilir: yanına `contributes.sessionEvents` tanımlayın, OpenChamber biten ya da başarısız olan her turu ve ajanın sorduğu her izni ya da soruyu, her projeden ve açık bir pencere olmadan hizmete gönderir. Bkz. [Oturum olayları](/sdk/host/#oturum-olayları). `provides: ["notifications"]` içeren bir hizmet ise kullanıcının bildirimlerini masaüstü ve telefonun yanında Slack'e, Matrix'e ya da kendi sunucunuza iletir; kullanıcı hesabı Ayarlar → Entegrasyonlar'da bağlar ve token OpenChamber'da kalır. Bkz. [Bildirim kanalları](/sdk/host/#bildirim-kanalları). `provides: ["tracker"]` olan bir servis, Linear'ın yanında bir iş öğesi izleyicisidir ve hesap kartı Uzantı hesapları altında durur; bkz. [İzleyiciler](/sdk/host/#i̇zleyiciler). `provides: ["quota"]` olan bir servis ise yerleşik sağlayıcıların yanında kullanımı bildirir ve bunun için OpenCode'un manifestte listelenen sağlayıcılar için sakladığı kimlik bilgilerini okur; bkz. [Kullanım sağlayıcıları](/sdk/host/#kullanım-sağlayıcıları).
+`contributes.service` isteğe bağlıdır. OhPiChamber'ın eklentinin yanında başlattığı yerel bir süreç tanımlar; bir web sayfasının ulaşamadığı şeyler için, örneğin bir Docker soketi. Bu süreç kullanıcının tam erişimiyle ve sandbox olmadan çalışır, bu yüzden onay iletişim kutusu bunu uyarır; sayfa işi yapamadığında bir tane tanımlayın. Paket dosyası `GUEST_SERVICES.md` dosyasına bakın. `provides: ["browser"]` içeren bir hizmet ajanın tarayıcısının yerine de geçebilir: `browser.*` eylemlerini sunucuda yanıtlar, böylece ajanlar açık bir masaüstü uygulaması olmadan gezinir; kullanıcı bunu Ayarlar → OhPiChamber Araçları'ndan seçer. Böyle bir hizmetin panele ihtiyacı yoktur. Bir hizmete kullanıcının oturumlarında olanlar da bildirilebilir: yanına `contributes.sessionEvents` tanımlayın, OhPiChamber biten ya da başarısız olan her turu ve ajanın sorduğu her izni ya da soruyu, her projeden ve açık bir pencere olmadan hizmete gönderir. Bkz. [Oturum olayları](/sdk/host/#oturum-olayları). `provides: ["notifications"]` içeren bir hizmet ise kullanıcının bildirimlerini masaüstü ve telefonun yanında Slack'e, Matrix'e ya da kendi sunucunuza iletir; kullanıcı hesabı Ayarlar → Entegrasyonlar'da bağlar ve token OhPiChamber'da kalır. Bkz. [Bildirim kanalları](/sdk/host/#bildirim-kanalları). `provides: ["tracker"]` olan bir servis, Linear'ın yanında bir iş öğesi izleyicisidir ve hesap kartı Uzantı hesapları altında durur; bkz. [İzleyiciler](/sdk/host/#i̇zleyiciler). `provides: ["quota"]` olan bir servis ise yerleşik sağlayıcıların yanında kullanımı bildirir ve bunun için OpenCode'un manifestte listelenen sağlayıcılar için sakladığı kimlik bilgilerini okur; bkz. [Kullanım sağlayıcıları](/sdk/host/#kullanım-sağlayıcıları).
 
 ## Yetenekler
 
@@ -110,7 +110,7 @@ Panel çizmek ve geçerli oturumu okumak izin gerektirmez. Kullanıcı adına bi
 | `files` | açık projedeki dosyaları okuyup yazmak (göreli yol ile `readFile`, `writeFile`, `listDir`, `stat`) |
 | `model` | kullanıcının Small Model'iyle tek seferlik metin üretimi (`generate`), herhangi bir oturumun dışında |
 
-On on bir tanesi sizin için otomatik eklenir: bir `integration` tanımladığınızda `network`, bir `service` tanımladığınızda `service`, `filesystem` desenleri tanımladığınızda `filesystem`, `origins` tanımladığınızda `origins`, bir oturum eylemi mesajları istediğinde `conversation` (bkz. [Eylemler, komutlar ve rozet](#eylemler-komutlar-ve-rozet)), `sessionEvents` veya `sessionControl` `content` istediğinde `transcript` (bkz. [Oturum olayları](/sdk/host/#oturum-olayları)), servisiniz oturumlar üzerinde işlem yaptığında `sessionControl` (bkz. [OpenChamber'ı çağırma](/sdk/host/#openchamberı-servisinizden-çağırma)), servisiniz kullanıcı adına ajanın izin isteklerini ve formlarını yanıtladığında `sessionAnswers` (`sessionControl: { answers: true }`), ajanların okuduklarına ekleme yaptığında `instructions` ve `contributes.skills` tanımladığınızda `skills`. `contributes.skills`, eklenti açıkken her ajana ulaşan skill'lerin bulunduğu bir paket klasörüdür. `contributes.links` tanımladığınızda da `links` eklenir (bkz. [Sohbet mesajlarındaki bağlantılar](#sohbet-mesajlarındaki-bağlantılar)).
+On on bir tanesi sizin için otomatik eklenir: bir `integration` tanımladığınızda `network`, bir `service` tanımladığınızda `service`, `filesystem` desenleri tanımladığınızda `filesystem`, `origins` tanımladığınızda `origins`, bir oturum eylemi mesajları istediğinde `conversation` (bkz. [Eylemler, komutlar ve rozet](#eylemler-komutlar-ve-rozet)), `sessionEvents` veya `sessionControl` `content` istediğinde `transcript` (bkz. [Oturum olayları](/sdk/host/#oturum-olayları)), servisiniz oturumlar üzerinde işlem yaptığında `sessionControl` (bkz. [OhPiChamber'ı çağırma](/sdk/host/#ohpichamberı-servisinizden-çağırma)), servisiniz kullanıcı adına ajanın izin isteklerini ve formlarını yanıtladığında `sessionAnswers` (`sessionControl: { answers: true }`), ajanların okuduklarına ekleme yaptığında `instructions` ve `contributes.skills` tanımladığınızda `skills`. `contributes.skills`, eklenti açıkken her ajana ulaşan skill'lerin bulunduğu bir paket klasörüdür. `contributes.links` tanımladığınızda da `links` eklenir (bkz. [Sohbet mesajlarındaki bağlantılar](#sohbet-mesajlarındaki-bağlantılar)).
 
 Kullanıcı tam listeyi bir kez, eklentiyi kurarken görür ve ya onaylar ya da eklentiyi kaldırır. Yeni bir sürüm daha fazlasını isterse pencere yeniden görünür. Kullanıcının onaylamadığı bir yeteneği gerektiren çağrı `NOT_GRANTED` ile başarısız olur.
 
@@ -127,15 +127,15 @@ Bir uzantı, sohbet mesajlarındaki kendi tanımlayıcılarını ve bağlantıla
 ```
 
 - `identifier.keys`, büyük harfle yazılmış en fazla 8 sabit anahtardır. `DEMO`, `DEMO-12` ifadesini yalnızca tam bir sözcük olarak tanır; kod, bağlantılar, yollar, `XDEMO-1` gibi sözcükler ve `DEMO-1.5` gibi sürümler metin olarak kalır.
-- `urls`, tek bir https kaynağındaki bağlantıları tam eşleşmeyle tanır. `item`, izleyicinin kendi kullandığı biçimdeki bağlantı şablonlarıdır: `{id}` bir kez, yolun içinde ya da `?name={id}` olarak; değişen kısımlar için de `{segment}` veya `{segments+}`. `identifier`, `{id}` değerinin neye benzediğini söyler: `key-number`, `number` veya `short-code`. Hiçbir zaman düzenli ifade yazmazsınız; şablonları OpenChamber derler.
+- `urls`, tek bir https kaynağındaki bağlantıları tam eşleşmeyle tanır. `item`, izleyicinin kendi kullandığı biçimdeki bağlantı şablonlarıdır: `{id}` bir kez, yolun içinde ya da `?name={id}` olarak; değişen kısımlar için de `{segment}` veya `{segments+}`. `identifier`, `{id}` değerinin neye benzediğini söyler: `key-number`, `number` veya `short-code`. Hiçbir zaman düzenli ifade yazmazsınız; şablonları OhPiChamber derler.
 - `action: "open"`, uzantınızı `ready.item` (veya `onItem`) değeri `{ kind: "link", identifier, url? }` olacak şekilde açar: `attach` değeri `"dialog"` ise kendi iletişim kutunuzda, değilse şerit panelinde. Türü `isGuestLinkItem` ile daraltın. Bunun için `panel.entry` gerekir. `url`, tıklanan bağlantıdan `#` sonrası kısmın ve şablonun kendi parametreleri dışındaki sorgu parametrelerinin çıkarılmış hâlidir; metindeki bir tanımlayıcı için, `{segment}` içermeyen bir şablonunuz varsa ve tanımlayıcı `urls.identifier` ile tanımlanan biçimdeyse, bu türden ilk şablonunuzun oluşturduğu bağlantıdır (`DEMO-12` hiçbir zaman bir `number` yerine geçmez).
 - `action: "attach"` bunun yerine sohbet kutusuna tanımlayıcıyı taşıyan bir etiket ekler ve etiketin kendi bağlantısını gösterebilmesi için `{segment}` veya `{segments+}` içermeyen bir şablon gerektirir; `identifier.keys` ile `urls.identifier` değeri `number` olamaz.
 
-Tanıma, ajan yanıtlarında ve kullanıcının kendi mesajlarında çalışır; akıl yürütmede, araç çıktısında ve Files görünümünde çalışmaz. Bir mesajı kopyalamak metni yazıldığı gibi korur. OpenChamber'ın kendisinin okuduğu bir bağlantı, yani bir izleyici öğesi, bir deponun issue'su veya pull request'i ya da bir commit, her zamanki gibi davranır; değiştirici tuşla yapılan tıklama da tarayıcının olağan davranışını korur. `links` tanımlamak `links` yeteneğini ekler: onay iletişim kutusu anahtarlarınızı ve kaynağınızı listeler ve tıklamanın ne yaptığını söyler; bunlardan herhangi birini değiştiren bir sürüm yeniden onay ister. `examples/tasks-demo`, `DEMO-2` ve `https://example.com/tasks/DEMO-2` bağlantılarını tanır.
+Tanıma, ajan yanıtlarında ve kullanıcının kendi mesajlarında çalışır; akıl yürütmede, araç çıktısında ve Files görünümünde çalışmaz. Bir mesajı kopyalamak metni yazıldığı gibi korur. OhPiChamber'ın kendisinin okuduğu bir bağlantı, yani bir izleyici öğesi, bir deponun issue'su veya pull request'i ya da bir commit, her zamanki gibi davranır; değiştirici tuşla yapılan tıklama da tarayıcının olağan davranışını korur. `links` tanımlamak `links` yeteneğini ekler: onay iletişim kutusu anahtarlarınızı ve kaynağınızı listeler ve tıklamanın ne yaptığını söyler; bunlardan herhangi birini değiştiren bir sürüm yeniden onay ister. `examples/tasks-demo`, `DEMO-2` ve `https://example.com/tasks/DEMO-2` bağlantılarını tanır.
 
 ## Metin üretme
 
-`model` yeteneğiyle `host.generate`, kullanıcının Small Model'inden tek seferlik bir yanıt ister: bir özet, bir başlık, bir taslak. Hiçbir şey bir oturuma girmez, geçmiş tutulmaz ve eklenti asla bir sağlayıcı seçmez. OpenChamber, Ayarlar → Oturumlar → Small Model üzerinden seçilen modeli ya da etkin sağlayıcının küçük modelini kullanır.
+`model` yeteneğiyle `host.generate`, kullanıcının Small Model'inden tek seferlik bir yanıt ister: bir özet, bir başlık, bir taslak. Hiçbir şey bir oturuma girmez, geçmiş tutulmaz ve eklenti asla bir sağlayıcı seçmez. OhPiChamber, Ayarlar → Oturumlar → Small Model üzerinden seçilen modeli ya da etkin sağlayıcının küçük modelini kullanır.
 
 ```ts
 const { text } = await host.generate({
@@ -151,7 +151,7 @@ Hiçbir model kullanılamadığında çağrı `NO_MODEL` ile başarısız olur; 
 
 Sayfanız bir sandbox içinde çalışır ve ağa kendi başına erişemez: betikler, stiller, görseller, yazı tipleri ve medya yalnızca paketinizden yüklenir, `fetch` de yalnızca paketinizdeki dosyalara ulaşır. Yazı tiplerini ve görselleri bir CDN'den yüklemek yerine paketin içinde gönderin.
 
-Dışarıdaki bir hizmetle konuşmak için bir `integration` tanımlayın; OpenChamber çağrıları `host.request` üzerinden, kullanıcının token'ı ekli olarak sizin yerinize yapar. Token sayfanıza asla ulaşmaz.
+Dışarıdaki bir hizmetle konuşmak için bir `integration` tanımlayın; OhPiChamber çağrıları `host.request` üzerinden, kullanıcının token'ı ekli olarak sizin yerinize yapar. Token sayfanıza asla ulaşmaz.
 
 Sayfanızın doğrudan ihtiyaç duyduğu diğer her şey için, örneğin bir CDN'den yazı tipleri veya görseller ya da herkese açık bir API için, en fazla 8 https kaynağı listeleyin:
 
@@ -164,12 +164,12 @@ Kullanıcı bunları onay penceresinde eklentinizin veri gönderip veri alabilec
 [Kurumsal modda](/security/) `origins`, `integration` ya da `service` içeren bir eklenti yalnızca yöneticinin listeye eklediği bir Git deposundan kurulur. Eklentiniz bunlar olmadan çalışabiliyorsa, bu ekipler için kurulabilir kalır. Böyle bir makinede eklenti geliştirmek için yöneticiden `allowLocalExtensions` isteyin; bununla eklentiyi kendi klasöründen kurabilirsiniz.
 
 - `token`: kullanıcı Ayarlar → Entegrasyonlar kartına bir API token'ı yapıştırır. `apiOrigin`, `request` çağrısının erişebileceği tek kaynaktır. `account` isteğe bağlıdır: bir GET yolu ve bir alan adı; kart böylece kimin bağlı olduğunu gösterebilir. `scheme`, token'ın nasıl gönderileceğini belirler; aşağıdaki tabloya bakın. Hangi başlığı beklediğini sağlayıcının API belgelerinden kontrol edin.
-- `oauth`: kullanıcı bir client id yapıştırır, yetkilendirme akışını OpenChamber yürütür. `authorizeUrl`, `tokenUrl` ve `apiOrigin` gerekir.
-- `host: { "provider": "linear" }`: OpenChamber'da zaten bağlı olan Linear hesabını yeniden kullanır. Client id gerekmez.
+- `oauth`: kullanıcı bir client id yapıştırır, yetkilendirme akışını OhPiChamber yürütür. `authorizeUrl`, `tokenUrl` ve `apiOrigin` gerekir.
+- `host: { "provider": "linear" }`: OhPiChamber'da zaten bağlı olan Linear hesabını yeniden kullanır. Client id gerekmez.
 
 Her `scheme` ne gönderir:
 
-| `scheme` | OpenChamber'ın gönderdiği başlık | Ne zaman kullanılır |
+| `scheme` | OhPiChamber'ın gönderdiği başlık | Ne zaman kullanılır |
 | --- | --- | --- |
 | atlanmış | `Authorization: <token>` | API başlıkta çıplak bir token belgeliyorsa |
 | `"bearer"` | `Authorization: Bearer <token>` | API bearer veya personal access token belgeliyorsa |
@@ -179,24 +179,24 @@ Her `scheme` ne gönderir:
 
 ## Dosyalar
 
-Sayfanız diske kendisi dokunamaz. OpenChamber onun yerine, kullanıcının onayladığı sınırlar içinde okur ve yazar.
+Sayfanız diske kendisi dokunamaz. OhPiChamber onun yerine, kullanıcının onayladığı sınırlar içinde okur ve yazar.
 
 - Göreli bir yol (`README.md`, `src/index.ts`, `.`) açık projeyi ifade eder. `files` yeteneği gerektirir. Açık proje yoksa `NO_DIRECTORY` olur.
 - `/` veya `~/` ile başlayan bir yol başka herhangi bir yeri ifade eder. `contributes.filesystem` içinde tanımladığınız desenlerden biriyle eşleşmelidir ve kullanıcı onay penceresinde tam olarak bu desenleri görür:
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 Desenlerde `*` tek bir yol parçasını, `**` herhangi bir derinliği karşılar. Bunların dışındaki her şey, onaydan sonra bile `BAD_PATH` olur. `..` hiçbir zaman izinli değildir.
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
-Yazmalar atomiktir: OpenChamber geçici bir dosya yazıp yeniden adlandırır, böylece okuyan taraf hiçbir zaman yarım yazılmış bir dosya görmez. Dosyalar UTF-8 metin olarak, en fazla 2 MB'a kadar okunur ve yazılır.
+Yazmalar atomiktir: OhPiChamber geçici bir dosya yazıp yeniden adlandırır, böylece okuyan taraf hiçbir zaman yarım yazılmış bir dosya görmez. Dosyalar UTF-8 metin olarak, en fazla 2 MB'a kadar okunur ve yazılır.
 
 ## Work Status'ta bir bölüm
 
@@ -211,11 +211,11 @@ Yazmalar atomiktir: OpenChamber geçici bir dosya yazıp yeniden adlandırır, b
 - `title`, bölüm başlığındaki panel adının yerini alır, en fazla 60 karakter.
 - `height`, piksel cinsinden başlangıç yüksekliğidir, 24 ile 320 arası (varsayılan 120). İçeriğinizin boyutu değişince [`host.setHeight()`](/sdk/host/) çağırın.
 
-Sayfanız `ctx.surface` değerini `status` olarak görür. OpenChamber sayfayı yalnızca Work Status paneli görünürken ve bölümünüz açıkken yükler, kullanıcı bölümü kapatınca kaldırır. Bu yüzden orada yeniden kuramayacağınız bir şey tutmayın. Yalnızca bölümden oluşan bir eklenti izinleri, bir servisi, bir entegrasyonu ve dosyaları kullanabilir, ama `page`, `attach`, `actions` veya `commands` kullanamaz. Yalnızca web ve masaüstü. `git-graph-status` örneği eksiksiz bir bölümdür.
+Sayfanız `ctx.surface` değerini `status` olarak görür. OhPiChamber sayfayı yalnızca Work Status paneli görünürken ve bölümünüz açıkken yükler, kullanıcı bölümü kapatınca kaldırır. Bu yüzden orada yeniden kuramayacağınız bir şey tutmayın. Yalnızca bölümden oluşan bir eklenti izinleri, bir servisi, bir entegrasyonu ve dosyaları kullanabilir, ama `page`, `attach`, `actions` veya `commands` kullanamaz. Yalnızca web ve masaüstü. `git-graph-status` örneği eksiksiz bir bölümdür.
 
 ## Dosya türünüz için bir düzenleyici
 
-`contributes.fileEditors`, dosyaları metin düzenleyici yerine sayfanızda açar. Kullanıcı Files içinde eşleşen bir dosyayı açtığında OpenChamber orada düzenleyicinizi gösterir; yerleşik görüntüleyicilerdeki kaynak geçişi, tam ekran düğmesi ve kaydet düğmesi de aynen bulunur.
+`contributes.fileEditors`, dosyaları metin düzenleyici yerine sayfanızda açar. Kullanıcı Files içinde eşleşen bir dosyayı açtığında OhPiChamber orada düzenleyicinizi gösterir; yerleşik görüntüleyicilerdeki kaynak geçişi, tam ekran düğmesi ve kaydet düğmesi de aynen bulunur.
 
 ```json
 "fileEditors": [
@@ -228,10 +228,10 @@ Sayfanız `ctx.surface` değerini `status` olarak görür. OpenChamber sayfayı 
 - `content`, `"text"` (varsayılan) ya da `"binary"` olur, aşağıya bakın.
 - Eklenti başına en fazla 8 düzenleyici, her birinde en fazla 16 desen.
 
-Dosyayı OpenChamber yönetir. Sayfanız dosyayı hiçbir zaman okumaz veya yazmaz ve bunun için bir izne ihtiyaç duymaz. OpenChamber size metni verir, kaydederken düzenlenmiş metni ister ve Cmd/Ctrl+S, otomatik kaydetme, kaydedilmemiş değişiklik uyarısı, satır sonları ve diskte yapılan değişikliklerle kendisi ilgilenir:
+Dosyayı OhPiChamber yönetir. Sayfanız dosyayı hiçbir zaman okumaz veya yazmaz ve bunun için bir izne ihtiyaç duymaz. OhPiChamber size metni verir, kaydederken düzenlenmiş metni ister ve Cmd/Ctrl+S, otomatik kaydetme, kaydedilmemiş değişiklik uyarısı, satır sonları ve diskte yapılan değişikliklerle kendisi ilgilenir:
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -247,11 +247,11 @@ const changed = () => host.reportFileChange(tracker.observe(versionOf(currentTex
 
 host.onFileSnapshot(() => ({ content: currentText(), version: versionOf(currentText()) }));
 
-// OpenChamber yazarken yapılan düzenlemeler dosyayı kaydedilmemiş bırakır.
+// OhPiChamber yazarken yapılan düzenlemeler dosyayı kaydedilmemiş bırakır.
 host.onFileSaved((version) => host.reportFileChange({ dirty: tracker.markSaved(version), edited: false }));
 ```
 
-`version`, belge değiştiğinde değişen herhangi bir kısa dizedir, örneğin bir hash. Bir dosya düzenleyicinizin açabileceği bir şey değilse `host.reportFileUnsupported()` çağırın; OpenChamber dosyanın kaynağını bir uyarıyla gösterir. 20 MB'tan büyük dosyalar kaynak görünümünde kalır.
+`version`, belge değiştiğinde değişen herhangi bir kısa dizedir, örneğin bir hash. Bir dosya düzenleyicinizin açabileceği bir şey değilse `host.reportFileUnsupported()` çağırın; OhPiChamber dosyanın kaynağını bir uyarıyla gösterir. 20 MB'tan büyük dosyalar kaynak görünümünde kalır.
 
 ### İkili dosyalar
 
@@ -266,15 +266,15 @@ host.onFileOpen((file) => {
 host.onFileSnapshot(() => ({ bytes: currentBytes(), version: versionOf(currentBytes()) }));
 ```
 
-İkili bir düzenleyici, desenlerinin eşleştiği her dosyayı üstlenebilir; görseller ve PDF'ler gibi OpenChamber'ın kendisinin önizlediği dosyalar da buna dahildir. Kaynak görünümü yoktur ve kullanıcı onu kaydedilmemiş değişikliklerle tam ekrana aldığında veya tam ekrandan çıkardığında OpenChamber önce değişiklikleri kaydeder. Biçimi okumak ve yazmak düzenleyicinizin işidir: OpenChamber döndürdüğünüz baytları olduğu gibi geri yazar.
+İkili bir düzenleyici, desenlerinin eşleştiği her dosyayı üstlenebilir; görseller ve PDF'ler gibi OhPiChamber'ın kendisinin önizlediği dosyalar da buna dahildir. Kaynak görünümü yoktur ve kullanıcı onu kaydedilmemiş değişikliklerle tam ekrana aldığında veya tam ekrandan çıkardığında OhPiChamber önce değişiklikleri kaydeder. Biçimi okumak ve yazmak düzenleyicinizin işidir: OhPiChamber döndürdüğünüz baytları olduğu gibi geri yazar.
 
-Sayfanız `ctx.surface` değerini `file` olarak görür. Dosya diskte değiştiğinde, kullanıcı değişiklikleri attığında ya da düzenleyici tam ekrana geçtiğinde veya tam ekrandan çıktığında OpenChamber sayfayı yeniden yükler ve dosyayı tekrar verir. Deseni eşleşen ilk etkin eklenti kazanır ve OpenChamber'ın kendi önizlemelerinden önce gelir. Yalnızca düzenleyiciden oluşan bir eklenti izinleri, bir servisi, bir entegrasyonu ve dosyaları kullanabilir, ama `page`, `attach`, `actions` veya `commands` kullanamaz. Yalnızca web ve masaüstü. `checklist-editor` örneği eksiksiz bir düzenleyicidir.
+Sayfanız `ctx.surface` değerini `file` olarak görür. Dosya diskte değiştiğinde, kullanıcı değişiklikleri attığında ya da düzenleyici tam ekrana geçtiğinde veya tam ekrandan çıktığında OhPiChamber sayfayı yeniden yükler ve dosyayı tekrar verir. Deseni eşleşen ilk etkin eklenti kazanır ve OhPiChamber'ın kendi önizlemelerinden önce gelir. Yalnızca düzenleyiciden oluşan bir eklenti izinleri, bir servisi, bir entegrasyonu ve dosyaları kullanabilir, ama `page`, `attach`, `actions` veya `commands` kullanamaz. Yalnızca web ve masaüstü. `checklist-editor` örneği eksiksiz bir düzenleyicidir.
 
 ## Eylemler, komutlar ve rozet
 
 Şerit ve + menüsünün ötesinde, bir eklenti üç yerde daha görünebilir. Hepsi eklentiye, bir etiket tıklamasının yaptığı gibi bir `item` verir.
 
-**Mesajlar ve oturumlar üzerindeki eylemler.** Menü girdileri tanımlayın, OpenChamber bunları yerleşik olanların yanında gösterir:
+**Mesajlar ve oturumlar üzerindeki eylemler.** Menü girdileri tanımlayın, OhPiChamber bunları yerleşik olanların yanında gösterir:
 
 ```json
 "actions": [
@@ -300,7 +300,7 @@ host.onResolve(async ({ command, args }) => {
 });
 ```
 
-Kullanıcı sohbet kutusuna `/task ABC-12` yazdığında OpenChamber eklentinizden bunu çözmesini ister ve döndürdüğünüzü, hiçbir şey açmadan, etiket olarak iliştirir. "Bir şey bulunamadı" için `null` döndürün. Paneliniz kapalıysa OpenChamber bu çağrı için onu arka planda yükler. OpenChamber'ın zaten kullandığı bir ad yok sayılır.
+Kullanıcı sohbet kutusuna `/task ABC-12` yazdığında OhPiChamber eklentinizden bunu çözmesini ister ve döndürdüğünüzü, hiçbir şey açmadan, etiket olarak iliştirir. "Bir şey bulunamadı" için `null` döndürün. Paneliniz kapalıysa OhPiChamber bu çağrı için onu arka planda yükler. OhPiChamber'ın zaten kullandığı bir ad yok sayılır.
 
 **Şerit simgesindeki rozet.** `host.setBadge(3)` simgenize bir nokta koyar ve sayıyı ipucunda gösterir, örneğin açık görevler; `host.setBadge(null)` onu temizler. Paneli açmak da temizler.
 
@@ -341,7 +341,7 @@ Anahtar, OpenCode'un bildirdiği sağlayıcı kimliğidir. Değer, paketinizdeki
 ## Paneldeki ilk satırlar
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -351,9 +351,9 @@ host.onReady((ctx) => {
 });
 ```
 
-`connectHost` yalnızca OpenChamber içinde çalışır. Sayfa düz bir dosya olarak açıldığında her çağrı `HOST_UNAVAILABLE` ile reddedilir.
+`connectHost` yalnızca OhPiChamber içinde çalışır. Sayfa düz bir dosya olarak açıldığında her çağrı `HOST_UNAVAILABLE` ile reddedilir.
 
-Paneli önce `@openchamber/sdk/ui` yapı taşlarıyla kurun: düğmeler, alanlar, açılır listeler, sekmeler, listeler ve daha fazlası, uygulamanın renkleri ve yazı tipleriyle; böylece panel OpenChamber'ın bir parçası gibi hissedilir. Kendi HTML ve CSS'inizi yalnızca kitte olmayanlar için yazın. Bkz. [UI kiti](/sdk/ui/).
+Paneli önce `ohpichamber-sdk/ui` yapı taşlarıyla kurun: düğmeler, alanlar, açılır listeler, sekmeler, listeler ve daha fazlası, uygulamanın renkleri ve yazı tipleriyle; böylece panel OhPiChamber'ın bir parçası gibi hissedilir. Kendi HTML ve CSS'inizi yalnızca kitte olmayanlar için yazın. Bkz. [UI kiti](/sdk/ui/).
 
 ## İlgili sayfalar
 

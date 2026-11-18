@@ -10,7 +10,9 @@ import {
   clearLinearAuth,
   toLinearPublicStatus,
   getLinearClientId,
+  getLinearBrokerUrl,
   getLinearRedirectUri,
+  isLinearSignInConfigured,
   isLinearAccessTokenStale,
   getLinearAuthFilePath,
   DEFAULT_LINEAR_CLIENT_ID_VALUE,
@@ -24,17 +26,20 @@ describe('Linear auth storage', () => {
   let previousPort;
   let previousClientId;
   let previousRedirect;
+  let previousBroker;
 
   beforeEach(() => {
     previousDataDir = process.env.OPENCHAMBER_DATA_DIR;
     previousPort = process.env.OPENCHAMBER_PORT;
     previousClientId = process.env.OPENCHAMBER_LINEAR_CLIENT_ID;
     previousRedirect = process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    previousBroker = process.env.OPENCHAMBER_LINEAR_BROKER_URL;
     dataDir = makeTempDir();
     process.env.OPENCHAMBER_DATA_DIR = dataDir;
     delete process.env.OPENCHAMBER_LINEAR_CLIENT_ID;
     delete process.env.OPENCHAMBER_LINEAR_SCOPES;
     delete process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    delete process.env.OPENCHAMBER_LINEAR_BROKER_URL;
     delete process.env.OPENCHAMBER_PORT;
   });
 
@@ -43,6 +48,7 @@ describe('Linear auth storage', () => {
     restoreEnv('OPENCHAMBER_PORT', previousPort);
     restoreEnv('OPENCHAMBER_LINEAR_CLIENT_ID', previousClientId);
     restoreEnv('OPENCHAMBER_LINEAR_REDIRECT_URI', previousRedirect);
+    restoreEnv('OPENCHAMBER_LINEAR_BROKER_URL', previousBroker);
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
@@ -141,10 +147,30 @@ describe('Linear auth storage', () => {
     expect(getLinearClientId()).toBe('env-client');
   });
 
-  it('uses the stable public broker callback by default', () => {
+  it('has no broker, redirect or sign-in until one is configured', () => {
     process.env.OPENCHAMBER_PORT = '3001';
-    expect(getLinearRedirectUri()).toBe('https://api.openchamber.dev/v1/oauth/linear/callback');
+    expect(getLinearBrokerUrl()).toBe('');
+    expect(getLinearRedirectUri()).toBe('');
+    expect(isLinearSignInConfigured()).toBe(false);
+  });
+
+  it('reads the broker from the environment first, then settings.json', () => {
+    process.env.OPENCHAMBER_LINEAR_BROKER_URL = 'https://broker.example.test/v1/oauth/linear/';
+    expect(getLinearBrokerUrl()).toBe('https://broker.example.test/v1/oauth/linear');
+    expect(getLinearRedirectUri()).toBe('https://broker.example.test/v1/oauth/linear/callback');
+    expect(isLinearSignInConfigured()).toBe(true);
+
+    delete process.env.OPENCHAMBER_LINEAR_BROKER_URL;
+    fs.writeFileSync(path.join(dataDir, 'settings.json'), JSON.stringify({ linearBrokerUrl: 'http://127.0.0.1:4100/linear' }), 'utf8');
+    expect(getLinearBrokerUrl()).toBe('http://127.0.0.1:4100/linear');
+    expect(getLinearRedirectUri()).toBe('http://127.0.0.1:4100/linear/callback');
+  });
+
+  it('keeps an explicit redirect URI and ignores the broker for it', () => {
     process.env.OPENCHAMBER_LINEAR_REDIRECT_URI = 'http://localhost:3000/linear/oauth/callback';
+    expect(getLinearRedirectUri()).toBe('http://localhost:3000/linear/oauth/callback');
+    expect(isLinearSignInConfigured()).toBe(true);
+    process.env.OPENCHAMBER_LINEAR_BROKER_URL = 'https://broker.example.test/v1/oauth/linear';
     expect(getLinearRedirectUri()).toBe('http://localhost:3000/linear/oauth/callback');
   });
 

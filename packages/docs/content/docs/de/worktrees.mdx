@@ -17,9 +17,9 @@ Eine Worktree-Sitzung läuft in einer eigenen ausgecheckten Kopie deines Repos a
 3. Prüfe **Based on** (der Branch, von dem ein neuer Branch ausgeht, standardmäßig der Standard-Branch des Remotes, etwa `origin/main`) und **Folder name**; ändere sie nur, wenn es nötig ist.
 4. Erstelle ihn. Hat das Projekt Setup-Befehle, laufen sie direkt danach.
 
-OpenChamber legt den Branch an, richtet den Ordner ein und öffnet dort eine neue Sitzung, bereit für deine erste Nachricht. Du kannst auch direkt von einer [todo](/notes-todos-plans/) oder einem [Issue oder Pull Request](/github/) aus damit beginnen.
+OhPiChamber legt den Branch an, richtet den Ordner ein und öffnet dort eine neue Sitzung, bereit für deine erste Nachricht. Du kannst auch direkt von einer [todo](/notes-todos-plans/) oder einem [Issue oder Pull Request](/github/) aus damit beginnen.
 
-Ohne Rückfragen geht es mit **Schneller Worktree** im selben Branch-Menü: OpenChamber gibt dem Branch einen vorläufigen Namen und richtet die neue Sitzung darauf aus. Sobald der Agent der Aufgabe einen Namen gibt, benennt er auch den Branch danach um, etwa in `fix/login-timeout`, solange der Branch noch nicht gepusht wurde.
+Ohne Rückfragen geht es mit **Schneller Worktree** im selben Branch-Menü: OhPiChamber gibt dem Branch einen vorläufigen Namen und richtet die neue Sitzung darauf aus. Sobald der Agent der Aufgabe einen Namen gibt, benennt er auch den Branch danach um, etwa in `fix/login-timeout`, solange der Branch noch nicht gepusht wurde.
 
 ## In der Seitenleiste
 
@@ -27,7 +27,7 @@ Ein Worktree ist eine Zeile in der Seitenleiste, darunter alle Sitzungen darin. 
 
 ## Projekte, die auf einem Ordner des Repositorys geöffnet sind
 
-Öffnest du ein Projekt auf einem Ordner innerhalb eines Repositorys, etwa `repo/ai`, öffnen sich neue Worktrees ebenfalls dort. Eine Sitzung in einem neuen Worktree startet im selben Ordner des Checkouts, sodass der Agent die Konfiguration findet, die dort liegt. Ein Projekt, das auf dem Repository-Stammverzeichnis geöffnet ist, startet wie bisher im Worktree-Stammverzeichnis. Hat ein Branch diesen Ordner nicht, startet die Sitzung im Worktree-Stammverzeichnis, und OpenChamber weist darauf hin.
+Öffnest du ein Projekt auf einem Ordner innerhalb eines Repositorys, etwa `repo/ai`, öffnen sich neue Worktrees ebenfalls dort. Eine Sitzung in einem neuen Worktree startet im selben Ordner des Checkouts, sodass der Agent die Konfiguration findet, die dort liegt. Ein Projekt, das auf dem Repository-Stammverzeichnis geöffnet ist, startet wie bisher im Worktree-Stammverzeichnis. Hat ein Branch diesen Ordner nicht, startet die Sitzung im Worktree-Stammverzeichnis, und OhPiChamber weist darauf hin.
 
 ## Die Arbeit zurückbringen
 
@@ -35,7 +35,7 @@ Wenn die Arbeit gut ist, verwende **Integrate** in der Git-Ansicht, um die Commi
 
 ## Aufräumen
 
-Wenn die Aufgabe fertig ist, wähle **Worktree archivieren** im Menü der Zeile, oder halte Shift gedrückt und klicke auf die Archivieren-Schaltfläche, die in der Zeile an die Stelle der Schaltfläche für eine neue Sitzung tritt. OpenChamber archiviert ihn: Der Ordner verschwindet, und seine Sitzungen, seine nicht committeten Änderungen und sein Branch warten auf der Seite Archiv. Läuft dort noch eine Sitzung, bleibt der Worktree.
+Wenn die Aufgabe fertig ist, wähle **Worktree archivieren** im Menü der Zeile, oder halte Shift gedrückt und klicke auf die Archivieren-Schaltfläche, die in der Zeile an die Stelle der Schaltfläche für eine neue Sitzung tritt. OhPiChamber archiviert ihn: Der Ordner verschwindet, und seine Sitzungen, seine nicht committeten Änderungen und sein Branch warten auf der Seite Archiv. Läuft dort noch eine Sitzung, bleibt der Worktree.
 
 Markierst du die Zeile als erledigt, verlässt sie nur den Bereich In Arbeit. Um einen Worktree jedes Mal zu archivieren, wenn du ihn als erledigt markierst, oder sobald sein PR gemergt ist, schalte das unter **Einstellungen → Sitzungen → Abgeschlossene Worktrees** ein.
 
@@ -45,9 +45,9 @@ Um einen Worktree endgültig loszuwerden, lösche ihn über sein Menü oder lös
 
 ## Wenn etwas seltsam aussieht
 
-Ein Worktree braucht möglicherweise Aufmerksamkeit, wenn sein Ordner fehlt, sein Branch in einem detached-Zustand ist oder ein Merge oder Rebase noch nicht abgeschlossen wurde. OpenChamber markiert das, damit du es beheben kannst — siehe [Worktrees & Git](/troubleshooting/worktrees-git/).
+Ein Worktree braucht möglicherweise Aufmerksamkeit, wenn sein Ordner fehlt, sein Branch in einem detached-Zustand ist oder ein Merge oder Rebase noch nicht abgeschlossen wurde. OhPiChamber markiert das, damit du es beheben kannst — siehe [Worktrees & Git](/troubleshooting/worktrees-git/).
 
 ## Verwandt
 
 - [Multi-run](/multi-run/) — viele Worktree-Sitzungen gleichzeitig starten
-- [Git-Workflows](/git/) — von innen in OpenChamber committen und integrieren
+- [Git-Workflows](/git/) — von innen in OhPiChamber committen und integrieren

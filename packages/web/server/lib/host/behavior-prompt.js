@@ -45,7 +45,7 @@ export const createBehaviorPromptSource = ({
   settingsFilePath = path.join(
     process.env.OPENCHAMBER_DATA_DIR
       ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
-      : path.join(os.homedir(), '.config', 'openchamber'),
+      : path.join(os.homedir(), '.config', 'ohpichamber'),
     'settings.json',
   ),
   readMergedSettings,

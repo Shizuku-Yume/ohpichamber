@@ -89,7 +89,7 @@ describe('Linear auth routes', () => {
       .expect(200);
 
     expect(callback.text).toContain('Authorization Complete');
-    expect(callback.text).toContain('openchamber://focus/linear-auth');
+    expect(callback.text).toContain('ohpichamber://focus/linear-auth');
 
     const status = await request(app).get('/api/linear/auth/status').expect(200);
     expect(status.body.connected).toBe(true);
@@ -133,7 +133,7 @@ describe('Linear auth routes', () => {
       .expect(400);
     expect(tokenFetch).not.toHaveBeenCalled();
     expect(response.text).toContain('Authorization Failed');
-    expect(response.text).not.toContain('openchamber://');
+    expect(response.text).not.toContain('ohpichamber://');
   });
 
   it('omits the desktop deep link for flows started outside the desktop shell', async () => {
@@ -162,7 +162,7 @@ describe('Linear auth routes', () => {
       .get('/linear/oauth/callback')
       .query({ state, code: 'auth-code' })
       .expect(200);
-    expect(response.text).not.toContain('openchamber://');
+    expect(response.text).not.toContain('ohpichamber://');
   });
 
   it('disconnects and revokes the refresh token', async () => {
@@ -493,6 +493,29 @@ describe('Linear auth routes', () => {
       stateId: 'not-a-uuid',
     }).expect(400);
     expect(updated.body.error).toBe('stateId must be a UUID.');
+  });
+
+  it('reports Linear sign-in unavailable, and refuses start, with no broker configured', async () => {
+    delete process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    delete process.env.OPENCHAMBER_LINEAR_BROKER_URL;
+    const app = createApp();
+
+    const status = await request(app).get('/api/linear/auth/status').expect(200);
+    expect(status.body).toEqual({
+      connected: false,
+      signIn: {
+        reason: 'broker-url-missing',
+        setting: 'OPENCHAMBER_LINEAR_BROKER_URL',
+        settingsKey: 'linearBrokerUrl',
+      },
+    });
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const start = await request(app).post('/api/linear/auth/start').send({}).expect(400);
+    expect(start.body.code).toBe('LINEAR_BROKER_NOT_CONFIGURED');
+    expect(start.body.error).toContain('OPENCHAMBER_LINEAR_BROKER_URL');
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('returns disconnected for issue routes when Linear is not connected', async () => {

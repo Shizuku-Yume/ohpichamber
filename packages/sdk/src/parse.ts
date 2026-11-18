@@ -770,7 +770,7 @@ export const openChamberManifestSchema = z.object({
     if (providesSourceControl && contributes.panel.id.length > SOURCE_CONTROL_GUEST_ID_MAX) {
       ctx.addIssue({
         code: 'custom', path: ['service', 'provides'],
-        message: `A source-control extension's panel.id is at most ${SOURCE_CONTROL_GUEST_ID_MAX} characters: OpenChamber names its Git host "ext-<panel.id>".`,
+        message: `A source-control extension's panel.id is at most ${SOURCE_CONTROL_GUEST_ID_MAX} characters: OhPiChamber names its Git host "ext-<panel.id>".`,
       });
       return;
     }
@@ -786,7 +786,7 @@ export const openChamberManifestSchema = z.object({
     if (providesNotifications && contributes.panel.id.length > NOTIFICATIONS_GUEST_ID_MAX) {
       ctx.addIssue({
         code: 'custom', path: ['service', 'provides'],
-        message: `A notifications extension's panel.id is at most ${NOTIFICATIONS_GUEST_ID_MAX} characters: OpenChamber names its channel "ext-<panel.id>".`,
+        message: `A notifications extension's panel.id is at most ${NOTIFICATIONS_GUEST_ID_MAX} characters: OhPiChamber names its channel "ext-<panel.id>".`,
       });
       return;
     }
@@ -802,7 +802,7 @@ export const openChamberManifestSchema = z.object({
     if (providesTracker && contributes.panel.id.length > TRACKER_GUEST_ID_MAX) {
       ctx.addIssue({
         code: 'custom', path: ['service', 'provides'],
-        message: `A tracker extension's panel.id is at most ${TRACKER_GUEST_ID_MAX} characters: OpenChamber names its tracker "ext-<panel.id>".`,
+        message: `A tracker extension's panel.id is at most ${TRACKER_GUEST_ID_MAX} characters: OhPiChamber names its tracker "ext-<panel.id>".`,
       });
       return;
     }
@@ -827,7 +827,7 @@ export const openChamberManifestSchema = z.object({
     if (providesQuota && contributes.panel.id.length > QUOTA_GUEST_ID_MAX) {
       ctx.addIssue({
         code: 'custom', path: ['service', 'provides'],
-        message: `A quota extension's panel.id is at most ${QUOTA_GUEST_ID_MAX} characters: OpenChamber names its usage provider "ext-<panel.id>".`,
+        message: `A quota extension's panel.id is at most ${QUOTA_GUEST_ID_MAX} characters: OhPiChamber names its usage provider "ext-<panel.id>".`,
       });
       return;
     }

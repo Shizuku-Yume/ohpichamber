@@ -21,9 +21,9 @@ const REMOTE_BUN_CANDIDATE = '"${BUN_INSTALL:-$HOME/.bun}/bin/bun"';
 const REMOTE_NVM_BIN = '${NVM_DIR:-$HOME/.nvm}/versions/node/v$(ls -1 "${NVM_DIR:-$HOME/.nvm}/versions/node" 2>/dev/null | sed "s/^v//" | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)/bin';
 const REMOTE_PATH_PREFIX = `\${BUN_INSTALL:-$HOME/.bun}/bin:\${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin:$HOME/.local/bin:$HOME/.openchamber/npm-global/bin:${REMOTE_NVM_BIN}`;
 const REMOTE_BIN_CANDIDATES = [
-  '"$HOME/.openchamber/npm-global/bin/openchamber"',
-  '"${BUN_INSTALL:-$HOME/.bun}/bin/openchamber"',
-  '"${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin/openchamber"',
+  '"$HOME/.openchamber/npm-global/bin/ohpichamber"',
+  '"${BUN_INSTALL:-$HOME/.bun}/bin/ohpichamber"',
+  '"${XDG_CACHE_HOME:-$HOME/.cache}/.bun/bin/ohpichamber"',
 ];
 const DEFAULT_CONTROL_PERSIST_SEC = 300;
 const DEFAULT_READY_TIMEOUT_SEC = 30;
@@ -377,14 +377,14 @@ const waitLocalForwardReady = async (localPort) => {
     await new Promise((resolve) => setTimeout(resolve, pollMs));
     pollMs = Math.min(pollMs * 2, 2000);
   }
-  throw new Error('Timed out waiting for forwarded OpenChamber health');
+  throw new Error('Timed out waiting for forwarded OhPiChamber health');
 };
 
 const parseVersionToken = (raw) => {
   for (const token of String(raw).split(/\s+/)) {
     let candidate = token.trim().replace(/^v/, '');
     candidate = candidate.replace(/[,)]+$/g, '');
-    // A Canary build carries a pre-release part: 2.5.4-canary.20261030.1.
+    // A pre-release version such as 1.0.0-beta.1 is still a version token.
     if (/^\d+(\.\d+)+(-[0-9A-Za-z.]+)?$/.test(candidate)) {
       return candidate;
     }
@@ -915,11 +915,11 @@ export class ElectronSshManager {
         password,
         trustDevice: true,
         issueClientToken: true,
-        clientLabel: 'OpenChamber Desktop SSH',
+        clientLabel: 'OhPiChamber Desktop SSH',
       }),
     });
     if (!loginResponse.ok) {
-      throw new Error(`Configured OpenChamber UI password was rejected by forwarded server (status ${loginResponse.status})`);
+      throw new Error(`Configured OhPiChamber UI password was rejected by forwarded server (status ${loginResponse.status})`);
     }
 
     const payload = await loginResponse.json().catch(() => null);
@@ -937,7 +937,7 @@ export class ElectronSshManager {
         'Content-Type': 'application/json',
         Cookie: cookie,
       },
-      body: JSON.stringify({ label: 'OpenChamber Desktop SSH' }),
+      body: JSON.stringify({ label: 'OhPiChamber Desktop SSH' }),
     });
     if (!tokenResponse.ok) return '';
     const tokenPayload = await tokenResponse.json().catch(() => null);
@@ -1066,7 +1066,7 @@ export class ElectronSshManager {
   // sit on PATH, so the caller picks by version instead of trusting PATH order.
   async remoteOpenChamberCandidates(parsed, controlPath) {
     const script = [
-      `for candidate in ${REMOTE_BIN_CANDIDATES.join(' ')} "$(command -v openchamber 2>/dev/null)"; do`,
+      `for candidate in ${REMOTE_BIN_CANDIDATES.join(' ')} "$(command -v ohpichamber 2>/dev/null)"; do`,
       '  [ -n "$candidate" ] || continue;',
       '  [ -x "$candidate" ] || continue;',
       `  printf '%s\t%s\n' "$candidate" "$("$candidate" --version 2>/dev/null | head -n 1)";`,
@@ -1101,10 +1101,10 @@ export class ElectronSshManager {
 
     // bun's global install targets `~/.bun` or `${XDG_CACHE_HOME:-~/.cache}/.bun` (bun 1.3.x XDG-aware);
     // npm is pinned to a prefix in the user's home so it never touches the root-owned global directory.
-    const bunCommand = bunPath ? `${shellQuote(bunPath)} add -g @openchamber/web@${version}` : null;
+    const bunCommand = bunPath ? `${shellQuote(bunPath)} add -g ohpichamber@${version}` : null;
     const npmCommand = npmPath
       // npm is a node script: an nvm npm finds its node only next to itself.
-      ? `mkdir -p "${REMOTE_USER_PREFIX}" && PATH="$(dirname ${shellQuote(npmPath)}):$PATH" ${shellQuote(npmPath)} install -g --prefix "${REMOTE_USER_PREFIX}" @openchamber/web@${version}`
+      ? `mkdir -p "${REMOTE_USER_PREFIX}" && PATH="$(dirname ${shellQuote(npmPath)}):$PATH" ${shellQuote(npmPath)} install -g --prefix "${REMOTE_USER_PREFIX}" ohpichamber@${version}`
       : null;
 
     const commands = [];
@@ -1129,7 +1129,7 @@ export class ElectronSshManager {
         lastError = error;
       }
     }
-    throw lastError || new Error('Failed to install OpenChamber on remote host');
+    throw lastError || new Error('Failed to install OhPiChamber on remote host');
   }
 
   async probeRemoteSystemInfo(parsed, controlPath, port, openchamberPassword) {
@@ -1162,15 +1162,15 @@ export class ElectronSshManager {
     if (isLivenessHttpStatus(infoStatus)) {
       if (isAuthHttpStatus(infoStatus)) {
         if (openchamberPassword && authStatus !== 200) {
-          throw new Error(`Remote OpenChamber requires UI authentication and configured password was rejected (auth status ${authStatus})`);
+          throw new Error(`Remote OhPiChamber requires UI authentication and configured password was rejected (auth status ${authStatus})`);
         }
         if (isLivenessHttpStatus(healthStatus)) return { info: {}, passwordAccepted, authStatus };
-        throw new Error('Remote OpenChamber requires UI authentication on /api/system/info; configure OpenChamber UI password');
+        throw new Error('Remote OhPiChamber requires UI authentication on /api/system/info; configure OhPiChamber UI password');
       }
     } else if (isLivenessHttpStatus(healthStatus)) {
       return { info: {}, passwordAccepted, authStatus };
     } else {
-      throw new Error(`Remote OpenChamber probe failed (info status ${infoStatus}, health status ${healthStatus})`);
+      throw new Error(`Remote OhPiChamber probe failed (info status ${infoStatus}, health status ${healthStatus})`);
     }
 
     try {
@@ -1207,7 +1207,7 @@ export class ElectronSshManager {
     return port || desiredPort;
   }
 
-  // `openchamber stop` owns the daemon lifecycle. The HTTP shutdown route sits
+  // `ohpichamber stop` owns the daemon lifecycle. The HTTP shutdown route sits
   // behind UI authentication, so it cannot stop a password-protected server.
   async stopRemoteServerBestEffort(parsed, controlPath, remotePort, remoteBinPath) {
     if (!remoteBinPath) return;
@@ -1358,46 +1358,46 @@ export class ElectronSshManager {
   async ensureRemoteServer(instance, parsed, controlPath) {
     if (instance.remoteOpenchamber.mode === 'external') {
       if (!instance.remoteOpenchamber.preferredPort) {
-        throw new Error('External mode requires a preferred remote OpenChamber port');
+        throw new Error('External mode requires a preferred remote OhPiChamber port');
       }
       const port = instance.remoteOpenchamber.preferredPort;
-      this.setStatus(instance.id, 'server_detecting', 'Probing external OpenChamber server', null, null, port, false, 0, false);
+      this.setStatus(instance.id, 'server_detecting', 'Probing external OhPiChamber server', null, null, port, false, 0, false);
       await this.probeRemoteSystemInfo(parsed, controlPath, port, this.configuredOpenChamberPassword(instance));
       return { remotePort: port, startedByUs: false, ownsRemoteServer: false, remoteBinPath: null };
     }
 
-    this.setStatus(instance.id, 'remote_probe', 'Checking remote OpenChamber installation');
+    this.setStatus(instance.id, 'remote_probe', 'Checking remote OhPiChamber installation');
     const installed = await this.remoteOpenChamberCandidates(parsed, controlPath);
     let binary = installed.find((candidate) => candidate.version === this.appVersion) || null;
 
     if (!binary) {
       const existing = installed[0] || null;
       if (existing) {
-        this.setStatus(instance.id, 'updating', `Updating remote OpenChamber from ${existing.version || 'unknown'} to ${this.appVersion}`);
+        this.setStatus(instance.id, 'updating', `Updating remote OhPiChamber from ${existing.version || 'unknown'} to ${this.appVersion}`);
       } else {
-        this.setStatus(instance.id, 'installing', 'Installing OpenChamber on remote host');
+        this.setStatus(instance.id, 'installing', 'Installing OhPiChamber on remote host');
       }
       await this.installOpenChamberManaged(parsed, controlPath, this.appVersion, instance.remoteOpenchamber.installMethod);
 
       const afterInstall = await this.remoteOpenChamberCandidates(parsed, controlPath);
       binary = afterInstall.find((candidate) => candidate.version === this.appVersion) || afterInstall[0] || existing;
       if (!binary) {
-        throw new Error('OpenChamber was installed on the remote host but no openchamber binary could be found');
+        throw new Error('OhPiChamber was installed on the remote host but no ohpichamber binary could be found');
       }
     }
 
-    this.setStatus(instance.id, 'server_detecting', 'Detecting managed OpenChamber server');
+    this.setStatus(instance.id, 'server_detecting', 'Detecting managed OhPiChamber server');
     const adopted = await this.adoptRunningRemoteServer(instance, parsed, controlPath, binary.binPath);
     let remotePort = adopted?.port || null;
     let startedByUs = false;
     if (!remotePort) {
-      this.setStatus(instance.id, 'server_starting', 'Starting managed OpenChamber server');
+      this.setStatus(instance.id, 'server_starting', 'Starting managed OhPiChamber server');
       const desiredPort = instance.remoteOpenchamber.preferredPort || randomPortCandidate(instance.id);
       remotePort = await this.startRemoteServerManaged(parsed, controlPath, instance, desiredPort, binary.binPath);
       startedByUs = true;
     }
     if (!(await this.remoteServerRunning(parsed, controlPath, remotePort, this.configuredOpenChamberPassword(instance)))) {
-      throw new Error('Managed OpenChamber server failed to become reachable');
+      throw new Error('Managed OhPiChamber server failed to become reachable');
     }
     // An adopted daemon is as much this instance's server as one it just
     // started: with keepRunning off, disconnecting stops either.

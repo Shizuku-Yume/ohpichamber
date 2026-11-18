@@ -14,7 +14,7 @@ import { TunnelSettings } from './TunnelSettings';
 import { EnvironmentVariablesSettings } from './EnvironmentVariablesSettings';
 import { DesktopNetworkSettings } from './DesktopNetworkSettings';
 import { DesktopAppSettings, DesktopQuickAccessSettings } from './DesktopAppSettings';
-import { GeneralConnectionAndPrivacySettings, GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
+import { GeneralFilesAndTerminalSettings, GeneralInterfaceSettings } from './GeneralWorkspaceSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import { isDesktopLocalOriginActive, isDesktopShell, isWebRuntime } from '@/lib/desktop';
@@ -111,7 +111,7 @@ const ShortcutsSectionContent: React.FC = () => {
 
 // General, by what people come here for: the desktop app itself, the agent's
 // tools, how other devices reach this app, the window, global shortcuts,
-// files and the terminal, then trusted links, message transport and privacy.
+// files and the terminal, then trusted links.
 // The layout drops the divider above whichever section renders first.
 const GeneralSectionContent: React.FC = () => {
     const runtimeEndpointEpoch = useRuntimeEndpointEpoch();
@@ -131,7 +131,6 @@ const GeneralSectionContent: React.FC = () => {
             <EnvironmentVariablesSettings key={runtimeEndpointEpoch} />
             <GeneralFilesAndTerminalSettings />
             <AppLinkSecuritySettings />
-            <GeneralConnectionAndPrivacySettings />
         </>
     );
 };

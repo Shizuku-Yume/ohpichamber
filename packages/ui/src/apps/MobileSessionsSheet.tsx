@@ -74,7 +74,7 @@ type MobileSessionsSheetProps = {
       it is shown. */
   variant?: 'drawer' | 'sidebar';
   /** App-level footer bar (desktop-sidebar-style): current instance on the
-      left, settings (and, on hosted web, a pending update) on the right. */
+      left, settings on the right. */
   footer?: {
     /** Connected instance label — Capacitor only; null hides the left slot. */
     instanceLabel: string | null;
@@ -87,8 +87,6 @@ type MobileSessionsSheetProps = {
     onOpenOverview?: () => void;
     /** The issues and PRs board. */
     onOpenSourceBoard: () => void;
-    /** Present only while a server update is available (hosted web). */
-    onOpenUpdate?: () => void;
   };
 };
 
@@ -390,7 +388,7 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
           </DropdownMenuItem>
         ) : null}
         <MobileMarkAllReadItem />
-      
+
       </DropdownMenuContent>
     </DropdownMenu>
   ) : null;
@@ -493,158 +491,143 @@ export const MobileSessionsSheet: React.FC<MobileSessionsSheetProps> = ({ open, 
   // above this, so a 100% height overflows by exactly that header — and the
   // clipped overflow swallowed the footer.
   const surfaceContent = (
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* The list scrolls under the search field: the list is virtualized
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* The list scrolls under the search field: the list is virtualized
             in its own scroller, which the field cannot join. */}
-        {!editingOrder && !empty && searchShown ? (
-          <div className={cn('shrink-0 px-2 pb-1', variant === 'sidebar' ? 'pt-2' : 'pt-1')}>
-            <SessionSearchInput
-              inputRef={searchInputRef}
-              value={query}
-              onSearch={setQuery}
-              onClose={variant === 'sidebar' ? toggleSearch : undefined}
-              active={open}
-              mobile
-              placeholder={t('mobile.sessions.search.placeholder')}
-              clearLabel={t('mobile.sessions.clearSearchAria')}
-            />
-          </div>
-        ) : null}
-        {empty ? (
-          <div className="min-h-0 flex-1">
-            <MobileSessionsEmpty
-              title={t('mobile.sessions.empty.noProjectsTitle')}
-              description={t('mobile.sessions.empty.noProjectsDescription')}
-              action={
-                <button
-                  type="button"
-                  className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 typography-ui-label text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => setDirectoryDialogOpen(true)}
-                >
-                  <Icon name="folder-add" className="size-4" />
-                  {t('sessions.sidebar.header.actions.addProject')}
-                </button>
-              }
-            />
-          </div>
-        ) : null}
-        {editingOrder ? (
-          <ScrollableOverlay outerClassName="min-h-0 flex-1" className="pb-4" useScrollShadow disableHorizontal>
-            <div className="flex flex-col gap-2 px-3 py-2">
-              <p className="px-1 typography-micro text-muted-foreground">{t('mobile.sessions.editOrderHint')}</p>
-              <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleReorderDragEnd}>
-                <SortableContext items={reorderList.map((project) => project.id)} strategy={verticalListSortingStrategy}>
-                  <div className="flex flex-col gap-1.5">
-                    {reorderList.map((project) => <SortableProjectRow key={project.id} project={project} />)}
-                  </div>
-                </SortableContext>
-              </DndContext>
-            </div>
-          </ScrollableOverlay>
-        ) : null}
-        {/* Mounted while reordering too, so the list comes back as it was. */}
-        <div className={cn('flex min-h-0 flex-1 flex-col', (editingOrder || empty) && 'hidden')}>
-          <MobileSidebarActionsProvider value={sidebarActions}>
-            <SessionSidebar mobileVariant isVisible={listActive} phone={phoneList} />
-          </MobileSidebarActionsProvider>
+      {!editingOrder && !empty && searchShown ? (
+        <div className={cn('shrink-0 px-2 pb-1', variant === 'sidebar' ? 'pt-2' : 'pt-1')}>
+          <SessionSearchInput
+            inputRef={searchInputRef}
+            value={query}
+            onSearch={setQuery}
+            onClose={variant === 'sidebar' ? toggleSearch : undefined}
+            active={open}
+            mobile
+            placeholder={t('mobile.sessions.search.placeholder')}
+            clearLabel={t('mobile.sessions.clearSearchAria')}
+          />
         </div>
+      ) : null}
+      {empty ? (
+        <div className="min-h-0 flex-1">
+          <MobileSessionsEmpty
+            title={t('mobile.sessions.empty.noProjectsTitle')}
+            description={t('mobile.sessions.empty.noProjectsDescription')}
+            action={
+              <button
+                type="button"
+                className="flex items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 typography-ui-label text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => setDirectoryDialogOpen(true)}
+              >
+                <Icon name="folder-add" className="size-4" />
+                {t('sessions.sidebar.header.actions.addProject')}
+              </button>
+            }
+          />
+        </div>
+      ) : null}
+      {editingOrder ? (
+        <ScrollableOverlay outerClassName="min-h-0 flex-1" className="pb-4" useScrollShadow disableHorizontal>
+          <div className="flex flex-col gap-2 px-3 py-2">
+            <p className="px-1 typography-micro text-muted-foreground">{t('mobile.sessions.editOrderHint')}</p>
+            <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleReorderDragEnd}>
+              <SortableContext items={reorderList.map((project) => project.id)} strategy={verticalListSortingStrategy}>
+                <div className="flex flex-col gap-1.5">
+                  {reorderList.map((project) => <SortableProjectRow key={project.id} project={project} />)}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+        </ScrollableOverlay>
+      ) : null}
+      {/* Mounted while reordering too, so the list comes back as it was. */}
+      <div className={cn('flex min-h-0 flex-1 flex-col', (editingOrder || empty) && 'hidden')}>
+        <MobileSidebarActionsProvider value={sidebarActions}>
+          <SessionSidebar mobileVariant isVisible={listActive} phone={phoneList} />
+        </MobileSidebarActionsProvider>
+      </div>
 
-        {/* App-level footer, as the desktop sidebar's: the connected
+      {/* App-level footer, as the desktop sidebar's: the connected
             instance (Capacitor) on the left, a pending web update and
             Settings on the right. The pages the list opens are in the
             header's More menu. */}
-        {footer ? (
-          <div
-            // At the bottom of the phone's drawer it rides the keyboard. The
-            // iPad's sidebar keeps its height under the raised keyboard
-            // (mobile.css), so its footer stays where it is.
-            data-keyboard-rider={variant === 'drawer' ? '' : undefined}
-            className="oc-sessions-footer flex shrink-0 items-center justify-between gap-2 border-t border-edge bg-background px-3 pt-1.5"
-            style={{ paddingBottom: 'calc(0.375rem + var(--oc-safe-area-bottom, 0px))' }}
-          >
-            <div className="flex min-w-0 items-center">
-              {footer.instanceLabel && footer.onOpenInstances ? (
-                <Button
-                  type="button"
-                  variant="info"
-                  size="lg"
-                  className="min-w-0 shrink justify-start"
-                  onClick={footer.onOpenInstances}
-                  aria-label={t('mobile.menu.instances')}
-                  style={{ touchAction: 'manipulation' }}
-                >
-                  <Icon name="server" className="size-[18px]" />
-                  <span className="block min-w-0 truncate">{footer.instanceLabel}</span>
-                </Button>
-              ) : null}
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {footer.onOpenUpdate ? (
-                <Button
-                  type="button"
-                  variant="chip"
-                  size="lg"
-                  className="relative w-10 px-0"
-                  onClick={footer.onOpenUpdate}
-                  aria-label={t('mobile.menu.update')}
-                  title={t('mobile.menu.update')}
-                  style={{ touchAction: 'manipulation' }}
-                >
-                  <Icon name="download" className="size-5" />
-                  <span className="absolute inset-e-2 top-2 inline-flex size-2 rounded-full bg-primary" aria-hidden />
-                </Button>
-              ) : null}
-              <Tooltip>
-              <TooltipTrigger asChild>
+      {footer ? (
+        <div
+          // At the bottom of the phone's drawer it rides the keyboard. The
+          // iPad's sidebar keeps its height under the raised keyboard
+          // (mobile.css), so its footer stays where it is.
+          data-keyboard-rider={variant === 'drawer' ? '' : undefined}
+          className="oc-sessions-footer flex shrink-0 items-center justify-between gap-2 border-t border-edge bg-background px-3 pt-1.5"
+          style={{ paddingBottom: 'calc(0.375rem + var(--oc-safe-area-bottom, 0px))' }}
+        >
+          <div className="flex min-w-0 items-center">
+            {footer.instanceLabel && footer.onOpenInstances ? (
               <Button
                 type="button"
-                variant="default"
+                variant="info"
                 size="lg"
-                className="w-10 px-0"
-                onClick={footer.onOpenSettings}
-                aria-label={t('mobile.menu.settings')}
+                className="min-w-0 shrink justify-start"
+                onClick={footer.onOpenInstances}
+                aria-label={t('mobile.menu.instances')}
                 style={{ touchAction: 'manipulation' }}
               >
-                <Icon name="settings-3" className="size-5" />
+                <Icon name="server" className="size-[18px]" />
+                <span className="block min-w-0 truncate">{footer.instanceLabel}</span>
               </Button>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="lg"
+                  className="w-10 px-0"
+                  onClick={footer.onOpenSettings}
+                  aria-label={t('mobile.menu.settings')}
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  <Icon name="settings-3" className="size-5" />
+                </Button>
               </TooltipTrigger>
               <TooltipContent side="top"><TooltipLabelWithShortcut label={t('mobile.menu.settings')} shortcut={formatShortcutForDisplay(getEffectiveShortcutCombo('open_settings', shortcutOverrides), '')} /></TooltipContent>
-              </Tooltip>
-            </div>
+            </Tooltip>
           </div>
-        ) : null}
+        </div>
+      ) : null}
 
-        <DirectoryExplorerDialog open={directoryDialogOpen} onOpenChange={setDirectoryDialogOpen} />
-        <NewWorktreeDialog
-          open={newWorktreeDialogOpen}
-          onOpenChange={(value) => {
-            setNewWorktreeDialogOpen(value);
-            if (!value) setWorktreeDialogProjectId(null);
-          }}
-          project={worktreeDialogProject ? { id: worktreeDialogProject.id, path: normalizePath(worktreeDialogProject.path) } : undefined}
-          onWorktreeCreated={(worktreePath) => {
-            openNewSessionDraft({
-              selectedProjectId: worktreeDialogProjectId,
-              directoryOverride: worktreePath,
-              preserveDirectoryOverride: true,
-            });
-            close();
-          }}
+      <DirectoryExplorerDialog open={directoryDialogOpen} onOpenChange={setDirectoryDialogOpen} />
+      <NewWorktreeDialog
+        open={newWorktreeDialogOpen}
+        onOpenChange={(value) => {
+          setNewWorktreeDialogOpen(value);
+          if (!value) setWorktreeDialogProjectId(null);
+        }}
+        project={worktreeDialogProject ? { id: worktreeDialogProject.id, path: normalizePath(worktreeDialogProject.path) } : undefined}
+        onWorktreeCreated={(worktreePath) => {
+          openNewSessionDraft({
+            selectedProjectId: worktreeDialogProjectId,
+            directoryOverride: worktreePath,
+            preserveDirectoryOverride: true,
+          });
+          close();
+        }}
+      />
+      <MobileProjectEditSurface
+        open={editingProject !== null}
+        project={editingProject}
+        onClose={() => setEditingProjectId(null)}
+      />
+      {worktreeToDelete ? (
+        <MobileDeleteWorktreeDialog
+          open
+          project={worktreeToDelete.project}
+          worktree={worktreeToDelete.worktree}
+          onClose={() => setWorktreeToDelete(null)}
         />
-        <MobileProjectEditSurface
-          open={editingProject !== null}
-          project={editingProject}
-          onClose={() => setEditingProjectId(null)}
-        />
-        {worktreeToDelete ? (
-          <MobileDeleteWorktreeDialog
-            open
-            project={worktreeToDelete.project}
-            worktree={worktreeToDelete.worktree}
-            onClose={() => setWorktreeToDelete(null)}
-          />
-        ) : null}
-      </div>
+      ) : null}
+    </div>
   );
 
   if (variant === 'sidebar') {

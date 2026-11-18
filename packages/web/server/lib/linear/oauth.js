@@ -13,6 +13,11 @@ const LINEAR_TOKEN_URL = 'https://api.linear.app/oauth/token';
 const LINEAR_REVOKE_URL = 'https://api.linear.app/oauth/revoke';
 const PENDING_AUTHORIZATION_TTL_MS = 10 * 60_000;
 
+/** The typed refusal when nothing can carry Linear's browser sign-in. */
+const LINEAR_BROKER_NOT_CONFIGURED = 'LINEAR_BROKER_NOT_CONFIGURED';
+const LINEAR_BROKER_NOT_CONFIGURED_MESSAGE =
+  'Linear sign-in needs an OAuth broker. Set OPENCHAMBER_LINEAR_BROKER_URL, or settings.json linearBrokerUrl.';
+
 const pendingByState = new Map();
 const brokerPollsByState = new Map();
 
@@ -151,7 +156,10 @@ export async function startAuthorization({ origin } = {}) {
   const state = crypto.randomBytes(32).toString('base64url');
   const brokerUrl = getLinearBrokerUrl();
   const configuredRedirectUri = getLinearRedirectUri();
-  const usesBroker = configuredRedirectUri === brokerCallbackUrl(brokerUrl);
+  if (!configuredRedirectUri) {
+    throw new LinearOAuthError(LINEAR_BROKER_NOT_CONFIGURED_MESSAGE, LINEAR_BROKER_NOT_CONFIGURED);
+  }
+  const usesBroker = Boolean(brokerUrl) && configuredRedirectUri === brokerCallbackUrl(brokerUrl);
   const claimSecret = usesBroker ? crypto.randomBytes(32).toString('base64url') : null;
   const redirectUri = usesBroker
     ? await registerBrokerTransaction({ brokerUrl, state, claimSecret })
@@ -269,7 +277,7 @@ export async function consumeAuthorizationCallback({ code, state, error, errorDe
   }
   if (!pending?.codeVerifier) {
     throw failAuthorization(
-      'This authorization session has expired or is unknown to the running app. Return to OpenChamber and click Connect again.',
+      'This authorization session has expired or is unknown to the running app. Return to OhPiChamber and click Connect again.',
       'UNKNOWN_STATE',
     );
   }

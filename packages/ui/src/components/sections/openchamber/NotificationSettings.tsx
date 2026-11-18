@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { getClientPlatform } from '@/lib/platform';
 import { useI18n } from '@/lib/i18n';
 import { problemMessage } from '@/lib/problemMessage';
+import type { NativePushStatus } from '@/lib/api/types';
 import {
   SettingsSection,
   SettingsTwoColumn,
@@ -80,6 +81,32 @@ export const NotificationSettings: React.FC = () => {
   const [pushSubscribed, setPushSubscribed] = React.useState(false);
   const [pushBusy, setPushBusy] = React.useState(false);
   const pushBusyBlink = useWaitingBlink(pushBusy);
+  const [nativePushStatus, setNativePushStatus] = React.useState<NativePushStatus | null>(null);
+
+  // On the native app, remote push is the only channel and this server may have no
+  // relay configured. The server says whether it can deliver; the page never guesses.
+  React.useEffect(() => {
+    if (!isNativeApp) {
+      setNativePushStatus(null);
+      return;
+    }
+    const push = getRegisteredRuntimeAPIs()?.push;
+    if (!push?.nativeStatus) {
+      setNativePushStatus(null);
+      return;
+    }
+    let cancelled = false;
+    void push.nativeStatus()
+      .then((status) => {
+        if (!cancelled) setNativePushStatus(status);
+      })
+      .catch(() => {
+        if (!cancelled) setNativePushStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isNativeApp]);
 
   React.useEffect(() => {
     if (!isBrowser) {
@@ -522,6 +549,19 @@ export const NotificationSettings: React.FC = () => {
                 </p>
               )}
             </div>
+          )}
+
+          {isNativeApp && nativePushStatus?.available === false && (
+            // Remote push is the native app's only channel. Without a relay the server
+            // sends nothing, so the page names the setting that turns it on.
+            <p className="typography-meta mt-1 text-[var(--status-warning)]">
+              {nativePushStatus.reason === 'relay-url-missing'
+                ? t('settings.notifications.page.push.nativeUnavailableRelay', { setting: nativePushStatus.relaySetting })
+                : t('settings.notifications.page.push.nativeUnavailableDirect', {
+                  setting: nativePushStatus.relaySetting,
+                  disabled: nativePushStatus.disabledSetting,
+                })}
+            </p>
           )}
         </SettingsSection>
 

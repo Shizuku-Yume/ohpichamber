@@ -329,6 +329,41 @@ describe('Linear tracker auth', () => {
     await expect(tracker.auth.start()).rejects.toMatchObject({ message: 'No client id', userError: true });
   });
 
+  it('reports why browser sign-in cannot start when no broker is configured', async () => {
+    const authFreeLibraries = (isLinearSignInConfigured) => libraries({
+      isLinearSignInConfigured,
+      getValidLinearAccessToken: async () => null,
+      pollAuthorizationBroker: async () => null,
+    });
+
+    const unavailable = createLinearTracker(authFreeLibraries(() => false));
+    expect(await unavailable.auth.status()).toEqual({
+      connected: false,
+      signIn: {
+        reason: 'broker-url-missing',
+        setting: 'OPENCHAMBER_LINEAR_BROKER_URL',
+        settingsKey: 'linearBrokerUrl',
+      },
+    });
+
+    // A configured broker leaves the refusal out, so the card draws Connect.
+    const available = createLinearTracker(authFreeLibraries(() => true));
+    expect(await available.auth.status()).toEqual({ connected: false });
+  });
+
+  it('maps a missing broker on start to a user error naming the setting', async () => {
+    const libs = libraries();
+    libs.startAuthorization.mockRejectedValueOnce(Object.assign(
+      new Error('Linear sign-in needs an OAuth broker. Set OPENCHAMBER_LINEAR_BROKER_URL, or settings.json linearBrokerUrl.'),
+      { code: 'LINEAR_BROKER_NOT_CONFIGURED' },
+    ));
+    await expect(createLinearTracker(libs).auth.start()).rejects.toMatchObject({
+      code: 'INVALID',
+      userError: true,
+      message: expect.stringContaining('OPENCHAMBER_LINEAR_BROKER_URL'),
+    });
+  });
+
   it('answers null when activating a workspace that is not stored', async () => {
     const tracker = createLinearTracker(libraries());
     expect(await tracker.auth.activate('org-x')).toBeNull();

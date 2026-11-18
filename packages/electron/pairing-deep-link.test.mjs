@@ -3,7 +3,7 @@ import test from 'node:test';
 import { parsePairingDeepLink } from './pairing-deep-link.mjs';
 
 const hostEncPubJwk = { kty: 'EC', crv: 'P-256', x: 'x-coordinate', y: 'y-coordinate' };
-const relayCandidate = { type: 'relay', relayUrl: 'wss://relay.openchamber.dev/ws', serverId: 'srv_abc', hostEncPubJwk, priority: 30 };
+const relayCandidate = { type: 'relay', relayUrl: 'wss://relay.example.test/ws', serverId: 'srv_abc', hostEncPubJwk, priority: 30 };
 
 const linkFor = (payload) => `ohpichamber://connect?v=2&p=${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
 
@@ -27,7 +27,7 @@ test('names the first direct address by priority when the link has one', () => {
 });
 
 test('skips malformed candidates and rejects a link with none left', () => {
-  const badRelay = { ...relayCandidate, relayUrl: 'https://relay.openchamber.dev/ws' };
+  const badRelay = { ...relayCandidate, relayUrl: 'https://relay.example.test/ws' };
   const badKey = { ...relayCandidate, hostEncPubJwk: { kty: 'EC', crv: 'P-384', x: 'a', y: 'b' } };
   assert.equal(parsePairingDeepLink(pairing([badRelay, badKey, { type: 'lan', url: 'ftp://host' }])), null);
   assert.equal(parsePairingDeepLink(pairing([badRelay, relayCandidate]))?.target, 'relay://srv_abc');

@@ -127,7 +127,7 @@ import { createWorktreeBootstrapStore } from './lib/git/worktree-bootstrap-stora
 import { createRemoteClientAuthRuntime } from './lib/client-auth/remote-clients.js';
 import { createClientPairingRuntime } from './lib/client-auth/pairing.js';
 import { attachRealtimeProxy } from './lib/realtime-proxy.js';
-import { createRelayService, relayBlockedByEnterprise } from './lib/relay/service.js';
+import { createRelayService, pinnedRelayUrl, relayBlockedByEnterprise } from './lib/relay/service.js';
 import { createRelayHostLock } from './lib/relay/host-lock.js';
 import { createRelayKeyStore } from './lib/relay/key-store.js';
 import { createBrowserControlBroker } from './lib/browser-control/broker.js';
@@ -1624,11 +1624,13 @@ async function main(options = {}) {
   return address;
  };
  const advertisedLanUrl = readAdvertisedLanUrl();
- const resolvePairingTransports = (req) => {
+ const resolvePairingTransports = async (req) => {
   const activePort = tunnelRuntimeContext.getActivePort() || port;
   const local = `http://127.0.0.1:${activePort}`;
+  const relayAvailable = !relayBlockedByEnterprise()
+   && (relayServiceInstance ? await relayServiceInstance.isConfigured() : pinnedRelayUrl() !== null);
   if (advertisedLanUrl) {
-   return { local, lan: advertisedLanUrl, relayAvailable: !relayBlockedByEnterprise() };
+   return { local, lan: advertisedLanUrl, relayAvailable };
   }
   let lanHost = null;
   if (isNetworkExposedBindHost(effectiveBindHost)) {
@@ -1656,7 +1658,7 @@ async function main(options = {}) {
    if (h && h !== '127.0.0.1' && h !== 'localhost' && h !== '::1') lanHost = effectiveBindHost;
   }
   const lan = lanHost ? `http://${lanHost.includes(':') ? `[${lanHost}]` : lanHost}:${activePort}` : null;
-  return { local, lan, relayAvailable: !relayBlockedByEnterprise() };
+  return { local, lan, relayAvailable };
  };
  // ALL direct LAN URLs this server is currently reachable on, for the
  // candidates-refresh endpoint: the address the requesting client already

@@ -96,7 +96,7 @@ export const createWebClientAuthAPI = (): ClientAuthAPI => ({
     if (!response.ok || !payload) {
       throw new Error(payload?.error || response.statusText || 'Failed to load pairing transports');
     }
-    return { local: payload.local ?? null, lan: payload.lan ?? null, relayAvailable: payload.relayAvailable !== false };
+    return { local: payload.local ?? null, lan: payload.lan ?? null, relayAvailable: payload.relayAvailable === true };
   },
 
   async cancelPairing(id: string): Promise<{ cancelled: boolean }> {

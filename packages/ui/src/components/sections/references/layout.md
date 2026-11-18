@@ -119,8 +119,7 @@ Sections own vertical rhythm; pages only list them.
   sections in a non-zero `space-y-*` on a page: it doubles the gap and
   bypasses `SettingsPageLayout`'s first-section rule. `space-y-0` is the
   allowed "no extra spacing" spelling.
-- Between titled groups inside one section's content:
-  `SETTINGS_SPACE_SECTION_CLASS` (`space-y-6`).
+- Between titled groups inside one section's content: `space-y-6`.
 - Field rows and mixed shapes (a field row beside a checkbox row, a role
   editor beside OMP rows): `SETTINGS_SPACE_ROW_CLASS` (`space-y-4`). A plain
   list of field rows stacks directly; each row carries `py-1`.

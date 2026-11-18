@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import crypto from 'node:crypto';
+import express from 'express';
+import request from 'supertest';
 
 import { createRelayService } from './service.js';
-
 const makeService = (options = {}) => {
   // In-memory key store with a pre-seeded signing key so the service never
   // regenerates the serverId during the test.
@@ -42,7 +43,7 @@ const makeService = (options = {}) => {
     hasRelayDemand: options.hasRelayDemand ?? (async () => true),
     hostLock,
     allowPassiveHost: options.allowPassiveHost,
-    logger: { warn: () => {} },
+    logger: { warn: () => { } },
   });
   return { service, hostLock, relayKeyStore, getSettings: () => settings };
 };
@@ -160,6 +161,90 @@ describe('relay service passive hosting', () => {
       expect(hostLock.forceClaim).toHaveBeenCalled();
     } finally {
       service.stop();
+    }
+  });
+});
+
+describe('relay service without a configured relay URL', () => {
+  it('stays disabled, never claims or dials, and rejects pairing enable when no relay URL is configured', async () => {
+    delete process.env.OPENCHAMBER_RELAY_URL;
+    const { service, hostLock, getSettings } = makeService({
+      settings: { privateRelay: { enabled: true } },
+      hasRelayDemand: async () => true,
+    });
+    try {
+      expect(await service.isConfigured()).toBe(false);
+      await service.startIfEnabled();
+      let status = await service.getStatus();
+      expect(status).toMatchObject({
+        state: 'disabled',
+        relayUrl: null,
+      });
+      expect(status.lastError).toContain('No relay URL is configured');
+      expect(hostLock.tryClaim).not.toHaveBeenCalled();
+
+      await service.reconcile();
+      status = await service.getStatus();
+      expect(status).toMatchObject({ state: 'disabled', relayUrl: null });
+      expect(status.lastError).toContain('No relay URL is configured');
+      expect(hostLock.tryClaim).not.toHaveBeenCalled();
+
+      expect(await service.getPairingCandidate()).toBeNull();
+      await expect(service.ensureEnabledForPairing()).rejects.toMatchObject({ statusCode: 400 });
+      expect(hostLock.forceClaim).not.toHaveBeenCalled();
+      expect(getSettings().privateRelay).toEqual({ enabled: true });
+    } finally {
+      service.stop();
+    }
+  });
+
+  it('rejects /api/openchamber/relay/enable when no valid relay URL is configured or supplied', async () => {
+    delete process.env.OPENCHAMBER_RELAY_URL;
+    const { service, getSettings } = makeService({ settings: { privateRelay: undefined } });
+    const app = express();
+    service.registerRoutes(app);
+    try {
+      const missingRes = await request(app).post('/api/openchamber/relay/enable').send({});
+      expect(missingRes.status).toBe(400);
+      expect(missingRes.body.error).toContain('No relay URL is configured');
+      expect(getSettings().privateRelay).toBeUndefined();
+
+      const invalidRes = await request(app)
+        .post('/api/openchamber/relay/enable')
+        .send({ relayUrl: 'https://relay.example.test/ws' });
+      expect(invalidRes.status).toBe(400);
+      expect(invalidRes.body.error).toContain('Invalid relay URL');
+      expect(getSettings().privateRelay).toBeUndefined();
+
+      const validRes = await request(app)
+        .post('/api/openchamber/relay/enable')
+        .send({ relayUrl: 'wss://relay.selfhosted.test/ws' });
+      expect(validRes.status).toBe(200);
+      expect(validRes.body).toMatchObject({
+        enabled: true,
+        relayUrl: 'wss://relay.selfhosted.test/ws',
+      });
+      expect(getSettings().privateRelay).toEqual({
+        enabled: true,
+        relayUrl: 'wss://relay.selfhosted.test/ws',
+      });
+    } finally {
+      service.stop();
+    }
+  });
+
+  it('enables and reports configured when OPENCHAMBER_RELAY_URL is pinned', async () => {
+    process.env.OPENCHAMBER_RELAY_URL = 'wss://relay.pinned.test/ws';
+    const { service } = makeService({ settings: { privateRelay: undefined } });
+    try {
+      expect(await service.isConfigured()).toBe(true);
+      expect(await service.getStatus()).toMatchObject({
+        relayUrl: 'wss://relay.pinned.test/ws',
+        relayUrlLocked: true,
+      });
+    } finally {
+      service.stop();
+      delete process.env.OPENCHAMBER_RELAY_URL;
     }
   });
 });

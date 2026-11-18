@@ -1,6 +1,6 @@
 # ohpichamber-sdk
 
-Build extensions for [OpenChamber](https://openchamber.dev). An extension can show a panel on the right-hand rail or run actions in the background without a panel. It can read the current project and session, show toasts, put text in the chat box, attach a task to a session, and, once the user approves it, start sessions and send prompts. This package is the contract between the extension and the app.
+Build extensions for [OpenChamber](https://github.com/Shizuku-Yume/ohpichamber). An extension can show a panel on the right-hand rail or run actions in the background without a panel. It can read the current project and session, show toasts, put text in the chat box, attach a task to a session, and, once the user approves it, start sessions and send prompts. This package is the contract between the extension and the app.
 
 Full guide: [Build an extension](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk). Reference: [Host API](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk) and [UI kit](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk). Extensions with a local process: [GUEST_SERVICES.md](./GUEST_SERVICES.md).
 

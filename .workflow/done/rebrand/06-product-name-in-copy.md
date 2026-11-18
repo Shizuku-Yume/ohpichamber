@@ -7,7 +7,6 @@
 **Read first:** spec `rebrand.md` "Name in copy" and "Copy (phase B)"; skill `locale-ui-patterns`; `decisions.md: 2026-11-16 - Rebrand in two phases around the open UX effort`
 **Check:** a script over the built locale catalogs finds no `OpenChamber` outside the About credit key. Screenshots of Settings → About (credit "Based on OpenChamber" with the MIT notice), the sidebar empty state and `ohpichamber --help` show OhPiChamber. `bun run type-check`, `bun run lint`, `VITEST_MAX_WORKERS=2 bun run test`, `bun run docs:validate` and `bun run dead-code` (report inspected) exit 0. Receipts go to `/home/shizuku/Project/ohpichamber-omp-artifacts/rebrand-06-<date>/`.
 **Base commit:** 79c262dee0ad7f367fbb30eb046c84c39467bd3c
-**Status:** active
 
 - [x] A scripted pass replaces the product name in all locale files. Each locale's inflected or transliterated forms are reviewed by hand, and the script does not touch keys, identifiers or `OPENCHAMBER_*`.
 - [x] Non-i18n strings are edited by hand.

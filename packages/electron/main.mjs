@@ -238,13 +238,18 @@ try {
 } catch {
 }
 
-try {
-  if (!app.isDefaultProtocolClient(DEEP_LINK_PROTOCOL)) {
-    app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL);
+const registerDeepLinkProtocol = () => {
+  try {
+    if (!app.isDefaultProtocolClient(DEEP_LINK_PROTOCOL)) {
+      app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL);
+    }
+  } catch (error) {
+    // log.* not yet initialized at module top-level; fall back to console.
+    console.warn('[electron] failed to register deep-link protocol:', error);
   }
-} catch (error) {
-  // log.* not yet initialized at this point; fall back to console.
-  console.warn('[electron] failed to register deep-link protocol:', error);
+};
+if (process.platform !== 'linux' || !app.isPackaged) {
+  registerDeepLinkProtocol();
 }
 
 const readAppMetadata = () => {
@@ -1407,7 +1412,7 @@ const maybeShowNativeNotification = (rawInput) => {
 
   const title = typeof payload.title === 'string' && payload.title.trim()
     ? payload.title.trim()
-    : 'OpenChamber';
+    : 'OhPiChamber';
   const body = typeof payload.body === 'string' ? payload.body : '';
   const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.trim()
     ? payload.sessionId.trim()
@@ -3216,7 +3221,7 @@ const createMiniChatWindow = async ({ mode, sessionId = '', directory = '', proj
   const desktopClientToken = effectiveRuntimeConfig.clientToken || '';
   const desktopRequestHeaders = effectiveRuntimeConfig.requestHeaders || {};
   const browserWindow = new BrowserWindow({
-    title: 'OpenChamber Mini Chat',
+    title: 'OhPiChamber Mini Chat',
     width: MINI_CHAT_WINDOW_WIDTH,
     height: MINI_CHAT_WINDOW_HEIGHT,
     minWidth: MINI_CHAT_MIN_WINDOW_WIDTH,
@@ -6242,9 +6247,26 @@ app.whenReady().then(async () => {
     } catch (error) {
       log.warn('[electron] failed to reconcile Linux autostart entry', error);
     }
-    void reconcileAppImageDesktopEntry()
-      .then((result) => log.info('[electron] AppImage launcher entry', result))
-      .catch((error) => log.warn('[electron] failed to reconcile AppImage launcher entry', error));
+    try {
+      const desktopResult = await reconcileAppImageDesktopEntry();
+      log.info('[electron] AppImage launcher entry', desktopResult);
+      if (desktopResult?.status === 'integrated' && desktopResult.desktopPath) {
+        try {
+          await execFileAsync('update-desktop-database', [path.dirname(desktopResult.desktopPath)]);
+        } catch {
+        }
+        try {
+          const { stdout } = await execFileAsync('xdg-mime', ['query', 'default', 'x-scheme-handler/ohpichamber'], { encoding: 'utf8' });
+          if (!stdout.trim()) {
+            await execFileAsync('xdg-mime', ['default', 'ohpichamber.desktop', 'x-scheme-handler/ohpichamber']);
+          }
+        } catch {
+        }
+      }
+    } catch (error) {
+      log.warn('[electron] failed to reconcile AppImage launcher entry', error);
+    }
+    registerDeepLinkProtocol();
   }
 
   if (isBackgroundStart) {

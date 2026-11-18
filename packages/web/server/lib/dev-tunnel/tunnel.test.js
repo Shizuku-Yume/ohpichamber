@@ -61,7 +61,7 @@ const startHost = async ({ allowedPorts, auth = null, discoveryOk = true }) => {
       socket.write(`HTTP/1.1 ${status} ${message}\r\n\r\n`);
       socket.destroy();
     },
-    logger: { warn: () => {} },
+    logger: { warn: () => { } },
   });
   started.push(async () => {
     runtime.dispose();
@@ -104,7 +104,7 @@ describe('dev tunnel end to end', () => {
     });
     const host = await startHost({ allowedPorts: [devPort] });
 
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
     const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });
 
@@ -117,9 +117,29 @@ describe('dev tunnel end to end', () => {
   test('reaches a dev server that listens on IPv6 loopback only', async () => {
     // `localhost` resolves to ::1 first on many systems, so a dev server started
     // with its defaults often never binds 127.0.0.1. Discovery lists it anyway.
-    const devPort = await startDevServer((req, res) => res.end(`v6:${req.url}`), '::1');
+    const probeIpv4Refused = (port) => new Promise((resolve) => {
+      const probe = net.createConnection({ host: '127.0.0.1', port }, () => {
+        probe.destroy();
+        resolve(false);
+      });
+      probe.on('error', (error) => {
+        resolve(error.code === 'ECONNREFUSED');
+      });
+    });
+
+    let devPort = 0;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const candidate = await startDevServer((req, res) => res.end(`v6:${req.url}`), '::1');
+      if (await probeIpv4Refused(candidate)) {
+        devPort = candidate;
+        break;
+      }
+      const stop = started.pop();
+      if (stop) await stop();
+    }
+    expect(devPort).toBeGreaterThan(0);
     const host = await startHost({ allowedPorts: [devPort] });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
 
     const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });
@@ -131,13 +151,13 @@ describe('dev tunnel end to end', () => {
   test('drops a connection that floods a handshake that never completes', async () => {
     // A host that accepts the TCP connection and then says nothing: the
     // WebSocket handshake hangs, which is when buffering could run away.
-    const stalled = net.createServer(() => {});
+    const stalled = net.createServer(() => { });
     const stalledSockets = trackSockets(stalled);
     const stalledPort = await listen(stalled);
     started.push(stopServer(stalled, stalledSockets));
 
     const client = createDevTunnelClient({
-      logger: { warn: () => {} },
+      logger: { warn: () => { } },
       handshakeTimeoutMs: 300,
     });
     started.push(() => client.closeAll());
@@ -165,7 +185,7 @@ describe('dev tunnel end to end', () => {
   test('reuses one listener for repeat opens of the same target', async () => {
     const devPort = await startDevServer((_req, res) => res.end('ok'));
     const host = await startHost({ allowedPorts: [devPort] });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
 
     const first = await client.open({ baseUrl: host.baseUrl, port: devPort });
@@ -190,7 +210,7 @@ describe('dev tunnel end to end', () => {
     started.push(stopServer(server, sockets));
     const baseUrl = `http://127.0.0.1:${hostPort}`;
 
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
     const space = await client.open({ baseUrl, port: 4321, spaceId: '84369ed6edda' });
     const host = await client.open({ baseUrl, port: 4321 });
@@ -212,7 +232,7 @@ describe('dev tunnel end to end', () => {
   test('refuses a port discovery does not report, so it is not a loopback proxy', async () => {
     const secret = await startDevServer((_req, res) => res.end('secret service'));
     const host = await startHost({ allowedPorts: [] });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
 
     const { localPort } = await client.open({ baseUrl: host.baseUrl, port: secret });
@@ -222,7 +242,7 @@ describe('dev tunnel end to end', () => {
   test('closing a tunnel frees its local port', async () => {
     const devPort = await startDevServer((_req, res) => res.end('ok'));
     const host = await startHost({ allowedPorts: [devPort] });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
 
     const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });
     expect(client.close({ baseUrl: host.baseUrl, port: devPort })).toBe(true);
@@ -238,7 +258,7 @@ describe('dev tunnel end to end', () => {
   });
 
   test('rejects an invalid remote port before binding anything', async () => {
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     await expect(client.open({ baseUrl: 'http://127.0.0.1:1', port: 0 })).rejects.toThrow('valid remote port');
     await expect(client.open({ baseUrl: '', port: 5173 })).rejects.toThrow('base URL');
     expect(client.list()).toEqual([]);
@@ -248,7 +268,7 @@ describe('dev tunnel end to end', () => {
     // A non-special scheme survives the `ws:` protocol assignment (WHATWG URL
     // ignores it), so `new WebSocket(...)` used to throw inside the connection
     // handler and take the whole process down.
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     await expect(client.open({ baseUrl: 'openchamber-ui://index', port: 5173 })).rejects.toThrow('must be http(s)');
     expect(client.list()).toEqual([]);
   });
@@ -287,7 +307,7 @@ describe('dev tunnel authentication', () => {
   test('accepts a bearer-authenticated client that sends no origin', async () => {
     const devPort = await startDevServer((_req, res) => res.end('ok'));
     const host = await startHost({ allowedPorts: [devPort], auth: clientAuth });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
 
     const { localPort } = await client.open({
@@ -314,7 +334,7 @@ describe('dev tunnel authentication', () => {
   test('rejects a client with no credentials', async () => {
     const devPort = await startDevServer((_req, res) => res.end('ok'));
     const host = await startHost({ allowedPorts: [devPort], auth: clientAuth });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
 
     const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });
@@ -326,7 +346,7 @@ describe('dev tunnel authentication', () => {
     // credentials are exactly what the origin check exists to protect.
     const devPort = await startDevServer((_req, res) => res.end('ok'));
     const host = await startHost({ allowedPorts: [devPort], auth: sessionAuth });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
 
     const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });
@@ -336,7 +356,7 @@ describe('dev tunnel authentication', () => {
   test('rejects a disallowed origin even with valid credentials', async () => {
     const devPort = await startDevServer((_req, res) => res.end('ok'));
     const host = await startHost({ allowedPorts: [devPort], auth: clientAuth });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
 
     const { localPort } = await client.open({
@@ -350,7 +370,7 @@ describe('dev tunnel authentication', () => {
   test('refuses every port when discovery itself is unavailable', async () => {
     const devPort = await startDevServer((_req, res) => res.end('ok'));
     const host = await startHost({ allowedPorts: [devPort], discoveryOk: false });
-    const client = createDevTunnelClient({ logger: { warn: () => {} } });
+    const client = createDevTunnelClient({ logger: { warn: () => { } } });
     started.push(() => client.closeAll());
 
     const { localPort } = await client.open({ baseUrl: host.baseUrl, port: devPort });

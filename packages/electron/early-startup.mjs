@@ -393,7 +393,7 @@ export const buildMainWindowOptions = ({ bounds, backgroundColor, additionalArgu
   const frameless = usesFramelessChrome();
   const usesCustomTitleBar = process.platform === 'darwin' || frameless;
   const options = {
-    title: 'OpenChamber',
+    title: 'OhPiChamber',
     width: bounds?.width ?? DEFAULT_WINDOW_WIDTH,
     height: bounds?.height ?? DEFAULT_WINDOW_HEIGHT,
     minWidth: MIN_WINDOW_WIDTH,

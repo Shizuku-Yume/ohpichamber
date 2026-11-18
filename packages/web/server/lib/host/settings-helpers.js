@@ -900,10 +900,6 @@ export const createSettingsHelpers = (dependencies) => {
       }
     }
 
-    // Usage reporting opt-out (default: true/enabled)
-    if (typeof candidate.reportUsage === 'boolean') {
-      result.reportUsage = candidate.reportUsage;
-    }
 
     // Behavior page (profile). The resolved response-style instruction is what
     // prompt delivery reads; the preset/flag keep the editor's own state.

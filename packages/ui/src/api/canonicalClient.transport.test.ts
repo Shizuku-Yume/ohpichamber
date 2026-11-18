@@ -325,7 +325,7 @@ describe('CanonicalClient real HTTP scope boundary', () => {
     const configuration = mcp.configuration;
     respondWith(configuration);
     expect(await client.getWorkspaceMcpConfig(workspaceId)).toEqual(configuration);
-    respondWith({ kind: 'mcp', status: 'no-active-workers', configuration, workers: [] });
+    respondWith({ kind: 'mcp', status: 'no-active-workers', outcome: 'applied', configuration, workers: [] });
     expect((await client.configureWorkspaceMcp(workspaceId, { expectedPersistedRevision: '0', config: configuration.config })).status).toBe('no-active-workers');
     expect((await client.applyWorkspaceMcp(workspaceId, { persistedRevision: '1' })).workers).toEqual([]);
     respondWith({ workspaceId, serverId: 'server_expected', persistedRevision: '1', status: 'connected', toolCount: 2 });
@@ -390,7 +390,7 @@ describe('CanonicalClient real HTTP scope boundary', () => {
   });
 
   test('rejects wrong MCP apply workspace and selected skill source scope without extra authority reads', async () => {
-    respondWith({ kind: 'mcp', status: 'no-active-workers', configuration: { workspaceId: 'workspace_other', persistedRevision: '1', config: { servers: [] } }, workers: [] });
+    respondWith({ kind: 'mcp', status: 'no-active-workers', outcome: 'applied', configuration: { workspaceId: 'workspace_other', persistedRevision: '1', config: { servers: [] } }, workers: [] });
     await expect(client.configureMcp(runtimeSession, { expectedPersistedRevision: '0', config: { servers: [] } })).rejects.toThrow();
     await expect(client.applyMcp(runtimeSession, { persistedRevision: '1' })).rejects.toThrow();
     respondWith({ kind: 'skills', status: 'no-active-workers', scope: { kind: 'agent', agentDirectoryId: 'agent_directory_other' }, sourceRevision: '1', workers: [] });

@@ -534,6 +534,185 @@ test('configured discovery falls back to native key cascade when no explicit acc
     expect(requests[0]!.authorization).toBe('Bearer cascade-key');
   } finally { server.stop(true); await fixture.close(); }
 });
+test('models.yml-only providers resolve apiKey env names and literal headers at discovery without metadata', async () => {
+  const requests: Array<{ path: string; authorization: string | null; custom: string | null }> = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      const path = new URL(request.url).pathname;
+      requests.push({
+        path,
+        authorization: request.headers.get('authorization'),
+        custom: request.headers.get('x-native-header'),
+      });
+      if (path.startsWith('/unauth')) return new Response('unauthorized', { status: 401 });
+      return Response.json({ data: [{ id: 'native-discovered' }] });
+    }
+  });
+  const root = await mkdtemp(join(tmpdir(), 'catalog-models-discovery-native-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  const envName = 'TEST_FB15_MODELS_YML_API_KEY';
+  const previousEnv = process.env[envName];
+  process.env[envName] = 'env-resolved-secret';
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const modelsPath = join(agentDirectory, 'models.yml');
+  const nativeEndpoint = `http://127.0.0.1:${server.port}/native/v1`;
+  const unauthEndpoint = `http://127.0.0.1:${server.port}/unauth/v1`;
+  await writeFile(modelsPath, YAML.stringify({
+    providers: {
+      'native-env-provider': {
+        baseUrl: nativeEndpoint,
+        apiKey: envName,
+        api: 'openai-responses',
+        headers: { 'X-Native-Header': 'native-header-value' },
+        models: [{ id: 'm-1', name: 'M1', api: 'openai-codex-responses', contextWindow: 8192, maxTokens: 1024 }],
+      },
+      'native-unset-key': {
+        baseUrl: unauthEndpoint,
+        apiKey: 'TEST_FB15_MODELS_YML_UNSET_KEY',
+        api: 'openai-responses',
+        models: [{ id: 'm-2', name: 'M2', api: 'openai-codex-responses', contextWindow: 8192, maxTokens: 1024 }],
+      },
+    },
+  }));
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    const result = await runtime.models.discoverProviderModels({
+      providerId: 'native-env-provider',
+      endpoint: nativeEndpoint,
+      protocol: 'responses',
+    });
+    expect(result.models.map(model => model.modelId)).toEqual(['native-discovered']);
+    // Must not forward the native provider credential to a different endpoint.
+    await runtime.models.discoverProviderModels({
+      providerId: 'native-env-provider',
+      endpoint: `http://127.0.0.1:${server.port}/other/v1`,
+      protocol: 'responses',
+    });
+    expect(requests).toEqual([
+      { path: '/native/v1/models', authorization: 'Bearer env-resolved-secret', custom: 'native-header-value' },
+      { path: '/other/v1/models', authorization: null, custom: null },
+    ]);
+    await runtime.models.configureProvider({
+      expectedRevision: '0',
+      configuration: {
+        providerId: 'native-missing-key',
+        name: 'Missing Key',
+        endpoint: unauthEndpoint,
+        protocol: 'responses',
+        credentialRef: null,
+      },
+    }, '1');
+    await expect(runtime.models.discoverProviderModels({
+      providerId: 'native-missing-key',
+      endpoint: unauthEndpoint,
+      protocol: 'responses',
+    })).rejects.toMatchObject({
+      status: 422,
+      code: 'CREDENTIAL_UNAVAILABLE',
+      message: expect.stringContaining('No credential is available for native-missing-key'),
+    });
+    // A models.yml apiKey naming an unset variable resolves to literal text in
+    // OMP; discovery must report the missing variable instead of blaming the endpoint.
+    await expect(runtime.models.discoverProviderModels({
+      providerId: 'native-unset-key',
+      endpoint: unauthEndpoint,
+      protocol: 'responses',
+    })).rejects.toMatchObject({
+      status: 422,
+      code: 'CREDENTIAL_UNAVAILABLE',
+      message: 'Provider native-unset-key has no credential: its models.yml apiKey names TEST_FB15_MODELS_YML_UNSET_KEY, which is not set. Set TEST_FB15_MODELS_YML_UNSET_KEY or save an API key.',
+    });
+  } finally {
+    if (previousEnv === undefined) delete process.env[envName];
+    else process.env[envName] = previousEnv;
+    server.stop(true);
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('environment-backed providers publish the variable name and keep it visible when a stored key wins', async () => {
+  const fixture = await openCatalogFixture();
+  const previous = process.env.OPENAI_API_KEY;
+  try {
+    process.env.OPENAI_API_KEY = 'env-only-openai-key';
+    expect(fixture.reader.models.provider('openai').auth).toEqual({
+      status: 'configured', credentialRef: expect.any(String), method: 'api-key',
+      source: 'external-environment', environment: { variable: 'OPENAI_API_KEY', active: true },
+    });
+    // The projection carries the variable's name and never its value.
+    expect(JSON.stringify(await fixture.reader.models.readProviders('workspace_1', '1'))).not.toContain('env-only-openai-key');
+    await fixture.writer.authStorage.credentials.upsert('openai', { type: 'api_key', key: 'stored-openai-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    expect(fixture.writer.models.provider('openai').auth).toMatchObject({
+      source: 'stored-credential', environment: { variable: 'OPENAI_API_KEY', active: false },
+    });
+    // A blank variable is absent, not an empty source.
+    process.env.OPENAI_API_KEY = '';
+    expect(fixture.writer.models.provider('openai').auth).not.toHaveProperty('environment');
+    // A provider with no environment mechanism says nothing about one.
+    await fixture.writer.authStorage.credentials.upsert('campus-2', { type: 'api_key', key: 'campus-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    expect(fixture.writer.models.provider('campus-2').auth).toMatchObject({ status: 'configured', source: 'stored-credential' });
+    expect(fixture.writer.models.provider('campus-2').auth).not.toHaveProperty('environment');
+  } finally {
+    if (previous === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previous;
+    await fixture.close();
+  }
+});
+
+test('a computed env resolver reports presence without inventing a single variable name', async () => {
+  const fixture = await openCatalogFixture();
+  const previous = process.env.HF_TOKEN;
+  try {
+    process.env.HF_TOKEN = 'env-only-huggingface-token';
+    expect(fixture.reader.models.provider('huggingface').auth).toMatchObject({
+      status: 'configured', source: 'external-environment', environment: { variable: null, active: true },
+    });
+  } finally {
+    if (previous === undefined) delete process.env.HF_TOKEN; else process.env.HF_TOKEN = previous;
+    await fixture.close();
+  }
+});
+
+test('a provider identity containing a selector separator is refused before any write', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    for (const providerId of ['campus/2', 'campus/', '/campus']) {
+      await expect(fixture.writer.models.configureProvider({
+        expectedRevision: '0', configuration: { ...configuration, providerId },
+      }, '1')).rejects.toMatchObject({ status: 422, code: 'INVALID_REQUEST' });
+    }
+    expect(await readFile(fixture.writer.modelsPath, 'utf8').catch(() => '')).not.toContain('campus');
+  } finally { await fixture.close(); }
+});
+
+test('a custom base URL query string survives discovery and the native baseUrl write', async () => {
+  const requests: string[] = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push(request.url);
+      return Response.json({ data: [{ id: 'azure-model', name: 'Azure' }] });
+    }
+  });
+  const fixture = await openCatalogFixture();
+  const endpoint = `http://127.0.0.1:${server.port}/v1?api-version=2024-10-21`;
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration: { ...configuration, endpoint } }, '1');
+    expect(await fixture.writer.models.discoverProviderModels({ endpoint, protocol: 'chat-completions' }))
+      .toEqual({ models: [{ modelId: 'azure-model', name: 'Azure' }] });
+    const requested = new URL(requests[0]!);
+    // `/models` belongs to the pathname; the query stays behind it.
+    expect(requested.pathname).toBe('/v1/models');
+    expect(requested.search).toBe('?api-version=2024-10-21');
+    const persisted = YAML.parse(await readFile(fixture.writer.modelsPath, 'utf8'));
+    expect(persisted.providers[configuration.providerId].baseUrl).toBe(endpoint);
+    expect((await fixture.reader.models.readProviderConfiguration(configuration.providerId, '1')).configuration.endpoint).toBe(endpoint);
+  } finally { server.stop(true); await fixture.close(); }
+});
 
 test('explicit empty headers replace old native provider headers and remain empty after reopen', async () => {
   const fixture = await openCatalogFixture();
@@ -794,4 +973,65 @@ providers:
   } finally {
     await fixture.close();
   }
+});
+
+test('bundled catalog metadata fills a known model id from the provider rows', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({
+      providerId: 'openai', models: [{ modelId: 'gpt-5.6' }],
+    });
+    expect(result.models).toEqual([{
+      modelId: 'gpt-5.6',
+      catalog: {
+        source: 'omp-catalog', input: ['text', 'image'], contextWindow: 1050000, maxTokens: 128000,
+        cost: { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
+        reasoning: true, family: 'gpt',
+      },
+    }]);
+  } finally { await fixture.close(); }
+});
+
+test('proxy reference matching resolves a bracket-affixed model id', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({ models: [{ modelId: '[Kiro] claude-opus-4-6' }] });
+    expect(result.models).toEqual([{
+      modelId: '[Kiro] claude-opus-4-6',
+      catalog: {
+        source: 'omp-catalog', input: ['text', 'image'], contextWindow: 1000000, maxTokens: 128000,
+        cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+        reasoning: true, family: 'opus',
+      },
+    }]);
+  } finally { await fixture.close(); }
+});
+
+test('an uncatalogued model id comes back without catalog metadata instead of failing', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({
+      providerId: 'm212-loopback', models: [{ modelId: 'not-a-catalogued-model' }],
+    });
+    expect(result).toEqual({ models: [{ modelId: 'not-a-catalogued-model' }] });
+  } finally { await fixture.close(); }
+});
+
+test('discovery attaches catalog metadata to catalogued ids and stays one request', async () => {
+  const requests: string[] = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push(new URL(request.url).pathname);
+      return Response.json({ data: [{ id: 'claude-opus-4-6', name: 'Claude' }, { id: 'not-a-catalogued-model', name: 'Unknown' }] });
+    }
+  });
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.discoverProviderModels({
+      endpoint: `http://127.0.0.1:${server.port}/v1`, protocol: 'chat-completions',
+    });
+    expect(requests).toEqual(['/v1/models']);
+    expect(result.models[0]).toMatchObject({ modelId: 'claude-opus-4-6', name: 'Claude', catalog: { source: 'omp-catalog', family: 'opus' } });
+    expect(result.models[1]).toEqual({ modelId: 'not-a-catalogued-model', name: 'Unknown' });
+  } finally { server.stop(true); await fixture.close(); }
 });

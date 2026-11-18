@@ -5,7 +5,7 @@ import { useSettingsModels } from '@/hooks/useSettingsModels';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
   SettingsSection,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { useOmpPageSettings } from '@/components/sections/shared/useOmpPageSettings';
@@ -98,59 +98,82 @@ export const MemoryPage: React.FC = () => {
       description={t('settings.page.memory.description')}
       showSaveStatus
     >
-      <div className="space-y-6">
-        {/* Backend selection */}
-        <SettingsSection
-          title={t('settings.memory.section.backend.title')}
-          description={t('settings.memory.section.backend.description')}
-          divider={false}
-          settingsItem="memory.section.backend"
-        >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
-            {backendById.has('memory.backend') ? (
-              <OmpRowControl
-                setting={backendById.get('memory.backend')!}
-                value={currentBackend}
+      {/* Backend selection */}
+      <SettingsSection
+        title={t('settings.memory.section.backend.title')}
+        description={t('settings.memory.section.backend.description')}
+        divider={false}
+        settingsItem="memory.section.backend"
+      >
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
+          {backendById.has('memory.backend') ? (
+            <OmpRowControl
+              setting={backendById.get('memory.backend')!}
+              value={currentBackend}
+              disabled={ompLoading}
+              onChange={(val) => void updateOmpSetting('memory.backend', val)}
+            />
+          ) : null}
+
+          {isEnabled ? (
+            <div className="pt-2">
+              <ModelRoleEditor
+                role="memory"
+                roles={roleSelectors}
+                models={models}
+                directory={directory ?? undefined}
                 disabled={ompLoading}
-                onChange={(val) => void updateOmpSetting('memory.backend', val)}
+                label={t('settings.omp.modelRoles.role.memory.label')}
+                info={t('settings.omp.modelRoles.role.memory.desc')}
+                settingsItem="omp.modelRoles.memory"
+                onChange={handleMemoryRoleChange}
               />
-            ) : null}
+            </div>
+          ) : null}
 
-            {isEnabled ? (
-              <div className="pt-2">
-                <ModelRoleEditor
-                  role="memory"
-                  roles={roleSelectors}
-                  models={models}
-                  directory={directory ?? undefined}
-                  disabled={ompLoading}
-                  label={t('settings.omp.modelRoles.role.memory.label')}
-                  info={t('settings.omp.modelRoles.role.memory.desc')}
-                  settingsItem="omp.modelRoles.memory"
-                  onChange={handleMemoryRoleChange}
-                />
-              </div>
-            ) : null}
+          {currentBackend === 'sharpshooter' && backendById.has('sharpshooter.model') ? (
+            <OmpRowControl
+              setting={backendById.get('sharpshooter.model')!}
+              value={ompForm['sharpshooter.model'] !== undefined ? ompForm['sharpshooter.model'] : backendById.get('sharpshooter.model')!.value}
+              disabled={ompLoading}
+              onChange={(val) => void updateOmpSetting('sharpshooter.model', val)}
+            />
+          ) : null}
+        </div>
+      </SettingsSection>
 
-            {currentBackend === 'sharpshooter' && backendById.has('sharpshooter.model') ? (
+      {/* Autolearn */}
+      <SettingsSection
+        title={t('settings.memory.section.autolearn.title')}
+        description={t('settings.memory.section.autolearn.description')}
+        settingsItem="memory.section.autolearn"
+      >
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
+          {['autolearn.enabled', 'autolearn.autoContinue'].map((id) => {
+            const s = backendById.get(id);
+            if (!s) return null;
+            return (
               <OmpRowControl
-                setting={backendById.get('sharpshooter.model')!}
-                value={ompForm['sharpshooter.model'] !== undefined ? ompForm['sharpshooter.model'] : backendById.get('sharpshooter.model')!.value}
+                key={id}
+                setting={s}
+                value={ompForm[id] !== undefined ? ompForm[id] : s.value}
                 disabled={ompLoading}
-                onChange={(val) => void updateOmpSetting('sharpshooter.model', val)}
+                onChange={(val) => void updateOmpSetting(id, val)}
               />
-            ) : null}
-          </div>
-        </SettingsSection>
+            );
+          })}
+        </div>
+      </SettingsSection>
 
-        {/* Autolearn */}
+      {/* MnemoPi Options */}
+      {(currentBackend === 'mnemopi' || currentBackend === 'off') ? (
         <SettingsSection
-          title={t('settings.memory.section.autolearn.title')}
-          description={t('settings.memory.section.autolearn.description')}
-          settingsItem="memory.section.autolearn"
+          title={t('settings.memory.section.mnemopi.title')}
+          description={t('settings.memory.section.mnemopi.description')}
+          settingsItem="memory.section.mnemopi"
         >
-          <div className={SETTINGS_OPTION_STACK_CLASS}>
-            {['autolearn.enabled', 'autolearn.autoContinue'].map((id) => {
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
+            {mnemopiKeys.map((id) => {
               const s = backendById.get(id);
               if (!s) return null;
               return (
@@ -165,57 +188,32 @@ export const MemoryPage: React.FC = () => {
             })}
           </div>
         </SettingsSection>
+      ) : null}
 
-        {/* MnemoPi Options */}
-        {(currentBackend === 'mnemopi' || currentBackend === 'off') ? (
-          <SettingsSection
-            title={t('settings.memory.section.mnemopi.title')}
-            description={t('settings.memory.section.mnemopi.description')}
-            settingsItem="memory.section.mnemopi"
-          >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
-              {mnemopiKeys.map((id) => {
-                const s = backendById.get(id);
-                if (!s) return null;
-                return (
-                  <OmpRowControl
-                    key={id}
-                    setting={s}
-                    value={ompForm[id] !== undefined ? ompForm[id] : s.value}
-                    disabled={ompLoading}
-                    onChange={(val) => void updateOmpSetting(id, val)}
-                  />
-                );
-              })}
-            </div>
-          </SettingsSection>
-        ) : null}
-
-        {/* Hindsight Options */}
-        {(currentBackend === 'hindsight' || currentBackend === 'off') ? (
-          <SettingsSection
-            title={t('settings.memory.section.hindsight.title')}
-            description={t('settings.memory.section.hindsight.description')}
-            settingsItem="memory.section.hindsight"
-          >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
-              {hindsightKeys.map((id) => {
-                const s = backendById.get(id);
-                if (!s) return null;
-                return (
-                  <OmpRowControl
-                    key={id}
-                    setting={s}
-                    value={ompForm[id] !== undefined ? ompForm[id] : s.value}
-                    disabled={ompLoading}
-                    onChange={(val) => void updateOmpSetting(id, val)}
-                  />
-                );
-              })}
-            </div>
-          </SettingsSection>
-        ) : null}
-      </div>
+      {/* Hindsight Options */}
+      {(currentBackend === 'hindsight' || currentBackend === 'off') ? (
+        <SettingsSection
+          title={t('settings.memory.section.hindsight.title')}
+          description={t('settings.memory.section.hindsight.description')}
+          settingsItem="memory.section.hindsight"
+        >
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
+            {hindsightKeys.map((id) => {
+              const s = backendById.get(id);
+              if (!s) return null;
+              return (
+                <OmpRowControl
+                  key={id}
+                  setting={s}
+                  value={ompForm[id] !== undefined ? ompForm[id] : s.value}
+                  disabled={ompLoading}
+                  onChange={(val) => void updateOmpSetting(id, val)}
+                />
+              );
+            })}
+          </div>
+        </SettingsSection>
+      ) : null}
     </SettingsPageLayout>
   );
 };

@@ -6,7 +6,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Secrets are write-only. Leave the API key blank to keep the stored credential.",
     "settings.providers.native.configuredHeaders": "Configured header names: {names}",
     "settings.providers.native.replaceHeaders": "Replace all stored headers",
-    "settings.providers.native.discoveryHint": "Review discovered models before saving. Enter missing context and output limits; no limits are guessed.",
     "settings.providers.native.invalidConfiguration": "Check the provider ID, endpoint, unique header and model names, positive model limits, and model metadata JSON.",
     "settings.providers.native.browserCookies": "Complete sign-in and paste the {cookies} cookie value.",
     "settings.providers.native.oauthFailureHint": "Sign-in could not complete. If the provider configuration changed, cancel this attempt and start sign-in again."
@@ -18,7 +17,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Geheimen zijn alleen schrijfbaar. Laat de API-sleutel leeg om de opgeslagen inloggegevens te behouden.",
     "settings.providers.native.configuredHeaders": "Ingestelde headernamen: {names}",
     "settings.providers.native.replaceHeaders": "Alle opgeslagen headers vervangen",
-    "settings.providers.native.discoveryHint": "Controleer gevonden modellen vóór het opslaan. Vul ontbrekende context- en uitvoerlimieten in; er worden geen limieten geraden.",
     "settings.providers.native.invalidConfiguration": "Controleer de provider-ID, het eindpunt, unieke header- en modelnamen, positieve modellimieten en de JSON-modelmetadata.",
     "settings.providers.native.browserCookies": "Voltooi het aanmelden en plak de waarde van de cookie {cookies}.",
     "settings.providers.native.oauthFailureHint": "Aanmelden kon niet worden voltooid. Als de providerconfiguratie is gewijzigd, annuleer deze poging en meld u opnieuw aan."
@@ -30,7 +28,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Секрети доступні лише для запису. Залиште API-ключ порожнім, щоб зберегти наявні облікові дані.",
     "settings.providers.native.configuredHeaders": "Назви налаштованих заголовків: {names}",
     "settings.providers.native.replaceHeaders": "Замінити всі збережені заголовки",
-    "settings.providers.native.discoveryHint": "Перегляньте знайдені моделі перед збереженням. Укажіть відсутні ліміти контексту й виводу; ліміти не вгадуються.",
     "settings.providers.native.invalidConfiguration": "Перевірте ID провайдера, кінцеву точку, унікальність назв заголовків і моделей, додатні ліміти та JSON метаданих моделі.",
     "settings.providers.native.browserCookies": "Завершіть вхід і вставте значення cookie {cookies}.",
     "settings.providers.native.oauthFailureHint": "Не вдалося завершити вхід. Якщо конфігурація провайдера змінилася, скасуйте цю спробу та почніть вхід знову."
@@ -42,7 +39,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Geheimnisse können nur geschrieben werden. Lass den API-Schlüssel leer, um die gespeicherten Zugangsdaten zu behalten.",
     "settings.providers.native.configuredHeaders": "Konfigurierte Headernamen: {names}",
     "settings.providers.native.replaceHeaders": "Alle gespeicherten Header ersetzen",
-    "settings.providers.native.discoveryHint": "Prüfe gefundene Modelle vor dem Speichern. Ergänze fehlende Kontext- und Ausgabelimits; Limits werden nicht geschätzt.",
     "settings.providers.native.invalidConfiguration": "Prüfe Anbieter-ID, Endpunkt, eindeutige Header- und Modellnamen, positive Modelllimits und die JSON-Modellmetadaten.",
     "settings.providers.native.browserCookies": "Schließe die Anmeldung ab und füge den Wert des Cookies {cookies} ein.",
     "settings.providers.native.oauthFailureHint": "Die Anmeldung konnte nicht abgeschlossen werden. Falls sich die Anbieterkonfiguration geändert hat, brich diesen Versuch ab und starte die Anmeldung erneut."
@@ -54,7 +50,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Los secretos solo se pueden escribir. Deja la clave API vacía para conservar la credencial guardada.",
     "settings.providers.native.configuredHeaders": "Nombres de cabeceras configuradas: {names}",
     "settings.providers.native.replaceHeaders": "Reemplazar todas las cabeceras guardadas",
-    "settings.providers.native.discoveryHint": "Revisa los modelos encontrados antes de guardar. Introduce los límites de contexto y salida que falten; no se inventan límites.",
     "settings.providers.native.invalidConfiguration": "Revisa el ID del proveedor, el endpoint, los nombres únicos de cabeceras y modelos, los límites positivos y el JSON de metadatos.",
     "settings.providers.native.browserCookies": "Completa el inicio de sesión y pega el valor de la cookie {cookies}.",
     "settings.providers.native.oauthFailureHint": "No se pudo completar el inicio de sesión. Si cambió la configuración del proveedor, cancela este intento e inicia sesión de nuevo."
@@ -66,7 +61,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Les secrets sont accessibles uniquement en écriture. Laissez la clé API vide pour conserver l’identifiant enregistré.",
     "settings.providers.native.configuredHeaders": "Noms des en-têtes configurés : {names}",
     "settings.providers.native.replaceHeaders": "Remplacer tous les en-têtes enregistrés",
-    "settings.providers.native.discoveryHint": "Vérifiez les modèles trouvés avant d’enregistrer. Renseignez les limites de contexte et de sortie manquantes ; aucune limite n’est devinée.",
     "settings.providers.native.invalidConfiguration": "Vérifiez l’ID du fournisseur, le point d’accès, les noms uniques des en-têtes et modèles, les limites positives et les métadonnées JSON.",
     "settings.providers.native.browserCookies": "Terminez la connexion et collez la valeur du cookie {cookies}.",
     "settings.providers.native.oauthFailureHint": "La connexion n’a pas pu aboutir. Si la configuration du fournisseur a changé, annulez cette tentative et recommencez la connexion."
@@ -78,7 +72,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "シークレットは書き込み専用です。保存済みの認証情報を保持するには API キーを空欄にしてください。",
     "settings.providers.native.configuredHeaders": "設定済みヘッダー名：{names}",
     "settings.providers.native.replaceHeaders": "保存済みヘッダーをすべて置き換える",
-    "settings.providers.native.discoveryHint": "保存前に検出されたモデルを確認してください。不足しているコンテキストと出力の上限を入力してください。上限は推測されません。",
     "settings.providers.native.invalidConfiguration": "プロバイダー ID、エンドポイント、ヘッダー名とモデル名の重複、正のモデル上限、メタデータ JSON を確認してください。",
     "settings.providers.native.browserCookies": "サインインを完了し、Cookie「{cookies}」の値を貼り付けてください。",
     "settings.providers.native.oauthFailureHint": "サインインを完了できませんでした。プロバイダー設定が変更された場合は、この試行をキャンセルしてサインインをやり直してください。"
@@ -90,7 +83,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "비밀 값은 쓰기 전용입니다. 저장된 자격 증명을 유지하려면 API 키를 비워 두세요.",
     "settings.providers.native.configuredHeaders": "설정된 헤더 이름: {names}",
     "settings.providers.native.replaceHeaders": "저장된 모든 헤더 교체",
-    "settings.providers.native.discoveryHint": "저장 전에 검색된 모델을 검토하세요. 누락된 컨텍스트와 출력 제한을 입력하세요. 제한을 추측하지 않습니다.",
     "settings.providers.native.invalidConfiguration": "제공자 ID, 엔드포인트, 헤더와 모델 이름의 중복, 양수 모델 제한, 메타데이터 JSON을 확인하세요.",
     "settings.providers.native.browserCookies": "로그인을 완료하고 {cookies} 쿠키 값을 붙여넣으세요.",
     "settings.providers.native.oauthFailureHint": "로그인을 완료할 수 없습니다. 제공자 설정이 변경되었다면 이 시도를 취소하고 다시 로그인하세요."
@@ -102,7 +94,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Sekrety można tylko zapisywać. Pozostaw klucz API pusty, aby zachować zapisane poświadczenia.",
     "settings.providers.native.configuredHeaders": "Nazwy skonfigurowanych nagłówków: {names}",
     "settings.providers.native.replaceHeaders": "Zastąp wszystkie zapisane nagłówki",
-    "settings.providers.native.discoveryHint": "Sprawdź znalezione modele przed zapisaniem. Uzupełnij brakujące limity kontekstu i wyjścia; limity nie są zgadywane.",
     "settings.providers.native.invalidConfiguration": "Sprawdź ID dostawcy, punkt końcowy, unikalność nazw nagłówków i modeli, dodatnie limity modelu oraz metadane JSON.",
     "settings.providers.native.browserCookies": "Dokończ logowanie i wklej wartość pliku cookie {cookies}.",
     "settings.providers.native.oauthFailureHint": "Nie udało się dokończyć logowania. Jeśli konfiguracja dostawcy się zmieniła, anuluj tę próbę i zaloguj się ponownie."
@@ -114,7 +105,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Segredos são somente para gravação. Deixe a chave API vazia para manter a credencial salva.",
     "settings.providers.native.configuredHeaders": "Nomes dos cabeçalhos configurados: {names}",
     "settings.providers.native.replaceHeaders": "Substituir todos os cabeçalhos salvos",
-    "settings.providers.native.discoveryHint": "Revise os modelos encontrados antes de salvar. Preencha os limites de contexto e saída ausentes; nenhum limite é presumido.",
     "settings.providers.native.invalidConfiguration": "Verifique o ID do provedor, endpoint, nomes únicos de cabeçalhos e modelos, limites positivos e metadados JSON.",
     "settings.providers.native.browserCookies": "Conclua o login e cole o valor do cookie {cookies}.",
     "settings.providers.native.oauthFailureHint": "Não foi possível concluir o login. Se a configuração do provedor mudou, cancele esta tentativa e entre novamente."
@@ -126,7 +116,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "Gizli değerler yalnızca yazılabilir. Saklanan kimlik bilgisini korumak için API anahtarını boş bırakın.",
     "settings.providers.native.configuredHeaders": "Yapılandırılmış başlık adları: {names}",
     "settings.providers.native.replaceHeaders": "Saklanan tüm başlıkları değiştir",
-    "settings.providers.native.discoveryHint": "Kaydetmeden önce bulunan modelleri inceleyin. Eksik bağlam ve çıktı sınırlarını girin; sınırlar tahmin edilmez.",
     "settings.providers.native.invalidConfiguration": "Sağlayıcı kimliğini, uç noktayı, benzersiz başlık ve model adlarını, pozitif model sınırlarını ve üst veri JSON’unu kontrol edin.",
     "settings.providers.native.browserCookies": "Oturum açmayı tamamlayıp {cookies} çerezinin değerini yapıştırın.",
     "settings.providers.native.oauthFailureHint": "Oturum açma tamamlanamadı. Sağlayıcı yapılandırması değiştiyse bu denemeyi iptal edip yeniden oturum açın."
@@ -138,7 +127,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "密钥仅可写入。将 API 密钥留空可保留已存储的凭据。",
     "settings.providers.native.configuredHeaders": "已配置的请求头名称：{names}",
     "settings.providers.native.replaceHeaders": "替换全部已存储的请求头",
-    "settings.providers.native.discoveryHint": "保存前请检查发现的模型。填写缺失的上下文和输出限制；不会猜测限制。",
     "settings.providers.native.invalidConfiguration": "请检查提供商 ID、端点、请求头和模型名称的唯一性、正数模型限制以及元数据 JSON。",
     "settings.providers.native.browserCookies": "完成登录并粘贴 {cookies} Cookie 的值。",
     "settings.providers.native.oauthFailureHint": "无法完成登录。如果提供商配置已更改，请取消本次尝试并重新登录。"
@@ -150,7 +138,6 @@ export const nativeProvidersI18n = {
     "settings.providers.native.secretHint": "機密值僅供寫入。將 API 金鑰留空可保留已儲存的憑證。",
     "settings.providers.native.configuredHeaders": "已設定的標頭名稱：{names}",
     "settings.providers.native.replaceHeaders": "取代全部已儲存的標頭",
-    "settings.providers.native.discoveryHint": "儲存前請檢查探索到的模型。填寫缺少的上下文和輸出限制；不會猜測限制。",
     "settings.providers.native.invalidConfiguration": "請檢查供應商 ID、端點、標頭與模型名稱的唯一性、正數模型限制及中繼資料 JSON。",
     "settings.providers.native.browserCookies": "完成登入並貼上 {cookies} Cookie 的值。",
     "settings.providers.native.oauthFailureHint": "無法完成登入。如果供應商設定已變更，請取消這次嘗試並重新登入。"

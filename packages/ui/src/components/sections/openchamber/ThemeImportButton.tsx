@@ -70,14 +70,13 @@ export function ThemeImportButton() {
   return (
     <div className="flex items-center gap-2" data-settings-item="appearance.import-theme">
       <span className="hidden @xl:contents"><SettingsInfoHint>{t('settings.themeImport.catalogHint')}</SettingsInfoHint></span>
-      {/* Below the pane's @xl width the button keeps only its plus, so it fits beside the section title. */}
+      {/* Below the pane's @xl width the button keeps only its plus, so it fits beside the section title; the size variant then supplies its own square-ish padding. */}
       <Button
         variant="outline"
         size="sm"
         disabled={busy || customThemesLoading}
         onClick={() => setOpen(true)}
         aria-label={t(busy ? 'settings.themeImport.busy' : 'settings.themeImport.action')}
-        className="w-7 px-0 @xl:w-auto @xl:px-2"
       >
         <Icon name={busy ? 'loader' : 'search'} className={busy ? 'size-3.5 animate-spin' : 'size-3.5'} />
         <span className="hidden @xl:inline">{t(busy ? 'settings.themeImport.busy' : 'settings.themeImport.action')}</span>

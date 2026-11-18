@@ -2,7 +2,7 @@ import React from 'react';
 
 import { Icon } from '@/components/icon/Icon';
 import { GuestIcon } from '@/components/layout/GuestRailIcon';
-import { SettingsSection, SettingsStackedField } from '@/components/sections/shared/SettingsSection';
+import { SettingsSection, SettingsStackedField, SETTINGS_SPACE_ROW_CLASS } from '@/components/sections/shared/SettingsSection';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -494,7 +494,7 @@ export const GuestIntegrationsSection: React.FC<{ divider?: boolean }> = ({ divi
       info={t('settings.integrations.guests.info')}
       divider={divider}
       settingsItem="integrations.guests"
-      contentClassName="space-y-3"
+      contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
       {cards.map((guest) => (
         <GuestIntegrationCard key={`${runtimeKey}:${guest.id}`} guest={guest} />

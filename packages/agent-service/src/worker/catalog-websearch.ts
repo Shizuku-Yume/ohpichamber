@@ -7,7 +7,7 @@ import { modelKind } from '@oh-my-pi/pi-catalog/types';
 import { Settings } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { getRoleInfo, roleCandidatePool } from '@oh-my-pi/pi-coding-agent/config/model-roles';
 import { getGroundedSearchProvider, getSearchProvider, type SearchProvider } from '@oh-my-pi/pi-coding-agent/web/search/provider';
-import { resolveRoleChain, formatModelStringWithRouting as selector } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
+import { resolveModelRoleValue, resolveRoleChain, formatModelStringWithRouting as selector } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { cfgWebSearchEnabled } from '@oh-my-pi/pi-coding-agent/tools/settings';
 import { cfgProvidersWebSearchTimeoutSeconds, cfgRetryFallbackChains } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { cfgExaEnabled, cfgExaSearchDelayMs, cfgSearxngCategories, cfgSearxngEndpoint, cfgSearxngEngines, cfgSearxngLanguage, cfgSearxngSafesearch } from '@oh-my-pi/pi-coding-agent/web/settings';
@@ -231,10 +231,30 @@ export class NativeWebSearch {
         credentialConfigured, requiresCredential: engine ? credentialOwner !== undefined && !optionalCredentialEngines.includes(model.id) : model.id !== 'hosted',
         isSelfHosted: engine && model.id === 'searxng', credentialWritable: credentialOwner !== undefined, ...providerSettings }, options ? { options } : {}));
     }));
-    const chain = resolveRoleChain('web', settings, roleCandidatePool('web', settings, this.runtime.modelRegistry));
-    const configuredPrimary = settings.getModelRole('web') ?? null;
-    const primary = configuredPrimary === null ? null : chain[0] ? selector(chain[0].model) : configuredPrimary;
-    const fallback = chain.map(candidate => selector(candidate.model)).filter(id => id !== primary);
+    // The fallback list is the order the user set. `retry.fallbackChains.web`
+    // stores that order verbatim, so display it as written; only an unset chain
+    // falls back to the effective role chain. Deriving the order from the chain
+    // would let the implicit `@web` primary (the first default entry when no
+    // primary is selected) jump back in front of a reordered list, so a saved
+    // reorder looked like it did nothing.
+    const pool = roleCandidatePool('web', settings, this.runtime.modelRegistry);
+    const resolveSelector = (value: string): string | undefined => {
+      const model = resolveModelRoleValue(value, pool, { settings }).model;
+      return model ? selector(model) : undefined;
+    };
+    const configuredPrimary = settings.getModelRole('web')?.trim() || null;
+    // A configured primary that resolves to no model stays named as configured:
+    // the page then reports it as missing instead of promoting a fallback.
+    const primary = configuredPrimary === null ? null : resolveSelector(configuredPrimary) ?? configuredPrimary;
+    const configuredChain = cfgRetryFallbackChains.get(settings).web;
+    const ordered = Array.isArray(configuredChain)
+      ? configuredChain
+      : resolveRoleChain('web', settings, pool).map(candidate => selector(candidate.model));
+    const fallback = ordered.reduce<string[]>((ids, value) => {
+      const resolved = resolveSelector(value);
+      if (resolved !== undefined && resolved !== primary && !ids.includes(resolved)) ids.push(resolved);
+      return ids;
+    }, []);
     return WebSearchConfigStateSchema.parse({ workspaceId: this.workspaceId, revision: await this.revision(), enabled: cfgWebSearchEnabled.get(settings), selectedProviderId: primary,
       fallbackProviderIds: fallback, timeoutSeconds: cfgProvidersWebSearchTimeoutSeconds.get(settings), providers });
   }

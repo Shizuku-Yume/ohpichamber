@@ -600,6 +600,21 @@ describe('settings helpers', () => {
     expect(response.collapsibleThinkingBlocks).toBe(true);
   });
 
+  it('leaves an unchosen showReasoningTraces to the client default instead of answering false', () => {
+    const helpers = createTestHelpers();
+
+    // An absent key means the profile never chose. The client's own default
+    // (`packages/ui/src/stores/useUIStore.ts`) shows thinking blocks, and a
+    // server answer of `false` used to override it on the first sync, which
+    // hid reasoning entirely on a fresh data directory.
+    const response = helpers.formatSettingsResponse({});
+    expect(response).not.toHaveProperty('showReasoningTraces');
+
+    // A stored choice still round-trips, both ways.
+    expect(helpers.formatSettingsResponse({ showReasoningTraces: false }).showReasoningTraces).toBe(false);
+    expect(helpers.formatSettingsResponse({ showReasoningTraces: true }).showReasoningTraces).toBe(true);
+  });
+
   it('includes transient desktop LAN access runtime status in desktop settings response', () => {
     const helpers = createTestHelpers();
     const previousRuntime = process.env.OPENCHAMBER_RUNTIME;
@@ -707,6 +722,32 @@ describe('settings helpers', () => {
     });
   });
 
+  describe('permission policy persistence', () => {
+    it('keeps the Host-owned per-session policy instead of dropping it', () => {
+      const helpers = createTestHelpersWithRealSanitizers();
+      const policy = { sessions: { ses_a: 'safety', ses_b: 'ask', ses_legacy: true }, revision: 4 };
+      expect(helpers.sanitizeSettingsUpdate({ permissionAutoAccept: policy })).toEqual({ permissionAutoAccept: policy });
+      // The registry is the write gate: the key survives the registry filter
+      // that the sanitizer applies last, so a restart reads the policy back.
+      expect(helpers.sanitizeSettingsUpdate({ permissionAutoAccept: { sessions: {}, revision: 0 } }))
+        .toEqual({ permissionAutoAccept: { sessions: {}, revision: 0 } });
+    });
+
+    it('normalizes the policy shape and drops entries that are neither a mode nor a boolean', () => {
+      const helpers = createTestHelpersWithRealSanitizers();
+      expect(helpers.sanitizeSettingsUpdate({
+        permissionAutoAccept: {
+          sessions: { ses_a: 'auto', ses_b: 'always', '': 'ask', ses_c: 1 },
+          revision: 2.5,
+        },
+      })).toEqual({ permissionAutoAccept: { sessions: { ses_a: 'auto' }, revision: 0 } });
+      expect(helpers.sanitizeSettingsUpdate({ permissionAutoAccept: { sessions: {} }, permissionDefaultMode: 'auto' }))
+        .toEqual({ permissionAutoAccept: { sessions: {}, revision: 0 }, permissionDefaultMode: 'auto' });
+      expect(helpers.sanitizeSettingsUpdate({ permissionAutoAccept: 'on' })).toEqual({});
+      expect(helpers.sanitizeSettingsUpdate({ permissionAutoAccept: ['on'] })).toEqual({});
+    });
+  });
+
   describe('commit-message control persistence', () => {
     it('round-trips each control and keeps absent distinct from false', () => {
       const helpers = createTestHelpersWithRealSanitizers();
@@ -787,6 +828,9 @@ describe('settings registry gate', () => {
     desktopLanAccessEnabled: true, desktopKeepAwakeEnabled: true, desktopMinimizeToTrayEnabled: true, desktopMacMenuBarEnabled: true, desktopLinuxNativeFrame: true, sidebarShowChatsSection: false,
     desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', gitlabClientId: 'gitlab-client', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
     defaultGitIdentityId: 'global', permissionDefaultMode: 'safety', messageSearchEnabled: true, messageSearchReasoningEnabled: true,
+    // The Host-owned per-session policy: modes for current clients, booleans
+    // from before the modes, and the revision the runtime increments.
+    permissionAutoAccept: { sessions: { 'ses_root': 'safety', 'ses_legacy': true }, revision: 3 },
     sessionGoalChecker: 'classifier', sessionGoalMaxAutoTurns: 20,
     planModeAllowAgents: true,
     agentControlToolEnabled: true, agentWebToolEnabled: true, browserProvider: 'builtin', agentNotifyToolEnabled: true, isolatedSpacesEnabled: true, isolatedSpacesIdleStop: { enabled: true, hours: 4 },

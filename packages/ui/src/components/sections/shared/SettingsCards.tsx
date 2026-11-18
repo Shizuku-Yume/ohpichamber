@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { cn } from '@/lib/utils';
+import { SETTINGS_WIDTH_LONG_TEXT_CLASS } from '@/components/sections/shared/SettingsSection';
 
 /**
  * Card grid for Settings pages that browse a set of things with a glanceable
@@ -225,10 +226,10 @@ export const SettingsCardSearch: React.FC<{
   onChange: (value: string) => void;
   placeholder: string;
   className?: string;
-  /** 28px, to match the dropdowns and buttons of a toolbar row. */
+  /** 28px, matching toolbar dropdowns and buttons; defaults true in settings. */
   compact?: boolean;
-}> = ({ value, onChange, placeholder, className, compact = false }) => (
-  <div className={cn('relative mb-4 max-w-[24rem]', className)}>
+}> = ({ value, onChange, placeholder, className, compact = true }) => (
+  <div className={cn('relative mb-4', SETTINGS_WIDTH_LONG_TEXT_CLASS, className)}>
     <Icon
       name="search"
       className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -253,9 +254,10 @@ export const SettingsCardSearch: React.FC<{
 export const SettingsCardToolbar: React.FC<{
   search: { value: string; onChange: (value: string) => void; placeholder: string } | null;
   actions: React.ReactNode;
-}> = ({ search, actions }) => (
-  <div className="mb-4 flex flex-wrap items-center gap-2">
-    {search ? <SettingsCardSearch {...search} compact className="mb-0 min-w-0 flex-1 basis-56" /> : null}
+  className?: string;
+}> = ({ search, actions, className }) => (
+  <div className={cn('mb-4 flex flex-wrap items-center gap-2', className)}>
+    {search ? <SettingsCardSearch {...search} compact className="mb-0 min-w-0 flex-1 basis-56 max-w-none" /> : null}
     <div className="ms-auto flex shrink-0 items-center gap-2">{actions}</div>
   </div>
 );

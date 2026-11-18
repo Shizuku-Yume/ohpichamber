@@ -105,4 +105,22 @@ describe('integrations catalog registry', () => {
     expect(catalogEntryHasAllInputs(ado, {})).toBe(false);
     expect(catalogEntryHasAllInputs(ado, { org: 'contoso' })).toBe(true);
   });
+
+  test('env inputs are unique per entry and labelled under the entry id', () => {
+    const entriesWithEnvInputs: string[] = [];
+    for (const entry of CATALOG_ENTRIES) {
+      const envInputs = catalogMcpComponent(entry)?.local?.envInputs ?? [];
+      if (envInputs.length === 0) continue;
+      entriesWithEnvInputs.push(entry.id);
+      const ids = envInputs.map((input) => input.id);
+      const envNames = envInputs.map((input) => input.envName);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(new Set(envNames).size).toBe(envNames.length);
+      for (const input of envInputs) {
+        expect(/^[A-Z][A-Z0-9_]*$/.test(input.envName)).toBe(true);
+        expect(input.labelKey).toBe(`integrationsCatalog.entry.${entry.id}.env.${input.id}`);
+      }
+    }
+    expect(entriesWithEnvInputs.sort()).toEqual(['azure-devops', 'grafana', 'mcp-toolbox', 'mongodb']);
+  });
 });

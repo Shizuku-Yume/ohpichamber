@@ -35,14 +35,14 @@ const fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(async (input) => 
     });
   }
   if (url.includes('/omp')) {
-    return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 0, settings: [] });
+    return Response.json({ workspaceId: 'ws_1', revision: '1', totalCount: 0, placementCounts: { tuiOnly: 0, boundary: 0, elsewhere: 0 }, settings: [] });
   }
   return Response.json(url.includes('/config/mcp') ? [] : { home: '/test', projects: [{ id: 'project', path: '/project' }], activeProjectId: 'project' });
 });
 // These loading boundaries must run after the browser globals and the Bun asset-loader plugin are installed.
 const { act } = await import('react');
 const { createRoot } = await import('react-dom/client');
-const { I18nProvider } = await import('@/lib/i18n');
+const { I18nProvider, useI18nStore } = await import('@/lib/i18n');
 const { useAgentsStore } = await import('@/stores/useAgentsStore');
 const { useProjectsStore } = await import('@/stores/useProjectsStore');
 const { useSessionUIStore } = await import('@/sync/session-ui-store');
@@ -98,7 +98,12 @@ beforeEach(() => {
     createAgent: async () => ({ ok: true, revision: '2' }),
   });
 });
-afterEach(async () => { await act(async () => root.unmount()); });
+afterEach(async () => {
+  await act(async () => {
+    root.unmount();
+    useI18nStore.getState().setLocale('en');
+  });
+});
 afterAll(() => { fetchSpy.mockRestore(); browser.close(); });
 const render = async () => { await act(async () => { root.render(<I18nProvider><AgentsPage /></I18nProvider>); }); };
 const field = (value: string) => {
@@ -112,14 +117,42 @@ const edit = async (entry: HTMLTextAreaElement, value: string, blur = true) => {
   await act(async () => { setter.call(entry, value); entry.dispatchEvent(new Event('input', { bubbles: true })); });
   if (blur) await act(async () => { entry.dispatchEvent(new FocusEvent('focusout', { bubbles: true })); });
 };
-const toolRow = (value: string): HTMLElement => {
-  const rows = [...container.querySelectorAll<HTMLElement>('div[role="button"]')];
-  const row = rows.find((candidate) => candidate.textContent?.includes(`(${value})`) || candidate.textContent?.includes(value));
+const expandAllToolGroups = async () => {
+  const collapsed = [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      '[data-settings-item="agents.permissions"] button[aria-expanded="false"]:not([aria-label])',
+    ),
+  ];
+  if (collapsed.length === 0) return;
+  await act(async () => {
+    for (const button of collapsed) {
+      button.click();
+    }
+  });
+};
+const findToolRow = (value: string): HTMLElement | undefined => {
+  const lower = value.toLowerCase();
+  const rows = [
+    ...container.querySelectorAll<HTMLElement>(
+      '[data-settings-item="agents.permissions"] div[role="button"]',
+    ),
+  ];
+  return rows.find((candidate) => {
+    const text = (candidate.textContent ?? '').toLowerCase();
+    return text.includes(`(${lower})`) || text.startsWith(lower);
+  });
+};
+const toolRow = async (value: string): Promise<HTMLElement> => {
+  let row = findToolRow(value);
+  if (!row) {
+    await expandAllToolGroups();
+    row = findToolRow(value);
+  }
   if (!row) throw new Error(`Missing tool row: ${value}`);
   return row;
 };
 const toggleTool = async (value: string) => {
-  const row = toolRow(value);
+  const row = await toolRow(value);
   await act(async () => { row.click(); });
 };
 
@@ -253,7 +286,7 @@ test('inherited tools stay null on hydrate and autosave, edit creates an explici
     updateAgent: async (agent) => { writes.push(agent); return { ok: true, revision: String(writes.length + 2) }; },
   });
   await render();
-  expect(container.textContent).toContain('Inherits the native default tool set.');
+  expect(container.textContent).toContain('Inherits default tool set');
   await edit(field('initial'), 'Inherited description');
   expect(writes[0].allowedTools).toBeNull();
   await toggleTool('read');
@@ -272,12 +305,13 @@ test('explicit empty tools remain an explicit empty list', async () => {
     updateAgent: async (agent) => { writes.push(agent); return { ok: true, revision: String(writes.length + 2) }; },
   });
   await render();
-  expect(container.textContent).not.toContain('Inherits the native default tool set.');
+  expect(container.textContent).not.toContain('Inherits default tool set');
+  expect(container.textContent).toContain('0 / 4 enabled');
   await toggleTool('read');
   expect(writes[0].allowedTools).toEqual(['read']);
 });
 
-test('the tool editor groups tools into collapsible sections with header tri-state checkboxes, N of M counts and tier chips; Show all selects only available tools; preset input is deleted', async () => {
+test('the tool editor groups tools into default-collapsed disclosures with header tri-state checkboxes and counts; All available selects only available tools; Show all and Hide all are absent; preset input is deleted', async () => {
   const writes: Agent[] = [];
   useAgentsStore.setState({
     updateAgent: async (agent) => {
@@ -289,25 +323,29 @@ test('the tool editor groups tools into collapsible sections with header tri-sta
   expect(container.querySelector('input[aria-label="Permission preset ID"]')).toBeNull();
   expect(container.querySelector('input[aria-label="Allowed tools"]')).toBeNull();
 
-  // Sections with counts and tier chips:
+  // Sections are present and legacy chip labels are absent:
   expect(container.textContent).toContain('Files and search');
   expect(container.textContent).toContain('Execution');
+  expect(container.textContent).toContain('MCP and extensions');
+  expect(container.textContent).not.toContain('Show all');
+  expect(container.textContent).not.toContain('Hide all');
 
-  // Toggling a tool updates allowedTools:
+  // Toggling a tool updates allowedTools (auto-expanding collapsed groups):
   await toggleTool('bash');
   expect(writes[0].allowedTools).toEqual(['read', 'custom-tool', 'bash']);
   expect((writes[0] as unknown as Record<string, unknown>).permissionPresetId).toBeUndefined();
 
-  // Show all selects only available tools:
-  const showAll = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Show all');
-  if (!showAll) throw new Error('Missing Show all action');
-  await act(async () => { showAll.click(); });
+  // All available selects only available tools:
+  const allAvailable = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'All available');
+  if (!allAvailable) throw new Error('Missing All available action');
+  await act(async () => { allAvailable.click(); });
   expect(writes.at(-1)?.allowedTools).toEqual(['read', 'bash', 'custom-tool']);
   expect(writes.at(-1)?.allowedTools).not.toContain('disabled-tool');
-  // Hide all selects empty:
-  const hideAll = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Hide all');
-  if (!hideAll) throw new Error('Missing Hide all action');
-  await act(async () => { hideAll.click(); });
+
+  // None selects empty:
+  const none = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'None');
+  if (!none) throw new Error('Missing None action');
+  await act(async () => { none.click(); });
   expect(writes.at(-1)?.allowedTools).toEqual([]);
 });
 
@@ -374,6 +412,7 @@ test('the editor uses the workspace selected in Settings, even when a chat in an
 
   expect(requestedUrls.some((u) => u.includes('/workspaces/ws_projectB/tools'))).toBe(true);
   expect(requestedUrls.some((u) => u.includes('/sessions/sess_projectA/tools'))).toBe(false);
+  await expandAllToolGroups();
   expect(container.textContent).toContain('b-specific-tool');
 });
 
@@ -399,19 +438,30 @@ test('a failed catalog load disables editing and never autosaves an empty list',
 
   await render();
 
-  const statusBanner = container.querySelector('[role="status"]');
+  const statusBanner = container.querySelector<HTMLElement>('[role="status"]');
   expect(statusBanner).not.toBeNull();
   expect(statusBanner?.textContent).toContain('Unavailable');
+  expect(statusBanner?.className).toContain('--status-warning');
+  expect(statusBanner?.className).not.toContain('amber-');
 
   // Quick action chip buttons must be unconditionally disabled
-  const chipButtons = [...container.querySelectorAll<HTMLButtonElement>('[role="group"] button')];
+  const chipButtons = [...container.querySelectorAll<HTMLButtonElement>('[data-settings-item="agents.permissions"] [role="group"] button')];
   expect(chipButtons.length).toBeGreaterThan(0);
   for (const btn of chipButtons) {
     expect(btn.disabled).toBe(true);
   }
-  // Checkboxes must be unconditionally disabled
-  const checkboxes = [...container.querySelectorAll<HTMLInputElement>('[data-settings-item="agents.allowed-tools"] input[type="checkbox"]')];
-  for (const cb of checkboxes) {
+  // Header tri-state checkboxes while collapsed must be unconditionally disabled
+  const collapsedCheckboxes = [...container.querySelectorAll<HTMLInputElement>('[data-settings-item="agents.permissions"] input[type="checkbox"]')];
+  expect(collapsedCheckboxes.length).toBeGreaterThan(0);
+  for (const cb of collapsedCheckboxes) {
+    expect(cb.disabled).toBe(true);
+  }
+
+  // Expand groups and verify every individual tool checkbox is also disabled
+  await expandAllToolGroups();
+  const expandedCheckboxes = [...container.querySelectorAll<HTMLInputElement>('[data-settings-item="agents.permissions"] input[type="checkbox"]')];
+  expect(expandedCheckboxes.length).toBeGreaterThan(collapsedCheckboxes.length);
+  for (const cb of expandedCheckboxes) {
     expect(cb.disabled).toBe(true);
   }
 
@@ -424,7 +474,7 @@ test('a failed catalog load disables editing and never autosaves an empty list',
   expect(lastWrite.allowedTools).toEqual(initialAgent.allowedTools);
   expect(lastWrite.allowedTools).not.toEqual([]);
 });
-test('unavailable or unknown tools cannot be selected and are excluded from Show all', async () => {
+test('unavailable or unknown tools cannot be selected and are excluded from All available', async () => {
   const writes: Agent[] = [];
   const agentWithUnknown: Agent = {
     ...initialAgent,
@@ -439,18 +489,147 @@ test('unavailable or unknown tools cannot be selected and are excluded from Show
   });
 
   await render();
+  await expandAllToolGroups();
 
   expect(container.textContent).toContain('unknown-tool');
   expect(container.textContent).toContain('Unavailable');
+  expect(container.textContent).not.toContain('Show all');
+  expect(container.textContent).not.toContain('Hide all');
 
   await toggleTool('disabled-tool');
   expect(writes.some((w) => w.allowedTools?.includes('disabled-tool'))).toBe(false);
 
-  const showAll = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'Show all');
-  if (!showAll) throw new Error('Missing Show all action');
-  await act(async () => { showAll.click(); });
+  const allAvailable = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.trim() === 'All available');
+  if (!allAvailable) throw new Error('Missing All available action');
+  await act(async () => { allAvailable.click(); });
   const lastWrite = writes.at(-1);
   expect(lastWrite?.allowedTools).toEqual(['read', 'bash', 'custom-tool']);
   expect(lastWrite?.allowedTools).not.toContain('disabled-tool');
   expect(lastWrite?.allowedTools).not.toContain('unknown-tool');
+});
+
+test('category disclosures are default-collapsed with counts and hide tool rows until expanded', async () => {
+  await render();
+
+  const disclosures = [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      '[data-settings-item="agents.permissions"] button[aria-expanded]:not([aria-label])',
+    ),
+  ];
+  expect(disclosures).toHaveLength(3);
+  for (const button of disclosures) {
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+  }
+  expect(container.querySelectorAll('[data-settings-item="agents.permissions"] div[role="button"]')).toHaveLength(0);
+
+  const executionDisclosure = disclosures.find((button) => button.textContent?.includes('Execution'));
+  const filesDisclosure = disclosures.find((button) => button.textContent?.includes('Files and search'));
+  const mcpDisclosure = disclosures.find((button) => button.textContent?.includes('MCP and extensions'));
+  expect(filesDisclosure?.textContent).toContain('1 / 1');
+  expect(executionDisclosure?.textContent).toContain('0 / 1');
+  expect(mcpDisclosure?.textContent).toContain('1 / 2');
+
+  if (!executionDisclosure || !mcpDisclosure) throw new Error('Missing expected disclosures');
+  await act(async () => { executionDisclosure.click(); });
+  expect(executionDisclosure.getAttribute('aria-expanded')).toBe('true');
+  expect(filesDisclosure?.getAttribute('aria-expanded')).toBe('false');
+  expect(container.querySelectorAll('[data-settings-item="agents.permissions"] div[role="button"]')).toHaveLength(1);
+
+  await act(async () => { mcpDisclosure.click(); });
+  expect(mcpDisclosure.getAttribute('aria-expanded')).toBe('true');
+  expect(container.querySelectorAll('[data-settings-item="agents.permissions"] div[role="button"]')).toHaveLength(3);
+});
+
+test('category header tri-state checkbox toggles category tools without expanding the disclosure', async () => {
+  const writes: Agent[] = [];
+  useAgentsStore.setState({
+    updateAgent: async (agent) => {
+      writes.push(agent);
+      return { ok: true, revision: String(writes.length + 1) };
+    },
+  });
+  await render();
+
+  const executionDisclosure = [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      '[data-settings-item="agents.permissions"] button[aria-expanded]:not([aria-label])',
+    ),
+  ].find((button) => button.textContent?.includes('Execution'));
+  const executionCheckbox = container.querySelector<HTMLElement>(
+    '[data-settings-item="agents.permissions"] [role="checkbox"][aria-label="Toggle Execution tools"]',
+  );
+  if (!executionDisclosure || !executionCheckbox) throw new Error('Missing Execution disclosure controls');
+
+  expect(executionDisclosure.getAttribute('aria-expanded')).toBe('false');
+  await act(async () => { executionCheckbox.click(); });
+  expect(executionDisclosure.getAttribute('aria-expanded')).toBe('false');
+  expect(writes.at(-1)?.allowedTools).toEqual(['read', 'custom-tool', 'bash']);
+  expect(writes.at(-1)?.allowedTools).not.toContain('disabled-tool');
+
+  await act(async () => { executionCheckbox.click(); });
+  expect(executionDisclosure.getAttribute('aria-expanded')).toBe('false');
+  expect(writes.at(-1)?.allowedTools).toEqual(['read', 'custom-tool']);
+
+  const mcpDisclosure = [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      '[data-settings-item="agents.permissions"] button[aria-expanded]:not([aria-label])',
+    ),
+  ].find((button) => button.textContent?.includes('MCP and extensions'));
+  const mcpCheckbox = container.querySelector<HTMLElement>(
+    '[data-settings-item="agents.permissions"] [role="checkbox"][aria-label="Toggle MCP and extensions tools"]',
+  );
+  if (!mcpDisclosure || !mcpCheckbox) throw new Error('Missing MCP disclosure controls');
+
+  await act(async () => { mcpCheckbox.click(); });
+  expect(mcpDisclosure.getAttribute('aria-expanded')).toBe('false');
+  expect(writes.at(-1)?.allowedTools).toEqual(['read']);
+
+  await act(async () => { mcpCheckbox.click(); });
+  expect(mcpDisclosure.getAttribute('aria-expanded')).toBe('false');
+  expect(writes.at(-1)?.allowedTools).toEqual(['read', 'custom-tool']);
+  expect(writes.at(-1)?.allowedTools).not.toContain('disabled-tool');
+});
+
+test('allowed tools summary shows enabled count for custom lists and None state for empty lists', async () => {
+  await render();
+  const modeRow = container.querySelector('[data-settings-item="agents.allowed-tools"]');
+  expect(modeRow?.textContent).toContain('2 / 4 enabled');
+
+  const noneChip = [...(modeRow?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find(
+    (button) => button.textContent?.trim() === 'None',
+  );
+  if (!noneChip) throw new Error('Missing None chip');
+  await act(async () => { noneChip.click(); });
+
+  expect(modeRow?.textContent).toContain('0 / 4 enabled');
+  expect(noneChip.getAttribute('aria-pressed')).toBe('true');
+});
+
+test('zh-CN locale renders localized mode chips, category headers, and expanded tool labels without Show all or Hide all', async () => {
+  await act(async () => {
+    useI18nStore.getState().setLocale('zh-CN');
+    while (useI18nStore.getState().loadingLocale !== null) {
+      const { promise, resolve } = Promise.withResolvers<void>();
+      setTimeout(resolve, 5);
+      await promise;
+    }
+  });
+  await render();
+
+  const modeRow = container.querySelector('[data-settings-item="agents.allowed-tools"]');
+  expect(modeRow?.textContent).toContain('默认');
+  expect(modeRow?.textContent).toContain('全部启用');
+  expect(modeRow?.textContent).toContain('全部禁用');
+  expect(container.textContent).not.toContain('Show all');
+  expect(container.textContent).not.toContain('Hide all');
+
+  expect(container.textContent).toContain('文件与搜索');
+  expect(container.textContent).toContain('执行');
+  expect(container.textContent).toContain('MCP 与扩展');
+
+  await expandAllToolGroups();
+  const readRow = [
+    ...container.querySelectorAll<HTMLElement>('[data-settings-item="agents.permissions"] div[role="button"]'),
+  ].find((row) => row.textContent?.includes('读取文件') && row.textContent?.includes('(read)'));
+  expect(readRow).toBeDefined();
 });

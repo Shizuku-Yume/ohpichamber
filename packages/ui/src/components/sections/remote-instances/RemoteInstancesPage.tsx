@@ -23,12 +23,19 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
 import {
   SettingsSection,
+  SettingsFieldRow,
   SettingsGroupTitle,
   SettingsChipGroup,
   SETTINGS_PAGE_TITLE_CLASS,
   SETTINGS_SECTION_TITLE_CLASS,
-  SETTINGS_FIELD_LABEL_CLASS,
-  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_NUMBER_STEPPER_ROW_CLASS,
+  SETTINGS_DIALOG_ICON_BUTTON_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_HELPER_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
@@ -265,15 +272,6 @@ const makeForward = (): DesktopSshPortForward => {
 const suggestConcreteHost = (pattern: string): string => {
   const value = pattern.trim().replace(/\*/g, 'host').replace(/\?/g, 'x');
   return value || 'user@host';
-};
-
-const HintLabel: React.FC<{ label: string; hint: React.ReactNode }> = ({ label, hint }) => {
-  return (
-    <span className={`inline-flex items-center gap-1 ${SETTINGS_FIELD_LABEL_CLASS}`}>
-      <span>{label}</span>
-      <SettingsInfoHint contentClassName="max-w-xs">{hint}</SettingsInfoHint>
-    </span>
-  );
 };
 
 const forwardTypeDescriptionKey = (type: DesktopSshPortForwardType): I18nKey => {
@@ -1595,7 +1593,7 @@ export const RemoteInstancesPage: React.FC = () => {
             info={t('settings.remoteInstances.clientAuth.description')}
             divider={false}
             settingsItem="remote-instances.client-auth"
-            contentClassName="space-y-3"
+            contentClassName={SETTINGS_SPACE_ROW_CLASS}
           >
             <RelayConflictNotice clientAuth={clientAuth} />
             <div>
@@ -1604,7 +1602,7 @@ export const RemoteInstancesPage: React.FC = () => {
                 {t('settings.remoteInstances.clientAuth.actions.addDevice')}
               </Button>
             </div>
-            <div className="space-y-2.5">
+            <div className="flex flex-col gap-1">
               {revokedClientCount > 0 ? (
                 <div className="flex justify-end">
                   <Button type="button" variant="ghost" size="xs" className="!font-normal" onClick={() => void purgeRevokedRemoteClients()}>
@@ -1693,7 +1691,7 @@ export const RemoteInstancesPage: React.FC = () => {
           title={t('settings.remoteInstances.direct.title')}
           info={t('settings.remoteInstances.direct.description')}
           settingsItem="remote-instances.direct-hosts"
-          contentClassName="space-y-4"
+          contentClassName={SETTINGS_SPACE_ROW_CLASS}
           headerAction={(
             /* Importing a pairing link is the flagship path; add-by-address is
                the manual fallback. The token-storage note lives in the add
@@ -1709,7 +1707,7 @@ export const RemoteInstancesPage: React.FC = () => {
             </div>
           )}
         >
-          <div className="space-y-2.5">
+          <div>
             {directLoading ? (
               <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.direct.state.loading')}</p>
             ) : directHosts.length === 0 ? (
@@ -1993,7 +1991,6 @@ export const RemoteInstancesPage: React.FC = () => {
               {t('settings.remoteInstances.sidebar.actions.addSshInstance')}
             </Button>
           )}
-          contentClassName="space-y-2.5"
         >
           {isLoading ? (
             <p className="typography-meta text-muted-foreground">{t('settings.remoteInstances.page.state.loadingInstances')}</p>
@@ -2186,8 +2183,8 @@ export const RemoteInstancesPage: React.FC = () => {
 
   return (
     <Dialog open={Boolean(draft)} onOpenChange={(open) => { if (!open) setSelectedId(null); }}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-auto">
-        <div className="mb-6 px-1">
+      <DialogContent className="@container sm:max-w-4xl max-h-[90vh] overflow-auto">
+        <div>
           <h1 dir="auto" className={`${SETTINGS_PAGE_TITLE_CLASS} truncate`}>{instanceTitle}</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2 typography-meta text-muted-foreground">
             <StatusDot className={phaseDotClass(statusPhase)} waiting={isConnectingPhase(statusPhase)} />
@@ -2202,7 +2199,7 @@ export const RemoteInstancesPage: React.FC = () => {
           title={t('settings.remoteInstances.page.section.actions')}
           info={t('settings.remoteInstances.page.section.actionsDescription')}
           divider={false}
-          contentClassName="space-y-3"
+          contentClassName={SETTINGS_SPACE_ROW_CLASS}
         >
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -2297,12 +2294,11 @@ export const RemoteInstancesPage: React.FC = () => {
         <SettingsSection
           title={t('settings.remoteInstances.page.section.instance')}
           info={t('settings.remoteInstances.page.section.instanceDescription')}
-          contentClassName="space-y-3"
         >
-          <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-            <span className="typography-ui-label text-foreground w-56 shrink-0">{t('settings.remoteInstances.page.field.sshCommand')}</span>
+          <SettingsFieldRow label={t('settings.remoteInstances.page.field.sshCommand')}>
             <Input
-              className="h-7 md:max-w-xl"
+              inputSize="compact"
+              className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
               value={draft.sshCommand}
               onChange={(event) =>
                 updateDraft((current) => ({
@@ -2312,11 +2308,11 @@ export const RemoteInstancesPage: React.FC = () => {
               }
               placeholder={t('settings.remoteInstances.page.field.sshCommandPlaceholder')}
             />
-          </div>
-          <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-            <span className="typography-ui-label text-foreground w-56 shrink-0">{t('settings.remoteInstances.page.field.nickname')}</span>
+          </SettingsFieldRow>
+          <SettingsFieldRow label={t('settings.remoteInstances.page.field.nickname')}>
             <Input
-              className="h-7 md:max-w-sm"
+              inputSize="compact"
+              className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
               value={draft.nickname || ''}
               onChange={(event) =>
                 updateDraft((current) => ({
@@ -2326,14 +2322,11 @@ export const RemoteInstancesPage: React.FC = () => {
               }
               placeholder={t('settings.remoteInstances.page.field.nicknamePlaceholder')}
             />
-          </div>
-          <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-            <div className="w-56 shrink-0">
-              <HintLabel
-                label={t('settings.remoteInstances.page.field.mode')}
-                hint={t('settings.remoteInstances.page.field.modeHint')}
-              />
-            </div>
+          </SettingsFieldRow>
+          <SettingsFieldRow
+            label={t('settings.remoteInstances.page.field.mode')}
+            info={t('settings.remoteInstances.page.field.modeHint')}
+          >
             <Select
               value={draft.remoteOpenchamber.mode}
               onValueChange={(value) =>
@@ -2346,7 +2339,7 @@ export const RemoteInstancesPage: React.FC = () => {
                 }))
               }
             >
-              <SelectTrigger className="w-fit min-w-[140px]">
+              <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                 <SelectValue>
                   {draft.remoteOpenchamber.mode === 'external'
                     ? t('settings.remoteInstances.page.field.modeExternal')
@@ -2358,84 +2351,78 @@ export const RemoteInstancesPage: React.FC = () => {
                 <SelectItem value="external">{t('settings.remoteInstances.page.field.modeExternal')}</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </SettingsFieldRow>
 
         </SettingsSection>
 
         <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-          <CollapsibleTrigger className="mt-6 w-auto justify-start gap-1.5">
+          <CollapsibleTrigger className="w-auto justify-start gap-1.5">
             <span className={SETTINGS_SECTION_TITLE_CLASS}>{t('settings.remoteInstances.page.section.advanced')}</span>
             <Icon name={advancedOpen ? 'arrow-up-s' : 'arrow-down-s'} className="h-4 w-4 text-muted-foreground" />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <p className="px-2 pb-2 typography-micro text-muted-foreground">{t('settings.remoteInstances.page.section.advancedHint')}</p>
-            <div className="flex flex-col gap-1.5 px-2 py-1.5 md:flex-row md:items-center md:gap-8">
-              <span className="typography-ui-label text-foreground w-56 shrink-0">{t('settings.remoteInstances.page.field.connectionTimeoutSeconds')}</span>
-              <NumberInput
-                containerClassName="w-fit"
-                min={5}
-                max={240}
-                step={1}
-                className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
-                value={draft.connectionTimeoutSec}
-                onValueChange={(next) => {
-                  updateDraft((current) => ({
-                    ...current,
-                    connectionTimeoutSec: Number.isFinite(next) ? next : current.connectionTimeoutSec,
-                  }));
-                }}
-              />
-            </div>
+            <p className="pb-2 typography-micro text-muted-foreground">{t('settings.remoteInstances.page.section.advancedHint')}</p>
+            <SettingsFieldRow label={t('settings.remoteInstances.page.field.connectionTimeoutSeconds')}>
+              <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                <NumberInput
+                  min={5}
+                  max={240}
+                  step={1}
+                  className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
+                  value={draft.connectionTimeoutSec}
+                  onValueChange={(next) => {
+                    updateDraft((current) => ({
+                      ...current,
+                      connectionTimeoutSec: Number.isFinite(next) ? next : current.connectionTimeoutSec,
+                    }));
+                  }}
+                />
+              </div>
+            </SettingsFieldRow>
 
             <SettingsSection
               title={t('settings.remoteInstances.page.section.remoteServer')}
               info={t('settings.remoteInstances.page.section.remoteServerDescription')}
-              contentClassName="space-y-3"
             >
-              <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                <div className="w-56 shrink-0" ref={remotePortRef}>
-                  <HintLabel
-                    label={t('settings.remoteInstances.page.field.preferredRemotePort')}
-                    hint={t('settings.remoteInstances.page.field.preferredRemotePortHint')}
+              <SettingsFieldRow
+                label={t('settings.remoteInstances.page.field.preferredRemotePort')}
+                info={t('settings.remoteInstances.page.field.preferredRemotePortHint')}
+              >
+                <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS} ref={remotePortRef}>
+                  <NumberInput
+                    min={1}
+                    max={65535}
+                    step={1}
+                    className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
+                    value={draft.remoteOpenchamber.preferredPort}
+                    onValueChange={(next) => {
+                      updateDraft((current) => ({
+                        ...current,
+                        remoteOpenchamber: {
+                          ...current.remoteOpenchamber,
+                          preferredPort: Number.isFinite(next) && next > 0 ? next : undefined,
+                        },
+                      }));
+                    }}
+                    onClear={() => {
+                      updateDraft((current) => ({
+                        ...current,
+                        remoteOpenchamber: {
+                          ...current.remoteOpenchamber,
+                          preferredPort: undefined,
+                        },
+                      }));
+                    }}
+                    emptyLabel={t('settings.remoteInstances.page.field.auto')}
                   />
                 </div>
-                <NumberInput
-                  containerClassName="w-fit"
-                  min={1}
-                  max={65535}
-                  step={1}
-                  className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
-                  value={draft.remoteOpenchamber.preferredPort}
-                  onValueChange={(next) => {
-                    updateDraft((current) => ({
-                      ...current,
-                      remoteOpenchamber: {
-                        ...current.remoteOpenchamber,
-                        preferredPort: Number.isFinite(next) && next > 0 ? next : undefined,
-                      },
-                    }));
-                  }}
-                  onClear={() => {
-                    updateDraft((current) => ({
-                      ...current,
-                      remoteOpenchamber: {
-                        ...current.remoteOpenchamber,
-                        preferredPort: undefined,
-                      },
-                    }));
-                  }}
-                  emptyLabel={t('settings.remoteInstances.page.field.auto')}
-                />
-              </div>
+              </SettingsFieldRow>
 
               {isManagedMode ? (
-                <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                  <div className="w-56 shrink-0">
-                    <HintLabel
-                      label={t('settings.remoteInstances.page.field.installMethod')}
-                      hint={t('settings.remoteInstances.page.field.installMethodHint')}
-                    />
-                  </div>
+                <SettingsFieldRow
+                  label={t('settings.remoteInstances.page.field.installMethod')}
+                  info={t('settings.remoteInstances.page.field.installMethodHint')}
+                >
                   <Select
                     value={draft.remoteOpenchamber.installMethod}
                     onValueChange={(value) =>
@@ -2448,7 +2435,7 @@ export const RemoteInstancesPage: React.FC = () => {
                       }))
                     }
                   >
-                    <SelectTrigger className="w-fit min-w-[140px]">
+                    <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                       <SelectValue>
                         {draft.remoteOpenchamber.installMethod === 'auto'
                           ? t('settings.remoteInstances.page.field.installMethodAuto')
@@ -2461,18 +2448,15 @@ export const RemoteInstancesPage: React.FC = () => {
                       <SelectItem value="npm">npm</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
+                </SettingsFieldRow>
               ) : null}
 
               {isManagedMode ? (
-                <div className="py-1.5">
-                  <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-8">
-                    <div className="w-56 shrink-0">
-                      <HintLabel
-                        label={t('settings.remoteInstances.page.field.remoteLanAccess')}
-                        hint={t('settings.remoteInstances.page.field.remoteLanAccessHint')}
-                      />
-                    </div>
+                <div>
+                  <SettingsFieldRow
+                    label={t('settings.remoteInstances.page.field.remoteLanAccess')}
+                    info={t('settings.remoteInstances.page.field.remoteLanAccessHint')}
+                  >
                     <Switch
                       checked={remoteLanExposed}
                       onCheckedChange={(checked) =>
@@ -2486,9 +2470,9 @@ export const RemoteInstancesPage: React.FC = () => {
                       }
                       aria-label={t('settings.remoteInstances.page.field.remoteLanAccess')}
                     />
-                  </div>
+                  </SettingsFieldRow>
                   {remoteLanExposed ? (
-                    <p className="mt-2 typography-micro text-[var(--status-warning)] md:ps-[16rem]">
+                    <p className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-warning)]')}>
                       {t('settings.remoteInstances.page.field.remoteLanAccessWarning')}
                     </p>
                   ) : null}
@@ -2496,43 +2480,34 @@ export const RemoteInstancesPage: React.FC = () => {
               ) : null}
 
               {isManagedMode ? (
-                <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                  <div className="w-56 shrink-0">
-                    <HintLabel
-                      label={t('settings.remoteInstances.page.field.keepServerRunning')}
-                      hint={t('settings.remoteInstances.page.field.keepServerRunningHint')}
-                    />
-                  </div>
-                  <div className="flex w-full items-center gap-2 md:max-w-xs">
-                    <Switch
-                      checked={draft.remoteOpenchamber.keepRunning}
-                      onCheckedChange={(checked) =>
-                        updateDraft((current) => ({
-                          ...current,
-                          remoteOpenchamber: {
-                            ...current.remoteOpenchamber,
-                            keepRunning: checked,
-                          },
-                        }))
-                      }
-                    />
-                  </div>
-                </div>
+                <SettingsFieldRow
+                  label={t('settings.remoteInstances.page.field.keepServerRunning')}
+                  info={t('settings.remoteInstances.page.field.keepServerRunningHint')}
+                >
+                  <Switch
+                    checked={draft.remoteOpenchamber.keepRunning}
+                    onCheckedChange={(checked) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        remoteOpenchamber: {
+                          ...current.remoteOpenchamber,
+                          keepRunning: checked,
+                        },
+                      }))
+                    }
+                  />
+                </SettingsFieldRow>
               ) : null}
             </SettingsSection>
 
             <SettingsSection
               title={t('settings.remoteInstances.page.section.mainTunnel')}
               info={t('settings.remoteInstances.page.section.mainTunnelDescription')}
-              contentClassName="space-y-3"
             >
-              <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                <div className="w-56 shrink-0">
-                  <HintLabel
-                    label={t('settings.remoteInstances.page.field.bindHost')}
-                    hint={t('settings.remoteInstances.page.field.bindHostHint')}
-                  />
-                </div>
+              <SettingsFieldRow
+                label={t('settings.remoteInstances.page.field.bindHost')}
+                info={t('settings.remoteInstances.page.field.bindHostHint')}
+              >
                 <Select
                   value={draft.localForward.bindHost}
                   onValueChange={(value) => {
@@ -2551,7 +2526,7 @@ export const RemoteInstancesPage: React.FC = () => {
                     }));
                   }}
                 >
-                  <SelectTrigger className="w-fit min-w-[240px]">
+                  <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                     <SelectValue>
                       {draft.localForward.bindHost === 'localhost'
                         ? t('settings.remoteInstances.page.field.bindHostOption.localhost')
@@ -2566,22 +2541,18 @@ export const RemoteInstancesPage: React.FC = () => {
                     <SelectItem value="0.0.0.0">{t('settings.remoteInstances.page.field.bindHostOption.lan')}</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </SettingsFieldRow>
 
-              <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                <div className="w-56 shrink-0">
-                  <HintLabel
-                    label={t('settings.remoteInstances.page.field.preferredLocalPort')}
-                    hint={t('settings.remoteInstances.page.field.preferredLocalPortHint')}
-                  />
-                </div>
-                <div className="flex w-full items-center gap-2 md:max-w-sm">
+              <SettingsFieldRow
+                label={t('settings.remoteInstances.page.field.preferredLocalPort')}
+                info={t('settings.remoteInstances.page.field.preferredLocalPortHint')}
+              >
+                <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
                   <NumberInput
-                    containerClassName="w-fit"
                     min={1}
                     max={65535}
                     step={1}
-                    className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
+                    className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
                     value={draft.localForward.preferredLocalPort}
                     onValueChange={(next) => {
                       updateDraft((current) => ({
@@ -2606,8 +2577,8 @@ export const RemoteInstancesPage: React.FC = () => {
                   <Button
                     type="button"
                     variant="outline"
-                    size="xs"
-                    className="!font-normal h-7 w-7 px-0"
+                    size="icon"
+                    className={SETTINGS_DIALOG_ICON_BUTTON_CLASS}
                     title={t('settings.remoteInstances.page.actions.pickRandomPort')}
                     onClick={() =>
                       updateDraft((current) => ({
@@ -2622,9 +2593,9 @@ export const RemoteInstancesPage: React.FC = () => {
                     <Icon name="shuffle" className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-              </div>
+              </SettingsFieldRow>
 
-              <div className="space-y-1 pt-1">
+              <div className="flex flex-col gap-1 pt-1">
                 <p className="typography-micro text-muted-foreground">{t('settings.remoteInstances.page.tunnelPreview.caption')}</p>
                 <p dir="ltr" className="typography-micro font-mono text-foreground/80 break-all">
                   {`${draft.localForward.bindHost}:${draft.localForward.preferredLocalPort || 'auto'} → ${draft.sshParsed?.destination || draft.nickname || 'remote'}:${draft.remoteOpenchamber.preferredPort || 'auto'}`}
@@ -2635,17 +2606,14 @@ export const RemoteInstancesPage: React.FC = () => {
             <SettingsSection
               title={t('settings.remoteInstances.page.section.authentication')}
               info={t('settings.remoteInstances.page.section.authenticationDescription')}
-              contentClassName="space-y-3"
             >
-              <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                <div className="w-56 shrink-0">
-                  <HintLabel
-                    label={t('settings.remoteInstances.page.field.sshPasswordOptional')}
-                    hint={t('settings.remoteInstances.page.field.sshPasswordHint')}
-                  />
-                </div>
+              <SettingsFieldRow
+                label={t('settings.remoteInstances.page.field.sshPasswordOptional')}
+                info={t('settings.remoteInstances.page.field.sshPasswordHint')}
+              >
                 <Input
-                  className="h-7 md:max-w-sm"
+                  inputSize="compact"
+                  className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
                   type="password"
                   value={draft.auth.sshPassword?.value || ''}
                   onChange={(event) =>
@@ -2663,52 +2631,51 @@ export const RemoteInstancesPage: React.FC = () => {
                   }
                   placeholder={t('settings.remoteInstances.page.field.sshPasswordPlaceholder')}
                 />
-              </div>
+              </SettingsFieldRow>
 
-              <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                <div className="w-56 shrink-0">
-                  <HintLabel
-                    label={remoteLanExposed
-                      ? t('settings.remoteInstances.page.field.uiPasswordRequired')
-                      : t('settings.remoteInstances.page.field.uiPasswordOptional')}
-                    hint={isManagedMode
-                      ? t('settings.remoteInstances.page.field.uiPasswordHintManaged')
-                      : t('settings.remoteInstances.page.field.uiPasswordHintExternal')}
-                  />
-                </div>
-                <Input
-                  className={cn('h-7 md:max-w-sm', uiPasswordMissing && 'border-[var(--status-error)]')}
-                  type="password"
-                  ref={uiPasswordRef}
-                  aria-invalid={uiPasswordMissing}
-                  value={draft.auth.openchamberPassword?.value || ''}
-                  onChange={(event) =>
-                    updateDraft((current) => ({
-                      ...current,
-                      auth: {
-                        ...current.auth,
-                        openchamberPassword: {
-                          enabled: event.target.value.trim().length > 0,
-                          value: event.target.value,
-                          store: current.auth.openchamberPassword?.store || 'never',
+              <div>
+                <SettingsFieldRow
+                  label={remoteLanExposed
+                    ? t('settings.remoteInstances.page.field.uiPasswordRequired')
+                    : t('settings.remoteInstances.page.field.uiPasswordOptional')}
+                  info={isManagedMode
+                    ? t('settings.remoteInstances.page.field.uiPasswordHintManaged')
+                    : t('settings.remoteInstances.page.field.uiPasswordHintExternal')}
+                >
+                  <Input
+                    inputSize="compact"
+                    className={cn(SETTINGS_WIDTH_SHORT_TEXT_CLASS, uiPasswordMissing && 'border-[var(--status-error)]')}
+                    type="password"
+                    ref={uiPasswordRef}
+                    aria-invalid={uiPasswordMissing}
+                    value={draft.auth.openchamberPassword?.value || ''}
+                    onChange={(event) =>
+                      updateDraft((current) => ({
+                        ...current,
+                        auth: {
+                          ...current.auth,
+                          openchamberPassword: {
+                            enabled: event.target.value.trim().length > 0,
+                            value: event.target.value,
+                            store: current.auth.openchamberPassword?.store || 'never',
+                          },
                         },
-                      },
-                    }))
-                  }
-                  placeholder={t('settings.remoteInstances.page.field.uiPasswordPlaceholder')}
-                />
+                      }))
+                    }
+                    placeholder={t('settings.remoteInstances.page.field.uiPasswordPlaceholder')}
+                  />
+                </SettingsFieldRow>
+                {uiPasswordMissing ? (
+                  <p className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-error)]')}>
+                    {t('settings.remoteInstances.page.field.uiPasswordMissingForLan')}
+                  </p>
+                ) : null}
               </div>
-              {uiPasswordMissing ? (
-                <p className="typography-micro text-[var(--status-error)] md:ps-[16rem]">
-                  {t('settings.remoteInstances.page.field.uiPasswordMissingForLan')}
-                </p>
-              ) : null}
             </SettingsSection>
 
             <SettingsSection
               title={t('settings.remoteInstances.page.section.portForwards')}
               info={t('settings.remoteInstances.page.section.portForwardsDescription')}
-              contentClassName="space-y-2"
             >
               {draft.portForwards.length === 0 ? (
                 <p className="typography-micro text-muted-foreground">{t('settings.remoteInstances.page.empty.noExtraForwards')}</p>
@@ -2784,19 +2751,16 @@ export const RemoteInstancesPage: React.FC = () => {
                       </div>
                     </div>
                     <CollapsibleContent className="pt-2">
-                      <div className="space-y-0 pb-2">
-                        <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                          <div className="w-56 shrink-0">
-                            <HintLabel
-                              label={t('settings.remoteInstances.page.field.forwardType')}
-                              hint={(
-                                <div className="space-y-1">
-                                  <p>{t('settings.remoteInstances.page.field.forwardTypeHint')}</p>
-                                  <p>{t(forwardTypeDescriptionKey(forward.type))}</p>
-                                </div>
-                              )}
-                            />
-                          </div>
+                      <div>
+                        <SettingsFieldRow
+                          label={t('settings.remoteInstances.page.field.forwardType')}
+                          info={(
+                            <div className="space-y-1">
+                              <p>{t('settings.remoteInstances.page.field.forwardTypeHint')}</p>
+                              <p>{t(forwardTypeDescriptionKey(forward.type))}</p>
+                            </div>
+                          )}
+                        >
                           <Select
                             value={forward.type}
                             onValueChange={(value) =>
@@ -2806,7 +2770,7 @@ export const RemoteInstancesPage: React.FC = () => {
                               }))
                             }
                           >
-                            <SelectTrigger className="w-fit min-w-[140px]">
+                            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                               <SelectValue>
                                 {forward.type === 'remote'
                                   ? t('settings.remoteInstances.page.forwardType.remote')
@@ -2821,15 +2785,12 @@ export const RemoteInstancesPage: React.FC = () => {
                               <SelectItem value="dynamic">{t('settings.remoteInstances.page.forwardType.dynamic')}</SelectItem>
                             </SelectContent>
                           </Select>
-                        </div>
+                        </SettingsFieldRow>
 
-                        <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                          <div className="w-56 shrink-0">
-                            <HintLabel label={localLabel} hint={localHint} />
-                          </div>
-                          <div className="flex items-center gap-1.5">
+                        <SettingsFieldRow label={localLabel} info={localHint}>
+                          <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'flex items-center gap-1.5')}>
                             <Input
-                              className="h-7 w-32"
+                              inputSize="compact"
                               value={forward.localHost || '127.0.0.1'}
                               onChange={(event) =>
                                 updateForward((item) => ({
@@ -2840,38 +2801,36 @@ export const RemoteInstancesPage: React.FC = () => {
                               placeholder={t('settings.remoteInstances.page.field.localHostPlaceholder')}
                             />
                             <span className="text-muted-foreground">:</span>
-                            <NumberInput
-                              containerClassName="w-fit"
-                              min={1}
-                              max={65535}
-                              step={1}
-                              className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
-                              value={forward.localPort}
-                              onValueChange={(next) => {
-                                updateForward((item) => ({
-                                  ...item,
-                                  localPort: Number.isFinite(next) && next > 0 ? next : undefined,
-                                }));
-                              }}
-                              onClear={() => {
-                                updateForward((item) => ({
-                                  ...item,
-                                  localPort: undefined,
-                                }));
-                              }}
-                              emptyLabel={t('settings.remoteInstances.page.field.auto')}
-                            />
+                            <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                              <NumberInput
+                                min={1}
+                                max={65535}
+                                step={1}
+                                className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
+                                value={forward.localPort}
+                                onValueChange={(next) => {
+                                  updateForward((item) => ({
+                                    ...item,
+                                    localPort: Number.isFinite(next) && next > 0 ? next : undefined,
+                                  }));
+                                }}
+                                onClear={() => {
+                                  updateForward((item) => ({
+                                    ...item,
+                                    localPort: undefined,
+                                  }));
+                                }}
+                                emptyLabel={t('settings.remoteInstances.page.field.auto')}
+                              />
+                            </div>
                           </div>
-                        </div>
+                        </SettingsFieldRow>
 
                         {forward.type !== 'dynamic' ? (
-                          <div className="flex flex-col gap-1.5 py-1.5 md:flex-row md:items-center md:gap-8">
-                            <div className="w-56 shrink-0">
-                              <HintLabel label={remoteLabel} hint={remoteHint} />
-                            </div>
-                            <div className="flex items-center gap-1.5">
+                          <SettingsFieldRow label={remoteLabel} info={remoteHint}>
+                            <div className={cn(SETTINGS_WIDTH_LONG_TEXT_CLASS, 'flex items-center gap-1.5')}>
                               <Input
-                                className="h-7 w-32"
+                                inputSize="compact"
                                 value={forward.remoteHost || ''}
                                 onChange={(event) =>
                                   updateForward((item) => ({
@@ -2882,29 +2841,30 @@ export const RemoteInstancesPage: React.FC = () => {
                                 placeholder={t('settings.remoteInstances.page.field.remoteHostPlaceholder')}
                               />
                               <span className="text-muted-foreground">:</span>
-                              <NumberInput
-                                containerClassName="w-fit"
-                                min={1}
-                                max={65535}
-                                step={1}
-                                className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
-                                value={forward.remotePort}
-                                onValueChange={(next) => {
-                                  updateForward((item) => ({
-                                    ...item,
-                                    remotePort: Number.isFinite(next) && next > 0 ? next : undefined,
-                                  }));
-                                }}
-                                onClear={() => {
-                                  updateForward((item) => ({
-                                    ...item,
-                                    remotePort: undefined,
-                                  }));
-                                }}
-                                emptyLabel={t('settings.remoteInstances.page.field.auto')}
-                              />
+                              <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                                <NumberInput
+                                  min={1}
+                                  max={65535}
+                                  step={1}
+                                  className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
+                                  value={forward.remotePort}
+                                  onValueChange={(next) => {
+                                    updateForward((item) => ({
+                                      ...item,
+                                      remotePort: Number.isFinite(next) && next > 0 ? next : undefined,
+                                    }));
+                                  }}
+                                  onClear={() => {
+                                    updateForward((item) => ({
+                                      ...item,
+                                      remotePort: undefined,
+                                    }));
+                                  }}
+                                  emptyLabel={t('settings.remoteInstances.page.field.auto')}
+                                />
+                              </div>
                             </div>
-                          </div>
+                          </SettingsFieldRow>
                         ) : null}
 
                         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md bg-[var(--surface-subtle)] p-2">
@@ -2988,7 +2948,7 @@ export const RemoteInstancesPage: React.FC = () => {
           </CollapsibleContent>
         </Collapsible>
 
-        <div className="mt-8 border-t border-[var(--interactive-border)] pt-3">
+        <div className="border-t border-edge py-8">
           <div className="flex items-center gap-2">
             <Button type="button" size="xs" className="!font-normal" onClick={() => void handleSave()} disabled={!hasChanges || isSaving}>
               {t('settings.common.actions.saveChanges')}

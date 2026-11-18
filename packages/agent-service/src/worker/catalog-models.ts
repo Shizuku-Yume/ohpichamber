@@ -3,7 +3,7 @@ import { mkdir, open, readFile, rm, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { JSONC, YAML } from 'bun';
 import { z } from 'zod';
-import { oauthAccountKey, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
+import { AUTHENTICATED_SENTINEL, getEnvApiKey, getEnvApiKeyName, listProvidersWithEnvKey, oauthAccountKey, type AuthApiKeyOptions, type ResolvedApiKey } from '@oh-my-pi/pi-ai';
 import { generateImage } from '@oh-my-pi/pi-ai/images';
 import { getModelPricingStatus, IMAGE_GENERATION_APIS, modelKind, PROVIDER_DESCRIPTORS } from '@oh-my-pi/pi-catalog';
 import { authPolicyFor } from '@oh-my-pi/pi-catalog/compat/auth';
@@ -17,6 +17,7 @@ import { filterAvailableModelsByEnabledPatterns, getModelMatchPreferences, pickD
 import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { resolveRoleModelFull } from '@oh-my-pi/pi-coding-agent/session/role-models';
 import { invalidateCommandConfig, resolveConfigHeaders, resolveConfigValue } from '@oh-my-pi/pi-coding-agent/config/resolve-config-value';
+import { isDiscoveryBearerApiKey } from '@oh-my-pi/pi-coding-agent/config/model-provider-discovery';
 import type { AuthStorage } from '@oh-my-pi/pi-coding-agent/session/auth-storage';
 import { replaceFileAtomically } from '@oh-my-pi/pi-coding-agent/utils/atomic-file';
 import {
@@ -27,7 +28,9 @@ import {
  ProviderConfigurationSchema, ProviderConfigureRequestSchema, ProviderDeleteRequestSchema,
  ProviderMutationResultSchema, PositiveCounterSchema, ProviderConfigurationReadSchema,
  ProviderModelDiscoveryRequestSchema, ProviderModelDiscoveryResultSchema,
+ ProviderModelEnrichRequestSchema, ProviderModelEnrichResultSchema,
  type ProviderConfigurationRead, type ProviderModelDiscoveryRequest, type ProviderModelDiscoveryResult,
+ type ProviderModelEnrichRequest, type ProviderModelEnrichResult,
  type Model, type ModelCatalog, type ModelConfigureRequest, type ModelDeleteRequest,
  type ModelMutationResult, type ModelSelection, type Provider, type ProviderCatalog,
  type ProviderConfigureRequest, type ProviderDeleteRequest, type ProviderMutationResult,
@@ -36,6 +39,7 @@ import {
  formatModelRef,
 } from '@openchamber/agent-contract';
 import { ProjectionError } from '../projection/journal.ts';
+import { catalogModelInfo } from './catalog-model-info.ts';
 
 export type NativeCatalogModel = NonNullable<CreateAgentSessionOptions['model']>;
 export type NativeReasoningEffort = NonNullable<NativeCatalogModel['thinking']>['efforts'][number];
@@ -104,6 +108,25 @@ export function resolveProviderDisplayName(providerId: string, configuredName?: 
  return providerId;
 }
 
+const ENV_PROVIDER_IDS: ReadonlySet<string> = new Set(listProvidersWithEnvKey());
+
+/**
+ * The environment variable that can back a provider, as a name only. OMP's own
+ * resolver decides presence, so an unset or blank variable reads as absent.
+ * Computed resolvers (multi-variable pickers, ADC/Bedrock probes) have no
+ * single name and report `variable: null`. `active` is whether the variable
+ * currently supplies the winning credential, taken from the projected source.
+ */
+function providerEnvironment(providerId: string, active: boolean): { variable: string | null; active: boolean } | undefined {
+ // OMP's own resolver decides presence, so an unset or blank variable is absent.
+ // An ambient sentinel (AWS profile, ADC) is auth without a variable to name.
+ if (!active) {
+  if (!ENV_PROVIDER_IDS.has(providerId)) return undefined;
+  const value = getEnvApiKey(providerId);
+  if (value === undefined || value === AUTHENTICATED_SENTINEL || value.trim() === '') return undefined;
+ }
+ return { variable: getEnvApiKeyName(providerId) ?? null, active };
+}
 
 function modelKey(selection: ModelSelection): string {
  return JSON.stringify([selection.providerId, selection.modelId]);
@@ -119,6 +142,18 @@ export function credentialReference(providerId: string, id: number): string {
  return `credential_${createHash('sha256').update(`${providerId}\0${id}`).digest('hex').slice(0, 24)}`;
 }
 
+function sameDiscoveryEndpoint(left: string | undefined | null, right: string | undefined | null): boolean {
+ if (!left || !right) return false;
+ try {
+  const a = new URL(left);
+  const b = new URL(right);
+  return a.origin === b.origin
+   && a.pathname.replace(/\/+$/, '') === b.pathname.replace(/\/+$/, '')
+   && a.search === b.search;
+ } catch {
+  return left === right;
+ }
+}
 function apiProtocol(api: NativeCatalogModel['api'] | undefined): Provider['protocol'] {
  switch (api) {
   case 'openai-completions': case 'openrouter': return 'chat-completions';
@@ -471,31 +506,60 @@ export class NativeModels {
    const state = await this.load();
    await this.context.authStorage.credentials.reload();
    const configured = request.providerId ? state.metadata.providers[request.providerId] : undefined;
-   const matchesConfigured = configured?.endpoint === request.endpoint && configured.protocol === request.protocol;
-   const headers = new Headers(matchesConfigured ? {
-    ...await resolveConfigHeaders(state.config.providers?.[configured.providerId]?.headers),
-    ...state.metadata.providerHeaders[configured.providerId],
+   const nativeProvider = request.providerId ? state.config.providers?.[request.providerId] : undefined;
+   const providerEndpoint = configured?.endpoint ?? nativeProvider?.baseUrl
+    ?? (request.providerId ? this.context.modelRegistry.getProviderBaseUrl(request.providerId) : undefined);
+   const matchesConfigured = configured !== undefined
+    && sameDiscoveryEndpoint(configured.endpoint, request.endpoint)
+    && configured.protocol === request.protocol;
+   // Native models.yml providers have no OpenChamber metadata entry, yet OMP
+   // resolves their credentials and headers against this same base URL.
+   const ownsEndpoint = request.providerId !== undefined && sameDiscoveryEndpoint(providerEndpoint, request.endpoint);
+   const headers = new Headers(ownsEndpoint ? {
+    ...await resolveConfigHeaders(nativeProvider?.headers),
+    ...(configured && matchesConfigured ? state.metadata.providerHeaders[configured.providerId] : undefined),
    } : undefined);
    for (const [name, value] of Object.entries(request.headers ?? {})) headers.set(name, value);
    let apiKey = request.apiKey;
    const source = request.providerId ? this.context.authStorage.keys.source(request.providerId) : undefined;
    const storedSource = !source || source.kind === 'api_key' || source.kind === 'oauth';
-   const reference = request.credentialRef ?? (matchesConfigured && storedSource ? this.defaultCredentialRef(configured.providerId) : null);
+   const reference = request.credentialRef ?? (configured && matchesConfigured && storedSource ? this.defaultCredentialRef(configured.providerId) : null);
    if (!apiKey && reference) {
     if (!request.providerId) throw new ProjectionError(422, 'INVALID_REQUEST', 'Credential discovery requires a provider identity');
     const credential = await this.resolveBoundCredential(request.providerId, reference, undefined);
     if (!credential) throw new ProjectionError(422, 'PROVIDER_UNAVAILABLE', 'Selected provider credential is unavailable');
     apiKey = credential.apiKey;
    }
-   if (!apiKey && !reference && matchesConfigured) {
-    apiKey = await this.context.authStorage.keys.get(configured.providerId, undefined, { baseUrl: request.endpoint });
+   if (!apiKey && !reference && ownsEndpoint && request.providerId) {
+    const resolved = await this.context.authStorage.keys.get(request.providerId, undefined, { baseUrl: request.endpoint });
+    // OMP keeps keyless-mode placeholders out of discovery bearers; ambient
+    // auth (a cloud profile, ADC) has no bearer to send either.
+    if (resolved && isDiscoveryBearerApiKey(resolved) && resolved !== AUTHENTICATED_SENTINEL) apiKey = resolved;
    }
+   // A models.yml `apiKey` naming an environment variable the runtime does not
+   // define resolves to its literal text in OMP, so the request leaves with a
+   // bogus bearer. The cause is a missing credential, not the endpoint's auth.
+   // OMP exposes no credential provenance here, so the variable-name shape is
+   // a heuristic: a literal all-caps key would be reported this way on 401/403.
+   const unsetKeyVariable = await (async () => {
+    const configKey = nativeProvider?.apiKey;
+    if (!ownsEndpoint || !configKey || configKey.startsWith('!')) return undefined;
+    if (!/^[A-Z][A-Z0-9_]+$/.test(configKey)) return undefined;
+    // OMP's own resolver decides: an environment-backed name resolves away
+    // from its literal text, an unset one stays literal.
+    return (await resolveConfigValue(configKey)) === configKey ? configKey : undefined;
+   })();
+   const authHeaderName = request.protocol === 'messages' ? 'x-api-key' : request.protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
    if (apiKey) {
-    const name = request.protocol === 'messages' ? 'x-api-key' : request.protocol === 'generate-content' ? 'x-goog-api-key' : 'authorization';
-    if (!headers.has(name)) headers.set(name, name === 'authorization' ? `Bearer ${apiKey}` : apiKey);
+    if (!headers.has(authHeaderName)) headers.set(authHeaderName, authHeaderName === 'authorization' ? `Bearer ${apiKey}` : apiKey);
    }
+   const hasCredential = headers.has(authHeaderName);
    if (request.protocol === 'messages' && !headers.has('anthropic-version')) headers.set('anthropic-version', '2023-06-01');
-   const url = new URL(`${request.endpoint.replace(/\/+$/, '')}/models`);
+   // A custom base URL may carry a query (`?api-version=`); the discovery path
+   // appends to the pathname, so the query has to be reattached afterwards.
+   const endpoint = new URL(request.endpoint);
+   const url = new URL(`${endpoint.origin}${endpoint.pathname.replace(/\/+$/, '')}/models`);
+   url.search = endpoint.search;
    const models: ProviderModelDiscoveryResult['models'] = [];
    const seen = new Set<string>();
    const pages = new Set<string>();
@@ -504,7 +568,35 @@ export class NativeModels {
     if (pages.has(url.href)) throw new Error('Invalid discovery pagination');
     pages.add(url.href);
     const response = await fetch(url, { headers, signal, redirect: 'error' });
-    if (!response.ok) throw new Error('Discovery request failed');
+    if (!response.ok) {
+     if (response.status === 401 || response.status === 403) {
+      if (request.providerId && unsetKeyVariable) {
+       throw new ProjectionError(
+        422,
+        'CREDENTIAL_UNAVAILABLE',
+        `Provider ${request.providerId} has no credential: its models.yml apiKey names ${unsetKeyVariable}, which is not set. Set ${unsetKeyVariable} or save an API key.`,
+       );
+      }
+      if (!hasCredential) {
+       const envName = request.providerId ? getEnvApiKeyName(request.providerId) : undefined;
+       throw new ProjectionError(
+        422,
+        'CREDENTIAL_UNAVAILABLE',
+        request.providerId
+         ? `No credential is available for ${request.providerId}${envName ? ` (save an API key or set ${envName})` : ''}.`
+         : 'This endpoint requires an API key for model discovery.',
+       );
+      }
+      if (request.providerId) {
+       throw new ProjectionError(
+        422,
+        'CREDENTIAL_UNAVAILABLE',
+        `Provider ${request.providerId} rejected the model discovery credential (HTTP ${response.status}).`,
+       );
+      }
+     }
+     throw new Error('Discovery request failed');
+    }
     const payload = z.object({
      data: z.array(z.unknown()).optional(), models: z.array(z.unknown()).optional(),
      nextPageToken: z.string().optional(), has_more: z.boolean().optional(), last_id: z.string().optional()
@@ -530,6 +622,10 @@ export class NativeModels {
      };
      if (contextWindow) discoveredModel.contextWindow = contextWindow;
      if (maxOutputTokens) discoveredModel.maxOutputTokens = maxOutputTokens;
+     // One request stays one request: discovery carries the same offline
+     // catalog hint auto-fill would return for this id.
+     const catalog = catalogModelInfo(modelId, request.providerId);
+     if (catalog) discoveredModel.catalog = catalog;
      models.push(discoveredModel);
     }
     if (request.protocol === 'generate-content' && payload.nextPageToken) url.searchParams.set('pageToken', payload.nextPageToken);
@@ -543,6 +639,24 @@ export class NativeModels {
    if (error instanceof ProjectionError) throw error;
    throw new ProjectionError(503, 'SERVICE_UNAVAILABLE', 'Provider model discovery failed');
   }
+ }
+
+ /**
+  * Fill capability metadata for model ids from the bundled catalog. Offline by
+  * design: no endpoint, credential, or provider-entry gate participates, and an
+  * unknown id simply comes back without a `catalog` block.
+  */
+ async enrichProviderModels(input: ProviderModelEnrichRequest): Promise<ProviderModelEnrichResult> {
+  const request = ProviderModelEnrichRequestSchema.parse(input);
+  const models: ProviderModelEnrichResult['models'] = [];
+  const seen = new Set<string>();
+  for (const { modelId } of request.models) {
+   if (seen.has(modelId)) continue;
+   seen.add(modelId);
+   const catalog = catalogModelInfo(modelId, request.providerId);
+   models.push(catalog ? { modelId, catalog } : { modelId });
+  }
+  return ProviderModelEnrichResultSchema.parse({ models });
  }
 
  defaultCredentialRef(providerId: string): string | null {
@@ -594,6 +708,12 @@ export class NativeModels {
      : `credential_${createHash('sha256').update(`${providerId}\0${source.kind}`).digest('hex').slice(0, 24)}`,
     source: storedSource ? 'stored-credential' : source.kind === 'env' ? 'external-environment' : 'managed-environment',
    };
+  }
+  // The variable stays visible even when a stored key wins the cascade; only
+  // its name travels, never the value.
+  if (auth.status === 'configured') {
+   const environment = providerEnvironment(providerId, auth.source === 'external-environment');
+   if (environment) auth = { ...auth, environment };
   }
   const base = {
    providerId, name: resolveProviderDisplayName(providerId, configured?.name),
@@ -822,6 +942,11 @@ export class NativeModels {
 
  async configureProvider(input: ProviderConfigureRequest, revision: string): Promise<ProviderMutationResult> {
   const request = ProviderConfigureRequestSchema.parse(input);
+  // A provider ID is the model selector's provider half; a slash would split
+  // every selector built from it, leaving the provider unselectable.
+  if (request.configuration.providerId.includes('/')) {
+   throw new ProjectionError(422, 'INVALID_REQUEST', 'Provider identity cannot contain a path separator');
+  }
   PositiveCounterSchema.parse(revision);
   const state = await this.load();
   await this.context.authStorage.credentials.reload();

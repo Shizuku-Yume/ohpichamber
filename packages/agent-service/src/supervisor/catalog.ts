@@ -21,6 +21,7 @@ import type {
 import { MCPWorkspaceReconnectResultSchema } from '@openchamber/agent-contract';
 import type { MCPConnectionTestResult, MCPWorkspaceReconnectResult } from '@openchamber/agent-contract';
 import { MCPToolDiscoverySchema, type MCPDiscoveredTool, type MCPToolDiscovery } from '../worker/mcp/protocol.ts';
+import { mcpAuthRequired } from '../mcp-auth.ts';
 import { WorkerOperationError } from './workers.ts';
 import { PluginWorkerApplyOutcomeSchema, type PluginWorkerApplyOutcome, type PluginRuntimeState } from '@openchamber/agent-contract';
 import type { HostSkillSourceCommit } from './file-resources-host-protocol.ts';
@@ -117,12 +118,20 @@ function ownerIdentity(worker: CatalogWorker): ContractCatalogWorkerIdentity {
   };
 }
 
-/** The worker causes a partial fan-out reported, so the reader sees why it failed
- * instead of only that it did. The full per-worker result stays in `details`. */
-function applyFailureCause(result: { workers: Array<{ outcome: string; error?: { detail: string } }> }, fallback: string): string {
+/** The cause a failed apply reported, so the reader sees why it failed instead of
+ * only that it did. Workers answer first; with no live worker the stateless probe
+ * already knows the server's own failure, and its detail is the same kind of
+ * evidence a worker error carries. The full per-worker result stays in `details`. */
+function applyFailureCause(
+  result: { workers: Array<{ outcome: string; error?: { detail: string } }> },
+  fallback: string,
+  probedCause?: string,
+): string {
   const causes = [...new Set(result.workers.flatMap(worker => worker.outcome === 'failed' && worker.error?.detail ? [worker.error.detail] : []))];
-  return causes.length > 0 ? causes.join('; ') : fallback;
+  if (causes.length > 0) return causes.join('; ');
+  return probedCause ?? fallback;
 }
+
 
 function operationError(error: Error | undefined, fallbackCode: string, fallbackDetail: string): CatalogOperationError {
   if (error instanceof WorkerOperationError || error instanceof CatalogCoordinatorError) {
@@ -526,14 +535,13 @@ export class CatalogCoordinator {
     await this.finalizeMcpOutcomes(outcomes);
     const status = aggregate(outcomes);
     let outcome: MCPApplyOutcome = 'applied';
-    if (status === 'no-active-workers') outcome = await this.unattendedMcpOutcome(configuration);
-    else if (status === 'failed' || status === 'partial') {
-      const authNeeded = outcomes.some(o => o.outcome === 'failed' && (
-        o.error.code === 'MCP_AUTH_REQUIRED' ||
-        o.error.code === 'AUTH_REQUIRED' ||
-        /401|auth|sign-in|unauthorized/i.test(o.error.detail) ||
-        /401|auth|sign-in|unauthorized/i.test(o.error.code)
-      ));
+    let probedCause: string | undefined;
+    if (status === 'no-active-workers') {
+      const unattended = await this.unattendedMcpOutcome(configuration);
+      outcome = unattended.outcome;
+      probedCause = unattended.cause;
+    } else if (status === 'failed' || status === 'partial') {
+      const authNeeded = outcomes.some(o => o.outcome === 'failed' && mcpAuthRequired(o.error));
       outcome = authNeeded ? 'saved-needs-auth' : 'saved-not-connected';
     }
     const result: MCPApplyResult = { kind: 'mcp' as const, status, outcome, configuration, workers: outcomes };
@@ -541,7 +549,7 @@ export class CatalogCoordinator {
       throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
     }
     if (isConfigure && outcome === 'saved-not-connected') {
-      throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker'), { result });
+      throw new CatalogCoordinatorError(503, 'MCP_APPLY_FAILED', applyFailureCause(result, 'The MCP apply did not reach every active worker', probedCause), { result });
     }
     return result;
   }
@@ -910,19 +918,25 @@ export class CatalogCoordinator {
   }
 
 
-  /** No live worker: the stateless probe of each enabled server classifies the saved configuration honestly. */
-  private async unattendedMcpOutcome(configuration: MCPConfigurationState): Promise<MCPApplyOutcome> {
+  /** No live worker: the stateless probe of each enabled server classifies the saved
+   * configuration honestly, and reports the server's own failure so the caller can
+   * name it instead of a Host sentence about missing workers. */
+  private async unattendedMcpOutcome(configuration: MCPConfigurationState): Promise<{ outcome: MCPApplyOutcome; cause?: string }> {
     const results = await Promise.all(configuration.config.servers.filter(server => server.enabled).map(async server => {
       try {
         const probe = await this.options.probeMcp(configuration.workspaceId, server.serverId, configuration);
-        return probe.status === 'connected' ? 'connected' : probe.error.code;
+        return probe.status === 'connected' ? null : probe.error;
       } catch {
-        return 'MCP_APPLY_FAILED';
+        return { code: 'MCP_APPLY_FAILED', detail: 'MCP probe failed' };
       }
     }));
-    if (results.includes('MCP_AUTH_REQUIRED')) return 'saved-needs-auth';
-    if (results.some(result => result !== 'connected')) return 'saved-not-connected';
-    return 'applied';
+    const failures = results.filter(result => result !== null);
+    if (failures.some(result => mcpAuthRequired(result))) return { outcome: 'saved-needs-auth' };
+    if (failures.length > 0) {
+      const cause = [...new Set(failures.flatMap(result => result.detail.trim() ? [result.detail] : []))].join('; ');
+      return { outcome: 'saved-not-connected', cause: cause || undefined };
+    }
+    return { outcome: 'applied' };
   }
   private async finalizeMcpOutcomes(outcomes: MCPWorkerApplyOutcome[]): Promise<void> {
     for (let index = 0; index < outcomes.length; index++) {

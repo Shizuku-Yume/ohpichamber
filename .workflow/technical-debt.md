@@ -168,3 +168,25 @@ An entry leaves this file in one of two ways:
 - **Impact:** paths that create a session without a draft (API callers, some automation) see roughly 200 ms more latency than the prepared path.
 - **Solution:** ask OMP for an SDK seam that builds a session graph in a spare process; guard `reapplyModelPolicies()` with a settings/credential revision so unchanged policy skips the rebuild (the staleness tests at `catalog-models.test.ts:133` and `:215` must keep passing).
 - **Cost:** the SDK seam needs an upstream change; the revision guard is small but touches catalog staleness.
+
+## A failed session admission stays reserved and blocks every later create
+
+- **Where:** `packages/web/server/lib/host/agent-scope-store.js:395-409`
+- **Added:** 2026-11-16
+- **Effort:** ux-feedback-2026-11-15
+- **Priority:** fix-now
+- **Problem:** `reserveSessionAdmission` inserts a `create` row and refuses any later admission while an overlapping row exists and `liveAdmissions` does not hold it; `releaseSessionAdmission` only removes it on the normal path, and `markSessionAdmissionUncertain` deletes the live entry without the row. The task 06 real-path run (`/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-16/task06/receipt.md`) reproduced this twice, once after a `/tmp` wipe and restart: `host_session_admissions` held an abandoned `create` row in a fresh data dir, so every `POST /api/agent/v1/sessions` answered 409 `COMMAND_IN_FLIGHT` with "A prior native session admission requires recovery". That is also why no session worker existed to take the MCP apply fan-out.
+- **Impact:** one abandoned create row permanently blocks session creation for every workspace whose root overlaps it, surviving host restarts, with no user-facing recovery path.
+- **Solution:** give the admission row an owner generation or start timestamp so a row whose process is gone is recoverable instead of authoritative, and remove the row on abort/failed-create like the normal release. Preserve the overlap guard for a genuinely live admission.
+- **Cost:** touches admission lifecycle in the metadata store and its tests; get the "live but slow" versus "abandoned" distinction right, since weakening the guard allows overlapping native session creates.
+
+## A user-scope credential reference breaks every other workspace's MCP save
+
+- **Where:** `packages/agent-service/src/worker/mcp-credentials.ts:12-20` (provider name hashes the writing workspace), `packages/agent-service/src/worker/mcp.ts:313-393` (the user MCP file is shared by every workspace), `packages/agent-service/src/worker/stateless.ts:220-223` (save resolves every reference before writing)
+- **Added:** 2026-11-16
+- **Effort:** ux-feedback-2026-11-15
+- **Priority:** worth-doing
+- **Problem:** a catalog entry installed at user scope writes its token as a workspace credential (`mcp_<uuid>`) and stores that reference in `~/.omp/agent/mcp.json`, which every workspace shares. `NativeMcpCredentials` prefixes the stored provider with a hash of the writing workspace, so another workspace that loads and saves that file fails the resolution check with 403 `MCP credential does not belong to this workspace`. Task 06 hit this for environment values and now forces project scope when any `envInputs` value is filled (`.workflow/decisions.md` 2026-11-16); token entries at user scope are unchanged and keep the hazard.
+- **Impact:** installing any token catalog entry (Linear, Sentry, …) at user scope can make unrelated workspaces unable to save MCP configuration until the reference is removed by hand.
+- **Solution:** either force project scope for every credential-carrying catalog install, or make user-file references resolvable from any workspace (workspace-independent provider name) while keeping project-file references workspace-scoped. Whichever path is chosen, add a save-from-another-workspace test.
+- **Cost:** small in the UI (same scope guard as env installs); the credential-name change touches the store's provider naming and needs a migration story for existing refs.

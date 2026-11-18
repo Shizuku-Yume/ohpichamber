@@ -3,8 +3,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   SettingsControlGroup,
   SettingsFieldRow,
-  SETTINGS_FIELDS_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
@@ -120,7 +120,7 @@ export function TrackerProjectMapping({
   };
 
   return (
-    <div className={SETTINGS_FIELDS_STACK_CLASS}>
+    <div className={SETTINGS_SPACE_ROW_CLASS}>
       {projects.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {t(copy.emptyProjects, { provider })}
@@ -143,7 +143,7 @@ export function TrackerProjectMapping({
           }}
         >
           <SelectTrigger
-            className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+            className={SETTINGS_WIDTH_SELECT_CLASS}
             aria-label={t(copy.defaultProjectAria, { provider })}
           >
             <SelectValue placeholder={t(copy.defaultProjectNone)}>
@@ -175,7 +175,7 @@ export function TrackerProjectMapping({
             {t(copy.emptyContainers, { provider })}
           </p>
         ) : (
-          <div className={SETTINGS_FIELDS_STACK_CLASS}>
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
             {mapping.containers.map((team) => (
               <SettingsFieldRow
                 key={team.id}
@@ -196,7 +196,7 @@ export function TrackerProjectMapping({
                   }}
                 >
                   <SelectTrigger
-                    className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+                    className={SETTINGS_WIDTH_SELECT_CLASS}
                     aria-label={t(copy.containerAria, { team: team.key ?? team.name, provider })}
                   >
                     <SelectValue placeholder={t(copy.containerUseDefault)}>

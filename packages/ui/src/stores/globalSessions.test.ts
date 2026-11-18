@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { Session } from '@openchamber/agent-contract';
-import { compareSessionRevision, isSessionDiscoveryFailed, mergeSessionDirectoryMetadata, registerWorkspaceDirectory, resetWorkspaceDirectories, resolveWorkspaceDirectory, splitGlobalSessionsByArchived } from './globalSessions';
+import { compareSessionRevision, isSessionDiscoveryFailed, mergeSessionDirectoryMetadata, registerWorkspaceDirectory, resetWorkspaceDirectories, resolveWorkspaceDirectory, resolveWorkspaceDisplayPath, splitGlobalSessionsByArchived } from './globalSessions';
 
 const session = (extra: Partial<Session> = {}): Session => ({
   sessionId: 'ses_one', projectId: 'pro_one', workspaceId: 'wsp_one', displayPath: 'repo',
@@ -32,6 +32,14 @@ describe('native global sessions', () => {
   test.each(['repo', './repo', 'C:repo'])('does not admit relative or display-path hint %s', (directory) => {
     registerWorkspaceDirectory('wsp_one', directory);
     expect(resolveWorkspaceDirectory('wsp_one')).toBeNull();
+  });
+  test('resolves relative workspace displayPath values against their project root and rejects absolute paths', () => {
+    expect(resolveWorkspaceDisplayPath('/srv/chats', '.')).toBe('/srv/chats');
+    expect(resolveWorkspaceDisplayPath('/srv/chats/', '2026-11-16/session-one')).toBe('/srv/chats/2026-11-16/session-one');
+    expect(resolveWorkspaceDisplayPath('/srv/repo', '../repo-wt')).toBe('/srv/repo-wt');
+    expect(resolveWorkspaceDisplayPath('C:\\repo', '.\\worktrees\\wt')).toBe('C:/repo/worktrees/wt');
+    expect(resolveWorkspaceDisplayPath('/srv/chats', '/etc/passwd')).toBeNull();
+    expect(resolveWorkspaceDisplayPath('/srv/chats', '../../..')).toBeNull();
   });
 
   test('matches native per-session, workspace and project failure scopes independently', () => {

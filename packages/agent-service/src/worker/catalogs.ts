@@ -107,6 +107,9 @@ export class WorkerCatalogs {
       case 'catalog.provider.models.discover':
         await this.context.assertProviderEntryAllowed();
         return { type: 'catalog.provider.models.discovered', result: await this.models.discoverProviderModels(operation.request) };
+      case 'catalog.provider.models.enrich':
+        // A local catalog read: no provider entry, endpoint, or credential.
+        return { type: 'catalog.provider.models.enriched', result: await this.models.enrichProviderModels(operation.request) };
       case 'catalog.provider.configure':
         await this.context.assertProviderEntryAllowed();
         return { type: 'catalog.provider.mutated', result: await this.models.configureProvider(operation.request, revision) };

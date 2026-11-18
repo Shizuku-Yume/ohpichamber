@@ -5,7 +5,11 @@ import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { SettingsSection } from '@/components/sections/shared/SettingsSection';
+import {
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
+  SettingsSection,
+} from '@/components/sections/shared/SettingsSection';
 import { SettingsCardChip, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
 import { useI18n } from '@/lib/i18n';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
@@ -141,7 +145,7 @@ const ItemRow: React.FC<ItemRowProps> = ({ item, selected, disabled, onSelect, o
    <Icon name={KIND_ICON[item.kind]} className="size-4 shrink-0 text-muted-foreground" aria-hidden />
    <button
     type="button"
-    className="min-w-[6rem] flex-1 text-start"
+    className="min-w-24 flex-1 text-start"
     aria-pressed={selected}
     onClick={onSelect}
    >
@@ -212,10 +216,10 @@ export const ExtensionControlCenter: React.FC<ExtensionControlCenterProps> = ({
      onChange={event => setQuery(event.target.value)}
      placeholder={t('settings.plugins.grid.searchPlaceholder')}
      aria-label={t('settings.plugins.grid.searchPlaceholder')}
-     className="max-w-[24ch]"
+     className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
     />
    )}
-   contentClassName="space-y-4"
+   contentClassName={SETTINGS_SPACE_ROW_CLASS}
   >
    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
     {providers.map(provider => (

@@ -7,6 +7,7 @@ import * as C from '@openchamber/agent-contract';
 import { SelectedCredentialHandoffRequestSchema, SelectedCredentialHandoffResultSchema } from '@openchamber/agent-service/private-protocol';
 import { isEnterpriseMode } from '../enterprise-mode.js';
 import { FILE_RESOURCE_AGENT_ROUTES } from './file-resource-agent-routes.js';
+import { callbackUrlForRequest, completeMcpOAuthCallback, createMcpOAuthPendingFlows, MCP_OAUTH_CALLBACK_PATH, renderMcpOAuthCallbackPage } from './mcp-oauth-callback.js';
 import { registerSkillFileRoutes } from './skill-file-routes.js';
 import { createSkillCatalogOwner } from './skill-catalog-owner.js';
 import { registerSkillRepositoryRoutes } from './skill-catalog-routes.js';
@@ -36,6 +37,7 @@ const AGENT_ROUTES = [
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers$/, response: C.ProviderCatalogSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/oauth-methods$/, response: C.ProviderOAuthMethodsSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/discover$/, request: C.ProviderModelDiscoveryRequestSchema, response: C.ProviderModelDiscoveryResultSchema, providerEntry: true },
+ { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/enrich$/, request: C.ProviderModelEnrichRequestSchema, response: C.ProviderModelEnrichResultSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, response: C.ProviderAccountsSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/accounts$/, request: C.ProviderAccountMutationRequestSchema, response: C.ProviderAccountsSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/providers\/[^/]+\/oauth$/, request: C.ProviderOAuthRequestSchema, response: C.ProviderOAuthResultSchema, providerOAuth: true },
@@ -83,7 +85,7 @@ const AGENT_ROUTES = [
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/mcp\/servers\/[^/]+\/reconnect$/, request: C.MCPApplyRequestSchema, response: C.MCPWorkspaceReconnectResultSchema },
  { method: 'PUT', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/mcp\/servers\/[^/]+\/credentials$/, request: C.MCPSecretWriteRequestSchema, response: C.MCPSecretWriteResultSchema },
  { method: 'GET', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, response: C.MCPOAuthResultSchema },
- { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, request: C.MCPOAuthRequestSchema, response: C.MCPOAuthResultSchema },
+ { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, request: C.MCPOAuthRequestSchema, response: C.MCPOAuthResultSchema, mcpOAuth: true },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/completions$/, request: C.CompletionRequestSchema, response: C.CompletionResultSchema },
  { method: 'POST', pattern: /^\/workspaces\/(?<workspaceId>[^/]+)\/completions\/[^/]+\/cancel$/, request: C.CompletionCancelRequestSchema, response: C.CompletionCancelResultSchema },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/recaps$/, response: C.SessionRecapListResponseSchema },
@@ -102,7 +104,7 @@ const AGENT_ROUTES = [
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/apply$/, request: C.MCPApplyRequestSchema, response: C.MCPApplyResultSchema },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/servers\/[^/]+\/reconnect$/, request: C.MCPReconnectRequestSchema, response: C.MCPCatalogReadSchema },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, response: C.MCPOAuthResultSchema },
- { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, request: C.MCPOAuthRequestSchema, response: C.MCPOAuthResultSchema },
+ { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/mcp\/servers\/[^/]+\/oauth$/, request: C.MCPOAuthRequestSchema, response: C.MCPOAuthResultSchema, mcpOAuth: true },
  { method: 'GET', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/catalog$/, response: C.SkillsCatalogStateSchema },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/apply$/, request: C.SkillsApplyRequestSchema, response: C.SkillsApplyResultSchema },
  { method: 'POST', pattern: /^\/sessions\/(?<sessionId>[^/]+)\/skills\/expand$/, request: C.SkillExpandRequestSchema, response: C.SkillExpandResultSchema },
@@ -175,6 +177,18 @@ export function registerCanonicalHostRoutes(app, {
    if (!response.ok) return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Agent Service is not ready.');
    return res.json(C.AgentServiceReadySchema.parse(await response.json()));
   } catch { return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The Agent Service is not ready.'); }
+ });
+ // The provider's browser redirect carries no UI bearer, so this page cannot
+ // authenticate. Its authority is the `state` the Host issued when it saw the
+ // matching `start` response; `completeMcpOAuthCallback` consumes that entry.
+ const mcpOAuthPendingFlows = createMcpOAuthPendingFlows();
+ router.get(MCP_OAUTH_CALLBACK_PATH.slice(PREFIX.length), async (req, res) => {
+  const sendPage = ({ status, title, message }) => res.status(status).type('html').send(renderMcpOAuthCallbackPage({ title, message }));
+  if (isEnterpriseMode(enterprisePolicyOptions))
+   return problem(res, 403, 'enterprise_mode', 'MCP sign-in is not available in enterprise mode.');
+  return sendPage(await completeMcpOAuthCallback({
+   service, pendingFlows: mcpOAuthPendingFlows, query: req.query, callbackUrl: callbackUrlForRequest(req),
+  }));
  });
  router.use(async (req, res, next) => {
   try {
@@ -379,6 +393,11 @@ export function registerCanonicalHostRoutes(app, {
      return problem(res, 400, 'INVALID_REQUEST', 'The extension target does not match its route.');
     if (route.providerOAuth && ['start', 'input', 'commit'].includes(parsed.data.action) && isEnterpriseMode(enterprisePolicyOptions))
      return problem(res, 403, 'enterprise_mode', 'Provider entry is not available in enterprise mode.');
+    if (route.mcpOAuth && parsed.data.action === 'start' && isEnterpriseMode(enterprisePolicyOptions))
+     return problem(res, 403, 'enterprise_mode', 'MCP sign-in is not available in enterprise mode.');
+    // The pending flow's `complete` must address the same owner its `start`
+    // did, so the Host records the route it is proxying rather than guessing.
+    if (route.mcpOAuth) res.locals.canonicalMcpOAuthPath = `${PREFIX}${req.path}`;
     if ('workspaceId' in parsed.data && parsed.data.workspaceId !== scope?.workspaceId)
      return problem(res, 403, 'UNAUTHORIZED', 'The request does not match the selected workspace.');
     if (groups?.websearchProviderId !== undefined && parsed.data.providerId !== decodeURIComponent(groups.websearchProviderId))
@@ -433,6 +452,19 @@ export function registerCanonicalHostRoutes(app, {
     return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The cache-warming response does not match its selected workspace.');
    if (route.websearch && (!scope || (result.state?.workspaceId ?? result.workspaceId) !== scope.workspaceId))
     return problem(res, 503, 'SERVICE_UNAVAILABLE', 'The search response does not match its selected workspace.');
+   if (route.mcpOAuth) {
+    // A pending start answer names the flow the browser will finish. Its
+    // authorization URL carries the worker-generated `state`; recording it lets
+    // the public callback address this exact flow, and any terminal answer ends
+    // that server's pending states so a stale callback cannot replay one.
+    if (result.status === 'pending' && scope) {
+     mcpOAuthPendingFlows.record({
+      authorizationUrl: result.pendingFlow.authorizationUrl, completionPath: res.locals.canonicalMcpOAuthPath,
+      workspaceId: scope.workspaceId, serverId: result.serverId,
+      flowId: result.pendingFlow.flowId, persistedRevision: result.persistedRevision, workerGeneration: result.worker.workerGeneration,
+     });
+    } else mcpOAuthPendingFlows.dropServer(scope?.workspaceId ?? result.worker.workspaceId, result.serverId);
+   }
    if (route.response === C.ShellSnapshotSchema) {
     for (const job of [...result.running, ...result.ended]) {
      const jobScope = capturedScope(await resolveRouteSessionScope(job.sessionId));

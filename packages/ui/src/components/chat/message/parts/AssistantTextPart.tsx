@@ -1,4 +1,5 @@
 import React from 'react';
+import { cn } from '@/lib/utils';
 import type { Part } from '@openchamber/agent-contract';
 import { MarkdownRenderer } from '../../MarkdownRenderer';
 import type { StreamPhase, ToolPopupContent } from '../types';
@@ -15,6 +16,11 @@ interface AssistantTextPartProps {
     streamPhase: StreamPhase;
     chatRenderMode?: 'sorted' | 'live';
     onShowPopup?: (content: ToolPopupContent) => void;
+    /**
+     * The stretch of a finished text this row draws, when a long answer spans
+     * several transcript rows (`timelineRows.ts`).
+     */
+    range?: { start: number; end?: number };
 }
 
 const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
@@ -24,10 +30,12 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     streamPhase,
     chatRenderMode = 'live',
     onShowPopup,
+    range,
 }) => {
     // Use part directly from props — parent provides the latest version from the store.
     // No store subscription here to avoid re-render cascade from unrelated delta events.
-    const textContent = part.type === 'text' || part.type === 'reasoning' ? part.content : '';
+    const fullText = part.type === 'text' || part.type === 'reasoning' ? part.content : '';
+    const textContent = range ? fullText.slice(range.start, range.end) : fullText;
     // Canonical text parts have no per-part timing; completion comes from
     // the owning message's stream phase.
     const isFinalized = streamPhase !== 'streaming';
@@ -45,7 +53,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     const throttledTextContent = useStreamingTextThrottle({
         text: textContent,
         isStreaming,
-        identityKey: `${messageId}:${part.partId}`,
+        identityKey: range ? `${messageId}:${part.partId}:${range.start}:${range.end ?? ''}` : `${messageId}:${part.partId}`,
     });
 
     const displayTextContent = resolveAssistantDisplayText({
@@ -68,7 +76,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         return null;
     }
 
-    const generatedResult = !isStreaming && isFinalized ? parseGeneratedJsonResult(displayTextContent) : null;
+    const generatedResult = !isStreaming && isFinalized && !range ? parseGeneratedJsonResult(displayTextContent) : null;
     if (generatedResult) {
         return (
             <div
@@ -82,7 +90,19 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
 
     return (
         <div
-            className={`group/assistant-text relative break-words ${chatRenderMode === 'live' ? 'my-1' : ''}`}
+            className={cn(
+                'group/assistant-text relative break-words',
+                // Rows of one answer stack as the whole text did: only its
+                // outer edges keep their spacing.
+                chatRenderMode === 'live' && !range?.start ? 'mt-1' : null,
+                chatRenderMode === 'live' && range?.end === undefined ? 'mb-1' : null,
+            )}
+            data-answer-continues={range?.start ? '' : undefined}
+            // The rows of one answer read as one text when a selection crosses them.
+            data-answer-part={range ? `${messageId}:${part.partId}` : undefined}
+            // The chat scroll stops following once the start of the reply
+            // being written would leave the screen (useChatTimelineScroll).
+            data-streaming-reply={isStreaming && part.type === 'text' ? '' : undefined}
             key={part.partId || `${messageId}-text`}
         >
             <MarkdownRenderer

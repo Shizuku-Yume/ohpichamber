@@ -1414,3 +1414,110 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** no
 - **Revisit when:** a defect is traced to one of these efforts; it is fixed as a new task, not by reopening the spec.
 - **Effort:** tech-debt-sweep
+## 2026-11-16 - MCP sign-in failure is a contract-visible result, and a closed registration asks for the client ID
+
+- **Decided:** the sign-in contract gains `MCP_OAUTH_IN_PROGRESS` (HTTP 409), `MCP_OAUTH_CLIENT_REGISTRATION_REJECTED` (HTTP 422) and an optional `error` on the unauthenticated `MCPOAuthResult`. A closed client registration reveals and focuses the client-ID field and shows the provider's own sentence; nothing is pre-filled, because no client ID is known, and no app-registration link is added. A failure after the browser handoff has no request left to throw from, so it is reported once through `MCPOAuthResult.unauthenticated.error`. The OAuth redirect stays `http://localhost:3000/callback` here and belongs to task 05.
+- **Instead of:** keeping one opaque `MCP_OAUTH_FAILED` and a `CATALOG_CONFLICT` for a second start, or adding a link to each provider's app-registration page.
+- **Because:** the panel must distinguish "already signing in" from a real conflict and must show why a handoff failed, and polling every 1.5 s otherwise resets to plain unauthenticated. A registration link would need per-provider URLs nobody maintains.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** OMP exposes a provider registration directory, or the redirect origin moves to the Host.
+## 2026-11-16 - Custom provider IDs keep a leading letter or digit
+
+- **Decided:** the provider-ID pattern is `^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`, narrower than the bare character set in "Provider IDs follow OMP's selector grammar": the first character must be a letter or digit. IDs like `.`, `..` or `-x` are refused.
+- **Instead of:** accepting the whole `[A-Za-z0-9._-]` set in any position, which OMP itself would accept.
+- **Because:** the same id reaches logo routes and settings keys, so a leading `.` reads as a hidden file, a leading `-` reads as a CLI flag, and `.`/`..` read as path segments. The narrower first character costs no real provider name.
+- **Mine:** yes
+- **Revisit when:** a provider name or OMP-side convention needs a leading dot or hyphen.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - `OmpSettingsState` carries `placementCounts`, because the page cannot count rows it never receives
+
+- **Decided:** `OmpSettingsState` gains `placementCounts: { tuiOnly, boundary, elsewhere }`. The Agent Service computes all three from the placement table over every registry row: `tuiOnly` and `boundary` count rows by placement, and `elsewhere` counts the rows state actually carries for another Settings page (`page` or `owned-by`). The 高级 config.yml footer renders those three numbers as its three sentences instead of deriving them.
+- **Instead of:** letting `OmpSettingsPage` count the rows it has and label the remainder "not shown", or adding the absent rows to `settings` with a `hidden` flag for the page to filter.
+- **Because:** `tui-only` and `boundary` rows never reach `state().settings`, so the page sees neither their ids nor their placement; anything it computed would have to infer the split from `totalCount` minus what it drew, which cannot distinguish terminal presentation from egress from another page's owner. Shipping absent rows in `settings` would have widened the write surface to rows the page must never offer. The measured footer is `tuiOnly: 83`, `elsewhere: 179`, `boundary: 42` over 602 registry / 265 exposed rows.
+- **Mine:** yes
+- **Revisit when:** OMP exposes placement in a runtime API, or another surface needs the same split.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - `providers.autoThinkingMaxEffort` sits on 常用 and `read.summarize.enabled` is owned by the preset row
+
+- **Decided:** `providers.autoThinkingMaxEffort` is placed on 常用 in the `toolsAndModels` group, gated by the new `autoThinkingActive` condition (shown only when `defaultThinkingLevel` is `auto`), rather than on 高级. `read.summarize.enabled` has no row of its own: the `preset.readSummary` row owns it and writes it together with the four thresholds, and 编辑与读取 remains the tab that row lives on.
+- **Instead of:** putting the auto ceiling with the other model-internals tuning on 高级, and giving `read.summarize.enabled` its own switch beside the preset.
+- **Because:** the ceiling only scales the automatic thinking level, so a user who never sets `auto` never acts on it — 高级 would advertise a knob that does nothing for them. A separate enable switch next to a preset that already sets it produced two controls for one value and a state where the switch contradicts the preset.
+- **Mine:** yes
+- **Revisit when:** OMP makes the auto ceiling apply outside the `auto` preset, or the preset stops writing `enabled`.
+## 2026-11-16 - Catalog installs that collect environment values are project-scope only
+
+- **Decided:** when any `envInputs` value is filled, a catalog MCP install writes workspace credentials and therefore installs at project scope only. The scope dialog disables the user option and says why, and with no project selected the Install button stays disabled. An entry whose env values are all empty keeps both scopes.
+- **Instead of:** allowing user scope with credential references in the shared user MCP file.
+- **Because:** `NativeMcpCredentials` prefixes every reference with a hash of the writing workspace (`packages/agent-service/src/worker/mcp-credentials.ts:12`), and the user MCP file is shared by every workspace (`packages/agent-service/src/worker/mcp.ts:391-393`); a reference written in one workspace makes another workspace's config save fail when the worker resolves it (`stateless.ts:220-223`). The same hazard already exists for catalog token entries saved at user scope and was not changed here.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** credential references become workspace-independent, or the user MCP file can carry per-workspace server entries.
+## 2026-11-16 - MCP OAuth callback state is bound to the flow, not the initiating browser session
+
+- **Decided:** the public `GET /api/agent/v1/mcp/oauth/callback` route accepts a `state` that the Host recorded from the proxied `start` response's authorization URL. It does not bind that state to the browser session, cookie or IP that started the flow, matching the existing guest and extension-tracker public callbacks (`guests/routes.js`, `trackers/routes.js`).
+- **Instead of:** adding a second, session-bound nonce to the redirect and rejecting a callback from a different browser.
+- **Because:** the workspace MCP credential store is shared by every surface and user of that workspace, so a completed sign-in is not scoped to the browser that began it. Binding to a session cookie would break the intended remote and mobile case (the consent browser is often a different browser profile, or the system browser rather than the Capacitor webview), and it would not add authority the credential store does not already carry. The accepted risk is a login-CSRF-class one: an attacker who obtains a live `state` can finish a sign-in the victim started, which yields the same credential the victim was already granting.
+- **Decided by:** agent
+- **Mine:** yes
+- **Revisit when:** MCP credentials become per-user or per-device, or the Host gains a session-bound consent surface.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - The settings layout refactor owns the fork-differs paths it touched
+
+- **Decided:** the 16 `fork-differs` settings/UI paths the drift report listed after the 2026-11-15 feedback work keep the fork blob and are recorded as `decision` rows: `CustomEndpointFields`, `CatalogExtensionsSection`, `TrackerProjectMapping`, `TrackerSessionComments`, `AboutReleaseNotes`, `DesktopAppSettings`, `DesktopNetworkSettings`, `DesktopQuakeModeSettings`, `OpenChamberVisualSettings`, `PasskeySettings`, `ProviderInstanceAccounts`, `SessionRetentionSettings` and its test, `ProjectWorktreesTab`, `SettingsSection` and `PublishDialog`.
+- **Instead of:** reverting them to upstream's inline `space-y-*` utilities and per-page control widths, or leaving them `unexplained`.
+- **Because:** each file is a call site or the definition of the 2026-11-15 decision that every settings row is label-left/control-right on one shared width and spacing scale, with a guard test that rejects raw width or spacing utilities in `components/sections`. Those commits renamed the shared classes (`SETTINGS_SPACE_ROW_CLASS`, `SETTINGS_WIDTH_*_CLASS`) and re-pointed the call sites, so upstream's blob would reintroduce exactly the ad-hoc utilities the refactor removed.
+- **Mine:** yes
+- **Revisit when:** upstream adopts a shared settings width/spacing scale, so the fork blob no longer carries behavior upstream lacks.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-16 - The integrations catalog declares environment inputs for local MCP entries
+
+- **Decided:** local catalog MCP entries carry `local.envInputs` (`{ id, envName, labelKey, required? }`) and the install form collects them; `registry.test.ts` asserts the declared inputs are unique, upper-snake env names and labelled under the entry id. The entry keeps the fork blob against upstream's catalog, which has no `envInputs` field.
+- **Instead of:** leaving the values as `{token}` placeholders inside `command`, or dropping the declaration to match upstream.
+- **Because:** a value written into `command` lands in the MCP config in plain text, while `envInputs` becomes a workspace credential behind `envCredentialRefs`; the catalog is the fork's own surface bound to the canonical agent service, so upstream's registry has nothing to adopt here.
+- **Mine:** yes
+- **Revisit when:** upstream's catalog gains an environment-input model the fork can adopt.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-17 - Settings controls share the 28 px height, and the stepper cluster opts in by `data-slot`
+
+- **Decided:** on desktop, a control inside `[data-settings-page]` is `h-7` (28 px), matching the dropdown trigger. `Input` gets there through the fork's `inputSize="compact"` prop at the call sites that upstream still sizes with a raw `h-8`, and `NumberInput`'s container carries `data-slot="number-input"` so the settings-page rule can size the stepper cluster and draw its 1 px border through `::after`, leaving the inner `<input>` (`h-full`) 28 px tall. `EnvironmentVariablesEditor` takes `inputSize="compact"` on its three fields instead of `h-8`; `NumberInput` gains only the slot marker.
+- **Instead of:** keeping upstream's `h-8` utilities per call site, or sizing `NumberInput` through a `containerClassName` each caller passes.
+- **Because:** the maintainer asked for one control height across Settings, and chat, dialogs and mobile touch targets must keep their own sizes. `inputSize` is a fork prop on a primitive upstream still has byte-identical (so `input.tsx` stays out of the ledger), and the slot marker is what the `[data-settings-page]` rule selects on: without it the stepper stayed 32 px beside 28 px selects. The same commit also re-indented `NumberInput`'s `no-explicit-any` oxlint directive, which is why that fork blob differs beyond the new attribute.
+- **Mine:** yes
+- **Revisit when:** upstream sizes settings controls from a shared token, or its `Input` grows a compact variant the fork can adopt instead of `inputSize`.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-18 - Row selects hug their value again, and OMP option notes sit under the field label
+
+- **Decided:** `SETTINGS_WIDTH_SELECT_CLASS` returns from `w-full @xl:w-56` to hug-with-cap sizing (`w-fit min-w-[8ch] max-w-[28ch]`), while `SettingsFieldRow` keeps `@xl:justify-end` so every row control still shares one trailing right edge. `OmpRowControl` passes the selected option's `description` to `SettingsFieldRow`'s `description` prop (under the left label) instead of stacking a `w-full` paragraph inside the `flex-1` control column. `settings-ui.test.ts` extends option-copy enforcement from `engine` rows to `page` rows as well.
+- **Instead of:** keeping 224 px fixed-width row selects and right-aligning or floating the option helper text in the control column.
+- **Because:** the maintainer reviewed the `4f9a7c7f39` candidate (`feedback-2026-11-18/1-*.png`, `6-*.png`) and reported both that 224 px selects look overlong and uncoordinated on short values (`Default`, `默认`, `500 行`) and that the helper subtext sits in the middle of the row. Upstream v2.7.0 used hug-width select triggers for the same reason, and `SettingsFieldRow` already owns a left-column `description` slot.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** never; supersedes the fixed-select-width clause of 2026-11-15.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-18 - Drop the `placementCounts` breakdown from the OMP `config.yml` footer
+
+- **Decided:** remove the three placement-count sentences and raw config path from `OmpSettingsPage`'s `omp.configFile` footer, keeping only the `仍需在 config.yml 中修改` row/title and the `打开 config.yml` button, and remove `placementCounts` if no other caller reads it. Supersedes `2026-11-16 - OmpSettingsState carries placementCounts`.
+- **Instead of:** keeping the count audit prose under the button.
+- **Because:** the maintainer reviewed `feedback-2026-11-18/6-*.png` and explicitly asked to remove the footer small print ("omp高级设置最后 这个小字就没必要搞了"); `AGENTS.md` only requires the `open config.yml` affordance.
+- **Decided by:** user
+- **Mine:** no
+- **Revisit when:** never.
+- **Effort:** ux-feedback-2026-11-15
+
+## 2026-11-18 - Routing categories are created in a complete dialog, fallbacks use `oc-tile` rows, and agent tools use flat `SettingsDisclosure` groups
+
+- **Decided:** (1) Routing replaces its bare `新类别 [input] [添加]` row (which inserted an invalid empty-description category into the live draft and immediately showed warning + error banners) with an outline `+ 添加类别` button that opens a complete creation `Dialog` (Name, Model, Thinking, Description) validated on submit. (2) Web Search's fallback list renders each item inside a rounded `oc-tile oc-tile-hover rounded-xl` row via optional `listClassName`/`rowClassName` props on `SettingsSortableList`. (3) `AgentPermissionsEditor` drops its boxed cards, `divide-y` dividers, hardcoded palette `TierChip`s and `"Show all"`/`"Hide all"` wording in favor of accurate `Default` / `All available` / `None` chips, flat default-collapsed `SettingsDisclosure` groups with tri-state `accessory` checkboxes, and single-line `SettingsCheckboxRow` items with descriptions behind `SettingsInfoHint`.
+- **Instead of:** patching individual error messages on inline incomplete category rows, adding borders to bare fallback rows, or restyling `AgentPermissionsEditor`'s cards.
+- **Because:** the maintainer reviewed `feedback-2026-11-18/2..5-*.png` and asked for a complete rethink of routing category addition, rounded-rectangle surfaces on fallback items, and a ground-up rewrite of agent tool settings to match OpenChamber's design system (`PATTERNS.md`, `STYLING.md`).
+- **Decided by:** user
+- **Mine:** partly (specific `Dialog`, `oc-tile` and `SettingsDisclosure` mappings are mine)
+- **Revisit when:** never.
+- **Effort:** ux-feedback-2026-11-15

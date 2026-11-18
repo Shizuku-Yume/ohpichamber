@@ -27,7 +27,7 @@ import { canonicalClient } from '@/api/canonicalClient';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useProjectsStore } from '@/stores/useProjectsStore';
-import { resolveMcpDirectory, selectMcpServersForDirectory, useMcpConfigStore } from '@/stores/useMcpConfigStore';
+import { resolveMcpDirectory, selectMcpServersForDirectory, useMcpConfigStore, type McpMutationResult } from '@/stores/useMcpConfigStore';
 import { getMcpServerStatus, useMcpStore, type McpServerRuntimeState } from '@/stores/useMcpStore';
 import { usePluginsStore } from '@/stores/usePluginsStore';
 import { useSkillsStore, type DiscoveredSkill } from '@/stores/useSkillsStore';
@@ -248,8 +248,15 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const guests = useGuestsStore((state) => open ? state.guests : EMPTY_GUESTS);
 
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  /**
+   * The entry an install just saved with sign-in still pending. Its panel starts
+   * the one sign-in method on mount instead of asking for a second click; a
+   * later visit to the same page signs in from the Authorize button.
+   */
+  const [autoStartEntryId, setAutoStartEntryId] = React.useState<string | null>(null);
   const showEntry = React.useCallback((id: string | null) => {
     setSelectedId(id);
+    setAutoStartEntryId(current => (current !== null && current !== id ? null : current));
   }, []);
 
   // Browse and detail share one scroller: a detail page opens at its top,
@@ -268,6 +275,8 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const [confirm, setConfirm] = React.useState<ConfirmRequest | null>(null);
   const [inputValues, setInputValues] = React.useState<Record<string, Record<string, string>>>({});
   const [tokenValues, setTokenValues] = React.useState<Record<string, string>>({});
+  /** Secrets for a local server's `envInputs`, keyed by entry and then input. */
+  const [envValues, setEnvValues] = React.useState<Record<string, Record<string, string>>>({});
   const [scopeDialogState, setScopeDialogState] = React.useState<{ entry: CatalogEntry; component?: CatalogComponent } | null>(null);
   const [selectedScope, setSelectedScope] = React.useState<'project' | 'user'>('project');
   React.useEffect(() => {
@@ -282,6 +291,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
   React.useEffect(() => {
     if (!open) {
       setSelectedId(null);
+      setAutoStartEntryId(null);
       browseScrollTopRef.current = 0;
       setQuery('');
       setCategory(null);
@@ -289,6 +299,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
       setConfirm(null);
       setInputValues({});
       setTokenValues({});
+      setEnvValues({});
     }
   }, [open]);
 
@@ -303,6 +314,28 @@ export function IntegrationsCatalogView(): React.ReactNode {
 
   const readToken = React.useCallback((entry: CatalogEntry): string => tokenValues[entry.id] ?? '', [tokenValues]);
   const setTokenValue = (entryId: string, value: string) => setTokenValues((prev) => ({ ...prev, [entryId]: value }));
+
+  const readEnvValue = React.useCallback((entry: CatalogEntry, envInputId: string): string =>
+    envValues[entry.id]?.[envInputId] ?? '', [envValues]);
+  const setEnvValue = React.useCallback((entryId: string, envInputId: string, value: string) => {
+    setEnvValues((prev) => ({ ...prev, [entryId]: { ...prev[entryId], [envInputId]: value } }));
+  }, []);
+  /** The entry's `envInputs` values that were filled in, trimmed, as env name → secret. */
+  const readFilledEnvValues = React.useCallback((entry: CatalogEntry, mcp: CatalogMcpComponent): Array<{ envName: string; value: string }> =>
+    (mcp.local?.envInputs ?? []).flatMap((input) => {
+      const value = readEnvValue(entry, input.id).trim();
+      return value === '' ? [] : [{ envName: input.envName, value }];
+    }), [readEnvValue]);
+  /**
+   * Whether installing would write workspace credentials for this entry. A
+   * credential reference is scoped to the workspace that wrote it, while a
+   * user-scope server lives in the shared user MCP file, so such an entry may
+   * only install at project scope.
+   */
+  const hasFilledEnvInputs = React.useCallback((entry: CatalogEntry): boolean => {
+    const mcp = catalogMcpComponent(entry);
+    return mcp ? readFilledEnvValues(entry, mcp).length > 0 : false;
+  }, [readFilledEnvValues]);
 
   // installedMcp is replaced by runtime-aware isMcpInstalled
   const installedPluginNames = React.useMemo(
@@ -454,6 +487,32 @@ export function IntegrationsCatalogView(): React.ReactNode {
   }, [settingsDirectory]);
 
   /**
+   * Writes a local server's collected environment values as workspace
+   * credentials and returns their references, keyed by env name. The saved
+   * config gets only those references, never the secrets.
+   *
+   * The credential route addresses a configured server, so the caller saves
+   * the server first. A credential write does not advance the persisted
+   * revision.
+   */
+  const writeMcpEnvCredentials = React.useCallback(async (
+    entry: CatalogEntry,
+    values: Array<{ envName: string; value: string }>,
+  ): Promise<{ ok: true; refs: Record<string, string> } | { ok: false; error: string }> => {
+    const workspace = await canonicalClient.resolveWorkspace(resolveMcpDirectory(settingsDirectory));
+    const { persistedRevision } = await canonicalClient.getWorkspaceMcpConfig(workspace.workspaceId);
+    const refs: Record<string, string> = {};
+    for (const row of values) {
+      const credential = await canonicalClient.writeWorkspaceMcpCredential(workspace.workspaceId, entry.id, {
+        persistedRevision,
+        value: row.value,
+      });
+      refs[row.envName] = credential.credentialRef;
+    }
+    return { ok: true, refs };
+  }, [settingsDirectory]);
+
+  /**
    * One Install pass over every component of the entry: the MCP server, the
    * plugin, and the skills. Already-installed components are skipped, so a
    * re-run cannot fail on "already exists". A plugin keeps its explicit
@@ -474,24 +533,94 @@ export function IntegrationsCatalogView(): React.ReactNode {
           allAlreadyInstalled = false;
           const values: Record<string, string> = {};
           for (const input of entry.inputs ?? []) values[input.id] = readInput(entry, input.id);
-          const config = buildCatalogMcpConfig(entry, component, values, targetScope ?? (hasSelectedProject ? 'project' : 'user'));
+          const scope = targetScope ?? (hasSelectedProject ? 'project' : 'user');
+          const config = buildCatalogMcpConfig(entry, component, values, scope);
           // An existing server is retried by configuring it again; create is only for a new id.
-          const exists = mcpServers.some((server) => server.serverId === entry.id);
-          const attempted = await (exists ? updateMcp(entry.id, config, settingsDirectory) : createMcp(config, settingsDirectory))
-            .then((result) => ({ result }))
-            .catch((failure: unknown) => ({ failure }));
+          const existingServer = mcpServers.find((server) => server.serverId === entry.id);
+          const existingEnvRefs = existingServer?.transport.type === 'stdio'
+            ? existingServer.transport.envCredentialRefs ?? {}
+            : {};
+          const filledEnv = component.local && (component.local.envInputs?.length ?? 0) > 0
+            ? readFilledEnvValues(entry, component)
+            : [];
+          // A credential reference belongs to the workspace that wrote it, so a
+          // user-scope server in the shared user file would break every other
+          // workspace's save. Refuse before any save.
+          if (filledEnv.length > 0 && scope !== 'project') {
+            failed = true;
+            errorDetail = t('integrationsCatalog.envInputs.projectOnly');
+            continue;
+          }
+          // The credential route addresses a configured server, and an env
+          // reference is what lets a local server connect. So the server is
+          // saved first (enabled, as usual), then each value is written as a
+          // workspace credential, then one save adds the references. A first
+          // save that persisted but could not connect is expected here and is
+          // not the install's outcome; the save after the references is.
+          let attempted: { result: McpMutationResult } | { failure: unknown };
+          if (filledEnv.length > 0) {
+            const firstConfig: MCPServerConfig = config.transport.type === 'stdio' && Object.keys(existingEnvRefs).length > 0
+              ? { ...config, transport: { ...config.transport, envCredentialRefs: existingEnvRefs } }
+              : config;
+            const firstSave = await (existingServer ? updateMcp(entry.id, firstConfig, settingsDirectory) : createMcp(firstConfig, settingsDirectory))
+              .then((result) => ({ result }))
+              .catch((failure) => ({ failure }));
+            if ('failure' in firstSave) {
+              failed = true;
+              errorDetail = firstSave.failure instanceof Error ? firstSave.failure.message : String(firstSave.failure);
+              continue;
+            }
+            // No `result` means the save itself was refused (authorization,
+            // validation, conflict), so nothing was persisted to reference.
+            if (!firstSave.result.ok && firstSave.result.result === undefined) {
+              failed = true;
+              errorDetail = firstSave.result.error;
+              continue;
+            }
+            let written: { ok: true; refs: Record<string, string> } | { ok: false; error: string };
+            try {
+              written = await writeMcpEnvCredentials(entry, filledEnv);
+            } catch (failure) {
+              failed = true;
+              errorDetail = failure instanceof Error ? failure.message : String(failure);
+              continue;
+            }
+            if (!written.ok) {
+              // The server stays saved without its environment, as a token
+              // install stays saved when its credential write fails.
+              failed = true;
+              errorDetail = written.error;
+              continue;
+            }
+            const refs = { ...existingEnvRefs, ...written.refs };
+            const finalConfig: MCPServerConfig = config.transport.type === 'stdio'
+              ? { ...config, transport: { ...config.transport, envCredentialRefs: refs } }
+              : config;
+            attempted = await updateMcp(entry.id, finalConfig, settingsDirectory)
+              .then((result) => ({ result }))
+              .catch((failure) => ({ failure }));
+          } else {
+            attempted = await (existingServer ? updateMcp(entry.id, config, settingsDirectory) : createMcp(config, settingsDirectory))
+              .then((result) => ({ result }))
+              .catch((failure) => ({ failure }));
+          }
           if ('failure' in attempted) {
             failed = true;
             errorDetail = attempted.failure instanceof Error ? attempted.failure.message : String(attempted.failure);
             continue;
           }
-          if (!attempted.result.ok) {
+          // A server saved with authorization pending is a sign-in, not a
+          // failed install: the reason the save could not connect is what the
+          // panel is about to finish.
+          if (attempted.result.outcome === 'saved-needs-auth') {
+            hadAuthPending = true;
+            setSelectedId(entry.id);
+            setAutoStartEntryId(entry.id);
+          } else if (!attempted.result.ok) {
             failed = true;
             errorDetail = attempted.result.error;
             continue;
-          }
-          if (attempted.result.outcome === 'saved-needs-auth' || component.auth === 'oauth') {
-            hadAuthPending = true;
+          } else if (component.auth === 'oauth') {
             setSelectedId(entry.id);
           }
           if (component.auth === 'token') {
@@ -553,14 +682,14 @@ export function IntegrationsCatalogView(): React.ReactNode {
           description: errorDetail ?? undefined,
         });
       } else if (hadAuthPending) {
-        toast.info(t('integrationsCatalog.status.needsAuth'));
+        toast.info(t('integrationsCatalog.install.savedNeedsAuth', { name: entry.name }));
       } else if (!openedSettings) {
         toast.success(t('integrationsCatalog.install.success', { name: entry.name }));
       }
     } finally {
       setBusyId(null);
     }
-  }, [attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp]);
+  }, [attachMcpToken, createMcp, hasSelectedProject, installPlugin, isExtensionInstalled, isMcpInstalled, isPluginInstalled, isSkillInstalled, mcpServers, readFilledEnvValues, readInput, readToken, setSettingsDialogOpen, setSettingsPage, settingsDirectory, t, updateMcp, writeMcpEnvCredentials]);
   /** One Uninstall pass: removes the MCP server, the plugin entries, and the installed skills. */
   const uninstallEntry = React.useCallback(async (entry: CatalogEntry) => {
     setBusyId(entry.id);
@@ -627,6 +756,10 @@ export function IntegrationsCatalogView(): React.ReactNode {
   const canInstallEntry = (entry: CatalogEntry): boolean => {
     const mcp = catalogMcpComponent(entry);
     if (!mcp) return true;
+    const filledEnv = readFilledEnvValues(entry, mcp);
+    if (filledEnv.length > 0 && !hasSelectedProject) return false;
+    const envComplete = (mcp.local?.envInputs ?? []).every((input) => !input.required || readEnvValue(entry, input.id).trim() !== '');
+    if (!envComplete) return false;
     if (mcp.auth === 'token') {
       const token = readToken(entry);
       return token.trim() !== '' || mcp.remote?.tokenOptional === true;
@@ -889,14 +1022,15 @@ export function IntegrationsCatalogView(): React.ReactNode {
     </aside>
   );
 
-  /** Token field, picker inputs and prerequisites, shown before the first install. */
+  /** Token field, env values, picker inputs and prerequisites, shown before the first install. */
   const renderSetup = (entry: CatalogEntry, mcp: CatalogMcpComponent): React.ReactNode => {
     const needsToken = mcp.auth === 'token' && Boolean(mcp.remote);
+    const envInputs = mcp.local?.envInputs ?? [];
     const notes = [
       ...(mcp.local ? [...(mcp.local.requires ?? []).map((requirement) => t(requiresNoteKey[requirement])), t('integrationsCatalog.local.note'), t('integrationsCatalog.requires.prefix')] : []),
       ...(mcp.auth === 'oauth' && mcp.remote ? [t('integrationsCatalog.oauth.note')] : []),
     ];
-    if (!needsToken && !entry.inputs && notes.length === 0) return null;
+    if (!needsToken && !entry.inputs && envInputs.length === 0 && notes.length === 0) return null;
     return (
       <section className="flex flex-col gap-3">
         <SectionHeading title={t('integrationsCatalog.detail.setup')} />
@@ -939,6 +1073,34 @@ export function IntegrationsCatalogView(): React.ReactNode {
         {needsToken && mcp.remote?.tokenOptional ? (
           <p className="text-sm text-muted-foreground">{t('integrationsCatalog.token.optional')}</p>
         ) : null}
+        {envInputs.length > 0 ? (
+          <div className="flex flex-col gap-3 pt-1">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-medium text-foreground">{t('integrationsCatalog.envInputs.heading')}</h3>
+              <p className="text-sm text-muted-foreground">{t('integrationsCatalog.envInputs.note')}</p>
+            </div>
+            {!hasSelectedProject && envInputs.some((input) => readEnvValue(entry, input.id).trim() !== '') ? (
+              <p className="text-sm text-muted-foreground">{t('integrationsCatalog.envInputs.projectOnly')}</p>
+            ) : null}
+            {envInputs.map((input) => (
+              <div key={input.id} className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <label htmlFor={`catalog-env-${entry.id}-${input.id}`} className="w-36 shrink-0 text-sm text-muted-foreground">
+                  {t(input.labelKey)}
+                </label>
+                <Input
+                  id={`catalog-env-${entry.id}-${input.id}`}
+                  type="password"
+                  autoComplete="off"
+                  required={input.required}
+                  value={readEnvValue(entry, input.id)}
+                  onChange={(event) => setEnvValue(entry.id, input.id, event.target.value)}
+                  placeholder={input.envName}
+                  className="max-w-xs"
+                />
+              </div>
+            ))}
+          </div>
+        ) : null}
         {notes.length > 0 ? <p className="text-sm text-muted-foreground">{notes.join(' ')}</p> : null}
       </section>
     );
@@ -977,6 +1139,8 @@ export function IntegrationsCatalogView(): React.ReactNode {
               <McpOAuthSignIn
                 serverId={entry.id}
                 directory={settingsDirectory}
+                autoStart={autoStartEntryId === entry.id}
+                onAutoStartConsumed={() => setAutoStartEntryId((current) => (current === entry.id ? null : current))}
                 onConnected={() => { void useMcpStore.getState().connect(entry.id, settingsDirectory); }}
               />
             </div>
@@ -1205,6 +1369,11 @@ export function IntegrationsCatalogView(): React.ReactNode {
   };
 
   const selectedEntry = selectedId ? getCatalogEntry(selectedId) : undefined;
+  /**
+   * An install that writes environment credentials can only target the project
+   * workspace, because a reference is valid only where it was written.
+   */
+  const projectScopeOnly = scopeDialogState !== null && hasFilledEnvInputs(scopeDialogState.entry);
 
   if (!open || enterpriseMode) return null;
 
@@ -1284,23 +1453,30 @@ export function IntegrationsCatalogView(): React.ReactNode {
                   type="radio"
                   name="mcp-install-scope"
                   value="project"
-                  checked={selectedScope === 'project'}
+                  checked={projectScopeOnly || selectedScope === 'project'}
                   onChange={() => setSelectedScope('project')}
                   className="size-4"
                 />
                 <span className="text-sm font-medium text-foreground">{t('integrationsCatalog.scopeDialog.scope.project')}</span>
               </label>
-              <label className="flex items-center gap-3 rounded-lg border border-[var(--interactive-border)] p-3 cursor-pointer hover:bg-[var(--surface-hover)]">
+              <label
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border border-[var(--interactive-border)] p-3',
+                  projectScopeOnly ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-[var(--surface-hover)]',
+                )}
+              >
                 <input
                   type="radio"
                   name="mcp-install-scope"
                   value="user"
                   checked={selectedScope === 'user'}
+                  disabled={projectScopeOnly}
                   onChange={() => setSelectedScope('user')}
                   className="size-4"
                 />
                 <span className="text-sm font-medium text-foreground">{t('integrationsCatalog.scopeDialog.scope.user')}</span>
               </label>
+              {projectScopeOnly ? <p className="text-sm text-muted-foreground">{t('integrationsCatalog.envInputs.projectOnly')}</p> : null}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setScopeDialogState(null)}>
@@ -1310,7 +1486,7 @@ export function IntegrationsCatalogView(): React.ReactNode {
                 onClick={() => {
                   const request = scopeDialogState;
                   setScopeDialogState(null);
-                  void installEntry(request.entry, request.component, selectedScope);
+                  void installEntry(request.entry, request.component, projectScopeOnly ? 'project' : selectedScope);
                 }}
               >
                 {t('integrationsCatalog.scopeDialog.confirm')}

@@ -89,6 +89,15 @@ Directory bootstrap operates through `CanonicalClient` consuming `@openchamber/a
 
 Workspace resolution and session discovery retain bounded startup retries. Canonical `ProblemDetails.retryable` controls canonical failures; a stale runtime or directory owner stops subsequent attempts. Environment and session initialization remain separate lanes, and failed environment initialization is recorded as a failure rather than marked complete. Each environment read (models, providers, agents, background shells) runs inside `STARTUP_RETRY` (8 attempts, 1 s to 8 s backoff, about 39 s of waits) with an independent stale-scope guard, so one slow sibling does not cancel the others. After the list lane completes, a failed environment initialization is requeued once when its bootstrap state is complete or absent and no matching queue/running entry exists; a successful retry is idempotent and does not duplicate session reads. Requeueing follows `isRetryableBootstrapError`: network/transient messages, HTTP 408/429/5xx, canonical `retryable: true`, and unclassified failures get one recovery attempt per connection signal, while other 4xx and canonical `retryable: false` failures stay failed until their input changes.
 
+## Parked admission on cold start
+
+A routed selection (`?session=<id>`) can name a session whose directory is not yet admitted: the route applies before projects and global discovery finish. `subscribeSessionAdmission` parks that selection rather than clearing it for good, and cold start is the case it exists for:
+
+- A selection whose directory is unadmitted is parked, and stays parked while global discovery has not indexed the session or has not resolved its directory. A project list arriving first must not discard the parked entry.
+- The parked session is dropped only when discovery completed (`hasLoaded`) and the record is genuinely gone, or when any later navigation supersedes it. A session in a permanently unadmitted (removed) project therefore stays parked invisibly; nothing is selected either way.
+- The parked session returns once its directory is admitted, and `adoptAuthoritativeSessionDirectory` promotes the guessed selection after the discovery snapshot commits so a route selection is not left guessing.
+- Per-chat sessions live in their own workspace with a Host-relative `displayPath`; global load binds those directories from `listWorkspaces` (resolved against the project root) so the snapshot fetch addresses the workspace that owns the session.
+
 ## Ownership map
 
 | Layer / Store | Owns | Scope |

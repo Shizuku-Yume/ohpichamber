@@ -79,8 +79,8 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
       const handleCaptureClick = (event: MouseEvent) => {
         event.preventDefault()
         event.stopPropagation()
-        // oxlint-disable-next-line typescript/no-explicit-any
-        ;(event as any).stopImmediatePropagation?.()
+          // oxlint-disable-next-line typescript/no-explicit-any
+          ; (event as any).stopImmediatePropagation?.()
         swallowNextClickCleanupRef.current?.()
       }
 
@@ -313,6 +313,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
 
     return (
       <div
+        data-slot="number-input"
         className={cn(
           "oc-surface-elevated flex h-8 shrink-0 items-stretch overflow-x-hidden overflow-y-hidden rounded-md border border-border bg-surface-elevated",
           "disabled:pointer-events-none disabled:opacity-50",

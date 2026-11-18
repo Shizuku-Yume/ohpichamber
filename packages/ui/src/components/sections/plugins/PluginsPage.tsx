@@ -19,9 +19,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Icon } from '@/components/icon/Icon';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLayout';
-import { SETTINGS_CARD_GRID_CLASS, SettingsAddCard, SettingsBackButton, SettingsCard, type SettingsCardAction, SettingsCardChip, SettingsCardIcon, SettingsCardPill } from '@/components/sections/shared/SettingsCards';
+import { SETTINGS_CARD_GRID_CLASS, SettingsAddCard, SettingsBackButton, SettingsCard, type SettingsCardAction, SettingsCardChip, SettingsCardIcon, SettingsCardPill, SettingsCardToolbar } from '@/components/sections/shared/SettingsCards';
 import {
   SETTINGS_SELECT_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SettingsFieldRow,
   SETTINGS_HELPER_CLASS,
   SettingsSection,
@@ -132,7 +133,7 @@ const MarketplaceDetailsSection: React.FC<{ entry: MarketplaceEntry | undefined 
   const details = entry?.details;
   if (!details) {
     return (
-      <SettingsSection title={t('settings.plugins.details.title')} contentClassName="space-y-0">
+      <SettingsSection title={t('settings.plugins.details.title')}>
         <p className="typography-meta text-muted-foreground">{t('settings.plugins.details.none')}</p>
       </SettingsSection>
     );
@@ -146,7 +147,7 @@ const MarketplaceDetailsSection: React.FC<{ entry: MarketplaceEntry | undefined 
   ] as const).filter(([, value]) => capabilityCount(value) > 0);
 
   return (
-    <SettingsSection title={t('settings.plugins.details.title')} contentClassName="space-y-0">
+    <SettingsSection title={t('settings.plugins.details.title')}>
       {details.author ? (
         <SettingsFieldRow label={t('settings.plugins.details.author')}>
           <span className="min-w-0 truncate typography-meta text-foreground">
@@ -274,7 +275,7 @@ const PluginSettingsEditor: React.FC<{ plugin: InstalledPluginEntry; disabled: b
   const autosave = useAutosave(save);
 
   return (
-    <div onBlurCapture={autosave.onBlurCapture} className="space-y-5">
+    <div onBlurCapture={autosave.onBlurCapture} className={SETTINGS_SPACE_ROW_CLASS}>
       <div className="space-y-1">
         <Textarea
           id="native-plugin-settings"
@@ -386,7 +387,7 @@ const LocalExtensionEditor: React.FC<{ extension: LocalExtensionEntry; revision:
   });
 
   return (
-    <div className="space-y-4" onBlurCapture={autosave.onBlurCapture}>
+    <div className={SETTINGS_SPACE_ROW_CLASS} onBlurCapture={autosave.onBlurCapture}>
       {state === 'loading' ? (
         <p role="status" className="flex items-center gap-2 typography-meta text-muted-foreground">
           <Icon name="loader-4" className="size-4 animate-spin" />
@@ -689,7 +690,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           headerEnd={deleteButton({ kind: 'plugin', plugin })}
           titleAccessory={<ScopeChip scope={plugin.scope} />}
         >
-          <SettingsSection divider={false} contentClassName="space-y-3">
+          <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
             {update ? (
               <p className="typography-meta text-[var(--status-info)]">
@@ -721,7 +722,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           <SettingsSection
             title={t('settings.plugins.page.header.entry')}
             description={details || undefined}
-            contentClassName="space-y-0"
           >
             <SettingsFieldRow label={t('settings.plugins.page.field.spec')}>
               <span className="min-w-0 truncate font-mono typography-meta text-foreground">
@@ -764,13 +764,12 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
             </span>
           )}
         >
-          <SettingsSection divider={false} contentClassName="space-y-3">
+          <SettingsSection divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
             {operationError ? <p role="alert" className="typography-meta text-[var(--status-error)]">{operationError}</p> : null}
           </SettingsSection>
 
           <SettingsSection
             title={t('settings.plugins.local.title')}
-            contentClassName="space-y-0"
           >
             <SettingsFieldRow label={t('settings.plugins.page.field.fileName')}>
               <span className="min-w-0 truncate font-mono typography-meta text-foreground">{extension.relativePath}</span>
@@ -849,7 +848,6 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               </Button>
             </div>
           )}
-          contentClassName="space-y-0"
         >
           <div className={SETTINGS_CARD_GRID_CLASS}>
             {installedCount === 0 ? (
@@ -941,7 +939,7 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
               </Button>
             </div>
           )}
-          contentClassName="space-y-3"
+          contentClassName={SETTINGS_SPACE_ROW_CLASS}
         >
           {/* The configured sources, or a line saying none is: the button that
               edits them sits in this section's header, so an absent row left
@@ -955,37 +953,32 @@ const NativePluginsPage: React.FC<{ directory: string | null }> = ({ directory }
           ) : (
             <p className={SETTINGS_HELPER_CLASS}>{t('settings.plugins.marketplace.sources.empty')}</p>
           )}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1">
-              <Icon name="search" className="pointer-events-none absolute inset-s-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-              <Input
-                value={marketplaceQuery}
-                onChange={event => setMarketplaceQuery(event.target.value)}
-                placeholder={t('settings.plugins.grid.searchPlaceholder')}
-                aria-label={t('settings.plugins.grid.searchPlaceholder')}
-                className="ps-8"
-              />
-            </div>
-            <Select
-              value={marketplaceScope}
-              onValueChange={value => {
-                if (value === 'user' || value === 'project') setMarketplaceScope(value);
-              }}
-            >
-              <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('settings.plugins.page.field.scope')}>
-                <SelectValue>
-                  {marketplaceScope === 'user' ? t('settings.plugins.scope.user') : t('settings.plugins.scope.project')}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent align="end">
-                <SelectItem value="project">{t('settings.plugins.scope.project')}</SelectItem>
-                <SelectItem value="user">{t('settings.plugins.scope.user')}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="ghost" size="sm" disabled={disabled} onClick={() => setSourcesOpen(true)}>
-              {t('settings.plugins.marketplace.sourcesButton')}
-            </Button>
-          </div>
+          <SettingsCardToolbar
+            className="mb-0"
+            search={{
+              value: marketplaceQuery,
+              onChange: setMarketplaceQuery,
+              placeholder: t('settings.plugins.grid.searchPlaceholder'),
+            }}
+            actions={(
+              <Select
+                value={marketplaceScope}
+                onValueChange={value => {
+                  if (value === 'user' || value === 'project') setMarketplaceScope(value);
+                }}
+              >
+                <SelectTrigger className={SETTINGS_SELECT_TRIGGER_CLASS} aria-label={t('settings.plugins.page.field.scope')}>
+                  <SelectValue>
+                    {marketplaceScope === 'user' ? t('settings.plugins.scope.user') : t('settings.plugins.scope.project')}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="project">{t('settings.plugins.scope.project')}</SelectItem>
+                  <SelectItem value="user">{t('settings.plugins.scope.user')}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
 
           {marketplaceCategories.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5">

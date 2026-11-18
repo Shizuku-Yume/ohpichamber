@@ -16,6 +16,7 @@ import { createMcpDraft, useMcpConfigStore } from '@/stores/useMcpConfigStore';
 import { useSnippetsStore } from '@/stores/useSnippetsStore';
 import { projectSettingsTabForSearchTarget, useProjectSettingsTabStore } from '@/components/sections/projects/projectSettingsTabs';
 import { chatSettingsTabForSearchTarget, useChatSettingsTabStore } from '@/components/sections/openchamber/chatSettingsTabs';
+import { ompSettingsTabForSearchTarget, useOmpSettingsTabStore } from '@/components/sections/openchamber/ompSettingsLayout';
 import { themeVariantForSearchTarget, useThemeVariantTabStore } from '@/components/sections/openchamber/themeVariantTab';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
@@ -83,10 +84,12 @@ const SETTINGS_SPLIT_SIDEBAR_WIDTH = 280;
 // The desktop close button: top-1 offset plus its h-7 height.
 const SETTINGS_CLOSE_BUTTON_CLEARANCE = 32;
 const SETTINGS_DETAIL_HISTORY_KEY = '__openchamberSettingsDetail';
-/** Pages that show one tab at a time (Chat, the Appearance theme list): open the one that holds the item. */
+/** Pages that show one tab at a time (Chat, OMP, the Appearance theme list): open the one that holds the item. */
 const openSettingsTabFor = (itemId: string): void => {
   const chatTab = chatSettingsTabForSearchTarget(itemId);
   if (chatTab) useChatSettingsTabStore.getState().setTab(chatTab);
+  const ompTab = ompSettingsTabForSearchTarget(itemId);
+  if (ompTab) useOmpSettingsTabStore.getState().setTab(ompTab);
   const themeVariant = themeVariantForSearchTarget(itemId);
   if (themeVariant) useThemeVariantTabStore.getState().setVariant(themeVariant);
 };
@@ -494,6 +497,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (isMobile) {
       setMobileStage('page-content');
     }
+    // The search overlay sits above the page on both surfaces, so leaving the
+    // query and its result list open hides the row the jump just revealed.
+    setSettingsSearchQuery('');
     if (result.id === 'plugins.create') {
       window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent('openchamber:settings-open-plugin-add'));

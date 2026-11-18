@@ -9,10 +9,11 @@ import {
   SettingsCheckboxRow,
   SettingsChipGroup,
   SETTINGS_ICON_BUTTON_CLASS,
-  SETTINGS_NUMBER_INPUT_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
   SETTINGS_NUMBER_STEPPER_ROW_CLASS,
   SETTINGS_NUMBER_UNIT_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
@@ -90,9 +91,9 @@ export const SessionRetentionSettings: React.FC = () => {
       info={t(onlyArchived
         ? 'settings.openchamber.sessionRetention.archivedTooltip'
         : 'settings.openchamber.sessionRetention.tooltip')}
-      contentClassName="space-y-2"
+      contentClassName={SETTINGS_SPACE_ROW_CLASS}
     >
-      <div className={SETTINGS_OPTION_STACK_CLASS}>
+      <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
         <SettingsCheckboxRow
           settingsItem="sessions.deletion-dialog"
           checked={showDeletionDialog}
@@ -157,7 +158,7 @@ export const SessionRetentionSettings: React.FC = () => {
               max={MAX_DAYS}
               step={1}
               aria-label={t('settings.openchamber.sessionRetention.field.retentionPeriodAria')}
-              className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
+              className={cn(SETTINGS_WIDTH_NUMBER_CLASS, 'tabular-nums')}
             />
             <span className={SETTINGS_NUMBER_UNIT_CLASS}>{t('settings.openchamber.sessionRetention.field.days')}</span>
             <Button

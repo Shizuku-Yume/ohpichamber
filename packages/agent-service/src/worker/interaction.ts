@@ -293,8 +293,11 @@ export class WorkerInteraction {
 
   /** Re-authorizes a native-approved bash call with an exact Host execution grant. */
   async requestNativeGrant(toolCallId: string, input: JsonObject, signal?: AbortSignal): Promise<boolean> {
-    const turnId = this.callbacks.currentTurn();
-    if (this.closed || !turnId || signal?.aborted) return false;
+    // Async jobs (a vibe worker's own `bash`) outlive the turn that spawned
+    // them, exactly like `approveTool`'s fallback; the grant stays tied to
+    // `toolCallId`, so a turn-less request still resolves only its own call.
+    const turnId = this.callbacks.currentTurn() ?? 'turn-0';
+    if (this.closed || signal?.aborted) return false;
     const approvalId = randomUUID();
     const action = actionType('bash');
     const { promise, resolve } = Promise.withResolvers<string | undefined>();

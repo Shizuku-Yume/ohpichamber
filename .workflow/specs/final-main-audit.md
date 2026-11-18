@@ -1,6 +1,6 @@
 # Final repository-wide code style, code quality, and full-product audit
 
-**Status:** proposed
+**Status:** in progress
 **Priority:** high
 **Integration branch:** final-main-audit/integration
 

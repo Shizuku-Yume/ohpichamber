@@ -185,7 +185,7 @@ describe('tokenizeComposer — magic keywords and turn budget', () => {
 
     test('turn budget directive +50k! in prose is highlighted with amber badge', () => {
         const ranges = tokenizeComposer('deploy now +50k!', context());
-        const budget = ranges.find(r => r.style === 'attention' && r.className?.includes('bg-amber-500/20'));
+        const budget = ranges.find(r => r.style === 'attention' && r.className?.includes('bg-[var(--status-warning-background)]'));
         expect(budget).toBeDefined();
     });
 });

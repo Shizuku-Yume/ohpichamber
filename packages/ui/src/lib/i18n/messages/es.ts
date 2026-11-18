@@ -8008,7 +8008,7 @@ export const dict = {
   "projects.opencodeTrust.saveFailed": "No se pudo guardar tu respuesta. Inténtalo de nuevo.",
   "projectActions.actions.autoDiscoverTooltip": "Detecta y ejecuta automáticamente el servidor de desarrollo",
   "projectActions.actions.chooseActionAria": "Elegir acción del proyecto",
-  "projectActions.actions.openPreview": "Abrir Preview",
+  "projectActions.actions.openPreview": "Abrir vista previa",
   "projectActions.actions.runNamedAria": "Ejecutar {name}",
   "projectActions.actions.stopNamedAria": "Detener {name}",
   "projectActions.label.fallbackAction": "Acción",

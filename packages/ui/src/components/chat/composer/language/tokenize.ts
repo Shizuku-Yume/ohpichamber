@@ -157,7 +157,7 @@ export function tokenizeComposer(
                 start,
                 end,
                 style: 'attention',
-                className: 'px-1 py-0.5 rounded text-xs font-mono font-medium bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30',
+                className: 'px-1 py-0.5 rounded text-xs font-mono font-medium bg-[var(--status-warning-background)] text-[var(--status-warning-text)] border border-[var(--status-warning-border)]',
                 priority: 95,
             });
         }

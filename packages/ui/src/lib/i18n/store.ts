@@ -35,29 +35,29 @@ async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
       ? await import('./messages/fr') as { dict: I18nDictionary }
       : locale === 'nl'
         ? await import('./messages/nl') as { dict: I18nDictionary }
-    : locale === 'zh-TW'
-      ? await import('./messages/zh-TW') as { dict: I18nDictionary }
-      : locale === 'es'
-        ? await import('./messages/es') as { dict: I18nDictionary }
-        : locale === 'pt-BR'
-          ? await import('./messages/pt-BR') as { dict: I18nDictionary }
-          : locale === 'uk'
-            ? await import('./messages/uk') as { dict: I18nDictionary }
-            : locale === 'ko'
-              ? await import('./messages/ko') as { dict: I18nDictionary }
-              : locale === 'pl'
-                ? await import('./messages/pl') as { dict: I18nDictionary }
-                : locale === 'de'
-                  ? await import('./messages/de') as { dict: I18nDictionary }
-                  : locale === 'ja'
-                    ? await import('./messages/ja') as { dict: I18nDictionary }
-                    : locale === 'tr'
-                      ? await import('./messages/tr') as { dict: I18nDictionary }
-                      : locale === 'ar'
-                        ? await import('./messages/ar') as { dict: I18nDictionary }
-                        : locale === 'he'
-                          ? await import('./messages/he') as { dict: I18nDictionary }
-                          : { dict: enDict };
+        : locale === 'zh-TW'
+          ? await import('./messages/zh-TW') as { dict: I18nDictionary }
+          : locale === 'es'
+            ? await import('./messages/es') as { dict: I18nDictionary }
+            : locale === 'pt-BR'
+              ? await import('./messages/pt-BR') as { dict: I18nDictionary }
+              : locale === 'uk'
+                ? await import('./messages/uk') as { dict: I18nDictionary }
+                : locale === 'ko'
+                  ? await import('./messages/ko') as { dict: I18nDictionary }
+                  : locale === 'pl'
+                    ? await import('./messages/pl') as { dict: I18nDictionary }
+                    : locale === 'de'
+                      ? await import('./messages/de') as { dict: I18nDictionary }
+                      : locale === 'ja'
+                        ? await import('./messages/ja') as { dict: I18nDictionary }
+                        : locale === 'tr'
+                          ? await import('./messages/tr') as { dict: I18nDictionary }
+                          : locale === 'ar'
+                            ? await import('./messages/ar') as { dict: I18nDictionary }
+                            : locale === 'he'
+                              ? await import('./messages/he') as unknown as { dict: I18nDictionary } // Incomplete Hebrew translation
+                              : { dict: enDict };
   const subagentDict = subagentHudI18n[locale] ?? subagentHudI18n.en;
   const noticeDict = (timelineNoticesI18n as Record<string, Record<string, string>>)[locale] ?? timelineNoticesI18n.en;
   const fullDict = { ...mod.dict, ...subagentDict, ...noticeDict } as I18nDictionary;

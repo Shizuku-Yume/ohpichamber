@@ -255,7 +255,7 @@ export const ProjectSettingsHeader: React.FC<{ form: ProjectIdentityFormState }>
           onChange={(event) => form.setName(event.target.value)}
           placeholder={t('settings.projects.page.field.projectNamePlaceholder')}
           aria-label={t('settings.projects.page.field.projectName')}
-          className="-ms-2 w-full max-w-[24rem] bg-transparent px-2 [&:not(:hover):not(:focus)]:shadow-none typography-settings-section-title md:typography-settings-section-title"
+          className="-ms-2 w-full max-w-[24rem] bg-transparent px-2 [&:not(:hover):not(:focus)]:shadow-none typography-settings-section-title"
         />
         <p className="truncate typography-meta text-muted-foreground" title={form.project.path}>
           {form.project.path}

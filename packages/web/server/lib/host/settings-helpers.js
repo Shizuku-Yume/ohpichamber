@@ -119,14 +119,15 @@ export const createSettingsHelpers = (dependencies) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return null;
     }
-    const result = {};
+    const sanitized = {};
     for (const [rawKey, rawValue] of Object.entries(value)) {
-      const key = typeof rawKey === 'string' ? rawKey.trim() : '';
-      const combo = typeof rawValue === 'string' ? rawValue.trim() : '';
+      if (typeof rawKey !== 'string' || typeof rawValue !== 'string') continue;
+      const key = rawKey.trim();
+      const combo = rawValue.trim();
       if (!key || !combo) continue;
-      result[key.slice(0, SHORTCUT_OVERRIDE_KEY_MAX_LENGTH)] = combo.slice(0, SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH);
+      sanitized[key.slice(0, SHORTCUT_OVERRIDE_KEY_MAX_LENGTH)] = combo.slice(0, SHORTCUT_OVERRIDE_VALUE_MAX_LENGTH);
     }
-    return result;
+    return sanitized;
   };
 
   const normalizePwaAppName = (value, fallback = '') => {

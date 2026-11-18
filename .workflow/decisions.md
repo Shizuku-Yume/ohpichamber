@@ -1531,3 +1531,11 @@ user may overturn on sight. `Revisit when` of "never" is allowed but suspicious;
 - **Mine:** yes
 - **Revisit when:** `@oh-my-pi/pi-coding-agent` exposes a two-phase session-graph API that separates workspace tool, extension, and prompt construction from `SessionManager`, `MCPManager`, `AgentRegistry` `sessionFile`, and `getApiKey` binding, or the unprepared `POST /sessions` path becomes a user-facing path whose 600 ms first-delta budget is unwaived.
 - **Effort:** tech-debt-sweep
+## 2026-11-18 - Remove OpenCode service and environment variables
+
+- **Decided:** Remove OpenCode service-env and environment variables from `packages/web/server/lib/environment/runtime.js` and its test, and update `packages/web/package.json` to reflect OhPiChamber identity.
+- **Instead of:** Keeping the OpenCode-shaped environment surface and dependencies.
+- **Because:** OhPiChamber does not support OpenCode service-env or its dependencies.
+- **Mine:** yes
+- **Revisit when:** OhPiChamber adopts a similar service-env runtime or OpenCode-compat surface.
+

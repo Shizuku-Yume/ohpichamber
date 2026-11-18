@@ -357,7 +357,7 @@ const resolveFallbackModel = (
     return null;
 };
 
-export type DirectoryDefaultSelection = {
+type DirectoryDefaultSelection = {
     agentName: string | undefined;
     providerId: string;
     modelId: string;

@@ -89,6 +89,15 @@ Directory bootstrap operates through `CanonicalClient` consuming `@openchamber/a
 
 Workspace resolution and session discovery retain bounded startup retries. Canonical `ProblemDetails.retryable` controls canonical failures; a stale runtime or directory owner stops subsequent attempts. Environment and session initialization remain separate lanes, and failed environment initialization is recorded as a failure rather than marked complete. Each environment read (models, providers, agents, background shells) runs inside `STARTUP_RETRY` (8 attempts, 1 s to 8 s backoff, about 39 s of waits) with an independent stale-scope guard, so one slow sibling does not cancel the others. After the list lane completes, a failed environment initialization is requeued once when its bootstrap state is complete or absent and no matching queue/running entry exists; a successful retry is idempotent and does not duplicate session reads. Requeueing follows `isRetryableBootstrapError`: network/transient messages, HTTP 408/429/5xx, canonical `retryable: true`, and unclassified failures get one recovery attempt per connection signal, while other 4xx and canonical `retryable: false` failures stay failed until their input changes.
 
+## Parked admission on cold start
+
+A routed selection (`?session=<id>`) can name a session whose directory is not yet admitted: the route applies before projects and global discovery finish. `subscribeSessionAdmission` parks that selection rather than clearing it for good, and cold start is the case it exists for:
+
+- A selection whose directory is unadmitted is parked, and stays parked while global discovery has not indexed the session or has not resolved its directory. A project list arriving first must not discard the parked entry.
+- The parked session is dropped only when discovery completed (`hasLoaded`) and the record is genuinely gone, or when any later navigation supersedes it. A session in a permanently unadmitted (removed) project therefore stays parked invisibly; nothing is selected either way.
+- The parked session returns once its directory is admitted, and `adoptAuthoritativeSessionDirectory` promotes the guessed selection after the discovery snapshot commits so a route selection is not left guessing.
+- Per-chat sessions live in their own workspace with a Host-relative `displayPath`; global load binds those directories from `listWorkspaces` (resolved against the project root) so the snapshot fetch addresses the workspace that owns the session.
+
 ## Ownership map
 
 | Layer / Store | Owns | Scope |
@@ -107,6 +116,7 @@ Workspace resolution and session discovery retain bounded startup retries. Canon
 | `useAdvisorStore.ts` | Live Advisor watchdog notes with same-epoch sequence checking, opaque epoch scoping, and note deduplication | All known sessions in the active runtime |
 | `session-ui-store.ts` (Slice C) | Session selection, draft lifecycle, abort prompts, worktree metadata, action entrypoints | App UI state |
 | `useGlobalSessionsStore.ts` (Slice C) | Global active/archived entities plus root, parent/child, and directory indexes | All opened project/worktree session lists |
+| `session-warming-sync.ts` | Hydrates `useSessionWarmingStore` for the active root session (and on Host reconnect) and prunes deleted sessions after authoritative `useGlobalSessionsStore` snapshots | Active runtime via `SyncRuntimeEffects` |
 | `viewport-store.ts` | Scroll anchors, session memory, loading indicators | App UI state |
 | `attachment-files.ts` | Attachment picker allowlists, MIME/content validation, structured-text sanitization, HEIC conversion | Local chat attachments |
 | `document-attachments.ts` | Bounded Office/OpenDocument extraction, document text serialization, embedded-image extraction, positional citations | Office chat attachments |
@@ -329,6 +339,7 @@ export interface SessionCompactedEvent extends DataEventEnvelope {
 ```
 
 Messages strictly adhere to three roles: `'user' | 'assistant' | 'system'`. There is no compaction message role. Step summaries within turns are represented as `StepSummaryPart` (`type: 'step_summary'`, `partId`, `title`, optional `durationMs`) inside `message.parts`. When a `session.compacted` event is received by the directory reducer, it marks a structural recovery condition and requests a full resnapshot.
+Live compaction state (`snapshot.compacting`) is projected via `session.updated` (`compacting: { method, reason?, startedAt } | null`) and cleared either by `compacting: null` on aborted/skipped/retry endings or by authoritative snapshot recovery on `session.compacted`. OMP's active todo checklist (`snapshot.todos`) is likewise projected via `session.updated` (`todos: TodoPhase[]`, including `[]` on `todo_auto_clear`) and read directly by `TodoTray` without scanning transcript tool parts.
 
 ## Workspace lifecycle and directory eviction
 

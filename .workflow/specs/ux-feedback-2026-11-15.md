@@ -1,6 +1,6 @@
 # Maintainer feedback 2026-11-15: tool tiers, MCP sign-in, chat rendering and the Settings pages
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** ux-feedback-2026-11-15/integration
 
@@ -197,3 +197,29 @@ The coverage test boots a worker and enumerates `getAllToolNames()` in main, pla
   - Auto-fill writes `input`, `contextWindow`, `maxTokens` and `cost` into `models.yml` for catalogued ids, and fills an uncatalogued id from OpenRouter.
   - In enterprise mode, the OpenRouter step is refused and reported.
 - **W11 (Acceptance).** On the packaged Linux AppImage, a reviewer that implemented nothing walks all seven items plus the two planning additions against the maintainer's screenshots and records PASS or FAIL per item. The full gate passes: `bun run check`, `type-check`, `lint`, all test suites, `docs:validate` and `workflow validate`.
+
+## 2026-11-18 follow-up amendment (Tasks 14–19)
+
+After Task 13 built and walked the `4f9a7c7f39` candidate, the maintainer reviewed the Settings surfaces and reported five follow-up defects (screenshots archived at `/home/shizuku/Project/ohpichamber-omp-artifacts/feedback-2026-11-18/1..6-*.png`):
+
+1. **Row select width, floating option subtext, and untranslated page-placed options (`14-select-width-and-option-subtext.md`).**
+   - `SETTINGS_WIDTH_SELECT_CLASS = 'w-full @xl:w-56'` (224 px) stretches short values (`默认`, `500 行`, `Low`, `Default`) into wide empty bars with the chevron pushed far right, clashing with hug-width `ModelSelector` triggers right beside them. `SETTINGS_WIDTH_SELECT_CLASS` returns to hug-with-cap sizing (`'w-fit min-w-[8ch] max-w-[28ch]'`), keeping trailing right-edge alignment via `@xl:justify-end`.
+   - `OmpRowControl` passed `controlClassName="flex-col items-end"` and rendered `<p className={cn(SETTINGS_HELPER_CLASS, 'w-full')}>{selected.description}</p>` inside `SettingsFieldRow`'s `flex-1` control column, leaving the helper text floating in the middle of the row. Selected option descriptions move into `SettingsFieldRow`'s built-in `description` prop directly beneath the left label, and the control stays vertically centered.
+   - `settings-ui.test.ts` skipped `placement.type === 'page'` settings when checking option localization, leaving Sampling options (`temperature`, `topP`, `topK`, `minP`, `presencePenalty`, `repetitionPenalty`, `textVerbosity`) in raw English. Option labels and descriptions for every `OmpRowControl`-rendered setting (`engine` and `page`) are localized in all 15 locales.
+2. **OMP Advanced `config.yml` footer small print (`15-omp-config-footer-cleanup.md`).**
+   - The four small-print lines under `仍需在 config.yml 中修改` (three placement-count sentences + raw `state.configPath`) are removed. Only the clean row/header and `打开 config.yml` button remain (`AGENTS.md` requires the action, not the audit counts). Unused `placementCounts` and `configFile.{terminal,elsewhere,egress}` keys are deleted cleanly.
+3. **Routing category creation flow (`16-routing-add-category-dialog.md`).**
+   - The bottom `新类别 [input] [添加]` row inserted an incomplete category with empty `description` directly into `draft.categories`, immediately triggering both the yellow `invalidDraft` warning banner and the red `descriptionRequired` error before the user could type a description. It is replaced by an outline `+ 添加类别` button opening a creation `Dialog` with Name, Model, Thinking and Description fields; validation runs on submit, and only complete valid categories enter `draft.categories` and save immediately.
+4. **Web Search fallback list surface (`17-websearch-fallback-tiles.md`).**
+   - `FallbacksSection` rendered naked borderless/backgroundless rows below the `oc-tile` provider cards. `SettingsSortableList` gains optional `listClassName` / `rowClassName` props so `WebSearchPage` renders each fallback inside a cohesive `oc-tile oc-tile-hover rounded-xl` row (`gap-2` stack) with drag handle, `oc-tile-inset` priority badge, provider icon, title, actionable setup pill/link when unconfigured, and trailing remove icon button.
+5. **Agents page tool permissions rewrite (`18-agents-tool-permissions-redesign.md`).**
+   - `AgentPermissionsEditor.tsx` violated `PATTERNS.md` and `STYLING.md` with boxed group cards, tinted headers, `divide-y` chrome, hardcoded emerald/amber/rose `TierChip` soup, all 7 groups expanded into 30+ multi-line rows, nested `div[role="button"]` `stopPropagation` hacks, redundant `SettingsStackedField` wrapper, and misleading `"Show all"` / `"Hide all"` labels. It is rewritten directly under `SettingsSection` with an accurate 3-way `SettingsChipGroup` (`Default` / `All available` / `None`), a flat default-collapsed `SettingsDisclosure` list with tri-state `accessory` checkboxes and quiet `selected / total` counts, and crisp single-line `SettingsCheckboxRow` items inside expanded groups with descriptions behind `info` (`SettingsInfoHint`).
+
+### Additional W checks (Tasks 14–19)
+
+- **W12 (Selects & option subtext).** Row `<SelectTrigger>`s hug their value (`w-fit min-w-[8ch] max-w-[28ch]`) aligned to the row's trailing edge; `OmpRowControl` renders selected option descriptions under the left field label via `SettingsFieldRow`'s `description` prop; `zh-CN` Sampling and OMP pages show zero raw English option labels or option descriptions; `settings-ui.test.ts` enforces option copy for both `engine` and `page` placements.
+- **W13 (OMP `config.yml` row).** On OMP → 高级, `omp.configFile` renders only its title and the working `打开 config.yml` button, with zero count breakdown lines and zero raw file path small print.
+- **W14 (Routing category creation).** Clicking `+ 添加类别` opens a complete creation dialog (Name, Model, Thinking, Description) with zero pre-existing error banners; submitting empty Name or Description validates inside the dialog without mutating or saving `routing.json`; submitting valid fields closes the dialog and persists immediately.
+- **W15 (Web search fallback tiles).** Each fallback row renders as a rounded `oc-tile` surface with drag handle, priority index, provider icon, name, setup indicator/action when unconfigured, and icon remove button; drag/keyboard reorder persists.
+- **W16 (Agents tool permissions).** `AgentPermissionsEditor` uses flat default-collapsed `SettingsDisclosure` groups + `SettingsCheckboxRow` items + semantic tokens only (zero boxed cards, zero `divide-y`, zero Tailwind palette colors), passes `settingsLayoutGuard.test.ts`, and preserves `null` / `[]` / `string[]` `allowedTools` semantics.
+- **W17 (Round-2 acceptance & full gate).** On Web at 1600 px and a rebuilt Linux AppImage, an independent reviewer that implemented none of Tasks 14–18 walks W12–W16 side-by-side against `feedback-2026-11-18/1..6-*.png` and records PASS/FAIL; `bun run check`, `type-check`, `lint` (0 warnings), all test suites, `docs:validate` and `workflow validate` exit 0.

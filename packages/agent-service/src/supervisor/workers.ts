@@ -115,6 +115,8 @@ export interface WorkerRegistryOptions {
   callbacks?: WorkerLifecycleCallbacks;
   /** Absent only in registry tests that model no session activity. */
   isSessionIdle?: (rootSessionId: string) => boolean;
+  /** Returns true when a session's per-session warming mode keeps it alive past the background idle timeout. */
+  isSessionKeptWarm?: (rootSessionId: string) => boolean;
   /** Test seam for the asynchronous path canonicalization race. */
   canonicalizeDirectory?: (directory: string) => Promise<string>;
   capacityPolicy?: WorkerCapacityPolicy;
@@ -701,6 +703,7 @@ export class WorkerRegistry {
       const now = Date.now();
       const candidates = [...this.workerEntries.values()].filter(entry => entry.kind === 'session'
         && entry.info.state === 'ready' && entry.child.connected
+        && !this.sessionIsKeptWarm(entry.info.rootSessionId)
         && now - entry.lastActivityAt >= this.capacityPolicy.idleEvictionTimeoutMs);
       for (const candidate of candidates) {
         try { await this.evictIfIdle(candidate); } catch { /* one failed candidate must not stop the scan */ }
@@ -724,7 +727,7 @@ export class WorkerRegistry {
   }
 
   private async evictIfIdle(candidate: WorkerEntry): Promise<void> {
-    if (candidate.kind !== 'session' || this.closing || !this.sessionIsIdle(candidate.info.rootSessionId)) return;
+    if (candidate.kind !== 'session' || this.closing || !this.sessionIsIdle(candidate.info.rootSessionId) || this.sessionIsKeptWarm(candidate.info.rootSessionId)) return;
     if (Date.now() - candidate.lastActivityAt < this.capacityPolicy.idleEvictionTimeoutMs) return;
     await this.evictCandidate(candidate, true);
   }
@@ -739,7 +742,7 @@ export class WorkerRegistry {
     return this.withRoot(candidate.info.rootSessionId, async () => {
       const entry = this.workerEntries.get(candidate.info.rootSessionId);
       if (entry !== candidate || entry.kind !== 'session' || this.closing || entry.info.state !== 'ready' || !entry.child.connected) return false;
-      if (enforceIdleTimeout && Date.now() - entry.lastActivityAt < this.capacityPolicy.idleEvictionTimeoutMs) return false;
+      if (enforceIdleTimeout && (Date.now() - entry.lastActivityAt < this.capacityPolicy.idleEvictionTimeoutMs || this.sessionIsKeptWarm(entry.info.rootSessionId))) return false;
       if (this.restartReservations.has(entry.info.rootSessionId) || entry.pending.size > 0
         || [...this.actions.values()].some(action => action.entry === entry)) return false;
       if (!this.sessionIsIdle(entry.info.rootSessionId)) return false;
@@ -791,6 +794,11 @@ export class WorkerRegistry {
 
   private sessionIsIdle(rootSessionId: string): boolean {
     try { return this.options.isSessionIdle?.(rootSessionId) ?? true; }
+    catch { return false; }
+  }
+
+  private sessionIsKeptWarm(rootSessionId: string): boolean {
+    try { return this.options.isSessionKeptWarm?.(rootSessionId) ?? false; }
     catch { return false; }
   }
 

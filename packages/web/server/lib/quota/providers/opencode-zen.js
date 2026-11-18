@@ -9,7 +9,7 @@ const MICRO_CENTS_PER_DOLLAR = 100_000_000;
 const consoleNumber = (value) => toNumber(typeof value === 'string' ? asNonEmptyString(value) : value);
 const clampPercent = (value) => Math.min(100, Math.max(0, value));
 
-export const parseConsoleSummary = (payload) => {
+const parseConsoleSummary = (payload) => {
   const summary = asObject(payload);
   if (!summary) return null;
   const requests = consoleNumber(summary.totalRequests);
@@ -17,7 +17,7 @@ export const parseConsoleSummary = (payload) => {
   return { requests };
 };
 
-export const parseConsoleBudget = (payload) => {
+const parseConsoleBudget = (payload) => {
   const budgets = [];
   for (const row of Array.isArray(payload) ? payload : []) {
     const budget = asObject(row);
@@ -37,7 +37,7 @@ export const parseConsoleBudget = (payload) => {
   return budgets;
 };
 
-export const parseConsoleModelUsage = (payload) => {
+const parseConsoleModelUsage = (payload) => {
   const items = Array.isArray(payload?.items) ? payload.items : [];
   const models = new Map();
   for (const item of items) {

@@ -600,17 +600,17 @@ const mergeParams = (entry: PrStatusEntry, next: PrRuntimeParams): PrStatusEntry
     || entry.params.connected !== next.connected;
   const entryIdentity = next.readContext
     ? {
-        ...createBoundEntryIdentity(next.readContext, next.branch, runtimeKey),
-        remoteName,
-      }
+      ...createBoundEntryIdentity(next.readContext, next.branch, runtimeKey),
+      remoteName,
+    }
     : {
-        runtimeKey,
-        provider: nextIdentity.provider,
-        instance: nextIdentity.instance,
-        directory: next.directory,
-        branch: next.branch,
-        remoteName,
-      };
+      runtimeKey,
+      provider: nextIdentity.provider,
+      instance: nextIdentity.instance,
+      directory: next.directory,
+      branch: next.branch,
+      remoteName,
+    };
 
   const updatedEntry = {
     ...entry,
@@ -1021,11 +1021,11 @@ export const useGitHubPrStatusStore = create<SourceControlStatusStore>()(
           const sibling = findResolvedSiblingEntry(state.entries, key);
           const seeded: PrStatusEntry = sibling
             ? {
-                ...createEntry(),
-                status: sibling.status,
-                isInitialStatusResolved: true,
-                resolvedRemoteName: sibling.resolvedRemoteName ?? sibling.status?.resolvedRemoteName ?? null,
-              }
+              ...createEntry(),
+              status: sibling.status,
+              isInitialStatusResolved: true,
+              resolvedRemoteName: sibling.resolvedRemoteName ?? sibling.status?.resolvedRemoteName ?? null,
+            }
             : createEntry();
           return {
             entries: boundEntries({
@@ -1051,10 +1051,10 @@ export const useGitHubPrStatusStore = create<SourceControlStatusStore>()(
                 || parsed.branch !== target.branch) continue;
               const sameAuthority = target.accountId
                 ? parsed.provider === target.provider
-                  && parsed.instance === target.instance
-                  && parsed.accountId === target.accountId
-                  && parsed.repositoryId === target.repositoryId
-                  && parsed.bindingRevision === target.bindingRevision
+                && parsed.instance === target.instance
+                && parsed.accountId === target.accountId
+                && parsed.repositoryId === target.repositoryId
+                && parsed.bindingRevision === target.bindingRevision
                 : parsed.provider === target.provider && parsed.instance === target.instance;
               if (sameAuthority) continue;
               entries[entryKey] = { ...entry, status: null, isInitialStatusResolved: false };
@@ -1636,12 +1636,6 @@ const getCachedPrSummary = (
   }
   prSummaryCacheByKey.set(cacheKey, { sig, summary });
   return summary;
-};
-
-/** The badge of one entry's change request, by its status key; stable while nothing changes. */
-export const selectEntryVisualSummary = (entries: Record<string, PrStatusEntry>, key: string): PrVisualSummary | null => {
-  const entry = entries[key];
-  return getCachedPrSummary(`entry:${key}`, entry?.status, entry?.identity?.provider ?? null);
 };
 
 export const useFreshestSourceControlVisualSummaryForBranch = (

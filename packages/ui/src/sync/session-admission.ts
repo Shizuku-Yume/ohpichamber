@@ -8,7 +8,7 @@ import { isSessionDirectoryAdmitted } from './session-admission-rule';
 import { ensureChatsRootDirectory } from '@/lib/chatDirectories';
 import { isVSCodeRuntime } from '@/lib/desktop';
 
-export const isSessionAdmitted = (directory: string | null | undefined): boolean => isSessionDirectoryAdmitted(
+const isSessionAdmitted = (directory: string | null | undefined): boolean => isSessionDirectoryAdmitted(
   directory, useProjectsStore.getState().projects, useSessionUIStore.getState().availableWorktreesByProject,
 );
 
@@ -69,13 +69,6 @@ const tryAdmitSession = (sessionId: string, directory: string): Promise<boolean>
   return request;
 };
 
-export const admitSession = (sessionId: string, directory: string): Promise<boolean> => (
-  tryAdmitSession(sessionId, directory).catch((error) => {
-    console.warn('[session-admission] Could not register the session project:', error);
-    return false;
-  })
-);
-
 const RETRY_DELAYS = [1000, 2000, 4000];
 type AdmissionAttempt = { sessionId: string; retries: number; timer: ReturnType<typeof setTimeout> | null };
 
@@ -125,17 +118,21 @@ export const subscribeSessionAdmission = (): (() => void) => {
   const gateSelection = () => {
     if (!current()) return;
     const ui = useSessionUIStore.getState();
-    const records = useGlobalSessionsStore.getState().entityById;
+    const global = useGlobalSessionsStore.getState();
+    const records = global.entityById;
     if (parked) {
       const record = records.get(parked.id);
       const directory = record ? resolveGlobalSessionDirectory(record) : null;
-      // Any navigation since, a draft included, replaces the parked session.
-      if (ui.currentSessionId || parked.revision !== getAdmissionNavigationRevision() || !directory) parked = null;
-      else if (isSessionAdmitted(directory)) {
+      // Any navigation since replaces the parked session; keep waiting while
+      // cold discovery has not yet indexed it or resolved its directory.
+      if (ui.currentSessionId || parked.revision !== getAdmissionNavigationRevision()) parked = null;
+      else if (directory && isSessionAdmitted(directory)) {
         const { id } = parked;
         parked = null;
         void ui.setCurrentSession(id, directory);
         return;
+      } else if (global.hasLoaded && !record) {
+        parked = null;
       }
     }
     const selectedRecord = ui.currentSessionId ? records.get(ui.currentSessionId) : null;

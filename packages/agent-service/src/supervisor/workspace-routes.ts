@@ -8,6 +8,7 @@ import {
   ProviderConfigureRequestSchema, ProviderDeleteRequestSchema, ModelConfigureRequestSchema, ModelDeleteRequestSchema,
   ProviderCredentialWriteRequestSchema, ProviderCredentialDeleteRequestSchema,
   ProviderAccountMutationRequestSchema, ProviderOAuthRequestSchema, ProviderModelDiscoveryRequestSchema,
+  ProviderModelEnrichRequestSchema,
   CompletionRequestSchema, CompletionCancelRequestSchema, EntityIdSchema,
   MCPConfigureRequestSchema, MCPApplyRequestSchema, MCPOAuthRequestSchema, MCPSecretWriteRequestSchema,
   CacheWarmingUpdateRequestSchema,
@@ -53,7 +54,8 @@ function unwrap(result: CatalogResult) {
     case 'catalog.image.generated': case 'catalog.image.mutated': return result.result;
     case 'catalog.provider.mutated': case 'catalog.model.mutated': case 'catalog.credential.mutated': case 'catalog.agent.mutated': return result.result;
     case 'catalog.provider.accounts': case 'catalog.provider.oauth.methods': case 'catalog.provider.oauth':
-    case 'catalog.provider.models.discovered': case 'catalog.provider.configuration': return result.result;
+    case 'catalog.provider.models.discovered': case 'catalog.provider.models.enriched':
+    case 'catalog.provider.configuration': return result.result;
     default: throw new WorkerOperationError(503, 'INTERNAL_ERROR', 'The catalog operation returned an unknown result');
   }
 }
@@ -353,13 +355,14 @@ export class WorkspaceRoutes {
       match(body.workspaceId, workspaceId);
       return { status: 200, body: unwrap(await this.catalogs.operation(workspaceId, { type: 'catalog.image.generate', request: body })) };
     }
-    const providerRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/providers\/(oauth-methods|discover|([^/]+)\/(accounts|oauth|config))$/.exec(url.pathname);
+    const providerRoute = /^\/api\/agent\/v1\/workspaces\/([^/]+)\/providers\/(oauth-methods|discover|enrich|([^/]+)\/(accounts|oauth|config))$/.exec(url.pathname);
     if (providerRoute) {
       const workspaceId = id(providerRoute[1]);
       const providerId = providerRoute[3] === undefined ? undefined : id(providerRoute[3]);
       let operation: CatalogOperation | undefined;
       if (providerRoute[2] === 'oauth-methods' && request.method === 'GET') operation = { type: 'catalog.provider.oauth.methods' };
       else if (providerRoute[2] === 'discover' && request.method === 'POST') operation = { type: 'catalog.provider.models.discover', request: await readBody(request, ProviderModelDiscoveryRequestSchema) };
+      else if (providerRoute[2] === 'enrich' && request.method === 'POST') operation = { type: 'catalog.provider.models.enrich', request: await readBody(request, ProviderModelEnrichRequestSchema) };
       else if (providerId !== undefined) {
         if (providerRoute[4] === 'accounts' && request.method === 'GET') operation = { type: 'catalog.provider.accounts.read', providerId };
         else if (providerRoute[4] === 'accounts' && request.method === 'POST') operation = { type: 'catalog.provider.account.mutate', providerId, request: await readBody(request, ProviderAccountMutationRequestSchema) };

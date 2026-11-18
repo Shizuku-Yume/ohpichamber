@@ -2,7 +2,7 @@ import React from 'react';
 import { Switch } from '@/components/ui/switch';
 import {
   SettingsFieldRow,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { useI18n } from '@/lib/i18n';
@@ -74,7 +74,7 @@ export function TrackerSessionComments({
   }
 
   return (
-    <div className={SETTINGS_FIELDS_STACK_CLASS}>
+    <div className={SETTINGS_SPACE_ROW_CLASS}>
       <SettingsFieldRow
         label={t(copy.label)}
         info={t(copy.info)}

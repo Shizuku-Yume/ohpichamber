@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { I18nKey } from '@/lib/i18n/store';
 import { dict as en } from '@/lib/i18n/messages/en';
+import { dict as zhCnDict } from '@/lib/i18n/messages/zh-CN';
 import { SETTINGS_SEARCH_ITEMS, buildSettingsSearchResults } from './search';
+import { ompSettingsTabForSearchTarget } from '@/components/sections/openchamber/ompSettingsLayout';
 
 const t = (key: I18nKey): string => key;
 
@@ -184,6 +186,26 @@ describe('settings search', () => {
       return missing.length > 0 ? [`${item.id}: ${missing.join(', ')}`] : [];
     });
     expect(unresolved).toEqual([]);
+  });
+
+  test('OMP engine rows are searchable by their translated copy and open the tab that draws them', () => {
+    // The Chinese word for "timeout" appears only in the locale, so matching it
+    // proves search reads the translated label/description rather than the id.
+    const results = buildSettingsSearchResults({
+      query: '超时',
+      runtimeCtx,
+      t: (key: I18nKey) => zhCnDict[key] ?? t(key),
+      getPageTitle: (page) => page,
+    });
+    const found = results.filter((result) => result.page === 'omp');
+    const ids = found.map((result) => result.id);
+    for (const anchor of ['omp.ask.timeout', 'omp.lsp.requestTimeout', 'omp.images.questionTimeoutMs']) {
+      expect(ids).toContain(anchor);
+      expect(ompSettingsTabForSearchTarget(anchor)).not.toBeNull();
+    }
+    for (const result of found) {
+      expect({ id: result.id, tab: ompSettingsTabForSearchTarget(result.id) }).not.toEqual({ id: result.id, tab: null });
+    }
   });
 
   test('finds guest extension panels on the integrations page', () => {

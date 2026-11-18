@@ -12,15 +12,15 @@ Use the shared control class constants; every desktop dropdown footprint is
 
 - `SelectTrigger`: no size prop — its chrome comes from `dropdownTriggerVariants()`.
 - Custom dropdown triggers (ModelSelector / AgentSelector): `SETTINGS_CUSTOM_TRIGGER_CLASS`.
-- Text `Input` next to dropdowns: `size="compact"` (h-7), matching the trigger footprint.
-- Icon action next to a control: `SETTINGS_ICON_BUTTON_CLASS`.
-
-Widths are capped — never let controls span the pane:
-
-- Field-row control cluster / stacked-field default cap: `max-w-[24rem]` (built into `SettingsStackedField`; use `SETTINGS_CONTROL_CLUSTER_CLASS` elsewhere).
-- Field-row selects: `SETTINGS_SELECT_ROW_TRIGGER_CLASS` (fills available width within the shared font-relative limits). The `@xl:w-56` breakpoint width belongs to the row's label column, not its select.
-- Stacked-field selects: `SETTINGS_SELECT_TRIGGER_CLASS` (fills the capped container).
-- Genuinely full-width content (dialog textareas): opt out with `controlClassName="w-full max-w-none"`.
+- Text `Input` and `NumberInput`: inside settings pages (`SettingsPageLayout` `[data-settings-page]`), desktop inputs and stepper clusters share the `h-7` (`28 px`) dropdown-trigger footprint automatically; elsewhere (toolbars, dialogs), pass `inputSize="compact"` when an `Input` sits next to dropdowns.
+- Icon action next to a control: `SETTINGS_ICON_BUTTON_CLASS` (`h-7 w-7`) in a settings page; `SETTINGS_DIALOG_ICON_BUTTON_CLASS` (`h-8 w-8`) in a dialog, matching its `Input` default.
+Widths come from the named classes — never let controls span the pane, and
+give an individual control no raw width utility of its own. `w-full`,
+`min-w-0`, `max-w-none` and `max-w-full` are the allowed fill/shrink tokens,
+so genuinely full-width content (dialog textareas) opts out with
+`controlClassName="w-full max-w-none"`. [Widths](layout.md#widths) owns the
+class-per-control table and [layout guard](layout.md#layout-guard) lists the
+rejected utilities.
 
 ## Field Rows
 
@@ -31,11 +31,13 @@ Widths are capped — never let controls span the pane:
   settingsItem="page.some-setting"
 >
   <Select …>
-    <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('...aria')}>…
+    <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={t('...aria')}>…
 ```
 
 Use `SettingsStackedField` (label above control) inside `SettingsTwoColumn`
 cells or when the control is wide; same `info` / `settingsItem` props.
+[Rows](layout.md#rows) owns the row shapes and their container-query
+fallback.
 
 ## Boolean
 
@@ -80,11 +82,11 @@ segmented choices use `SettingsChipGroup` (chips with `aria-pressed`).
 
 ## Numeric Value / Override
 
-`NumberInput` inside `SETTINGS_NUMBER_STEPPER_ROW_CLASS`, with
-`SETTINGS_NUMBER_UNIT_CLASS` for the unit and an adjacent
-`SETTINGS_ICON_BUTTON_CLASS` reset button. Never flex-grow the stepper.
-Optional overrides: empty means "inherit"; provide `fallbackValue`,
-`onClear`, `emptyLabel="—"`.
+`NumberInput` with `SETTINGS_WIDTH_NUMBER_CLASS` inside
+`SETTINGS_NUMBER_STEPPER_ROW_CLASS`, `SETTINGS_NUMBER_UNIT_CLASS` for the
+unit and an adjacent `SETTINGS_ICON_BUTTON_CLASS` reset button. Never
+flex-grow the stepper. Optional overrides: empty means "inherit"; provide
+`fallbackValue`, `onClear`, `emptyLabel="—"`.
 
 ## Info Hints
 

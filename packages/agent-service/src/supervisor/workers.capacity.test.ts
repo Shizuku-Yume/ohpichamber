@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -73,12 +73,16 @@ test('the measured Task17 policy is the production default', () => {
 
 test('a new root at the cap evicts the least recently active idle worker', async () => {
   const tree = await workspace('evict-lru');
-  const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
+  const registry = new WorkerRegistry({
+    workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
-    capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 }) });
+    capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 })
+  });
   try {
-    await registry.startStateless({ rootSessionId: 'catalog-root', projectId: 'project', workspaceId: 'workspace',
-      cwd: tree.cwd, agentDirectory: tree.agentDirectory, agentDirectoryId: 'agent', catalogRevision: '1' });
+    await registry.startStateless({
+      rootSessionId: 'catalog-root', projectId: 'project', workspaceId: 'workspace',
+      cwd: tree.cwd, agentDirectory: tree.agentDirectory, agentDirectoryId: 'agent', catalogRevision: '1'
+    });
     await startSession(registry, 'root-one', tree.cwd, tree.agentDirectory);
     await Bun.sleep(5);
     await startSession(registry, 'root-two', tree.cwd, tree.agentDirectory);
@@ -97,17 +101,21 @@ test('a new root at the cap evicts the least recently active idle worker', async
 
 test('a busy-only cap is refused with the capacity outcome and leaves every worker', async () => {
   const tree = await workspace('busy-refusal');
-  const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
+  const registry = new WorkerRegistry({
+    workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000, isSessionIdle: () => false,
-    capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 }) });
+    capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 })
+  });
   try {
     await startSession(registry, 'root-one', tree.cwd, tree.agentDirectory);
     await startSession(registry, 'root-two', tree.cwd, tree.agentDirectory);
     const refusal = await startSession(registry, 'root-three', tree.cwd, tree.agentDirectory).catch(error => error);
     expect(refusal).toBeInstanceOf(WorkerOperationError);
     if (!(refusal instanceof WorkerOperationError)) throw new Error('Expected a typed capacity refusal');
-    expect(refusal).toMatchObject({ status: 503, code: 'SERVICE_UNAVAILABLE',
-      details: { reason: 'worker_capacity', activeRootWorkers: 2, maxActiveRootWorkers: 2 } });
+    expect(refusal).toMatchObject({
+      status: 503, code: 'SERVICE_UNAVAILABLE',
+      details: { reason: 'worker_capacity', activeRootWorkers: 2, maxActiveRootWorkers: 2 }
+    });
     expect(refusal.message).toBe('Session capacity is full (2 of 2 active). Every worker is busy; finish or close one before sending another message.');
     expect(registry.list().filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId).sort()).toEqual(['root-one', 'root-two']);
   } finally {
@@ -117,9 +125,11 @@ test('a busy-only cap is refused with the capacity outcome and leaves every work
 
 test('simultaneous opens cannot oversubscribe the cap', async () => {
   const tree = await workspace('concurrent');
-  const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
+  const registry = new WorkerRegistry({
+    workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
-    capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 }) });
+    capacityPolicy: policy({ maxActiveRootWorkers: 2, idleEvictionTimeoutMs: 60_000, reapIntervalMs: 60_000 })
+  });
   try {
     const outcomes = await Promise.allSettled(['a', 'b', 'c'].map(id => startSession(registry, `root-${id}`, tree.cwd, tree.agentDirectory)));
     // Roots still starting are not idle, so a concurrent third admission may be refused; the cap must hold.
@@ -135,23 +145,32 @@ test('simultaneous opens cannot oversubscribe the cap', async () => {
 test('an idle worker is evicted while active-turn and pending-approval roots stay', async () => {
   const tree = await workspace('idle');
   const blocked = new Set(['root-active-turn', 'root-pending-approval']);
-  const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
+  const registry = new WorkerRegistry({
+    workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
     capacityPolicy: policy({ idleEvictionTimeoutMs: 100, reapIntervalMs: 20 }),
-    isSessionIdle: rootSessionId => !blocked.has(rootSessionId) });
+    isSessionIdle: rootSessionId => !blocked.has(rootSessionId)
+  });
   try {
     for (const id of ['root-idle', 'root-active-turn', 'root-pending-approval']) await startSession(registry, id, tree.cwd, tree.agentDirectory);
-    await Bun.sleep(400);
+    await Promise.all([
+      waitForEviction(registry, 'root-idle'),
+      expectNotEvictedFor(registry, 'root-active-turn', 200),
+      expectNotEvictedFor(registry, 'root-pending-approval', 200),
+    ]);
     expect(registry.list().filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId).sort())
       .toEqual(['root-active-turn', 'root-pending-approval']);
 
     blocked.delete('root-active-turn');
-    await Bun.sleep(400);
+    await Promise.all([
+      waitForEviction(registry, 'root-active-turn'),
+      expectNotEvictedFor(registry, 'root-pending-approval', 200),
+    ]);
     expect(registry.list().filter(worker => worker.kind === 'session').map(worker => worker.rootSessionId))
       .toEqual(['root-pending-approval']);
 
     blocked.delete('root-pending-approval');
-    await Bun.sleep(400);
+    await waitForEviction(registry, 'root-pending-approval');
     expect(registry.list().filter(worker => worker.kind === 'session')).toEqual([]);
   } finally {
     try { await registry.close(); } finally { await tree.remove(); }
@@ -160,16 +179,21 @@ test('an idle worker is evicted while active-turn and pending-approval roots sta
 
 test('a pending worker operation and a restart reservation each postpone eviction', async () => {
   const tree = await workspace('pending');
-  const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
+  const registry = new WorkerRegistry({
+    workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
     capacityPolicy: policy({ idleEvictionTimeoutMs: 80, reapIntervalMs: 20 }),
-    isSessionIdle: () => true });
+    isSessionIdle: () => true
+  });
   try {
-    await startSession(registry, 'root-pending-operation', tree.cwd, tree.agentDirectory, { WORKER_OPERATION_DELAY_MS: '250' });
+    const holdFile = join(tree.root, 'operation.hold');
+    await writeFile(holdFile, 'held');
+    await startSession(registry, 'root-pending-operation', tree.cwd, tree.agentDirectory, { WORKER_OPERATION_HOLD_FILE: holdFile });
     const pending = registry.request('root-pending-operation', { type: 'shell', operation: { type: 'snapshot' } });
-    // Real child processes and the registry's own interval share no fake
-    // clock, so the postponement window is observed against the live reaper.
-    await expectNotEvictedFor(registry, 'root-pending-operation', 150);
+    // Real child processes and the registry's interval share no fake
+    // clock, so hold the operation open until the postponement window is observed.
+    await expectNotEvictedFor(registry, 'root-pending-operation', 200);
+    await rm(holdFile, { force: true });
     await pending;
     await waitForEviction(registry, 'root-pending-operation');
 
@@ -187,19 +211,21 @@ test('a pending worker operation and a restart reservation each postpone evictio
 
 test('a running background shell job postpones eviction until it ends', async () => {
   const tree = await workspace('shell-job');
-  const registry = new WorkerRegistry({ workerEntrypoint, workerRuntime: process.execPath,
+  const registry = new WorkerRegistry({
+    workerEntrypoint, workerRuntime: process.execPath,
     startupTimeoutMs: 10_000, stopTimeoutMs: 2_000,
-    capacityPolicy: policy({ idleEvictionTimeoutMs: 100, reapIntervalMs: 20 }),
-    isSessionIdle: () => true });
+    capacityPolicy: policy({ idleEvictionTimeoutMs: 80, reapIntervalMs: 20 }),
+    isSessionIdle: () => true
+  });
   try {
-    await startSession(registry, 'root-shell-job', tree.cwd, tree.agentDirectory, { WORKER_SHELL_JOB_MS: '900' });
-    // Real child processes and the registry's interval share no fake clock; the
-    // idle window itself is the behavior under test.
-    await Bun.sleep(400);
-    expect(registry.info('root-shell-job')?.state).toBe('ready');
-
-    await Bun.sleep(1_200);
-    expect(registry.info('root-shell-job')).toBeUndefined();
+    const holdFile = join(tree.root, 'shell-job.hold');
+    await writeFile(holdFile, 'running');
+    await startSession(registry, 'root-shell-job', tree.cwd, tree.agentDirectory, { WORKER_SHELL_JOB_HOLD_FILE: holdFile });
+    // Real child processes and the registry's interval share no fake clock;
+    // hold the shell job active across multiple idle sweeps, then release it.
+    await expectNotEvictedFor(registry, 'root-shell-job', 250);
+    await rm(holdFile, { force: true });
+    await waitForEviction(registry, 'root-shell-job');
   } finally {
     try { await registry.close(); } finally { await tree.remove(); }
   }

@@ -4,11 +4,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Radio } from '@/components/ui/radio';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { dropdownTriggerVariants } from '@/components/ui/dropdown-trigger';
+import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import { SettingsInfoHint } from './SettingsInfoHint';
 
 /**
- * Width cap shared by every settings value picker.
+ * Width cap shared by the settings pickers that hug their value.
  *
  * `applyTypography` scales the `--typography-*` vars but never the root rem,
  * so a rem-based cap (`max-w-48`) stays 192px while the label inside it grows,
@@ -20,13 +21,40 @@ import { SettingsInfoHint } from './SettingsInfoHint';
  * short button rather than a wide box with the chevron pushed to its edge.
  * The cap keeps a long value from stretching across the pane; it truncates.
  */
-const SETTINGS_TRIGGER_WIDTH_CLASS = 'w-fit max-w-[28ch]';
+const SETTINGS_HUG_WIDTH_CLASS = 'w-fit max-w-[28ch]';
 
-/** Settings select trigger in stacked cells. */
-export const SETTINGS_SELECT_TRIGGER_CLASS = SETTINGS_TRIGGER_WIDTH_CLASS;
+/**
+ * Settings select trigger in stacked cells — two-column cells, dialogs and
+ * wrap rows, where there is no shared control column to line up with, so it
+ * hugs its value.
+ */
+export const SETTINGS_SELECT_TRIGGER_CLASS = SETTINGS_HUG_WIDTH_CLASS;
 
-/** Settings select trigger in SettingsFieldRow control columns. */
-export const SETTINGS_SELECT_ROW_TRIGGER_CLASS = SETTINGS_TRIGGER_WIDTH_CLASS;
+/**
+ * Settings select trigger in a `SettingsFieldRow` control column.
+ *
+ * Hugs its selected value between `8ch` and `28ch` (font-relative `ch`, so the
+ * bounds scale with interface font size). Short labels (`Default`, `500 行`,
+ * `Low`) stay compact instead of stretching into wide empty bars, while long
+ * labels cap at `28ch` and truncate. `SettingsFieldRow` packs the control
+ * column to the trailing edge (`@xl:justify-end`), so row selects still share
+ * one right edge.
+ */
+export const SETTINGS_WIDTH_SELECT_CLASS = 'w-fit min-w-[8ch] max-w-[28ch]';
+
+/**
+ * Short text field in a row (a name, an id): full width when stacked below
+ * `@xl`, and `14rem` on `@xl`+. `SettingsFieldRow` packs it to the trailing edge
+ * (`@xl:justify-end`), so a section of selects and short inputs keeps one right
+ * edge.
+ */
+export const SETTINGS_WIDTH_SHORT_TEXT_CLASS = 'w-full @xl:w-56';
+
+/**
+ * Long text field, textarea, or stacked control cluster (select/input plus a
+ * reset): fills its column up to a readable cap.
+ */
+export const SETTINGS_WIDTH_LONG_TEXT_CLASS = 'w-full max-w-[24rem]';
 
 /**
  * Width for every settings NumberInput stepper. Font-relative for the same
@@ -37,37 +65,53 @@ export const SETTINGS_SELECT_ROW_TRIGGER_CLASS = SETTINGS_TRIGGER_WIDTH_CLASS;
  * The rem part holds the two buttons, which are wider on a phone than `ch`
  * grows; the `ch` part holds five digits, the longest value (a port).
  */
-export const SETTINGS_NUMBER_INPUT_CLASS = 'typography-ui-label w-[calc(5.75rem+5ch)]';
+export const SETTINGS_WIDTH_NUMBER_CLASS = 'typography-ui-label w-[calc(5.75rem+5ch)]';
 
-/** Compact reset / icon action next to a settings control (matches h-8 controls). */
+/** Compact reset / icon action next to a settings-pane control (matches h-7 controls). */
 export const SETTINGS_ICON_BUTTON_CLASS =
+  'h-7 w-7 px-0 text-muted-foreground hover:text-foreground';
+
+/**
+ * The same icon action in a dialog: dialogs size to the window and keep the
+ * `Input` default footprint (h-8), so their action matches that instead of the
+ * settings pane's h-7 row.
+ */
+export const SETTINGS_DIALOG_ICON_BUTTON_CLASS =
   'h-8 w-8 px-0 text-muted-foreground hover:text-foreground';
 
 /** Custom dropdown triggers (ModelSelector / AgentSelector) in settings field rows. */
 // oxlint-disable-next-line react/only-export-components
 export const SETTINGS_CUSTOM_TRIGGER_CLASS = cn(
   dropdownTriggerVariants(),
-  SETTINGS_TRIGGER_WIDTH_CLASS,
+  SETTINGS_HUG_WIDTH_CLASS,
 );
-
-/** Shared width for stacked control clusters (select/input + reset). */
-export const SETTINGS_CONTROL_CLUSTER_CLASS = 'w-full max-w-[24rem]';
 
 /**
  * Row wrapping a NumberInput + unit label + reset.
  * Keep the stepper intrinsic — never flex-grow it or +/- buttons stretch unevenly.
+ * The row is block-level, so it still fills a stacked cell, while in a field
+ * row it stays content-wide and the row's trailing alignment pushes it across.
  */
-export const SETTINGS_NUMBER_STEPPER_ROW_CLASS = 'flex w-full min-w-0 items-center gap-2';
+export const SETTINGS_NUMBER_STEPPER_ROW_CLASS = 'flex min-w-0 items-center gap-2';
 
 /** Unit suffix next to a settings number stepper (%, px, …). */
 export const SETTINGS_NUMBER_UNIT_CLASS =
   'typography-meta shrink-0 text-muted-foreground tabular-nums';
 
-/** Vertical stack spacing for fields inside a column. */
-export const SETTINGS_FIELDS_STACK_CLASS = 'space-y-4';
+/**
+ * Between titled groups inside one section's content: the section already owns
+ * the page-level rhythm (`py-8`), so pages never wrap sections in this.
+ */
+export const SETTINGS_SPACE_SECTION_CLASS = 'space-y-6';
 
-/** Compact checkbox / radio list stack. */
-export const SETTINGS_OPTION_STACK_CLASS = 'space-y-1.5';
+/**
+ * Stack of field rows and mixed shapes (a field row next to a checkbox row,
+ * a role editor next to OMP rows). Never the 6px checkbox stack.
+ */
+export const SETTINGS_SPACE_ROW_CLASS = 'space-y-4';
+
+/** Pure checkbox / radio list stack. */
+export const SETTINGS_SPACE_CHECKBOX_CLASS = 'space-y-1.5';
 
 /**
  * Settings heading classes by context (size + default color).
@@ -295,7 +339,7 @@ export const SettingsStackedField: React.FC<SettingsStackedFieldProps> = ({
         </div>
         {descriptionPlacement === 'before' ? descriptionNode : null}
       </div>
-      <div className={cn('flex min-w-0 max-w-[24rem] items-center gap-2', controlClassName)}>{children}</div>
+      <div className={cn('flex min-w-0 items-center gap-2', SETTINGS_WIDTH_LONG_TEXT_CLASS, controlClassName)}>{children}</div>
       {descriptionPlacement === 'after' ? descriptionNode : null}
     </div>
   );
@@ -317,8 +361,16 @@ interface SettingsFieldRowProps {
 }
 
 /**
- * Side-by-side form row: fixed label column + control cluster.
- * Use inside full-width sections or single columns.
+ * Side-by-side form row: fixed label column + control column that grows to
+ * the row's trailing edge.
+ *
+ * The control column is `flex-1` at every width, so `alignEnd` (`@xl:justify-end`)
+ * packs its content to the trailing edge (a `w-fit` column would have no free
+ * space to distribute). That lets hug-width row selects (`SETTINGS_WIDTH_SELECT_CLASS`)
+ * and other controls share one right edge without stretching short labels into
+ * fixed-width bars. Below `@xl` the row stacks, so a narrow pane keeps label
+ * above control. A control that fills the column (a row-filling input) passes
+ * `controlClassName`.
  *
  * The row's own vertical padding keeps two stacked rows of 32px controls
  * apart (8px between them), so a list of field rows needs no spacing of its
@@ -355,13 +407,85 @@ export const SettingsFieldRow: React.FC<SettingsFieldRowProps> = ({
       </div>
       <div
         className={cn(
-          'flex min-w-0 flex-1 items-center gap-2 @xl:w-fit @xl:flex-none',
+          'flex min-w-0 flex-1 items-center gap-2',
           alignEnd && '@xl:justify-end',
           controlClassName,
         )}
       >
         {children}
       </div>
+    </div>
+  );
+};
+
+interface SettingsDisclosureProps {
+  /** Item name; truncates. */
+  title: React.ReactNode;
+  /** Quiet one-line summary next to the title; truncates. */
+  secondary?: React.ReactNode;
+  /**
+   * Trailing control (a checkbox row, say). It sits beside the toggle rather
+   * than inside it, so it stays its own hit target — and adds its own focus
+   * stop, so a header is two tab stops rather than one.
+   */
+  accessory?: React.ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+  /** Rendered only while expanded. */
+  children: React.ReactNode;
+  settingsItem?: string;
+  className?: string;
+}
+
+/**
+ * A flat list item that expands into its editor: one ghost header row with a
+ * chevron, the item name and a quiet summary, then the editor below. No card,
+ * border or divide chrome — a list of these reads as one flat stack.
+ */
+export const SettingsDisclosure: React.FC<SettingsDisclosureProps> = ({
+  title,
+  secondary,
+  accessory,
+  expanded,
+  onToggle,
+  children,
+  settingsItem,
+  className,
+}) => {
+  const contentId = React.useId();
+
+  return (
+    <div data-settings-item={settingsItem} className={cn('py-1', className)}>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          aria-expanded={expanded}
+          aria-controls={expanded ? contentId : undefined}
+          onClick={onToggle}
+          className="flex h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1.5"
+        >
+          <Icon
+            name="arrow-right-s"
+            className={cn(
+              'size-4 shrink-0 text-muted-foreground transition-transform duration-150',
+              expanded && 'rotate-90 rtl:-rotate-90',
+            )}
+          />
+          <span className={cn(SETTINGS_FIELD_LABEL_CLASS, 'min-w-0 truncate font-medium')}>
+            {title}
+          </span>
+          {secondary != null ? (
+            <span className={cn(SETTINGS_HELPER_CLASS, 'min-w-0 truncate')}>{secondary}</span>
+          ) : null}
+        </Button>
+        {accessory}
+      </div>
+      {expanded ? (
+        <div id={contentId} className={cn(SETTINGS_SPACE_ROW_CLASS, 'px-1 pb-4 pt-2')}>
+          {children}
+        </div>
+      ) : null}
     </div>
   );
 };
@@ -559,7 +683,7 @@ export const SettingsRadioGroup: React.FC<SettingsRadioGroupProps> = ({
   className,
 }) => {
   return (
-    <div role="radiogroup" aria-label={ariaLabel} className={cn(SETTINGS_OPTION_STACK_CLASS, className)}>
+    <div role="radiogroup" aria-label={ariaLabel} className={cn(SETTINGS_SPACE_CHECKBOX_CLASS, className)}>
       {children}
     </div>
   );
@@ -686,7 +810,7 @@ export function SettingsChipGroup<T extends string>({
                 // Light themes paint elevated darker than the canvas, so the
                 // raised option takes the canvas colour there, like the tab pill.
                 ? option.selectedClassName
-                  ?? 'oc-raised bg-[var(--surface-background)] text-foreground hover:bg-[var(--surface-background)] dark:bg-[var(--surface-elevated)] dark:hover:bg-[var(--surface-elevated)]'
+                ?? 'oc-raised bg-[var(--surface-background)] text-foreground hover:bg-[var(--surface-background)] dark:bg-[var(--surface-elevated)] dark:hover:bg-[var(--surface-elevated)]'
                 : 'text-muted-foreground hover:bg-transparent hover:text-foreground',
             )}
             onClick={() => onChange(option.value)}

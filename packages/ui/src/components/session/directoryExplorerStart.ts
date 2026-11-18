@@ -2,7 +2,7 @@ const toSlashes = (value: string): string => value.trim().replace(/\\/g, '/').re
 
 const ROOTED_PATH = /^(?:~(?:\/|$)|\/|[a-zA-Z]:\/)/;
 
-export const isRootedBrowseQuery = (query: string): boolean => ROOTED_PATH.test(query.trimStart());
+const isRootedBrowseQuery = (query: string): boolean => ROOTED_PATH.test(query.trimStart());
 
 /**
  * What the path field means. A name without a root belongs to the folder being

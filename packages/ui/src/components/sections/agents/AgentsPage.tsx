@@ -30,8 +30,9 @@ import {
   SettingsFieldRow,
   SettingsStackedField,
   SETTINGS_CUSTOM_TRIGGER_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 
 interface FormState {
@@ -327,87 +328,85 @@ export const AgentsPage: React.FC = () => {
         description={t('settings.agents.page.globalDescription')}
         showSaveStatus
       >
-        <div className="space-y-6">
-          {/* Subagents */}
-          <SettingsSection
-            title={t('settings.omp.section.subagents.title')}
-            description={t('settings.omp.section.subagents.description')}
-            divider={false}
-            settingsItem="agents.section.subagents"
-          >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
-              <ModelRoleEditor
-                role="task"
-                roles={roleSelectors}
-                models={models}
-                directory={settingsDirectory ?? undefined}
+        {/* Subagents */}
+        <SettingsSection
+          title={t('settings.omp.section.subagents.title')}
+          description={t('settings.omp.section.subagents.description')}
+          divider={false}
+          settingsItem="agents.section.subagents"
+        >
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
+            <ModelRoleEditor
+              role="task"
+              roles={roleSelectors}
+              models={models}
+              directory={settingsDirectory ?? undefined}
+              disabled={ompLoading}
+              label={t('settings.omp.modelRoles.role.task.label')}
+              info={t('settings.omp.modelRoles.role.task.desc')}
+              settingsItem="omp.modelRoles.task"
+              onChange={(selector) => void handleRoleChange('task', selector)}
+            />
+            {subagentSettings.map((s) => (
+              <OmpRowControl
+                key={s.id}
+                setting={s}
+                value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
                 disabled={ompLoading}
-                label={t('settings.omp.modelRoles.role.task.label')}
-                info={t('settings.omp.modelRoles.role.task.desc')}
-                settingsItem="omp.modelRoles.task"
-                onChange={(selector) => void handleRoleChange('task', selector)}
+                onChange={(val) => void updateOmpSetting(s.id, val)}
               />
-              {subagentSettings.map((s) => (
-                <OmpRowControl
-                  key={s.id}
-                  setting={s}
-                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
-                  disabled={ompLoading}
-                  onChange={(val) => void updateOmpSetting(s.id, val)}
-                />
-              ))}
-            </div>
-          </SettingsSection>
+            ))}
+          </div>
+        </SettingsSection>
 
-          {/* Prewalk */}
-          <SettingsSection
-            title={t('settings.agents.section.prewalk.title')}
-            description={t('settings.agents.section.prewalk.description')}
-            settingsItem="agents.section.prewalk"
-          >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
-              {prewalkSettings.map((s) => (
-                <OmpRowControl
-                  key={s.id}
-                  setting={s}
-                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
-                  disabled={ompLoading}
-                  onChange={(val) => void updateOmpSetting(s.id, val)}
-                />
-              ))}
-            </div>
-          </SettingsSection>
-
-          {/* Advisor */}
-          <SettingsSection
-            title={t('settings.agents.section.advisor.title')}
-            description={t('settings.agents.section.advisor.description')}
-            settingsItem="agents.section.advisor"
-          >
-            <div className={SETTINGS_OPTION_STACK_CLASS}>
-              <ModelRoleEditor
-                role="advisor"
-                roles={roleSelectors}
-                models={models}
-                directory={settingsDirectory ?? undefined}
+        {/* Prewalk */}
+        <SettingsSection
+          title={t('settings.agents.section.prewalk.title')}
+          description={t('settings.agents.section.prewalk.description')}
+          settingsItem="agents.section.prewalk"
+        >
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
+            {prewalkSettings.map((s) => (
+              <OmpRowControl
+                key={s.id}
+                setting={s}
+                value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
                 disabled={ompLoading}
-                label={t('settings.omp.modelRoles.role.advisor.label')}
-                info={t('settings.omp.modelRoles.role.advisor.desc')}
-                settingsItem="omp.modelRoles.advisor"
-                onChange={(selector) => void handleRoleChange('advisor', selector)}
+                onChange={(val) => void updateOmpSetting(s.id, val)}
               />
-              {advisorSettings.map((s) => (
-                <OmpRowControl
-                  key={s.id}
-                  setting={s}
-                  value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
-                  disabled={ompLoading}
-                  onChange={(val) => void updateOmpSetting(s.id, val)}
-                />
-              ))}
-            </div>
-          </SettingsSection>
-        </div>
+            ))}
+          </div>
+        </SettingsSection>
+
+        {/* Advisor */}
+        <SettingsSection
+          title={t('settings.agents.section.advisor.title')}
+          description={t('settings.agents.section.advisor.description')}
+          settingsItem="agents.section.advisor"
+        >
+          <div className={SETTINGS_SPACE_ROW_CLASS}>
+            <ModelRoleEditor
+              role="advisor"
+              roles={roleSelectors}
+              models={models}
+              directory={settingsDirectory ?? undefined}
+              disabled={ompLoading}
+              label={t('settings.omp.modelRoles.role.advisor.label')}
+              info={t('settings.omp.modelRoles.role.advisor.desc')}
+              settingsItem="omp.modelRoles.advisor"
+              onChange={(selector) => void handleRoleChange('advisor', selector)}
+            />
+            {advisorSettings.map((s) => (
+              <OmpRowControl
+                key={s.id}
+                setting={s}
+                value={ompForm[s.id] !== undefined ? ompForm[s.id] : s.value}
+                disabled={ompLoading}
+                onChange={(val) => void updateOmpSetting(s.id, val)}
+              />
+            ))}
+          </div>
+        </SettingsSection>
       </SettingsPageLayout>
     );
   }
@@ -419,12 +418,12 @@ export const AgentsPage: React.FC = () => {
   >
     {error && <p role="alert" className="mb-4 typography-meta text-destructive">{error}</p>}
     {!source || (!isNewAgent && revision === undefined) ? <p role="status">{t('common.unavailable')}</p> : <>
-      <SettingsSection title={t('settings.agents.page.section.identityRole')} divider={false} contentClassName="space-y-3">
+      <SettingsSection title={t('settings.agents.page.section.identityRole')} divider={false} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         {isNewAgent && <SettingsFieldRow settingsItem="agents.name" label={t('settings.agents.page.field.agentName')}>
           <div className="flex items-center">
             <span className="typography-ui-label text-muted-foreground mr-1">@</span>
             <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })}
-              placeholder={t('settings.agents.page.field.agentNamePlaceholder')} className="h-7 w-40 px-2" />
+              placeholder={t('settings.agents.page.field.agentNamePlaceholder')} className={SETTINGS_WIDTH_SHORT_TEXT_CLASS} />
           </div>
         </SettingsFieldRow>}
         <SettingsStackedField label={t('settings.common.field.description')} controlClassName="w-full max-w-none">
@@ -433,7 +432,7 @@ export const AgentsPage: React.FC = () => {
             className="w-full resize-none min-h-[60px] bg-transparent" />
         </SettingsStackedField>
       </SettingsSection>
-      <SettingsSection title={t('settings.agents.page.section.modelParameters')} contentClassName="space-y-3">
+      <SettingsSection title={t('settings.agents.page.section.modelParameters')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <SettingsFieldRow settingsItem="agents.model" label={t('settings.agents.page.field.overrideModel')}>
           <ModelSelector providerId={form.model?.providerId ?? ''} modelId={form.model?.modelId ?? ''}
             directory={settingsDirectory ?? undefined}
@@ -450,7 +449,7 @@ export const AgentsPage: React.FC = () => {
               requestSave();
             }}
           >
-            <SelectTrigger className={SETTINGS_SELECT_ROW_TRIGGER_CLASS} aria-label={t('sessions.scheduledTasks.editor.thinkingLevel.label')}>
+            <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS} aria-label={t('sessions.scheduledTasks.editor.thinkingLevel.label')}>
               <SelectValue>{thinkingLevelLabel(form.thinkingLevel, t)}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -475,7 +474,7 @@ export const AgentsPage: React.FC = () => {
               setForm({ ...form, spawns: event.target.value });
               requestSave();
             }}
-            className="h-8 w-64 px-2 font-mono text-xs"
+            className={`${SETTINGS_WIDTH_SHORT_TEXT_CLASS} font-mono typography-meta`}
           />
         </SettingsFieldRow>
       </SettingsSection>
@@ -485,31 +484,28 @@ export const AgentsPage: React.FC = () => {
           placeholder={t('settings.agents.page.field.systemPromptPlaceholder')} rows={8}
           className="w-full font-mono typography-meta min-h-[120px] max-h-[60vh] bg-transparent" />
       </SettingsSection>
-      <SettingsSection title={t('settings.agents.page.section.toolPermissions')} settingsItem="agents.permissions" contentClassName="space-y-3">
-        <SettingsStackedField
-          settingsItem="agents.allowed-tools"
-          label={t('settings.agents.page.field.allowedTools')}
-          controlClassName="w-full max-w-none flex-col items-stretch"
-        >
-          {toolsCatalogError && (
-            <div role="status" className="rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-center justify-between gap-2">
-              <span>{t('common.unavailable')}</span>
-              <Button size="xs" variant="outline" onClick={() => setCatalogRetryCount((c) => c + 1)}>
-                {t('settings.agents.page.permissionsEditor.actions.retry')}
-              </Button>
-            </div>
-          )}
-          <AgentPermissionsEditor
-            allowedTools={form.allowedTools}
-            toolsCatalog={toolsCatalog}
-            disabled={Boolean(toolsCatalogError)}
-            onChange={(nextTools) => {
-              if (toolsCatalogError) return;
-              setForm((current) => ({ ...current, allowedTools: nextTools }));
-              requestSave();
-            }}
-          />
-        </SettingsStackedField>
+      <SettingsSection title={t('settings.agents.page.section.toolPermissions')} settingsItem="agents.permissions" contentClassName={SETTINGS_SPACE_ROW_CLASS}>
+        {toolsCatalogError ? (
+          <div
+            role="status"
+            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--status-warning)]/30 bg-[var(--status-warning)]/10 px-3 py-2 typography-meta text-[var(--status-warning)]"
+          >
+            <span>{t('common.unavailable')}</span>
+            <Button size="xs" variant="outline" onClick={() => setCatalogRetryCount((c) => c + 1)}>
+              {t('settings.agents.page.permissionsEditor.actions.retry')}
+            </Button>
+          </div>
+        ) : null}
+        <AgentPermissionsEditor
+          allowedTools={form.allowedTools}
+          toolsCatalog={toolsCatalog}
+          disabled={Boolean(toolsCatalogError)}
+          onChange={(nextTools) => {
+            if (toolsCatalogError) return;
+            setForm((current) => ({ ...current, allowedTools: nextTools }));
+            requestSave();
+          }}
+        />
       </SettingsSection>
       {isNewAgent && <div className="flex items-center gap-2 pb-8">
         <Button onClick={() => void handleCreate()} disabled={isCreating || !form.name.trim()} size="xs" className="!font-normal">

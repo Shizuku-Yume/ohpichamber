@@ -19,7 +19,7 @@
  * segment can exceed the bar.
  */
 
-export type ContextBuckets = {
+type ContextBuckets = {
   user: number;
   assistant: number;
   tool: number;

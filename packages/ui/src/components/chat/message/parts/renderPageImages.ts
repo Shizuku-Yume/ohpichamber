@@ -25,7 +25,7 @@ const PAGE_IMAGE_BUDGET_BYTES = 25 * 1024 * 1024;
 const OLDER_SERVER_MAX_IMAGES = 12;
 
 /** The local image paths a page names, in order, once each. */
-export function renderPageImageSources(html: string): string[] {
+function renderPageImageSources(html: string): string[] {
     const sources = new Set<string>();
     for (const match of html.matchAll(LOCAL_IMAGE_RE)) {
         const source = match[2] ?? match[3];
@@ -38,7 +38,7 @@ export function renderPageImageSources(html: string): string[] {
 const dataUrlBytes = (url: string): number => Math.floor((url.length - url.indexOf(',') - 1) * 3 / 4);
 
 /** The page with each loaded image's path swapped for its data URL; an image that did not load keeps its path. */
-export function inlineRenderPageImages(html: string, images: ReadonlyMap<string, string>): string {
+function inlineRenderPageImages(html: string, images: ReadonlyMap<string, string>): string {
     return html.replace(LOCAL_IMAGE_RE, (match: string, quote: string | undefined, quoted: string | undefined, bare: string | undefined) => {
         const url = images.get(quoted ?? bare ?? '');
         if (!url) return match;
@@ -55,7 +55,7 @@ type PrepareImages = typeof prepareLocalMarkdownImages;
  * before. Any other failure stays a failure: a request without the page's call
  * id gets no weight budget.
  */
-export function prepareRenderPageImages(
+function prepareRenderPageImages(
     request: Parameters<PrepareImages>[0] & { callId: string },
     prepare: PrepareImages = prepareLocalMarkdownImages,
 ): ReturnType<PrepareImages> {

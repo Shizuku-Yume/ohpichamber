@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import { CounterSchema, EntityIdSchema, EpochSchema, JsonObjectSchema, JsonValueSchema, PositiveCounterSchema, TimestampSchema } from './primitives.ts';
 import { SessionMetadataSchema } from './metadata.ts';
-import { LoopStateSchema, RunOriginSchema, RuntimeSessionSchema, SessionModeSchema, SessionRuntimeStatusSchema, SubagentSchema } from './session.ts';
+import { CompactionMethodSchema, LoopStateSchema, RunOriginSchema, RuntimeSessionSchema, SessionModeSchema, SessionRuntimeStatusSchema, SubagentSchema, TodoPhaseSchema } from './session.ts';
 import { PartSchema, StepTimingSchema, TokenUsageSchema, ToolStatusSchema } from './messages.ts';
 import { ApprovalRequestSchema, QuestionRequestSchema } from './requests.ts';
 import { QueueStateSchema } from './queue.ts';
 import { CatalogUpdateSchema } from './catalogs.ts';
 import { ShellJobSchema } from './shell.ts';
-import { SessionSelectionSchema } from './snapshot.ts';
+import { SessionCompactingSchema, SessionSelectionSchema } from './snapshot.ts';
 
 export const DataEventEnvelopeSchema = z.strictObject({
   sessionId: EntityIdSchema,
@@ -25,6 +25,8 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
   continuationPending: z.boolean().optional(),
   loop: LoopStateSchema.optional(),
   selection: SessionSelectionSchema.optional(),
+  compacting: SessionCompactingSchema.nullable().optional(),
+  todos: z.array(TodoPhaseSchema).optional(),
   metadata: SessionMetadataSchema.nullable().optional(),
   metadataRevision: CounterSchema.optional(),
   archivedAt: TimestampSchema.nullable().optional(),
@@ -33,7 +35,8 @@ const sessionUpdatedSchema = DataEventEnvelopeSchema.extend({
   const metadataPresent = event.metadata !== undefined;
   const archivePresent = event.archivedAt !== undefined;
   return (event.session !== undefined || event.mode !== undefined || event.title !== undefined
-    || event.continuationPending !== undefined || event.loop !== undefined || event.selection !== undefined || metadataPresent || archivePresent)
+    || event.continuationPending !== undefined || event.loop !== undefined || event.selection !== undefined
+    || event.compacting !== undefined || event.todos !== undefined || metadataPresent || archivePresent)
     && metadataPresent === (event.metadataRevision !== undefined)
     && archivePresent === (event.archiveRevision !== undefined)
     && (!metadataPresent || (event.metadata === null) === (event.metadataRevision === '0'));
@@ -131,7 +134,7 @@ export const CanonicalEventSchema = z.discriminatedUnion('type', [
   DataEventEnvelopeSchema.extend({
     type: z.literal('session.compacted'),
     compactionId: EntityIdSchema,
-    method: z.enum(['soft-compacted', 'snap-compacted', 'shaken', 'remote-compacted', 'handed-off', 'compacted']).optional(),
+    method: CompactionMethodSchema.optional(),
     tokensBefore: z.number().int().nonnegative(),
     tokensAfter: z.number().int().nonnegative().optional(),
     summary: z.string().optional(),

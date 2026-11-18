@@ -107,7 +107,7 @@ const pickRowTooltipSide = (row: Element | null): 'right' | 'left' | null => {
  return null;
 };
 
-export const ModelPickerCardBody: React.FC<{
+const ModelPickerCardBody: React.FC<{
  metadata?: ModelMetadata;
  providerName: string | null;
  labels: ModelPickerListProps['labels'];

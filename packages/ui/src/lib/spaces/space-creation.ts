@@ -39,9 +39,6 @@ export const resetSpaceCreationRequests = (): void => {
 
 export const isSpaceCreationRequest = (requestId: string | null | undefined): boolean => Boolean(requestId && spaceRequests.has(requestId));
 
-/** The space a draft waits for, or null when the draft waits for nothing of this kind. */
-export const spaceOfCreationRequest = (requestId: string | null | undefined): string | null => (requestId ? spaceRequests.get(requestId) ?? null : null);
-
 /**
  * Resolves once the list says the space is ready or its making failed; the host announces both.
  * A space that leaves the list, the host having restarted in the middle among the reasons, or a

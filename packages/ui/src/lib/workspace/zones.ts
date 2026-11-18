@@ -123,7 +123,7 @@ type SizedTab = ZonedTab & { targetPath?: string | null };
  * editor column shown (no file open, or the editor hidden). Such a zone never
  * expands.
  */
-export const showsFileTreeOnly = (panel: ZonedPanel<SizedTab>, tab: SizedTab, sizing: SideZoneSizing): boolean => {
+const showsFileTreeOnly = (panel: ZonedPanel<SizedTab>, tab: SizedTab, sizing: SideZoneSizing): boolean => {
   if (tab.mode !== 'file') return false;
   const editorShown = panel.tabs.some((entry) => entry.mode === 'file' && entry.targetPath)
     && (sizing.contextEditorVisible || !sizing.contextEditorTreeVisible);

@@ -3,6 +3,7 @@ import { Window } from 'happy-dom';
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { MobileAppActions } from '@/apps/mobileAppContext';
+import type { getMarkdownProcessingOptions as GetProcessingOptions } from './markdown/streamdownPlugins';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import * as actualEffectiveDirectory from '@/hooks/useEffectiveDirectory';
 
@@ -36,11 +37,13 @@ mock.module('@/contexts/useThemeSystem', () => ({ useOptionalThemeSystem: () => 
 mock.module('./message/FadeInOnReveal', () => ({ FadeInOnReveal: ({ children }: { children: React.ReactNode }) => children }));
 
 let Renderer: typeof import('./MarkdownRendererImpl');
+let getMarkdownProcessingOptions: typeof GetProcessingOptions;
 let I18nProvider: typeof import('@/lib/i18n')['I18nProvider'];
 let root: Root;
 const host = document.createElement('div');
 beforeAll(async () => {
   Renderer = await import('./MarkdownRendererImpl');
+  getMarkdownProcessingOptions = (await import('./markdown/streamdownPlugins')).getMarkdownProcessingOptions;
   I18nProvider = (await import('@/lib/i18n')).I18nProvider;
   document.body.append(host);
   root = createRoot(host);
@@ -112,6 +115,40 @@ test('invisible-block filtering preserves BOM-prefixed text and filters reparsed
     expect(Array.from(host.querySelectorAll('p')).map((p) => p.textContent)).toEqual(['Body', 'X', 'After']);
     for (const block of host.querySelectorAll('[data-oc-markdown-block]')) {
       expect(block.textContent?.length).toBeGreaterThan(0);
+    }
+  }
+});
+
+test('reasoning text keeps in-paragraph line breaks while other variants stay soft', async () => {
+  const draw = (content: string, variant: 'reasoning' | 'assistant' | 'tool', mode: 'streaming' | 'static') => act(async () => root.render(
+    React.createElement(I18nProvider, null, React.createElement(Renderer.MarkdownContent, {
+      content, variant, mode, isStreaming: mode === 'streaming', settled: mode === 'static', enableFileReferences: false,
+    }))));
+  for (const mode of ['streaming', 'static'] as const) {
+    await draw('A\nB', 'reasoning', mode);
+    expect(host.querySelectorAll('p').length).toBe(1);
+    expect(host.querySelector('p')?.querySelector('br')).not.toBeNull();
+    expect(host.querySelector('p')?.textContent).toBe('A\nB');
+    await draw('A\n\nB', 'reasoning', mode);
+    expect(Array.from(host.querySelectorAll('p')).map((p) => p.textContent)).toEqual(['A', 'B']);
+    await draw('A\nB', 'assistant', mode);
+    expect(host.querySelectorAll('p').length).toBe(1);
+    expect(host.querySelector('p')?.querySelector('br')).toBeNull();
+  }
+  await draw('```text\nfirst\n\nsecond\n```', 'reasoning', 'static');
+  expect(host.querySelector('pre code')?.querySelector('br')).toBeNull();
+  expect(host.querySelector('[data-oc-code-source]')?.getAttribute('data-oc-code-source')).toBe('first\n\nsecond');
+});
+
+test('processing options cache line-break policies separately and keep each stable', () => {
+  for (const raw of [false, true]) {
+    for (const singleTilde of [false, true]) {
+      const plain = getMarkdownProcessingOptions(raw, singleTilde, false);
+      const breaks = getMarkdownProcessingOptions(raw, singleTilde, true);
+      expect(breaks).not.toBe(plain);
+      expect(breaks.remarkPlugins).not.toBe(plain.remarkPlugins);
+      expect(getMarkdownProcessingOptions(raw, singleTilde, false)).toBe(plain);
+      expect(getMarkdownProcessingOptions(raw, singleTilde, true)).toBe(breaks);
     }
   }
 });
@@ -253,6 +290,33 @@ test('table columns preserve short content and allocate remaining width to long 
     expect(Array.from(host.querySelectorAll('col'), (col) => col.style.width)).toEqual(['121px', '379px']);
     expect(host.querySelector('td')?.style.getPropertyValue('--oc-table-code-wrap')).toBe('nowrap');
     expect(host.querySelector<HTMLElement>('td:last-child')?.style.getPropertyValue('--oc-table-code-wrap')).toBe('normal');
+  } finally {
+    bounds.mockRestore();
+    if (clientWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidth);
+    else Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+    await act(() => root.render(null));
+  }
+});
+
+test('tableWidthScope reaches MarkdownTable through presentation context', async () => {
+  const clientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+  const bounds = spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function(this: HTMLElement) {
+    if (this.style.width === 'min-content') return new window.DOMRect(0, 0, 60, 30);
+    const width = this.tagName === 'TH' || this.tagName === 'TD' ? 120 : 500;
+    return new window.DOMRect(0, 0, width, 30);
+  });
+  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 500 });
+  const tableMarkdown = '| colA | colB |\n| --- | --- |\n| 1 | 2 |';
+  try {
+    await act(async () => {
+      root.render(React.createElement(I18nProvider, null, React.createElement(Renderer.MarkdownContent, { content: tableMarkdown, enableFileReferences: false })));
+    });
+    expect(host.querySelectorAll('th [role="separator"]')).toHaveLength(0);
+
+    await act(async () => {
+      root.render(React.createElement(I18nProvider, null, React.createElement(Renderer.MarkdownContent, { content: tableMarkdown, enableFileReferences: false, tableWidthScope: 'session:test' })));
+    });
+    expect(host.querySelectorAll('th [role="separator"]')).toHaveLength(2);
   } finally {
     bounds.mockRestore();
     if (clientWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidth);

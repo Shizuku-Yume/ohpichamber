@@ -4,6 +4,32 @@ One directory per Settings page. `shared/` holds the page chrome and controls
 every page is built from; see `.agents/skills/settings-ui-patterns/SKILL.md` for
 which primitive to reach for.
 
+## The OMP page
+
+`openchamber/OmpSettingsPage.tsx` draws the agent settings whose placement is
+`engine`, one tab at a time. `openchamber/ompSettingsLayout.ts` owns the table:
+four tabs (`common`, `editing`, `execution`, `advanced`) of named groups of
+setting ids, ordered impact-first — a switch that turns a capability on comes
+before the knobs that tune it. The page renders that order instead of OMP's own
+`group`, whose declaration order interleaved unrelated areas.
+
+Rules the module holds:
+
+- A row appears only when the snapshot carries it with placement `engine` and
+  `conditionActive !== false`; a layout id missing from the snapshot is skipped,
+  and a group whose rows all disappear leaves no heading. Rows are keyed by id,
+  so a condition flip does not move scroll.
+- The layout table is total and injective over the engine ids the agent service
+  exposes (`ompSettingsLayout.test.ts` compares it with the placement table), so
+  a row cannot reach the page without a place, and none can appear twice.
+- `read.summarize.enabled` is owned by the read-summary preset entry, which
+  writes that switch and its four thresholds in one PATCH; the thresholds stay
+  editable under `advanced`.
+- The closing section of `advanced` offers the action to open `config.yml` for settings that stay in the file.
+- Settings search derives one entry per layout id (`lib/settings/search.ts`),
+  and `ompSettingsTabForSearchTarget` maps an anchor to the tab that draws it;
+  `SettingsView` sets that tab before it highlights the row.
+
 ## Autosave on the OpenCode configuration pages
 
 `agents/`, `commands/`, `skills/`, `mcp/`, `plugins/` and `behavior/` edit files
@@ -100,23 +126,25 @@ login, AWS profile for Bedrock) asks only its form and calls
 `integration.connect.external`, which stores a reference to credentials managed
 outside OpenCode; the account then lists as "External credentials".
 
-A provider's credentials show as one collapsible card per kind: API key,
-browser sign-in, credentials on the server machine
-(`providers/ProviderAuthMethodCards.tsx`, built on the Integrations page's
-`IntegrationCatalogCard`). The same cards serve the connect page and a
-connected provider's page, where they are always on screen. A card names its
-kind, says in one line how it works, and carries a pill: In use, Not in use,
-Sign in again or Not connected. Opened, it lists the stored accounts of its
-kind with their Use, Rename and Remove actions, then the field or button that
-adds another. Under a stored account that field or button waits behind "Add
-account": an empty key field under a key reads as "replace this key" and a bare
-Connect as "reconnect", while both add another account that becomes active. A
-provider with one kind starts with its card
-open. Keys from environment variables are listed above the cards. A key
-OpenCode takes from the environment or the config, or credentials on the
-server machine, mark their own card In use, or the key card when the provider
-has no card of that kind. In enterprise mode the cards keep the stored accounts and
-offer nothing new.
+Every OMP built-in provider appears as a card, plus one card per custom
+provider (`providers/ProviderGrid.tsx`). Opening a card shows its accounts and
+the form that adds one, through `providers/ProviderAccounts.tsx` and
+`providers/ProviderApiKeyForm.tsx`. A provider whose credentials come from the
+environment shows "From $VAR" with the variable's name and never its value;
+its API-key form stays available, so a key can still be saved for it. The
+environment source is read from the Agent Service's
+`ProviderAuthState.environment` (`{ variable, active }`) on every provider the
+workspace reports. A key saved in OpenChamber outranks the environment
+variable, and the environment badge stays on the card because the variable is
+still set. The connect picker lists only providers with no credential yet, so
+an env-backed provider is not in it; the key form for one is reached from its
+card's key button or its own page. In enterprise mode the cards keep the stored
+accounts and offer nothing new.
+
+Custom provider IDs follow the model selector grammar: letters, digits, dots,
+underscores and hyphens, unique regardless of case, with no `/`, `#`, `@`, `:`,
+whitespace or prototype names such as `__proto__`. A custom base URL may carry a
+query string (Azure's `?api-version=`), but no userinfo.
 
 The cards replaced a separate account list over an "Add account" panel that
 stacked the key form and the sign-in buttons. That panel read as steps to
@@ -136,20 +164,53 @@ serves), `usesMachineCredentials` counts that as credentials: the card shows
 OpenCode config is switched on (`activation: "enabled"`) even without a key, so
 activation alone is not a sign-in signal.
 
-The custom-provider form can discover models before save through
-`POST /api/provider/discover-models`. Discovery is a one-time prefill the user
-starts with "Find models": they pick which returned models to add, the review
-panel closes, and nothing stays in sync with the provider afterwards (a
-maintainer decision; never add a recurring refresh). Provider metadata wins
-field by field and models.dev fills the gaps. Discovery failure never removes
-rows or blocks saving.
+The custom-provider form can discover models before save through the Canonical
+API's `POST /api/agent/v1/workspaces/:id/providers/discover`. Discovery is a
+one-time prefill the user starts with "Find models", and it opens
+`CustomProviderModelsDialog` rather than an inline panel: the dialog lists
+every returned model (plus form rows the fresh list no longer carries, marked
+stale) with filter chips 全部/All, 失效/Stale, 文本/Text, 图片/Image,
+嵌入/Embedding and 音频/Audio, each showing its count. Per-model add and remove
+are icon buttons, capability chips (text, image, reasoning, tools, context
+window) reuse the `ProvidersPage` badge style, and the list groups by family
+only when every visible row names one. "Add all models" adds exactly the
+returned ids the form does not hold; each added row is prefilled from its
+catalog entry. "Remove stale models" lists the ids it would drop in a
+confirmation dialog first, and each stale row can also be removed alone.
+Nothing stays in sync with the provider afterwards (a maintainer decision;
+never add a recurring refresh). Discovery failure never removes rows or blocks
+saving.
+
+Staleness follows the form row, not how it was created: a hand-added row whose
+id the endpoint does not return is stale too, and the confirmation names it
+before anything is removed. Family grouping is evaluated over the currently
+visible rows, so a filter that hides the anonymous rows may turn the list into
+groups, and clearing it returns the flat list.
+
+"Try to fill in model info" fills only fields the user has not set. It asks
+`POST /api/agent/v1/workspaces/:id/providers/enrich` first — an offline read of
+OMP's bundled catalog that never touches the network — then, for the ids that
+answer did not cover, the Host route `POST /api/openchamber/openrouter/model-info`
+with model ids only (never keys or the endpoint). That route refuses with
+`403` `code: "enterprise_mode"` under enterprise policy and answers `502` when
+the upstream lookup fails; either way the fill keeps the catalog-only result
+and says so, so a partial lookup never reads as a complete one. Ids beyond
+each source's cap (500 for enrich, 200 for the Host route) are reported with
+the unknown ids instead of being silently skipped; the partial notice names at
+most ten of them and counts the rest through a translated "and N more" phrase,
+and unknown ids outrank "nothing left to fill" so a repeat fill still lists the
+models whose limits stayed empty. Every filled value carries its source under
+the control ("From the OMP model catalog" / "From OpenRouter").
+Provenance is per field: a value the user typed is never overwritten, while a
+previously filled value may be corrected by a later read — including a limit
+the user cleared, which stays typed and therefore stays empty.
 
 Model rows render collapsed (name, id, limits, non-text inputs) so a provider
 with dozens of models stays scannable; a row added by hand opens, and a row
-with a validation error opens on submit. Capabilities are written to the
-OpenCode config only when they are known (saved config, discovery, or the
-user's edit, `capabilitiesKnown`); otherwise the key is left out so a save
-never replaces what OpenCode knows about a model with a text-only default.
+with a validation error opens on submit. A capability is written only when it
+is known (a saved model, a catalog answer, or the user's edit); an unknown
+tool-support value is left out of the request so a save never replaces what
+the native runner knows with a text-only default.
 
 Custom-provider icons are OpenChamber profile preferences, keyed by provider
 ID. They are not written into OpenCode config because OpenCode has no provider
@@ -221,68 +282,106 @@ nor delete because no config entry backs them.
 
 ### MCP OAuth
 
-A remote MCP server with OAuth enabled is registered by OpenCode as an
-integration (`mcp_<hash>`, `metadata.source: "mcp"`, named after the server)
-with `oauth` methods, so signing in is the same connect / status /
-complete flow the Providers page runs. `mcp/McpOAuthSignIn.tsx` looks the
-integration up by server name in the server's directory (the registration is
-per Location) and mounts the shared `providers/ProviderOAuthMethods.tsx`
-with that directory. While the server reports `needs_auth`, the status card
-shows its sign-in row; once the credential is stored, the page connects the
-server again, which is what moves it out of `needs_auth` or `failed`.
+Signing in to an MCP server is one panel, `mcp/McpOAuthSignIn.tsx`, used by the
+MCP Settings page and by the Integrations catalog. It reads and drives the
+Agent Service's own OAuth state (`GET`/`POST
+.../mcp/servers/:id/oauth`) rather than a provider integration: the server's
+pending flow, its authorization URL and its connection are the worker's, and
+the panel only shows them.
 
-A started sign-in keeps its row until it completes or fails, whatever the
-status says (`onActiveChange`). A failed one stays only while the status
-itself offers a sign-in, so its error never lingers on a connected server.
-A sign-in from another machine writes the server's redirect first
-(`packages/web/server/lib/opencode/mcp-oauth.js`), OpenCode reconnects the
-server and reports `pending` for about a second, and
-unmounting the row then cancelled the attempt: the first Connect did nothing
-visible and only the second one opened the consent page. The Integrations
-catalog keeps its sign-in row the same way.
+Props: `serverId`, `directory`, `onConnected` (runs the server's connect) and
+two install hooks, `autoStart` and `onAutoStartConsumed`.
 
-The detail page looks up the integration for a failed server or a configured
-remote server with `oauth !== false`. An absent `oauth` field is included:
-OpenCode can discover OAuth without an explicit config entry. The lookup is
-scoped to the selected server's directory and stops after 9 reads spaced
-750 ms apart, including when a header/token-auth remote server has no OAuth
-integration. Leaving the selection discards the result.
+Every start names the redirect the runtime can actually complete
+(`mcpOAuthRedirect.ts`): the Agent Service's pinned loopback callback
+(`MCP_OAUTH_LOOPBACK_REDIRECT_URI`, `http://localhost:38471/callback`) when the
+UI runs on the Host machine, and `<Host base>/api/agent/v1/mcp/oauth/callback`
+(the Host serves that path and validates the `state` it issued) otherwise —
+remote web, same-origin web on a LAN address, Capacitor mobile, and a desktop
+window connected to another Host (including over its SSH tunnel). A redirect
+URI the user types keeps its meaning.
 
-### Why a failed OAuth server's header says "Sign in again"
+Relay mode is the one exception on both ends: the E2EE tunnel carries only the
+app's own requests, so neither the loopback listener nor the Host callback is
+reachable by the browser that consents. The panel keeps the loopback redirect
+and does **not** open the authorization page on its own there
+(`currentMcpOAuthAutoOpen`); the pending panel offers Open in browser and the
+pasted-callback field, and the user finishes the flow by pasting the callback
+URL or code. This is a known limitation of relay sign-in, not a fallback path
+with a listener behind it.
 
-When the service rejects the stored token (a refresh answered with 403
-`access_denied`), OpenCode reports the server `failed`, not `needs_auth`, and
-keeps the rejected credential. Connect only sends it again. A fresh sign-in
-starts with no tokens (it reuses only the earlier client registration) and
-its new credential is the one the next connect uses, so signing in is the
-whole recovery; no sign-out call is needed.
+A non-local redirect also makes the worker drop OMP's `launchUrl` from the
+pending flow: OMP advertises a `/launch` page for any loopback hostname even
+when the flow only holds a random-port placeholder or the Host's own port, and
+that page would be a dead route.
 
-So for a `failed` server the header's primary button is "Sign in again" in
-place of Connect, and the card shows no second sign-in row: each press mounts
-a fresh `McpOAuthSignIn` with `autoStart`. A single method starts immediately
-with its start button hidden; multiple methods keep their start controls so
-the user can choose one. Test connection stays on the status line for
-the other cause of `failed`, a server that was down; it retries with the
-stored credential. A `failed` server without OAuth keeps Connect.
+Without `autoStart` the panel shows the form: client ID, client secret,
+scopes and redirect URI, then Authorize. The client secret is written through
+the dedicated credential endpoint and only its reference travels in the start
+request.
 
-The Integrations catalog keeps its sign-in row and labels its button "Sign in
-again" for `failed`, gated on the entry's `auth: 'oauth'` so a failed
-token-based entry gets no sign-in block. It starts the sign-in by itself after
-an install only for `needs_auth`: a first connect that failed for another
-reason waits for a click.
+With `autoStart` the panel starts the one sign-in method by itself once the
+server's state is `unauthenticated`. That is the install path: the catalog
+saves a server whose probe needs authorization, reports
+`integrationsCatalog.install.savedNeedsAuth` ("<name> saved. Sign in to
+finish.") as info rather than an error, opens the detail page and mounts the
+panel with `autoStart`. The start is one-shot: an `autoStarted` ref survives
+StrictMode's double effect and re-renders, the flag is read from a ref so the
+owner clearing it cannot re-arm the panel, and `onAutoStartConsumed` tells the
+catalog to clear it, so returning to the same entry later signs in from the
+button. While that automatic start is in flight the Authorize button is
+replaced by a progress line; a manual visit keeps the button.
 
-### Why a connected OAuth server offers Authorize
+A pending flow shows its instructions, the authorization URL, Open in
+browser and Copy link, the elapsed time and Cancel. The panel opens
+`launchUrl ?? authorizationUrl` exactly once per flow (a ref remembers the
+opened flow ids, so polling or a re-render cannot reopen the browser). It
+polls the server's OAuth state every 1.5 s inside a five-minute budget; when
+the poll returns `authenticated` the panel calls `onConnected` and shows the
+connected state. At the budget's end it stops, shows a neutral "timed out"
+line and offers Try again, which cancels the stale flow, re-reads the state
+and starts a fresh one. The elapsed clock stops with the budget.
 
-A connected transport can expose tools that still require user consent. When
-an OAuth integration exists, the detail header offers Authorize unless the
-server is `needs_auth`, `blocked`, or already offers Sign in again. Authorize
-mounts the status card and the same sign-in flow, even while connected;
-completion reconnects the server. Only one sign-in panel is mounted if the
-runtime changes to `needs_auth` during that flow.
+Both ways of finishing funnel through one `applyResult`: a poll that turns
+authenticated and a user pasting the callback URL into the manual Complete
+field cannot connect twice, and the one-connection latch resets whenever a
+result is not authenticated, so signing in again after Clear Auth connects
+again. The manual Complete field stays as the fallback for a browser that
+cannot reach a loopback callback.
 
-The Integrations catalog also offers sign-in for connected entries with
-`auth: 'oauth'`, labeled Authorize. Its view is mounted by `MainLayout` on web
-and desktop, not by mobile or VS Code; those use the shared MCP Settings page.
+Leaving the panel unmounts it and cancels a flow it was still waiting on,
+using the flow's own `persistedRevision`, `workerGeneration` and `flowId`.
+
+Failures are read by their stable code:
+
+- `MCP_OAUTH_CANCELLED` — the neutral "Sign-in was cancelled." line, not the
+  red error style. A Cancel the Agent Service accepts is also reported this
+  way, because that answer is the plain unauthenticated state.
+- `MCP_OAUTH_IN_PROGRESS` — "Sign-in already in progress." as info: the panel
+  re-reads the state, adopts the flow that exists and keeps polling it.
+- `MCP_OAUTH_CLIENT_REGISTRATION_REJECTED` — the provider's own sentence (the
+  worker forwards it whole, naming the register endpoint and the reason) shown
+  beside the client-ID field, which is revealed and focused, so a client id
+  the provider already approved can be typed and retried. Figma is the known
+  case: its registration endpoint answers 403 to unlisted clients.
+- `enterprise_mode` — the Host refused MCP sign-in because the administrator's
+  policy does not allow it. The panel shows
+  `integrationsCatalog.oauth.enterpriseMode` as an info line (in every locale)
+  rather than the Host's fixed English sentence: the user can act on it by
+  asking their administrator.
+- Anything else — the provider's message in red with the form still available.
+
+A flow that fails after the browser handoff (consent denied, state mismatch,
+a refused token exchange, expiry) comes back from the poll as
+`unauthenticated` with an optional `error`. The panel shows that cause in red
+(or neutral for `MCP_OAUTH_CANCELLED`), stops polling and keeps the form. A
+transport failure on the poll is not a flow failure: it is ignored and polling
+continues within the budget.
+
+The catalog shows the panel for an entry with `auth: 'oauth'` that is not
+connected, says "Signing in…" above it and connects the server through
+`useMcpStore.connect` when the panel reports it. Settings mounts the same
+panel for any created remote server and reconnects it the same way.
 
 ### Usage: what was spent and what is left
 

@@ -92,7 +92,7 @@ export class StatelessWorker {
       isCurrent: () => !this.closed,
     }) : undefined;
     this.agents = new NativeAgents({
-      cwd: input.cwd, agentDirectory: input.agentDirectory, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
+      cwd: input.cwd, agentDirectory: input.agentDirectory, models, modelRegistry: runtime.modelRegistry, settings: runtime.settings,
       get extensionRoots() { return nativeExtensionRoots(runtime.settings); },
       availableToolNames: () => BUILTIN_TOOL_NAMES,
     });
@@ -313,6 +313,8 @@ export class StatelessWorker {
       case 'catalog.provider.models.discover':
         await providerEntry();
         result = { type: 'catalog.provider.models.discovered', result: await this.models.discoverProviderModels(operation.request) }; break;
+      case 'catalog.provider.models.enrich':
+        result = { type: 'catalog.provider.models.enriched', result: await this.models.enrichProviderModels(operation.request) }; break;
       case 'catalog.provider.configure':
         await providerEntry();
         result = { type: 'catalog.provider.mutated', result: await this.models.configureProvider(operation.request, revision) }; break;

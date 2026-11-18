@@ -1,4 +1,4 @@
-import { CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, SessionToolsCatalogSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
+import { CacheWarmingModeSchema, CapturedSendOptionsSchema, CounterSchema, EntityIdSchema, EpochSchema, FollowUpAckSchema, HistoryPageRequestSchema, HistoryPageSchema, JsonObjectSchema, JsonValueSchema, MCPConfigurationStateSchema, MCPServerConfigSchema, ProblemCodeSchema, PromptRequestSchema, RunSchema, SessionBranchRequestSchema, SessionBranchResultSchema, SessionBranchStateSchema, SessionModeSchema, SessionToolsCatalogSchema, ShellStartRequestSchema, SkillSourceRevisionsSchema, SteerAckSchema, TimestampSchema, type JsonValue } from '@openchamber/agent-contract';
 import { GoalControlRequestSchema } from '@openchamber/agent-contract';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -32,6 +32,7 @@ export const WorkerBootstrapSchema = z.strictObject({
   pluginRevision: CounterSchema.optional(),
   skillSources: SkillSourceRevisionsSchema.optional(),
   hostTools: z.record(z.string(), z.boolean()).optional(),
+  sessionWarmingMode: CacheWarmingModeSchema.nullable().optional(),
 });
 export type WorkerBootstrap = z.infer<typeof WorkerBootstrapSchema>;
 export const WorkerBootstrapMessageSchema = WorkerBootstrapSchema.omit({ env: true }).extend({
@@ -59,7 +60,7 @@ const UsageSessionReferenceSchema = z.strictObject({
 });
 export type UsageSessionReference = z.infer<typeof UsageSessionReferenceSchema>;
 /** One authorized transcript: its session identity, and whether it is a root session or a subagent's. */
-export const UsageScopeFileSchema = z.strictObject({ file: PrivatePathSchema, sessionId: EntityIdSchema, role: z.enum(['root', 'subagent']) });
+const UsageScopeFileSchema = z.strictObject({ file: PrivatePathSchema, sessionId: EntityIdSchema, role: z.enum(['root', 'subagent']) });
 export type UsageScopeFile = z.infer<typeof UsageScopeFileSchema>;
 export const UsageAuthorizationSchema = z.array(z.strictObject({ workspaceId: EntityIdSchema, projectId: EntityIdSchema }));
 
@@ -191,6 +192,21 @@ export const WorkerCommandSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('stop'), workerGeneration: EntityIdSchema }),
   WorkerOperationCommandSchema,
 ]);
+/**
+ * How much of a failure cause the wire carries. Most operations carry a short
+ * sentence, but an OAuth failure is the provider's own diagnostic — a rejected
+ * dynamic client registration names the endpoint, the HTTP status and the
+ * `oauth.clientId` remedy — and a 200-character cut removes exactly the part the
+ * sign-in panel shows. The bound lives beside the schema that enforces it, and
+ * the sender truncates with the same function, so the two cannot disagree about
+ * what fits.
+ */
+const DefaultOperationErrorDetailLimit = 200;
+const McpOAuthOperationErrorDetailLimit = 1_000;
+export function operationErrorDetail(code: string, detail: string): string {
+  return detail.slice(0, code.startsWith('MCP_OAUTH_') ? McpOAuthOperationErrorDetailLimit : DefaultOperationErrorDetailLimit);
+}
+
 export const WorkerReplySchema = z.discriminatedUnion('type', [
   // A pre-warmed worker reports that its module graph is loaded and it is
   // waiting for a bootstrap. Only then is adopting it faster than spawning.
@@ -200,7 +216,12 @@ export const WorkerReplySchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('warm') }),
   z.strictObject({ type: z.literal('ready'), workerGeneration: EntityIdSchema }),
   z.strictObject({ type: z.literal('error'), workerGeneration: EntityIdSchema, code: ProblemCodeSchema, detail: z.string().min(1).max(200).optional() }),
-  z.strictObject({ type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema, status: z.number().int().min(400).max(599), detail: z.string().min(1).max(200) }),
+  z.strictObject({
+    type: z.literal('operation.error'), workerGeneration: EntityIdSchema, commandId: EntityIdSchema, code: ProblemCodeSchema,
+    status: z.number().int().min(400).max(599), detail: z.string().min(1).max(McpOAuthOperationErrorDetailLimit),
+  }).refine(reply => reply.detail.length <= (reply.code.startsWith('MCP_OAUTH_') ? McpOAuthOperationErrorDetailLimit : DefaultOperationErrorDetailLimit), {
+    path: ['detail'], message: 'Operation error detail exceeds the limit for its code',
+  }),
   z.strictObject({ type: z.literal('lifecycle'), workerGeneration: EntityIdSchema, state: z.enum(['initialized', 'closed']) }),
   z.strictObject({ type: z.literal('opened'), workerGeneration: EntityIdSchema, sessionFile: PrivatePathSchema, seed: ProjectionSeedSchema }),
   z.strictObject({ type: z.literal('subagent'), workerGeneration: EntityIdSchema, subagentId: EntityIdSchema, status: z.enum(['started', 'completed', 'failed', 'aborted']), role: z.string().min(1), solutionSpace: z.string().optional(), sessionFile: PrivatePathSchema.optional(), toolCallId: EntityIdSchema.optional() }),

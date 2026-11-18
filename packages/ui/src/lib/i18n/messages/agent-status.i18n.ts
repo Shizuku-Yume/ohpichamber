@@ -15,6 +15,7 @@ export const agentStatusI18n = {
   en: {
     'chat.agentStatus.working': 'working',
     'chat.agentStatus.thinking': 'thinking',
+    'chat.agentStatus.compacting': 'compacting the conversation',
     'chat.agentStatus.waitingPermission': 'waiting for permission',
     'chat.agentStatus.usingTool': 'using {name}',
     'chat.agentStatus.retry': 'Retrying',
@@ -25,6 +26,7 @@ export const agentStatusI18n = {
   de: {
     'chat.agentStatus.working': 'arbeitet',
     'chat.agentStatus.thinking': 'denkt nach',
+    'chat.agentStatus.compacting': 'komprimiert die Unterhaltung',
     'chat.agentStatus.waitingPermission': 'wartet auf Erlaubnis',
     'chat.agentStatus.usingTool': 'verwendet {name}',
     'chat.agentStatus.retry': 'Neuer Versuch',
@@ -35,6 +37,7 @@ export const agentStatusI18n = {
   fr: {
     'chat.agentStatus.working': 'travaille',
     'chat.agentStatus.thinking': 'réfléchit',
+    'chat.agentStatus.compacting': 'compacte la conversation',
     'chat.agentStatus.waitingPermission': 'attend une autorisation',
     'chat.agentStatus.usingTool': 'utilise {name}',
     'chat.agentStatus.retry': 'Nouvelle tentative',
@@ -45,6 +48,7 @@ export const agentStatusI18n = {
   nl: {
     'chat.agentStatus.working': 'werkt',
     'chat.agentStatus.thinking': 'denkt na',
+    'chat.agentStatus.compacting': 'kort het gesprek in',
     'chat.agentStatus.waitingPermission': 'wacht op toestemming',
     'chat.agentStatus.usingTool': 'gebruikt {name}',
     'chat.agentStatus.retry': 'Opnieuw proberen',
@@ -55,6 +59,7 @@ export const agentStatusI18n = {
   es: {
     'chat.agentStatus.working': 'trabaja',
     'chat.agentStatus.thinking': 'piensa',
+    'chat.agentStatus.compacting': 'compacta la conversación',
     'chat.agentStatus.waitingPermission': 'espera permiso',
     'chat.agentStatus.usingTool': 'usa {name}',
     'chat.agentStatus.retry': 'Reintentando',
@@ -65,6 +70,7 @@ export const agentStatusI18n = {
   ja: {
     'chat.agentStatus.working': '作業中',
     'chat.agentStatus.thinking': '思考中',
+    'chat.agentStatus.compacting': '会話を圧縮中',
     'chat.agentStatus.waitingPermission': '許可待ち',
     'chat.agentStatus.usingTool': '{name}を使用中',
     'chat.agentStatus.retry': '再試行中',
@@ -75,6 +81,7 @@ export const agentStatusI18n = {
   'pt-BR': {
     'chat.agentStatus.working': 'trabalha',
     'chat.agentStatus.thinking': 'pensa',
+    'chat.agentStatus.compacting': 'compacta a conversa',
     'chat.agentStatus.waitingPermission': 'aguarda permissão',
     'chat.agentStatus.usingTool': 'usa {name}',
     'chat.agentStatus.retry': 'Tentando novamente',
@@ -85,6 +92,7 @@ export const agentStatusI18n = {
   uk: {
     'chat.agentStatus.working': 'працює',
     'chat.agentStatus.thinking': 'думає',
+    'chat.agentStatus.compacting': 'стискає розмову',
     'chat.agentStatus.waitingPermission': 'чекає на дозвіл',
     'chat.agentStatus.usingTool': 'використовує {name}',
     'chat.agentStatus.retry': 'Повторна спроба',
@@ -95,6 +103,7 @@ export const agentStatusI18n = {
   ko: {
     'chat.agentStatus.working': '작업 중',
     'chat.agentStatus.thinking': '생각 중',
+    'chat.agentStatus.compacting': '대화 압축 중',
     'chat.agentStatus.waitingPermission': '권한 승인 대기 중',
     'chat.agentStatus.usingTool': '{name} 사용 중',
     'chat.agentStatus.retry': '다시 시도 중',
@@ -105,6 +114,7 @@ export const agentStatusI18n = {
   pl: {
     'chat.agentStatus.working': 'pracuje',
     'chat.agentStatus.thinking': 'myśli',
+    'chat.agentStatus.compacting': 'kompaktuje rozmowę',
     'chat.agentStatus.waitingPermission': 'czeka na zgodę',
     'chat.agentStatus.usingTool': 'używa {name}',
     'chat.agentStatus.retry': 'Ponawianie próby',
@@ -115,6 +125,7 @@ export const agentStatusI18n = {
   'zh-CN': {
     'chat.agentStatus.working': '正在工作',
     'chat.agentStatus.thinking': '正在思考',
+    'chat.agentStatus.compacting': '正在压缩对话',
     'chat.agentStatus.waitingPermission': '正在等待授权',
     'chat.agentStatus.usingTool': '正在使用{name}',
     'chat.agentStatus.retry': '正在重试',
@@ -125,6 +136,7 @@ export const agentStatusI18n = {
   'zh-TW': {
     'chat.agentStatus.working': '正在工作',
     'chat.agentStatus.thinking': '正在思考',
+    'chat.agentStatus.compacting': '正在壓縮對話',
     'chat.agentStatus.waitingPermission': '正在等待授權',
     'chat.agentStatus.usingTool': '正在使用{name}',
     'chat.agentStatus.retry': '正在重試',
@@ -135,6 +147,7 @@ export const agentStatusI18n = {
   tr: {
     'chat.agentStatus.working': 'çalışıyor',
     'chat.agentStatus.thinking': 'düşünüyor',
+    'chat.agentStatus.compacting': 'sohbeti sıkıştırıyor',
     'chat.agentStatus.waitingPermission': 'izin bekliyor',
     'chat.agentStatus.usingTool': '{name} kullanıyor',
     'chat.agentStatus.retry': 'Yeniden deneniyor',
@@ -145,6 +158,7 @@ export const agentStatusI18n = {
   ar: {
     'chat.agentStatus.working': 'يعمل',
     'chat.agentStatus.thinking': 'يفكر',
+    'chat.agentStatus.compacting': 'يضغط المحادثة',
     'chat.agentStatus.waitingPermission': 'ينتظر الإذن',
     'chat.agentStatus.usingTool': 'يستخدم {name}',
     'chat.agentStatus.retry': 'جار إعادة المحاولة',
@@ -155,6 +169,7 @@ export const agentStatusI18n = {
   he: {
     'chat.agentStatus.working': 'עובד',
     'chat.agentStatus.thinking': 'חושב',
+    'chat.agentStatus.compacting': 'דוחס את השיחה',
     'chat.agentStatus.waitingPermission': 'ממתין להרשאה',
     'chat.agentStatus.usingTool': 'משתמש בכלי {name}',
     'chat.agentStatus.retry': 'מנסה שוב',

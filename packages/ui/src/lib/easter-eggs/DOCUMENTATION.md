@@ -2,7 +2,7 @@
 
 ## Ownership
 
-This module owns the small jokes the app tells at ordinary moments: the rotating new-session heading, the line under "Working tree clean", the toast for a late-night or Friday-evening push, the toast for a commit that deletes clearly more than it adds, and the calendar that switches some of them on Halloween and New Year. It picks lines; the components that show them (`components/chat/useDraftHeading.ts`, `GitEmptyState`, `GitView`) decide where. The celebration overlay lives in `components/ui/FireworksAnimation.tsx`, `fireworksShows.ts` and `holidayOrnaments.tsx`; it asks the calendar's `celebrationOf` which holiday or season a push or merge falls on. The About dialog's seven-tap logo animation is `components/ui/LevitatingLogo.tsx`.
+This module owns the small jokes the app tells at ordinary moments: the rotating new-session heading, the line under "Working tree clean", the toast for a late-night or Friday-evening push, the toast for a commit that deletes clearly more than it adds, and the calendar that switches some of them on Halloween and New Year. It picks lines; the components that show them (`GitEmptyState`, `GitView`) decide where. The celebration overlay lives in `components/ui/FireworksAnimation.tsx`, `fireworksShows.ts` and `holidayOrnaments.tsx`; it asks the calendar's `celebrationOf` which holiday or season a push or merge falls on. The About dialog's seven-tap logo animation is `components/ui/LevitatingLogo.tsx`.
 
 ## Invariants
 

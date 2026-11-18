@@ -2,6 +2,7 @@ import type { I18nKey } from '@/lib/i18n/store';
 import type { SettingsPageSlug, SettingsRuntimeContext } from './metadata';
 import { getSettingsPageMeta } from './metadata';
 import { getCustomizableShortcutActions } from '@/lib/shortcuts';
+import { ompLayoutSettingIds } from '@/components/sections/openchamber/ompSettingsLayout';
 
 /** The search anchor of one shortcut's row: the id the Shortcuts page names it by. */
 export const shortcutSearchItemId = (actionId: string): string => `shortcuts.action.${actionId}`;
@@ -33,6 +34,19 @@ export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContex
 }
 
 /**
+ * One search entry per OMP row the page draws, built from the same layout table
+ * the page renders. A hand-kept index drifted to 47 anchors of 132 and left most
+ * engine rows unreachable; deriving it here means a row cannot join the page
+ * without becoming searchable.
+ */
+const ompLayoutSearchItems = (): SettingsSearchItem[] => ompLayoutSettingIds().map((settingId) => ({
+  id: `omp.${settingId}`,
+  page: 'omp' as const,
+  titleKey: `settings.omp.items.${settingId}.label` as I18nKey,
+  descriptionKey: `settings.omp.items.${settingId}.description` as I18nKey,
+}));
+
+/**
  * The settings search index. Every `titleKey`/`descriptionKey` must exist in the
  * English dictionary: a key with no copy resolves to the key itself and shows a
  * raw `settings.…` string, so an entry without copy is dead weight, not a row.
@@ -40,10 +54,10 @@ export interface SettingsSearchAvailabilityContext extends SettingsRuntimeContex
  */
 export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
   {
-    id: 'omp.advanced',
+    id: 'omp.configFile',
     page: 'omp',
-    titleKey: 'settings.omp.advanced',
-    keywords: ['advanced', 'config.yml', 'settings', 'dynamic', 'omp configuration'],
+    titleKey: 'settings.omp.configFile.title',
+    keywords: ['advanced', 'config.yml', 'config', 'terminal', 'egress', 'settings', 'dynamic', 'omp configuration'],
   },
   {
     id: 'omp.modelRoles',
@@ -52,6 +66,7 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.omp.modelRoles.description',
     keywords: ['model roles', 'roles', 'models', 'thinking effort', 'assignments'],
   },
+  ...ompLayoutSearchItems(),
   {
     id: 'omp.modelRoles.memory',
     page: 'memory',
@@ -183,18 +198,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.omp.items.compaction.idleTimeoutSeconds.description' as I18nKey,
   },
   {
-    id: 'omp.lsp.enabled',
-    page: 'omp',
-    titleKey: 'settings.omp.items.lsp.enabled.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.lsp.enabled.description' as I18nKey,
-  },
-  {
-    id: 'omp.lsp.formatOnWrite',
-    page: 'omp',
-    titleKey: 'settings.omp.items.lsp.formatOnWrite.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.lsp.formatOnWrite.description' as I18nKey,
-  },
-  {
     id: 'omp.temperature',
     page: 'sessions',
     titleKey: 'settings.omp.items.temperature.label' as I18nKey,
@@ -291,18 +294,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     descriptionKey: 'settings.omp.items.task.isolation.enabled.description' as I18nKey,
   },
   {
-    id: 'omp.task.maxConcurrency',
-    page: 'omp',
-    titleKey: 'settings.omp.items.task.maxConcurrency.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.task.maxConcurrency.description' as I18nKey,
-  },
-  {
-    id: 'omp.task.maxRecursionDepth',
-    page: 'omp',
-    titleKey: 'settings.omp.items.task.maxRecursionDepth.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.task.maxRecursionDepth.description' as I18nKey,
-  },
-  {
     id: 'omp.plan.enabled',
     page: 'sessions',
     titleKey: 'settings.omp.items.plan.enabled.label' as I18nKey,
@@ -325,18 +316,6 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'sessions',
     titleKey: 'settings.omp.items.goal.enabled.label' as I18nKey,
     descriptionKey: 'settings.omp.items.goal.enabled.description' as I18nKey,
-  },
-  {
-    id: 'omp.skills.enableSkillCommands',
-    page: 'omp',
-    titleKey: 'settings.omp.items.skills.enableSkillCommands.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.skills.enableSkillCommands.description' as I18nKey,
-  },
-  {
-    id: 'omp.mcp.enableProjectConfig',
-    page: 'omp',
-    titleKey: 'settings.omp.items.mcp.enableProjectConfig.label' as I18nKey,
-    descriptionKey: 'settings.omp.items.mcp.enableProjectConfig.description' as I18nKey,
   },
   {
     id: 'chat.activity-default',
@@ -853,6 +832,13 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     titleKey: 'settings.openchamber.defaults.field.sessionWarming',
     descriptionKey: 'settings.openchamber.defaults.field.sessionWarmingInfo',
     keywords: ['warming', 'warm', 'cache', 'prompt cache', 'keep-alive', 'idle'],
+  },
+  {
+    id: 'sessions.session-warming',
+    page: 'sessions',
+    titleKey: 'settings.openchamber.defaults.sessionWarming.label',
+    descriptionKey: 'settings.openchamber.defaults.sessionWarming.info',
+    keywords: ['warming', 'warm', 'cache', 'prompt cache', 'keep warm', 'session', 'override', 'idle'],
   },
   {
     id: 'sessions.show-chats',
@@ -1775,7 +1761,7 @@ export const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     keywords: ['update', 'upgrade', 'version', 'git', 'extension', 'guest', 'refresh'],
     isAvailable: (ctx) => !ctx.isMobile,
   },
-] as const;
+];
 
 interface BuildSettingsSearchResultsOptions {
   query: string;

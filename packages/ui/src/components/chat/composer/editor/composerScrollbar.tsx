@@ -14,7 +14,7 @@ type AttachedOverlayScrollbarProps = Omit<OverlayScrollbarProps, 'containerRef'>
  * hides the scroller's native bar and draws the thumb over the nearest
  * positioned ancestor, which must share the scroller's top and right edges.
  */
-export function AttachedOverlayScrollbar({ scroller, ...props }: AttachedOverlayScrollbarProps) {
+function AttachedOverlayScrollbar({ scroller, ...props }: AttachedOverlayScrollbarProps) {
  const containerRef = React.useMemo(() => ({ current: scroller }), [scroller]);
 
  React.useLayoutEffect(() => {

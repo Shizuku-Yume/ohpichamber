@@ -12,7 +12,10 @@ import { SettingsPageLayout } from '@/components/sections/shared/SettingsPageLay
 import {
   SettingsSection,
   SettingsFieldRow,
-  SettingsStackedField,
+  SETTINGS_FIELD_LABEL_CLASS,
+  SETTINGS_WIDTH_LONG_TEXT_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_WIDTH_SHORT_TEXT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 
@@ -126,17 +129,18 @@ export const SnippetsPage: React.FC = () => {
       description={selectedSnippet?.source}
       showSaveStatus={false}
     >
-      <SettingsSection divider={false} contentClassName="space-y-0">
+      <SettingsSection divider={false}>
         {isNew ? (
           <SettingsFieldRow label="/">
             <Input
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}
               placeholder={t('settings.snippets.page.field.namePlaceholder')}
-              className="h-7 w-44 px-2"
+              inputSize="compact"
+              className={SETTINGS_WIDTH_SHORT_TEXT_CLASS}
             />
             <Select value={draftScope} onValueChange={(value) => setDraftScope(value as SnippetScope)}>
-              <SelectTrigger className="w-fit min-w-[100px]">
+              <SelectTrigger className={SETTINGS_WIDTH_SELECT_CLASS}>
                 <SelectValue>
                   {draftScope === 'agent' ? t('settings.common.scope.global') : t('settings.common.scope.project')}
                 </SelectValue>
@@ -148,23 +152,26 @@ export const SnippetsPage: React.FC = () => {
             </Select>
           </SettingsFieldRow>
         ) : null}
-        <SettingsStackedField label={t('settings.common.field.description')}>
+        <SettingsFieldRow label={t('settings.common.field.description')}>
           <Input
             value={description}
             readOnly={!isNew && !selectedSnippet?.editable}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('settings.snippets.page.field.descriptionPlaceholder')}
-            className="h-7 w-full max-w-sm px-2"
+            inputSize="compact"
+            className={SETTINGS_WIDTH_LONG_TEXT_CLASS}
           />
-        </SettingsStackedField>
+        </SettingsFieldRow>
       </SettingsSection>
 
       <SettingsSection settingsItem="snippets.content">
-        <div className="flex items-center gap-1">
-          <span className="typography-ui-label text-foreground">{t('settings.snippets.page.field.content')}</span>
-          <SettingsInfoHint>{t('settings.snippets.page.hint')}</SettingsInfoHint>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1">
+            <span className={SETTINGS_FIELD_LABEL_CLASS}>{t('settings.snippets.page.field.content')}</span>
+            <SettingsInfoHint>{t('settings.snippets.page.hint')}</SettingsInfoHint>
+          </div>
+          <Textarea readOnly={!isNew && !selectedSnippet?.editable} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('settings.snippets.page.field.contentPlaceholder')} rows={12} className="w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
         </div>
-        <Textarea readOnly={!isNew && !selectedSnippet?.editable} value={content} onChange={(e) => setContent(e.target.value)} placeholder={t('settings.snippets.page.field.contentPlaceholder')} rows={12} className="mt-1.5 w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent" />
         <div className="pt-3">
           <Button onClick={handleSave} disabled={isSaving || !isDirty || (!isNew && !selectedSnippet?.editable)} size="xs" className="!font-normal">
             {isSaving ? t('settings.common.actions.saving') : t('settings.common.actions.saveChanges')}

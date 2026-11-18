@@ -10,7 +10,7 @@ import {
   SettingsCheckboxRow,
   SettingsSection,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { saveWorktreeSetupWaitEnabled, updateProjectSetup, type ProjectRef, type ProjectSetup } from '@/lib/openchamberConfig';
@@ -155,7 +155,7 @@ const SetupCommands: React.FC<{ projectRef: ProjectRef; setup: ProjectSetup; set
       )}
 
       {kind === 'setup' ? (
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
           {setup.shared.setupWorktree.length > 0 ? (
             <SettingsCheckboxRow
               settingsItem="projects.worktree.setup.replace"

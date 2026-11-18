@@ -344,10 +344,10 @@ mock.module('@/components/ui/confirm-dialog', () => ({
   useConfirmDialog: () => ({ confirm: async () => true, dialog: null }),
 }));
 mock.module('@/components/sections/shared/SettingsSection', () => ({
-  SETTINGS_CONTROL_CLUSTER_CLASS: '',
-  SETTINGS_FIELDS_STACK_CLASS: '',
+  SETTINGS_WIDTH_LONG_TEXT_CLASS: '',
+  SETTINGS_SPACE_ROW_CLASS: '',
   SETTINGS_HELPER_CLASS: '',
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS: '',
+  SETTINGS_WIDTH_SELECT_CLASS: '',
   SettingsControlGroup: ({ children }: ElementProps) => children ?? null,
   SettingsFieldRow: ({ children, description }: ElementProps) => [description ?? null, children ?? null],
   SettingsStackedField: ({ children }: ElementProps) => children ?? null,

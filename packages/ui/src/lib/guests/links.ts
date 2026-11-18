@@ -1,8 +1,6 @@
-import React from 'react';
 import { GUEST_ATTACH_URL_MAX, buildLinkUrl, type GuestLinkAction } from '@openchamber/sdk';
 
 import { guestMay } from './capabilities.ts';
-import { useGuestsStore } from './store.ts';
 import type { InstalledGuest } from './types.ts';
 
 /**
@@ -24,7 +22,7 @@ export type GuestLinkRule = {
 };
 
 /** A click target: which extension, what it does, the identifier and the link it names. */
-export type GuestLinkClaim = {
+type GuestLinkClaim = {
   guestId: string;
   action: GuestLinkAction;
   identifier: string;
@@ -142,16 +140,6 @@ export const claimGuestUrl = (rules: readonly GuestLinkRule[], href: string): Gu
   return null;
 };
 
-// The last rules handed out, by content: every chat part reads the same
-// catalog, so one slot keeps one array while the rules stay the same.
-type HandedOutRules = { key: string; rules: readonly GuestLinkRule[] };
-let current: HandedOutRules = { key: '[]', rules: [] };
-const stableRules = (rules: readonly GuestLinkRule[]): readonly GuestLinkRule[] => {
-  const key = JSON.stringify(rules);
-  if (key !== current.key) current = { key, rules };
-  return current.rules;
-};
-
 const versions = new WeakMap<readonly GuestLinkRule[], number>();
 let nextVersion = 1;
 /**
@@ -170,12 +158,3 @@ export const guestLinksVersion = (rules: readonly GuestLinkRule[]): number => {
   return version;
 };
 
-/**
- * The rules of the extensions active now. The array keeps its identity while
- * the rules stay the same, so the chat's Markdown plugins keep theirs and no
- * catalog reload re-parses a transcript.
- */
-export const useGuestLinkRules = (): readonly GuestLinkRule[] => {
-  const guests = useGuestsStore((state) => state.guests);
-  return React.useMemo(() => stableRules(guestLinkRulesOf(guests)), [guests]);
-};

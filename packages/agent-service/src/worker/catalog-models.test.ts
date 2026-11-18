@@ -5,12 +5,15 @@ import os, { tmpdir } from 'node:os';
 import path, { join, dirname } from 'node:path';
 import { YAML } from 'bun';
 import { getBundledModel } from '@oh-my-pi/pi-catalog';
+import { buildModel } from '@oh-my-pi/pi-catalog/build';
+import { writeModelCache } from '@oh-my-pi/pi-catalog/model-cache';
+import { resolveModelCacheProviderId } from '@oh-my-pi/pi-catalog/provider-models';
 import { ModelRegistry } from '@oh-my-pi/pi-coding-agent/config/model-registry';
-import { cfgEnabledModels } from '@oh-my-pi/pi-coding-agent/config/model-settings';
+import { cfgDisabledProviders, cfgEnabledModels } from '@oh-my-pi/pi-coding-agent/config/model-settings';
 import { filterAvailableModelsByEnabledPatterns } from '@oh-my-pi/pi-coding-agent/config/model-resolver';
 import { Settings, resetSettingsForTest } from '@oh-my-pi/pi-coding-agent/config/settings';
 import { discoverAuthStorage } from '@oh-my-pi/pi-coding-agent/sdk';
-import { cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
+import { cfgCompactionModelThresholds, cfgCompactionModelThresholdsEnabled, cfgExtendedContext } from '@oh-my-pi/pi-coding-agent/session/context-settings';
 import { cfgDefaultThinkingLevel } from '@oh-my-pi/pi-coding-agent/session/settings';
 import { NativeModels, credentialReference, publicModel, resolveProviderDisplayName, type NativeCatalogModel } from './catalog-models.ts';
 import { openNativeRuntime, syncNativeConfigPair } from './native-runtime.ts';
@@ -534,6 +537,185 @@ test('configured discovery falls back to native key cascade when no explicit acc
     expect(requests[0]!.authorization).toBe('Bearer cascade-key');
   } finally { server.stop(true); await fixture.close(); }
 });
+test('models.yml-only providers resolve apiKey env names and literal headers at discovery without metadata', async () => {
+  const requests: Array<{ path: string; authorization: string | null; custom: string | null }> = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      const path = new URL(request.url).pathname;
+      requests.push({
+        path,
+        authorization: request.headers.get('authorization'),
+        custom: request.headers.get('x-native-header'),
+      });
+      if (path.startsWith('/unauth')) return new Response('unauthorized', { status: 401 });
+      return Response.json({ data: [{ id: 'native-discovered' }] });
+    }
+  });
+  const root = await mkdtemp(join(tmpdir(), 'catalog-models-discovery-native-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  const envName = 'TEST_FB15_MODELS_YML_API_KEY';
+  const previousEnv = process.env[envName];
+  process.env[envName] = 'env-resolved-secret';
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const modelsPath = join(agentDirectory, 'models.yml');
+  const nativeEndpoint = `http://127.0.0.1:${server.port}/native/v1`;
+  const unauthEndpoint = `http://127.0.0.1:${server.port}/unauth/v1`;
+  await writeFile(modelsPath, YAML.stringify({
+    providers: {
+      'native-env-provider': {
+        baseUrl: nativeEndpoint,
+        apiKey: envName,
+        api: 'openai-responses',
+        headers: { 'X-Native-Header': 'native-header-value' },
+        models: [{ id: 'm-1', name: 'M1', api: 'openai-codex-responses', contextWindow: 8192, maxTokens: 1024 }],
+      },
+      'native-unset-key': {
+        baseUrl: unauthEndpoint,
+        apiKey: 'TEST_FB15_MODELS_YML_UNSET_KEY',
+        api: 'openai-responses',
+        models: [{ id: 'm-2', name: 'M2', api: 'openai-codex-responses', contextWindow: 8192, maxTokens: 1024 }],
+      },
+    },
+  }));
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  try {
+    const result = await runtime.models.discoverProviderModels({
+      providerId: 'native-env-provider',
+      endpoint: nativeEndpoint,
+      protocol: 'responses',
+    });
+    expect(result.models.map(model => model.modelId)).toEqual(['native-discovered']);
+    // Must not forward the native provider credential to a different endpoint.
+    await runtime.models.discoverProviderModels({
+      providerId: 'native-env-provider',
+      endpoint: `http://127.0.0.1:${server.port}/other/v1`,
+      protocol: 'responses',
+    });
+    expect(requests).toEqual([
+      { path: '/native/v1/models', authorization: 'Bearer env-resolved-secret', custom: 'native-header-value' },
+      { path: '/other/v1/models', authorization: null, custom: null },
+    ]);
+    await runtime.models.configureProvider({
+      expectedRevision: '0',
+      configuration: {
+        providerId: 'native-missing-key',
+        name: 'Missing Key',
+        endpoint: unauthEndpoint,
+        protocol: 'responses',
+        credentialRef: null,
+      },
+    }, '1');
+    await expect(runtime.models.discoverProviderModels({
+      providerId: 'native-missing-key',
+      endpoint: unauthEndpoint,
+      protocol: 'responses',
+    })).rejects.toMatchObject({
+      status: 422,
+      code: 'CREDENTIAL_UNAVAILABLE',
+      message: expect.stringContaining('No credential is available for native-missing-key'),
+    });
+    // A models.yml apiKey naming an unset variable resolves to literal text in
+    // OMP; discovery must report the missing variable instead of blaming the endpoint.
+    await expect(runtime.models.discoverProviderModels({
+      providerId: 'native-unset-key',
+      endpoint: unauthEndpoint,
+      protocol: 'responses',
+    })).rejects.toMatchObject({
+      status: 422,
+      code: 'CREDENTIAL_UNAVAILABLE',
+      message: 'Provider native-unset-key has no credential: its models.yml apiKey names TEST_FB15_MODELS_YML_UNSET_KEY, which is not set. Set TEST_FB15_MODELS_YML_UNSET_KEY or save an API key.',
+    });
+  } finally {
+    if (previousEnv === undefined) delete process.env[envName];
+    else process.env[envName] = previousEnv;
+    server.stop(true);
+    runtime.authStorage.close();
+    resetSettingsForTest();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('environment-backed providers publish the variable name and keep it visible when a stored key wins', async () => {
+  const fixture = await openCatalogFixture();
+  const previous = process.env.OPENAI_API_KEY;
+  try {
+    process.env.OPENAI_API_KEY = 'env-only-openai-key';
+    expect(fixture.reader.models.provider('openai').auth).toEqual({
+      status: 'configured', credentialRef: expect.any(String), method: 'api-key',
+      source: 'external-environment', environment: { variable: 'OPENAI_API_KEY', active: true },
+    });
+    // The projection carries the variable's name and never its value.
+    expect(JSON.stringify(await fixture.reader.models.readProviders('workspace_1', '1'))).not.toContain('env-only-openai-key');
+    await fixture.writer.authStorage.credentials.upsert('openai', { type: 'api_key', key: 'stored-openai-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    expect(fixture.writer.models.provider('openai').auth).toMatchObject({
+      source: 'stored-credential', environment: { variable: 'OPENAI_API_KEY', active: false },
+    });
+    // A blank variable is absent, not an empty source.
+    process.env.OPENAI_API_KEY = '';
+    expect(fixture.writer.models.provider('openai').auth).not.toHaveProperty('environment');
+    // A provider with no environment mechanism says nothing about one.
+    await fixture.writer.authStorage.credentials.upsert('campus-2', { type: 'api_key', key: 'campus-key', source: 'login' });
+    await fixture.writer.authStorage.credentials.reload();
+    expect(fixture.writer.models.provider('campus-2').auth).toMatchObject({ status: 'configured', source: 'stored-credential' });
+    expect(fixture.writer.models.provider('campus-2').auth).not.toHaveProperty('environment');
+  } finally {
+    if (previous === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = previous;
+    await fixture.close();
+  }
+});
+
+test('a computed env resolver reports presence without inventing a single variable name', async () => {
+  const fixture = await openCatalogFixture();
+  const previous = process.env.HF_TOKEN;
+  try {
+    process.env.HF_TOKEN = 'env-only-huggingface-token';
+    expect(fixture.reader.models.provider('huggingface').auth).toMatchObject({
+      status: 'configured', source: 'external-environment', environment: { variable: null, active: true },
+    });
+  } finally {
+    if (previous === undefined) delete process.env.HF_TOKEN; else process.env.HF_TOKEN = previous;
+    await fixture.close();
+  }
+});
+
+test('a provider identity containing a selector separator is refused before any write', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    for (const providerId of ['campus/2', 'campus/', '/campus']) {
+      await expect(fixture.writer.models.configureProvider({
+        expectedRevision: '0', configuration: { ...configuration, providerId },
+      }, '1')).rejects.toMatchObject({ status: 422, code: 'INVALID_REQUEST' });
+    }
+    expect(await readFile(fixture.writer.modelsPath, 'utf8').catch(() => '')).not.toContain('campus');
+  } finally { await fixture.close(); }
+});
+
+test('a custom base URL query string survives discovery and the native baseUrl write', async () => {
+  const requests: string[] = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push(request.url);
+      return Response.json({ data: [{ id: 'azure-model', name: 'Azure' }] });
+    }
+  });
+  const fixture = await openCatalogFixture();
+  const endpoint = `http://127.0.0.1:${server.port}/v1?api-version=2024-10-21`;
+  try {
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration: { ...configuration, endpoint } }, '1');
+    expect(await fixture.writer.models.discoverProviderModels({ endpoint, protocol: 'chat-completions' }))
+      .toEqual({ models: [{ modelId: 'azure-model', name: 'Azure' }] });
+    const requested = new URL(requests[0]!);
+    // `/models` belongs to the pathname; the query stays behind it.
+    expect(requested.pathname).toBe('/v1/models');
+    expect(requested.search).toBe('?api-version=2024-10-21');
+    const persisted = YAML.parse(await readFile(fixture.writer.modelsPath, 'utf8'));
+    expect(persisted.providers[configuration.providerId].baseUrl).toBe(endpoint);
+    expect((await fixture.reader.models.readProviderConfiguration(configuration.providerId, '1')).configuration.endpoint).toBe(endpoint);
+  } finally { server.stop(true); await fixture.close(); }
+});
 
 test('explicit empty headers replace old native provider headers and remain empty after reopen', async () => {
   const fixture = await openCatalogFixture();
@@ -793,5 +975,280 @@ providers:
     }
   } finally {
     await fixture.close();
+  }
+});
+
+test('bundled catalog metadata fills a known model id from the provider rows', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({
+      providerId: 'openai', models: [{ modelId: 'gpt-5.6' }],
+    });
+    expect(result.models).toEqual([{
+      modelId: 'gpt-5.6',
+      catalog: {
+        source: 'omp-catalog', input: ['text', 'image'], contextWindow: 1050000, maxTokens: 128000,
+        cost: { input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5 },
+        reasoning: true, family: 'gpt',
+      },
+    }]);
+  } finally { await fixture.close(); }
+});
+
+test('proxy reference matching resolves a bracket-affixed model id', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({ models: [{ modelId: '[Kiro] claude-opus-4-6' }] });
+    expect(result.models).toEqual([{
+      modelId: '[Kiro] claude-opus-4-6',
+      catalog: {
+        source: 'omp-catalog', input: ['text', 'image'], contextWindow: 1000000, maxTokens: 128000,
+        cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+        reasoning: true, family: 'opus',
+      },
+    }]);
+  } finally { await fixture.close(); }
+});
+
+test('an uncatalogued model id comes back without catalog metadata instead of failing', async () => {
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.enrichProviderModels({
+      providerId: 'm212-loopback', models: [{ modelId: 'not-a-catalogued-model' }],
+    });
+    expect(result).toEqual({ models: [{ modelId: 'not-a-catalogued-model' }] });
+  } finally { await fixture.close(); }
+});
+
+test('discovery attaches catalog metadata to catalogued ids and stays one request', async () => {
+  const requests: string[] = [];
+  const server = Bun.serve({
+    hostname: '127.0.0.1', port: 0, fetch(request) {
+      requests.push(new URL(request.url).pathname);
+      return Response.json({ data: [{ id: 'claude-opus-4-6', name: 'Claude' }, { id: 'not-a-catalogued-model', name: 'Unknown' }] });
+    }
+  });
+  const fixture = await openCatalogFixture();
+  try {
+    const result = await fixture.reader.models.discoverProviderModels({
+      endpoint: `http://127.0.0.1:${server.port}/v1`, protocol: 'chat-completions',
+    });
+    expect(requests).toEqual(['/v1/models']);
+    expect(result.models[0]).toMatchObject({ modelId: 'claude-opus-4-6', name: 'Claude', catalog: { source: 'omp-catalog', family: 'opus' } });
+    expect(result.models[1]).toEqual({ modelId: 'not-a-catalogued-model', name: 'Unknown' });
+  } finally { server.stop(true); await fixture.close(); }
+});
+
+function countPolicyReapplies(registry: ModelRegistry) {
+  const original = registry.reapplyModelPolicies.bind(registry);
+  let count = 0;
+  registry.reapplyModelPolicies = () => {
+    count += 1;
+    return original();
+  };
+  return {
+    get count() { return count; },
+    reset() { count = 0; },
+  };
+}
+
+test('20 unchanged model selections skip reapplyModelPolicies after runtime init and in unrefreshed readers', async () => {
+  const selection = { providerId: routed.provider, modelId: routed.id };
+  const root = await mkdtemp(join(tmpdir(), 'catalog-models-guard-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  const fixture = await openCatalogFixture();
+  try {
+    const runtimeSpy = countPolicyReapplies(runtime.modelRegistry);
+    for (let i = 0; i < 20; i++) {
+      expect((await runtime.models.selection(selection)).nativeModel.id).toBe(routed.id);
+    }
+    await runtime.models.readModels('workspace_1', '1');
+    await runtime.models.readProviders('workspace_1', '1');
+    expect(runtimeSpy.count).toBe(0);
+
+    const readerSpy = countPolicyReapplies(fixture.reader.modelRegistry);
+    // Unrefreshed ModelRegistry hydrates once on first use, then skips all subsequent unchanged selections.
+    expect((await fixture.reader.models.selection(selection)).nativeModel.id).toBe(routed.id);
+    expect(readerSpy.count).toBe(1);
+    for (let i = 0; i < 20; i++) {
+      expect((await fixture.reader.models.selection(selection)).nativeModel.id).toBe(routed.id);
+    }
+    expect(readerSpy.count).toBe(1);
+  } finally {
+    runtime.authStorage.close();
+    await fixture.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('policy revision guard runs reapplyModelPolicies once per policy-relevant change and ignores unrelated settings', async () => {
+  const fixture = await openCatalogFixture();
+  const published = getBundledModel('openai', 'gpt-5.6');
+  const selection = { providerId: published.provider, modelId: published.id };
+  try {
+    await fixture.writer.authStorage.credentials.upsert('openai', { type: 'api_key', key: 'test-openai-key', source: 'login' });
+    await fixture.reader.models.readModels('workspace_1', '0');
+    const spy = countPolicyReapplies(fixture.reader.modelRegistry);
+
+    // Persisted policy setting change (config.yml) invalidates once.
+    cfgExtendedContext.set(fixture.writer.settings, true);
+    await fixture.writer.settings.flush();
+    expect((await fixture.reader.models.selection(selection)).nativeModel.contextWindow).toBe(published.contextWindow);
+    expect(spy.count).toBe(1);
+    for (let i = 0; i < 5; i++) await fixture.reader.models.selection(selection);
+    expect(spy.count).toBe(1);
+
+    // In-memory setting override invalidates once and updates readModels too.
+    cfgExtendedContext.override(fixture.reader.settings, false);
+    expect((await fixture.reader.models.selection(selection)).nativeModel.contextWindow).toBe(published.cost.longContext?.inputThreshold);
+    expect(spy.count).toBe(2);
+    const catalogAfterOverride = await fixture.reader.models.readModels('workspace_1', '1');
+    expect(catalogAfterOverride.models.find(m => m.provider === published.provider && m.modelId === published.id)?.contextWindow)
+      .toBe(published.cost.longContext?.inputThreshold);
+    expect(spy.count).toBe(2);
+    // Compaction model thresholds policy setting invalidates once.
+    cfgCompactionModelThresholdsEnabled.set(fixture.writer.settings, true);
+    cfgCompactionModelThresholds.set(fixture.writer.settings, { 'openai/gpt-5.6': 'f500000' });
+    await fixture.writer.settings.flush();
+    await fixture.reader.models.selection(selection);
+    expect(spy.count).toBe(3);
+
+    // Disabled providers policy setting invalidates once.
+    cfgDisabledProviders.set(fixture.writer.settings, ['anthropic']);
+    await fixture.writer.settings.flush();
+    await fixture.reader.models.selection(selection);
+    expect(spy.count).toBe(4);
+
+    // Unrelated setting change does not rebuild policies.
+    cfgDefaultThinkingLevel.set(fixture.writer.settings, 'low');
+    await fixture.writer.settings.flush();
+    await fixture.reader.models.selection(selection);
+    expect(spy.count).toBe(4);
+
+    // Stored credential mutation invalidates once.
+    await fixture.writer.authStorage.credentials.upsert(configuration.providerId, { type: 'api_key', key: 'cred-1', source: 'login' });
+    await fixture.reader.models.selection(selection);
+    expect(spy.count).toBe(5);
+    await fixture.reader.models.selection(selection);
+    expect(spy.count).toBe(5);
+
+    // models.yml mutation invalidates once, then stabilizes.
+    await fixture.writer.models.configureProvider({ expectedRevision: '0', configuration, models: [configuredModel] }, '1');
+    expect((await fixture.reader.models.selection({ providerId: configuration.providerId, modelId: configuredModel.modelId })).nativeModel.api)
+      .toBe('openai-completions');
+    expect(spy.count).toBe(6);
+    await fixture.reader.models.selection({ providerId: configuration.providerId, modelId: configuredModel.modelId });
+    expect(spy.count).toBe(6);
+
+    // readProviderConfiguration also reloads credentials and runs policy guard on external credential additions.
+    await fixture.writer.authStorage.credentials.upsert(configuration.providerId, { type: 'api_key', key: 'cred-2', source: 'login' });
+    await fixture.reader.models.readProviderConfiguration(configuration.providerId, '1');
+    expect(spy.count).toBe(7);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('failed reapplyModelPolicies does not advance the guard revision so a retry re-runs it', async () => {
+  const fixture = await openCatalogFixture();
+  const published = getBundledModel('openai', 'gpt-5.6');
+  const selection = { providerId: published.provider, modelId: published.id };
+  try {
+    const original = fixture.reader.modelRegistry.reapplyModelPolicies.bind(fixture.reader.modelRegistry);
+    let attempts = 0;
+    let shouldFail = true;
+    fixture.reader.modelRegistry.reapplyModelPolicies = async () => {
+      attempts += 1;
+      if (shouldFail) throw new Error('simulated policy rebuild failure');
+      return await original();
+    };
+
+    cfgExtendedContext.set(fixture.writer.settings, true);
+    await fixture.writer.settings.flush();
+    await expect(fixture.reader.models.selection(selection)).rejects.toThrow('simulated policy rebuild failure');
+    expect(attempts).toBe(1);
+
+    shouldFail = false;
+    expect((await fixture.reader.models.selection(selection)).nativeModel.contextWindow).toBe(published.contextWindow);
+    expect(attempts).toBe(2);
+
+    await fixture.reader.models.selection(selection);
+    expect(attempts).toBe(2);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test('unrefreshed ModelRegistry hydrates credential-scoped SQLite model cache once while openNativeRuntime skips rebuilds', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'catalog-models-cache-hydrate-'));
+  const cwd = join(root, 'workspace');
+  const agentDirectory = join(root, 'agent');
+  await mkdir(cwd, { recursive: true });
+  await mkdir(agentDirectory, { recursive: true });
+  const apiKey = 'test-kimi-cache-key';
+  const cachedModel = buildModel({
+    id: 'kimi-cached-only',
+    name: 'Kimi Cached Only',
+    api: 'anthropic-messages',
+    provider: 'kimi-code',
+    baseUrl: 'https://api.kimi.com/coding/v1',
+    reasoning: false,
+    input: ['text'],
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: 128000,
+    maxTokens: 8192,
+  });
+  const cacheProviderId = resolveModelCacheProviderId('kimi-code', { apiKey });
+  const cacheDbPath = join(agentDirectory, 'models.db');
+  writeModelCache(cacheProviderId, Date.now(), [cachedModel], true, 'test-kimi-fingerprint', cacheDbPath);
+
+  const seedSettings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
+  const seedAuth = await discoverAuthStorage(agentDirectory, { cwd, settings: seedSettings });
+  try {
+    await seedAuth.credentials.upsert('kimi-code', { type: 'api_key', key: apiKey, source: 'login' });
+  } finally {
+    seedAuth.close();
+    seedSettings.cancelPendingSaves();
+  }
+
+  const runtime = await openNativeRuntime({ cwd, agentDirectory });
+  const unrefreshedSettings = await Settings.loadIsolated({ cwd, agentDir: agentDirectory });
+  const unrefreshedAuth = await discoverAuthStorage(agentDirectory, { cwd, settings: unrefreshedSettings });
+  const unrefreshedRegistry = new ModelRegistry(unrefreshedAuth, runtime.modelsPath, { settings: unrefreshedSettings });
+  const unrefreshedModels = new NativeModels({
+    settings: unrefreshedSettings,
+    authStorage: unrefreshedAuth,
+    modelRegistry: unrefreshedRegistry,
+    modelsPath: runtime.modelsPath,
+    oauthProviderIds: () => new Set<string>(),
+    currentNativeSessionId: () => 'unrefreshed-session',
+  });
+  const selection = { providerId: 'kimi-code', modelId: 'kimi-cached-only' };
+  try {
+    // openNativeRuntime already hydrated credential-scoped caches via refresh('offline').
+    const runtimeSpy = countPolicyReapplies(runtime.modelRegistry);
+    for (let i = 0; i < 20; i++) {
+      expect((await runtime.models.selection(selection)).nativeModel.id).toBe('kimi-cached-only');
+    }
+    expect(runtimeSpy.count).toBe(0);
+
+    // Synchronous ModelRegistry construction skips credential-scoped caches until first policy sync.
+    expect(unrefreshedRegistry.find('kimi-code', 'kimi-cached-only')).toBeUndefined();
+    const unrefreshedSpy = countPolicyReapplies(unrefreshedRegistry);
+    expect((await unrefreshedModels.selection(selection)).nativeModel.id).toBe('kimi-cached-only');
+    expect(unrefreshedSpy.count).toBe(1);
+    for (let i = 0; i < 20; i++) {
+      expect((await unrefreshedModels.selection(selection)).nativeModel.id).toBe('kimi-cached-only');
+    }
+    expect(unrefreshedSpy.count).toBe(1);
+  } finally {
+    runtime.authStorage.close();
+    unrefreshedAuth.close();
+    unrefreshedSettings.cancelPendingSaves();
+    await rm(root, { recursive: true, force: true });
   }
 });

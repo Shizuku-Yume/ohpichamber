@@ -33,7 +33,7 @@ interface LiveTurnActivityProps {
  * The fold's header. Folded, it also draws what stays in view: a working
  * turn's latest steps, then the pages it showed and the steps after them.
  */
-export function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, renderMessage }: LiveTurnActivityProps) {
+function LiveTurnActivity({ turn, hasLaterAssistant, expanded, onToggle, renderMessage }: LiveTurnActivityProps) {
     const { t } = useI18n();
     const finalMessage = getLiveFinalMessage(turn.assistantMessages);
     const activityMessages = React.useMemo(

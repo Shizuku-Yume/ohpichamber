@@ -262,7 +262,8 @@ function extractQuotedLiterals(text) {
  *
  * Placement type alone decides exposure because the placement table is the
  * authority on renderability: a `record`/`array` value with no options for the
- * generic row is placed `config-only`, not on a page. `settings-ui.test.ts`
+ * generic row is placed `config-only`, not on a page, and terminal-renderer,
+ * print-mode and egress rows are `tui-only` or `boundary`. `settings-ui.test.ts`
  * pins that invariant against OMP's registry, which this audit cannot read, so
  * the audit never has to guess whether a row would draw a control.
  */

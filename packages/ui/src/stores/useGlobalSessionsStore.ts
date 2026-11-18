@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Session, Subagent } from '@openchamber/agent-contract';
 import { SessionSchema, SubagentSchema } from '@openchamber/agent-contract';
 import { canonicalClient } from '@/api/canonicalClient';
-import { isSessionDiscoveryFailed, registerWorkspaceDirectory, resetWorkspaceDirectories, resolveWorkspaceDirectory, splitGlobalSessionsByArchived, subscribeWorkspaceDirectories } from '@/stores/globalSessions';
+import { isSessionDiscoveryFailed, registerWorkspaceDirectory, resetWorkspaceDirectories, resolveWorkspaceDirectory, resolveWorkspaceDisplayPath, splitGlobalSessionsByArchived, subscribeWorkspaceDirectories } from '@/stores/globalSessions';
 import { normalizePath } from '@/lib/pathNormalization';
 import { raiseSessionOrderingBaselines } from '@/sync/session-ordering';
 import { mapWithConcurrency } from '@/lib/concurrency';
@@ -157,22 +157,32 @@ const discoverChildSessions = async (roots: readonly Session[], known: ReadonlyM
   return { sessions, succeededParents, failedParents };
 };
 
-const bindKnownWorkspaceDirectories = async (generation: number): Promise<void> => {
+const bindKnownWorkspaceDirectories = async (generation: number): Promise<{
+  projectRootsById: Map<string, string>;
+  /** The store action itself, called once the discovery snapshot has committed. */
+  adoptGuessedSession: () => void;
+}> => {
   const [{ useProjectsStore }, { useSessionUIStore }] = await Promise.all([
     import('@/stores/useProjectsStore'), import('@/sync/session-ui-store'),
   ]);
-  if (generation !== loadGeneration) return;
+  const projectRootsById = new Map<string, string>();
+  const adoptGuessedSession = useSessionUIStore.getState().adoptAuthoritativeSessionDirectory;
+  if (generation !== loadGeneration) return { projectRootsById, adoptGuessedSession };
   const directoryState = useDirectoryStore.getState();
   const sessionState = useSessionUIStore.getState();
   const chatsRoot = getChatsRoot();
+  const projectPaths = normalizeDirectorySet(useProjectsStore.getState().projects.map((project) => project.path));
   const candidates = normalizeDirectorySet([
     directoryState.currentDirectory,
     ...directoryState.directoryHistory,
-    ...useProjectsStore.getState().projects.map((project) => project.path),
+    ...projectPaths,
     ...[...sessionState.availableWorktreesByProject.values()].flatMap((worktrees) => worktrees.map((worktree) => worktree.path)),
     ...[...sessionState.worktreeMetadata.values()].map((worktree) => worktree.path),
     ...(chatsRoot ? [chatsRoot] : []),
   ]);
+  // A failed workspace list only means no derived directories this pass; the
+  // candidate loop below still admits every directory it can resolve.
+  const listedWorkspacesPromise = canonicalClient.listWorkspaces().catch(() => null);
   await mapWithConcurrency([...candidates], DIRECTORY_SESSION_REFRESH_CONCURRENCY, async (directory) => {
     if (generation !== loadGeneration) return;
     try {
@@ -180,12 +190,77 @@ const bindKnownWorkspaceDirectories = async (generation: number): Promise<void> 
         if (generation !== loadGeneration) throw new Error('Runtime changed before workspace resolution');
         return canonicalClient.resolveWorkspace(directory);
       });
-      if (generation === loadGeneration && resolveWorkspaceDirectory(workspace.workspaceId) === null) {
+      if (generation !== loadGeneration) return;
+      if (resolveWorkspaceDirectory(workspace.workspaceId) === null) {
         registerWorkspaceDirectory(workspace.workspaceId, directory);
+      }
+      if (workspace.displayPath === '.' || (workspace.displayPath === undefined && (directory === chatsRoot || projectPaths.has(directory)))) {
+        projectRootsById.set(workspace.projectId, directory);
       }
     } catch {
       // A candidate is only a hint. Failed admission grants no path binding;
       // independently successful native session discovery remains usable.
+    }
+  });
+  const listedWorkspaces = await listedWorkspacesPromise;
+  if (generation === loadGeneration && listedWorkspaces) {
+    const derived = new Map<string, string>();
+    for (const ws of listedWorkspaces.items) {
+      if (resolveWorkspaceDirectory(ws.workspaceId) !== null) continue;
+      if (!ws.displayPath || ws.displayPath === '.') continue;
+      const root = projectRootsById.get(ws.projectId);
+      if (!root) continue;
+      const directory = resolveWorkspaceDisplayPath(root, ws.displayPath);
+      if (directory && !candidates.has(directory)) derived.set(ws.workspaceId, directory);
+    }
+    if (derived.size > 0) {
+      await mapWithConcurrency([...derived.entries()], DIRECTORY_SESSION_REFRESH_CONCURRENCY, async ([expectedWorkspaceId, directory]) => {
+        if (generation !== loadGeneration) return;
+        try {
+          const workspace = await withDirectorySessionRefreshSlot(() => {
+            if (generation !== loadGeneration) throw new Error('Runtime changed before workspace resolution');
+            return canonicalClient.resolveWorkspace(directory);
+          });
+          if (generation === loadGeneration && workspace.workspaceId === expectedWorkspaceId && resolveWorkspaceDirectory(workspace.workspaceId) === null) {
+            registerWorkspaceDirectory(workspace.workspaceId, directory);
+          }
+        } catch {
+          // Unreachable derived workspace stays unbound without failing sibling workspaces.
+        }
+      });
+    }
+  }
+  return { projectRootsById, adoptGuessedSession };
+};
+
+const bindDerivedSessionWorkspaces = async (
+  sessions: readonly Session[],
+  projectRootsById: ReadonlyMap<string, string>,
+  generation: number,
+): Promise<void> => {
+  if (generation !== loadGeneration || projectRootsById.size === 0) return;
+  const derived = new Map<string, string>();
+  for (const session of sessions) {
+    if (resolveWorkspaceDirectory(session.workspaceId) !== null) continue;
+    if (!session.displayPath || session.displayPath === '.' || session.displayPath === 'workspace') continue;
+    const root = projectRootsById.get(session.projectId);
+    if (!root) continue;
+    const directory = resolveWorkspaceDisplayPath(root, session.displayPath);
+    if (directory) derived.set(session.workspaceId, directory);
+  }
+  if (derived.size === 0) return;
+  await mapWithConcurrency([...derived.entries()], DIRECTORY_SESSION_REFRESH_CONCURRENCY, async ([expectedWorkspaceId, directory]) => {
+    if (generation !== loadGeneration) return;
+    try {
+      const workspace = await withDirectorySessionRefreshSlot(() => {
+        if (generation !== loadGeneration) throw new Error('Runtime changed before workspace resolution');
+        return canonicalClient.resolveWorkspace(directory);
+      });
+      if (generation === loadGeneration && workspace.workspaceId === expectedWorkspaceId && resolveWorkspaceDirectory(workspace.workspaceId) === null) {
+        registerWorkspaceDirectory(workspace.workspaceId, directory);
+      }
+    } catch {
+      // Unreachable derived session workspace stays unbound without failing discovery.
     }
   });
 };
@@ -742,13 +817,15 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         rootsReady = true;
         get().rehydrateManagedChatSessions();
-        const [result] = await Promise.all([canonicalClient.listSessions(), bindKnownWorkspaceDirectories(generation)]);
+        const [result, binding] = await Promise.all([canonicalClient.listSessions(), bindKnownWorkspaceDirectories(generation)]);
 
         if (generation !== loadGeneration) {
           // Runtime switched mid-load: this snapshot belongs to the previous
           // instance — drop it.
           return { activeSessions: [], archivedSessions: [] };
         }
+        await bindDerivedSessionWorkspaces(result.items, binding.projectRootsById, generation);
+        if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         const children = await discoverChildSessions(result.items, get().entityById, generation);
         if (generation !== loadGeneration) return { activeSessions: [], archivedSessions: [] };
         set((state) => {
@@ -776,6 +853,7 @@ export const useGlobalSessionsStore = create<GlobalSessionsState>((set, get) => 
         });
         const committed = get();
         raiseSessionOrderingBaselines(committed.activeSessions);
+        binding.adoptGuessedSession();
         return { activeSessions: committed.activeSessions, archivedSessions: committed.archivedSessions };
       } catch (error) {
         if (generation !== loadGeneration) {

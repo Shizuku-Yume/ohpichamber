@@ -42,7 +42,7 @@ const TIMELINE_REVEAL_FADE_MS = 100;
 import { hasActiveFormToolInCurrentTurn, recoverPendingFormWithRetry } from '@/sync/form-recovery';
 import { toast } from '@/components/ui';
 import { StatusRowContainer } from './StatusRowContainer';
-import { SessionRecapNote } from '@/components/chat/SessionRecapSpacer';
+import { LiveCompactionDivider, SessionRecapNote } from '@/components/chat/SessionRecapSpacer';
 import {
  FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX,
  forgetComposerSlot,
@@ -369,6 +369,7 @@ const ChatViewport = React.memo(({
  const listFooter = React.useMemo(() => (
   <>
    {/* Permissions and forms dock above the composer (`PermissionDock`, `FormDock`). */}
+   <LiveCompactionDivider sessionId={currentSessionId} directory={directory} className="chat-message-column" />
    <CleanseTimelineBoard sessionId={currentSessionId} directory={directory} />
    <AdvisorTimelineCard sessionId={currentSessionId} directory={directory} />
    <SessionErrorNotice sessionId={currentSessionId} directory={directory} />

@@ -19,10 +19,14 @@ const descriptor = {
   tab: 'context',
   placement: { type: 'engine' } as const,
 };
-const state = { workspaceId: 'workspace_1', revision: '2', totalCount: 1, settings: [descriptor] };
+const state = {
+  workspaceId: 'workspace_1', revision: '2', totalCount: 1,
+  settings: [descriptor],
+};
 
 test('OMP_SETTING_IDS is deleted and not exported', () => {
   expect((settingsModule as Record<string, unknown>).OMP_SETTING_IDS).toBeUndefined();
+  expect((settingsModule as Record<string, unknown>).OmpSettingsPlacementCountsSchema).toBeUndefined();
 });
 
 test('parsePlacement and formatPlacement roundtrip correctly', () => {
@@ -61,6 +65,7 @@ test('OMP settings state carries descriptors and revisions', () => {
   expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [descriptor, descriptor] }).success).toBe(false);
   expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [{ ...descriptor, value: undefined }] }).success).toBe(false);
   expect(OmpSettingsStateSchema.safeParse({ ...state, settings: [{ ...descriptor, placement: { type: 'invalid' } }] }).success).toBe(false);
+  expect(OmpSettingsStateSchema.safeParse({ ...state, placementCounts: { tuiOnly: 0, boundary: 0, elsewhere: 0 } }).success).toBe(false);
 });
 
 test('an owned-by placement requires an owner and conditional setting reports condition state', () => {

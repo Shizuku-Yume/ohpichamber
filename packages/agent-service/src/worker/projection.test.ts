@@ -120,8 +120,10 @@ test('completed native compaction emits opaque canonical transition only', async
     expect(compacted).toMatchObject({ type: 'session.compacted', tokensBefore: 42, completedAt: expect.any(Number) });
     if (compacted?.type !== 'session.compacted') throw new Error('Compaction event was not emitted');
     expect(compacted.compactionId).toEqual(expect.any(String));
-    expect(projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: { summary: 'retry', firstKeptEntryId: 'native-entry', tokensBefore: 40 }, aborted: false, willRetry: true })).toEqual([]);
-    expect(projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: undefined, aborted: false, willRetry: false })).toEqual([]);
+    expect(projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: { summary: 'retry', firstKeptEntryId: 'native-entry', tokensBefore: 40 }, aborted: false, willRetry: true }))
+      .toMatchObject([{ event: { type: 'session.updated', compacting: null } }]);
+    expect(projection.consume({ type: 'auto_compaction_end', action: 'context-full', result: undefined, aborted: false, willRetry: false }))
+      .toMatchObject([{ event: { type: 'session.updated', compacting: null } }]);
   } finally {
     await manager.close();
     await rm(root, { recursive: true, force: true });

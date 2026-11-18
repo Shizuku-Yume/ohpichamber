@@ -260,9 +260,9 @@ test('a stale staged bundle is not read as a settings consumer', () => {
 test('only a placement a GUI owner draws counts as exposure', () => {
   // The audit reads the placement table alone, because OMP's descriptors are
   // not in this tree. Exposure is therefore exactly: `owned-by`, `engine`, and a
-  // `page` placement on a page listed in GUI_WRITTEN_PAGES. A `config-only` or
-  // `tui-only` row, or a page placement on a page with no GUI control, is
-  // config.yml-only, so a search entry pointing at it is a dead row.
+  // `page` placement on a page listed in GUI_WRITTEN_PAGES. A `config-only`,
+  // `tui-only` or `boundary` row, or a page placement on a page with no GUI
+  // control, is config.yml-only, so a search entry pointing at it is a dead row.
   const placements = PLACEMENTS.replace(
     "'bash.enabled': 'engine',",
     [

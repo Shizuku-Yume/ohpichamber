@@ -6,6 +6,7 @@ import type { Root, RootContent } from 'mdast';
 import rehypeSanitize from 'rehype-sanitize';
 import { remarkAlerts, MARKDOWN_ALERT_KINDS } from './remarkAlerts';
 import { remarkDisclosures } from './remarkDisclosures';
+import { remarkLineBreaks } from './remarkLineBreaks';
 import { remarkMathCompatibility } from './remarkMathCompatibility';
 import { rehypeMarkdownPolicy, rehypeRestoreMarkdownLinks } from './rehypeMarkdownPolicy';
 import { isInvisibleText } from '@/lib/invisibleText';
@@ -106,7 +107,11 @@ function remarkVisibleBlocks() {
   };
 }
 
-function createOptions(allowRawHtml: boolean, singleTilde: boolean): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
+function createOptions(
+  allowRawHtml: boolean,
+  singleTilde: boolean,
+  lineBreaks: boolean,
+): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
   return {
     remarkPlugins: [
       ...(singleTilde ? Object.values(defaultRemarkPlugins) : defaultRemarkPluginList),
@@ -114,6 +119,7 @@ function createOptions(allowRawHtml: boolean, singleTilde: boolean): Pick<Stream
       remarkAlerts,
       remarkVisibleBlocks,
       remarkSessionLinks,
+      ...(lineBreaks ? [remarkLineBreaks] : []),
     ],
     rehypePlugins: [
       ...(allowRawHtml ? [defaultRehypePlugins.raw] : []),
@@ -126,18 +132,20 @@ function createOptions(allowRawHtml: boolean, singleTilde: boolean): Pick<Stream
 }
 
 const policies = {
-  strictText: createOptions(false, false),
-  strictRaw: createOptions(true, false),
-  gfmText: createOptions(false, true),
-  gfmRaw: createOptions(true, true),
+  gfm: {
+    raw: { plain: createOptions(true, true, false), breaks: createOptions(true, true, true) },
+    text: { plain: createOptions(false, true, false), breaks: createOptions(false, true, true) },
+  },
+  strict: {
+    raw: { plain: createOptions(true, false, false), breaks: createOptions(true, false, true) },
+    text: { plain: createOptions(false, false, false), breaks: createOptions(false, false, true) },
+  },
 };
 
 export function getMarkdownProcessingOptions(
   allowRawHtml: boolean,
   singleTildeStrikethrough = true,
+  lineBreaks = false,
 ): Pick<StreamdownProps, 'remarkPlugins' | 'rehypePlugins'> {
-  if (singleTildeStrikethrough) {
-    return allowRawHtml ? policies.gfmRaw : policies.gfmText;
-  }
-  return allowRawHtml ? policies.strictRaw : policies.strictText;
+  return policies[singleTildeStrikethrough ? 'gfm' : 'strict'][allowRawHtml ? 'raw' : 'text'][lineBreaks ? 'breaks' : 'plain'];
 }

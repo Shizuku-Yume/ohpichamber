@@ -9,9 +9,10 @@ import {
   SettingsCheckboxRow,
   SettingsInset,
   SettingsChipGroup,
-  SETTINGS_NUMBER_INPUT_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_WIDTH_NUMBER_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
+  SETTINGS_WIDTH_SELECT_CLASS,
+  SETTINGS_NUMBER_STEPPER_ROW_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { NumberInput } from '@/components/ui/number-input';
 import { OmpRowControl } from '@/components/sections/shared/OmpRowControl';
@@ -19,6 +20,7 @@ import { SessionGoalCheckerField, SessionGoalMaxTurnsField } from './SessionGoal
 import { ModelEffortPicker, ModelRoleEditor } from '@/components/sections/shared/ModelRoleEditor';
 import { changedRoles, formatRoleSelector, modelForSelector, parseRolesRecord, roleSelector, splitRoleSelector } from '@/components/sections/shared/modelRoleSelectors';
 import { SessionWarmingCheckbox } from './SessionWarmingCheckbox';
+import { SessionWarmingField } from './SessionWarmingField';
 import { PermissionDefaultModeField } from './PermissionDefaultModeField';
 import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n, type I18nKey } from '@/lib/i18n';
@@ -288,7 +290,7 @@ export const DefaultsSettings: React.FC = () => {
       disabled={isSavingOmp || !ompState}
     >
       <SelectTrigger
-        className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+        className={SETTINGS_WIDTH_SELECT_CLASS}
         aria-label={t('settings.openchamber.defaults.field.fallbackModel')}
       >
         <SelectValue placeholder={t('settings.openchamber.defaults.field.fallbackModelNone')}>
@@ -371,7 +373,7 @@ export const DefaultsSettings: React.FC = () => {
           `omp.modelRoles` as that record's owner. Stamping the record here is
           what makes that claim name a real control rather than a search entry. */}
       <SettingsSection title={t('settings.openchamber.defaults.title')} divider={false} settingsItem="omp.modelRoles">
-        <div className="space-y-4">
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           <ModelRoleEditor
             role="default"
             roles={roleSelectors}
@@ -416,7 +418,7 @@ export const DefaultsSettings: React.FC = () => {
           >
             <Select value={defaultSessionMode} onValueChange={(val) => setDefaultSessionMode(val as SessionModeValue)}>
               <SelectTrigger
-                className={SETTINGS_SELECT_ROW_TRIGGER_CLASS}
+                className={SETTINGS_WIDTH_SELECT_CLASS}
                 aria-label={t('chat.chatInput.mode.label')}
               >
                 <SelectValue>{selectorLabel(defaultSessionMode)}</SelectValue>
@@ -442,7 +444,7 @@ export const DefaultsSettings: React.FC = () => {
       </SettingsSection>
 
       {/* Models the app runs on its own: summaries, titles, the walkthrough. */}
-      <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName="space-y-2">
+      <SettingsSection title={t('settings.layout.sessions.helperModels.title')} contentClassName={SETTINGS_SPACE_ROW_CLASS}>
         <SettingsCheckboxRow
           settingsItem="sessions.small-model"
           checked={!usesOwnSmallModel}
@@ -497,7 +499,7 @@ export const DefaultsSettings: React.FC = () => {
         />
       </SettingsSection>
 
-      <SettingsSection title={t('settings.sessions.permissions.defaultMode')} contentClassName="space-y-1">
+      <SettingsSection title={t('settings.sessions.permissions.defaultMode')}>
         <PermissionDefaultModeField />
       </SettingsSection>
       {/* Plan & Goal Modes */}
@@ -506,7 +508,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.omp.section.modes.description')}
         settingsItem="sessions.plan-goal"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('plan').map((s) => (
             <OmpRowControl
               key={s.id}
@@ -528,7 +530,7 @@ export const DefaultsSettings: React.FC = () => {
             info={t('settings.openchamber.defaults.field.planModeAllowAgentsInfo')}
           />
           {ompState?.settings.find((s) => s.id === 'goal.enabled')?.value === true ? (
-            <div className="ps-6 space-y-3 pt-2">
+            <div className={`ps-6 pt-2 ${SETTINGS_SPACE_ROW_CLASS}`}>
               <SessionGoalCheckerField />
               <SessionGoalMaxTurnsField />
               <SettingsFieldRow
@@ -545,21 +547,23 @@ export const DefaultsSettings: React.FC = () => {
                 }
                 settingsItem="chat.session-goal-budget"
               >
-                <NumberInput
-                  value={sessionGoalDefaultBudget}
-                  onValueChange={(value) => {
-                    if (Number.isFinite(value) && value > 0) {
-                      setSessionGoalDefaultBudget(Math.floor(value));
-                      void updateDesktopSettings({ sessionGoalDefaultBudget: Math.floor(value) });
-                    }
-                  }}
-                  min={1000}
-                  max={100000000}
-                  step={50000}
-                  disabled={!sessionGoalDefaultBudgetEnabled}
-                  className={SETTINGS_NUMBER_INPUT_CLASS}
-                  aria-label={t('settings.openchamber.visual.goal.budgetAria')}
-                />
+                <div className={SETTINGS_NUMBER_STEPPER_ROW_CLASS}>
+                  <NumberInput
+                    value={sessionGoalDefaultBudget}
+                    onValueChange={(value) => {
+                      if (Number.isFinite(value) && value > 0) {
+                        setSessionGoalDefaultBudget(Math.floor(value));
+                        void updateDesktopSettings({ sessionGoalDefaultBudget: Math.floor(value) });
+                      }
+                    }}
+                    min={1000}
+                    max={100000000}
+                    step={50000}
+                    disabled={!sessionGoalDefaultBudgetEnabled}
+                    className={SETTINGS_WIDTH_NUMBER_CLASS}
+                    aria-label={t('settings.openchamber.visual.goal.budgetAria')}
+                  />
+                </div>
               </SettingsFieldRow>
             </div>
           ) : null}
@@ -572,7 +576,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.sessions.section.sampling.description')}
         settingsItem="sessions.sampling"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('sampling').map((s) => (
             <OmpRowControl
               key={s.id}
@@ -591,7 +595,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.sessions.section.context.description')}
         settingsItem="sessions.context"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('context').map((s) => (
             <OmpRowControl
               key={s.id}
@@ -610,7 +614,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.sessions.section.startup.description')}
         settingsItem="sessions.startup"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('general').map((s) => (
             <OmpRowControl
               key={s.id}
@@ -629,7 +633,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.sessions.section.execution.description')}
         settingsItem="sessions.execution"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('execution').map((s) => (
             <OmpRowControl
               key={s.id}
@@ -648,7 +652,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.omp.section.compaction.description')}
         settingsItem="sessions.compaction"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('compaction').map((s) => (
             <OmpRowControl
               key={s.id}
@@ -667,7 +671,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.omp.section.retry.description')}
         settingsItem="sessions.retry"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('retry').map((s) => (
             <OmpRowControl
               key={s.id}
@@ -686,7 +690,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.sessions.section.isolation.description')}
         settingsItem="sessions.isolation"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {[...getSectionRows('isolation'), ...getSectionRows('worktree')].map((s) => (
             <OmpRowControl
               key={s.id}
@@ -705,7 +709,7 @@ export const DefaultsSettings: React.FC = () => {
         description={t('settings.sessions.section.title.description')}
         settingsItem="sessions.title"
       >
-        <div className={SETTINGS_OPTION_STACK_CLASS}>
+        <div className={SETTINGS_SPACE_ROW_CLASS}>
           {getSectionRows('title').map((s) => (
             <OmpRowControl
               key={s.id}
@@ -718,9 +722,10 @@ export const DefaultsSettings: React.FC = () => {
         </div>
       </SettingsSection>
 
-      <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')} contentClassName="space-y-1">
-        <SettingsInset className={SETTINGS_OPTION_STACK_CLASS}>
+      <SettingsSection title={t('settings.openchamber.visual.section.sessionAssistance')}>
+        <SettingsInset className={SETTINGS_SPACE_ROW_CLASS}>
           <SessionWarmingCheckbox />
+          <SessionWarmingField />
           <SettingsCheckboxRow
             settingsItem="sessions.show-chats"
             checked={showChatsSection}

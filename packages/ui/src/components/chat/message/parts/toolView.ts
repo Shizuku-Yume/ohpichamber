@@ -43,7 +43,7 @@ export type CanonicalToolState =
     };
 
 /** Concatenated text of a canonical tool result, however the agent encoded it. */
-export const toolResultText = (result: ToolResultPart | undefined): string => {
+const toolResultText = (result: ToolResultPart | undefined): string => {
     if (!result) return '';
     const output = result.output;
     if (typeof output === 'string') return output;
@@ -150,8 +150,6 @@ export type RenderedPageAsk =
     | { kind: 'not-drawn' }
     | { kind: 'declined' }
     | { kind: 'unanswered' };
-
-export type RenderedPage = { html: string; ui?: string; title: string; ask: RenderedPageAsk };
 
 export type RequestedSecret = { label: string; reason: string; placeholder: string | undefined };
 

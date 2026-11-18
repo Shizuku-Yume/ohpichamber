@@ -17,25 +17,13 @@ import { holdPartialTableRow } from '../../lib/streamTextCommit';
 import type { StreamPhase } from '../types';
 import { useReasoningReveal } from '@/components/chat/search/reasoningReveal';
 import { dispatchRowExpand } from '@/components/chat/lib/scroll/timelineScrollIntent';
+import { cleanReasoningText } from './reasoningText';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
 const TOOL_ROW_DESCRIPTION_CLASS = cn('typography-meta', TOOL_ROW_TEXT_CLASS);
 
 type ReasoningVariant = 'thinking' | 'justification';
-
-const cleanReasoningText = (text: string): string => {
-    if (typeof text !== 'string' || isInvisibleText(text)) {
-        return '';
-    }
-
-    return text
-        .split('\n')
-        .map((line: string) => line.replace(/^>\s?/, '').trimEnd())
-        .filter((line: string) => !isInvisibleText(line))
-        .join('\n')
-        .trim();
-};
 
 const SUMMARY_MAX_CHARS = 80;
 const EXPANDED_CONTENT_UNMOUNT_DELAY_MS = 200;

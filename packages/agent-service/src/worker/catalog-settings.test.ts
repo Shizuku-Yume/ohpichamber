@@ -46,6 +46,9 @@ test('the setting list is derived from orderedSettings and never exposes credent
       expect(ids.has(cred)).toBe(false);
     }
     const boundaryIds = Object.keys(OMP_SETTING_PLACEMENTS).filter(id => OMP_SETTING_PLACEMENTS[id].type === 'boundary');
+    for (const id of ['dev.autoqa', 'spotlight.experiment.enabled', 'dev.autoqaPush.endpoint']) {
+      expect(boundaryIds, id).toContain(id);
+    }
     for (const id of boundaryIds) expect(ids.has(id), id).toBe(false);
     const shown = all.filter(s => !s.isCredential && OMP_SETTING_EXPOSED_IDS.has(s.id));
     expect(state.settings.length).toBe(shown.length);

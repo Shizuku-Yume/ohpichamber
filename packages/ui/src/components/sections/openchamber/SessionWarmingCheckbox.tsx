@@ -7,6 +7,7 @@ import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { useI18n } from '@/lib/i18n';
 import { reportSettingsSaveState } from '@/lib/persistence';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
+import { useSessionWarmingStore } from '@/stores/useSessionWarmingStore';
 
 const modeKeys = {
   off: 'settings.openchamber.defaults.warming.off',
@@ -68,6 +69,10 @@ const WorkspaceWarming: React.FC<{ directory: string | null }> = ({ directory })
       if (!current()) return;
       setPersisted(result.persisted);
       setOutcome(result.status);
+      useSessionWarmingStore.getState().invalidateWorkspaceSessions(
+        result.persisted.workspaceId,
+        result.persisted.mode,
+      );
       reportSettingsSaveState(result.status === 'failed' || result.status === 'partial' ? 'error' : 'saved');
     } catch (failure) {
       if (!current()) return;
@@ -75,6 +80,10 @@ const WorkspaceWarming: React.FC<{ directory: string | null }> = ({ directory })
         const details = CacheWarmingPartialWriteDetailsSchema.safeParse(failure.problem.details);
         if (details.success && details.data.workspaceId === persisted.workspaceId) {
           setPartialWriteMode(details.data.configuredMode);
+          useSessionWarmingStore.getState().invalidateWorkspaceSessions(
+            details.data.workspaceId,
+            details.data.configuredMode,
+          );
         }
       }
       setError(true);

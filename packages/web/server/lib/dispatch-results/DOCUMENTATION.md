@@ -60,9 +60,11 @@ re-arm everything. `register` arms once too, because a short turn can end
 before its entry exists. The tick then asks OpenCode, and unknown is never
 "over":
 
-1. `/api/session/active` lists it → running; its next idle event re-arms.
-2. A subagent of it runs → not over: the session runs again on the subagent's
-   result. Rechecked after 5 s (`../opencode/session-activity.js`).
+1. Its `runtimeStatus` is `running`, `awaiting_approval`, or `awaiting_input`
+   (via `sessionService.open`) → running; its next idle event re-arms.
+2. A subagent of it is in one of those active states (via `sessionService.list`)
+   → not over: the session runs again on the subagent's result. Rechecked
+   after 5 s.
 3. The newest page of its records (`order: desc`, 50): OpenCode appends an
    `idle` record with `outcome` (`succeeded`, `failed`, `interrupted`) when a
    run ends. The dispatch route reads the newest one before the prompt goes

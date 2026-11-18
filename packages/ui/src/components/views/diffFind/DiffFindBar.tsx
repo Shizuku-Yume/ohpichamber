@@ -92,7 +92,7 @@ export const DiffFindBar: React.FC<DiffFindBarProps> = ({
 
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLInputElement>) => {
     // An Escape that dismisses an IME candidate window is not ours: closing the
-    // bar here would collapse it mid-composition. Same contract as zoneEscape.
+    // bar here would collapse it mid-composition.
     if (isIMECompositionEvent(event)) return;
     if (event.key === 'Enter') {
       event.preventDefault();

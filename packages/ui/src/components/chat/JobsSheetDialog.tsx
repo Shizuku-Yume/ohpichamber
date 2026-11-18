@@ -22,7 +22,7 @@ import type {
 import type { EndedShell, TrackedShell } from '@/sync/background-shells';
 import { problemMessage } from '@/lib/problemMessage';
 
-export interface JobsSheetDialogProps {
+interface JobsSheetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   shell: TrackedShell | EndedShell | null;
@@ -477,8 +477,8 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
           <button
             type="button"
             className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${activeTab === 'output'
-                ? 'border-b-2 border-primary text-foreground font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
+              ? 'border-b-2 border-primary text-foreground font-semibold'
+              : 'text-muted-foreground hover:text-foreground'
               }`}
             onClick={() => setActiveTab('output')}
           >
@@ -488,8 +488,8 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
             <button
               type="button"
               className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors flex items-center gap-1.5 ${activeTab === 'streams'
-                  ? 'border-b-2 border-primary text-foreground font-semibold'
-                  : 'text-muted-foreground hover:text-foreground'
+                ? 'border-b-2 border-primary text-foreground font-semibold'
+                : 'text-muted-foreground hover:text-foreground'
                 }`}
               onClick={() => setActiveTab('streams')}
             >
@@ -525,8 +525,8 @@ export const JobsSheetDialog: React.FC<JobsSheetDialogProps> = ({
                     key={s.id}
                     type="button"
                     className={`px-2.5 py-1 rounded text-xs font-mono transition-colors whitespace-nowrap ${selectedStreamId === s.id
-                        ? 'bg-interactive-selection text-interactive-selection-foreground font-medium'
-                        : 'bg-[var(--surface-elevated)] hover:bg-muted text-muted-foreground'
+                      ? 'bg-interactive-selection text-interactive-selection-foreground font-medium'
+                      : 'bg-[var(--surface-elevated)] hover:bg-muted text-muted-foreground'
                       }`}
                     onClick={() => setSelectedStreamId(s.id)}
                   >

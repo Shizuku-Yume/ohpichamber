@@ -5,7 +5,7 @@ import { useUIStore } from '@/stores/useUIStore';
  * A thinking level in the same three states the selection store uses: a
  * variant name, `null` for an explicit Default, and `undefined` for no choice.
  */
-export type EffortChoice = string | null | undefined;
+type EffortChoice = string | null | undefined;
 
 type EffortAgentPin = {
   name?: string;
@@ -13,14 +13,14 @@ type EffortAgentPin = {
   model?: { providerID?: string; id?: string; variant?: string };
 };
 
-export const effortMemoryKey = (providerID: string, modelID: string): string => modelRefKey(providerID, modelID);
+const effortMemoryKey = (providerID: string, modelID: string): string => modelRefKey(providerID, modelID);
 
 const effortRevisions = new Map<string, number>();
 export const readEffortRevision = (providerID: string, modelID: string): number =>
   effortRevisions.get(effortMemoryKey(providerID, modelID)) ?? 0;
 
 /** The last chosen level for this model, across sessions and projects. */
-export const readRememberedEffort = (providerID: string, modelID: string): EffortChoice => {
+const readRememberedEffort = (providerID: string, modelID: string): EffortChoice => {
   if (!providerID || !modelID) return undefined;
   return (useUIStore.getState().lastUsedEfforts ?? {})[effortMemoryKey(providerID, modelID)];
 };

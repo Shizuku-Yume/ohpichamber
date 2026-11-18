@@ -94,7 +94,6 @@ export const AboutReleaseNotes: React.FC<AboutReleaseNotesProps> = ({ version, s
           <Icon name="external-link" className="size-3.5" />
         </a>
       )}
-      contentClassName="space-y-2"
     >
       {releases.map((release, index) => (
         <ReleaseCard key={release.version} release={release} label={since ? labelOf(release, index) : null} />

@@ -1,20 +1,19 @@
 import React from 'react';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/icon/Icon';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
-import { Icon } from '@/components/icon/Icon';
 import { cn } from '@/lib/utils';
 import {
   SETTINGS_CUSTOM_TRIGGER_CLASS,
   SETTINGS_DESCRIPTION_CLASS,
-  SETTINGS_FIELDS_STACK_CLASS,
+  SETTINGS_SPACE_ROW_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_OPTION_STACK_CLASS,
-  SETTINGS_SELECT_ROW_TRIGGER_CLASS,
+  SETTINGS_SPACE_CHECKBOX_CLASS,
   SettingsCheckboxRow,
+  SettingsControlGroup,
+  SettingsDisclosure,
   SettingsFieldRow,
   SettingsSection,
   SettingsStackedField,
@@ -30,10 +29,19 @@ import { parseModelSelector } from '@openchamber/agent-contract';
 import { isAutoModel } from '@/lib/routing/autoModel';
 import { useRoutingStore } from '@/stores/useRoutingStore';
 import { JevAccessNote } from '@/components/sections/classification/JevAccessNote';
+import {
+  CreateRoutingCategoryDialog,
+  type CreateRoutingCategoryInput,
+} from './CreateRoutingCategoryDialog';
+import { VariantSelect } from './VariantSelect';
+import {
+  MAX_CATEGORIES,
+  buildUniqueCategoryId,
+  knownVariant,
+  useModelReasoningEfforts,
+} from './routingCategoryUtils';
 
-const DEFAULT_VARIANT_VALUE = '__default__';
 const SAVE_DEBOUNCE_MS = 500;
-
 
 /**
  * Whether the server's copy is the draft as the server stores it. The server
@@ -48,61 +56,17 @@ const isStoredFormOf = (server: RoutingConfig, draft: RoutingConfig): boolean =>
   return trimmed(server) === trimmed(draft);
 };
 
-const slugify = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
-/** The thinking efforts OMP reports for one model; 'off' plus reasoningOptions. Empty when the model has none. */
-const useModelReasoningEfforts = (providerID: string | null | undefined, modelID: string | null | undefined): string[] => {
-  const providers = useConfigStore((state) => state.providers);
-  return React.useMemo(() => {
-    if (!providerID || !modelID) return [];
-    const provider = providers.find((entry) => entry.providerId === providerID);
-    const model = provider?.models.find((entry) => entry.modelId === modelID);
-    if (!model?.reasoningEffortSupported && !model?.reasoningOptions?.length) return [];
-    return ['off', ...model.reasoningOptions.map((option) => option.reasoningEffort).filter((effort) => effort !== 'off')];
-  }, [modelID, providerID, providers]);
-};
-
 /**
- * The saved level, or null when the model does not list it: list positions
- * saved before #4133 run as the model's default on the server, so they read
- * as Default here too. A model with no known levels keeps what was saved.
+ * Ids of the categories the server would reject: it trims both fields and
+ * requires each to be non-empty. The save gate and the page's own signal use
+ * the same list, so what the page says and what it sends cannot drift apart.
  */
-const knownVariant = (value: string | null | undefined, variants: string[]): string | null => (
-  value && (variants.length === 0 || variants.includes(value)) ? value : null
-);
-
-const VariantSelect: React.FC<{
-  providerID: string | null | undefined;
-  modelID: string | null | undefined;
-  value: string | null;
-  onChange: (variant: string | null) => void;
-  ariaLabel: string;
-  className?: string;
-}> = ({ providerID, modelID, value, onChange, ariaLabel, className }) => {
-  const { t } = useI18n();
-  const efforts = useModelReasoningEfforts(providerID, modelID);
-  const selected = knownVariant(value, efforts) ?? DEFAULT_VARIANT_VALUE;
-  const label = (variant: string) => {
-    if (variant === DEFAULT_VARIANT_VALUE) return t('settings.routing.thinking.default');
-    if (variant === 'off') return t('chat.modelControls.off');
-    return variant.charAt(0).toUpperCase() + variant.slice(1);
-  };
-  return (
-    <Select value={selected} onValueChange={(next) => onChange(next === DEFAULT_VARIANT_VALUE ? null : next)} disabled={efforts.length === 0}>
-      <SelectTrigger className={cn(SETTINGS_SELECT_ROW_TRIGGER_CLASS, className)} aria-label={ariaLabel}>
-        <SelectValue>{label(selected)}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={DEFAULT_VARIANT_VALUE}>{label(DEFAULT_VARIANT_VALUE)}</SelectItem>
-        {efforts.map((effort) => (
-          <SelectItem key={effort} value={effort}>{label(effort)}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-};
+const invalidCategoryIds = (config: RoutingConfig): string[] => config.categories
+  .filter((category) => category.name.trim().length === 0 || category.description.trim().length === 0)
+  .map((category) => category.id);
 
 
-/** One category: a summary row that expands into its editor. */
+/** One category: a flat disclosure row that expands into its editor. */
 const CategoryRow: React.FC<{
   category: RoutingCategory;
   expanded: boolean;
@@ -114,84 +78,100 @@ const CategoryRow: React.FC<{
   const { t } = useI18n();
   const efforts = useModelReasoningEfforts(category.model?.providerID, category.model?.modelID);
   const shownVariant = knownVariant(category.variant, efforts);
-  const modelLabel = category.model
+  const errorId = React.useId();
+  const nameErrorId = `${errorId}-name`;
+  const descriptionErrorId = `${errorId}-description`;
+  const summary = category.model
     ? `${category.model.modelID}${shownVariant ? ` / ${shownVariant}` : ''}`
-    : t('settings.routing.model.useFallback');
-  const summary = modelLabel;
+    : undefined;
+  const missingName = category.name.trim().length === 0;
+  const missingDescription = category.description.trim().length === 0;
+  const displayName = category.name.trim() || category.id;
+
   return (
-    <div className={cn('py-1', !category.enabled && 'opacity-60')}>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          onClick={onToggle}
-          aria-expanded={expanded}
-          className="flex h-auto min-w-0 flex-1 justify-start gap-2 px-1 py-1.5"
-        >
-          <Icon name={expanded ? 'arrow-down-s' : 'arrow-right-s'} className="size-4 shrink-0 text-muted-foreground" />
-          <span className="typography-ui-label font-medium text-foreground truncate">{category.name || category.id}</span>
-          <span className="typography-meta text-muted-foreground truncate">{summary}</span>
-        </Button>
-        <Switch
+    <SettingsDisclosure
+      title={displayName}
+      secondary={summary}
+      accessory={(
+        <SettingsCheckboxRow
           checked={category.enabled}
-          onCheckedChange={(checked) => onChange({ enabled: checked })}
-          aria-label={t('settings.routing.category.enabledAria', { name: category.name })}
+          onChange={(checked) => onChange({ enabled: checked })}
+          label={<span className="sr-only">{t('settings.routing.category.enabledAria', { name: displayName })}</span>}
+          ariaLabel={t('settings.routing.category.enabledAria', { name: displayName })}
         />
-      </div>
-      {expanded ? (
-        <div className="space-y-4 px-1 pb-4 pt-2">
-          <SettingsTwoColumn>
-            <SettingsStackedField label={t('settings.routing.category.name')} controlClassName="max-w-none">
-              <Input
-                value={category.name}
-                onChange={(event) => onChange({ name: event.target.value })}
-                aria-label={t('settings.routing.category.name')}
-                inputSize="compact"
-                className="w-full"
-                maxLength={60}
-              />
-            </SettingsStackedField>
-            <SettingsStackedField label={t('settings.routing.category.model')} info={t('settings.routing.category.modelInfo')} controlClassName="max-w-none">
-              <ModelSelector
-                providerId={category.model?.providerID ?? ''}
-                modelId={category.model?.modelID ?? ''}
-                onChange={(providerID, modelID) => onChange({ model: { providerID, modelID }, variant: null })}
-                className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
-                placeholder={t('settings.routing.model.useFallback')}
-              />
-            </SettingsStackedField>
-          </SettingsTwoColumn>
-          <SettingsFieldRow label={t('settings.routing.category.thinking')} settingsItem="routing.category-thinking">
-            <VariantSelect
-              providerID={category.model?.providerID}
-              modelID={category.model?.modelID}
-              value={category.variant}
-              onChange={(variant) => onChange({ variant })}
-              ariaLabel={t('settings.routing.category.thinking')}
-            />
-          </SettingsFieldRow>
-          <SettingsStackedField
-            label={t('settings.routing.category.description')}
-            info={t('settings.routing.category.descriptionInfo')}
-            controlClassName="max-w-none"
-          >
-            <Textarea
-              value={category.description}
-              onChange={(event) => onChange({ description: event.target.value })}
-              aria-label={t('settings.routing.category.description')}
-              rows={5}
-              maxLength={2000}
+      )}
+      expanded={expanded}
+      onToggle={onToggle}
+      className={cn(!category.enabled && 'opacity-60')}
+    >
+      <SettingsTwoColumn>
+        <SettingsStackedField label={t('settings.routing.category.name')}>
+          <div className="w-full">
+            <Input
+              value={category.name}
+              onChange={(event) => onChange({ name: event.target.value })}
+              aria-label={t('settings.routing.category.name')}
+              aria-invalid={missingName || undefined}
+              aria-describedby={missingName ? nameErrorId : undefined}
+              inputSize="compact"
               className="w-full"
+              maxLength={60}
             />
-          </SettingsStackedField>
-          <div className="flex flex-wrap items-center gap-2">
-            {onReset ? (
-              <Button size="xs" variant="outline" onClick={onReset}>{t('settings.routing.category.reset')}</Button>
+            {missingName ? (
+              <p id={nameErrorId} className="mt-1 typography-meta text-[var(--status-error)]">
+                {t('settings.routing.category.nameRequired')}
+              </p>
             ) : null}
-            <Button size="xs" variant="ghost" onClick={onRemove}>{t('settings.routing.category.remove')}</Button>
           </div>
+        </SettingsStackedField>
+        <SettingsStackedField label={t('settings.routing.category.model')} info={t('settings.routing.category.modelInfo')}>
+          <ModelSelector
+            providerId={category.model?.providerID ?? ''}
+            modelId={category.model?.modelID ?? ''}
+            onChange={(providerID, modelID) => onChange({ model: { providerID, modelID }, variant: null })}
+            className={cn(SETTINGS_CUSTOM_TRIGGER_CLASS, 'w-full')}
+            placeholder={t('settings.routing.model.useFallback')}
+          />
+        </SettingsStackedField>
+      </SettingsTwoColumn>
+      <SettingsFieldRow label={t('settings.routing.category.thinking')} settingsItem="routing.category-thinking">
+        <VariantSelect
+          providerID={category.model?.providerID}
+          modelID={category.model?.modelID}
+          value={category.variant}
+          onChange={(variant) => onChange({ variant })}
+          ariaLabel={t('settings.routing.category.thinking')}
+        />
+      </SettingsFieldRow>
+      <SettingsStackedField
+        label={t('settings.routing.category.description')}
+        info={t('settings.routing.category.descriptionInfo')}
+      >
+        <div className="w-full">
+          <Textarea
+            value={category.description}
+            onChange={(event) => onChange({ description: event.target.value })}
+            aria-label={t('settings.routing.category.description')}
+            aria-invalid={missingDescription || undefined}
+            aria-describedby={missingDescription ? descriptionErrorId : undefined}
+            rows={5}
+            maxLength={2000}
+            className="w-full"
+          />
+          {missingDescription ? (
+            <p id={descriptionErrorId} className="mt-1 typography-meta text-[var(--status-error)]">
+              {t('settings.routing.category.descriptionRequired')}
+            </p>
+          ) : null}
         </div>
-      ) : null}
-    </div>
+      </SettingsStackedField>
+      <div className="flex flex-wrap items-center gap-2">
+        {onReset ? (
+          <Button size="xs" variant="outline" onClick={onReset}>{t('settings.routing.category.reset')}</Button>
+        ) : null}
+        <Button size="xs" variant="ghost" onClick={onRemove}>{t('settings.routing.category.remove')}</Button>
+      </div>
+    </SettingsDisclosure>
   );
 };
 
@@ -207,8 +187,8 @@ export const RoutingPage: React.FC = () => {
   const saveConfig = useRoutingStore((state) => state.saveConfig);
 
   const [draft, setDraft] = React.useState<RoutingConfig | null>(serverConfig);
-  const [newCategoryName, setNewCategoryName] = React.useState('');
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = React.useState<string[]>([]);
+  const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   // A pending edit remembers the server it was made against; a save that would
   // run after a runtime switch is dropped rather than sent to the new server.
   const pendingRef = React.useRef<{ config: RoutingConfig; runtimeKey: string } | null>(null);
@@ -233,6 +213,12 @@ export const RoutingPage: React.FC = () => {
   const flush = React.useCallback(() => {
     const pending = pendingRef.current;
     if (!pending) return saveChainRef.current;
+    // The server trims both fields and rejects an empty one with a 400. Sending
+    // the draft anyway would report a failure on every keystroke and leave the
+    // config unsaveable, so an invalid draft stays pending for the next edit.
+    if (invalidCategoryIds(pending.config).length > 0) {
+      return saveChainRef.current;
+    }
     pendingRef.current = null;
     if (pending.runtimeKey !== getRuntimeKey()) return saveChainRef.current;
     savesInFlightRef.current += 1;
@@ -274,8 +260,8 @@ export const RoutingPage: React.FC = () => {
       ...config,
       fallback: { model: { providerID: parsed.providerId, modelID: parsed.modelId }, variant: null },
     }));
-  // `update` is stable; the effect keys on what decides whether to prefill.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
+    // `update` is stable; the effect keys on what decides whether to prefill.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, serverConfig, settingsDefaultModel]);
 
   const update = React.useCallback((mutate: (config: RoutingConfig) => RoutingConfig) => {
@@ -293,19 +279,42 @@ export const RoutingPage: React.FC = () => {
     update((config) => ({ ...config, categories: config.categories.map((category) => (category.id === id ? { ...category, ...patch } : category)) }));
   }, [update]);
 
-  const addCategory = () => {
-    const name = newCategoryName.trim();
-    if (!name || !draft) return;
-    const base = slugify(name) || `category-${Date.now()}`;
-    let id = base;
-    let counter = 2;
-    while (draft.categories.some((category) => category.id === id)) id = `${base}-${counter++}`;
-    update((config) => ({
-      ...config,
-      categories: [...config.categories, { id, builtin: false, enabled: true, name, description: '', model: null, variant: null, agent: null }],
-    }));
-    setNewCategoryName('');
-    setExpandedId(id);
+  const createCategory = React.useCallback((input: CreateRoutingCategoryInput) => {
+    if (!draft || draft.categories.length >= MAX_CATEGORIES) return;
+    const existingIds = [
+      ...draft.categories.map((category) => category.id),
+      ...builtins.map((builtin) => builtin.id),
+    ];
+    const id = buildUniqueCategoryId(input.name, existingIds);
+    const newCategory: RoutingCategory = {
+      id,
+      builtin: false,
+      enabled: true,
+      name: input.name.trim(),
+      description: input.description.trim(),
+      model: input.model,
+      variant: input.model ? input.variant : null,
+      agent: null,
+    };
+    const next: RoutingConfig = {
+      ...draft,
+      categories: [...draft.categories, newCategory],
+    };
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setDraft(next);
+    pendingRef.current = { config: next, runtimeKey: getRuntimeKey() };
+    setCreateDialogOpen(false);
+    void flush();
+  }, [builtins, draft, flush]);
+
+  const toggleCategory = (id: string) => {
+    // A row held open by the invalid-draft gate stays open: collapsing it would
+    // hide the reason saves are blocked and drop its focused field.
+    if (draft && invalidCategoryIds(draft).includes(id)) return;
+    setExpandedIds((current) => (current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id]));
   };
 
   const resetCategory = (id: string) => {
@@ -327,18 +336,24 @@ export const RoutingPage: React.FC = () => {
     update((config) => ({ ...config, categories: config.categories.filter((category) => category.id !== id) }));
   };
 
+  // An invalid draft blocks the whole-config save, so the offending rows stay
+  // open and the section says why: collapsing the row must not hide the reason
+  // unrelated edits are not being sent.
+  const invalidIds = draft ? invalidCategoryIds(draft) : [];
+  const invalidDraft = invalidIds.length > 0;
+
   const enabledCount = draft?.categories.filter((category) => category.enabled).length ?? 0;
   const removedBuiltins = builtins.filter((builtin) => !draft?.categories.some((category) => category.id === builtin.id));
 
   const readinessText = !draft?.enabled
-      ? t('settings.routing.status.disabled')
-      : !draft.fallback
-        ? t('settings.routing.status.noFallback')
-        : enabledCount < 2
-          ? t('settings.routing.status.tooFewCategories')
-          : autoReady
-            ? t('settings.routing.status.ready')
-            : t('settings.routing.status.notReady');
+    ? t('settings.routing.status.disabled')
+    : !draft.fallback
+      ? t('settings.routing.status.noFallback')
+      : enabledCount < 2
+        ? t('settings.routing.status.tooFewCategories')
+        : autoReady
+          ? t('settings.routing.status.ready')
+          : t('settings.routing.status.notReady');
 
   return (
     <SettingsPageLayout
@@ -352,9 +367,9 @@ export const RoutingPage: React.FC = () => {
       ) : (
         <>
           <SettingsSection title={t('settings.routing.auto.title')} divider={false}>
-            <div className={SETTINGS_FIELDS_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <JevAccessNote />
-              <div className={SETTINGS_OPTION_STACK_CLASS}>
+              <div className={SETTINGS_SPACE_CHECKBOX_CLASS}>
                 <SettingsCheckboxRow
                   settingsItem="routing.enabled"
                   checked={draft.enabled}
@@ -374,7 +389,6 @@ export const RoutingPage: React.FC = () => {
                   />
                 )}
               </div>
-              <p className={SETTINGS_HELPER_CLASS}>{readinessText}</p>
               <SettingsFieldRow
                 settingsItem="routing.fallback-model"
                 label={t('settings.routing.auto.fallbackModel')}
@@ -405,15 +419,21 @@ export const RoutingPage: React.FC = () => {
           </SettingsSection>
 
           <SettingsSection title={t('settings.routing.categories.title')}>
-            <div className={SETTINGS_FIELDS_STACK_CLASS}>
+            <div className={SETTINGS_SPACE_ROW_CLASS}>
               <p className={SETTINGS_HELPER_CLASS}>{t('settings.routing.categories.description')}</p>
-              <div className="divide-y divide-border/40 border-y border-border/40">
+              <p className={SETTINGS_HELPER_CLASS}>{readinessText}</p>
+              {invalidDraft ? (
+                <p className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-warning)]')}>
+                  {t('settings.routing.categories.invalidDraft')}
+                </p>
+              ) : null}
+              <div>
                 {draft.categories.map((category) => (
                   <CategoryRow
                     key={category.id}
                     category={category}
-                    expanded={expandedId === category.id}
-                    onToggle={() => setExpandedId((current) => (current === category.id ? null : category.id))}
+                    expanded={expandedIds.includes(category.id) || invalidIds.includes(category.id)}
+                    onToggle={() => toggleCategory(category.id)}
                     onChange={(patch) => updateCategory(category.id, patch)}
                     onReset={category.builtin ? () => resetCategory(category.id) : null}
                     onRemove={() => removeCategory(category.id)}
@@ -421,33 +441,36 @@ export const RoutingPage: React.FC = () => {
                 ))}
               </div>
               {removedBuiltins.length > 0 ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  {removedBuiltins.map((builtin) => (
-                    <Button key={builtin.id} size="xs" variant="outline" onClick={() => restoreCategory(builtin.id)}>
-                      {t('settings.routing.category.restore', { name: builtin.name })}
-                    </Button>
-                  ))}
-                </div>
+                <SettingsControlGroup title={t('settings.routing.categories.removedTitle')}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {removedBuiltins.map((builtin) => (
+                      <Button key={builtin.id} size="xs" variant="ghost" onClick={() => restoreCategory(builtin.id)}>
+                        {t('settings.routing.category.restore', { name: builtin.name })}
+                      </Button>
+                    ))}
+                  </div>
+                </SettingsControlGroup>
               ) : null}
-              <SettingsFieldRow label={t('settings.routing.categories.addLabel')} settingsItem="routing.add-category">
-                <div className="flex w-full min-w-0 items-center gap-2">
-                  <Input
-                    value={newCategoryName}
-                    onChange={(event) => setNewCategoryName(event.target.value)}
-                    onKeyDown={(event) => { if (event.key === 'Enter') addCategory(); }}
-                    placeholder={t('settings.routing.categories.addPlaceholder')}
-                    aria-label={t('settings.routing.categories.addLabel')}
-                    inputSize="compact"
-                    className="min-w-0 flex-1"
-                    maxLength={60}
-                  />
-                  <Button size="xs" variant="outline" onClick={addCategory} disabled={newCategoryName.trim().length === 0}>
-                    {t('settings.routing.categories.add')}
-                  </Button>
-                </div>
-              </SettingsFieldRow>
+              <div data-settings-item="routing.add-category" className="pt-1">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={() => setCreateDialogOpen(true)}
+                  disabled={draft.categories.length >= MAX_CATEGORIES}
+                >
+                  <Icon name="add" className="size-3.5" />
+                  {t('settings.routing.categories.addCategory')}
+                </Button>
+              </div>
             </div>
           </SettingsSection>
+          <CreateRoutingCategoryDialog
+            open={createDialogOpen}
+            onOpenChange={setCreateDialogOpen}
+            existingCategories={draft.categories}
+            onCreate={createCategory}
+          />
         </>
       )}
     </SettingsPageLayout>

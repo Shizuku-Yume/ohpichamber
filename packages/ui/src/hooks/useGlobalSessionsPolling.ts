@@ -10,7 +10,7 @@ import { seedGlobalSessionStatusFromHost } from '@/sync/host-session-status-seed
 import { subscribeFirstServerConnect } from '@/sync/first-server-connect';
 
 export const GLOBAL_SESSIONS_REFRESH_INTERVAL_MS = 45_000;
-export const GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS = 10 * 60_000;
+const GLOBAL_SESSIONS_FULL_REFRESH_INTERVAL_MS = 10 * 60_000;
 const STARTUP_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
 
 type ScheduleTimeout = (callback: () => void, delay: number) => number;

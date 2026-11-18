@@ -4,18 +4,15 @@ import { z } from 'zod';
 import { fallbackPresentation, KNOWN_TOOL_NAMES, TOOL_PRESENTATIONS, type KnownToolName } from './presentations';
 import type { ToolGroup, ToolPresentation } from './types';
 
-export { normalizeIntent, intentOf } from './intent';
-export type { ToolGroup, ToolPresentation, ToolOutputLanguage } from './types';
+export { normalizeIntent } from './intent';
 export { KNOWN_TOOL_NAMES } from './presentations';
-export type { KnownToolName } from './presentations';
 export {
     categorizeTool,
     TOOL_PERMISSION_GROUPS,
-    GROUP_DESCRIPTIONS,
     getToolOneLineDescription,
 } from './groups';
-export { useEvalView, splitEvalOutput, evalResultSummary, normalizeEvalLanguage, isToolCallStatusEvent } from './toolView';
-export type { EvalLanguage, EvalTableColumn, EvalView, EvalViewEntry, EvalStatusEvent, EvalCellView, EvalViewData, EvalOutputPart } from './toolView';
+export { useEvalView, splitEvalOutput, evalResultSummary } from './toolView';
+export type { EvalTableColumn, EvalStatusEvent, EvalCellView } from './toolView';
 
 /** A runtime row's name may carry a stream index and a `runtime.` prefix. */
 export const toolBaseName = (toolName: string | undefined): string => {
@@ -89,8 +86,6 @@ export const isRetainTool = (toolName: string | undefined): boolean => toolBaseN
 export const isRecallTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'recall';
 export const isReflectTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'reflect';
 export const isLearnTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'learn';
-/** Text-to-image generation and editing tool. */
-export const isImageGenerationTool = (toolName: string | undefined): boolean => toolBaseName(toolName) === 'generate_image';
 /** Rows with a direct in-app destination: reads and skills. */
 export const isStaticTool = (toolName: string | undefined): boolean => {
     const name = toolBaseName(toolName);

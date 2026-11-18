@@ -48,6 +48,12 @@ async function fixture() {
     if (operation.operation.type === 'catalog.settings.write') {
       return { type: 'catalog', result: { type: 'catalog.settings.mutated', state: await native.write('workspace', operation.revision, operation.operation.request) } };
     }
+    if (operation.operation.type === 'catalog.provider.models.enrich') {
+      return { type: 'catalog', result: { type: 'catalog.provider.models.enriched', result: { models: [{ modelId: 'catalogued-model', catalog: {
+        source: 'omp-catalog', input: ['text'], contextWindow: 8192, maxTokens: 1024,
+        cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }, reasoning: false,
+      } }, { modelId: 'unknown-model' }] } } };
+    }
     throw new Error('Unexpected catalog operation');
   });
   const search = new WebSearchCoordinator(catalogs, workers);
@@ -122,5 +128,20 @@ test('an unregistered workspace is unauthorized while a ready workspace with no 
     f.unavailable(true);
     await expect(f.call('GET', '/api/agent/v1/workspaces/workspace/omp/settings'))
       .rejects.toMatchObject({ status: 503, code: 'SERVICE_UNAVAILABLE' });
+  } finally { await f.close(); }
+});
+
+test('POST /workspaces/:id/providers/enrich reaches the catalog worker and returns unknown ids bare', async () => {
+  const f = await fixture();
+  try {
+    const response = await f.call('POST', '/api/agent/v1/workspaces/workspace/providers/enrich', {
+      models: [{ modelId: 'catalogued-model' }, { modelId: 'unknown-model' }],
+    });
+    expect(response?.status).toBe(200);
+    expect(response?.body).toMatchObject({ models: [
+      { modelId: 'catalogued-model', catalog: { source: 'omp-catalog', input: ['text'], contextWindow: 8192, maxTokens: 1024 } },
+      { modelId: 'unknown-model' },
+    ] });
+    expect(f.requests()).toBe(1);
   } finally { await f.close(); }
 });

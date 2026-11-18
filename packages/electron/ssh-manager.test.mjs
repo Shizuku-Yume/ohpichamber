@@ -497,7 +497,7 @@ printf '4321\\n'`);
     manager.runRemoteCommand = async () => [
       '/home/pi/.openchamber/npm-global/bin/ohpichamber\t1.2.3',
       '/usr/bin/ohpichamber\t0.9.0',
-      '/opt/canary/bin/ohpichamber\t1.2.4-canary.20261030.7',
+      '/opt/preview/bin/ohpichamber\t1.2.4-beta.7',
       '',
     ].join('\n');
 
@@ -506,7 +506,7 @@ printf '4321\\n'`);
     expect(candidates).toEqual([
       { binPath: '/home/pi/.openchamber/npm-global/bin/ohpichamber', version: '1.2.3' },
       { binPath: '/usr/bin/ohpichamber', version: '0.9.0' },
-      { binPath: '/opt/canary/bin/ohpichamber', version: '1.2.4-canary.20261030.7' },
+      { binPath: '/opt/preview/bin/ohpichamber', version: '1.2.4-beta.7' },
     ]);
   });
 

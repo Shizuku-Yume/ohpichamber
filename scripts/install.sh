@@ -101,7 +101,6 @@ detect_package_manager() {
 # Flags that approve the dependency builds pnpm 10+ blocks; pnpm 11+ stops to
 # ask about them in a terminal. `--allow-build` exists since pnpm 10.4.0; older
 # versions reject it, and pnpm 9 and older run the builds without approval.
-# Keep the list in sync with packages/web/server/lib/package-manager.js.
 get_pnpm_allow_build_flags() {
   local version major minor
   version=$(pnpm --version 2>/dev/null || true)

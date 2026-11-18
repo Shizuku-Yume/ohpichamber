@@ -90,6 +90,8 @@ COPY --from=builder /app/packages/agent-service/dist ./packages/agent-service/di
 COPY --from=builder /app/packages/web/bin ./packages/web/bin
 COPY --from=builder /app/packages/web/server ./packages/web/server
 COPY --from=builder /app/packages/web/dist ./packages/web/dist
+# Release notes shipped with the Host; Settings > About reads them offline.
+COPY --from=builder /app/packages/web/resources/changelog ./packages/web/resources/changelog
 
 EXPOSE 3000
 

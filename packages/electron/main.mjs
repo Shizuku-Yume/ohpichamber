@@ -80,7 +80,6 @@ import { RUNTIME_CONFIG_SCRIPT, RUNTIME_CONFIG_SCRIPT_PATHNAME, createRuntimeCon
 import { settleMainProcessCompileCache } from './compile-cache.mjs';
 import { probeDirectHostWithRetry } from './host-probe-policy.mjs';
 import { probeElectronHostWithDeadline } from './electron-host-probe.mjs';
-import { requestRemoteHostUpdate } from './remote-host-update.mjs';
 import { ensureDesktopLocalClientToken, shouldBootstrapPackagedLocalAuth } from './desktop-local-auth.mjs';
 import { assertUpdaterCapability, readLinuxPackageType } from './updater-capability.mjs';
 import { relaunchAfterExit } from './linux-relaunch.mjs';
@@ -103,14 +102,7 @@ import { menuAccelerator, normalizeMenuShortcuts } from './menu-shortcuts.mjs';
 import { createCopyLinkMenuHook } from './context-menu-clipboard.mjs';
 import { createCopyMenuAction } from './menu-copy-action.mjs';
 import {
-  CANARY_MIRROR_UPDATER_FEED,
-  CANARY_UPDATER_FEED,
   PRODUCTION_UPDATER_FEED,
-  STABLE_MIRROR_UPDATER_FEED,
-  isCanaryVersion,
-  isUpdateChannel,
-  normalizeUpdateChannel,
-  pickUpdaterSource,
   resolveUpdaterFeed,
 } from './updater-feed.mjs';
 import {
@@ -331,14 +323,9 @@ const state = {
   // path may end the process: the update sequence owns the exit.
   updateInstallPending: false,
   pendingUpdate: null,
-  // The channel and source ('mirror' or 'github') the updater's feed was last
-  // pointed at (applyUpdaterChannel), and the update check in flight, if any.
-  updaterChannel: null,
-  updaterSource: null,
-  // When the Stable mirror last failed a check or a download; checks read
-  // GitHub for a while after (pickUpdaterSource).
-  updaterMirrorFailedAt: null,
-  updateCheck: null,
+  // The feed the updater's provider was last configured for; re-applying it
+  // would replace the provider a download in flight is reading from.
+  updaterFeed: null,
   updateDownloadPromise: null,
   updateDownloadVersion: null,
   unreachableHosts: new Set(),
@@ -1616,23 +1603,6 @@ const spawnLocalServer = async () => {
       apiBaseUrl: state.apiBaseUrl || '',
       requestHeaders: sanitizeRuntimeRequestHeaders(state.requestHeaders || {}),
     }),
-    // Remote clients only. A package install asks for the administrator
-    // password on this machine's screen, so nobody at a phone could answer it
-    // and the server would stay down until someone at the desk did.
-    desktopUpdater: {
-      check: async () => {
-        const updateInfo = await handleInvoke(null, 'desktop_check_for_updates');
-        return isLinuxPackageInstall() ? { ...updateInfo, installBlocked: 'desktop-host' } : updateInfo;
-      },
-      install: async () => {
-        const updateInfo = await handleInvoke(null, 'desktop_check_for_updates');
-        if (!updateInfo.available) return updateInfo;
-        if (isLinuxPackageInstall()) return { ...updateInfo, installBlocked: 'desktop-host' };
-        await handleInvoke(null, 'desktop_download_and_install_update');
-        return updateInfo;
-      },
-      restart: () => handleInvoke(null, 'desktop_restart'),
-    },
   });
 
   const port = handle.getPort();
@@ -3606,38 +3576,28 @@ const resolveInitialUrl = async ({ onPlainLocalBoot = null } = {}) => {
 const UPDATER_E2E_BUILD = typeof __OPENCHAMBER_UPDATER_E2E_BUILD__ !== 'undefined'
   && __OPENCHAMBER_UPDATER_E2E_BUILD__ === true;
 
-const readUpdateChannel = () => normalizeUpdateChannel(readSettingsRoot().desktopUpdateChannel, APP_VERSION);
-
 /**
- * Points the updater at the chosen channel's feed; every check re-reads the
- * stored channel, so a switch takes effect on the next check without a
- * restart. Stable from a Canary build allows the downgrade to the latest
- * release, which is the way back; a release build never downgrades.
+ * Points the updater at the fork's GitHub Releases feed. Called before every
+ * check, and again when a build carrying the compile-time E2E marker swaps in
+ * the loopback feed. Re-setting the same feed would replace the provider that
+ * a download in flight reads from, so it happens once per feed.
  */
-const applyUpdaterChannel = (channel, source = pickUpdaterSource({ mirrorFailedAt: state.updaterMirrorFailedAt })) => {
-  if (state.updaterChannel === channel && state.updaterSource === source) return;
-  // An update found on the other channel is not this channel's; the next
-  // check starts clean (a failed feed otherwise keeps it, #5921).
-  if (state.updaterChannel !== null && state.updaterChannel !== channel) state.pendingUpdate = null;
-  const feed = resolveUpdaterFeed({ testBuild: UPDATER_E2E_BUILD, channel, source });
-  // Every published feed carries the Windows ARM64 manifest; the E2E fixture does not.
-  const updaterChannel = [PRODUCTION_UPDATER_FEED, CANARY_UPDATER_FEED, STABLE_MIRROR_UPDATER_FEED, CANARY_MIRROR_UPDATER_FEED].includes(feed)
+const applyUpdaterFeed = () => {
+  const feed = resolveUpdaterFeed({ testBuild: UPDATER_E2E_BUILD });
+  if (state.updaterFeed?.provider === feed.provider && state.updaterFeed?.url === feed.url) return;
+  // The published feed carries the Windows ARM64 manifest; the E2E fixture does not.
+  const manifestChannel = feed === PRODUCTION_UPDATER_FEED
     ? resolveUpdaterChannel({ platform: process.platform, architecture: process.arch })
     : null;
-  if (updaterChannel) {
-    autoUpdater.channel = updaterChannel;
+  if (manifestChannel) {
+    autoUpdater.channel = manifestChannel;
   }
   autoUpdater.setFeedURL(feed);
-  autoUpdater.allowDowngrade = channel === 'stable' && isCanaryVersion(APP_VERSION);
-  state.updaterChannel = channel;
-  state.updaterSource = source;
+  state.updaterFeed = feed;
   log.info('[electron] updater feed configured', {
-    channel,
-    source,
     provider: feed.provider,
     target: feed.provider === 'github' ? `${feed.owner}/${feed.repo}` : feed.url,
-    manifest: updaterChannel || 'latest',
-    allowDowngrade: autoUpdater.allowDowngrade,
+    manifest: manifestChannel || 'latest',
   });
 };
 
@@ -3651,7 +3611,7 @@ const setupAutoUpdater = () => {
   autoUpdater.fullChangelog = true;
   autoUpdater.disableWebInstaller = false;
   autoUpdater.logger = log;
-  applyUpdaterChannel(readUpdateChannel());
+  applyUpdaterFeed();
 
   autoUpdater.on('download-progress', (progress) => {
     const total = Number(progress.total || 0);
@@ -3763,7 +3723,6 @@ const installDownloadedUpdate = () => new Promise((resolve, reject) => {
         await installLinuxPackage({
           packageType: readLinuxPackageType(),
           file: state.pendingUpdate?.downloadedFile,
-          downgrade: state.pendingUpdate?.downgrade === true,
         });
         settled = true;
         autoUpdater.off('error', fail);
@@ -4995,21 +4954,6 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
         String(args.expectedServerId || ''),
       ));
 
-    // A saved host only: the address and token come from the hosts file, never
-    // from the caller, so a page cannot aim the token at another server.
-    case 'desktop_host_update_server': {
-      const hostId = String(args.hostId || '');
-      const host = (readDesktopHostsConfig().hosts || []).find((entry) => entry?.id === hostId);
-      const url = normalizeHostUrl(host?.apiUrl || host?.url || '');
-      if (!host || !url) return { status: 'failed', error: null };
-      return requestRemoteHostUpdate({
-        url,
-        clientToken: sanitizeClientTokenForStorage(host.clientToken) || '',
-        requestHeaders: host.requestHeaders || {},
-        chromiumFetch: (requestUrl, options) => electronNet.fetch(requestUrl, options),
-      });
-    }
-
     case 'desktop_remote_password_login':
       return loginRemoteAndIssueClientToken({
         url: args.url,
@@ -5065,65 +5009,15 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       return null;
     }
 
-    case 'desktop_get_update_channel': {
-      return { channel: readUpdateChannel() };
-    }
-
-    case 'desktop_set_update_channel': {
-      if (!isUpdateChannel(args?.channel)) {
-        throw new Error('Unknown update channel');
-      }
-      const channel = args.channel;
-      await mutateSettingsRoot((root) => {
-        root.desktopUpdateChannel = channel;
-      });
-      return { channel };
-    }
-
     case 'desktop_check_for_updates': {
       assertUpdaterCapability({ packaged: app.isPackaged });
-      // electron-updater answers a check that is already running, for the
-      // feed it started on. A channel switched meanwhile waits for that check
-      // to end, then checks its own feed.
-      if (state.updateCheck && readUpdateChannel() !== state.updaterChannel) {
-        await state.updateCheck.catch(() => null);
-      }
-      const channel = readUpdateChannel();
-      applyUpdaterChannel(channel);
-      // The source this check started on. A check running beside it can fall
-      // back first and move the shared state to GitHub; this one still owes
-      // its caller the same fallback.
-      const startedOn = state.updaterSource;
+      applyUpdaterFeed();
       const currentVersion = APP_VERSION;
-      const runCheck = () => checkForDesktopUpdate({
+      const { available, updateInfo, nextVersion, pendingUpdate } = await checkForDesktopUpdate({
         autoUpdater,
         currentVersion,
         pendingUpdate: state.pendingUpdate,
-        missingFeedIsError: state.updaterSource === 'mirror',
       });
-      // The whole check, the GitHub retry included, is what a channel switch
-      // waits for: a switch that ran between the two would have its feed
-      // replaced by the retry.
-      const check = (async () => {
-        try {
-          return await runCheck();
-        } catch (error) {
-          if (startedOn !== 'mirror') throw error;
-          // The mirror failed: GitHub answers this check and the next ones for a while.
-          log.warn('[electron] update mirror failed, checking GitHub', error instanceof Error ? error.message : String(error));
-          state.updaterMirrorFailedAt = Date.now();
-          applyUpdaterChannel(channel, 'github');
-          return runCheck();
-        }
-      })();
-      state.updateCheck = check;
-      let result;
-      try {
-        result = await check;
-      } finally {
-        if (state.updateCheck === check) state.updateCheck = null;
-      }
-      const { available, updateInfo, nextVersion, pendingUpdate } = result;
       // Assign before the changelog fetch: a download can finish while the
       // notes load and mark this record as downloaded. Assigning after that
       // await would replace it with the pre-await copy and drop the payload.
@@ -5161,11 +5055,6 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
           data: {},
         }));
         return null;
-      } catch (error) {
-        // A retry checks first (useUpdateStore.downloadUpdate), so marking the
-        // mirror failed sends the retry's check and download to GitHub.
-        if (state.updaterSource === 'mirror') state.updaterMirrorFailedAt = Date.now();
-        throw error;
       } finally {
         setTaskbarProgress(-1);
       }

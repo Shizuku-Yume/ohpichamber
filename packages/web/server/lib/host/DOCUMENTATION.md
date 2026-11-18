@@ -35,7 +35,6 @@
 - `feature-routes-runtime.js`: Registers Host feature route domains (filesystems, environments, quotas, walkthroughs, git, dev servers, session folders, project context, scheduled tasks, tracked items).
 - `models-metadata.js`: In-process cache and client projection helper for the `models.dev` catalog.
 - `openrouter-model-info.js`: In-process cache and local id matching for OpenRouter's public model list, behind `POST /api/openchamber/openrouter/model-info` for Models-dialog auto-fill; refused in enterprise mode before any request.
-- `npm-registry-config.js` (`npm-registry-config.d.ts`): Resolves npm registry endpoints and authentication headers from `.npmrc` or environment configurations.
 - `openchamber-routes.js`: Registers OpenChamber update checks, update installations, enterprise policy, and model catalog endpoints.
 - `server-utils-runtime.js`: Utility helpers for PATH augmentation, executable resolution, and SSE data payload parsing.
 - `session-runtime.js`: In-memory state machine for session activity phases, attention status, and blocking requests, driven by Canonical `/api/agent/v1` events and snapshots.
@@ -242,7 +241,7 @@ The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/pe
     6. Browser auth, passkeys, and client pairing (`registerAuthAndAccessRoutes`)
     7. TTS routes (`registerTtsRoutes`)
     8. Notification subscription and delivery routes (`registerNotificationRoutes`)
-    9. OpenChamber updater and model catalog routes (`registerOpenChamberRoutes`)
+    9. OpenChamber release-notes and model catalog routes (`registerOpenChamberRoutes`)
   - Returns `{ uiAuthController }`.
 
 ### cli-options.js
@@ -295,14 +294,10 @@ The reverse direction is a Host-initiated `POST /internal/sessions/:sessionId/pe
 - `registerOpenRouterModelInfoRoute(app, { fetchImpl, enterprisePolicyOptions, url, ttlMs, timeoutMs, now } = {})`: Registers `POST /api/openchamber/openrouter/model-info` for the Models dialog's auto-fill. The body is `{ modelIds }` (1–200 trimmed ids, ≤256 characters, strict schema). The route fetches OpenRouter's public model list with `fetchImpl` (a bare `GET https://openrouter.ai/api/v1/models`, no body, no auth, no cookies, 8 s timeout, 8 MiB cap) and matches ids locally — exact id first, then a base id that only one publisher owns (the segment after the last `/`, lowercased, with `:` read as `-` and a `free`/`cloud` variant suffix dropped; two publishers sharing a basename get no bare-name match). The response lists only known ids as `{ models: [{ modelId, catalog }] }`, where `catalog` is `{ source: 'openrouter', input, contextWindow, maxTokens, cost: { input, output, cacheRead, cacheWrite }, reasoning, toolsSupported }` and `cost` uses the catalog's USD-per-million-token unit, rounded to six decimals, with 0 for a cache price the public list omits. Models without a positive context window, a positive `max_completion_tokens`, a usable input modality or usable input/output prices are omitted rather than invented. Every refusal is an `application/problem+json` document: 400 `INVALID_REQUEST` (also for a malformed or oversized body), 403 `enterprise_mode` before any outbound request, and 502 `PROVIDER_UNAVAILABLE` when the upstream fetch fails, times out or returns an oversized payload — never an empty success.
 - `createOpenRouterModelCatalog({ fetchImpl, url, ttlMs, timeoutMs, now } = {})`: Internal (not exported) in-memory cache behind the route (default 10-minute TTL). Its `lookup(modelIds)` returns the same matched projections; failures are not cached. The route is the only caller, so the cache is exercised through `registerOpenRouterModelInfoRoute`.
 
-### npm-registry-config.js
-- `resolveNpmRegistryRequest(packageName, metadataPath)`: Parses npm registry configuration from process environment (`npm_config_*`, `NPM_CONFIG_*`) and user `.npmrc`. Supports scoped registries (such as `@scope:registry`) and resolves Bearer token or Basic authentication headers. Exported type declarations live in `npm-registry-config.d.ts`.
-
 ### openchamber-routes.js
 - `registerOpenChamberRoutes(app, dependencies)`:
   - `GET /api/openchamber/enterprise-policy`: Returns public enterprise mode policy.
-  - `GET /api/openchamber/update-check`: Checks for application updates.
-  - `POST /api/openchamber/update-install`: Initiates update installation (delegated to Electron `desktopUpdater`, systemd transient units, macOS launchd kickstarts, or Windows `.cmd` scripts).
+  - `GET /api/openchamber/release-notes`: Returns the bundled changelog's release notes for `version`, or for the range since `since`. Nothing is fetched; a missing bundle answers 503.
   - `GET /api/openchamber/models-metadata`: Returns projected `models.dev` metadata.
   - `POST /api/openchamber/openrouter/model-info`: Registers through `openrouter-model-info.js`; see that module.
 

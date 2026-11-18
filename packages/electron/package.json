@@ -207,8 +207,8 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "openchamber",
-      "repo": "openchamber"
+      "owner": "Shizuku-Yume",
+      "repo": "ohpichamber"
     }
   }
 }

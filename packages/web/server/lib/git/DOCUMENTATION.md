@@ -346,7 +346,7 @@ Anonymous execution uses managed HTTPS environment and exact-key local HTTP sani
 
 Public transport is `{ mode: 'anonymous', verification: { status: 'anonymous' } }`, with no actor. Audit transport is `{ kind: 'anonymous' }` and has no provider account. Auxiliary endpoints still need independent exact grants, even on the same host. An exact anonymous auxiliary grant may fetch only an HTTPS submodule or LFS endpoint under the same credential-free environment isolation; it never starts the credential resolver or broker. Missing grants remain authorization-required. Explicit managed auxiliary grants cannot replace the parent's anonymous metadata.
 
-The loopback HTTPS canary exercises real clone, fetch, pull and an authentication challenge with test-only self-signed TLS acceptance. It checks local included headers, cookies, helpers, AskPass, netrc, proxy and client-certificate isolation. These tests do not establish native Windows or packaged-runtime behavior.
+The loopback HTTPS test server exercises real clone, fetch, pull and an authentication challenge with test-only self-signed TLS acceptance. It checks local included headers, cookies, helpers, AskPass, netrc, proxy and client-certificate isolation. These tests do not establish native Windows or packaged-runtime behavior.
 
 ### Checkout hydration
 

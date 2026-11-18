@@ -1423,8 +1423,8 @@ describe('git network operation routes', () => {
   });
 
   it('does not expose native planning paths in responses or logs', async () => {
-    const canary = '/private/openchamber-store/git-network-operations.json';
-    const error = Object.assign(new Error(`ENOENT: no such file or directory, open '${canary}'`), { code: 'ENOENT' });
+    const secretPath = '/private/openchamber-store/git-network-operations.json';
+    const error = Object.assign(new Error(`ENOENT: no such file or directory, open '${secretPath}'`), { code: 'ENOENT' });
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { app, getRoute } = createRouteRegistry();
     registerGitRoutes(app, {
@@ -1434,8 +1434,8 @@ describe('git network operation routes', () => {
     const response = createMockResponse();
     await getRoute('POST', '/api/git/network-operations')({ body: { operation: 'fetch' } }, response);
     expect(response.body).toEqual({ error: 'Git network operation request failed', code: 'UNKNOWN' });
-    expect(JSON.stringify(response.body)).not.toContain(canary);
-    expect(JSON.stringify(logged.mock.calls)).not.toContain(canary);
+    expect(JSON.stringify(response.body)).not.toContain(secretPath);
+    expect(JSON.stringify(logged.mock.calls)).not.toContain(secretPath);
     logged.mockRestore();
   });
 });
@@ -2162,8 +2162,8 @@ describe('git network operation routes', () => {
   });
 
   it('does not expose native planning paths in responses or logs', async () => {
-    const canary = '/private/openchamber-store/git-network-operations.json';
-    const error = Object.assign(new Error(`ENOENT: no such file or directory, open '${canary}'`), { code: 'ENOENT' });
+    const secretPath = '/private/openchamber-store/git-network-operations.json';
+    const error = Object.assign(new Error(`ENOENT: no such file or directory, open '${secretPath}'`), { code: 'ENOENT' });
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { app, getRoute } = createRouteRegistry();
     registerGitRoutes(app, {
@@ -2173,8 +2173,8 @@ describe('git network operation routes', () => {
     const response = createMockResponse();
     await getRoute('POST', '/api/git/network-operations')({ body: { operation: 'fetch' } }, response);
     expect(response.body).toEqual({ error: 'Git network operation request failed', code: 'UNKNOWN' });
-    expect(JSON.stringify(response.body)).not.toContain(canary);
-    expect(JSON.stringify(logged.mock.calls)).not.toContain(canary);
+    expect(JSON.stringify(response.body)).not.toContain(secretPath);
+    expect(JSON.stringify(logged.mock.calls)).not.toContain(secretPath);
     logged.mockRestore();
   });
 });

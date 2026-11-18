@@ -54,7 +54,6 @@ import { z } from 'zod';
  * - Speech and transcription go only to servers on this machine (`tts`,
  *   `dictation`).
  * - Push notifications carry no message text or session name (`notifications`).
- * - Update checks still run but never report usage (`package-manager.js`).
  * - The draw.io diagram editor, diagrams.net's own page in a frame, is not
  *   loaded; a .drawio file opens as its XML (`packages/ui` FilesView). The
  *   crossing happens in the browser, so the UI is where it is held back.

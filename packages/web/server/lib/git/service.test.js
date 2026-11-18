@@ -4371,7 +4371,7 @@ describe('removeWorktree', () => {
     claimedEntry = destination;
     fs.unlinkSync(source);
     fs.mkdirSync(source);
-    fs.writeFileSync(path.join(source, 'canary'), 'concurrent directory contents\n');
+    fs.writeFileSync(path.join(source, 'sentinel-entry'), 'concurrent directory contents\n');
    }
    await rename(source, destination);
   });
@@ -4383,7 +4383,7 @@ describe('removeWorktree', () => {
    })).rejects.toThrow(/locked/);
    expect(claimedEntry).toBeDefined();
    expect(fs.lstatSync(fixture.gitEntry, { throwIfNoEntry: false })).toBeUndefined();
-   expect(fs.readFileSync(path.join(claimedEntry, 'canary'), 'utf8')).toBe('concurrent directory contents\n');
+   expect(fs.readFileSync(path.join(claimedEntry, 'sentinel-entry'), 'utf8')).toBe('concurrent directory contents\n');
    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(claimedEntry));
   } finally {
    renameSpy.mockRestore();
@@ -4495,8 +4495,8 @@ describe('removeWorktree', () => {
    fs.symlinkSync(outside, target, 'dir');
   }
   const linkTarget = installGitDirectoryLink({ ...fixture, metadata: target }, true);
-  const canary = path.join(target, 'canary');
-  fs.writeFileSync(canary, 'untouched\n');
+  const secretPath = path.join(target, 'sentinel-entry');
+  fs.writeFileSync(secretPath, 'untouched\n');
 
   await expect(removeWorktree(fixture.repo, {
    directory: fixture.worktree,
@@ -4504,7 +4504,7 @@ describe('removeWorktree', () => {
   })).rejects.toThrow('outside this repository\'s worktree metadata');
 
   expect(fs.readlinkSync(fixture.gitEntry)).toBe(linkTarget);
-  expect(fs.readFileSync(canary, 'utf8')).toBe('untouched\n');
+  expect(fs.readFileSync(secretPath, 'utf8')).toBe('untouched\n');
   expect(fs.readFileSync(path.join(fixture.worktree, 'README.md'), 'utf8')).toBe('# Test\n');
   expect(runGit(fixture.repo, ['show-ref', '--verify', 'refs/heads/feature/remove'])).toContain('refs/heads/feature/remove');
  });
@@ -4608,7 +4608,7 @@ describe('removeWorktree', () => {
   try {
    const repo = createTempDir();
    const sentinel = createTempDir();
-   const canary = path.join(sentinel, 'canary.txt');
+   const secretPath = path.join(sentinel, 'sentinel.txt');
 
    runGit(repo, ['init', '-b', 'main']);
    runGit(repo, ['config', 'user.email', 'test@example.com']);
@@ -4616,13 +4616,13 @@ describe('removeWorktree', () => {
    fs.writeFileSync(path.join(repo, 'README.md'), '# Test\n');
    runGit(repo, ['add', 'README.md']);
    runGit(repo, ['commit', '-m', 'Initial commit']);
-   fs.writeFileSync(canary, 'sentinel');
+   fs.writeFileSync(secretPath, 'sentinel');
 
    await expect(removeWorktree(repo, {
     directory: sentinel,
     deleteLocalBranch: false,
    })).resolves.toBe(true);
-   expect(fs.existsSync(canary)).toBe(true);
+   expect(fs.existsSync(secretPath)).toBe(true);
   } finally {
    if (previousXdgDataHome === undefined) {
     delete process.env.OPENCHAMBER_DATA_DIR;

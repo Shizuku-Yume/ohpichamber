@@ -215,7 +215,7 @@ describe('terminal runtime', () => {
   it.each([
     [undefined, 'node-pty'],
     ['1.3.14', 'node-pty'],
-    ['1.4.0-canary.1', 'node-pty'],
+    ['1.4.0-beta.1', 'node-pty'],
     ['1.4.0', 'bun-pty'],
     ['1.10.0', 'bun-pty'],
     ['2.0.0', 'bun-pty'],

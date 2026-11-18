@@ -47,6 +47,7 @@ packages/web/server/built-in-extensions/
 packages/web/server/built-in-extensions.previous-*/
 packages/web/server/.builtin-build-*/
 packages/web/resources/agent-runtime/
+packages/web/resources/changelog/
 packages/web/resources/agent-runtime.staging/
 packages/web/resources/standalone-sdk/
 build/

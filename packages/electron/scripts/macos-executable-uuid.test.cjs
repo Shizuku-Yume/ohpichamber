@@ -51,7 +51,7 @@ test('replaces only the UUID, with one derived from the appId', () => {
 
 test('the UUID is stable for an appId and differs between appIds', () => {
   assert.deepEqual(deriveExecutableUuid('dev.ohpichamber.desktop'), deriveExecutableUuid('dev.ohpichamber.desktop'));
-  assert.notDeepEqual(deriveExecutableUuid('dev.ohpichamber.desktop'), deriveExecutableUuid('dev.ohpichamber.desktop.canary'));
+  assert.notDeepEqual(deriveExecutableUuid('dev.ohpichamber.desktop'), deriveExecutableUuid('dev.openchamber.desktop'));
 });
 
 test('an executable it cannot patch fails the build', () => {

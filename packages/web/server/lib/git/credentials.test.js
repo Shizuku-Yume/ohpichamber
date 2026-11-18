@@ -25,7 +25,7 @@ const fixture = async (inventoryOptions = {}) => {
   const discoveryRoot = path.join(root, '.ssh');
   await fs.mkdir(discoveryRoot, { mode: 0o700 });
   const privateKeyPath = path.join(discoveryRoot, 'id_ed25519');
-  await run('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', 'private-comment-canary', '-f', privateKeyPath]);
+  await run('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-C', 'private-comment-sentinel', '-f', privateKeyPath]);
   const fingerprint = (await run('ssh-keygen', ['-lf', `${privateKeyPath}.pub`, '-E', 'sha256'])).stdout.split(' ')[1];
   const record = { id: 'key_one', privateKeyPath, fingerprint };
   const filePath = path.join(root, 'git-ssh-credentials.json');
@@ -212,7 +212,7 @@ describe('connected-server managed SSH inventory', () => {
     const candidate = discovery.body.candidates[0];
     expect(candidate.candidateId).toMatch(/^ssh_candidate_[A-Za-z0-9_]+$/);
     expect(JSON.stringify(discovery.body)).not.toContain(record.privateKeyPath);
-    expect(JSON.stringify(discovery.body)).not.toContain('private-comment-canary');
+    expect(JSON.stringify(discovery.body)).not.toContain('private-comment-sentinel');
     expect(JSON.stringify(discovery.body)).not.toContain('PRIVATE KEY');
     expect((await request(app).post('/api/git/managed-ssh-credentials').send({ operation: 'import',
       candidateId: candidate.candidateId, expectedFingerprint: `SHA256:${'z'.repeat(43)}`, confirmed: true }).expect(200)).body)
@@ -329,7 +329,7 @@ describe('connected-server managed SSH inventory', () => {
       expect(response.body).toEqual({ code: 'INVALID_REQUEST', error: 'Invalid managed SSH inventory request' });
     }
     await store.replace([record]);
-    await fs.writeFile(filePath, 'private-invalid-canary');
+    await fs.writeFile(filePath, 'private-invalid-sentinel');
     const response = await request(app).post('/api/git/managed-ssh-credentials').send({ operation: 'inventory' }).expect(500);
     expect(response.body).toEqual({ code: 'UNKNOWN', error: 'Managed SSH inventory could not be read' });
     expect(response.body).not.toHaveProperty('credentials');

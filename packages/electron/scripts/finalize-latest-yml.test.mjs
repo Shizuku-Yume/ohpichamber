@@ -41,7 +41,7 @@ const environment = ({ artifacts, output }) => ({
   ...process.env,
   LATEST_YML_DIR: artifacts,
   RUNNER_TEMP: output,
-  GH_REPO: 'openchamber/openchamber',
+  GH_REPO: 'Shizuku-Yume/ohpichamber',
   OPENCHAMBER_VERSION: '1.2.3',
 });
 

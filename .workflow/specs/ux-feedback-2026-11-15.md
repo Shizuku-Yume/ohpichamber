@@ -1,6 +1,6 @@
 # Maintainer feedback 2026-11-15: tool tiers, MCP sign-in, chat rendering and the Settings pages
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** ux-feedback-2026-11-15/integration
 

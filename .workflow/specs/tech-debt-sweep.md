@@ -1,6 +1,6 @@
 # Technical debt sweep: zero dead code and lint warnings, every debt entry closed, finished efforts closed, stale worktrees gone
 
-**Status:** in progress
+**Status:** done
 **Priority:** high
 **Integration branch:** tech-debt-sweep/integration
 

@@ -82,7 +82,7 @@ Every change keeps the existing path: UI `canonicalClient` → Host session rout
 
 ## How we will know it works
 
-Worker behaviour is tested against a real OMP `AgentSession` with the local `Bun.serve` chat-completions fixture used by `worker/session-native.test.ts`. Host routes get `packages/web` tests; UI gets component tests. W11 uses the real provider (`~/.config/ohpichamber/omp-m0-provider.env`) and the maintainer's real OMP config, with the `gemini-3.8-flash` model at `high` for sends.
+W11 uses a real provider (configured through the app) and the maintainer's real OMP config, with the `gemini-3.8-flash` model at `high` for sends.
 
 - **W1.** In a project with a session created by `omp` CLI and one created in the app, the sidebar lists both with OMP's titles. A new app chat gets OMP's generated title. A rename in the app is what `omp --resume` shows.
 - **W2.** After a Host start over 20 persisted sessions, no SDK worker is running. Opening, scrolling and prefetching 10 sessions starts none. A send starts one. Sending in 7 different sessions in a row never returns 503; the least recently used idle worker is evicted.

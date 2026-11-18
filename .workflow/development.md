@@ -5,6 +5,8 @@ Read this record before implementation, together with the [agent guide](../AGENT
 ## Current state
 
 **2026-11-18 Task 19 Round-2 visual acceptance and full gate (effort `ux-feedback-2026-11-15`, branch `ux-feedback-2026-11-15/19`, base `4f9a7c7f39`, integration tip `57564bf232`, artifacts `/home/shizuku/Project/ohpichamber-omp-artifacts/ux-feedback-2026-11-18-r2/task19/`):**
+**2026-11-18 Operator cutover (task rebrand/07, base `7e9251f0d9`):** Cut the operator files (`omp-m0-provider.env`, `chats/`) over to OhPiChamber's own data directory, making `~/.config/ohpichamber` the maintainer's real product data directory. Dev/test runs now isolate data from this directory and real-provider checks configure the provider through the app instead of sourcing an environment file.
+
 1. **Full gate on tip `57564bf232` (`gate/FINAL-SUMMARY.txt`):**
    - `bun run check`: exit 0 (5/5 steps: `tsc -b` 3,880 files / 5 projects, `upstream-drift` clean, `error-cause` 0, `css-classes` 2,260 tokens, `upstream-gaps` 662/662 allowlisted / 0 unallowlisted).
    - `bun run type-check`: exit 0 (root + electron + agent-contract + agent-service + mobile).
@@ -318,11 +320,11 @@ Execution order is M1 Host extraction and authenticated credential preflight, M2
 To run the real provider test, load the local fish configuration and run the probe:
 
 ```fish
-source ~/.config/ohpichamber/omp-m0-provider.env
+Configure the provider through the app. The probe is run without sourcing an environment file.
 bun run scripts/omp-m0/run.mjs --suite capabilities --fixture --real-provider --output /home/shizuku/Project/ohpichamber-omp-artifacts/omp-m0-real-provider.json
 ```
 
-`~/.config/ohpichamber/omp-m0-provider.env` is the operator-managed local configuration containing the already-approved provider settings. It stays outside the repository. The probe reads the exported values, sends one short completion request, and writes only the sanitized result to the evidence directory named in [standards.md](standards.md).
+Real provider settings are now configured through the app. The probe sends a completion request, and writes only the sanitized result to the evidence directory named in [standards.md](standards.md).
 
 ## Next implementation step
 

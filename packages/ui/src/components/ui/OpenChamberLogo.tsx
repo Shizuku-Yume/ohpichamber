@@ -95,6 +95,9 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
           <path key={path} d={path} />
         ))}
       </g>
+      {/* The π stays still while the tiers light up. */}
+      <path d={ART.pi.face} fill={color} />
+      <path d={ART.pi.fold} fill={color} />
     </svg>
   );
 };

@@ -405,6 +405,59 @@
           ]
         },
         {
+          "image-name": "pi.png",
+          "name": "pi",
+          "glass-specializations": [
+            {
+              "value": false
+            },
+            {
+              "appearance": "dark",
+              "value": true
+            },
+            {
+              "appearance": "tinted",
+              "value": true
+            }
+          ],
+          "opacity-specializations": [
+            {
+              "value": 1
+            }
+          ],
+          "position-specializations": [
+            {
+              "idiom": "square",
+              "value": {
+                "scale": 1.15,
+                "translation-in-points": [
+                  -0.65,
+                  -3.25
+                ]
+              }
+            }
+          ],
+          "fill-specializations": [
+            {
+              "value": {
+                "solid": "srgb:0.22000,0.22000,0.23000,1.00000"
+              }
+            },
+            {
+              "appearance": "dark",
+              "value": {
+                "solid": "srgb:0.96000,0.96000,0.97000,1.00000"
+              }
+            },
+            {
+              "appearance": "tinted",
+              "value": {
+                "solid": "srgb:0.96000,0.96000,0.97000,1.00000"
+              }
+            }
+          ]
+        },
+        {
           "image-name": "roof.png",
           "name": "roof",
           "glass-specializations": [

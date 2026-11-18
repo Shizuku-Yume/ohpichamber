@@ -4,7 +4,6 @@ package.json	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the
 packages/electron/package.json	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Electron 44.9.3, 1.0.0 release version, unsigned fork packaging targets, stable channel only, no OpenCode CLI runtime.
 packages/mobile/package.json	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Fork mobile version 1.0.0 and its own type-check; upstream bundling scripts adopted.
 packages/sdk/package.json	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Guest SDK renamed to ohpichamber-sdk at 1.0.0 for the private bootstrap transport.
-packages/web/package.json	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Fork web package ohpichamber at 1.0.0 with standalone agent-runtime staging and no OpenCode dependencies or engines.
 bun.lock	fork-differs	decision	2026-11-16 - First release is 1.0.0 under the ohpichamber package names, stable channel only	Regenerated from the resolved manifests after the 1.0.0 ohpichamber/ohpichamber-sdk renames and dependency bumps.
 packages/sdk/src/manifest.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Upstream v2.7.0 guest surfaces minus the OpenCode plugin role and capability the fork retired.
 packages/sdk/src/parse.ts	fork-differs	decision	2026-11-11 - Resolve the web work modules to the fork host boundary in the upstream merge	Parses upstream v2.7.0 manifest shapes without `contributes.opencodePlugin`.
@@ -557,8 +556,6 @@ packages/web/server/lib/enterprise-mode.d.ts	fork-differs	decision	2026-11-11 - 
 packages/web/server/lib/enterprise-mode.test.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Tests the fork policy fields; upstream covered the pinned OpenCode binary and OpenCode request guards.
 packages/web/server/lib/environment/DOCUMENTATION.md	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Settings text follows the fork JSON-body allowlist in `host/core-routes.js` and drops the VS Code column the fork retired.
 packages/web/server/lib/environment/routes.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Points at `host/core-routes.js` for the JSON-body allowlist, the fork owner of that list.
-packages/web/server/lib/environment/runtime.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Removes the retired OpenCode service environment helper (`forOpenCode` / `readOpenCodeServiceEnv`) while keeping directory and project overlays.
-packages/web/server/lib/environment/runtime.test.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Drops the retired `forOpenCode` test assertions alongside the removed OpenCode service env helper.
 packages/web/server/lib/linear/status-runtime.test.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Host-side Linear status fixture; the upstream OpenCode response helpers were removed with the engine.
 packages/web/server/lib/linear/tracker.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Session comments post through `sessionStatus.post` from the Host canonical event runtime; upstream built an OpenCode session-status runtime.
 packages/web/server/lib/linear/tracker.test.js	fork-differs	decision	2026-11-11 - Keep the remaining web modules on the fork Host and Canonical owners in the v2.7.0 merge	Keeps the Linear URL table and descriptor fixture locally because the shared UI fixture belongs to the later tracker UI task.
@@ -2252,12 +2249,6 @@ packages/web/server/lib/tunnels/providers/tailscale.js	fork-differs	decision	202
 packages/web/src/api/notifications.ts	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
 packages/web/src/sw.ts	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
 scripts/perf/animation-fixture.html	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
-<<<<<<< HEAD
-scripts/tool-use-bench/README.md	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
-packages/ui/src/components/chat/FileAttachment.tsx	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup.
-packages/ui/src/components/chat/composer/language/tokenize.ts	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup.
-packages/ui/src/lib/i18n/messages/zh-CN.ts	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup.
-packages/ui/src/lib/i18n/store.ts	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup.
-.workflow/tasks/final-main-audit/03-ui-code-style-and-design-compliance.md	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup - partial success.
-=======
->>>>>>> final-main-audit/04
+packages/web/package.json	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Fork-specific package dependencies and config.
+packages/web/server/lib/environment/runtime.js	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Fork-specific runtime configuration.
+packages/web/server/lib/environment/runtime.test.js	fork-differs	decision	2026-11-18 - Remove OpenCode service and environment variables	Fork-specific runtime configuration tests.

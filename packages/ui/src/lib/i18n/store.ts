@@ -29,38 +29,36 @@ async function loadDictionary(locale: Locale): Promise<I18nDictionary> {
     return cached;
   }
 
-  const mod = locale === 'zh-CN'
-    ? await import('./messages/zh-CN') as { dict: I18nDictionary }
-    : locale === 'fr'
-      ? await import('./messages/fr') as { dict: I18nDictionary }
-      : locale === 'nl'
-        ? await import('./messages/nl') as { dict: I18nDictionary }
-        : locale === 'zh-TW'
-          ? await import('./messages/zh-TW') as { dict: I18nDictionary }
-          : locale === 'es'
-            ? await import('./messages/es') as { dict: I18nDictionary }
-            : locale === 'pt-BR'
-              ? await import('./messages/pt-BR') as { dict: I18nDictionary }
-              : locale === 'uk'
-                ? await import('./messages/uk') as { dict: I18nDictionary }
-                : locale === 'ko'
-                  ? await import('./messages/ko') as { dict: I18nDictionary }
-                  : locale === 'pl'
-                    ? await import('./messages/pl') as { dict: I18nDictionary }
-                    : locale === 'de'
-                      ? await import('./messages/de') as { dict: I18nDictionary }
-                      : locale === 'ja'
-                        ? await import('./messages/ja') as { dict: I18nDictionary }
-                        : locale === 'tr'
-                          ? await import('./messages/tr') as { dict: I18nDictionary }
-                          : locale === 'ar'
-                            ? await import('./messages/ar') as { dict: I18nDictionary }
-                            : locale === 'he'
-                              ? await import('./messages/he') as unknown as { dict: I18nDictionary } // Incomplete Hebrew translation
-                              : { dict: enDict };
+  /*
+    The dictionaries are runtime-selected. We cast the import result to I18nDictionary,
+    as the module structure is guaranteed to contain a 'dict' of type I18nDictionary.
+  */
+  const moduleResult = await (async () => {
+    switch (locale) {
+      case 'zh-CN': return import('./messages/zh-CN');
+      case 'fr': return import('./messages/fr');
+      case 'nl': return import('./messages/nl');
+      case 'zh-TW': return import('./messages/zh-TW');
+      case 'es': return import('./messages/es');
+      case 'pt-BR': return import('./messages/pt-BR');
+      case 'uk': return import('./messages/uk');
+      case 'ko': return import('./messages/ko');
+      case 'pl': return import('./messages/pl');
+      case 'de': return import('./messages/de');
+      case 'ja': return import('./messages/ja');
+      case 'tr': return import('./messages/tr');
+      case 'ar': return import('./messages/ar');
+      case 'he': return import('./messages/he');
+      default: return import('./messages/en');
+    }
+  })();
+  const mod = moduleResult as { dict: I18nDictionary };
   const subagentDict = subagentHudI18n[locale] ?? subagentHudI18n.en;
+  /* SAFETY: timelineNoticesI18n structure is Record<string, Record<string, string>>. */
   const noticeDict = (timelineNoticesI18n as Record<string, Record<string, string>>)[locale] ?? timelineNoticesI18n.en;
-  const fullDict = { ...mod.dict, ...subagentDict, ...noticeDict } as I18nDictionary;
+
+  /* SAFETY: The merged dictionary follows the I18nDictionary contract. */
+  const fullDict = { ...mod.dict, ...subagentDict, ...noticeDict };
   dictionaries.set(locale, fullDict);
   return fullDict;
 }

@@ -13,7 +13,7 @@ The mark is upstream's open shell with OMP's π on its left face, the bar folded
 | In-app logo: the open shell in one colour | Every splash, About, sign-in, empty states, README |
 | Glyph: cube outline, two roof rings and the π, one colour | macOS menu bar, favicon, model picker sprite, Android notification and themed icon, iOS Control Center |
 
-This fork has no Canary channel, so there is no second icon set: `packages/electron/resources/icons` is the only one.
+This fork ships a single release channel, so there is no second icon set: `packages/electron/resources/icons` is the only one.
 
 The macOS menu bar animation lives in `packages/electron/tray.mjs`; this module only draws its frames. `OpenChamberLogo.tsx` renders the in-app logo from the generated `openChamberLogoArt.ts` and owns its loading animation; the π stays still while the tiers light.
 

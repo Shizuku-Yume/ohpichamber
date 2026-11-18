@@ -63,7 +63,7 @@ jobs:
           VERSION: ${{ steps.get_version.outputs.version }}
         run: |
           title=$(node scripts/changelog/release-notes.mjs "$VERSION" artifacts/release-notes.md)
-          echo "name=OpenChamber v$VERSION: $title" >> "$GITHUB_OUTPUT"
+          echo "name=OhPiChamber v$VERSION: $title" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
         id: create_release
@@ -149,7 +149,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
-          tags: openchamber:${{ needs.create-release.outputs.version }}
+          tags: ohpichamber:${{ needs.create-release.outputs.version }}
 
   build-desktop-electron-macos:
     needs: create-release
@@ -206,6 +206,9 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+      - name: Generate brand assets
+        run: bun run brand:generate
+
       - name: Build Electron app
         working-directory: packages/electron
         env:
@@ -237,7 +240,7 @@ jobs:
               --config.mac.notarize=false \
               --config.mac.verifyUpdateCodeSignature=false
           fi
-          bun run verify:agent-runtime "dist/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/OpenChamber.app/Contents/Resources"
+          bun run verify:agent-runtime "dist/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/OhPiChamber.app/Contents/Resources"
 
       - name: Verify signature + entitlements + notarization
         if: ${{ secrets.APPLE_CERTIFICATE != '' }}

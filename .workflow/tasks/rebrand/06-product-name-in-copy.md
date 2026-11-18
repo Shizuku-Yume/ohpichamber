@@ -11,3 +11,4 @@
 - [ ] Non-i18n strings are edited by hand.
 - [ ] A new About credit key in every locale.
 - [ ] README and product docs say OhPiChamber. Historical changelog sections stay.
+- [ ] Update remaining `openchamber.dev` and `openchamber/openchamber` links in `packages/docs/` to `Shizuku-Yume/ohpichamber`.

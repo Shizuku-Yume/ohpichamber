@@ -408,28 +408,3 @@ export const GeneralFilesAndTerminalSettings: React.FC = () => (
   </>
 );
 
-/** The last section of General: usage reports. */
-export const GeneralConnectionAndPrivacySettings: React.FC = () => {
-  const { t } = useI18n();
-  const reportUsage = useUIStore((state) => state.reportUsage);
-  const setReportUsage = useUIStore((state) => state.setReportUsage);
-
-  // Sync reportUsage changes to server settings
-  const handleReportUsageChange = React.useCallback((enabled: boolean) => {
-    setReportUsage(enabled);
-    void updateDesktopSettings({ reportUsage: enabled });
-  }, [setReportUsage]);
-
-  return (
-    <SettingsSection title={t('settings.openchamber.visual.section.privacy')}>
-      <SettingsCheckboxRow
-        checked={reportUsage}
-        onChange={handleReportUsageChange}
-        label={t('settings.openchamber.visual.field.sendAnonymousUsageReports')}
-        info={t('settings.openchamber.visual.field.sendAnonymousUsageReportsHint')}
-        ariaLabel={t('settings.openchamber.visual.field.sendAnonymousUsageReportsAria')}
-        settingsItem="appearance.usage-reports"
-      />
-    </SettingsSection>
-  );
-};

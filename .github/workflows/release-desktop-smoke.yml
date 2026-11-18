@@ -101,6 +101,9 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
+      - name: Generate brand assets
+        run: bun run brand:generate
+
       - name: Build Electron app
         working-directory: packages/electron
         env:
@@ -129,7 +132,7 @@ jobs:
               --config.mac.notarize=false \
               --config.mac.verifyUpdateCodeSignature=false
           fi
-          bun run verify:agent-runtime "dist/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/OpenChamber.app/Contents/Resources"
+          bun run verify:agent-runtime "dist/mac${{ matrix.arch == 'arm64' && '-arm64' || '' }}/OhPiChamber.app/Contents/Resources"
 
       - name: Verify signature + entitlements + notarization
         if: ${{ secrets.APPLE_CERTIFICATE != '' }}

@@ -24,7 +24,12 @@ const resolveDataHome = (env, homeDir) => {
 // Desktop Entry spec: a string value escapes backslashes; an Exec argument is
 // double-quoted with ", `, $ and \ escaped, and a literal % is written %%.
 const escapeDesktopString = (value) => value.replace(/\\/g, '\\\\');
-const quoteExecArgument = (value) => `"${value.replace(/(["`$\\])/g, '\\$1')}"`.replace(/%/g, '%%');
+const EXEC_NEEDS_QUOTES = /[\s"'`$\\<>~|&;*?#()]/;
+const quoteExecArgument = (value) => (
+  EXEC_NEEDS_QUOTES.test(value)
+    ? `"${value.replace(/(["`$\\])/g, '\\$1')}"`
+    : value
+).replace(/%/g, '%%');
 
 export const buildAppImageDesktopEntry = ({ appImagePath, iconPath }) => [
   '[Desktop Entry]',
@@ -38,6 +43,7 @@ export const buildAppImageDesktopEntry = ({ appImagePath, iconPath }) => [
   'StartupNotify=true',
   `StartupWMClass=${WM_CLASS}`,
   'Categories=Development;',
+  'MimeType=x-scheme-handler/ohpichamber;',
   `${MANAGED_KEY}=true`,
   '',
 ].join('\n');

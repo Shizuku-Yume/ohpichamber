@@ -683,9 +683,6 @@
     "notificationTemplates": {
       "scope": "profile"
     },
-    "reportUsage": {
-      "scope": "profile"
-    },
     "usageDisplayMode": {
       "scope": "profile"
     },

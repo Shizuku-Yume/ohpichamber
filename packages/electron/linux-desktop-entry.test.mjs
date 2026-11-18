@@ -47,6 +47,8 @@ test('a first AppImage launch writes a visible launcher entry and its icon', asy
   assert.match(entry, /^StartupWMClass=ohpichamber$/m);
   assert.match(entry, new RegExp(`^TryExec=${lab.env.APPIMAGE}$`, 'm'));
   assert.match(entry, new RegExp(`^Icon=${lab.iconPath}$`, 'm'));
+  assert.match(entry, /^MimeType=x-scheme-handler\/ohpichamber;$/m);
+  assert.match(entry, new RegExp(`^Exec=${lab.env.APPIMAGE} %U$`, 'm'));
   assert.doesNotMatch(entry, /NoDisplay/);
 });
 

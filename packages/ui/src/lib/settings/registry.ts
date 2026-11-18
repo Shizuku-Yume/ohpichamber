@@ -633,7 +633,6 @@ export const SETTINGS_REGISTRY = {
   parse: parseNotificationTemplates,
   ui: uiStore('notificationTemplates', (v) => useUIStore.getState().setNotificationTemplates(v)),
  }),
- reportUsage: field({ scope: 'profile', effect: ['server', 'store', 'ui'], parse: parseBoolean, ui: uiStore('reportUsage', (v) => useUIStore.getState().setReportUsage(v)) }),
 
  // ── Usage page (profile; the page reads and writes these itself) ──
  usageDisplayMode: field({ scope: 'profile', effect: ['store', 'ui'], parse: parseOneOf(['usage', 'remaining']) }),

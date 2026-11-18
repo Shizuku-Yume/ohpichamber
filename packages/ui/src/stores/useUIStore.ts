@@ -1217,7 +1217,6 @@ interface UIStore {
  showSplitAssistantMessageActions: boolean;
  allowPromptingSubagentSessions: boolean;
  isExpandedInput: boolean;
- reportUsage: boolean;
  shortcutOverrides: Record<string, ShortcutCombo>;
  fileEditorKeymap: FileEditorKeymap;
  /** vimrc map lines applied whenever the file editor runs in Vim mode. */
@@ -1488,7 +1487,6 @@ interface UIStore {
  setExpandedInput: (value: boolean) => void;
  requestParallelComposer: (prompt?: string) => void;
  consumeParallelComposerRequest: (id: number) => void;
- setReportUsage: (value: boolean) => void;
  setShortcutOverride: (actionId: string, combo: ShortcutCombo) => void;
  clearShortcutOverride: (actionId: string) => void;
  resetAllShortcutOverrides: () => void;
@@ -1720,7 +1718,6 @@ export const useUIStore = create<UIStore>()(
     allowPromptingSubagentSessions: false,
     draftStartersVisible: true,
     isExpandedInput: false,
-    reportUsage: true,
     shortcutOverrides: {},
     fileEditorKeymap: 'default',
     fileEditorVimMappings: '',
@@ -3368,9 +3365,6 @@ export const useUIStore = create<UIStore>()(
     },
     setAllowPromptingSubagentSessions: (value) => {
      set({ allowPromptingSubagentSessions: value });
-    },
-    setReportUsage: (value) => {
-     set({ reportUsage: value });
     },
     viewPagerPage: 'center',
     setViewPagerPage: (page: 'left' | 'center' | 'right') => {

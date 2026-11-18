@@ -2251,3 +2251,8 @@ packages/web/src/api/notifications.ts	fork-differs	decision	2026-11-16 - Rename 
 packages/web/src/sw.ts	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
 scripts/perf/animation-fixture.html	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
 scripts/tool-use-bench/README.md	fork-differs	decision	2026-11-16 - Rename what users and the OS see; keep OPENCHAMBER_* variables and private names	User-facing product name updated to OhPiChamber in copy, UI, CLI, or docs.
+packages/ui/src/components/chat/FileAttachment.tsx	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup.
+packages/ui/src/components/chat/composer/language/tokenize.ts	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup.
+packages/ui/src/lib/i18n/messages/zh-CN.ts	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup.
+packages/ui/src/lib/i18n/store.ts	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup.
+.workflow/tasks/final-main-audit/03-ui-code-style-and-design-compliance.md	fork-differs	refactor	2026-11-18 - Audit-03 UI polish	UI code style and design compliance cleanup - partial success.

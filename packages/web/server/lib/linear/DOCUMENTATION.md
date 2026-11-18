@@ -26,7 +26,7 @@ Hide Linear UI when the API is missing.
 
 The shared UI reads Linear through the neutral tracker routes, `/api/tracker/linear/*` (`../trackers/DOCUMENTATION.md`), which call the same functions. The routes below are the legacy Linear-shaped set.
 
-- `GET /linear/oauth/callback`: public fallback for an explicitly configured direct redirect URI. The built-in flow uses the stable callback broker instead, because desktop and self-hosted instances may have private or dynamic addresses.
+- `GET /linear/oauth/callback`: public fallback for an explicitly configured direct redirect URI. When a broker URL is configured, the flow uses the stable callback broker instead, because desktop and self-hosted instances may have private or dynamic addresses.
 - `GET /api/linear/auth/status`: connected flag, current user/organization/scope, and `workspaces` (id, name, current, user, authorizedAt). Never returns tokens. A 401 on the current workspace drops that workspace only; if another remains, status returns that one instead of disconnected. Identity refresh does not bump `authorizedAt`.
 - `POST /api/linear/auth/start`: returns `{ authorizationUrl, expiresIn, scope }`. Body may include `origin: "desktop"` so the callback page can raise the desktop window. The authorize URL uses `prompt=consent` so Add workspace can pick a different Linear org. Completing OAuth stores or replaces that org and makes it current.
 - `POST /api/linear/auth/activate`: body `{ organizationId }`. Makes that stored workspace current. 400 if the id is missing, 404 if it is not stored.
@@ -50,14 +50,14 @@ Disconnected list/get/states/update/mapping/session-status return `{ connected: 
 - Mapping storage: `~/.config/ohpichamber/linear-mapping.json` (same data dir). Shape is `{ workspaces: { [workspaceId]: { defaultProjectPath, teamProjectPaths } } }`. Reads and writes use the current workspace slice. A legacy flat file is wrapped under the current workspace id on read. Disconnect does not wipe maps. Writes are atomic and file mode is `0o600`.
 - Session status storage: `~/.config/ohpichamber/linear-session-status.json` (same data dir). Writes are atomic and file mode is `0o600`. Dedupes started/completed/failure per OpenChamber session id.
 - Writes are atomic and file mode is `0o600`.
-- Client ID: `OPENCHAMBER_LINEAR_CLIENT_ID` -> `settings.json` `linearClientId` -> baked-in public default.
+- Client ID: `OPENCHAMBER_LINEAR_CLIENT_ID` -> `settings.json` `linearClientId` -> a baked-in default. A self-hosted broker's Linear application has its own client id, so set it here.
 - Client secret: `OPENCHAMBER_LINEAR_CLIENT_SECRET` -> `settings.json` `linearClientSecret`. Optional with PKCE. Do not commit a secret.
 - Scopes: `OPENCHAMBER_LINEAR_SCOPES` -> `settings.json` `linearScopes` -> `read,write,comments:create`.
 - Session comments: `settings.json` `linearSessionComments`, boolean, absent means off. Written only through `PUT /api/linear/preferences`.
-- Broker URL: `OPENCHAMBER_LINEAR_BROKER_URL` -> `settings.json` `linearBrokerUrl` -> `https://api.openchamber.dev/v1/oauth/linear`.
-- Redirect URI: `OPENCHAMBER_LINEAR_REDIRECT_URI` -> `settings.json` `linearRedirectUri` -> `<broker-url>/callback`. Setting an explicit redirect URI bypasses the broker for custom/self-hosted OAuth applications.
+- Broker URL: `OPENCHAMBER_LINEAR_BROKER_URL` -> `settings.json` `linearBrokerUrl` -> none. The fork ships no default broker. Redirect URI: `OPENCHAMBER_LINEAR_REDIRECT_URI` -> `settings.json` `linearRedirectUri` -> `<broker-url>/callback`. Sign-in is available only when one of those is set, so an explicit redirect URI alone configures it too.
+- Unavailable sign-in: `POST /api/linear/auth/start` answers 400 with `code: 'LINEAR_BROKER_NOT_CONFIGURED'` (and no client id is `LINEAR_CLIENT_ID_MISSING`); any other failure stays 500. `GET /api/linear/auth/status` and the tracker status add `signIn: { reason: 'broker-url-missing', setting: 'OPENCHAMBER_LINEAR_BROKER_URL', settingsKey: 'linearBrokerUrl' }`, so the card shows the reason and the enabling setting instead of a button that fails on click. Connected workspaces and every non-OAuth path (issue list/get/update, mapping, session comments) keep working.
 
-Linear requires an exact callback match. The built-in application registers `https://api.openchamber.dev/v1/oauth/linear/callback`; the broker holds only the short-lived authorization code. The local OpenChamber server keeps the claim secret and PKCE verifier, exchanges the code for tokens locally, then acknowledges the handoff. Custom brokers must expose `/start`, `/callback`, `/poll`, and `/complete` with the same contract.
+Linear requires an exact callback match. A self-hosted broker registers its own Linear OAuth application and uses its own callback, for example `https://broker.example.com/v1/oauth/linear/callback`; the broker holds only the short-lived authorization code. The local OpenChamber server keeps the claim secret and PKCE verifier, exchanges the code for tokens locally, then acknowledges the handoff. A broker must expose `/start`, `/callback`, `/poll`, and `/complete` with the same contract. The built-in Linear application and its hosted callback are not part of this fork.
 
 ## OAuth contract
 
@@ -86,10 +86,11 @@ A worktree started from the board or picker is created in that mapped project. N
 
 ## Notes for contributors
 
-The implementation and deployment hand-off for the stable callback broker is
-in [`OAUTH-BROKER-HANDOFF.md`](./OAUTH-BROKER-HANDOFF.md). It records the exact
-Linear redirect URI that must be registered and why the original loopback
-callback could not support packaged desktop or arbitrary self-hosted servers.
+The broker contract and the deployment hand-off for a self-hosted callback
+broker are in [`OAUTH-BROKER-HANDOFF.md`](./OAUTH-BROKER-HANDOFF.md). It records
+the redirect URI the broker's Linear application must register and why the
+original loopback callback could not support packaged desktop or arbitrary
+self-hosted servers.
 
 - Do not log tokens, codes, verifiers, or the client secret.
 - Do not add Linear under Git or as a third-party plugin row.

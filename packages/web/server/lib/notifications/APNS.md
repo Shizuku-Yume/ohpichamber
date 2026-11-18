@@ -1,9 +1,12 @@
 # APNs remote push — signed relay mode
 
 Native iOS background push (notifications even when the app is **suspended or killed**) is
-delivered via APNs through a **central relay**, so no user configures an Apple key. Each server
-signs its relay requests with an auto-generated keypair, and tokens are bound to the server that
-registered them — so a leaked device token alone can't be used to push.
+delivered via APNs through a relay the operator configures; no user configures an Apple key. Each
+server signs its relay requests with an auto-generated keypair, and tokens are bound to the
+server that registered them — so a leaked device token alone can't be used to push.
+
+The fork configures no relay. Remote push is off until `OPENCHAMBER_PUSH_RELAY_URL` names one,
+or direct mode is set up (see *Modes*); local and Web push are unaffected.
 
 ## How it works
 
@@ -19,9 +22,9 @@ registered them — so a leaked device token alone can't be used to push.
    message content — plus a **`badge`** count (see below) — and POSTs `{ tokens, title, body,
    badge, env, data:{sessionId}, publicKeyJwk, ts, sig }` to `POST /v1/push/send`
    (`apns-runtime.js` → `sendViaRelay`). It does **not** gate on UI visibility (see below).
-4. The **relay** (`openchamber-website/apps/api`, Cloudflare Worker) verifies the signature +
+4. The **relay** verifies the signature +
    `ts` freshness, derives `serverId`, and only delivers to tokens bound to that server. It holds
-   the single project APNs `.p8` key, signs an ES256 JWT with `crypto.subtle`, and sends each
+   the project APNs `.p8` key, signs an ES256 JWT with `crypto.subtle`, and sends each
    token to APNs over HTTP/2, returning per-token results; the server drops tokens flagged `drop`
    (410 / BadDeviceToken). The relay stores no secret — only `token → serverId` hashes.
 5. Tapping a push deep-links to its session via the forwarded `sessionId`.
@@ -49,7 +52,7 @@ responses. Instead the server always sends, and **iOS** suppresses the foregroun
 (`PushNotifications.presentationOptions: []` in `capacitor.config`) — so there is no notification
 while the app is active, with no race. APNs is the native app's **only** channel; local
 notifications were removed (a WKWebView can't tell foreground from background — `document.hasFocus()`
-is unreliable — so they leaked while the app was open). Cloudflare is touched only when a native
+is unreliable — so they leaked while the app was open). The relay is contacted only when a native
 app with notifications on has a registered token and a trigger fires.
 
 ## App-icon badge
@@ -81,33 +84,53 @@ device token of a server sees the same badge.
 
 ## Modes
 
-- **Relay (default):** server has no Apple key; `OPENCHAMBER_PUSH_RELAY_URL` defaults to
-  `https://api.openchamber.dev/v1/push/send` (register URL is derived as `…/register-token`).
-- **Direct (fallback):** set `OPENCHAMBER_PUSH_RELAY_DISABLED=true` + `OPENCHAMBER_APNS_KEY_ID/
-  TEAM_ID/P8` to sign+send from the server itself (HTTP/2 + ES256 JWT); no relay binding needed.
+- **Relay (optional):** server has no Apple key and POSTs to the relay configured with
+  `OPENCHAMBER_PUSH_RELAY_URL` (the register URL is derived as `…/register-token`). There is no
+  default relay: with no URL set, remote iOS push is unavailable and sends nothing, and the
+  mobile push settings say it needs a relay URL.
+- **Direct (optional):** set `OPENCHAMBER_APNS_KEY_ID/TEAM_ID/P8` to sign+send from the server
+  itself (HTTP/2 + ES256 JWT); no relay binding needed. It is used whenever no relay URL is set,
+  and `OPENCHAMBER_PUSH_RELAY_DISABLED=true` forces it when one is.
+
+With neither configured, nothing is sent, the reason is logged once per process, and
+`GET /api/push/native-status` tells the client:
+
+- `{ available: true, reason: null, relaySetting }` when a relay URL or a direct APNs config is
+  present.
+- `{ available: false, reason: 'relay-url-missing', relaySetting: 'OPENCHAMBER_PUSH_RELAY_URL' }`
+  when the relay is not disabled but no URL is set.
+- `{ available: false, reason: 'direct-config-missing', relaySetting, disabledSetting:
+  'OPENCHAMBER_PUSH_RELAY_DISABLED' }` when the relay is disabled and no direct APNs key exists.
+
+`available` is true when either path can send. On the native app the settings page keeps the
+delivery toggle and, when this answer says unavailable, shows a warning under it naming
+`relaySetting` (and `disabledSetting` for the direct case); it never claims delivery works without
+one. The route answers 404 when the server was not wired with `resolveApnsStatus`.
 
 ## Config
 
 Server (`apns-runtime.js`):
-- `OPENCHAMBER_PUSH_RELAY_URL` (default the public relay), `OPENCHAMBER_APNS_ENVIRONMENT`
-  (optional override forcing every send to `sandbox` or `production`; normally unset — each
-  token is delivered to the environment it registered with: the iOS shell reads the
-  `aps-environment` entitlement from the embedded provisioning profile and reports it at
-  registration, so Xcode dev builds go to sandbox and TestFlight/App Store to production).
-  The signing keypair is auto-generated — nothing to set.
+- `OPENCHAMBER_PUSH_RELAY_URL` (self-hosted relay send endpoint; unset means no remote push),
+  `OPENCHAMBER_APNS_ENVIRONMENT` (optional override forcing every send to `sandbox` or
+  `production`; normally unset — each token is delivered to the environment it registered with:
+  the iOS shell reads the `aps-environment` entitlement from the embedded provisioning profile
+  and reports it at registration, so Xcode dev builds go to sandbox and TestFlight/App Store to
+  production). The signing keypair is auto-generated — nothing to set.
 - Direct fallback: `OPENCHAMBER_APNS_KEY_ID`, `OPENCHAMBER_APNS_TEAM_ID`, `OPENCHAMBER_APNS_P8`
-  (or `_P8_PATH`), `OPENCHAMBER_APNS_BUNDLE_ID`, `OPENCHAMBER_PUSH_RELAY_DISABLED=true`.
+  (or `_P8_PATH`), `OPENCHAMBER_APNS_BUNDLE_ID`; `OPENCHAMBER_PUSH_RELAY_DISABLED=true` forces
+  direct send while a relay URL is set.
 
-Relay (Cloudflare Worker secrets via `wrangler secret put` / GitHub Actions): `APNS_P8`,
-`APNS_KEY_ID`, `APNS_TEAM_ID`, optional `APNS_BUNDLE_ID` / `APNS_DEFAULT_ENV`. The `push_tokens`
-binding table is created by `migrations/0002_push_tokens.sql` (applied on deploy).
+The relay is deployed by whoever operates it, configured through its own deployment secrets:
+`APNS_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, optional `APNS_BUNDLE_ID` / `APNS_DEFAULT_ENV`, plus its
+`push_tokens` storage table (created by `migrations/0002_push_tokens.sql` in the reference relay).
 
 ## Apple setup (one-time)
 
 1. Apple **Keys** (not Certificates) → create an **APNs Auth Key** (`.p8`) → Key ID + Team ID;
    enable **Push Notifications** on App ID `dev.ohpichamber.app`.
-2. In the **openchamber-website** repo → Actions secrets: `APNS_P8` (PEM), `APNS_KEY_ID`,
-   `APNS_TEAM_ID`. Push to `main` → relay deploys, secrets sync, D1 migrations apply.
+2. Configure the relay you operate with the key's secrets (`APNS_P8` PEM, `APNS_KEY_ID`,
+   `APNS_TEAM_ID`) through its own deployment, or use direct mode with the same values in the
+   server environment.
 3. Xcode: confirm the Push Notifications capability; Clean Build Folder; run on device.
 
 ## Security posture
@@ -116,10 +139,10 @@ binding table is created by `migrations/0002_push_tokens.sql` (applied on deploy
   is signed by the server's private key, and the relay only delivers to a token from its bound
   `serverId`. A leaked token alone is useless — an attacker has neither the private key nor a
   matching binding.
-- `serverId` self-certifies (`SHA-256(publicKey)`), so the relay holds no secret; a D1 leak
-  exposes only `token → serverId` hashes. The signed `ts` (±5 min window) blocks replay.
+- `serverId` self-certifies (`SHA-256(publicKey)`), so the relay holds no secret; a relay database
+  leak exposes only `token → serverId` hashes. The signed `ts` (±5 min window) blocks replay.
 - Residual: trust-on-first-bind (whoever registers a token first owns it) — acceptable, since
-  registering already requires possessing the token. Cloudflare rate limiting is defence-in-depth.
+  registering already requires possessing the token. Relay rate limiting is defence-in-depth.
 
 ## Data confidentiality (what the relay / Apple / Google can see)
 
@@ -136,7 +159,7 @@ Notification Service Extension and Android's `SealedPushMessagingService` open i
 Who can read what:
 
 - **Network hops:** nothing (TLS).
-- **The relay (Cloudflare):** the generic title, the device token, `sessionId` and the sealed
+- **The relay (operator-run):** the generic title, the device token, `sessionId` and the sealed
   blob. It stores only `token → serverId` hashes (no text, no payload).
 - **Apple APNs / Google FCM:** the same as the relay.
 - **The device:** opens the blob and shows the real text.

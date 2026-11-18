@@ -21,6 +21,7 @@ import type {
   TrackerPerson,
   TrackerPreferences,
   TrackerSessionStatusPostResult,
+  TrackerSignInUnavailable,
   TrackerStatesResult,
   TrackerWorkflowState,
 } from '@openchamber/ui/lib/api/types';
@@ -173,13 +174,21 @@ const connectInfoSchema: z.ZodType<TrackerConnectInfo> = z.object({
   redirectUri: z.string().trim().min(1).max(2_048).nullable().catch(null),
 });
 
+/** Why the browser sign-in cannot start here; absent when it can, or on an older server. */
+const signInSchema: z.ZodType<TrackerSignInUnavailable> = z.object({
+  reason: z.literal('broker-url-missing'),
+  setting: z.string().trim().min(1).max(128),
+  settingsKey: z.string().trim().min(1).max(128),
+});
+
 export const authStatusSchema: z.ZodType<TrackerAuthStatus> = z.union([
-  z.object({ connected: z.literal(false), accounts: listOf(accountSchema).optional(), connect: connectInfoSchema.optional().catch(undefined) }),
+  z.object({ connected: z.literal(false), accounts: listOf(accountSchema).optional(), connect: connectInfoSchema.optional().catch(undefined), signIn: signInSchema.optional().catch(undefined) }),
   z.object({
     connected: z.literal(true),
     account: accountSchema.nullish().catch(null),
     accounts: listOf(accountSchema),
     connect: connectInfoSchema.optional().catch(undefined),
+    signIn: signInSchema.optional().catch(undefined),
   }),
 ]);
 

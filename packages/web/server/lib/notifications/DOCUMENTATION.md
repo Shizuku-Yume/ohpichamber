@@ -36,6 +36,7 @@ delivery path.
   - `GET /api/push/vapid-public-key`
   - `POST /api/push/subscribe`
   - `DELETE /api/push/subscribe`
+  - `GET /api/push/native-status`: whether this server can deliver native push and why not — `{ available, reason, relaySetting, disabledSetting? }`, with `reason` `null`, `'relay-url-missing'` or `'direct-config-missing'` and `disabledSetting` present only for the direct case. The native app's settings page reads it instead of guessing. 404 when the server was not wired with `resolveApnsStatus`, 500 when the read fails.
   - `POST /api/push/apns-token` (native iOS APNs device-token registration)
   - `DELETE /api/push/apns-token`
   - `POST /api/push/visibility`

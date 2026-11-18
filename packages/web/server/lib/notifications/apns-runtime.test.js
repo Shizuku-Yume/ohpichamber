@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createApnsRuntime } from './apns-runtime.js';
 import { openPushContent } from './push-seal.js';
@@ -256,6 +256,11 @@ describe('apns runtime relay mode (default)', () => {
     const refused = () => Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
     const timedOut = () => new DOMException('The operation was aborted due to timeout', 'TimeoutError');
 
+    // There is no built-in relay: these exercise a relay the operator configured.
+    beforeEach(() => {
+      process.env.OPENCHAMBER_PUSH_RELAY_URL = 'https://relay.test/v1/push/send';
+    });
+
     afterEach(() => {
       vi.useRealTimers();
       vi.restoreAllMocks();
@@ -355,11 +360,53 @@ describe('apns runtime relay mode (default)', () => {
   });
 
   it('no-ops (no relay call) when no tokens are registered', async () => {
+    process.env.OPENCHAMBER_PUSH_RELAY_URL = 'https://relay.test/v1/push/send';
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const runtime = createApnsRuntime(makeDeps());
     await runtime.sendApnsToAllUiSessions({ title: 't', body: 'b' });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('apns runtime with no relay configured', () => {
+  it('reports remote push unavailable and names the relay setting', async () => {
+    const runtime = createApnsRuntime(makeDeps());
+    await expect(runtime.resolveApnsStatus()).resolves.toEqual({ available: false, reason: 'relay-url-missing' });
+  });
+
+  it('reports available once a relay URL is configured', async () => {
+    process.env.OPENCHAMBER_PUSH_RELAY_URL = 'https://relay.test/v1/push/send';
+    const runtime = createApnsRuntime(makeDeps());
+    await expect(runtime.resolveApnsStatus()).resolves.toEqual({ available: true, reason: null });
+  });
+
+  it('registers a token locally and sends nothing', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const deps = makeDeps();
+    const runtime = createApnsRuntime(deps);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await runtime.addOrUpdateApnsToken('s1', 'tokenA', undefined, 'ios', 'production');
+    await runtime.sendApnsToAllUiSessions({ title: 'ready', body: 'My session' });
+
+    // The token is kept so the registration survives enabling a relay later, but no
+    // request left this machine: no register-token, no send.
+    expect(fetchMock).not.toHaveBeenCalled();
+    const stored = JSON.parse(await deps.fsPromises.readFile());
+    expect(Object.values(stored.tokensBySession).flat().map((entry) => entry.deviceToken)).toEqual(['tokenA']);
+    // The reason is surfaced once, not per send.
+    await runtime.sendApnsToAllUiSessions({ title: 'ready', body: 'My session' });
+    expect(warn.mock.calls.map((call) => call.join(' '))).toEqual([
+      '[APNs] Remote push is unavailable: no push relay is configured. Set OPENCHAMBER_PUSH_RELAY_URL on this server to turn it on, or set OPENCHAMBER_PUSH_RELAY_DISABLED=true with OPENCHAMBER_APNS_KEY_ID / OPENCHAMBER_APNS_TEAM_ID / OPENCHAMBER_APNS_P8 for direct send.',
+    ]);
+  });
+
+  it('reports the direct-config reason when the relay is disabled and no key is set', async () => {
+    process.env.OPENCHAMBER_PUSH_RELAY_DISABLED = 'true';
+    const runtime = createApnsRuntime(makeDeps());
+    await expect(runtime.resolveApnsStatus()).resolves.toEqual({ available: false, reason: 'direct-config-missing' });
   });
 });
 

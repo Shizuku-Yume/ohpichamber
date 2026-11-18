@@ -495,6 +495,29 @@ describe('Linear auth routes', () => {
     expect(updated.body.error).toBe('stateId must be a UUID.');
   });
 
+  it('reports Linear sign-in unavailable, and refuses start, with no broker configured', async () => {
+    delete process.env.OPENCHAMBER_LINEAR_REDIRECT_URI;
+    delete process.env.OPENCHAMBER_LINEAR_BROKER_URL;
+    const app = createApp();
+
+    const status = await request(app).get('/api/linear/auth/status').expect(200);
+    expect(status.body).toEqual({
+      connected: false,
+      signIn: {
+        reason: 'broker-url-missing',
+        setting: 'OPENCHAMBER_LINEAR_BROKER_URL',
+        settingsKey: 'linearBrokerUrl',
+      },
+    });
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const start = await request(app).post('/api/linear/auth/start').send({}).expect(400);
+    expect(start.body.code).toBe('LINEAR_BROKER_NOT_CONFIGURED');
+    expect(start.body.error).toContain('OPENCHAMBER_LINEAR_BROKER_URL');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('returns disconnected for issue routes when Linear is not connected', async () => {
     const app = createApp();
     const list = await request(app).get('/api/linear/issues/list').expect(200);

@@ -1,4 +1,5 @@
 import { disconnectCurrentLinearWorkspace, readLinearAuthStatus } from './auth-status.js';
+import { LINEAR_SIGN_IN_SETTING, LINEAR_SIGN_IN_SETTINGS_KEY } from './auth.js';
 import { isPlainObject, readTrimmedString } from './parse.js';
 
 /**
@@ -199,6 +200,23 @@ export function toTrackerAuthStatus(status) {
   return { connected: true, account: accounts.find((account) => account.current) ?? null, accounts };
 }
 
+/**
+ * Why Linear's browser sign-in cannot start here, or undefined when it can.
+ * It needs a broker URL (or an explicit redirect URI) the operator configured.
+ * Absent when the injected libraries do not say (a fake in a test), so the
+ * client asks the start route instead of guessing.
+ * @returns {import('../trackers/tracker-contract').TrackerSignInUnavailable | undefined}
+ */
+function linearSignInUnavailable(libraries) {
+  if (typeof libraries?.isLinearSignInConfigured !== 'function') return undefined;
+  if (libraries.isLinearSignInConfigured()) return undefined;
+  return {
+    reason: 'broker-url-missing',
+    setting: LINEAR_SIGN_IN_SETTING,
+    settingsKey: LINEAR_SIGN_IN_SETTINGS_KEY,
+  };
+}
+
 const linearAccountLabel = (auth) => (
   readTrimmedString(auth?.user?.displayName)
   || readTrimmedString(auth?.user?.name)
@@ -243,6 +261,9 @@ export function createLinearTracker(libraries) {
       return { authorizationUrl, expiresIn };
     } catch (error) {
       if (error?.code === 'LINEAR_CLIENT_ID_MISSING') throw userError(error.message);
+      // No broker and no explicit redirect: the card shows the reason from the
+      // status, and a direct start call answers as a user error naming the setting.
+      if (error?.code === 'LINEAR_BROKER_NOT_CONFIGURED') throw userError(error.message);
       throw error;
     }
   };
@@ -254,7 +275,11 @@ export function createLinearTracker(libraries) {
 
   return {
     auth: {
-      status: async () => toTrackerAuthStatus(await readLinearAuthStatus(libraries)),
+      status: async () => {
+        const status = toTrackerAuthStatus(await readLinearAuthStatus(libraries));
+        const signIn = linearSignInUnavailable(libraries);
+        return signIn ? { ...status, signIn } : status;
+      },
       start: ({ origin } = {}) => start(origin),
       disconnect: async () => ({ removed: await disconnectCurrentLinearWorkspace(libraries) }),
       activate: async (accountId) => {

@@ -247,3 +247,56 @@ describe('notification routes /api/push/apns-token', () => {
     });
   });
 });
+
+describe('notification routes /api/push/native-status', () => {
+  const startApp = async (apnsRuntime) => {
+    const app = express();
+    app.use(express.json());
+    registerNotificationRoutes(app, {
+      uiAuthController: { ensureSessionToken: async () => 'test-ui-session' },
+      addOrUpdateApnsToken: apnsRuntime.addOrUpdateApnsToken,
+      removeApnsToken: apnsRuntime.removeApnsToken,
+      resolveApnsStatus: apnsRuntime.resolveApnsStatus,
+    });
+    const server = createServer(app);
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    return { server, base: `http://127.0.0.1:${server.address().port}` };
+  };
+
+  const createRuntime = () => createApnsRuntime({
+    fsPromises: createMemoryFs(),
+    path: { dirname: () => '/dir' },
+    crypto,
+    http2: {},
+    APNS_TOKENS_FILE_PATH: '/dir/tokens.json',
+    readSettingsFromDiskMigrated: vi.fn(async () => ({})),
+    relayKeyStore: createMemoryRelayKeyStore(),
+  });
+
+  it('reports remote push unavailable with the setting that turns it on', async () => {
+    const { server, base } = await startApp(createRuntime());
+    try {
+      const res = await originalFetch(`${base}/api/push/native-status`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        available: false,
+        reason: 'relay-url-missing',
+        relaySetting: 'OPENCHAMBER_PUSH_RELAY_URL',
+      });
+    } finally {
+      server.close();
+    }
+  });
+
+  it('reports remote push available once a relay URL is configured', async () => {
+    vi.stubEnv('OPENCHAMBER_PUSH_RELAY_URL', 'https://relay.test/v1/push/send');
+    const { server, base } = await startApp(createRuntime());
+    try {
+      const res = await originalFetch(`${base}/api/push/native-status`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ available: true, reason: null, relaySetting: 'OPENCHAMBER_PUSH_RELAY_URL' });
+    } finally {
+      server.close();
+    }
+  });
+});

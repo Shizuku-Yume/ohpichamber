@@ -8,7 +8,7 @@ description: Todos los métodos de connectHost que una extensión puede llamar, 
 Usa esta página cuando necesites los métodos exactos de `connectHost`, los límites y los códigos de error. Para la estructura de la carpeta, el manifiesto y la instalación, empieza en [Crea una extensión](/sdk/).
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
 
 const host = connectHost();
 ```
@@ -200,7 +200,7 @@ Los eventos son `turn-started`, `session-created`, `session-archived`, `session-
 Cada evento llega como un `POST /session-events` con el bearer del servicio. Léelo con `readSessionEventRequest` y responde `{ "ok": true }`:
 
 ```ts
-import { SESSION_EVENTS_PATH, readSessionEventRequest } from "@openchamber/sdk";
+import { SESSION_EVENTS_PATH, readSessionEventRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === SESSION_EVENTS_PATH) {
@@ -221,7 +221,7 @@ Se envían los eventos de todos los proyectos; compara `event.project.directory`
 Un servicio puede actuar sin ninguna ventana abierta. `createServiceHost` es su camino de vuelta a OpenChamber:
 
 ```ts
-import { createServiceHost } from '@openchamber/sdk';
+import { createServiceHost } from 'ohpichamber-sdk';
 
 const host = createServiceHost({ env: process.env });
 
@@ -303,7 +303,7 @@ A partir de esa descripción, OpenChamber dibuja una tarjeta de cuenta para el c
 OpenChamber reenvía tres llamadas a `POST /notifications`: `auth.probe` (si este servidor es uno de los que atiendes), `auth.verify` (a quién pertenece este token) y `notify` (una notificación). Lee cada una con `readNotificationsProviderRequest`, y llega al servidor del canal solo a través del helper de salida, que envía tu petición a OpenChamber con el handle de la llamada; OpenChamber añade el token y mantiene la petición en el servidor de la cuenta.
 
 ```ts
-import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "@openchamber/sdk";
+import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createNotificationsOutbound({ env: process.env });
 
@@ -349,7 +349,7 @@ El usuario conecta cuentas en la tarjeta del gestor bajo Cuentas de extensiones:
 OpenChamber reenvía nueve llamadas a `POST /tracker`: `auth.probe` y `auth.verify`, las lecturas `items.list`, `items.get`, `items.liveSummaries`, `states.list` y `containers.list`, y las escrituras `items.updateState` y `comments.create`. Lee cada una con `readTrackerProviderRequest`, responde con las formas neutras de elemento y llega al servidor del gestor solo a través del helper de salida, que envía tu petición a OpenChamber con el handle de la llamada; OpenChamber añade la credencial y mantiene la petición en el servidor de la cuenta. El handle de una lectura solo envía `GET`.
 
 ```ts
-import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "@openchamber/sdk";
+import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createTrackerOutbound({ env: process.env });
 
@@ -382,7 +382,7 @@ El diálogo de aprobación enumera esos proveedores, y una versión que cambie l
 Lee el cuerpo con `readQuotaProviderRequest` y responde `{ ok: true, data }` con el resultado que calcula un proveedor integrado: `ok`, `configured`, `error`, `planLabel` y `usage.windows` por nombre de ventana, cada una con `usedPercent`, `windowSeconds`, `resetAt` (época en milisegundos) y un `valueLabel` o `value` opcional, más `usage.models` para las ventanas por modelo. OpenChamber deriva la parte restante, la cuenta atrás del reinicio y las cadenas formateadas, así que la tarjeta coincide con la de un proveedor integrado.
 
 ```ts
-import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "@openchamber/sdk";
+import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === QUOTA_PROVIDER_PATH) {
@@ -406,7 +406,7 @@ Una ruta relativa está dentro del proyecto abierto y necesita la capacidad `fil
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/openchamber/config.json");
+const info = await host.stat("~/.config/ohpichamber/config.json");
 ```
 
 Límites: ruta de hasta 1024 caracteres, contenido de hasta 2,000,000 caracteres, listado de hasta 2000 entradas. Superar el límite de contenido es `FILE_TOO_LARGE`.

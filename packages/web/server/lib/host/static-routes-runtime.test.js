@@ -82,7 +82,7 @@ describe('static routes runtime', () => {
     expect(response.status).toBe(200);
     expect(response.text).toContain('OpenChamber is running in headless mode');
     expect(response.text).toContain('Open it from the OpenChamber desktop or mobile app');
-    expect(response.text).toContain('openchamber connect-url --help');
+    expect(response.text).toContain('ohpichamber connect-url --help');
     expect(response.text).toContain('Copy command');
   });
 

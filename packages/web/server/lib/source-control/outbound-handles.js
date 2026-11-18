@@ -5,8 +5,8 @@ import {
   SOURCE_CONTROL_OUTBOUND_RESPONSE_HEADER_PREFIX,
   SOURCE_CONTROL_OUTBOUND_RESPONSE_MAX,
   SOURCE_CONTROL_OUTBOUND_TIMEOUT_MS,
-} from '@openchamber/sdk';
-import { sourceControlProviderSchemasV1 } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { sourceControlProviderSchemasV1 } from 'ohpichamber-sdk/schemas';
 
 import { joinGuestRequestUrl } from '../guests/request.js';
 import { readBoundedResponseText } from '../guests/response-body.js';

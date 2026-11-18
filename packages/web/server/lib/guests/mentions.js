@@ -8,8 +8,8 @@ import {
   MENTION_TEXT_MAX,
   isGuestApproved,
   requestedGuestCapabilities,
-} from '@openchamber/sdk';
-import { mentionItemSchema, mentionsResolveResultSchema } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { mentionItemSchema, mentionsResolveResultSchema } from 'ohpichamber-sdk/schemas';
 
 import { proxyGuestServiceRequest } from './service.js';
 

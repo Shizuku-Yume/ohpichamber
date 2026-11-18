@@ -1,6 +1,6 @@
 import { OpenChamberControlError } from '../openchamber-control/error.js';
-import { SERVICE_EVENT_DATA_MAX, SERVICE_EVENT_RATE_MAX, SERVICE_HOST_PATH, isGuestApproved, requestedGuestCapabilities } from '@openchamber/sdk';
-import { serviceHostCallSchema } from '@openchamber/sdk/schemas';
+import { SERVICE_EVENT_DATA_MAX, SERVICE_EVENT_RATE_MAX, SERVICE_HOST_PATH, isGuestApproved, requestedGuestCapabilities } from 'ohpichamber-sdk';
+import { serviceHostCallSchema } from 'ohpichamber-sdk/schemas';
 
 import { setHostCallbackRoute } from './host-callback.js';
 import { guestIdOfServiceToken } from './service.js';

@@ -33,7 +33,7 @@ The language streams well: the parser returns a partial tree for any prefix, so 
 
 ### Why the server gets generated text and not the catalog
 
-`lang-core` has an install-time telemetry `postinstall` script. Bun blocks it, but npm runs it, and `@openchamber/web` is installed with npm. Keeping the package out of the server means users' installs never run it; the server reads a generated copy of the guidance instead.
+`lang-core` has an install-time telemetry `postinstall` script. Bun blocks it, but npm runs it, and `ohpichamber` is installed with npm. Keeping the package out of the server means users' installs never run it; the server reads a generated copy of the guidance instead.
 
 ### Why a reply's answer is synthetic input and not a user message
 

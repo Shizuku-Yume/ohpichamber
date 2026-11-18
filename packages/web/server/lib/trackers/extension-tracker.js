@@ -13,8 +13,8 @@ import {
   serviceProvides,
   trackerProviderIdOf,
   trackerProviderTimeoutMs,
-} from '@openchamber/sdk';
-import { trackerProviderSchemasV1 as schemas } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { trackerProviderSchemasV1 as schemas } from 'ohpichamber-sdk/schemas';
 
 import { GuestOAuthError } from '../guests/oauth.js';
 import { proxyGuestServiceRequest } from '../guests/service.js';

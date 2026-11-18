@@ -1,4 +1,4 @@
-import { resolveIntegrationAuth } from '@openchamber/sdk';
+import { resolveIntegrationAuth } from 'ohpichamber-sdk';
 
 import { GuestOAuthError, toPublicGuestAuth } from './oauth.js';
 

@@ -28,8 +28,8 @@ import {
   isGuestApproved,
   requestedGuestCapabilities,
   serviceProvides,
-} from '@openchamber/sdk';
-import { browserProviderResultSchema } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { browserProviderResultSchema } from 'ohpichamber-sdk/schemas';
 
 import { GuestServiceError, proxyGuestServiceRequest } from '../guests/service.js';
 import { BrowserControlError } from './broker.js';

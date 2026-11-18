@@ -47,8 +47,8 @@ function renderLinearOAuthCallbackPage({ title, message, desktopReturn }) {
 <main>
 <h1>${escapeHtml(title)}</h1>
 <p>${escapeHtml(message)}</p>
-${desktopReturn ? `<a class="return" href="openchamber://focus/linear-auth">Return to OpenChamber</a>
-<script>window.location.href = 'openchamber://focus/linear-auth';</script>` : ''}
+${desktopReturn ? `<a class="return" href="ohpichamber://focus/linear-auth">Return to OpenChamber</a>
+<script>window.location.href = 'ohpichamber://focus/linear-auth';</script>` : ''}
 </main>
 </body>
 </html>`;

@@ -1,4 +1,4 @@
-// `openchamber://extensions/install?url=…` installs from a repository, and
+// `ohpichamber://extensions/install?url=…` installs from a repository, and
 // `?path=…` from a folder. A link can come from any page outside the app, so
 // the desktop shell passes on only `url`, and only chat content inside the app
 // may carry `path`.
@@ -7,7 +7,7 @@
 
 type ExtensionInstallLink = { kind: 'url' | 'path'; source: string };
 
-const LINK_PREFIX = 'openchamber://extensions/install?';
+const LINK_PREFIX = 'ohpichamber://extensions/install?';
 
 export const parseExtensionInstallLink = (href: string): ExtensionInstallLink | null => {
   if (!href.toLowerCase().startsWith(LINK_PREFIX)) return null;

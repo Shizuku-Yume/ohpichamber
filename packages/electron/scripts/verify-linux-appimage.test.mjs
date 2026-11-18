@@ -23,11 +23,11 @@ const writeIcon = (root, relativePath) => {
 };
 
 const createPayload = () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-payload-test-'));
-  fs.writeFileSync(path.join(root, 'openchamber.desktop'), [
-    '[Desktop Entry]', 'Name=OpenChamber', 'Exec=AppRun --no-sandbox %U', 'Icon=openchamber', 'StartupWMClass=openchamber', '',
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ohpichamber-payload-test-'));
+  fs.writeFileSync(path.join(root, 'ohpichamber.desktop'), [
+    '[Desktop Entry]', 'Name=OhPiChamber', 'Exec=AppRun --no-sandbox %U', 'Icon=ohpichamber', 'StartupWMClass=ohpichamber', '',
   ].join('\n'));
-  writeElf(path.join(root, 'openchamber'), 'x64');
+  writeElf(path.join(root, 'ohpichamber'), 'x64');
   const agent = path.join(root, 'resources/agent-runtime');
   writeElf(path.join(agent, 'bun'), 'x64');
   writeElf(path.join(agent, 'packages/native/addon.node'), 'x64');
@@ -44,7 +44,7 @@ const createPayload = () => {
   for (const name of ['pty.node', 'sherpa-onnx.node']) {
     writeElf(path.join(root, 'resources/app.asar.unpacked/node_modules', name), 'x64');
   }
-  writeIcon(root, 'usr/share/icons/hicolor/512x512/apps/openchamber.png');
+  writeIcon(root, 'usr/share/icons/hicolor/512x512/apps/ohpichamber.png');
   return root;
 };
 
@@ -71,7 +71,7 @@ const verify = (root) => verifyExtractedPayload({
 });
 
 test('reads supported ELF architectures', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'openchamber-elf-test-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ohpichamber-elf-test-'));
   try {
     writeElf(path.join(root, 'x64'), 'x64');
     writeElf(path.join(root, 'arm64'), 'arm64');
@@ -211,17 +211,17 @@ test('accepts a scalable theme icon', () => {
   const root = createPayload();
   try {
     fs.rmSync(path.join(root, 'usr/share/icons/hicolor/512x512'), { recursive: true });
-    writeIcon(root, 'usr/share/icons/hicolor/scalable/apps/openchamber.svg');
+    writeIcon(root, 'usr/share/icons/hicolor/scalable/apps/ohpichamber.svg');
     assert.equal(verify(root).nativeModuleCount, 2);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('fails when the theme cannot resolve Icon=openchamber', () => {
+test('fails when the theme cannot resolve Icon=ohpichamber', () => {
   for (const relativePath of [
-    'usr/share/icons/hicolor/scalable/openchamber.svg',
-    'usr/share/icons/hicolor/1024x1024/apps/openchamber.png',
+    'usr/share/icons/hicolor/scalable/ohpichamber.svg',
+    'usr/share/icons/hicolor/1024x1024/apps/ohpichamber.png',
   ]) {
     const root = createPayload();
     try {
@@ -238,7 +238,7 @@ test('fails when .DirIcon is dangling', () => {
   const root = createPayload();
   try {
     fs.rmSync(path.join(root, '.DirIcon'));
-    fs.symlinkSync('usr/share/icons/hicolor/scalable/openchamber.svg', path.join(root, '.DirIcon'));
+    fs.symlinkSync('usr/share/icons/hicolor/scalable/ohpichamber.svg', path.join(root, '.DirIcon'));
     assert.throws(() => verify(root), /\.DirIcon does not resolve/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

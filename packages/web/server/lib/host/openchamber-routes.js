@@ -12,7 +12,7 @@ function resolveSystemdServiceUnit(environment) {
   const configuredUnit = typeof environment.OPENCHAMBER_SYSTEMD_UNIT === 'string'
     ? environment.OPENCHAMBER_SYSTEMD_UNIT.trim()
     : '';
-  const unit = configuredUnit || 'openchamber.service';
+  const unit = configuredUnit || 'ohpichamber.service';
   return SYSTEMD_SERVICE_UNIT_PATTERN.test(unit) ? unit : null;
 }
 
@@ -20,7 +20,7 @@ function quotePosixShell(value) {
   return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
-const LAUNCHD_SERVICE_ID = 'dev.openchamber.web';
+const LAUNCHD_SERVICE_ID = 'dev.ohpichamber.web';
 
 const resolveLaunchdPlistPath = (pathModule, osModule) =>
   pathModule.join(osModule.homedir(), 'Library', 'LaunchAgents', `${LAUNCHD_SERVICE_ID}.plist`);
@@ -316,7 +316,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
       if (isForegroundService) {
         if (!systemdServiceUnit && !isLaunchdService) {
           return res.status(409).json({
-            error: 'Foreground servers must be updated by their service manager. Set OPENCHAMBER_SYSTEMD_UNIT when running under systemd, or run openchamber update and restart the service.',
+            error: 'Foreground servers must be updated by their service manager. Set OPENCHAMBER_SYSTEMD_UNIT when running under systemd, or run ohpichamber update and restart the service.',
           });
         }
 
@@ -384,7 +384,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
           String(storedOptions.port),
         ];
         let restartCmdPrimary = restartParts.join(' ');
-        let restartCmdFallback = `openchamber serve --port ${storedOptions.port}`;
+        let restartCmdFallback = `ohpichamber serve --port ${storedOptions.port}`;
         if (storedOptions.host) {
           if (isWindows) {
             const escapedHost = storedOptions.host.replace(/"/g, '""');

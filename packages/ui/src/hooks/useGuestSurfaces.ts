@@ -1,5 +1,5 @@
 import React from 'react';
-import { hasGuestPage, resolveAttachMode, type AttachMode } from '@openchamber/sdk';
+import { hasGuestPage, resolveAttachMode, type AttachMode } from 'ohpichamber-sdk';
 
 import type { IconName } from '@/components/icon/icons';
 import { isMobileSurfaceRuntime } from '@/lib/runtimeSurface';

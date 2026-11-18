@@ -1,5 +1,5 @@
 import React from 'react';
-import { GUEST_BLOCK_HEIGHT_DEFAULT, GUEST_BLOCK_HEIGHT_MAX, type GuestBlockCall } from '@openchamber/sdk';
+import { GUEST_BLOCK_HEIGHT_DEFAULT, GUEST_BLOCK_HEIGHT_MAX, type GuestBlockCall } from 'ohpichamber-sdk';
 
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useI18n } from '@/lib/i18n';

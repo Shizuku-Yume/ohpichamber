@@ -1,4 +1,4 @@
-import { GUEST_BOOTSTRAP_SCRIPT, guestFramePolicy } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_SCRIPT, guestFramePolicy } from 'ohpichamber-sdk';
 
 const DOCUMENT_ORIGIN = 'https://extension.invalid';
 const MAX_FILES = 500;

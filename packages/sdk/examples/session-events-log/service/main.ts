@@ -8,7 +8,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
-import { SESSION_EVENTS_PATH, readSessionEventRequest, type GuestSessionEventResult } from '@openchamber/sdk';
+import { SESSION_EVENTS_PATH, readSessionEventRequest, type GuestSessionEventResult } from 'ohpichamber-sdk';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
 const token = process.env.OPENCHAMBER_SERVICE_TOKEN ?? '';

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { sourceControlServiceLoginSchema } from '@openchamber/sdk/schemas';
+import { sourceControlServiceLoginSchema } from 'ohpichamber-sdk/schemas';
 
 /**
  * What the UI knows about one source-control provider, as the connected

@@ -1,4 +1,4 @@
-package com.openchamber.app;
+package dev.ohpichamber.app;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;

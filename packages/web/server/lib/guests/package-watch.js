@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { resolveAttachEntry, resolvePageEntry, resolveStatusSectionEntry } from '@openchamber/sdk';
-import { parseManifestJson } from '@openchamber/sdk/schemas';
+import { resolveAttachEntry, resolvePageEntry, resolveStatusSectionEntry } from 'ohpichamber-sdk';
+import { parseManifestJson } from 'ohpichamber-sdk/schemas';
 
 import { listRelativeGuestAssetHrefs, resolveGuestHtmlRelativePath } from './html-tokens.js';
 import { createFolderChangeWatch } from '../fs/folder-change-watch.js';

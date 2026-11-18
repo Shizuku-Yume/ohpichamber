@@ -1,4 +1,4 @@
-import { isGuestCommitSha, type HostRequestErrorCode } from '@openchamber/sdk';
+import { isGuestCommitSha, type HostRequestErrorCode } from 'ohpichamber-sdk';
 
 import type { GitAPI } from '@/lib/api/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';

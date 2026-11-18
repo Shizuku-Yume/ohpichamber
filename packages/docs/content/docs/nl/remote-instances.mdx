@@ -33,7 +33,7 @@ Een link met **Overal** bevat zowel een direct adres als een route via de [Priv√
 U kunt ook vanuit een terminal op de andere computer een link maken:
 
 ```bash
-openchamber connect-url --port 3000 --server http://your-host:3000 --qr
+ohpichamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
 `connect-url` start eerst de server als er niets op die poort draait. Voeg `--api-only` toe voor een server zonder webinterface, `--lan` om bij het starten op het lokale netwerk te luisteren, `--ui-password` om browsertoegang te beschermen en `--name` voor de naam van de opgeslagen verbinding. Met `--relay` werkt de link ook buiten het lokale netwerk. Het apparaat kiest bij voorkeur de directe verbinding en valt terug op de [Priv√©relay](/nl/private-relay/). De instantie start de relay vanzelf.

@@ -32,7 +32,7 @@ describe('session references', () => {
   test('the text decides what goes: each mention once, in order, and what is not resolved yet', () => {
     const resolved = new Map([['ses_a:', sessionReference({ id: 'ses_a', title: 'A' })]]);
     const found = sessionReferencesInText(
-      'openchamber://session/ses_b?message=msg_1 then openchamber://session/ses_a, again openchamber://session/ses_a.',
+      'ohpichamber://session/ses_b?message=msg_1 then ohpichamber://session/ses_a, again ohpichamber://session/ses_a.',
       [],
       resolved,
     );

@@ -5,7 +5,7 @@ description: Skonfiguruj OpenChamber za pomocą zmiennych środowiskowych.
 
 # Zmienne środowiskowe
 
-OpenChamber odczytuje te zmienne przy starcie. Dla usług startowych `openchamber startup enable` domyślnie zapisuje snapshot bieżącego środowiska, więc uruchom tę komendę ponownie po zmianie zmiennych, których ma używać usługa.
+OpenChamber odczytuje te zmienne przy starcie. Dla usług startowych `ohpichamber startup enable` domyślnie zapisuje snapshot bieżącego środowiska, więc uruchom tę komendę ponownie po zmianie zmiennych, których ma używać usługa.
 
 ## Zmienne dla sesji agenta, Git i terminala
 
@@ -50,13 +50,13 @@ Originy, które mogą pokazywać OpenChamber w ramce na własnej stronie, rozdzi
 
 ### `OPENCHAMBER_DATA_DIR`
 
-Nadpisuje katalog danych OpenChamber. Domyślnie jest to `~/.config/openchamber`.
+Nadpisuje katalog danych OpenChamber. Domyślnie jest to `~/.config/ohpichamber`.
 
-Wszystko, co OpenChamber zapisuje, znajduje się w tym katalogu: ustawienia, dane logowania, konfiguracje projektów, motywy, plany i modele mowy. Instancja, która używała własnego katalogu przed wersją 1.23, przy pierwszym uruchomieniu otrzyma kopie folderów `projects`, `themes` i `speech-models` z `~/.config/openchamber`; oryginały pozostają na miejscu i nic nie jest scalane.
+Wszystko, co OpenChamber zapisuje, znajduje się w tym katalogu: ustawienia, dane logowania, konfiguracje projektów, motywy, plany i modele mowy. Instancja, która używała własnego katalogu przed wersją 1.23, przy pierwszym uruchomieniu otrzyma kopie folderów `projects`, `themes` i `speech-models` z `~/.config/ohpichamber`; oryginały pozostają na miejscu i nic nie jest scalane.
 
 ### `OPENCHAMBER_CHATS_DIR`
 
-Przenosi zarządzane katalogi czatów, które OpenChamber tworzy dla czatów bez projektu. Domyślnie jest to `~/.config/openchamber/chats`. Istniejące czaty nie są przenoszone.
+Przenosi zarządzane katalogi czatów, które OpenChamber tworzy dla czatów bez projektu. Domyślnie jest to `~/.config/ohpichamber/chats`. Istniejące czaty nie są przenoszone.
 
 ### `OPENCHAMBER_COMPRESS_API`
 

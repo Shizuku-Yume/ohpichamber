@@ -107,7 +107,7 @@ import { beginGuestServiceHost, beginGuestServiceShutdown, stopAllGuestServices 
 import { findInstalledGuest, listInstalledGuests } from './lib/guests/catalog.js';
 import { extensionsPersistPath } from './lib/guests/persist.js';
 import { createGuestSurfaceRuntime } from './lib/guests/surface.js';
-import { BROWSER_PROVIDER_IDLE_MS } from '@openchamber/sdk';
+import { BROWSER_PROVIDER_IDLE_MS } from 'ohpichamber-sdk';
 import { createProjectConfigRuntime } from './lib/projects/project-config.js';
 import { worktreeSetupOf } from './lib/projects/worktree-setup.js';
 import { ensureChatsDir, migrateLegacyUserDirs } from './lib/data-dir-migration.js';
@@ -160,7 +160,7 @@ import { applySystemCertificates } from './lib/system-ca.js';
 import { createOutboundHandles } from './lib/source-control/outbound-handles.js';
 import { createNotificationChannelAccounts, notificationChannelsPersistPath } from './lib/notifications/channel-accounts.js';
 import { createExtensionNotificationChannels } from './lib/notifications/extension-channels.js';
-import { NOTIFICATIONS_OUTBOUND_PATH } from '@openchamber/sdk';
+import { NOTIFICATIONS_OUTBOUND_PATH } from 'ohpichamber-sdk';
 import { createAutoReviewRuntime } from './lib/auto-review/runtime.js';
 import { createPrWatchRuntime } from './lib/pr-watch/runtime.js';
 import { createClientPushAccess } from './lib/notifications/client-push-access.js';
@@ -331,11 +331,11 @@ const sanitizeSkillCatalogs = (...args) => settingsNormalizationRuntime.sanitize
 const sanitizeProjects = (...args) => settingsNormalizationRuntime.sanitizeProjects(...args);
 
 // Every OpenChamber-owned file and folder hangs off one root: the default
-// `~/.config/openchamber`, or `OPENCHAMBER_DATA_DIR` when set. The user
+// `~/.config/ohpichamber`, or `OPENCHAMBER_DATA_DIR` when set. The user
 // folders (`projects/`, `themes/`, `speech-models/`) are copied into a custom
 // root once at startup (`migrateLegacyUserDirs`), because they used to ignore
 // the variable.
-const OPENCHAMBER_DEFAULT_CONFIG_ROOT = path.join(os.homedir(), '.config', 'openchamber');
+const OPENCHAMBER_DEFAULT_CONFIG_ROOT = path.join(os.homedir(), '.config', 'ohpichamber');
 const OPENCHAMBER_USER_CONFIG_ROOT = process.env.OPENCHAMBER_DATA_DIR
  ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
  : OPENCHAMBER_DEFAULT_CONFIG_ROOT;
@@ -2322,7 +2322,7 @@ async function main(options = {}) {
  // device/session exists, stop it (and clear a stale enabled flag) otherwise.
  void relayService.reconcile();
 
- // Relay demand can change outside our routes: `openchamber connect-url
+ // Relay demand can change outside our routes: `ohpichamber connect-url
  // --relay` writes a pending relay session straight to the on-disk store, and
  // pending sessions expire without any request hitting us. Poll reconcile so a
  // headless instance picks the relay up (or drops it) within a minute.

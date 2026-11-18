@@ -1,4 +1,4 @@
-import type { GuestPopoverRequest, GuestPopoverSide } from '@openchamber/sdk';
+import type { GuestPopoverRequest, GuestPopoverSide } from 'ohpichamber-sdk';
 
 type GuestPopoverFrameBounds = {
   left: number;

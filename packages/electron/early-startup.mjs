@@ -26,15 +26,15 @@ import { spawnSync } from 'node:child_process';
 import { createShellEnvironmentLoader } from './shell-environment.mjs';
 import { isSplashColor } from './remote-page-policy.mjs';
 import { UI_PROTOCOL } from './packaged-ui-routing.mjs';
-import { clearAppImageArgv0FromProcessEnv } from '@openchamber/web/server/lib/inherited-env.js';
+import { clearAppImageArgv0FromProcessEnv } from 'ohpichamber/server/lib/inherited-env.js';
 
 export { UI_PROTOCOL };
 
 export const isDev = process.env.OPENCHAMBER_ELECTRON_DEV === '1' || !app.isPackaged;
 
-export const DEEP_LINK_PROTOCOL = 'openchamber';
-const PACKAGED_APP_USER_MODEL_ID = 'dev.openchamber.desktop';
-const DEV_APP_USER_MODEL_ID = 'dev.openchamber.desktop.dev';
+export const DEEP_LINK_PROTOCOL = 'ohpichamber';
+const PACKAGED_APP_USER_MODEL_ID = 'dev.ohpichamber.desktop';
+const DEV_APP_USER_MODEL_ID = 'dev.ohpichamber.desktop.dev';
 export const APP_USER_MODEL_ID = app.isPackaged ? PACKAGED_APP_USER_MODEL_ID : DEV_APP_USER_MODEL_ID;
 export const BACKGROUND_START_ARG = '--background';
 
@@ -101,7 +101,7 @@ export const settingsFilePath = () => {
   if (typeof process.env.OPENCHAMBER_DATA_DIR === 'string' && process.env.OPENCHAMBER_DATA_DIR.trim()) {
     return path.join(process.env.OPENCHAMBER_DATA_DIR.trim(), 'settings.json');
   }
-  return path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+  return path.join(os.homedir(), '.config', 'ohpichamber', 'settings.json');
 };
 
 const readJsonFile = (filePath) => {

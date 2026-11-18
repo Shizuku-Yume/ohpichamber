@@ -7,7 +7,7 @@ import {
   type GuestRequestResult,
   type GuestSettings,
   type HostRequestErrorCode,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 import { runtimeFetch } from '@/lib/runtime-fetch';
 

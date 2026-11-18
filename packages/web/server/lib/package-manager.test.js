@@ -112,7 +112,7 @@ describe('checkForUpdates', () => {
           releaseNotes: '## [1.10.0]\n\n- New',
         }),
       })
-      .when('mirror.example.com/npm/@openchamber%2Fweb', {
+      .when('mirror.example.com/npm/ohpichamber', {
         ok: true,
         json: async () => ({
           'dist-tags': { latest: '1.10.0' },
@@ -129,7 +129,7 @@ describe('checkForUpdates', () => {
       expect(result.available).toBe(true);
       expect(result.version).toBe('1.10.0');
       expect(
-        fetchMock.mock.calls.some(([url]) => String(url) === 'https://mirror.example.com/npm/@openchamber%2Fweb'),
+        fetchMock.mock.calls.some(([url]) => String(url) === 'https://mirror.example.com/npm/ohpichamber'),
       ).toBe(true);
     } finally {
       if (previousLower === undefined) delete process.env.npm_config_registry;
@@ -149,7 +149,7 @@ describe('checkForUpdates', () => {
         ok: true,
         json: async () => ({ latestVersion: '1.10.0', updateAvailable: true }),
       })
-      .when('mirror.example.com/npm/@openchamber%2Fweb', {
+      .when('mirror.example.com/npm/ohpichamber', {
         ok: true,
         json: async () => ({ 'dist-tags': { latest: '1.10.0' } }),
       });
@@ -159,7 +159,7 @@ describe('checkForUpdates', () => {
       const npmCall = fetchMock.mock.calls.find(([url]) => String(url).includes('mirror.example.com'));
 
       expect(result.available).toBe(true);
-      expect(npmCall[0]).toBe('https://mirror.example.com/npm/@openchamber%2Fweb');
+      expect(npmCall[0]).toBe('https://mirror.example.com/npm/ohpichamber');
       expect(npmCall[0]).not.toContain('test-password');
       expect(npmCall[1].headers.Authorization).toBe(`Basic ${Buffer.from('test-user:test-password').toString('base64')}`);
     } finally {
@@ -495,7 +495,7 @@ describe('checkForUpdates on the update channels', () => {
 
     const result = await checkForUpdates({ currentVersion: '2.5.3' });
 
-    expect(result).toMatchObject({ available: true, version: '2.5.4-canary.20261031.7', updateCommand: 'openchamber update' });
+    expect(result).toMatchObject({ available: true, version: '2.5.4-canary.20261031.7', updateCommand: 'ohpichamber update' });
     // The website still counts the check-in.
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('api.openchamber.dev'))).toBe(true);
   });
@@ -572,10 +572,10 @@ describe('getCurrentVersion', () => {
 
 describe('getUpdateCommand', () => {
   it('pins the exact target version instead of re-resolving the latest dist-tag', () => {
-    expect(getUpdateCommand('npm', { targetVersion: '1.24.1' })).toBe('npm install -g @openchamber/web@1.24.1');
-    expect(getUpdateCommand('pnpm', { targetVersion: 'v1.24.1' })).toBe('pnpm add -g @openchamber/web@1.24.1');
-    expect(getUpdateCommand('yarn', { targetVersion: '1.24.1' })).toBe('yarn global add @openchamber/web@1.24.1');
-    expect(getUpdateCommand('bun', { targetVersion: '1.25.0-beta.1' })).toContain('add -g @openchamber/web@1.25.0-beta.1');
+    expect(getUpdateCommand('npm', { targetVersion: '1.24.1' })).toBe('npm install -g ohpichamber@1.24.1');
+    expect(getUpdateCommand('pnpm', { targetVersion: 'v1.24.1' })).toBe('pnpm add -g ohpichamber@1.24.1');
+    expect(getUpdateCommand('yarn', { targetVersion: '1.24.1' })).toBe('yarn global add ohpichamber@1.24.1');
+    expect(getUpdateCommand('bun', { targetVersion: '1.25.0-beta.1' })).toContain('add -g ohpichamber@1.25.0-beta.1');
   });
 
   describe('pnpm build approvals', () => {
@@ -595,7 +595,7 @@ describe('getUpdateCommand', () => {
       for (const version of ['10.4.0', '10.34.6', '11.28.2', '12.11.2']) {
         stubPnpmVersion(`${version}\n`);
         expect(getUpdateCommand('pnpm', { targetVersion: '1.24.1' })).toBe(
-          'pnpm add -g --allow-build=msgpackr-extract --allow-build=node-pty @openchamber/web@1.24.1',
+          'pnpm add -g --allow-build=msgpackr-extract --allow-build=node-pty ohpichamber@1.24.1',
         );
       }
     });
@@ -603,15 +603,15 @@ describe('getUpdateCommand', () => {
     it('leaves the flag out where pnpm rejects it or the version is unknown', () => {
       for (const version of ['9.15.9', '10.3.0', '']) {
         stubPnpmVersion(`${version}\n`);
-        expect(getUpdateCommand('pnpm', { targetVersion: '1.24.1' })).toBe('pnpm add -g @openchamber/web@1.24.1');
+        expect(getUpdateCommand('pnpm', { targetVersion: '1.24.1' })).toBe('pnpm add -g ohpichamber@1.24.1');
       }
       stubPnpmVersion('', 1);
-      expect(getUpdateCommand('pnpm', { targetVersion: '1.24.1' })).toBe('pnpm add -g @openchamber/web@1.24.1');
+      expect(getUpdateCommand('pnpm', { targetVersion: '1.24.1' })).toBe('pnpm add -g ohpichamber@1.24.1');
     });
   });
 
   it('falls back to the latest dist-tag when no target version is given', () => {
-    expect(getUpdateCommand('npm')).toBe('npm install -g @openchamber/web@latest');
+    expect(getUpdateCommand('npm')).toBe('npm install -g ohpichamber@latest');
   });
 
   it('rejects a target version that is not a concrete version', () => {
@@ -640,7 +640,7 @@ describe('executeUpdate', () => {
   });
 
   it('reports success when the installed version matches the target', () => {
-    stubSpawnSync({ listingStdout: '└── @openchamber/web@1.24.1' });
+    stubSpawnSync({ listingStdout: '└── ohpichamber@1.24.1' });
     const result = executeUpdate('npm', { targetVersion: '1.24.1' });
     expect(result.success).toBe(true);
     expect(result.installedVersion).toBe('1.24.1');
@@ -654,7 +654,7 @@ describe('executeUpdate', () => {
   });
 
   it('fails when the package manager exits successfully but installed the wrong version', () => {
-    stubSpawnSync({ listingStdout: '└── @openchamber/web@1.19.0' });
+    stubSpawnSync({ listingStdout: '└── ohpichamber@1.19.0' });
     const result = executeUpdate('npm', { targetVersion: '1.24.1' });
     expect(result.success).toBe(false);
     expect(result.error).toContain('1.19.0');
@@ -684,12 +684,12 @@ describe('detectPackageManagerDetails', () => {
   });
 
   it.each([
-    ['Windows pnpm store', String.raw`D:\pnpm-store\v11\links\@openchamber\web\2.5.1\hash\node_modules\@openchamber\web`, 'pnpm'],
-    ['POSIX pnpm store', '/home/user/.local/share/pnpm-store/v11/links/@openchamber/web/2.5.1/hash/node_modules/@openchamber/web', 'pnpm'],
-    ['case-insensitive Windows pnpm store', String.raw`D:\PNPM-STORE\v11\links\@openchamber\web\2.5.1\hash\node_modules\@openchamber\web`, 'pnpm'],
-    ['pnpm virtual store', '/opt/global/node_modules/.pnpm/@openchamber+web@2.5.1/node_modules/@openchamber/web', 'pnpm'],
-    ['npm install', '/usr/local/lib/node_modules/@openchamber/web', 'npm'],
-    ['unrelated store name', '/opt/pnpm-store-backup/node_modules/@openchamber/web', 'npm'],
+    ['Windows pnpm store', String.raw`D:\pnpm-store\v11\links\ohpichamber\2.5.1\hash\node_modules\ohpichamber`, 'pnpm'],
+    ['POSIX pnpm store', '/home/user/.local/share/pnpm-store/v11/links/ohpichamber/2.5.1/hash/node_modules/ohpichamber', 'pnpm'],
+    ['case-insensitive Windows pnpm store', String.raw`D:\PNPM-STORE\v11\links\ohpichamber\2.5.1\hash\node_modules\ohpichamber`, 'pnpm'],
+    ['pnpm virtual store', '/opt/global/node_modules/.pnpm/ohpichamber@2.5.1/node_modules/ohpichamber', 'pnpm'],
+    ['npm install', '/usr/local/lib/node_modules/ohpichamber', 'npm'],
+    ['unrelated store name', '/opt/pnpm-store-backup/node_modules/ohpichamber', 'npm'],
   ])('uses the install path for %s when global roots cannot establish ownership', async (_name, packagePath, packageManager) => {
     vi.stubEnv('OPENCHAMBER_RUNTIME', '');
     vi.stubEnv('OPENCHAMBER_PACKAGE_MANAGER', '');
@@ -703,7 +703,7 @@ describe('detectPackageManagerDetails', () => {
         return { status: 0, stdout: '10.0.0', stderr: '' };
       }
       if (args[0] === 'list') {
-        return { status: 0, stdout: '@openchamber/web 2.5.1', stderr: '' };
+        return { status: 0, stdout: 'ohpichamber 2.5.1', stderr: '' };
       }
       return { status: 1, stdout: '', stderr: '' };
     });
@@ -724,8 +724,8 @@ describe('detectPackageManagerDetails', () => {
       globalNodeModulesRoot: null,
     });
     expect(getUpdateCommand()).toBe(packageManager === 'pnpm'
-      ? 'pnpm add -g @openchamber/web@latest'
-      : 'npm install -g @openchamber/web@latest');
+      ? 'pnpm add -g ohpichamber@latest'
+      : 'npm install -g ohpichamber@latest');
   });
 
   it('keeps reporting a copy no package manager installed after the first detection', async () => {

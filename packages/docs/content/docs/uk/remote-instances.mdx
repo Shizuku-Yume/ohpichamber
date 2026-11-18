@@ -33,7 +33,7 @@ OpenChamber проходить через кроки — перевірку з'�
 Посилання також можна створити з термінала на віддаленій машині:
 
 ```bash
-openchamber connect-url --port 3000 --server http://your-host:3000 --qr
+ohpichamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
 `connect-url` спочатку запускає сервер, якщо на цьому порту нічого не працює. Додайте `--api-only` для headless-сервера, `--lan` для LAN bind під час старту, `--ui-password` для захисту browser access і `--name` для назви збереженого підключення. Додайте `--relay`, щоб посилання працювало й поза локальною мережею: пристрій віддає перевагу прямому підключенню, коли сервер доступний, і переходить на [Private Relay](/uk/private-relay/) — інстанс піднімає relay сам.

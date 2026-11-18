@@ -68,7 +68,7 @@ export const createStaticRoutesRuntime = (dependencies) => {
 
   const registerApiOnlyFallbackRoutes = (app) => {
     app.get(/^(?!\/api|\/auth|\/health|\/linear|.*\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot|map)).*$/, (req, res) => {
-      const command = 'openchamber connect-url --help';
+      const command = 'ohpichamber connect-url --help';
       res.status(200).format({
         html: () => {
           res.send(`<!doctype html>

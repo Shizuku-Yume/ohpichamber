@@ -37,7 +37,7 @@ const checkService = async (entry: string): Promise<void> => {
     return;
   }
   const code = await readFile(path, 'utf8');
-  if (/from\s+["']@openchamber\/sdk/.test(code)) problems.push(`${entry} still imports @openchamber/sdk. Bundle it with --node.`);
+  if (/from\s+["']ohpichamber-sdk/.test(code)) problems.push(`${entry} still imports ohpichamber-sdk. Bundle it with --node.`);
   if (!code.includes('OPENCHAMBER_SERVICE_PORT')) problems.push(`${entry} never reads OPENCHAMBER_SERVICE_PORT, so the host cannot reach it.`);
 };
 

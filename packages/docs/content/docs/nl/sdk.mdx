@@ -1,11 +1,11 @@
 ---
 title: Een extensie bouwen
-description: Voeg met @openchamber/sdk een eigen paneel toe, installeer het vanuit een map of Git-URL en communiceer met de app via connectHost.
+description: Voeg met ohpichamber-sdk een eigen paneel toe, installeer het vanuit een map of Git-URL en communiceer met de app via connectHost.
 ---
 
 # Een extensie bouwen
 
-Gebruik `@openchamber/sdk` om een eigen paneel aan OpenChamber toe te voegen. Een extensie is een kleine webpagina in de rechterbalk. Via `connectHost()` kan ze het huidige project en de sessie lezen, meldingen tonen, tekst in het invoerveld plaatsen en een taak aan een sessie koppelen. Met toestemming van de gebruiker kan ze ook sessies starten en prompts versturen.
+Gebruik `ohpichamber-sdk` om een eigen paneel aan OpenChamber toe te voegen. Een extensie is een kleine webpagina in de rechterbalk. Via `connectHost()` kan ze het huidige project en de sessie lezen, meldingen tonen, tekst in het invoerveld plaatsen en een taak aan een sessie koppelen. Met toestemming van de gebruiker kan ze ook sessies starten en prompts versturen.
 
 Extensies draaien op OpenChamber web en desktop.
 
@@ -20,7 +20,7 @@ Een map met drie bestanden:
 OpenChamber compileert uw code niet. Lever het gebouwde `.js`-bestand mee. De SDK bevat een bundelopdracht; elke andere bundler die een IIFE maakt, werkt ook.
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -38,7 +38,7 @@ Verwijs in `index.html` naar `main.js` met een gewone `<script src="main.js"></s
 
 OpenChamber leest het manifest en toont de gevraagde rechten. Zie [Rechten](#rechten). Na goedkeuring verschijnt uw pictogram in de balk. Klik erop om de pagina te laden.
 
-U kunt ook een lokale `.zip` of een https-link naar een Git-repository of ZIP-bestand toevoegen. Alleen een Git-installatie ondersteunt updates: verhoog `version` in `package.json` en push. OpenChamber controleert kort na het openen en om de paar uur, meldt het de gebruiker één keer en biedt de update aan in Instellingen → Extensies. Een link naar `openchamber://extensions/install?url=<encoded repository URL>` op een willekeurige pagina opent de desktopapp met die repository in het toevoegvenster, zodat u een installatieknop kunt aanbieden. Met `#tag` of `#branch` in de URL bepaalt u welke versie wordt gevolgd. Deze installaties worden naar de gegevensmap van OpenChamber gekopieerd en draaien daaruit. Lever dus gebouwde bestanden mee, geen `node_modules` of TypeScript-bronbestanden. Verwijderen wist de kopie. Een mapinstallatie draait rechtstreeks uit uw map, zodat u kunt bewerken, opnieuw bouwen en herladen.
+U kunt ook een lokale `.zip` of een https-link naar een Git-repository of ZIP-bestand toevoegen. Alleen een Git-installatie ondersteunt updates: verhoog `version` in `package.json` en push. OpenChamber controleert kort na het openen en om de paar uur, meldt het de gebruiker één keer en biedt de update aan in Instellingen → Extensies. Een link naar `ohpichamber://extensions/install?url=<encoded repository URL>` op een willekeurige pagina opent de desktopapp met die repository in het toevoegvenster, zodat u een installatieknop kunt aanbieden. Met `#tag` of `#branch` in de URL bepaalt u welke versie wordt gevolgd. Deze installaties worden naar de gegevensmap van OpenChamber gekopieerd en draaien daaruit. Lever dus gebouwde bestanden mee, geen `node_modules` of TypeScript-bronbestanden. Verwijderen wist de kopie. Een mapinstallatie draait rechtstreeks uit uw map, zodat u kunt bewerken, opnieuw bouwen en herladen.
 
 ## Manifest
 
@@ -48,7 +48,7 @@ U kunt ook een lokale `.zip` of een https-link naar een Git-repository of ZIP-be
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -76,9 +76,9 @@ U kunt ook een lokale `.zip` of een https-link naar een Git-repository of ZIP-be
 
 `apiVersion` moet `1` zijn. OpenChamber weigert andere waarden.
 
-SDK 3 vervangt de transport via het bovenliggende venster van SDK 2 door een privé, geversioneerde `MessagePort`-bootstrap. Een paneel dat nog de v1-`hello` van vóór M3 verstuurt, kan geen verbinding maken: OpenChamber toont een versiemismatch in het paneel en geeft het geen poort of hoststatus. Een v1-bootstrapaankondiging wordt zonder toekenning weggegooid. Bouw het paneel opnieuw met `@openchamber/sdk` 3. `apiVersion` blijft `1`, omdat het manifestschema niet is gewijzigd.
+SDK 3 vervangt de transport via het bovenliggende venster van SDK 2 door een privé, geversioneerde `MessagePort`-bootstrap. Een paneel dat nog de v1-`hello` van vóór M3 verstuurt, kan geen verbinding maken: OpenChamber toont een versiemismatch in het paneel en geeft het geen poort of hoststatus. Een v1-bootstrapaankondiging wordt zonder toekenning weggegooid. Bouw het paneel opnieuw met `ohpichamber-sdk` 3. `apiVersion` blijft `1`, omdat het manifestschema niet is gewijzigd.
 
-`engines.openchamber` is optioneel. Geef de oudste ondersteunde OpenChamber-versie op als `3.0.0` of `>=3.0.0`. Oudere builds weigeren de installatie dan meteen, in plaats van later vast te lopen.
+`engines.openchamber` is optioneel. Geef de oudste ondersteunde OpenChamber-versie op als `1.0.0` of `>=1.0.0`. Oudere builds weigeren de installatie dan meteen, in plaats van later vast te lopen.
 
 `id`, `name` en `icon` benoemen de extensie. `id` gebruikt kebab-case en moet uniek zijn onder de geïnstalleerde extensies. `icon` is een Remixicon-naam: `RiWindowLine` wordt `window`. Een SVG-bestand in uw map, zoals `icon.svg`, mag ook. `contributes.panel` is het paneel van de extensie in de balk. De `entry` daarvan verwijst naar het HTML-bestand in de map. Een extensie zonder paneel in de balk laat `panel` weg. Oudere pakketten houden `id`, `name` en `icon` in `panel`, en dat blijft werken.
 
@@ -185,14 +185,14 @@ Uw pagina heeft zelf geen schijftoegang. OpenChamber leest en schrijft namens ha
 - Een pad dat met `/` of `~/` begint, verwijst naar een andere locatie. Het moet passen bij een patroon in `contributes.filesystem`. De gebruiker ziet precies die patronen in het toestemmingsvenster:
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 `*` staat voor één padsegment en `**` voor willekeurige diepte. Een pad daarbuiten geeft `BAD_PATH`, ook na goedkeuring. `..` is nooit toegestaan.
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -231,7 +231,7 @@ De pagina ziet `ctx.surface` als `status`. OpenChamber laadt haar alleen als Wer
 OpenChamber beheert het bestand. Uw pagina leest of schrijft het niet zelf en heeft er geen recht voor nodig. OpenChamber geeft de tekst door, vraagt bij het opslaan om de bewerkte tekst en regelt Cmd/Ctrl+S, automatisch opslaan, waarschuwingen voor niet-opgeslagen wijzigingen, regeleinden en wijzigingen op schijf:
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -341,7 +341,7 @@ De sleutel is de provider-ID zoals OpenCode die meldt. De waarde is een `.svg` o
 ## De eerste regels van het paneel
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -353,7 +353,7 @@ host.onReady((ctx) => {
 
 `connectHost` werkt alleen binnen OpenChamber. Als u de pagina als los bestand opent, wordt elke aanroep geweigerd met `HOST_UNAVAILABLE`.
 
-Bouw uw paneel eerst met de onderdelen van `@openchamber/sdk/ui`: knoppen, velden, keuzelijsten, tabbladen en lijsten in de kleuren en lettertypen van de app. Zo voelt het paneel als onderdeel van OpenChamber. Schrijf alleen eigen HTML en CSS voor wat de kit niet biedt. Zie [UI-kit](/nl/sdk/ui/).
+Bouw uw paneel eerst met de onderdelen van `ohpichamber-sdk/ui`: knoppen, velden, keuzelijsten, tabbladen en lijsten in de kleuren en lettertypen van de app. Zo voelt het paneel als onderdeel van OpenChamber. Schrijf alleen eigen HTML en CSS voor wat de kit niet biedt. Zie [UI-kit](/nl/sdk/ui/).
 
 ## Zie ook
 

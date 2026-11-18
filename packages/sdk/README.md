@@ -1,8 +1,8 @@
-# @openchamber/sdk
+# ohpichamber-sdk
 
 Build extensions for [OpenChamber](https://openchamber.dev). An extension can show a panel on the right-hand rail or run actions in the background without a panel. It can read the current project and session, show toasts, put text in the chat box, attach a task to a session, and, once the user approves it, start sessions and send prompts. This package is the contract between the extension and the app.
 
-Full guide: [Build an extension](https://docs.openchamber.dev/sdk/). Reference: [Host API](https://docs.openchamber.dev/sdk/host/) and [UI kit](https://docs.openchamber.dev/sdk/ui/). Extensions with a local process: [GUEST_SERVICES.md](./GUEST_SERVICES.md).
+Full guide: [Build an extension](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk). Reference: [Host API](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk) and [UI kit](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk). Extensions with a local process: [GUEST_SERVICES.md](./GUEST_SERVICES.md).
 
 Extensions load on Web and Electron. OhPiChamber has removed the VS Code extension form and plans mobile sandboxed iframes in M5, without local service processes. External editor launch and VS Code theme import remain separate retained capabilities. See [migration scope](../../.workflow/omp-migration/scope.md).
 
@@ -11,10 +11,10 @@ Device-scoped extension storage is local browser preference data. It stays parti
 ## Install
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 ```
 
-The package ships compiled JavaScript with type declarations, so any bundler works. Its version matches the OpenChamber release it shipped with, so `@openchamber/sdk@3.0.0` is the contract of OpenChamber 3.0.0.
+The package ships compiled JavaScript with type declarations, so any bundler works. Its version matches the OpenChamber release it shipped with, so `ohpichamber-sdk@1.0.0` is the contract of OhPiChamber 1.0.0.
 
 SDK 3 replaces the pre-M3 parent-window transport with a private, versioned `MessagePort` bootstrap. A panel that still sends the pre-M3 v1 window `hello` cannot connect: the host names the version mismatch in the pane and never grants it a port, ready state, or host state. A v1 bootstrap announcement is dropped without granting anything. Rebuild the panel with SDK 3. Manifest `apiVersion` remains `1`; it names the manifest schema, which did not change.
 
@@ -32,10 +32,10 @@ bunx openchamber-guest-bundle panel/main.ts panel/main.js
 Preview packages are for testing unreleased SDK changes against a matching development build of OpenChamber. They do not imply compatibility with the published app of the same base version.
 
 ```bash
-npm install @openchamber/sdk@preview
+npm install ohpichamber-sdk@preview
 ```
 
-Maintainers can run **Publish SDK preview** in GitHub Actions, select the source branch, and enter a positive preview number. For example, `1` publishes `1.23.2-preview.1` under the `preview` npm tag; the workflow currently bases previews on `1.23.2`. Each publication needs an unused number. The workflow uses the existing `NPM_TOKEN` secret and publishes only the SDK. It changes the version in its temporary checkout, without creating commits or release tags or changing `latest`.
+Maintainers can run **Publish SDK preview** in GitHub Actions, select the source branch, and enter a positive preview number. For example, `1` publishes `1.0.0-preview.1` under the `preview` npm tag; the workflow currently bases previews on `1.0.0`. Each publication needs an unused number. The workflow uses the existing `NPM_TOKEN` secret and publishes only the SDK. It changes the version in its temporary checkout, without creating commits or release tags or changing `latest`.
 
 The workflow must exist on the default branch before GitHub exposes its manual trigger. Once it does, select `bohdan/dev` to publish that branch's SDK. Enable `dry_run` to validate without publishing. Validation installs the packed SDK in an isolated project and checks its imports, TypeScript declarations, and extension bundler before publishing that same archive.
 
@@ -55,11 +55,11 @@ bunx openchamber-guest-bundle panel/main.ts panel/main.js
 
 Then install the folder from Settings → Extensions → Add. Folder installs run from your folder, so edit, rebuild, and reload. A `.zip` or an https git or zip link is copied into OpenChamber's data folder instead; ship the built files only. Git installs can update from Settings → Extensions when the repository's `version` is newer than the installed one, so bump `version` to ship an update; `https://…/panel.git#v1` pins a tag or branch.
 
-A complete three-file example is on the [Build an extension](https://docs.openchamber.dev/sdk/) page. Six examples are at [github.com/openchamber/openchamber/tree/main/packages/sdk/examples](https://github.com/openchamber/openchamber/tree/main/packages/sdk/examples).
+A complete three-file example is on the [Build an extension](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk) page. Six examples are at [github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk/examples](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk/examples).
 
 ## Manifest
 
-Git installs also accept SSH addresses such as `git@github.com:owner/extension.git` and `ssh://git@github.com/owner/extension.git`. The fingerprint menu in Settings → Extensions selects Global Identity or a Git identity on the active server. That identity is reused for update checks and updates. On a remote instance, SSH keys and any unlocked SSH agent must be available to the server process, not just your desktop. See [Extensions](https://docs.openchamber.dev/extensions/) for details.
+Git installs also accept SSH addresses such as `git@github.com:owner/extension.git` and `ssh://git@github.com/owner/extension.git`. The fingerprint menu in Settings → Extensions selects Global Identity or a Git identity on the active server. That identity is reused for update checks and updates. On a remote instance, SSH keys and any unlocked SSH agent must be available to the server process, not just your desktop. See [Extensions](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/docs/content/docs/extensions) for details.
 
 ```json
 {
@@ -67,7 +67,7 @@ Git installs also accept SSH addresses such as `git@github.com:owner/extension.g
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -98,7 +98,7 @@ Git installs also accept SSH addresses such as `git@github.com:owner/extension.g
 
 - `version` is required semver. Settings → Extensions shows it on the card.
 - `apiVersion` is `1`. Anything else is refused.
-- `engines.openchamber` is optional (`3.0.0` or `>=3.0.0`). Older OpenChamber builds refuse the install.
+- `engines.openchamber` is optional (`1.0.0` or `>=1.0.0`). Older OpenChamber builds refuse the install.
 - `panel.id` is kebab-case and unique. `icon` is a Remixicon name (`RiWindowLine` becomes `window`) or an SVG inside the folder. `entry` is the visible panel's HTML file. Leave `entry` out to have no rail icon or panel. Add `background.entry` for executable actions and commands; with neither entry, the extension can only declare `tools`, as in `examples/tools-only`, and `providerLogos`.
 - `background: { "entry": "background/index.html" }` supplies separate sandboxed HTML for background actions and slash commands. Its scripts must be built. It runs on demand, not continuously or at installation. A panel can coexist with it.
 - `attach` is optional. `"dialog"` opens the page in a window from the + menu next to the chat box; `true` or `"panel"` opens the rail panel instead. `ctx.surface` tells the page which one it is in. The object form `{ "mode": "dialog", "entry": "panel/attach.html" }` gives the window its own page. When the user clicks the attached chip, the page opens again with that item in `ctx.item` (`null` from the + menu), so it can show the item instead of the list.
@@ -181,7 +181,7 @@ With `sessions` approved, use `listProjects()`, `listWorktrees(projectId)`, and 
 Pass `{ scope: 'device' }` only after `onReady` reports `features.deviceStorage: true`. Device storage stays in this browser profile and installation namespace instead of the connected server's instance storage. Older hosts reject that request with `UNSUPPORTED`; the SDK does not fall back to instance storage. It is for ordinary preferences, not secrets or single-sign-on state.
 
 ```ts
-import { connectHost, HostRequestError } from '@openchamber/sdk';
+import { connectHost, HostRequestError } from 'ohpichamber-sdk';
 
 const host = connectHost();
 
@@ -235,22 +235,22 @@ host.onItem((item) => {
 });
 ```
 
-Every method, its limits, and the error codes are on the [Host API](https://docs.openchamber.dev/sdk/host/) page.
+Every method, its limits, and the error codes are on the [Host API](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk) page.
 
 ## Popovers outside the extension frame
 
 When `ready.features.popovers` is true, `host.openPopover` can show a bounded card outside your iframe. The host loads the same package entry in a second sandboxed frame, with `ready.surface === 'popover'` and `ready.popover.data` carrying your JSON. Branch on that surface before mounting your normal page. The popover has the same approved capabilities as your extension.
 
-Use `mountPopoverAnchor` from `@openchamber/sdk/ui` to attach the preview to a DOM element. It handles hover, keyboard access, anchor removal and scrolling; dispose the binding when replacing the element. Keep your existing click action as a fallback for older hosts. The Git Graph example shows this with commit metadata, statistics and copy/link actions. See [Anchored popovers](./API.md#anchored-popovers) for the request, limits and lifecycle.
+Use `mountPopoverAnchor` from `ohpichamber-sdk/ui` to attach the preview to a DOM element. It handles hover, keyboard access, anchor removal and scrolling; dispose the binding when replacing the element. Keep your existing click action as a fallback for older hosts. The Git Graph example shows this with commit metadata, statistics and copy/link actions. See [Anchored popovers](./API.md#anchored-popovers) for the request, limits and lifecycle.
 
 ## UI kit
 
-`@openchamber/sdk/ui` has buttons, fields, a searchable dropdown, checkboxes, tabs, badges, lists, empty states, spinners, banners, separators, progress bars, menus, and safe text, all drawn with the app's colours and fonts. Apply `applyHostReady` on every `onReady`, but mount controls and register listeners once. Repeated snapshots must not erase inputs or drafts. Every mount returns `{ update, dispose }`. Use `update` to pass changed values back to controls, including `tabs.update({ activeId })` and `select.update({ value })` inside `onChange`. See the [UI kit examples](https://docs.openchamber.dev/sdk/ui/) for input state and tab switching.
+`ohpichamber-sdk/ui` has buttons, fields, a searchable dropdown, checkboxes, tabs, badges, lists, empty states, spinners, banners, separators, progress bars, menus, and safe text, all drawn with the app's colours and fonts. Apply `applyHostReady` on every `onReady`, but mount controls and register listeners once. Repeated snapshots must not erase inputs or drafts. Every mount returns `{ update, dispose }`. Use `update` to pass changed values back to controls, including `tabs.update({ activeId })` and `select.update({ value })` inside `onChange`. See the [UI kit examples](https://github.com/Shizuku-Yume/ohpichamber/tree/main/packages/sdk) for input state and tab switching.
 
 Theme snapshots may include optional syntax colors for keywords, strings, numbers, functions, types, comments, variables, and operators. `applyHostReady` publishes them as `--oc-syntax-*` variables and clears an optional variable when a later snapshot omits it. Existing semantic theme variables remain available for older hosts.
 
 ```ts
-import { applyHostReady, mountList } from '@openchamber/sdk/ui';
+import { applyHostReady, mountList } from 'ohpichamber-sdk/ui';
 
 let mounted = false;
 host.onReady((ctx) => {
@@ -267,13 +267,13 @@ host.onReady((ctx) => {
 });
 ```
 
-OpenChamber supplies thin, theme-aware native scrollbars inside extension documents, including nested lists, tabs, and textareas. Like the app's own, they stay hidden until you hover or scroll. The UI kit includes the same defaults for development previews. Existing installed bundles get the host stylesheet without rebuilding. Custom rendering hosts can use `GUEST_SCROLLBAR_CSS` from `@openchamber/sdk`. Authors can override these default rules; an extension's CSP still applies.
+OpenChamber supplies thin, theme-aware native scrollbars inside extension documents, including nested lists, tabs, and textareas. Like the app's own, they stay hidden until you hover or scroll. The UI kit includes the same defaults for development previews. Existing installed bundles get the host stylesheet without rebuilding. Custom rendering hosts can use `GUEST_SCROLLBAR_CSS` from `ohpichamber-sdk`. Authors can override these default rules; an extension's CSP still applies.
 
-The kit's look comes from the OpenChamber version that runs your extension: colours, borders, corner radii, and hover, selected and focus states follow the app after an update, with no rebuild on your side. Sizes and spacing stay the ones your bundle was built with, so a layout built around them doesn't shift; they change when you rebuild against a newer SDK. The app adds its look after your document, so to restyle a kit control, use a selector more specific than the kit's, such as `#root .oc-sdk-btn`. Custom rendering hosts can use `GUEST_UI_LOOK_CSS` from `@openchamber/sdk/ui`.
+The kit's look comes from the OpenChamber version that runs your extension: colours, borders, corner radii, and hover, selected and focus states follow the app after an update, with no rebuild on your side. Sizes and spacing stay the ones your bundle was built with, so a layout built around them doesn't shift; they change when you rebuild against a newer SDK. The app adds its look after your document, so to restyle a kit control, use a selector more specific than the kit's, such as `#root .oc-sdk-btn`. Custom rendering hosts can use `GUEST_UI_LOOK_CSS` from `ohpichamber-sdk/ui`.
 
 ## Schemas
 
-`@openchamber/sdk/schemas` exports the zod schemas for the manifest and the messages, for tools that validate extensions. The main entry has no zod dependency, so a page bundle stays small.
+`ohpichamber-sdk/schemas` exports the zod schemas for the manifest and the messages, for tools that validate extensions. The main entry has no zod dependency, so a page bundle stays small.
 
 ## Scope
 

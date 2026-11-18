@@ -801,7 +801,7 @@ export const registerFsRoutes = (app, dependencies) => {
    }
    const [canonicalChatsRoot, canonicalLegacyChatsRoot] = await Promise.all([
     canonicalDirectoryPath(chatsRoot, fsPromises, path),
-    canonicalDirectoryPath(path.join(home, '.config', 'openchamber', 'chats'), fsPromises, path).catch((error) => {
+    canonicalDirectoryPath(path.join(home, '.config', 'ohpichamber', 'chats'), fsPromises, path).catch((error) => {
      // A relocated root must remain usable if the old root is inaccessible.
      // Omit only this optional alias; clients retain exact legacy matching.
      console.warn('Failed to resolve legacy chats root:', error);

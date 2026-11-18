@@ -5,7 +5,7 @@ description: リモートおよびモバイルアクセス向けに OpenChamber 
 
 # トンネル
 
-トンネルは OpenChamber へのリンクです。別ネットワークの普通のブラウザから、または Tailscale Serve なら tailnet 内のどのデバイスからでもアクセスできます。実行中のインスタンスに対して作成するには `openchamber tunnel` を使います。
+トンネルは OpenChamber へのリンクです。別ネットワークの普通のブラウザから、または Tailscale Serve なら tailnet 内のどのデバイスからでもアクセスできます。実行中のインスタンスに対して作成するには `ohpichamber tunnel` を使います。
 
 > **自分のデバイス**（モバイルアプリ、別のデスクトップ）の接続には、通常トンネルは不要です。代わりに [ペアリング](/connect-devices/) して、エンドツーエンド暗号化の [Private Relay](/private-relay/) にセットアップ不要で外出先アクセスを任せましょう。
 
@@ -34,30 +34,30 @@ ngrok config add-authtoken <your-ngrok-token>
 openchamber
 ```
 
-この手順を省いた場合、`openchamber tunnel start` は CLI サーバーを自動起動できます。自動起動時には `--port`、`--host`、`--lan`、`--ui-password`、`--api-only` などのサーバーオプションを渡せます。
+この手順を省いた場合、`ohpichamber tunnel start` は CLI サーバーを自動起動できます。自動起動時には `--port`、`--host`、`--lan`、`--ui-password`、`--api-only` などのサーバーオプションを渡せます。
 
 2. Cloudflare トンネルを開始します。
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode quick
+ohpichamber tunnel start --provider cloudflare --mode quick
 ```
 
 または Ngrok トンネルを開始します。
 
 ```bash
-openchamber tunnel start --provider ngrok --mode quick
+ohpichamber tunnel start --provider ngrok --mode quick
 ```
 
 または、Tailscale Serve で tailnet 内のデバイスと共有します。
 
 ```bash
-openchamber tunnel start --provider tailscale --mode serve
+ohpichamber tunnel start --provider tailscale --mode serve
 ```
 
 3. 状態を確認します。
 
 ```bash
-openchamber tunnel status
+ohpichamber tunnel status
 ```
 
 トンネルが起動すると、`status` に公開 URL が表示されます。それを開くか QR コードをスキャンすると、どこからでも OpenChamber にアクセスできます。
@@ -85,7 +85,7 @@ openchamber tunnel status
 Cloudflare が管理する token + hostname を使います。
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
+ohpichamber tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
 ```
 
 ### Managed local
@@ -93,7 +93,7 @@ openchamber tunnel start --provider cloudflare --mode managed-remote --token-fil
 ローカルの `cloudflared` 設定を使います。
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
+ohpichamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
 ```
 
 ## プロファイル（managed-remote）
@@ -101,25 +101,25 @@ openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.
 再利用可能なプロファイルを保存します。
 
 ```bash
-openchamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-file ~/.secrets/cf-token
+ohpichamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-file ~/.secrets/cf-token
 ```
 
 保存したプロファイルで起動します。
 
 ```bash
-openchamber tunnel start --profile prod-main
+ohpichamber tunnel start --profile prod-main
 ```
 
 ## 便利なコマンド
 
 ```bash
-openchamber tunnel providers
-openchamber tunnel ready --provider cloudflare
-openchamber tunnel ready --provider ngrok
-openchamber tunnel doctor --provider cloudflare
-openchamber tunnel doctor --provider ngrok
-openchamber tunnel doctor --provider tailscale
-openchamber tunnel stop --port 3000
+ohpichamber tunnel providers
+ohpichamber tunnel ready --provider cloudflare
+ohpichamber tunnel ready --provider ngrok
+ohpichamber tunnel doctor --provider cloudflare
+ohpichamber tunnel doctor --provider ngrok
+ohpichamber tunnel doctor --provider tailscale
+ohpichamber tunnel stop --port 3000
 ```
 
 ## 動作メモ

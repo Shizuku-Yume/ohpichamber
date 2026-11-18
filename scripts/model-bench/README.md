@@ -12,7 +12,7 @@ Measures how a model handles real OpenChamber work, so the team can decide which
    ```
 
    Several models can go in one command; one model alone is fine, because each run is graded against the shipped fix, not against other models. A full set for one model is 18 runs, about 1 to 2 hours at 4 in parallel. It needs nothing from the person and survives an app restart under `nohup`.
-3. Grade the new runs with judges (below), then compare them with earlier models in `~/.config/openchamber/model-bench/judgments.jsonl`.
+3. Grade the new runs with judges (below), then compare them with earlier models in `~/.config/ohpichamber/model-bench/judgments.jsonl`.
 
 Options: `--timeout <minutes>` per run (default 30), `--keep` keeps each run's code copy for inspection, `validate <task|all>` checks that a task's reference tests fail before the fix and pass after it (run it after adding or editing a task).
 
@@ -23,7 +23,7 @@ Options: `--timeout <minutes>` per run (default 30), `--keep` keeps each run's c
 - A watchdog stops a run at the time limit or after 6 minutes without any event, and kills every process it started. A tool call that names the real checkout stops the whole bench; one that reaches this repository on GitHub stops the run and marks it `leaked`.
 - After the run: the commit's own tests are dropped in and run, and the copy and its agent session are deleted.
 
-Results: one line per run in `~/.config/openchamber/model-bench/results.jsonl` (time, steps, tokens, tests, stop reason); artifacts in `~/.cache/openchamber-model-bench/results/<run>/` (`model.patch`, `reference.patch`, `events.jsonl`, `tests.txt`, `answer.txt` for reviews).
+Results: one line per run in `~/.config/ohpichamber/model-bench/results.jsonl` (time, steps, tokens, tests, stop reason); artifacts in `~/.cache/openchamber-model-bench/results/<run>/` (`model.patch`, `reference.patch`, `events.jsonl`, `tests.txt`, `answer.txt` for reviews).
 
 ## Grading
 

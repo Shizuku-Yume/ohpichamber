@@ -4,8 +4,8 @@ import path from 'node:path';
 import {
   GUEST_PROVIDER_LOGO_BYTES_MAX, hasGuestPage, requestedGuestCapabilities, resolveAttachEntry, resolveAttachMode, resolvePageEntry, resolveStatusSectionEntry, resolveStatusSectionSource, toPublicNotifications,
   toPublicQuota, toPublicTracker, toPublicService, toPublicSessionEvents, toPublicSourceControl, toPublicIntegration, hostMeetsOpenChamberEngine, openChamberEngineMinimum
-} from '@openchamber/sdk';
-import { parseManifestJson } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { parseManifestJson } from 'ohpichamber-sdk/schemas';
 
 import { listRelativeGuestScriptHrefs, resolveGuestHtmlRelativePath } from './html-tokens.js';
 import { effectiveGrants, guestGrantScope } from './grant-scope.js';

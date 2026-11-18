@@ -7,7 +7,7 @@ import { prepareWebAgentRuntime, resolveBunExecutable } from './prepare-agent-ru
 
 const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = path.resolve(webRoot, '../..');
-const backupPath = path.join(os.tmpdir(), 'openchamber-web-package-json-backup.json');
+const backupPath = path.join(os.tmpdir(), 'ohpichamber-package-json-backup.json');
 
 export function runPrepack() {
   const bunPath = resolveBunExecutable();
@@ -19,7 +19,7 @@ export function runPrepack() {
     if (extResult.status !== 0) throw extResult.error ?? new Error('Building extensions failed');
   }
 
-  // 2. Stage standalone @openchamber/sdk copy (outside node_modules so package-level node_modules stays clean)
+  // 2. Stage standalone ohpichamber-sdk copy (outside node_modules so package-level node_modules stays clean)
   const sdkSource = path.join(workspaceRoot, 'packages', 'sdk');
   const sdkTarget = path.join(webRoot, 'resources', 'standalone-sdk');
   if (fs.existsSync(path.join(sdkSource, 'dist'))) {
@@ -50,7 +50,7 @@ export function runPrepack() {
   if (manifest.dependencies) {
     delete manifest.dependencies['@openchamber/agent-contract'];
     delete manifest.dependencies['@openchamber/agent-service'];
-    delete manifest.dependencies['@openchamber/sdk'];
+    delete manifest.dependencies['ohpichamber-sdk'];
   }
   delete manifest.bundleDependencies;
   const files = new Set(manifest.files || []);

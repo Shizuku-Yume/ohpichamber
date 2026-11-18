@@ -606,7 +606,7 @@ const pendingSessionLinksSchema = z.array(z.object({
 type PendingDesktopSessionLink = { sessionId: string; messageId: string | null; runtimeKey: string | null; requireKnownSession: boolean };
 
 /**
- * Extension install links (`openchamber://extensions/install?url=…`) that
+ * Extension install links (`ohpichamber://extensions/install?url=…`) that
  * reached the desktop app before this window could listen for them. Taking
  * them removes them; outside the desktop local page there are none. The shell
  * only lets an https repository through.
@@ -623,7 +623,7 @@ export const takePendingDesktopExtensionInstalls = async (): Promise<string[]> =
 };
 
 /**
- * Session links (`openchamber://session/...`) that reached the desktop app
+ * Session links (`ohpichamber://session/...`) that reached the desktop app
  * before this window could listen for them — the link that launched the app,
  * or "open in main window" from a closed main window. A link that names its
  * host (`?host=<id>`) carries that host's runtime key, and a cold jump-list
@@ -657,8 +657,8 @@ type PendingDesktopHostAction = z.infer<typeof pendingHostActionsSchema>[number]
 
 /**
  * Host work the desktop shell hands to the main window: a pairing link the user
- * confirmed (`openchamber://connect`), or a relay-capable host to activate
- * (`openchamber://host/<id>`). Taking them removes them.
+ * confirmed (`ohpichamber://connect`), or a relay-capable host to activate
+ * (`ohpichamber://host/<id>`). Taking them removes them.
  */
 export const takePendingDesktopHostActions = async (): Promise<PendingDesktopHostAction[]> => {
  // The shell answers only the main window's local page, whichever instance

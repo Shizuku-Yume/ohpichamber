@@ -50,9 +50,9 @@ describe.skipIf(process.platform === 'win32')('FILLER_PROGRAM, run', () => {
   const FAKE_NPM = `#!/bin/sh
 echo "$@" > npm-args.txt
 [ -f fail-npm ] && exit 3
-mkdir -p node_modules/.bin node_modules/@openchamber/web
-touch node_modules/.bin/openchamber
-[ -f skip-web ] || echo '{}' > node_modules/@openchamber/web/package.json
+mkdir -p node_modules/.bin node_modules/ohpichamber
+touch node_modules/.bin/ohpichamber
+[ -f skip-web ] || echo '{}' > node_modules/ohpichamber/package.json
 `;
   let root;
   let tools;
@@ -86,12 +86,12 @@ touch node_modules/.bin/openchamber
 
   it('writes package.json to the tools directory, tarballs to staging, installs, and writes the marker last', async () => {
     const bytes = Buffer.from([31, 139, 0, 10, 255, 0]);
-    const result = await fill(buildFillInput({ key: KEY, packageJson: '{"name":"x"}', files: [{ name: 'openchamber-web.tgz', bytes }] }));
+    const result = await fill(buildFillInput({ key: KEY, packageJson: '{"name":"x"}', files: [{ name: 'ohpichamber.tgz', bytes }] }));
 
     expect(result).toMatchObject({ code: 0 });
     expect(fs.readFileSync(path.join(tools, 'package.json'), 'utf8')).toBe('{"name":"x"}');
-    expect(fs.readFileSync(path.join(staging, 'openchamber-web.tgz'))).toEqual(bytes);
-    expect(fs.existsSync(path.join(tools, 'openchamber-web.tgz'))).toBe(false);
+    expect(fs.readFileSync(path.join(staging, 'ohpichamber.tgz'))).toEqual(bytes);
+    expect(fs.existsSync(path.join(tools, 'ohpichamber.tgz'))).toBe(false);
     expect(fs.readFileSync(path.join(tools, 'npm-args.txt'), 'utf8').trim()).toBe(`install --ignore-scripts --no-audit --no-fund --cache ${path.join(staging, 'npm-cache')}`);
     expect(fs.readFileSync(path.join(tools, '.filled'), 'utf8')).toBe(KEY);
     // The marker arrives through a rename, so a marker that exists is never half written.
@@ -114,7 +114,7 @@ touch node_modules/.bin/openchamber
     const result = await fill(buildFillInput({ key: KEY, packageJson: '{}' }));
 
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain('node_modules/@openchamber/web/package.json is missing');
+    expect(result.stderr).toContain('node_modules/ohpichamber/package.json is missing');
     expect(fs.existsSync(path.join(tools, '.filled'))).toBe(false);
   });
 

@@ -33,7 +33,7 @@ Link utworzony z opcją **Wszędzie** zawiera zarówno adres bezpośredni, jak i
 Link możesz też utworzyć z terminala na zdalnej maszynie:
 
 ```bash
-openchamber connect-url --port 3000 --server http://your-host:3000 --qr
+ohpichamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
 `connect-url` najpierw uruchamia serwer, jeśli nic nie działa na tym porcie. Dodaj `--api-only` dla serwera headless, `--lan` aby nasłuchiwać w LAN przy starcie, `--ui-password` aby chronić dostęp z przeglądarki oraz `--name` aby nazwać zapisane połączenie. Dodaj `--relay`, aby link działał także poza siecią lokalną: urządzenie preferuje połączenie bezpośrednie, gdy serwer jest osiągalny, a w przeciwnym razie przełącza się na [Private Relay](/pl/private-relay/) — instancja sama uruchomi relay.

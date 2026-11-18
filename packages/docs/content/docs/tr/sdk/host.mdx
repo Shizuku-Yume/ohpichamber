@@ -8,7 +8,7 @@ description: Bir eklentinin çağırabileceği her connectHost metodu, OpenChamb
 Bu sayfayı `connectHost` metodlarını, sınırları ve hata kodlarını tam olarak bilmeniz gerektiğinde kullanın. Klasör düzeni, manifest ve kurulum için [Eklenti oluşturma](/sdk/) sayfasından başlayın.
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
 
 const host = connectHost();
 ```
@@ -209,7 +209,7 @@ Olaylar şunlardır: `turn-started`, `session-created`, `session-archived`, `ses
 Her olay servis bearer token'ı ile tek bir `POST /session-events` olarak gelir. `readSessionEventRequest` ile okuyun ve `{ "ok": true }` yanıtlayın:
 
 ```ts
-import { SESSION_EVENTS_PATH, readSessionEventRequest } from "@openchamber/sdk";
+import { SESSION_EVENTS_PATH, readSessionEventRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === SESSION_EVENTS_PATH) {
@@ -230,7 +230,7 @@ Her projenin olayları gönderilir; `event.project.directory` değerini kendi ay
 Bir servis, hiçbir pencere açık değilken de işlem yapabilir. `createServiceHost`, servisin OpenChamber'a dönüş yoludur:
 
 ```ts
-import { createServiceHost } from '@openchamber/sdk';
+import { createServiceHost } from 'ohpichamber-sdk';
 
 const host = createServiceHost({ env: process.env });
 
@@ -312,7 +312,7 @@ OpenChamber bu tarife göre Ayarlar → Entegrasyonlar'da kanal için bir hesap 
 OpenChamber üç çağrıyı `POST /notifications` adresine iletir: `auth.probe` (bu sunucu ilettiğiniz bir sunucu mu), `auth.verify` (bu token kime ait) ve `notify` (bir bildirim). Her birini `readNotificationsProviderRequest` ile okuyun ve kanalın sunucusuna yalnızca giden yardımcı üzerinden ulaşın; yardımcı isteğinizi çağrının tanıtıcısıyla OpenChamber'a gönderir, OpenChamber token'ı ekler ve isteği hesabın sunucusuyla sınırlı tutar.
 
 ```ts
-import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "@openchamber/sdk";
+import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createNotificationsOutbound({ env: process.env });
 
@@ -358,7 +358,7 @@ Kullanıcı, Uzantı hesapları altındaki izleyici kartında hesap bağlar: bir
 OpenChamber dokuz çağrıyı `POST /tracker` adresine iletir: `auth.probe` ve `auth.verify`, okuma çağrıları `items.list`, `items.get`, `items.liveSummaries`, `states.list` ve `containers.list`, yazma çağrıları `items.updateState` ve `comments.create`. Her birini `readTrackerProviderRequest` ile okuyun, yansız öğe biçimlerinde yanıtlayın ve izleyicinin sunucusuna yalnızca giden yardımcı üzerinden ulaşın; yardımcı isteğinizi çağrının tanıtıcısıyla OpenChamber'a gönderir, OpenChamber kimlik bilgisini ekler ve isteği hesabın sunucusuyla sınırlı tutar. Bir okumanın tanıtıcısı yalnızca `GET` gönderir.
 
 ```ts
-import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "@openchamber/sdk";
+import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createTrackerOutbound({ env: process.env });
 
@@ -391,7 +391,7 @@ Onay iletişim kutusu bu sağlayıcıları listeler; listeyi değiştiren bir s�
 Gövdeyi `readQuotaProviderRequest` ile okuyun ve yerleşik bir sağlayıcının hesapladığı sonucu `{ ok: true, data }` ile yanıtlayın: `ok`, `configured`, `error`, `planLabel` ve pencere adına göre `usage.windows`, her biri `usedPercent`, `windowSeconds`, `resetAt` (epoch milisaniye) ve isteğe bağlı `valueLabel` ya da `value` ile; ayrıca model başına pencereler için `usage.models`. Kalan payı, sıfırlamaya geri sayımı ve biçimlendirilmiş metinleri OpenChamber türetir, böylece kart yerleşik bir sağlayıcınınkiyle eşleşir.
 
 ```ts
-import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "@openchamber/sdk";
+import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === QUOTA_PROVIDER_PATH) {
@@ -415,7 +415,7 @@ Göreli bir yol açık projenin içindedir ve `files` yeteneği gerektirir. `/` 
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/openchamber/config.json");
+const info = await host.stat("~/.config/ohpichamber/config.json");
 ```
 
 Sınırlar: yol en fazla 1024 karakter, içerik en fazla 2,000,000 karakter, listeleme en fazla 2000 kayıt. İçerik sınırını aşmak `FILE_TOO_LARGE` olur.

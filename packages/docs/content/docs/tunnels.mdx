@@ -5,7 +5,7 @@ description: Expose OpenChamber safely for remote and mobile access.
 
 # Tunnels
 
-A tunnel is a link to your OpenChamber, so you can reach it from an ordinary browser on another network or, with Tailscale Serve, from any device in your tailnet. Use `openchamber tunnel` to create one for a running instance.
+A tunnel is a link to your OpenChamber, so you can reach it from an ordinary browser on another network or, with Tailscale Serve, from any device in your tailnet. Use `ohpichamber tunnel` to create one for a running instance.
 
 > Connecting your **own devices** (the mobile app, another desktop) usually doesn't need a tunnel — [pair them](/connect-devices/) instead and let the end-to-end encrypted [Private Relay](/private-relay/) handle away-from-home access with zero setup.
 
@@ -34,30 +34,30 @@ ngrok config add-authtoken <your-ngrok-token>
 openchamber
 ```
 
-If you skip this step, `openchamber tunnel start` can auto-start a CLI server. When auto-starting, you can pass server options such as `--port`, `--host`, `--lan`, `--ui-password`, and `--api-only`.
+If you skip this step, `ohpichamber tunnel start` can auto-start a CLI server. When auto-starting, you can pass server options such as `--port`, `--host`, `--lan`, `--ui-password`, and `--api-only`.
 
 2. Start a Cloudflare tunnel:
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode quick
+ohpichamber tunnel start --provider cloudflare --mode quick
 ```
 
 Or start an Ngrok tunnel:
 
 ```bash
-openchamber tunnel start --provider ngrok --mode quick
+ohpichamber tunnel start --provider ngrok --mode quick
 ```
 
 Or share it with the devices in your tailnet through Tailscale Serve:
 
 ```bash
-openchamber tunnel start --provider tailscale --mode serve
+ohpichamber tunnel start --provider tailscale --mode serve
 ```
 
 3. Check status:
 
 ```bash
-openchamber tunnel status
+ohpichamber tunnel status
 ```
 
 When the tunnel is up, `status` shows a public URL. Open it, or scan the QR code, to reach OpenChamber from anywhere.
@@ -85,7 +85,7 @@ Stopping the tunnel removes what OpenChamber shared through Tailscale and leaves
 Use a token + hostname managed by Cloudflare:
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
+ohpichamber tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
 ```
 
 ### Managed local
@@ -93,7 +93,7 @@ openchamber tunnel start --provider cloudflare --mode managed-remote --token-fil
 Use a local `cloudflared` config:
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
+ohpichamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
 ```
 
 ## Profiles (managed-remote)
@@ -101,25 +101,25 @@ openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.
 Save a reusable profile:
 
 ```bash
-openchamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-file ~/.secrets/cf-token
+ohpichamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-file ~/.secrets/cf-token
 ```
 
 Start using the saved profile:
 
 ```bash
-openchamber tunnel start --profile prod-main
+ohpichamber tunnel start --profile prod-main
 ```
 
 ## Useful commands
 
 ```bash
-openchamber tunnel providers
-openchamber tunnel ready --provider cloudflare
-openchamber tunnel ready --provider ngrok
-openchamber tunnel doctor --provider cloudflare
-openchamber tunnel doctor --provider ngrok
-openchamber tunnel doctor --provider tailscale
-openchamber tunnel stop --port 3000
+ohpichamber tunnel providers
+ohpichamber tunnel ready --provider cloudflare
+ohpichamber tunnel ready --provider ngrok
+ohpichamber tunnel doctor --provider cloudflare
+ohpichamber tunnel doctor --provider ngrok
+ohpichamber tunnel doctor --provider tailscale
+ohpichamber tunnel stop --port 3000
 ```
 
 ## Behavior notes

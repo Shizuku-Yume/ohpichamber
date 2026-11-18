@@ -1,5 +1,5 @@
 import express from 'express';
-import { guestStorageRequestSchema } from '@openchamber/sdk/schemas';
+import { guestStorageRequestSchema } from 'ohpichamber-sdk/schemas';
 import { runGuestStorage } from './storage.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -17,7 +17,7 @@ import {
   isGuestRequestPath,
   requestedGuestCapabilities,
   resolveIntegrationAuth,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 import {
   findInstalledGuest,

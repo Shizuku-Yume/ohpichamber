@@ -29,7 +29,7 @@ import {
   type TrackerProviderResult,
   type TrackerProviderStateCategory,
   type TrackerProviderWorkflowState,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
 const serviceToken = process.env.OPENCHAMBER_SERVICE_TOKEN ?? '';

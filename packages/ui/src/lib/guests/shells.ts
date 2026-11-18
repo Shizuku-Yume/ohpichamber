@@ -1,5 +1,5 @@
-import type { GuestEndedShell, GuestRunningShell, GuestRunningShellsSnapshot, GuestShellOutputResult, GuestShellsScope } from '@openchamber/sdk';
-import { GUEST_SHELLS_MAX, HostRequestError } from '@openchamber/sdk';
+import type { GuestEndedShell, GuestRunningShell, GuestRunningShellsSnapshot, GuestShellOutputResult, GuestShellsScope } from 'ohpichamber-sdk';
+import { GUEST_SHELLS_MAX, HostRequestError } from 'ohpichamber-sdk';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { sessionsInTree, useBackgroundShellsStore, type EndedShell, type TrackedShell } from '@/sync/background-shells';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';

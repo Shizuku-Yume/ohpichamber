@@ -31,7 +31,7 @@ const createApp = ({
   const dependencies = {
     fs: {
       existsSync: vi.fn((targetPath) => {
-        if (typeof targetPath === 'string' && targetPath.endsWith('dev.openchamber.web.plist')) {
+        if (typeof targetPath === 'string' && targetPath.endsWith('dev.ohpichamber.web.plist')) {
           return plistExists;
         }
         return false;
@@ -82,7 +82,7 @@ beforeEach(() => {
   packageManager.detectPackageManagerDetails.mockReturnValue({
     packageManager: 'npm',
   });
-  packageManager.getUpdateCommand.mockReturnValue('npm install -g @openchamber/web@latest');
+  packageManager.getUpdateCommand.mockReturnValue('npm install -g ohpichamber@latest');
   packageManager.isUnmanagedInstall.mockReturnValue(false);
 });
 
@@ -264,7 +264,7 @@ describe('OpenChamber foreground update route', () => {
   it('leaves the update installable for a macOS launchd foreground server', async () => {
     const launchd = createApp({
       platform: 'darwin',
-      environment: { XPC_SERVICE_NAME: 'dev.openchamber.web' },
+      environment: { XPC_SERVICE_NAME: 'dev.ohpichamber.web' },
       storedOptions: { launchMode: 'foreground' },
       plistExists: true,
     });
@@ -278,7 +278,7 @@ describe('OpenChamber foreground update route', () => {
     await request(app)
       .post('/api/openchamber/update-install')
       .expect(409, {
-        error: 'Foreground servers must be updated by their service manager. Set OPENCHAMBER_SYSTEMD_UNIT when running under systemd, or run openchamber update and restart the service.',
+        error: 'Foreground servers must be updated by their service manager. Set OPENCHAMBER_SYSTEMD_UNIT when running under systemd, or run ohpichamber update and restart the service.',
       });
 
     expect(childProcess.spawnSync).not.toHaveBeenCalled();
@@ -288,14 +288,14 @@ describe('OpenChamber foreground update route', () => {
     const { app } = createApp({
       environment: {
         INVOCATION_ID: 'systemd-invocation',
-        OPENCHAMBER_SYSTEMD_UNIT: 'openchamber.service; rm -rf /',
+        OPENCHAMBER_SYSTEMD_UNIT: 'ohpichamber.service; rm -rf /',
       },
     });
 
     await request(app)
       .post('/api/openchamber/update-install')
       .expect(409, {
-        error: 'Foreground servers must be updated by their service manager. Set OPENCHAMBER_SYSTEMD_UNIT when running under systemd, or run openchamber update and restart the service.',
+        error: 'Foreground servers must be updated by their service manager. Set OPENCHAMBER_SYSTEMD_UNIT when running under systemd, or run ohpichamber update and restart the service.',
       });
 
     expect(childProcess.spawnSync).not.toHaveBeenCalled();
@@ -333,7 +333,7 @@ describe('OpenChamber foreground update route', () => {
       '--setenv=PATH=/home/syu/.npm-global/bin:/usr/bin:/bin',
       '/bin/sh',
       '-c',
-      "set -eu\nnpm install -g @openchamber/web@latest\nsystemctl --user restart 'openchamber@wsl.service'",
+      "set -eu\nnpm install -g ohpichamber@latest\nsystemctl --user restart 'openchamber@wsl.service'",
     ], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -351,7 +351,7 @@ describe('OpenChamber foreground update route', () => {
     await request(app)
       .post('/api/openchamber/update-install')
       .expect(409, {
-        error: 'Foreground servers must be updated by their service manager. Set OPENCHAMBER_SYSTEMD_UNIT when running under systemd, or run openchamber update and restart the service.',
+        error: 'Foreground servers must be updated by their service manager. Set OPENCHAMBER_SYSTEMD_UNIT when running under systemd, or run ohpichamber update and restart the service.',
       });
 
     expect(childProcess.spawnSync).not.toHaveBeenCalled();
@@ -375,7 +375,7 @@ describe('OpenChamber foreground update route', () => {
   it('allows foreground update on macOS when launchd plist exists and invokes launchd restart command', async () => {
     const { app } = createApp({
       platform: 'darwin',
-      environment: { XPC_SERVICE_NAME: 'dev.openchamber.web' },
+      environment: { XPC_SERVICE_NAME: 'dev.ohpichamber.web' },
       storedOptions: { launchMode: 'foreground' },
       plistExists: true,
     });
@@ -399,7 +399,7 @@ describe('OpenChamber foreground update route', () => {
       [
         '-c',
         expect.stringContaining(
-          "launchctl kickstart -k gui/$(id -u)/dev.openchamber.web || launchctl bootstrap gui/$(id -u) '/home/test/Library/LaunchAgents/dev.openchamber.web.plist'"
+          "launchctl kickstart -k gui/$(id -u)/dev.ohpichamber.web || launchctl bootstrap gui/$(id -u) '/home/test/Library/LaunchAgents/dev.ohpichamber.web.plist'"
         ),
       ],
       expect.objectContaining({
@@ -434,7 +434,7 @@ describe('OpenChamber foreground update route', () => {
       [
         '-c',
         expect.stringContaining(
-          "('/usr/bin/node' '/opt/openchamber/bin/cli.js' serve --port 7897) || (openchamber serve --port 7897)"
+          "('/usr/bin/node' '/opt/openchamber/bin/cli.js' serve --port 7897) || (ohpichamber serve --port 7897)"
         ),
       ],
       expect.objectContaining({
@@ -469,7 +469,7 @@ describe('OpenChamber foreground update route', () => {
       [
         '-c',
         expect.stringContaining(
-          "('/usr/bin/node' '/opt/openchamber/bin/cli.js' serve --port 7897) || (openchamber serve --port 7897)"
+          "('/usr/bin/node' '/opt/openchamber/bin/cli.js' serve --port 7897) || (ohpichamber serve --port 7897)"
         ),
       ],
       expect.objectContaining({
@@ -534,16 +534,16 @@ describe('OpenChamber web update route on Windows', () => {
     // Every preamble line is an echo; none is left to run as a command.
     expect(lines.filter((line) => line.startsWith('currentVersion=') || line.startsWith('restartCommand='))).toEqual([]);
     expect(lines).toContain('echo packageManager=npm');
-    expect(lines).toContain('echo restartCommand=^("C:\\Program Files\\nodejs\\node.exe" "/opt/openchamber/bin/cli.js" serve --port 7897^) ^|^| ^(openchamber serve --port 7897^)');
+    expect(lines).toContain('echo restartCommand=^("C:\\Program Files\\nodejs\\node.exe" "/opt/openchamber/bin/cli.js" serve --port 7897^) ^|^| ^(ohpichamber serve --port 7897^)');
     // The UI password is never part of the script or its log.
     expect(script).not.toContain('pa%');
     // A .cmd shim (npm, pnpm, yarn) must be `call`ed or the script ends there.
-    expect(lines).toContain('call npm install -g @openchamber/web@latest');
+    expect(lines).toContain('call npm install -g ohpichamber@latest');
     expect(lines).toContain('ping -n 3 127.0.0.1 >nul');
     expect(lines.some((line) => line.startsWith('timeout '))).toBe(false);
     expect(lines).toContain('if %ERRORLEVEL% EQU 0 (');
     expect(lines.at(-2)).toBe('del "%~f0"');
-    expect(lines).toContain('  ("C:\\Program Files\\nodejs\\node.exe" "/opt/openchamber/bin/cli.js" serve --port 7897) || (openchamber serve --port 7897)');
+    expect(lines).toContain('  ("C:\\Program Files\\nodejs\\node.exe" "/opt/openchamber/bin/cli.js" serve --port 7897) || (ohpichamber serve --port 7897)');
 
     // The restarted server reads the password from its environment.
     expect(childProcess.spawn).toHaveBeenCalledWith(

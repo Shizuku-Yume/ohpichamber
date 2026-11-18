@@ -1,11 +1,11 @@
 ---
 title: 构建扩展
-description: 用 @openchamber/sdk 为 OpenChamber 添加你自己的面板，从文件夹或 git 地址安装，并通过 connectHost 与应用交互。
+description: 用 ohpichamber-sdk 为 OpenChamber 添加你自己的面板，从文件夹或 git 地址安装，并通过 connectHost 与应用交互。
 ---
 
 # 构建扩展
 
-使用 `@openchamber/sdk` 为 OpenChamber 添加你自己的面板。扩展是一个小型网页，OpenChamber 会把它显示在右侧栏。它通过 `connectHost()` 与应用交互：可以读取当前项目和会话、显示提示消息、把文本放进聊天框、把任务附加到会话，并在用户批准后创建会话和发送提示词。
+使用 `ohpichamber-sdk` 为 OpenChamber 添加你自己的面板。扩展是一个小型网页，OpenChamber 会把它显示在右侧栏。它通过 `connectHost()` 与应用交互：可以读取当前项目和会话、显示提示消息、把文本放进聊天框、把任务附加到会话，并在用户批准后创建会话和发送提示词。
 
 扩展可以在 OpenChamber 的网页版和桌面版中运行。
 
@@ -20,7 +20,7 @@ description: 用 @openchamber/sdk 为 OpenChamber 添加你自己的面板，从
 OpenChamber 从不编译你的代码。请直接发布构建好的 `.js` 文件。SDK 附带一个打包命令；任何能输出 IIFE 的打包器也都可以。
 
 ```bash
-npm install @openchamber/sdk
+npm install ohpichamber-sdk
 bunx openchamber-guest-bundle panel/main.ts panel/main.js
 ```
 
@@ -38,7 +38,7 @@ bunx openchamber-guest-bundle panel/main.ts panel/main.js
 
 OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的内容（见[能力](#能力)）。批准后，你的图标会出现在侧栏。点击它，你的页面就会加载。
 
-你也可以添加本地 `.zip` 文件，或指向 git 仓库或 zip 文件的 https 链接。只有 git 安装能够更新：提高 `package.json` 里的 `version` 并推送，OpenChamber 会在启动后不久和每隔几小时检查一次，通知用户一次，并在 设置 → 扩展 中提供更新。任何页面上指向 `openchamber://extensions/install?url=<encoded repository URL>` 的链接都会打开桌面应用，并把该仓库填入添加对话框，因此你可以提供一个安装按钮。URL 上的 `#tag` 或 `#branch` 固定它跟随的是哪一个。这些会被复制到 OpenChamber 的数据文件夹，并从该副本运行，因此请发布构建好的文件，而不是 `node_modules` 或 TypeScript 源码。移除扩展时会删除该副本。从文件夹安装则直接从你的文件夹运行，你可以编辑、重新构建、再重新加载。
+你也可以添加本地 `.zip` 文件，或指向 git 仓库或 zip 文件的 https 链接。只有 git 安装能够更新：提高 `package.json` 里的 `version` 并推送，OpenChamber 会在启动后不久和每隔几小时检查一次，通知用户一次，并在 设置 → 扩展 中提供更新。任何页面上指向 `ohpichamber://extensions/install?url=<encoded repository URL>` 的链接都会打开桌面应用，并把该仓库填入添加对话框，因此你可以提供一个安装按钮。URL 上的 `#tag` 或 `#branch` 固定它跟随的是哪一个。这些会被复制到 OpenChamber 的数据文件夹，并从该副本运行，因此请发布构建好的文件，而不是 `node_modules` 或 TypeScript 源码。移除扩展时会删除该副本。从文件夹安装则直接从你的文件夹运行，你可以编辑、重新构建、再重新加载。
 
 ## 清单
 
@@ -48,7 +48,7 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
   "version": "1.0.0",
   "openchamber": {
     "apiVersion": 1,
-    "engines": { "openchamber": ">=3.0.0" },
+    "engines": { "openchamber": ">=1.0.0" },
     "id": "acme-hello",
     "name": "Hello",
     "icon": "window",
@@ -76,9 +76,9 @@ OpenChamber 会读取清单，并弹出一个对话框列出扩展所请求的�
 
 `apiVersion` 为 `1`。OpenChamber 拒绝任何其他值。
 
-SDK 3 用私有且带版本号的 `MessagePort` 引导流程取代 SDK 2 的父窗口传输。仍发送 M3 之前 v1 `hello` 的面板无法连接：OpenChamber 会在面板中显示版本不匹配信息，并且不会授予端口或主机状态。v1 引导通知会被丢弃且不授予任何内容。请使用 `@openchamber/sdk` 3 重新构建面板。由于清单架构未变，`apiVersion` 仍为 `1`。
+SDK 3 用私有且带版本号的 `MessagePort` 引导流程取代 SDK 2 的父窗口传输。仍发送 M3 之前 v1 `hello` 的面板无法连接：OpenChamber 会在面板中显示版本不匹配信息，并且不会授予端口或主机状态。v1 引导通知会被丢弃且不授予任何内容。请使用 `ohpichamber-sdk` 3 重新构建面板。由于清单架构未变，`apiVersion` 仍为 `1`。
 
-`engines.openchamber` 可选。填写你的扩展支持的最低 OpenChamber 版本，写成 `3.0.0` 或 `>=3.0.0`。更旧的版本会拒绝安装，而不是之后才出错。
+`engines.openchamber` 可选。填写你的扩展支持的最低 OpenChamber 版本，写成 `1.0.0` 或 `>=1.0.0`。更旧的版本会拒绝安装，而不是之后才出错。
 
 `id`、`name` 和 `icon` 用来标识扩展。`id` 使用 kebab-case，且在已安装扩展中必须唯一。`icon` 是 Remixicon 图标名（`RiWindowLine` 写成 `window`），或者你文件夹内的 SVG 文件，如 `icon.svg`。`contributes.panel` 是扩展在侧栏中的面板：它的 `entry` 是你文件夹内的 HTML 文件。没有侧栏面板的扩展可以不写 `panel`。旧版包把 `id`、`name` 和 `icon` 放在 `panel` 内，这种写法仍然有效。
 
@@ -185,14 +185,14 @@ const { text } = await host.generate({
 - 以 `/` 或 `~/` 开头的路径指其他任何位置。它必须匹配你在 `contributes.filesystem` 中声明的某个模式，用户会在批准对话框中看到这些原样的模式：
 
 ```json
-"filesystem": ["~/.config/openchamber/config.json", "~/notes/**"]
+"filesystem": ["~/.config/ohpichamber/config.json", "~/notes/**"]
 ```
 
 模式中 `*` 匹配一个路径段，`**` 匹配任意深度。超出模式范围的一律为 `BAD_PATH`，即使已获批准也是如此。`..` 永远不允许。
 
 ```ts
-const config = await host.readFile("~/.config/openchamber/config.json");
-await host.writeFile("~/.config/openchamber/config.json", nextJson);
+const config = await host.readFile("~/.config/ohpichamber/config.json");
+await host.writeFile("~/.config/ohpichamber/config.json", nextJson);
 const { entries } = await host.listDir(".");
 ```
 
@@ -231,7 +231,7 @@ const { entries } = await host.listDir(".");
 文件由 OpenChamber 管理。你的页面从不读写它，也不需要为此申请任何权限。OpenChamber 把文本交给你，保存时向你要编辑后的文本，并处理 Cmd/Ctrl+S、自动保存、未保存更改提示、换行符以及磁盘上的更改：
 
 ```ts
-import { connectHost, createFileSaveTracker } from "@openchamber/sdk";
+import { connectHost, createFileSaveTracker } from "ohpichamber-sdk";
 
 const host = connectHost();
 let tracker = createFileSaveTracker(null);
@@ -341,7 +341,7 @@ host.onResolve(async ({ command, args }) => {
 ## 面板里的前几行代码
 
 ```ts
-import { connectHost } from "@openchamber/sdk";
+import { connectHost } from "ohpichamber-sdk";
 
 const host = connectHost();
 
@@ -353,7 +353,7 @@ host.onReady((ctx) => {
 
 `connectHost` 只在 OpenChamber 内部可用。作为普通文件打开时，每次调用都会以 `HOST_UNAVAILABLE` 拒绝。
 
-先用 `@openchamber/sdk/ui` 提供的构件搭建面板：按钮、输入框、下拉框、标签页、列表等，都采用应用的颜色和字体，让面板像是 OpenChamber 的一部分。只为套件没有的东西自己编写 HTML 和 CSS。见 [UI 套件](/sdk/ui/)。
+先用 `ohpichamber-sdk/ui` 提供的构件搭建面板：按钮、输入框、下拉框、标签页、列表等，都采用应用的颜色和字体，让面板像是 OpenChamber 的一部分。只为套件没有的东西自己编写 HTML 和 CSS。见 [UI 套件](/sdk/ui/)。
 
 ## 相关页面
 

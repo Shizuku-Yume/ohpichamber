@@ -6,7 +6,7 @@
 //    The one npm installs matches the build host, which is the wrong
 //    architecture for a cross-built app.
 // 2. The `@vscode/ripgrep` platform package, an optional dependency of
-//    `@openchamber/web` that npm and Bun install for the current platform:
+//    `ohpichamber` that npm and Bun install for the current platform:
 //    web installs, the Docker image and desktop development.
 // 3. `rg` on the PATH, for an install whose platform package is missing.
 //

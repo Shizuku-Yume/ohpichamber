@@ -36,7 +36,7 @@ Config Studio validates JSON syntax, not every OpenCode configuration option. Re
 - `tasks-demo/panel/tasks.ts` owns task validation and storage; `board.ts` composes the UI; `workspace.ts` owns live project/session subscriptions and generation guards.
 - Every panel applies `applyHostReady` on repeated snapshots and mounts once. Controlled inputs call their handle's `update`. Provider and conversation data render as text.
 - SDK Playground keeps its message action in `hello-kit/background/main.ts`, separate from the panel. To make a background-only variant, omit `panel.entry` and `page` from its manifest; the action remains available and the rail icon disappears.
-- Example source uses the workspace SDK and the repository's existing Zod dependency for boundary validation. To move an example into its own repository, copy `shared.ts` into that package, adjust its imports, and declare `@openchamber/sdk` and `zod` where used.
+- Example source uses the workspace SDK and the repository's existing Zod dependency for boundary validation. To move an example into its own repository, copy `shared.ts` into that package, adjust its imports, and declare `ohpichamber-sdk` and `zod` where used.
 - The optional Tool Gallery MCP fixture is a separate process. Installing the extension never starts it or changes OpenCode configuration.
 
 Panel copy is intentionally English so the source stays easy to follow. A localized extension can select its own dictionaries using `HostReadyContext.locale`; an iframe cannot use the host's React i18n context.

@@ -103,7 +103,7 @@ jobs:
         run: bun run build
 
       # Both packages are packed and published with bun so the
-      # `workspace:*` link from @openchamber/web to @openchamber/sdk is
+      # `workspace:*` link from ohpichamber to ohpichamber-sdk is
       # rewritten to the released version. npm leaves it in place and the
       # published tarball then fails to install.
       - name: Publish SDK to npm

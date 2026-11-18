@@ -33,7 +33,7 @@ Diese drei Dateien sind eine funktionierende Erweiterung. Sie verbindet einen Gi
       }
     }
   },
-  "dependencies": { "@openchamber/sdk": "^3.0.0" }
+  "dependencies": { "ohpichamber-sdk": "^1.0.0" }
 }
 ```
 
@@ -56,8 +56,8 @@ Diese drei Dateien sind eine funktionierende Erweiterung. Sie verbindet einen Gi
 `panel/main.ts`:
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
-import { applyHostReady, mountBanner, mountEmpty, mountList, mountSpinner } from "@openchamber/sdk/ui";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
+import { applyHostReady, mountBanner, mountEmpty, mountList, mountSpinner } from "ohpichamber-sdk/ui";
 
 type Repo = { full_name: string; html_url: string; description: string | null };
 

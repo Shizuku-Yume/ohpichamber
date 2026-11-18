@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import type { GuestRequest, GuestStatusView } from '@openchamber/sdk';
+import type { GuestRequest, GuestStatusView } from 'ohpichamber-sdk';
 
 import type { GuestRequestProxyResult } from './oauth';
 import {

@@ -5,7 +5,7 @@ description: Bezpiecznie udostępnij OpenChamber do dostępu zdalnego i mobilneg
 
 # Tunele
 
-Tunel to link do Twojego OpenChamber, dzięki któremu możesz dotrzeć do niego ze zwykłej przeglądarki w innej sieci albo, z Tailscale Serve, z każdego urządzenia w Twoim tailnecie. Użyj `openchamber tunnel`, aby utworzyć go dla działającej instancji.
+Tunel to link do Twojego OpenChamber, dzięki któremu możesz dotrzeć do niego ze zwykłej przeglądarki w innej sieci albo, z Tailscale Serve, z każdego urządzenia w Twoim tailnecie. Użyj `ohpichamber tunnel`, aby utworzyć go dla działającej instancji.
 
 > Łączenie **własnych urządzeń** (aplikacja mobilna, drugi komputer) zwykle nie wymaga tunelu — zamiast tego [sparuj je](/pl/connect-devices/) i pozwól, by szyfrowany end-to-end [Private Relay](/pl/private-relay/) zajął się dostępem spoza domu bez żadnej konfiguracji.
 
@@ -34,30 +34,30 @@ ngrok config add-authtoken <your-ngrok-token>
 openchamber
 ```
 
-Jeśli pominiesz ten krok, `openchamber tunnel start` może automatycznie uruchomić serwer CLI. Przy auto-starcie możesz przekazać opcje serwera, takie jak `--port`, `--host`, `--lan`, `--ui-password` i `--api-only`.
+Jeśli pominiesz ten krok, `ohpichamber tunnel start` może automatycznie uruchomić serwer CLI. Przy auto-starcie możesz przekazać opcje serwera, takie jak `--port`, `--host`, `--lan`, `--ui-password` i `--api-only`.
 
 2. Uruchom tunel Cloudflare:
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode quick
+ohpichamber tunnel start --provider cloudflare --mode quick
 ```
 
 Albo uruchom tunel Ngrok:
 
 ```bash
-openchamber tunnel start --provider ngrok --mode quick
+ohpichamber tunnel start --provider ngrok --mode quick
 ```
 
 Albo udostępnij go urządzeniom z Twojego tailnetu przez Tailscale Serve:
 
 ```bash
-openchamber tunnel start --provider tailscale --mode serve
+ohpichamber tunnel start --provider tailscale --mode serve
 ```
 
 3. Sprawdź status:
 
 ```bash
-openchamber tunnel status
+ohpichamber tunnel status
 ```
 
 Gdy tunel działa, `status` pokazuje publiczny adres URL. Otwórz go lub zeskanuj kod QR, aby dotrzeć do OpenChamber z dowolnego miejsca.
@@ -85,7 +85,7 @@ Zatrzymanie tunelu usuwa to, co OpenChamber udostępnił przez Tailscale, a resz
 Użyj tokenu + nazwy hosta zarządzanych przez Cloudflare:
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
+ohpichamber tunnel start --provider cloudflare --mode managed-remote --token-file ~/.secrets/cf-token --hostname app.example.com
 ```
 
 ### Zarządzany lokalny
@@ -93,7 +93,7 @@ openchamber tunnel start --provider cloudflare --mode managed-remote --token-fil
 Użyj lokalnej konfiguracji `cloudflared`:
 
 ```bash
-openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
+ohpichamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml
 ```
 
 ## Profile (managed-remote)
@@ -101,25 +101,25 @@ openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.
 Zapisz profil wielokrotnego użytku:
 
 ```bash
-openchamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-file ~/.secrets/cf-token
+ohpichamber tunnel profile add --provider cloudflare --mode managed-remote --name prod-main --hostname app.example.com --token-file ~/.secrets/cf-token
 ```
 
 Uruchom z zapisanym profilem:
 
 ```bash
-openchamber tunnel start --profile prod-main
+ohpichamber tunnel start --profile prod-main
 ```
 
 ## Przydatne polecenia
 
 ```bash
-openchamber tunnel providers
-openchamber tunnel ready --provider cloudflare
-openchamber tunnel ready --provider ngrok
-openchamber tunnel doctor --provider cloudflare
-openchamber tunnel doctor --provider ngrok
-openchamber tunnel doctor --provider tailscale
-openchamber tunnel stop --port 3000
+ohpichamber tunnel providers
+ohpichamber tunnel ready --provider cloudflare
+ohpichamber tunnel ready --provider ngrok
+ohpichamber tunnel doctor --provider cloudflare
+ohpichamber tunnel doctor --provider ngrok
+ohpichamber tunnel doctor --provider tailscale
+ohpichamber tunnel stop --port 3000
 ```
 
 ## Uwagi dotyczące zachowania

@@ -4,7 +4,7 @@
  * OpenCode server, and through them the integrated terminal and an agent's
  * shell. Every such write goes through `assignInjectedEnv`, which also records
  * the variable's name in `OPENCHAMBER_INJECTED_ENV`. A command run from one of
- * those shells (`openchamber startup enable`) reads the record to tell
+ * those shells (`ohpichamber startup enable`) reads the record to tell
  * OpenChamber's configuration from what the user exported, with no list of
  * names that could drift from the code that sets them (#4604).
  *

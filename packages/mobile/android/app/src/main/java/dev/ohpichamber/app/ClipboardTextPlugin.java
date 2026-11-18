@@ -1,4 +1,4 @@
-package com.openchamber.app;
+package dev.ohpichamber.app;
 
 import android.content.ClipData;
 import android.content.ClipboardManager;

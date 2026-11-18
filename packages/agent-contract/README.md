@@ -1,6 +1,6 @@
 # @openchamber/agent-contract
 
-Shared JSON wire types and Zod validation for the Canonical Agent API at `/api/agent/v1`. The Host, Agent Service and clients import this package; OMP SDK objects stay private to the Agent Service. The separate `@openchamber/sdk` package remains the Guest extension contract.
+Shared JSON wire types and Zod validation for the Canonical Agent API at `/api/agent/v1`. The Host, Agent Service and clients import this package; OMP SDK objects stay private to the Agent Service. The separate `ohpichamber-sdk` package remains the Guest extension contract.
 
 Session metadata retains typed OpenChamber workflow fields, including review offers and the `btwPromoted` marker. `SessionMetadataPatch` accepts native field updates and explicit `null` deletion; review-offer timestamps and promotion markers are validated rather than carried in an untyped extension object. `SessionCreateRequestSchema` accepts an optional `parentSessionId: EntityIdSchema` for establishing child session links within the same authorized workspace and project, and `RuntimeSession` projects this relationship.
 

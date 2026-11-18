@@ -6,8 +6,8 @@ import type { ShellJob, ShellSnapshot } from '@openchamber/agent-contract'
 import type { WorktreeMetadata } from "@/types/worktree"
 import type { State } from "../types"
 
-const CHAT = "/home/u/.config/openchamber/chats/2026-10-03/session-a"
-const OTHER_CHAT = "/home/u/.config/openchamber/chats/2026-10-03/session-b"
+const CHAT = "/home/u/.config/ohpichamber/chats/2026-10-03/session-a"
+const OTHER_CHAT = "/home/u/.config/ohpichamber/chats/2026-10-03/session-b"
 const WORKTREE = "/repo/app-worktrees/feature"
 const PROJECT = "/repo/app"
 const CHAT_DELAY = 30_000

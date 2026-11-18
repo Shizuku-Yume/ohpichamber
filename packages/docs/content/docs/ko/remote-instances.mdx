@@ -33,7 +33,7 @@ SSH 및 UI 비밀번호를 저장할지, 매번 입력할지 결정합니다. �
 원격 머신의 터미널에서도 링크를 만들 수 있습니다:
 
 ```bash
-openchamber connect-url --port 3000 --server http://your-host:3000 --qr
+ohpichamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
 해당 포트에 서버가 없으면 `connect-url`이 먼저 서버를 시작합니다. Headless 서버에는 `--api-only`, 시작 시 LAN에 바인딩하려면 `--lan`, 브라우저 접근 보호에는 `--ui-password`, 저장된 연결 이름에는 `--name`을 사용하세요. 로컬 네트워크 밖에서도 작동하는 링크가 필요하면 `--relay`를 추가하세요. 기기는 도달 가능할 때 직접 연결을 우선하고, 밖에서는 [Private Relay](/ko/private-relay/)로 대체합니다. 인스턴스가 릴레이를 알아서 올립니다.

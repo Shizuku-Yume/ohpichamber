@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import {
   GUEST_REQUEST_TIMEOUT_MS, HostRequestError, OPENCHAMBER_SDK_API_VERSION, OPENCHAMBER_SDK_CHANNEL,
   type HostMessage,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useBackgroundShellsStore, type TrackedShell } from '@/sync/background-shells';
 import {

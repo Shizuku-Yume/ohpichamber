@@ -20,10 +20,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "paths": {
-      "@openchamber/sdk": [
+      "ohpichamber-sdk": [
         "../sdk/src/index.ts"
       ],
-      "@openchamber/sdk/schemas": [
+      "ohpichamber-sdk/schemas": [
         "../sdk/src/schemas.ts"
       ],
       "@/*": [

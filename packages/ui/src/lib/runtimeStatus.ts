@@ -129,12 +129,12 @@ export const buildRuntimeStatusReport = async (): Promise<string> => {
     const isWindows = /Windows NT/.test(platform);
     const isMacDesktop = /Mac OS X|Macintosh/.test(platform);
     lines.push(`- OpenChamber desktop: ${isWindows
-      ? '%APPDATA%\\OpenChamber\\logs\\main.log'
+      ? '%APPDATA%\\OhPiChamber\\logs\\main.log'
       : isMacDesktop
-        ? '~/Library/Logs/OpenChamber/main.log'
-        : '~/.config/OpenChamber/logs/main.log'}`);
+        ? '~/Library/Logs/OhPiChamber/main.log'
+        : '~/.config/OhPiChamber/logs/main.log'}`);
   } else {
-    lines.push(`- Host console: ${hostHome ? `${hostHome}/.config/openchamber` : '(server log output)'}`);
+    lines.push(`- Host console: ${hostHome ? `${hostHome}/.config/ohpichamber` : '(server log output)'}`);
   }
 
   lines.push('');

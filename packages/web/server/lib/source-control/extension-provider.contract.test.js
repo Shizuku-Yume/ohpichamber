@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { SOURCE_CONTROL_OUTBOUND_PATH, createSourceControlForge, OPENCHAMBER_HOST_CALLBACK_URL } from '@openchamber/sdk';
+import { SOURCE_CONTROL_OUTBOUND_PATH, createSourceControlForge, OPENCHAMBER_HOST_CALLBACK_URL } from 'ohpichamber-sdk';
 import { startFakeForge } from '../../../../sdk/examples/source-control-provider/fake-forge.ts';
 import { listInstalledGuests } from '../guests/catalog.js';
 import { hostCallbackUrl, setHostCallbackRoute, stopHostCallbackListener } from '../guests/host-callback.js';

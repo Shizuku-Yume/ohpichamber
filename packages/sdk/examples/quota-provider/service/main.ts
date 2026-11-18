@@ -14,7 +14,7 @@ import {
   type QuotaProviderResult,
   type QuotaProviderUsageData,
   type QuotaProviderWindow,
-} from '@openchamber/sdk';
+} from 'ohpichamber-sdk';
 
 const port = Number(process.env.OPENCHAMBER_SERVICE_PORT);
 const serviceToken = process.env.OPENCHAMBER_SERVICE_TOKEN ?? '';

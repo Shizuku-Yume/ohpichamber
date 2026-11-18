@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { GUEST_SHELLS_MAX, HostRequestError } from '@openchamber/sdk';
+import { GUEST_SHELLS_MAX, HostRequestError } from 'ohpichamber-sdk';
 import type { Session } from '@openchamber/agent-contract';
 import { CanonicalApiError, canonicalClient } from '@/api/canonicalClient';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';

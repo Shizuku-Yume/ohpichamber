@@ -8,7 +8,7 @@ description: Każda metoda connectHost, którą rozszerzenie może wywołać, to
 Użyj tej strony, gdy potrzebujesz dokładnych metod `connectHost`, limitów i kodów błędów. Układ folderu, manifest i instalację opisuje [Tworzenie rozszerzenia](/sdk/).
 
 ```ts
-import { connectHost, HostRequestError } from "@openchamber/sdk";
+import { connectHost, HostRequestError } from "ohpichamber-sdk";
 
 const host = connectHost();
 ```
@@ -200,7 +200,7 @@ Zdarzenia to `turn-started`, `session-created`, `session-archived`, `session-del
 Każde zdarzenie przychodzi jako jedno `POST /session-events` z tokenem bearer usługi. Odczytaj je przez `readSessionEventRequest` i odpowiedz `{ "ok": true }`:
 
 ```ts
-import { SESSION_EVENTS_PATH, readSessionEventRequest } from "@openchamber/sdk";
+import { SESSION_EVENTS_PATH, readSessionEventRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === SESSION_EVENTS_PATH) {
@@ -221,7 +221,7 @@ Wysyłane są zdarzenia ze wszystkich projektów; porównaj `event.project.direc
 Usługa może działać bez otwartego okna. `createServiceHost` to jej droga powrotna do OpenChamber:
 
 ```ts
-import { createServiceHost } from '@openchamber/sdk';
+import { createServiceHost } from 'ohpichamber-sdk';
 
 const host = createServiceHost({ env: process.env });
 
@@ -303,7 +303,7 @@ Z tego opisu OpenChamber rysuje kartę konta kanału w Ustawienia → Integracje
 OpenChamber przekazuje trzy wywołania do `POST /notifications`: `auth.probe` (czy to serwer, do którego dostarczasz), `auth.verify` (do kogo należy ten token) i `notify` (jedno powiadomienie). Odczytaj każde przez `readNotificationsProviderRequest`, a z serwerem kanału łącz się tylko przez pomocnika wychodzącego, który wysyła Twoje żądanie do OpenChamber z uchwytem wywołania; OpenChamber dodaje token i kieruje żądanie wyłącznie na serwer konta.
 
 ```ts
-import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "@openchamber/sdk";
+import { NOTIFICATIONS_PROVIDER_PATH, createNotificationsOutbound, readNotificationsProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createNotificationsOutbound({ env: process.env });
 
@@ -349,7 +349,7 @@ Użytkownik podłącza konta na karcie trackera w sekcji Konta rozszerzeń: toke
 OpenChamber przekazuje dziewięć wywołań do `POST /tracker`: `auth.probe` i `auth.verify`, odczyty `items.list`, `items.get`, `items.liveSummaries`, `states.list` i `containers.list` oraz zapisy `items.updateState` i `comments.create`. Odczytaj każde przez `readTrackerProviderRequest`, odpowiadaj w neutralnych kształtach elementów, a z serwerem trackera łącz się tylko przez pomocnika wychodzącego, który wysyła Twoje żądanie do OpenChamber z uchwytem wywołania; OpenChamber dodaje dane logowania i kieruje żądanie wyłącznie na serwer konta. Uchwyt odczytu wysyła tylko `GET`.
 
 ```ts
-import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "@openchamber/sdk";
+import { TRACKER_PROVIDER_PATH, createTrackerOutbound, readTrackerProviderRequest } from "ohpichamber-sdk";
 
 const outbound = createTrackerOutbound({ env: process.env });
 
@@ -382,7 +382,7 @@ Okno zatwierdzania wymienia tych dostawców, a wersja, która zmienia listę, py
 Odczytaj treść przez `readQuotaProviderRequest` i odpowiedz `{ ok: true, data }` z wynikiem, jaki oblicza wbudowany dostawca: `ok`, `configured`, `error`, `planLabel` oraz `usage.windows` po nazwie okna, każde z `usedPercent`, `windowSeconds`, `resetAt` (epoka w milisekundach) i opcjonalnym `valueLabel` lub `value`, plus `usage.models` dla okien per model. OpenChamber wyprowadza pozostałą część, odliczanie do resetu i sformatowane napisy, więc karta zgadza się z kartą wbudowanego dostawcy.
 
 ```ts
-import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "@openchamber/sdk";
+import { QUOTA_PROVIDER_PATH, readQuotaProviderRequest } from "ohpichamber-sdk";
 
 // inside your service's request handler, after the bearer check
 if (url.pathname === QUOTA_PROVIDER_PATH) {
@@ -406,7 +406,7 @@ Usługa odpowiada w 20 s i zatrzymuje się po dziesięciu minutach bez wywołani
 const { content } = await host.readFile("package.json");
 await host.writeFile("notes/today.md", "# Today\n");
 const { entries } = await host.listDir("src");
-const info = await host.stat("~/.config/openchamber/config.json");
+const info = await host.stat("~/.config/ohpichamber/config.json");
 ```
 
 Limity: ścieżka do 1024 znaków, treść do 2 000 000 znaków, listing do 2000 wpisów. Przekroczenie limitu treści to `FILE_TOO_LARGE`.

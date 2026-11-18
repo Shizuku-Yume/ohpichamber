@@ -15,7 +15,7 @@ import { pickLiveBrowserTabs, touchRecentBrowserTab } from '@/lib/browser/liveTa
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
 import { useGuestsStore } from '@/lib/guests/store';
 import { guestHasSharedSurface, guestSurfaceDocking, type GuestSurfaceDocking } from '@/lib/guests/surfaces';
-import { GUEST_SURFACE_DOCK_SIZE_MIN } from '@openchamber/sdk';
+import { GUEST_SURFACE_DOCK_SIZE_MIN } from 'ohpichamber-sdk';
 import { isPluginContextPanelMode, pluginIdFromMode, type PluginContextPanelMode } from '@/lib/surfaces/modes';
 import {
   getZoneView,

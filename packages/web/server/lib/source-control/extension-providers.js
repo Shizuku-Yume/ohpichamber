@@ -1,4 +1,4 @@
-import { isGuestApproved, requestedGuestCapabilities, serviceProvides } from '@openchamber/sdk';
+import { isGuestApproved, requestedGuestCapabilities, serviceProvides } from 'ohpichamber-sdk';
 
 import { buildExtensionDescriptor } from './extension-descriptor.js';
 import { extensionProviderId } from './provider-id.js';

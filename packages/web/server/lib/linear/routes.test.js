@@ -89,7 +89,7 @@ describe('Linear auth routes', () => {
       .expect(200);
 
     expect(callback.text).toContain('Authorization Complete');
-    expect(callback.text).toContain('openchamber://focus/linear-auth');
+    expect(callback.text).toContain('ohpichamber://focus/linear-auth');
 
     const status = await request(app).get('/api/linear/auth/status').expect(200);
     expect(status.body.connected).toBe(true);
@@ -133,7 +133,7 @@ describe('Linear auth routes', () => {
       .expect(400);
     expect(tokenFetch).not.toHaveBeenCalled();
     expect(response.text).toContain('Authorization Failed');
-    expect(response.text).not.toContain('openchamber://');
+    expect(response.text).not.toContain('ohpichamber://');
   });
 
   it('omits the desktop deep link for flows started outside the desktop shell', async () => {
@@ -162,7 +162,7 @@ describe('Linear auth routes', () => {
       .get('/linear/oauth/callback')
       .query({ state, code: 'auth-code' })
       .expect(200);
-    expect(response.text).not.toContain('openchamber://');
+    expect(response.text).not.toContain('ohpichamber://');
   });
 
   it('disconnects and revokes the refresh token', async () => {

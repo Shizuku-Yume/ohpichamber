@@ -9,7 +9,7 @@ This guide describes the operator procedure for backing up and restoring OpenCha
 OpenChamber state is divided between the **Host Gateway data directory** and the **OMP Agent directory**.
 
 ### Host Gateway Data Directory
-Default location: `~/.config/openchamber` (or the directory specified by `OPENCHAMBER_DATA_DIR`).
+Default location: `~/.config/ohpichamber` (or the directory specified by `OPENCHAMBER_DATA_DIR`).
 
 - **`host-metadata.sqlite`** (plus `-wal` and `-shm` sidecars):
   - Schema: Managed by `packages/web/server/lib/host/metadata-sqlite.js` with `PRAGMA user_version = 1`.
@@ -97,7 +97,7 @@ A coherent snapshot requires either:
 
 3. **Archive Host Gateway data**:
    ```bash
-   DATA_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/openchamber}"
+   DATA_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/ohpichamber}"
    if [ ! -d "$DATA_DIR" ]; then
      echo "Error: Host data directory not found or not a directory: $DATA_DIR" >&2
      exit 1
@@ -226,7 +226,7 @@ A coherent snapshot requires either:
      exit 1
    fi
 
-   RESTORE_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/openchamber}"
+   RESTORE_DIR="${OPENCHAMBER_DATA_DIR:-$HOME/.config/ohpichamber}"
    mkdir -p "$RESTORE_DIR" || { echo "Error: Failed to create restore directory: $RESTORE_DIR" >&2; exit 1; }
    if [ ! -w "$RESTORE_DIR" ]; then
      echo "Error: Restore directory is not writable: $RESTORE_DIR" >&2

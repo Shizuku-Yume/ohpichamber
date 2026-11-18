@@ -33,7 +33,7 @@ Ein mit **Anywhere** erstellter Link enthält sowohl eine direkte Adresse als au
 Du kannst einen Link auch in einem Terminal auf dem entfernten Rechner erstellen:
 
 ```bash
-openchamber connect-url --port 3000 --server http://your-host:3000 --qr
+ohpichamber connect-url --port 3000 --server http://your-host:3000 --qr
 ```
 
 `connect-url` startet den Server zuerst, wenn auf diesem Port nichts läuft. Füge `--api-only` für einen headless Server hinzu, `--lan`, um beim Starten an das LAN zu binden, `--ui-password`, um den Browserzugriff zu schützen, und `--name`, um die gespeicherte Verbindung zu benennen. Füge `--relay` für einen Link hinzu, der auch außerhalb des lokalen Netzwerks funktioniert: Das Gerät bevorzugt die direkte Verbindung, wenn sie erreichbar ist, und fällt auf das [Private Relay](/private-relay/) zurück — die Instanz startet das Relay selbstständig.

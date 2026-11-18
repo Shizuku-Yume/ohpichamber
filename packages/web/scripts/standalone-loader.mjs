@@ -44,9 +44,13 @@ export function ensureAgentRuntimeSymlinks(root) {
     }
   }
 
-  // Ensure node_modules/@openchamber links for agent-contract and agent-service
+  // Ensure node_modules links for the packages the packed server imports by bare
+  // specifier. The daemon runs under the bundled Bun, which never consults the
+  // resolve hook registered below, so these links are the only resolution the
+  // standalone install has.
   const targetWebRoot = path.resolve(root, '../..');
-  const webNm = path.join(targetWebRoot, 'node_modules', '@openchamber');
+  const packageNm = path.join(targetWebRoot, 'node_modules');
+  const webNm = path.join(packageNm, '@openchamber');
   try {
     fs.mkdirSync(webNm, { recursive: true });
     const contractPkg = manifest.packages?.find((p) => p.name === '@openchamber/agent-contract');
@@ -62,10 +66,10 @@ export function ensureAgentRuntimeSymlinks(root) {
     if (!fs.existsSync(serviceDest) && fs.existsSync(serviceTarget)) {
       fs.symlinkSync(path.relative(webNm, serviceTarget), serviceDest, 'dir');
     }
-    const sdkDest = path.join(webNm, 'sdk');
+    const sdkDest = path.join(packageNm, 'ohpichamber-sdk');
     const sdkTarget = path.join(targetWebRoot, 'resources', 'standalone-sdk');
     if (!fs.existsSync(sdkDest) && fs.existsSync(sdkTarget)) {
-      fs.symlinkSync(path.relative(webNm, sdkTarget), sdkDest, 'dir');
+      fs.symlinkSync(path.relative(packageNm, sdkTarget), sdkDest, 'dir');
     }
   } catch {
     // best effort if node_modules is read-only
@@ -136,20 +140,20 @@ export async function resolve(specifier, context, nextResolve) {
     }
     const sdkRoot = fs.existsSync(path.join(webRoot, 'resources', 'standalone-sdk', 'dist'))
       ? path.join(webRoot, 'resources', 'standalone-sdk')
-      : path.join(webRoot, 'node_modules', '@openchamber', 'sdk');
-    if (specifier === '@openchamber/sdk') {
+      : path.join(webRoot, 'node_modules', 'ohpichamber-sdk');
+    if (specifier === 'ohpichamber-sdk') {
       const candidate = path.join(sdkRoot, 'dist', 'index.js');
       if (fs.existsSync(candidate)) {
         return { format: 'module', shortCircuit: true, url: pathToFileURL(candidate).href };
       }
     }
-    if (specifier === '@openchamber/sdk/schemas') {
+    if (specifier === 'ohpichamber-sdk/schemas') {
       const candidate = path.join(sdkRoot, 'dist', 'schemas.js');
       if (fs.existsSync(candidate)) {
         return { format: 'module', shortCircuit: true, url: pathToFileURL(candidate).href };
       }
     }
-    if (specifier === '@openchamber/sdk/ui') {
+    if (specifier === 'ohpichamber-sdk/ui') {
       const candidate = path.join(sdkRoot, 'dist', 'ui', 'index.js');
       if (fs.existsSync(candidate)) {
         return { format: 'module', shortCircuit: true, url: pathToFileURL(candidate).href };

@@ -81,7 +81,7 @@ test('message image export contains wide tables and formulas without reflowing p
         server = await createServer({
             configFile: false, root: fixture, logLevel: 'error', cacheDir: path.join(fixture, '.vite'),
             css: { postcss: repo },
-            resolve: { alias: { '@': path.join(repo, 'packages/ui/src'), '@openchamber/sdk': path.join(repo, 'packages/sdk/src/index.ts') } },
+            resolve: { alias: { '@': path.join(repo, 'packages/ui/src'), 'ohpichamber-sdk': path.join(repo, 'packages/sdk/src/index.ts') } },
             server: { host: 'localhost', port: 0, hmr: false, watch: null, fs: { allow: [repo, realpathSync(path.join(repo, 'node_modules'))] } },
         });
         await server.listen();

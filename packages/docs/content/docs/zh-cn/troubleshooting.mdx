@@ -15,13 +15,13 @@ description: 常见的设置与运行问题及快速解决方法。
 
 ## 无法访问 Web UI
 
-- 用 `openchamber logs` 查看服务器日志
+- 用 `ohpichamber logs` 查看服务器日志
 - 确认活动端口（默认 `3000`）
 - 在测试隧道链接之前，先直接打开 `http://localhost:3000`
 
 ## 远程/隧道链接无法使用
 
-- 运行 `openchamber tunnel status --all`
+- 运行 `ohpichamber tunnel status --all`
 - 从同一实例/端口重启隧道
 - 如果之前的令牌已被使用，请重新生成连接链接
 

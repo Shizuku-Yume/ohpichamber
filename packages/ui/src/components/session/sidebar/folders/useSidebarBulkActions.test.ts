@@ -21,7 +21,7 @@ describe('sidebar bulk project scopes', () => {
     const owners = new Map([
       ['project-session', 'project-a'],
       ['other-project-session', 'project-b'],
-      ['managed-chat', '/home/.config/openchamber/chats'],
+      ['managed-chat', '/home/.config/ohpichamber/chats'],
     ]);
 
     expect(resolveSelectionFolderIds(['project-session'], 'project-a', owners)).toEqual(['project-session']);
@@ -29,7 +29,7 @@ describe('sidebar bulk project scopes', () => {
     expect(resolveSelectionFolderIds(['other-project-session'], 'project-a', owners)).toEqual([]);
     expect(resolveSelectionFolderIds(['project-session', 'unresolved'], 'project-a', owners)).toEqual([]);
     expect(resolveSelectionFolderIds(['project-session'], null, owners)).toEqual([]);
-    expect(resolveSelectionFolderIds(['managed-chat'], '/home/.config/openchamber/chats', owners)).toEqual(['managed-chat']);
+    expect(resolveSelectionFolderIds(['managed-chat'], '/home/.config/ohpichamber/chats', owners)).toEqual(['managed-chat']);
   });
 });
 

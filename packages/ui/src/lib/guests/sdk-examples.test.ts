@@ -2,9 +2,9 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 import { Window } from 'happy-dom';
-import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, GUEST_BOOTSTRAP_SCRIPT, OPENCHAMBER_SDK_API_VERSION } from '@openchamber/sdk';
-import { guestMessageSchema } from '@openchamber/sdk/schemas';
-import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from '@openchamber/sdk';
+import { GUEST_BOOTSTRAP_API_VERSION, GUEST_BOOTSTRAP_CHANNEL, GUEST_BOOTSTRAP_SCRIPT, OPENCHAMBER_SDK_API_VERSION } from 'ohpichamber-sdk';
+import { guestMessageSchema } from 'ohpichamber-sdk/schemas';
+import type { GuestMessage, HostMessage, HostReadyContext, HostResultPayload, GuestWorkspaceSnapshot } from 'ohpichamber-sdk';
 
 const examples = new URL('../../../../sdk/examples/', import.meta.url);
 const windows: Window[] = [];

@@ -1,7 +1,7 @@
 // One call to the DeskChart component. The arguments are written by a model,
 // so this page only draws them: it never acts on them.
-import { connectHost } from '@openchamber/sdk';
-import { applyHostReady } from '@openchamber/sdk/ui';
+import { connectHost } from 'ohpichamber-sdk';
+import { applyHostReady } from 'ohpichamber-sdk/ui';
 
 const host = connectHost();
 const root = document.querySelector<HTMLElement>('#root');

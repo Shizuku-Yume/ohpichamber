@@ -15,8 +15,8 @@ import { FILLER_PROGRAM } from './tools-filler.js';
 // Where the filler puts the tarballs of a packed source. It is a tmpfs, so they vanish with the filler.
 export const TOOLS_STAGING_PATH = '/tmp/openchamber-fill';
 
-const WEB_TARBALL_NAME = 'openchamber-web.tgz';
-const SDK_TARBALL_NAME = 'openchamber-sdk.tgz';
+const WEB_TARBALL_NAME = 'ohpichamber.tgz';
+const SDK_TARBALL_NAME = 'ohpichamber-sdk.tgz';
 
 // Exact versions for the packages this module names, never a range or a URL.
 // That pins those only. Their own dependencies are still ranges, and no lock file travels
@@ -53,7 +53,7 @@ const requireRevision = (value) => {
 };
 
 /**
- * The version a released host installs: its own `@openchamber/web`. There is no agent runtime in
+ * The version a released host installs: its own `ohpichamber`. There is no agent runtime in
  * the tools volume any more, and no engine version to read beside it.
  */
 export function readHostToolVersions(packageJsonUrl = new URL('../../../package.json', import.meta.url)) {
@@ -64,13 +64,13 @@ export function readHostToolVersions(packageJsonUrl = new URL('../../../package.
     throw new SpaceError('tools_versions_unreadable', `Could not read the package.json of the OpenChamber server: ${error.message}`);
   }
   return {
-    webVersion: requireVersion(manifest.version, '@openchamber/web'),
+    webVersion: requireVersion(manifest.version, 'ohpichamber'),
   };
 }
 
 export function createRegistryToolsSource({ webVersion, revision = '' }) {
   const packages = {
-    '@openchamber/web': requireVersion(webVersion, '@openchamber/web'),
+    'ohpichamber': requireVersion(webVersion, 'ohpichamber'),
   };
   return finishSource({
     kind: 'registry',
@@ -83,7 +83,7 @@ export function createRegistryToolsSource({ webVersion, revision = '' }) {
 
 /**
  * A development build. The two tarballs are read and hashed here, once.
- * The override makes every `@openchamber/sdk` in the tree the local tarball, also the one
+ * The override makes every `ohpichamber-sdk` in the tree the local tarball, also the one
  * that `web` asks for by version number.
  */
 export function createPackedToolsSource({ webTarballPath, sdkTarballPath, revision = '' }) {
@@ -104,10 +104,10 @@ export function createPackedToolsSource({ webTarballPath, sdkTarballPath, revisi
     canonical: { kind: 'packed', tarballs: files.map((file) => ({ name: file.name, sha256: sha256(file.bytes) })), revision: requireRevision(revision) },
     packageJson: packageJsonText({
       dependencies: {
-        '@openchamber/web': `file:${TOOLS_STAGING_PATH}/${WEB_TARBALL_NAME}`,
-        '@openchamber/sdk': `file:${TOOLS_STAGING_PATH}/${SDK_TARBALL_NAME}`,
+        'ohpichamber': `file:${TOOLS_STAGING_PATH}/${WEB_TARBALL_NAME}`,
+        'ohpichamber-sdk': `file:${TOOLS_STAGING_PATH}/${SDK_TARBALL_NAME}`,
       },
-      overrides: { '@openchamber/sdk': '$@openchamber/sdk' },
+      overrides: { 'ohpichamber-sdk': '$ohpichamber-sdk' },
     }),
     files,
   });

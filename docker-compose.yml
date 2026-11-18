@@ -1,18 +1,18 @@
 services:
-  openchamber:
+  ohpichamber:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: openchamber
+    container_name: ohpichamber
     ports:
       - "3000:3000"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ./data/openchamber:/home/openchamber/.config/openchamber
-      - ./data/omp:/home/openchamber/.omp
-      - ./data/ssh:/home/openchamber/.ssh
-      - ./workspaces:/home/openchamber/workspaces
+      - ./data/ohpichamber:/home/ohpichamber/.config/ohpichamber
+      - ./data/omp:/home/ohpichamber/.omp
+      - ./data/ssh:/home/ohpichamber/.ssh
+      - ./workspaces:/home/ohpichamber/workspaces
     environment:
       # Docker binds OpenChamber to 0.0.0.0 for port mapping, so UI auth is required.
       # Set this before starting, for example:
@@ -23,5 +23,5 @@ services:
     # OPENCHAMBER_TUNNEL_MODE: quick  # quick | managed-remote | managed-local
     # OPENCHAMBER_TUNNEL_HOSTNAME: app.example.com  # required for managed-remote
     # OPENCHAMBER_TUNNEL_TOKEN: your_cloudflare_token  # required for managed-remote
-    # OPENCHAMBER_TUNNEL_CONFIG: /home/openchamber/.cloudflared/config.yml  # optional for managed-local
+    # OPENCHAMBER_TUNNEL_CONFIG: /home/ohpichamber/.cloudflared/config.yml  # optional for managed-local
     restart: unless-stopped

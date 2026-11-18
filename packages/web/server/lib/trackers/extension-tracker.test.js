@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { trackerProviderTimeoutMs } from '@openchamber/sdk';
+import { trackerProviderTimeoutMs } from 'ohpichamber-sdk';
 
 import { createOutboundHandles } from '../source-control/outbound-handles.js';
 import { createTrackerAccounts, trackerAccountsPersistPath } from './extension-accounts.js';

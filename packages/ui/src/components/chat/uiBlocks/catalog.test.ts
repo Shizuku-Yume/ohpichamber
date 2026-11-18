@@ -1,4 +1,4 @@
-import { GUEST_BLOCK_RESERVED_NAMES } from '@openchamber/sdk';
+import { GUEST_BLOCK_RESERVED_NAMES } from 'ohpichamber-sdk';
 import { describe, expect, test } from 'bun:test';
 import { NO_EXTENSION_BLOCKS, collectExtensionBlocks, blockDecisions, blockFields, blockNode, cardDecision, decisionTitles, blockProps, noteSlot, parseUiBlock, type BlockValue, type UiBlockParse } from './catalog';
 

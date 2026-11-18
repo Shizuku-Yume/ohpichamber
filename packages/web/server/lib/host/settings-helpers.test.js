@@ -126,7 +126,7 @@ describe('settings helpers', () => {
     expect(next.defaultAgent).toBeUndefined();
     expect(next.projects[0].defaultAgent).toBeUndefined();
   });
-  it('imports from the packed @openchamber/web tarball without escaping the published package', async () => {
+  it('imports from the packed ohpichamber tarball without escaping the published package', async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'settings-helpers-pack-'));
     const packDir = join(tempRoot, 'pack');
     const extractDir = join(tempRoot, 'extract');

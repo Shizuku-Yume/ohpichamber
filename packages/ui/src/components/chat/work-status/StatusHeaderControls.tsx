@@ -1,5 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import type { GuestStatusControl } from '@openchamber/sdk';
+import type { GuestStatusControl } from 'ohpichamber-sdk';
 import type React from 'react';
 
 import { Icon } from '@/components/icon/Icon';

@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { SOURCE_CONTROL_OUTBOUND_METHODS } from '@openchamber/sdk';
+import { SOURCE_CONTROL_OUTBOUND_METHODS } from 'ohpichamber-sdk';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createOutboundHandles } from './outbound-handles.js';

@@ -12,8 +12,8 @@ import {
   requestedGuestCapabilities,
   serviceProvides,
   toPublicNotifications,
-} from '@openchamber/sdk';
-import { notificationsProviderSchemasV1 as schemas } from '@openchamber/sdk/schemas';
+} from 'ohpichamber-sdk';
+import { notificationsProviderSchemasV1 as schemas } from 'ohpichamber-sdk/schemas';
 
 import { isProviderUsername } from '../source-control/provider-id.js';
 import { isEnterpriseMode } from '../enterprise-mode.js';

@@ -1,4 +1,4 @@
-package com.openchamber.app;
+package dev.ohpichamber.app;
 
 import android.app.ActivityManager;
 import android.app.NotificationChannel;

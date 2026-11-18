@@ -60,7 +60,7 @@ export const sessionReferenceKey = (reference: { sessionId: string; messageId?: 
 });
 
 /** The link the `@` picker writes for a session. */
-export const sessionLinkText = (sessionId: string): string => `openchamber://session/${sessionId}`;
+export const sessionLinkText = (sessionId: string): string => `ohpichamber://session/${sessionId}`;
 
 export const loadSessionLinkReference = async (target: SessionLinkTarget): Promise<SessionReference | null> => {
     const runtimeKey = getRuntimeKey();

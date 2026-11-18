@@ -50,7 +50,7 @@ describe('createRegistryToolsSource', () => {
     expect(JSON.parse(source.packageJson)).toEqual({
       name: 'openchamber-space-tools',
       private: true,
-      dependencies: { '@openchamber/web': '1.24.2' },
+      dependencies: { 'ohpichamber': '1.24.2' },
     });
   });
 
@@ -69,17 +69,17 @@ describe('createPackedToolsSource', () => {
 
     expect(source.description).toBe('development build');
     expect(source.files).toEqual([
-      { name: 'openchamber-web.tgz', bytes: Buffer.from('web bytes') },
-      { name: 'openchamber-sdk.tgz', bytes: Buffer.from('sdk bytes') },
+      { name: 'ohpichamber.tgz', bytes: Buffer.from('web bytes') },
+      { name: 'ohpichamber-sdk.tgz', bytes: Buffer.from('sdk bytes') },
     ]);
     expect(JSON.parse(source.packageJson)).toEqual({
       name: 'openchamber-space-tools',
       private: true,
       dependencies: {
-        '@openchamber/web': 'file:/tmp/openchamber-fill/openchamber-web.tgz',
-        '@openchamber/sdk': 'file:/tmp/openchamber-fill/openchamber-sdk.tgz',
+        'ohpichamber': 'file:/tmp/openchamber-fill/ohpichamber.tgz',
+        'ohpichamber-sdk': 'file:/tmp/openchamber-fill/ohpichamber-sdk.tgz',
       },
-      overrides: { '@openchamber/sdk': '$@openchamber/sdk' },
+      overrides: { 'ohpichamber-sdk': '$ohpichamber-sdk' },
     });
   });
 

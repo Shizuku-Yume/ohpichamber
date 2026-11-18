@@ -135,6 +135,16 @@ describe('PWA manifest route', () => {
     expect(manifest.shortcuts.map((shortcut) => shortcut.url)).toEqual(['/?settings=appearance']);
   });
 
+  it('serves the product name as the default install name', async () => {
+    const app = createApp();
+    const response = await request(app).get('/manifest.webmanifest');
+    const manifest = JSON.parse(response.text);
+
+    expect(manifest.name).toBe('OhPiChamber');
+    expect(manifest.short_name).toBe('OhPiChamber');
+    expect(manifest.description).toBe('Web interface for the OhPiChamber native agent');
+  });
+
   it('uses a neutral fallback title for canonical metadata without a title', async () => {
     const app = createApp({
       listSessions: async () => ({ items: [canonicalSession('session-untitled', null, 25)], errors: {} }),

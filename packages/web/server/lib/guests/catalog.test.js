@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { GUEST_PROVIDER_LOGO_BYTES_MAX } from '@openchamber/sdk';
+import { GUEST_PROVIDER_LOGO_BYTES_MAX } from 'ohpichamber-sdk';
 import { guestAssetContentType, hasGuestFrame, inspectGuestPackage, listInstalledGuests, noteGuestPackageChanged, resolveGuestAssetPath, resolveGuestServedFile, toPublicGuest } from './catalog.js';
 import { setCapabilityGrants, writeExtensionPaths } from './persist.js';
 
